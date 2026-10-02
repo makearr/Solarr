@@ -5735,6 +5735,10 @@ export interface components {
             files_by_codec: components["schemas"]["StatisticsFiles"][];
             albums_by_state: components["schemas"]["StatisticsCount"][];
             downloads_by_state: components["schemas"]["StatisticsCount"][];
+            /** @description Files and bytes first seen per month, oldest first; the first scan lands in one month. */
+            growth_by_month: components["schemas"]["StatisticsFiles"][];
+            /** @description Release decisions of the last window_days, by ACCEPT, REJECT or DEFER. */
+            decisions_by_outcome: components["schemas"]["StatisticsCount"][];
         };
         StatisticsFiles: {
             /** @description The audio codec */

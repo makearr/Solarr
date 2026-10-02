@@ -30,6 +30,26 @@ WHERE a.created_at >= sqlc.arg(since)
 GROUP BY d.category_id, a.state
 ORDER BY d.category_id, a.state;
 
+-- Files and bytes first seen per root folder and month: growth since Solarr began watching.
+-- name: AggregateFilesAddedByRootAndMonth :many
+SELECT lp.root_folder_id,
+       CAST(strftime('%Y-%m', mo.first_seen_at, 'unixepoch') AS TEXT) AS month,
+       CAST(COUNT(*) AS INTEGER) AS files,
+       CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes
+FROM library_path lp
+JOIN media_object mo ON mo.id = lp.media_object_id
+GROUP BY lp.root_folder_id, month
+ORDER BY lp.root_folder_id, month;
+
+-- Release decisions since a time, per library and outcome.
+-- name: AggregateDecisionsByCategoryAndOutcome :many
+SELECT d.category_id, cd.outcome, CAST(COUNT(*) AS INTEGER) AS decisions
+FROM candidate_decision cd
+JOIN desired_item d ON d.id = cd.desired_item_id
+WHERE cd.decided_at >= sqlc.arg(since)
+GROUP BY d.category_id, cd.outcome
+ORDER BY d.category_id, cd.outcome;
+
 -- name: DeleteStatRollupMetric :exec
 DELETE FROM stat_rollup WHERE metric = ?;
 

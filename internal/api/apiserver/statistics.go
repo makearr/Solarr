@@ -19,11 +19,13 @@ type StatisticsFigure struct {
 
 // StatisticsView is what the last rollup computed for one library; ComputedAt is zero before the first run.
 type StatisticsView struct {
-	ComputedAt       time.Time
-	WindowDays       int
-	FilesByCodec     []StatisticsFigure
-	AlbumsByState    []StatisticsFigure
-	DownloadsByState []StatisticsFigure
+	ComputedAt         time.Time
+	WindowDays         int
+	FilesByCodec       []StatisticsFigure
+	AlbumsByState      []StatisticsFigure
+	DownloadsByState   []StatisticsFigure
+	GrowthByMonth      []StatisticsFigure
+	DecisionsByOutcome []StatisticsFigure
 }
 
 // StatisticsReader answers a library's statistics from stat_rollup (section 21.12).
@@ -58,10 +60,15 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 	out := gen.CategoryStatistics{
-		WindowDays:       view.WindowDays,
-		FilesByCodec:     make([]gen.StatisticsFiles, len(view.FilesByCodec)),
-		AlbumsByState:    counts(view.AlbumsByState),
-		DownloadsByState: counts(view.DownloadsByState),
+		WindowDays:         view.WindowDays,
+		FilesByCodec:       make([]gen.StatisticsFiles, len(view.FilesByCodec)),
+		AlbumsByState:      counts(view.AlbumsByState),
+		DownloadsByState:   counts(view.DownloadsByState),
+		DecisionsByOutcome: counts(view.DecisionsByOutcome),
+		GrowthByMonth:      make([]gen.StatisticsFiles, len(view.GrowthByMonth)),
+	}
+	for index, figure := range view.GrowthByMonth {
+		out.GrowthByMonth[index] = gen.StatisticsFiles{Key: figure.Key, Files: figure.Count, Bytes: int64(figure.Value)}
 	}
 	for index, figure := range view.FilesByCodec {
 		out.FilesByCodec[index] = gen.StatisticsFiles{Key: figure.Key, Files: figure.Count, Bytes: int64(figure.Value)}

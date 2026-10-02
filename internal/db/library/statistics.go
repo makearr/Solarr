@@ -21,6 +21,10 @@ const (
 	StatAlbumsByState = "albums_by_state"
 	// StatDownloadsByState: value and count the downloads of the last 30 days, key their state.
 	StatDownloadsByState = "downloads_by_state"
+	// StatGrowthByMonth: value bytes, count files first seen in the month, key "YYYY-MM".
+	StatGrowthByMonth = "growth_by_month"
+	// StatDecisionsByOutcome: value and count the release decisions of the last 30 days, key ACCEPT, REJECT or DEFER.
+	StatDecisionsByOutcome = "decisions_by_outcome"
 )
 
 // StatisticsWindowDays is how far back the download figures reach.
@@ -57,6 +61,15 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 		return fmt.Errorf("library: statistics: downloads: %w", err)
 	}
 
+	added, err := reader.AggregateFilesAddedByRootAndMonth(ctx)
+	if err != nil {
+		return fmt.Errorf("library: statistics: growth: %w", err)
+	}
+	decisions, err := reader.AggregateDecisionsByCategoryAndOutcome(ctx, now-StatisticsWindowDays*86_400)
+	if err != nil {
+		return fmt.Errorf("library: statistics: decisions: %w", err)
+	}
+
 	type figure struct {
 		metric, dimension string
 		value             float64
@@ -80,6 +93,26 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 	for _, one := range byCodec {
 		figures = append(figures, *one)
 	}
+	byMonth := map[string]*figure{}
+	for _, row := range added {
+		category, found := categoryOfRoot[row.RootFolderID]
+		if !found {
+			continue
+		}
+		dimension := dimensionOf(category, row.Month)
+		if existing, ok := byMonth[dimension]; ok {
+			existing.value += float64(row.Bytes)
+			existing.count += row.Files
+			continue
+		}
+		byMonth[dimension] = &figure{StatGrowthByMonth, dimension, float64(row.Bytes), row.Files}
+	}
+	for _, one := range byMonth {
+		figures = append(figures, *one)
+	}
+	for _, row := range decisions {
+		figures = append(figures, figure{StatDecisionsByOutcome, dimensionOf(row.CategoryID, row.Outcome), float64(row.Decisions), row.Decisions})
+	}
 	for _, row := range albums {
 		figures = append(figures, figure{StatAlbumsByState, dimensionOf(row.CategoryID, row.State), float64(row.Albums), row.Albums})
 	}
@@ -89,7 +122,7 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 
 	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		for _, metric := range []string{StatFilesByCodec, StatAlbumsByState, StatDownloadsByState} {
+		for _, metric := range []string{StatFilesByCodec, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth, StatDecisionsByOutcome} {
 			if err := queries.DeleteStatRollupMetric(ctx, metric); err != nil {
 				return err
 			}
