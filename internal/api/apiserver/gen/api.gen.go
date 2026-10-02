@@ -309,6 +309,20 @@ const (
 	LibraryLevelItemStatusUnverified  LibraryLevelItemStatus = "unverified"
 )
 
+// Defines values for LibraryQualityPreferredProtocol.
+const (
+	LibraryQualityPreferredProtocolEmpty   LibraryQualityPreferredProtocol = ""
+	LibraryQualityPreferredProtocolTorrent LibraryQualityPreferredProtocol = "torrent"
+	LibraryQualityPreferredProtocolUsenet  LibraryQualityPreferredProtocol = "usenet"
+)
+
+// Defines values for LibraryQualityWritePreferredProtocol.
+const (
+	LibraryQualityWritePreferredProtocolEmpty   LibraryQualityWritePreferredProtocol = ""
+	LibraryQualityWritePreferredProtocolTorrent LibraryQualityWritePreferredProtocol = "torrent"
+	LibraryQualityWritePreferredProtocolUsenet  LibraryQualityWritePreferredProtocol = "usenet"
+)
+
 // Defines values for LogoutStatusStatus.
 const (
 	LogoutStatusStatusSignedOut LogoutStatusStatus = "signed-out"
@@ -2195,12 +2209,14 @@ type LibraryNaming struct {
 // LibraryQuality defines model for LibraryQuality.
 type LibraryQuality struct {
 	// Available Every profile, in the suggested order.
-	Available       []QualityProfileRef `json:"available"`
-	CutoffProfileId *int64              `json:"cutoff_profile_id,omitempty"`
+	Available         []QualityProfileRef             `json:"available"`
+	CutoffProfileId   *int64                          `json:"cutoff_profile_id,omitempty"`
+	PreferredProtocol LibraryQualityPreferredProtocol `json:"preferred_protocol"`
 
 	// Profiles The library's own list, earlier preferred. Empty means the instance default.
-	Profiles []QualityProfileRef `json:"profiles"`
-	Target   *QualityTarget      `json:"target,omitempty"`
+	Profiles             []QualityProfileRef `json:"profiles"`
+	ProtocolDelayMinutes int64               `json:"protocol_delay_minutes"`
+	Target               *QualityTarget      `json:"target,omitempty"`
 
 	// UpgradesAllowed Lidarr's "Upgrades Allowed". Off, an album with every track is complete whatever its quality: nothing is upgradable and nothing is searched for an upgrade.
 	UpgradesAllowed bool `json:"upgrades_allowed"`
@@ -2209,17 +2225,29 @@ type LibraryQuality struct {
 	Warnings []string `json:"warnings"`
 }
 
+// LibraryQualityPreferredProtocol defines model for LibraryQuality.PreferredProtocol.
+type LibraryQualityPreferredProtocol string
+
 // LibraryQualityWrite defines model for LibraryQualityWrite.
 type LibraryQualityWrite struct {
 	CutoffProfileId *int64 `json:"cutoff_profile_id,omitempty"`
 
+	// PreferredProtocol The delay profile's preferred protocol; the other's releases wait. Omitted leaves it as it is.
+	PreferredProtocol *LibraryQualityWritePreferredProtocol `json:"preferred_protocol,omitempty"`
+
 	// ProfileIds The profiles the library accepts, earlier preferred.
-	ProfileIds []int64        `json:"profile_ids"`
-	Target     *QualityTarget `json:"target,omitempty"`
+	ProfileIds []int64 `json:"profile_ids"`
+
+	// ProtocolDelayMinutes How long after a release was posted the other protocol waits; 0 is no delay. Omitted leaves it as it is.
+	ProtocolDelayMinutes *int64         `json:"protocol_delay_minutes,omitempty"`
+	Target               *QualityTarget `json:"target,omitempty"`
 
 	// UpgradesAllowed Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
 	UpgradesAllowed *bool `json:"upgrades_allowed,omitempty"`
 }
+
+// LibraryQualityWritePreferredProtocol The delay profile's preferred protocol; the other's releases wait. Omitted leaves it as it is.
+type LibraryQualityWritePreferredProtocol string
 
 // LibraryRenamePlan defines model for LibraryRenamePlan.
 type LibraryRenamePlan struct {

@@ -264,6 +264,8 @@ type judge struct {
 	incumbent *model.Decision
 	// cutoffMet rejects every release, as Lidarr's "existing files meet cutoff": the album wants nothing.
 	cutoffMet bool
+	// delay is the library's delay profile: the other protocol's releases wait (D16); zero is none.
+	delay protocolDelay
 }
 
 // judgeFor builds item's yardstick from its work and its library's settings.
@@ -286,13 +288,19 @@ func (s Search) judgeFor(ctx context.Context, item librarydb.DesiredItem) (judge
 		preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
 	}
 	artistName := primaryArtistName(detail)
+	var delay protocolDelay
+	if category, found := snapshot.Category(item.CategoryID); found {
+		delay = protocolDelay{
+			preferred: category.PreferredProtocol, window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, now: s.Clock.Now(),
+		}
+	}
 	target := targetIdentity(detail, item, artistName, aliases)
 	albumTarget := target
 	albumTarget.Title = detail.Work.CanonicalTitle
 	built := judge{
 		work: detail.Work, aliases: aliases, artistName: artistName, wantedArtist: artistName,
 		target: target, albumTarget: albumTarget, rules: rules,
-		languagePolicy: languagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers,
+		languagePolicy: languagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers, delay: delay,
 	}
 	built.cutoffMet = item.State == ItemStateComplete
 	if item.State == ItemStateUpgradable {
@@ -331,6 +339,7 @@ func strictlyBetter(candidate, incumbent model.Decision) bool {
 
 func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind {
 	finds := evaluateRawItems(raws, conn, j.target, j.albumTarget, j.wantedArtist, j.rules, j.languagePolicy, j.preferPropers)
+	j.delay.apply(finds)
 	if j.cutoffMet {
 		for index := range finds {
 			decision := &finds[index].decision
@@ -356,6 +365,41 @@ func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind
 		}
 	}
 	return finds
+}
+
+// protocolDelay is a delay profile (D16): protocol preference as a wait, never a filter. Within the window after a
+// release was posted only the preferred protocol is acted on; the other's accepted releases are held as DEFER, with
+// the time they stop waiting, and are taken normally after it.
+type protocolDelay struct {
+	preferred string
+	window    time.Duration
+	now       time.Time
+}
+
+func (d protocolDelay) apply(finds []acceptedFind) {
+	if d.preferred == "" || d.window <= 0 {
+		return
+	}
+	for index := range finds {
+		found := &finds[index]
+		if found.decision.Outcome != model.OutcomeAccept || protocolForImpl(found.conn.Impl) == d.preferred {
+			continue
+		}
+		// A release with no posting time is judged from now, so it waits the whole window rather than none.
+		posted := found.raw.PublishedAt
+		if posted.IsZero() {
+			posted = d.now
+		}
+		releasedAt := posted.Add(d.window)
+		if !d.now.Before(releasedAt) {
+			continue
+		}
+		found.decision.Outcome = model.OutcomeDefer
+		found.decision.Deferrals = append(found.decision.Deferrals, model.Deferral{
+			Reason: "protocol-delay", RetryAfter: releasedAt,
+			Detail: map[string]any{"preferred_protocol": d.preferred, "minutes": int64(d.window / time.Minute)},
+		})
+	}
 }
 
 // decide keeps one row per release, ranks them best first and records each decision against itemID.

@@ -184,8 +184,11 @@ type CategoryEntry struct {
 	QualityCutoff   string              `yaml:"quality_cutoff,omitempty"`
 	QualityTarget   *QualityTargetEntry `yaml:"quality_target,omitempty"`
 	// QualityUpgrades is written only when off, so documents from before it read as on.
-	QualityUpgrades *bool  `yaml:"quality_upgrades,omitempty"`
-	LanguageProfile string `yaml:"language_profile,omitempty"`
+	QualityUpgrades *bool `yaml:"quality_upgrades,omitempty"`
+	// PreferredProtocol and ProtocolDelayMinutes are the delay profile; both are omitted at their defaults.
+	PreferredProtocol    string `yaml:"preferred_protocol,omitempty"`
+	ProtocolDelayMinutes int64  `yaml:"protocol_delay_minutes,omitempty"`
+	LanguageProfile      string `yaml:"language_profile,omitempty"`
 	// MonitorDiscovered is section 19.6's policy: what a scan does with an
 	// album it finds that nobody asked for. Empty on import means the
 	// column's own default (monitored) applies.
@@ -440,6 +443,7 @@ func (c *Cache) Export() Document {
 			off := false
 			entry.QualityUpgrades = &off
 		}
+		entry.PreferredProtocol, entry.ProtocolDelayMinutes = category.PreferredProtocol, category.ProtocolDelayMinutes
 		if category.LanguageProfileID != nil {
 			entry.LanguageProfile = languageNameByID[*category.LanguageProfileID]
 		}
@@ -986,6 +990,13 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			if category.QualityUpgrades != nil && !*category.QualityUpgrades {
 				if err := queries.SetCategoryQualityUpgrades(ctx, settingsdb.SetCategoryQualityUpgradesParams{ID: id}); err != nil {
 					return fmt.Errorf("category %q quality upgrades: %w", key, err)
+				}
+			}
+			if category.PreferredProtocol != "" || category.ProtocolDelayMinutes != 0 {
+				if err := queries.SetCategoryProtocolDelay(ctx, settingsdb.SetCategoryProtocolDelayParams{
+					PreferredProtocol: category.PreferredProtocol, ProtocolDelayMinutes: category.ProtocolDelayMinutes, ID: id,
+				}); err != nil {
+					return fmt.Errorf("category %q protocol delay: %w", key, err)
 				}
 			}
 			if category.MonitorDiscovered != "" {

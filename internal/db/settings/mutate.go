@@ -437,6 +437,33 @@ func (c *Cache) SetCategoryQualityUpgrades(ctx context.Context, categoryID int64
 	})
 }
 
+// maxProtocolDelayMinutes is a week: a longer wait is a filter in all but name.
+const maxProtocolDelayMinutes = 7 * 24 * 60
+
+// SetCategoryProtocolDelay saves a library's delay profile: protocol is "usenet", "torrent" or "" for none.
+func (c *Cache) SetCategoryProtocolDelay(ctx context.Context, categoryID int64, protocol string, minutes int64) error {
+	if _, found := c.Snapshot().Category(categoryID); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	var problems config.Problems
+	if protocol != "" && protocol != "usenet" && protocol != "torrent" {
+		problems = append(problems, config.Problem{Path: "preferred_protocol", Value: protocol, Expectation: "usenet, torrent or empty"})
+	}
+	if minutes < 0 || minutes > maxProtocolDelayMinutes {
+		problems = append(problems, config.Problem{
+			Path: "protocol_delay_minutes", Value: strconv.FormatInt(minutes, 10), Expectation: "0 to " + strconv.Itoa(maxProtocolDelayMinutes),
+		})
+	}
+	if len(problems) > 0 {
+		return problems
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryProtocolDelay(ctx, settingsdb.SetCategoryProtocolDelayParams{
+			PreferredProtocol: protocol, ProtocolDelayMinutes: minutes, ID: categoryID,
+		})
+	})
+}
+
 // SetCategoryQuality saves a library's quality: the profiles it accepts in priority order, the
 // cutoff (one of them), and the target, nil for none. Every problem is reported at once.
 func (c *Cache) SetCategoryQuality(

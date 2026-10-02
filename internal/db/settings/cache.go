@@ -274,6 +274,7 @@ func convertCategories(rows []settingsdb.Category, naming map[int64]*NamingProfi
 			Naming:              profile,
 			QualityCutoffID:     nullInt64Ptr(row.QualityCutoffProfileID),
 			QualityUpgrades:     row.QualityUpgrades != 0,
+			PreferredProtocol:   row.PreferredProtocol, ProtocolDelayMinutes: row.ProtocolDelayMinutes,
 		})
 	}
 	return categories

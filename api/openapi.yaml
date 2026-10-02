@@ -5901,6 +5901,14 @@ components:
         upgrades_allowed:
           type: boolean
           description: Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
+        preferred_protocol:
+          type: string
+          enum: ["", usenet, torrent]
+          description: The delay profile's preferred protocol; the other's releases wait. Omitted leaves it as it is.
+        protocol_delay_minutes:
+          type: integer
+          format: int64
+          description: How long after a release was posted the other protocol waits; 0 is no delay. Omitted leaves it as it is.
 
     QualityProfileRef:
       type: object
@@ -5911,8 +5919,10 @@ components:
 
     LibraryQuality:
       type: object
-      required: [profiles, available, warnings, upgrades_allowed]
+      required: [profiles, available, warnings, upgrades_allowed, preferred_protocol, protocol_delay_minutes]
       properties:
+        preferred_protocol: { type: string, enum: ["", usenet, torrent] }
+        protocol_delay_minutes: { type: integer, format: int64 }
         upgrades_allowed:
           type: boolean
           description: >-

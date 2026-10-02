@@ -62,6 +62,8 @@ type Category struct {
 	MonitorReleaseTypes    string
 	QualityCutoffProfileID sql.NullInt64
 	QualityUpgrades        int64
+	PreferredProtocol      string
+	ProtocolDelayMinutes   int64
 }
 
 type CategoryFileManagement struct {

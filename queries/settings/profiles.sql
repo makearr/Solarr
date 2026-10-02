@@ -73,6 +73,9 @@ UPDATE category SET quality_cutoff_profile_id = ? WHERE id = ?;
 -- name: SetCategoryQualityUpgrades :exec
 UPDATE category SET quality_upgrades = ? WHERE id = ?;
 
+-- name: SetCategoryProtocolDelay :exec
+UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id = ?;
+
 -- name: ListCategoryQualityTargets :many
 SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct FROM category_quality_target;
 
