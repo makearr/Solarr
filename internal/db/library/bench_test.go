@@ -527,6 +527,26 @@ func TestADR28_ListPlansReachAnIndexAndNeverSort(t *testing.T) {
 	}
 }
 
+// A filtered list of a library imported from Lidarr (most albums on no root, visible through their desired items)
+// once scanned every item of the category per album: over a minute for 93,000 albums (found 2026-10-02).
+func TestADR28_VisibilityByDesiredItemSeeksByWork(t *testing.T) {
+	timed(t)
+
+	works := library.NewWorks(corpus(t))
+	for _, filter := range []library.WorkFilter{
+		{WantedOnly: true, CategoryIDs: []int64{1}},
+		{CutoffUnmetOnly: true, CategoryIDs: []int64{1}},
+	} {
+		plan, err := works.ExplainList(t.Context(), filter, library.WorkCursor{}, listPageSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(plan, "desired_by_work_category (work_id=? AND category_id=?)") {
+			t.Errorf("%+v: the visibility test does not seek by work and category:\n%s", filter, plan)
+		}
+	}
+}
+
 // The Tracks level's own acceptance case (ADR-54): reaches
 // work_primary_artist_sort and takes its ordering from the index.
 func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
