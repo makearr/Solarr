@@ -130,3 +130,30 @@ func TestSweepOlderThan_RemovesOnlyTheOldWorkspaces(t *testing.T) {
 		t.Errorf("a missing directory = %d, %v; want none", removed, err)
 	}
 }
+
+// A retired archive set moves whole into the source's recycle folder, which the next Find never reports again.
+func TestRetire_MovesEverySetIntoTheRecycleFolderAndFindIgnoresIt(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	for _, name := range []string{"Album.part01.rar", "Album.part02.rar", "Other.zip", "notes.txt"} {
+		put(t, fsys, "/dl/sub/"+name, []byte("x"))
+	}
+	moved, err := unpack.Retire(t.Context(), fsys, "/dl")
+	if err != nil || moved != 2 {
+		t.Fatalf("Retire = %d, %v; want 2 sets", moved, err)
+	}
+	for _, name := range []string{"Album.part01.rar", "Album.part02.rar", "Other.zip"} {
+		if _, err := fsys.Stat("/dl/.solarr-recycle/sub/" + name); err != nil {
+			t.Errorf("%s not recycled: %v", name, err)
+		}
+		if _, err := fsys.Stat("/dl/sub/" + name); err == nil {
+			t.Errorf("%s still in place", name)
+		}
+	}
+	if _, err := fsys.Stat("/dl/sub/notes.txt"); err != nil {
+		t.Errorf("a non-archive moved: %v", err)
+	}
+	found, err := unpack.Find(t.Context(), fsys, "/dl")
+	if err != nil || len(found) != 0 {
+		t.Errorf("Find after Retire = %v, %v; want none", found, err)
+	}
+}
