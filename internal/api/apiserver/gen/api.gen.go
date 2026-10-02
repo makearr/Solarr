@@ -3556,6 +3556,12 @@ type ListImportUnitsParams struct {
 // ListImportUnitsParamsDecision defines parameters for ListImportUnits.
 type ListImportUnitsParamsDecision string
 
+// CommitImportUnitJSONBody defines parameters for CommitImportUnit.
+type CommitImportUnitJSONBody struct {
+	ExternalId string `json:"external_id"`
+	Provider   string `json:"provider"`
+}
+
 // ListProwlarrIndexersJSONBody defines parameters for ListProwlarrIndexers.
 type ListProwlarrIndexersJSONBody struct {
 	ApiKey  string `json:"api_key"`
@@ -4045,6 +4051,9 @@ type CommitHeldImportUnitsJSONRequestBody = ImportCommitHeldRequest
 
 // RevertImportSessionJSONRequestBody defines body for RevertImportSession for application/json ContentType.
 type RevertImportSessionJSONRequestBody = ImportRevertRequest
+
+// CommitImportUnitJSONRequestBody defines body for CommitImportUnit for application/json ContentType.
+type CommitImportUnitJSONRequestBody CommitImportUnitJSONBody
 
 // UpdateImportSettingsJSONRequestBody defines body for UpdateImportSettings for application/json ContentType.
 type UpdateImportSettingsJSONRequestBody = ImportSettings

@@ -85,6 +85,25 @@ var ErrUnitChanged = errors.New("importjob: unit's own files no longer match wha
 // candidate -- a human override of DECIDE's own threshold, not a second
 // identification: the same candidate IDENTIFY already ranked, never re-run.
 func (m ManualCommitter) CommitHeld(ctx context.Context, unitID int64) (music.Placed, error) {
+	return m.commitHeld(ctx, unitID, topCandidate)
+}
+
+// CommitHeldAs force-commits one QUEUE-decision unit as the album a person named ("Identify as...", for a unit
+// IDENTIFY found nothing for, or found the wrong thing): a stated identifier outranks any guess, so it is placed
+// exactly as an identifier read from the files would be.
+func (m ManualCommitter) CommitHeldAs(ctx context.Context, unitID int64, provider, externalID string) (music.Placed, error) {
+	chosen := model.Identification{
+		Strategy:   "manual",
+		ExternalID: &model.ExternalID{Provider: provider, ExternalID: externalID, Confidence: 1},
+		Precedence: model.PrecedenceAsserted,
+		Confidence: 1,
+	}
+	return m.commitHeld(ctx, unitID, func(library.Unit) (model.Identification, error) { return chosen, nil })
+}
+
+func (m ManualCommitter) commitHeld(
+	ctx context.Context, unitID int64, choose func(library.Unit) (model.Identification, error),
+) (music.Placed, error) {
 	unit, err := m.sessions.GetUnit(ctx, unitID)
 	if err != nil {
 		return music.Placed{}, fmt.Errorf("importjob: get unit %d: %w", unitID, err)
@@ -100,7 +119,7 @@ func (m ManualCommitter) CommitHeld(ctx context.Context, unitID int64) (music.Pl
 		return music.Placed{}, err
 	}
 
-	best, err := topCandidate(unit)
+	best, err := choose(unit)
 	if err != nil {
 		return music.Placed{}, err
 	}

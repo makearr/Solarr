@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { factsOf } from "@/lib/identificationEvidence";
 
 import { IdentificationCandidates } from "./IdentificationCandidates";
+import { IdentifyUnitAs } from "./IdentifyUnitAs";
 import { PathPicker, useRecentPaths } from "./PathPicker";
 
 type ImportSession = components["schemas"]["ImportSession"];
@@ -1047,6 +1048,15 @@ function UnitList({ sessionId }: { sessionId: number }) {
   });
 
   const queryClient = useQueryClient();
+  const sessions = useQuery({
+    queryKey: ["import-sessions"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/import/sessions");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const categoryId = sessions.data?.find((session) => session.id === sessionId)?.category_id ?? null;
   const importSettings = useQuery({
     queryKey: ["import-settings"],
     queryFn: async () => {
@@ -1099,7 +1109,7 @@ function UnitList({ sessionId }: { sessionId: number }) {
       {units.data && units.data.length > 0 && (
         <ul className="divide-y divide-border-subtle">
           {units.data.map((unit) => (
-            <UnitRow key={unit.id} sessionId={sessionId} unit={unit} />
+            <UnitRow key={unit.id} sessionId={sessionId} unit={unit} categoryId={categoryId} />
           ))}
         </ul>
       )}
@@ -1140,8 +1150,9 @@ function describeTransfer(methods: { method: TransferMethod; files: number }[]):
   return methods.map((m) => `${m.files} ${TRANSFER_PAST[m.method]}`).join(", ");
 }
 
-function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
+function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: ImportUnit; categoryId: number | null }) {
   const [expanded, setExpanded] = useState(false);
+  const [identifying, setIdentifying] = useState(false);
   const queryClient = useQueryClient();
 
   const commit = useMutation({
@@ -1194,7 +1205,31 @@ function UnitRow({ sessionId, unit }: { sessionId: number; unit: ImportUnit }) {
             {commit.isPending ? "Committing…" : "Commit anyway"}
           </button>
         )}
+        {unit.decision === "QUEUE" && categoryId !== null && (
+          <button
+            type="button"
+            onClick={() => setIdentifying(true)}
+            title="Search for the album these files are and place them as it"
+            className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Identify as…
+          </button>
+        )}
       </div>
+      {identifying && categoryId !== null && (
+        <IdentifyUnitAs
+          sessionId={sessionId}
+          unitId={unit.id}
+          categoryId={categoryId}
+          onClose={() => setIdentifying(false)}
+          onDone={() => {
+            setIdentifying(false);
+            void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
+            void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+          }}
+        />
+      )}
       {commit.isError && <span className="text-danger">That could not be committed.</span>}
       {expanded && (
         <div className="flex flex-col gap-1 rounded-md bg-canvas p-2 text-ink-muted">

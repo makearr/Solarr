@@ -4104,6 +4104,21 @@ paths:
         continuity alone re-walks back into all of them at once, with no
         reliable way to say which one this was -- a known, narrow gap
         (private/questions.md), not attempted this pass.
+
+
+        With a body naming a provider and an external id ("Identify as..."),
+        the unit is placed as that album instead of its top candidate, which
+        is also how a unit IDENTIFY found nothing for is resolved by hand.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [provider, external_id]
+              properties:
+                provider: { type: string, example: "musicbrainz:release-group" }
+                external_id: { type: string }
       responses:
         "200":
           description: Placed.

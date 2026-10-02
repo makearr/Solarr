@@ -158,7 +158,9 @@ func (a ImportSessions) CommitHeldImportUnits(
 
 // CommitImportUnit maps importjob.ManualCommitter's own sentinel errors to
 // their apiserver counterparts.
-func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID int64) (apiserver.ImportUnitRow, error) {
+func (a ImportSessions) CommitImportUnit(
+	ctx context.Context, sessionID, unitID int64, as *apiserver.ImportIdentity,
+) (apiserver.ImportUnitRow, error) {
 	unit, err := a.Sessions.GetUnit(ctx, unitID)
 	if err != nil {
 		return apiserver.ImportUnitRow{}, err
@@ -167,7 +169,13 @@ func (a ImportSessions) CommitImportUnit(ctx context.Context, sessionID, unitID 
 		return apiserver.ImportUnitRow{}, sql.ErrNoRows
 	}
 
-	if _, err := a.Manual.CommitHeld(ctx, unitID); err != nil {
+	var commitErr error
+	if as != nil {
+		_, commitErr = a.Manual.CommitHeldAs(ctx, unitID, as.Provider, as.ExternalID)
+	} else {
+		_, commitErr = a.Manual.CommitHeld(ctx, unitID)
+	}
+	if err := commitErr; err != nil {
 		switch {
 		case errors.Is(err, importjob.ErrUnitNotQueued):
 			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitNotQueued
