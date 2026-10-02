@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, Info } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { Card, Toggle } from "./SettingsCard";
 
 type MetadataSource = components["schemas"]["MetadataSource"];
 type Settings = components["schemas"]["MetadataSettings"];
@@ -112,25 +113,13 @@ export function MetadataSettings() {
     .map((category) => category.name);
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Metadata</h2>
-      <p className="text-xs text-ink-muted">
-        Sources are set per media type; every library of that type uses them.
+    <section className="flex flex-col gap-4">
+      <p className="max-w-2xl text-sm text-ink-muted">
+        Where artist and album facts, covers and photos come from. Sources are set per media type; every library of that type uses
+        them. {musicLibraries.length === 0 ? "No music library uses these yet." : `Music is used by ${musicLibraries.join(", ")}.`}
       </p>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <div className="flex flex-col gap-0.5">
-          <h3 className="text-sm font-medium text-ink">Music</h3>
-          <p className="text-xs text-ink-muted">
-            {musicLibraries.length === 0
-              ? "No music library uses these yet."
-              : `Used by ${musicLibraries.join(", ")}.`}
-          </p>
-        </div>
-
-        <p className="text-xs text-ink-muted">
-          Artist and album data is asked from each source in turn until one answers.
-        </p>
+      <Card title="Artists and albums" help="Asked from each source in turn until one answers. MusicBrainz always answers as a last resort.">
         <OrderedSources
           title="Source order"
           sources={SOURCES}
@@ -146,49 +135,57 @@ export function MetadataSettings() {
           onSave={(agent) => patch.mutate({ brainzmash_user_agent: agent })}
           busy={patch.isPending}
         />
+      </Card>
 
-        <div className="flex flex-col gap-3 border-t border-border-subtle pt-3">
-          <p className="text-xs text-ink-muted">
-            Covers come from each source in turn; a later one only fills what the earlier ones left
-            missing.
-          </p>
-          <OrderedSources
-            title="Cover sources"
-            sources={COVER_SOURCES}
-            order={settings.cover_sources ?? []}
-            busy={patch.isPending}
-            onChange={(order) => patch.mutate({ cover_sources: order })}
-          />
-          <Switch
-            label="Wikidata"
-            note="Artist photos and biographies."
-            checked={settings.wikidata ?? true}
-            busy={patch.isPending}
-            onChange={(wikidata) => patch.mutate({ wikidata })}
-          />
-          <Switch
-            label="TheAudioDB"
-            note="Artist photos and biographies where Wikidata has none."
-            checked={settings.theaudiodb ?? true}
-            busy={patch.isPending}
-            onChange={(theaudiodb) => patch.mutate({ theaudiodb })}
-          />
-          <BackfillForm
-            key={settings.people_backfill_per_run ?? 200}
-            stored={settings.people_backfill_per_run ?? 200}
-            onSave={(perRun) => patch.mutate({ people_backfill_per_run: perRun })}
-            busy={patch.isPending}
-          />
-          <Switch
-            label="AcoustID fingerprints"
-            note="Identifies a file by its sound when its tags and folder name cannot. Needs the key below."
-            checked={settings.acoustid ?? true}
-            busy={patch.isPending}
-            onChange={(acoustid) => patch.mutate({ acoustid })}
-          />
-        </div>
-        {patch.isError && <p className="text-xs text-danger">That change was refused.</p>}
+      <Card title="Covers" help="Each source in turn; a later one only fills what the earlier ones left missing.">
+        <OrderedSources
+          title="Cover sources"
+          sources={COVER_SOURCES}
+          order={settings.cover_sources ?? []}
+          busy={patch.isPending}
+          onChange={(order) => patch.mutate({ cover_sources: order })}
+        />
+      </Card>
 
+      <Card title="Artist photos and biographies" help="Filled in the background, a few artists at a time.">
+        <Switch
+          label="Wikidata"
+          note="Artist photos and biographies."
+          checked={settings.wikidata ?? true}
+          busy={patch.isPending}
+          onChange={(wikidata) => patch.mutate({ wikidata })}
+        />
+        <Switch
+          label="TheAudioDB"
+          note="Artist photos and biographies where Wikidata has none."
+          checked={settings.theaudiodb ?? true}
+          busy={patch.isPending}
+          onChange={(theaudiodb) => patch.mutate({ theaudiodb })}
+        />
+        <BackfillForm
+          key={settings.people_backfill_per_run ?? 200}
+          stored={settings.people_backfill_per_run ?? 200}
+          onSave={(perRun) => patch.mutate({ people_backfill_per_run: perRun })}
+          busy={patch.isPending}
+        />
+        <ApiKeyForm
+          key={`theaudiodb-${String(settings.theaudiodb_api_key?.has_value ?? false)}`}
+          label="TheAudioDB API key"
+          unset="the free public key is used"
+          stored={settings.theaudiodb_api_key?.has_value ?? false}
+          onSave={(apiKey) => saveTheAudioDBKey.mutate(apiKey)}
+          busy={saveTheAudioDBKey.isPending}
+        >
+          Optional. TheAudioDB works without one; a supporter key from theaudiodb.com replaces the public key and its limits.
+        </ApiKeyForm>
+        {saveTheAudioDBKey.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
+      </Card>
+
+      <Card
+        title="Fingerprints"
+        help="Identifies a file by its sound when its tags and folder name cannot. Needs the key below."
+        toggle={<Toggle label="Use AcoustID" checked={settings.acoustid ?? true} disabled={patch.isPending} onChange={(acoustid) => patch.mutate({ acoustid })} />}
+      >
         <ApiKeyForm
           key={`acoustid-${String(settings.acoustid_api_key?.has_value ?? false)}`}
           label="AcoustID API key"
@@ -197,8 +194,7 @@ export function MetadataSettings() {
           onSave={(apiKey) => saveAcoustIDKey.mutate(apiKey)}
           busy={saveAcoustIDKey.isPending}
         >
-          Identifies a file by its sound when nothing else can name it. Without a key that step is
-          skipped and everything else still works. Free, and it takes a minute: register an
+          Without a key that step is skipped and everything else still works. Free, and it takes a minute: register an
           application at{" "}
           <a
             href="https://acoustid.org/new-application"
@@ -208,27 +204,12 @@ export function MetadataSettings() {
           >
             acoustid.org/new-application
           </a>
-          . The key it gives you is the one to paste here -- the key on your own account page is a
-          different one, for submitting fingerprints, and lookups refuse it.
+          . The key it gives you is the one to paste here; the key on your own account page is a different one, for submitting
+          fingerprints, and lookups refuse it.
         </ApiKeyForm>
-        {saveAcoustIDKey.isError && (
-          <p className="text-xs text-danger">That key could not be stored.</p>
-        )}
-        <ApiKeyForm
-          key={`theaudiodb-${String(settings.theaudiodb_api_key?.has_value ?? false)}`}
-          label="TheAudioDB API key"
-          unset="the free public key is used"
-          stored={settings.theaudiodb_api_key?.has_value ?? false}
-          onSave={(apiKey) => saveTheAudioDBKey.mutate(apiKey)}
-          busy={saveTheAudioDBKey.isPending}
-        >
-          Optional. TheAudioDB works without one; a supporter key from theaudiodb.com replaces the
-          public key and its limits.
-        </ApiKeyForm>
-        {saveTheAudioDBKey.isError && (
-          <p className="text-xs text-danger">That key could not be stored.</p>
-        )}
-      </div>
+        {saveAcoustIDKey.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
+      </Card>
+      {patch.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
   );
 }

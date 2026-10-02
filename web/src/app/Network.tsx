@@ -6,6 +6,8 @@ import { api } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
+import { Card, SaveBar, Toggle } from "./SettingsCard";
+
 type NetworkSettings = components["schemas"]["NetworkSettings"];
 type NetworkUpdate = components["schemas"]["NetworkSettingsUpdate"];
 
@@ -83,19 +85,22 @@ function NetworkForm({
     parsedBypass.join("\n") !== network.proxy_bypass.join("\n") ||
     parsedAllow.join("\n") !== network.allow_cidrs.join("\n");
 
+  const submit = () =>
+    onSave({
+      port,
+      proxy_enabled: proxyEnabled,
+      proxy_url: proxyURL.trim() === "" ? undefined : proxyURL.trim(),
+      proxy_bypass: parsedBypass,
+      allow_cidrs_enabled: allowEnabled,
+      allow_cidrs: parsedAllow,
+    });
+
   return (
     <form
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
-        onSave({
-          port,
-          proxy_enabled: proxyEnabled,
-          proxy_url: proxyURL.trim() === "" ? undefined : proxyURL.trim(),
-          proxy_bypass: parsedBypass,
-          allow_cidrs_enabled: allowEnabled,
-          allow_cidrs: parsedAllow,
-        });
+        submit();
       }}
     >
       <Card title="Listen port" help="The port Solarr serves on. A change needs a restart of the container.">
@@ -171,72 +176,8 @@ function NetworkForm({
         </label>
       </Card>
 
-      <div className="sticky bottom-0 -mx-1 flex items-center gap-3 border-t border-border-subtle bg-canvas/95 px-1 py-3 backdrop-blur">
-        <button
-          type="submit"
-          disabled={busy || !dirty}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          {busy ? "Saving…" : "Save"}
-        </button>
-        {dirty && <span className="text-xs text-ink-muted">Unsaved changes</span>}
-      </div>
+      <SaveBar dirty={dirty} busy={busy} onSave={submit} />
     </form>
-  );
-}
-
-/** One group of related settings: a heading, what it does, an optional on/off switch and the fields. */
-function Card({
-  title,
-  help,
-  toggle,
-  children,
-}: {
-  title: string;
-  help: string;
-  toggle?: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
-      <div className="flex items-start gap-4">
-        <div className="flex flex-1 flex-col gap-0.5">
-          <h2 className="text-sm font-medium">{title}</h2>
-          <p className="max-w-xl text-xs text-ink-muted">{help}</p>
-        </div>
-        {toggle}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function Toggle({
-  label,
-  checked,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  disabled: boolean;
-  onChange: (value: boolean) => void;
-}) {
-  return (
-    <label className="flex shrink-0 cursor-pointer items-center gap-2 text-xs text-ink">
-      {label}
-      <input
-        type="checkbox"
-        role="switch"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="h-5 w-9 cursor-pointer appearance-none rounded-full bg-border-subtle transition-colors
-                   checked:bg-accent relative after:absolute after:left-0.5 after:top-0.5 after:size-4
-                   after:rounded-full after:bg-white after:transition-transform checked:after:translate-x-4"
-      />
-    </label>
   );
 }
 

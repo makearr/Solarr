@@ -44,7 +44,7 @@ export function Backups() {
       </div>
       <SettingsDocument />
 
-      <h3 className="text-xs font-medium uppercase tracking-wide text-ink-muted">Database backups</h3>
+      <h3 className="text-sm font-semibold text-ink">Database backups</h3>
       <p className="max-w-2xl text-xs text-ink-muted">
         Restoring a database is an offline procedure: stop the server and put the file back. There
         is no button for it on purpose.
