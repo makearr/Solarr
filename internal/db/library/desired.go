@@ -556,18 +556,26 @@ func (d Desired) RecomputeAlbum(ctx context.Context, itemID, workID int64) error
 }
 
 func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, workID int64) error {
+	item, err := queries.GetDesiredItem(ctx, itemID)
+	if err != nil {
+		return fmt.Errorf("get item: %w", err)
+	}
 	parts, err := queries.ListWorkParts(ctx, workID)
 	if err != nil {
 		return fmt.Errorf("list parts: %w", err)
 	}
 	var required sql.NullInt64
-	if len(parts) > 0 {
-		var monitored int64
-		for _, part := range parts {
-			if part.Monitored == 1 {
-				monitored++
-			}
+	var scoped, monitored int64
+	for _, part := range parts {
+		if !partInScope(part.MediaRef, item.MediaRef) {
+			continue
 		}
+		scoped++
+		if part.Monitored == 1 {
+			monitored++
+		}
+	}
+	if scoped > 0 {
 		required = sql.NullInt64{Int64: monitored, Valid: true}
 	}
 	if err := queries.SetDesiredItemRequiredCount(ctx,
@@ -577,7 +585,7 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 	if err := queries.RecomputePresentCount(ctx, itemID); err != nil {
 		return fmt.Errorf("recompute present count: %w", err)
 	}
-	item, err := queries.GetDesiredItem(ctx, itemID)
+	item, err = queries.GetDesiredItem(ctx, itemID)
 	if err != nil {
 		return fmt.Errorf("get item: %w", err)
 	}
