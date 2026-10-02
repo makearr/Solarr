@@ -82,6 +82,16 @@ func TestDownloader_AddSendsTheTorrentUnderTheCategoryAndAnswersTheInfoHash(t *t
 		t.Errorf("Referer = %q", got)
 	}
 
+	for _, body := range []string{`{"success_count":1,"failure_count":0,"pending_count":0}`, `{"success_count":0,"failure_count":0,"pending_count":1}`} {
+		server.routes["/api/v2/torrents/add"] = route{body: body}
+		if _, err := downloader.Add(t.Context(), download.AddRequest{File: torrentFile()}); err != nil {
+			t.Errorf("v5.2 answer %s: %v, want accepted", body, err)
+		}
+	}
+	server.routes["/api/v2/torrents/add"] = route{body: `{"success_count":0,"failure_count":1,"pending_count":0}`}
+	if _, err := downloader.Add(t.Context(), download.AddRequest{File: torrentFile()}); !errors.Is(err, download.ErrRefused) {
+		t.Errorf("a failure count: %v, want ErrRefused", err)
+	}
 	server.routes["/api/v2/torrents/add"] = route{body: "Fails."}
 	if _, err := downloader.Add(t.Context(), download.AddRequest{File: torrentFile()}); !errors.Is(err, download.ErrRefused) {
 		t.Errorf("Fails.: %v, want ErrRefused", err)
@@ -118,7 +128,7 @@ func TestDownloader_DownloadsMapsStatesAndOnlyACompletedOneHasAPath(t *testing.T
 
 func TestClient_LogsInWithCredentialsAndSendsTheSessionCookie(t *testing.T) {
 	header := make(http.Header)
-	header.Add("Set-Cookie", "SID=abc123; HttpOnly")
+	header.Add("Set-Cookie", "QBT_SID_8086=abc123; HttpOnly")
 	server := &fakeServer{routes: map[string]route{
 		"/api/v2/auth/login":  {body: "Ok.", header: header},
 		"/api/v2/app/version": {body: "v5.2.3"},
@@ -127,7 +137,7 @@ func TestClient_LogsInWithCredentialsAndSendsTheSessionCookie(t *testing.T) {
 	if err != nil || version != "v5.2.3" {
 		t.Fatalf("Version = %q, %v", version, err)
 	}
-	if cookie, _ := server.requested[1].Cookie("SID"); cookie == nil || cookie.Value != "abc123" {
+	if cookie, _ := server.requested[1].Cookie("QBT_SID_8086"); cookie == nil || cookie.Value != "abc123" {
 		t.Errorf("the version call carried no session cookie")
 	}
 	if !strings.Contains(server.bodies[0], "username=me") || !strings.Contains(server.bodies[0], "password=secret") {

@@ -35,12 +35,14 @@ type Client struct {
 	username string
 	password string
 	session  *string
+	// sessionName is the cookie qBittorrent named the session with.
+	sessionName *string
 }
 
 // NewClient builds one; credentials is "user:password", or empty when the host lets this address in.
 func NewClient(client *httpx.Client, baseURL, credentials string) Client {
 	user, password, _ := strings.Cut(credentials, ":")
-	return Client{http: client, baseURL: strings.TrimRight(baseURL, "/"), username: user, password: password, session: new(string)}
+	return Client{http: client, baseURL: strings.TrimRight(baseURL, "/"), username: user, password: password, session: new(string), sessionName: new(string)}
 }
 
 func (c Client) login(ctx context.Context) error {
@@ -53,7 +55,9 @@ func (c Client) login(ctx context.Context) error {
 		return ErrLoginRefused
 	}
 	for _, cookie := range cookies {
-		if cookie.Name == "SID" {
+		// "SID", or "QBT_SID_<port>" since v5.
+		if cookie.Name == "SID" || strings.HasPrefix(cookie.Name, "QBT_SID") {
+			*c.sessionName = cookie.Name
 			*c.session = cookie.Value
 		}
 	}
@@ -73,7 +77,7 @@ func (c Client) send(
 	// qBittorrent checks Referer/Origin against the host on every state-changing call.
 	request.Header.Set("Referer", c.baseURL)
 	if withSession && *c.session != "" {
-		request.AddCookie(&http.Cookie{Name: "SID", Value: *c.session})
+		request.AddCookie(&http.Cookie{Name: *c.sessionName, Value: *c.session})
 	}
 	response, err := c.http.Do(ctx, request)
 	// httpx turns a non-success status into an error; a 403 or 404 is an answer here (login needed, an older API).
@@ -223,10 +227,26 @@ func (c Client) Add(ctx context.Context, request AddRequest) error {
 	if err != nil {
 		return err
 	}
-	if status != http.StatusOK || strings.TrimSpace(string(data)) != "Ok." {
+	if status != http.StatusOK || !addSucceeded(data) {
 		return fmt.Errorf("qbittorrent: add torrent: %w", ErrRefused)
 	}
 	return nil
+}
+
+// addSucceeded reads torrents/add's answer: "Ok." or "Fails." before v5.2, a JSON count of what was added, still
+// loading its metadata, or failed after. Anything unreadable is taken as success, since the status was 200.
+func addSucceeded(body []byte) bool {
+	text := strings.TrimSpace(string(body))
+	if text == "Fails." {
+		return false
+	}
+	var counts struct {
+		Failure *int `json:"failure_count"`
+	}
+	if json.Unmarshal(body, &counts) == nil && counts.Failure != nil {
+		return *counts.Failure == 0
+	}
+	return true
 }
 
 // ErrRefused is qBittorrent declining a torrent it was sent.
