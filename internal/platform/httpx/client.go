@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -93,6 +94,10 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 		inner: &http.Client{
 			Transport: transport,
 			CheckRedirect: func(request *http.Request, via []*http.Request) error {
+				// An indexer answers a torrent download with a redirect to a magnet link: not a page to fetch.
+				if request.URL.Scheme == "magnet" {
+					return &MagnetRedirect{Link: request.URL.String()}
+				}
 				if len(via) >= maxRedirects {
 					return fmt.Errorf("httpx: stopped after %d redirects", maxRedirects)
 				}
@@ -122,6 +127,12 @@ func NewTransport(guard *Guard, proxy LiveProxyPolicy) *http.Transport {
 	}
 	return transport
 }
+
+// MagnetRedirect is a server answering with a redirect to a magnet link, which is the release itself rather than an
+// error; the caller takes Link as what it asked to download.
+type MagnetRedirect struct{ Link string }
+
+func (e *MagnetRedirect) Error() string { return "httpx: redirected to a magnet link" }
 
 // Do sends a request through the guard, the breaker and the rate limiter (§11.3).
 func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response, error) {
@@ -156,6 +167,13 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	}
 
 	response, err := c.inner.Do(request.WithContext(timedOut))
+	var magnet *MagnetRedirect
+	if errors.As(err, &magnet) {
+		cancel()
+		c.limiter.Observe(c.provider, Outcome{Success: true})
+		c.breaker.Observe(c.provider, true)
+		return nil, magnet
+	}
 	if err != nil {
 		cancel()
 		c.limiter.Observe(c.provider, Outcome{Success: false})

@@ -2,6 +2,9 @@ package indexer_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -27,5 +30,24 @@ func TestFetch_RefusesAnEmptyFile(t *testing.T) {
 
 	if _, err := client.Fetch(context.Background(), "http://indexer.local/x"); err == nil {
 		t.Fatal("Fetch succeeded on an empty body")
+	}
+}
+
+type redirectingTransport struct{ location string }
+
+func (f redirectingTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	header := make(http.Header)
+	header.Set("Location", f.location)
+	return &http.Response{StatusCode: http.StatusFound, Header: header, Body: io.NopCloser(strings.NewReader("")), Request: request}, nil
+}
+
+// Prowlarr answers a torrent's download with a redirect to its magnet link: that link is the release.
+func TestFetch_AMagnetRedirectIsTheRelease(t *testing.T) {
+	const magnet = "magnet:?xt=urn:btih:0123456789abcdef0123456789abcdef01234567&dn=x"
+	client := indexer.NewClient(newTestClient(t, redirectingTransport{location: magnet}), "http://indexer.local", "key")
+
+	body, err := client.Fetch(context.Background(), "http://indexer.local/4/download?link=abc")
+	if err != nil || string(body) != magnet {
+		t.Fatalf("Fetch = %q, %v, want the magnet link", body, err)
 	}
 }
