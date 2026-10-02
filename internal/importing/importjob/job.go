@@ -268,7 +268,8 @@ func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, 
 	}
 	j.sweepWorkspaces()
 	sum := sha256.Sum256([]byte(sourcePath))
-	workspace = path.Join(j.workspace, hex.EncodeToString(sum[:])[:12])
+	// Named after the source so a workspace session reads as what it came from, and the hash keeps two sources apart.
+	workspace = path.Join(j.workspace, fsx.SanitiseComponent(path.Base(sourcePath))+"-"+hex.EncodeToString(sum[:])[:8])
 	if err := unpack.RemoveTree(j.fsys, workspace); err != nil {
 		j.logger.Warn("import workspace not cleared", slog.String("workspace", workspace), slog.Any("error", err))
 		return "", 0
