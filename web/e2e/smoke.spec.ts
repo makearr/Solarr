@@ -6,6 +6,8 @@ const PASSWORD = "TestPass123!TestPass";
 
 /** Mounted read-only into the instance by the harness. */
 const LIBRARY_ROOT = "/library";
+/** The user's test library, mounted read-only by the harness. */
+const MOUNTED_MUSIC = "/media/music";
 // A real release folder, named in Makefile.local (E2E_IMPORT_FOLDER) so no library name is in git.
 const DOWNLOAD_FIXTURE = process.env.E2E_IMPORT_FIXTURE ?? "";
 
@@ -113,6 +115,52 @@ test("a source path can be browsed, and a finished session dismissed", async ({ 
   await dismiss.first().click();
   await expect(dismiss).toHaveCount(before - 1);
 });
+
+/** Images in the page that have really loaded, not merely been requested. The page is reloaded first: a picture
+ *  that was missing when the wall rendered stays a placeholder until the next visit. */
+async function loadedImages(page: Page): Promise<number> {
+  await page.reload();
+  await page.waitForTimeout(3_000);
+  return page
+    .locator("main img")
+    .evaluateAll((images) => images.filter((image) => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0).length);
+}
+
+// The 2026-09-13 finding, kept from happening again: artist images and album covers were declared done while
+// none had ever been fetched. This scans the mounted library (read-only, ~1,100 files) with the real
+// metadata providers and waits for the walls to show real pictures.
+test("a scan fills the artist wall with photos and the album wall with covers", async ({ page }) => {
+  test.setTimeout(10 * 60_000);
+  await signIn(page);
+
+  await page.goto("/storage/roots");
+  await page.getByLabel("Path").fill(MOUNTED_MUSIC);
+  // Named explicitly: the form's default is the first library listed, which is not always Music.
+  const form = page.locator("form").filter({ has: page.getByRole("button", { name: /add root folder/i }) });
+  await form.getByRole("combobox").selectOption({ label: "Music (music)" });
+  await form.getByRole("button", { name: /add root folder/i }).click();
+  await expect(page.getByText(MOUNTED_MUSIC).first()).toBeVisible();
+
+  // The scan starts on attach; the Albums count in the tree says how many it has found.
+  await expect.poll(async () => albumCount(page), { timeout: 4 * 60_000, intervals: [3_000] }).toBeGreaterThan(0);
+  await page.goto("/library/1/artists");
+
+  // Photos come from the providers in the background, a few a minute at MusicBrainz's pace.
+  await expect.poll(async () => loadedImages(page), { timeout: 6 * 60_000, intervals: [5_000] }).toBeGreaterThan(2);
+  await page.screenshot({ path: "/e2e-out/artists-wall.png" });
+
+  await page.goto("/library/1/albums");
+  await expect.poll(async () => loadedImages(page), { timeout: 6 * 60_000, intervals: [5_000] }).toBeGreaterThan(2);
+  await page.screenshot({ path: "/e2e-out/albums-wall.png" });
+});
+
+/** The Albums count the tree shows, read from the API the tree reads: the page itself only refreshes it on navigation. */
+async function albumCount(page: Page): Promise<number> {
+  const response = await page.request.get("/api/v1/libraries");
+  if (!response.ok()) return 0;
+  const libraries = (await response.json()) as { id: number; levels: { key: string; count?: number }[] }[];
+  return libraries.find((library) => library.id === 1)?.levels.find((level) => level.key === "albums")?.count ?? 0;
+}
 
 async function signIn(page: Page) {
   await page.goto("/");

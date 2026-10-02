@@ -58,15 +58,29 @@ fixed.
 
 Monitoring an album later from its own page also searches it at once while that box is ticked.
 
+With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
+library compared with each artist's discography (live albums and compilations left out): the most
+missing first, with one click to follow the artist and add the rest. It fills in after the weekly
+comparison has run (Settings → Scheduler → Compare discographies).
+
+On an album's or artist's page, **Choose image** lists the pictures the metadata providers hold
+(Cover Art Archive, TheAudioDB, Wikidata); the one you pick is kept over later refreshes.
+
 ## 5. What happens on its own
 
 Three scheduled tasks (Settings → Scheduler) find what is missing without you pressing anything:
 
 - **RSS sync** (every 15 minutes) reads each indexer's newest releases and grabs one a wanted album
   accepts.
-- **Search for missing albums** (every 15 minutes) searches the most urgent missing albums, within
-  **Automatic searches per hour** (Settings → Priority, advanced; default 12, 0 turns it off). An
-  album just searched waits 6 hours, then 12, 24, doubling to a week.
+- **Search for missing albums** (every 15 minutes) searches the most urgent wanted albums, within
+  **Automatic searches per hour** (Settings → Libraries → Priority, advanced; default 12, 0 turns it off). Each
+  hour's searches are split 40% new releases, 40% older gaps and 20% **upgrades** (albums below the
+  library's cutoff); a share one group leaves unused goes to the others. **Automatic search order**
+  (same section) picks the order within a share: oldest or newest searched, oldest or newest release,
+  or a random pick among the oldest searched. An album just searched waits 6 hours, then 12, 24,
+  doubling to a week; after a failed download it is tried again within a day. An upgrade also waits
+  until the file it would replace is a day old, and is left alone once it has had three imports in
+  a week.
 - **Check downloads** (every minute) follows each download to imported and cleaned up. A download
   that fails is blocklisted and the album searched again.
 
@@ -78,7 +92,15 @@ full, and stop when the library's root folders have no space above their reserve
 - **Activity → Queue**: what is downloading, and what is held waiting for room.
 - **Activity → History**: what was grabbed, imported or failed, and why.
 - **Library → Wanted** lists what is **Missing**, and under **Cutoff Unmet** the complete albums whose
-  files are below the library's quality (not searched for upgrades yet).
+  files are below the library's quality. **Search all** there looks for a strictly better release of
+  each; the automatic search does the same a few at a time.
+- **Activity → Notifications** (and the bell in the header) collects what needs you: the warnings the
+  dashboard shows, and the last week's failed downloads and imports.
+- **Library → Statistics**: monitored albums by state (each figure opens those albums), files and bytes
+  by audio codec, and the last 30 days' downloads. Computed once a day, not live.
+- **Calendar**: month, week, a seven-day forecast, one day, an agenda and a year view of the releases of
+  artists you follow and albums you have asked for. Green has it, blue is wanted and not out yet, red
+  wanted and out.
 - An **album's page**, under Search, says when it was last searched and when it will be searched
   again -- or why it will not: a download on its way, no indexer, searching switched off, no space,
   or waiting for its release date. **Interactive search** lists every release found, best first,
@@ -90,14 +112,33 @@ full, and stop when the library's root folders have no space above their reserve
 folder. Solarr works out what is in it.
 
 - **Preview first** places nothing until you commit from the review below.
-- **Add unrecognised albums** (on by default): a folder no metadata source recognises still
+- **Only into library** limits the import to one library; **Add as a root instead of moving** makes the
+  folder itself a root of that library, scanned where it is, instead of moving files out of it.
+- **Archives are opened like folders**: a zip, rar or 7z (multipart sets as one, archives inside
+  archives too) is opened into a workspace under the cache folder and its contents are inspected and
+  committed exactly like a folder. The archive itself is never changed. A download that is only an
+  archive imports the same way.
+- **Add unrecognised albums** (off by default): a folder no metadata source recognises still
   becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for;
   commit it from the review with the right candidate and its files move onto the real album.
 - Every import can be **reverted** from its session.
 
 Files a library scan could not identify wait under **Library → Music → Unidentified**.
 
-## 8. What the colours mean
+## 8. Libraries and storage
+
+- **Storage → Root folders** groups the roots under their library; a root folder belongs to at most one.
+  Each card carries the policy (read only, allow rename, reserve), capacity, and **Preview rename / drain**
+  to move files off a disk.
+- **Library → Music → File management** (advanced): **Merge Artists Stored Under Several Names** folds
+  duplicate artists into one after each disk scan; **Navidrome profile** (under naming → tags) also fills
+  the track artist's tags and puts a `cover.jpg` in each album folder that has none.
+- **Library → Music → Quality** and **Quality profiles**: a profile ranks codecs, file extensions and
+  containers (an `.m4a` and an `.mp4` are both MP4), channels and bitrate targets.
+- The Albums view sorts by title, artist, release, added, size on disk, quality profile, status, genres or
+  tags, and shows posters, an overview or a table.
+
+## 9. What the colours mean
 
 On posters and artist pages: **green** complete, **red** missing, **purple** downloading,
 **yellow** not released yet, **grey** unverified.

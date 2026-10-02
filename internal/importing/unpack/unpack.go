@@ -11,6 +11,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/platform/archive"
@@ -189,4 +190,28 @@ func RemoveTree(fsys fsx.FS, root string) error {
 		}
 	}
 	return fsys.Remove(root)
+}
+
+// SweepOlderThan removes the workspaces of dir last touched before cutoff and answers how many; a missing dir is none.
+func SweepOlderThan(fsys fsx.FS, dir string, cutoff time.Time) (int, error) {
+	entries, err := fsys.ReadDir(dir)
+	if err != nil {
+		if isMissing(err) {
+			return 0, nil
+		}
+		return 0, err
+	}
+	removed := 0
+	for _, entry := range entries {
+		folder := path.Join(dir, entry.Name)
+		info, err := fsys.Stat(folder)
+		if err != nil || !info.ModTime.Before(cutoff) {
+			continue
+		}
+		if err := RemoveTree(fsys, folder); err != nil {
+			return removed, err
+		}
+		removed++
+	}
+	return removed, nil
 }
