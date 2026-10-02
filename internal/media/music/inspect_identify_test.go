@@ -1,6 +1,7 @@
 package music_test
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
@@ -173,5 +175,66 @@ func TestRefineUnitByAlbum_ADownloadIsMatchedAgainstTheAlbumItWasGrabbedFor(t *t
 	}
 	if seeded.Best == nil || seeded.Best.ExternalID.ExternalID != "rg-studio" || placement == nil {
 		t.Errorf("with provenance Best = %+v, placement %v; want rg-studio placed", seeded.Best, placement)
+	}
+}
+
+// printsByPath fingerprints a file as its own path, so the AcoustID fake can answer per file.
+type printsByPath struct{}
+
+func (printsByPath) Fingerprint(_ context.Context, paths []string) ([]mediatool.Fingerprint, error) {
+	prints := make([]mediatool.Fingerprint, len(paths))
+	for index, path := range paths {
+		prints[index] = mediatool.Fingerprint{Path: path, Chromaprint: path, Duration: 200 * time.Second}
+	}
+	return prints, nil
+}
+
+// namesByPrint answers the recording each fingerprint names.
+type namesByPrint struct {
+	enabled bool
+	named   map[string]acoustid.Recording
+}
+
+func (n namesByPrint) Enabled() bool { return n.enabled }
+
+func (n namesByPrint) Lookup(_ context.Context, fingerprint string, _ time.Duration) ([]acoustid.Match, error) {
+	recording, found := n.named[fingerprint]
+	if !found {
+		return nil, nil
+	}
+	return []acoustid.Match{{Score: 0.97, Recordings: []acoustid.Recording{recording}}}, nil
+}
+
+// D12 on the import side: a unit whose files carry no tags at all is named from its audio and matched as an album,
+// the way a scan's fingerprint pass does -- and nothing happens without an AcoustID key.
+func TestRefineUnitByAudio_NamesATaglessUnitFromItsFingerprints(t *testing.T) {
+	unit, probes, lookup := traumaUnit()
+	lookup.searches = nil
+	named := map[string]acoustid.Recording{}
+	for index, track := range traumaTracks {
+		relPath := fmt.Sprintf("downloads/P!po - Kebilegev Bibihi/%02d.flac", index+1)
+		probe := probes[relPath]
+		probe.Tags = mediatool.Tags{}
+		probes[relPath] = probe
+		named["/"+relPath] = acoustid.Recording{
+			MBID: "rec-" + strconv.Itoa(index), Title: track.title, Artist: "P!po",
+			Duration: time.Duration(track.seconds) * time.Second, ReleaseGroupMBIDs: []string{"rg-studio"},
+		}
+	}
+	lookup.groups = map[string]musicbrainz.ReleaseGroup{"rg-studio": {MBID: "rg-studio", Title: "Kebilegev Bibihi", PrimaryType: "Album"}}
+	absolute := func(relPath string) string { return "/" + relPath }
+
+	naming := music.AudioNaming{Fingerprints: printsByPath{}, AcoustID: namesByPrint{enabled: true, named: named}, Albums: lookup}
+	refined, placement, err := music.RefineUnitByAudio(t.Context(), naming, unit, probes, absolute, model.ChainResult{}, 0.9, nil)
+	if err != nil {
+		t.Fatalf("RefineUnitByAudio: %v", err)
+	}
+	if refined.Best == nil || refined.Best.ExternalID.ExternalID != "rg-studio" || placement == nil {
+		t.Fatalf("Best = %+v, placement %v; want the unit named from its audio and placed on rg-studio", refined.Best, placement)
+	}
+
+	naming.AcoustID = namesByPrint{enabled: false, named: named}
+	if off, _, err := music.RefineUnitByAudio(t.Context(), naming, unit, probes, absolute, model.ChainResult{}, 0.9, nil); err != nil || off.Best != nil {
+		t.Errorf("without a key: Best = %+v, %v; want nothing", off.Best, err)
 	}
 }

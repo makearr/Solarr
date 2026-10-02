@@ -604,10 +604,11 @@ func (j *Job) provenanceSeeds(ctx context.Context, acquisitionID *int64) []strin
 
 // albumRefiner matches units as albums over the cluster's probes, or nil when no lookup is configured.
 // seeds are release groups always scored, whatever the files' names recall.
-func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe, threshold float64, seeds []string) refineUnit {
+func (j *Job) albumRefiner(sourcePath string, relPaths []string, probes []mediatool.Probe, threshold float64, seeds []string) refineUnit {
 	if j.albums == nil {
 		return nil
 	}
+	naming := music.AudioNaming{Fingerprints: j.tool, AcoustID: j.acoustID, Albums: j.albums}
 	byPath := make(map[string]mediatool.Probe, len(probes))
 	for i, probe := range probes {
 		byPath[relPaths[i]] = probe
@@ -616,6 +617,16 @@ func (j *Job) albumRefiner(relPaths []string, probes []mediatool.Probe, threshol
 		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result, threshold, seeds)
 		if err != nil {
 			j.logger.Warn("import album identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
+		}
+		// Still nothing: name the files from their audio (D12), as a scan does.
+		if refined.Best == nil && placement == nil {
+			audio, audioPlacement, err := music.RefineUnitByAudio(ctx, naming, unit, byPath,
+				func(relPath string) string { return path.Join(sourcePath, relPath) }, refined, threshold, seeds)
+			if err != nil {
+				j.logger.Warn("import audio identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
+			} else {
+				refined, placement = audio, audioPlacement
+			}
 		}
 		return refined, placement
 	}
@@ -725,7 +736,7 @@ func (j *Job) commitCluster(
 
 	poisonReasons := j.poisonedByExclusion(batch, categoryID)
 
-	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(relPaths, probes, cfg.AmbiguityThreshold, seeds))
+	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(sourcePath, relPaths, probes, cfg.AmbiguityThreshold, seeds))
 	for i, reason := range poisonReasons {
 		if reason != "" {
 			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action

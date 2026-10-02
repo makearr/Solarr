@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
@@ -76,15 +78,97 @@ func RefineUnitByAlbum(
 	if err != nil {
 		return result, nil, fmt.Errorf("music: identify unit %q as an album: %w", unit.Directory, err)
 	}
-	switch decision = decision.Within(threshold); decision.Outcome {
+	refined, placement := albumResult(decision.Within(threshold), relPaths, result)
+	return refined, placement, nil
+}
+
+// albumResult is an album decision as the chain's answer for a unit.
+func albumResult(decision AlbumDecision, relPaths []string, result model.ChainResult) (model.ChainResult, *AlbumPlacement) {
+	switch decision.Outcome {
 	case AlbumIdentified:
 		best := AlbumCandidates(AlbumDecision{Outcome: decision.Outcome, Scores: []ReleaseScore{*decision.Best}})[0]
 		best.Confidence = albumConfidence(*decision.Best)
 		best.ExternalID.Confidence = best.Confidence
 		return model.ChainResult{Best: &best, Candidates: append([]model.Identification{best}, result.Candidates...)},
-			PlacementOf(decision, relPaths), nil
+			PlacementOf(decision, relPaths)
 	case AlbumAmbiguous:
-		return model.ChainResult{Candidates: append(AlbumCandidates(decision), result.Candidates...)}, nil, nil
+		return model.ChainResult{Candidates: append(AlbumCandidates(decision), result.Candidates...)}, nil
 	}
-	return result, nil, nil
+	return result, nil
+}
+
+// AudioNaming is what a unit's files are named from their audio with: fingerprints, AcoustID, and the album sources.
+type AudioNaming struct {
+	Fingerprints Fingerprinter
+	AcoustID     AcoustIDLookup
+	Albums       AlbumLookup
+}
+
+// RefineUnitByAudio is RefineUnitByAlbum's last rung, for a unit its tags and names could not identify: the files'
+// own audio is fingerprinted, AcoustID names the recordings, and those names (not AcoustID's recording ids) are
+// matched against whole tracklists, seeded with the release groups AcoustID named, most agreed-on first -- the
+// scan's fingerprint pass, for an import (D12). Nothing happens without an AcoustID key.
+func RefineUnitByAudio(
+	ctx context.Context, naming AudioNaming, unit inspect.Unit, probes map[string]mediatool.Probe,
+	absolute func(relPath string) string, result model.ChainResult, threshold float64, seeds []string,
+) (model.ChainResult, *AlbumPlacement, error) {
+	if naming.Albums == nil || naming.Fingerprints == nil || naming.AcoustID == nil || !naming.AcoustID.Enabled() ||
+		result.Best != nil {
+		return result, nil, nil
+	}
+	var relPaths, paths []string
+	for _, media := range unit.Media {
+		if probe, found := probes[media.RelPath]; found && probe.Err == nil {
+			relPaths = append(relPaths, media.RelPath)
+			paths = append(paths, absolute(media.RelPath))
+		}
+	}
+	if len(paths) == 0 {
+		return result, nil, nil
+	}
+	prints, err := naming.Fingerprints.Fingerprint(ctx, paths)
+	if err != nil || len(prints) != len(paths) {
+		return result, nil, fmt.Errorf("music: fingerprint unit %q: %w", unit.Directory, err)
+	}
+	recognised := make([][]acoustid.Recording, len(paths))
+	for index, print := range prints {
+		if print.Err != nil || print.Chromaprint == "" {
+			continue
+		}
+		matches, err := naming.AcoustID.Lookup(ctx, print.Chromaprint, print.Duration)
+		if err != nil {
+			continue
+		}
+		recognised[index] = namedRecordings(matches)
+	}
+	artist := consensusArtist(recognised)
+	var locals []LocalTrack
+	var namedPaths []string
+	counts := make(map[string]int)
+	var order []string
+	for index, relPath := range relPaths {
+		recording, found := chooseRecording(recognised[index], artist, prints[index].Duration)
+		if !found {
+			continue
+		}
+		probe := probes[relPath]
+		locals = append(locals, recordedLocal(ReadLocalTrack(probe.Tags, probe.Measured, relPath), recording, prints[index].Duration))
+		namedPaths = append(namedPaths, relPath)
+		for _, group := range recording.ReleaseGroupMBIDs {
+			if counts[group] == 0 {
+				order = append(order, group)
+			}
+			counts[group]++
+		}
+	}
+	if len(locals) == 0 {
+		return result, nil, nil
+	}
+	slices.SortStableFunc(order, func(a, b string) int { return counts[b] - counts[a] })
+	decision, err := IdentifyAlbum(ctx, naming.Albums, musicbrainz.PriorityIdentify, locals, append(slices.Clone(seeds), order...))
+	if err != nil {
+		return result, nil, fmt.Errorf("music: identify unit %q from its audio: %w", unit.Directory, err)
+	}
+	refined, placement := albumResult(decision.Within(threshold), namedPaths, result)
+	return refined, placement, nil
 }
