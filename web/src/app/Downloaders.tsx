@@ -223,13 +223,23 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         remote_path: mapped ? reported : undefined,
         local_path: mapped ? localFolder : undefined,
       };
+      // The folder first: a folder Solarr cannot see would leave a client that can never be imported from.
+      let folderId: number | undefined;
+      if (addFolder && localFolder) {
+        const added = await api.POST("/downloadfolders", { body: { path: localFolder, label: name, watch: false } });
+        if (added.error) {
+          throw new Error(
+            `Solarr cannot see the download folder: ${(added.error as { detail?: string }).detail ?? ""}. Mount it into Solarr's container (read-only is enough) or change where Solarr sees it. Nothing was added.`,
+          );
+        }
+        folderId = added.data?.id;
+      }
       const { error } = await api.POST("/downloaders", {
         body: { name, impl: kind, base_url: baseUrl, protocol: spec.protocol, credentials: secret || undefined, enabled: true, options },
       });
-      if (error) throw error;
-      if (addFolder && localFolder) {
-        const added = await api.POST("/downloadfolders", { body: { path: localFolder, label: name, watch: false } });
-        if (added.error) throw new Error(`The client was added, but the download folder was not: ${(added.error as { detail?: string }).detail ?? ""}`);
+      if (error) {
+        if (folderId !== undefined) await api.DELETE("/downloadfolders/{id}", { params: { path: { id: folderId } } });
+        throw error;
       }
     },
     onSuccess: () => {
