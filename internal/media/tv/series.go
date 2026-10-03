@@ -39,6 +39,8 @@ type AirTime struct {
 	Hour, Minute int
 	// Timezone is an IANA name; empty when only the clock time is known.
 	Timezone string
+	// Guessed is true when the zone comes from the network's country, not from a provider.
+	Guessed bool
 }
 
 // Confidence says how far an availability time can be trusted (section 19.2).

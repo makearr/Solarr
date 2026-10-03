@@ -121,6 +121,11 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 	}
 	merged := Merge(sources...)
 	merged.Type = DetectType(merged)
+	if merged.AirTime != nil && merged.AirTime.Timezone == "" {
+		if zone := GuessZone(merged.OriginalCountry); zone != "" {
+			merged.AirTime.Timezone, merged.AirTime.Guessed = zone, true
+		}
+	}
 	if haveRich {
 		if len(merged.Episodes) == 0 && len(rich.TMDBEpisodes) > 0 {
 			merged.Episodes, merged.Basis = rich.TMDBEpisodes, ProviderTMDB+":default"

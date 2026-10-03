@@ -271,7 +271,11 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 		fields = append(fields, library.SeriesFieldWrite{Field: "series_type", Provider: "detected", Value: string(series.Type)})
 	}
 	if series.AirTime != nil {
-		add("air_time", fmt.Sprintf("%02d:%02d %s", series.AirTime.Hour, series.AirTime.Minute, series.AirTime.Timezone))
+		guess := ""
+		if series.AirTime.Guessed {
+			guess = " (guess)"
+		}
+		add("air_time", fmt.Sprintf("%02d:%02d %s%s", series.AirTime.Hour, series.AirTime.Minute, series.AirTime.Timezone, guess))
 	}
 	if len(series.Cast) > 0 {
 		if encoded, err := json.Marshal(series.Cast); err == nil {
