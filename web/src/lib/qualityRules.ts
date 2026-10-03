@@ -34,7 +34,7 @@ export interface AudioRules {
 }
 
 type Target = { when?: Record<string, string>; min?: string; ideal: string; max?: string; weights?: unknown };
-type ScoringRule = { name: string; score: number; specs: { field: string; has?: string; required?: boolean }[] };
+type ScoringRule = { name: string; score: number; specs: { field: string; has?: string; eq?: string; required?: boolean }[] };
 type Document = {
   scoring?: ScoringRule[];
   quality_profile?: string;
@@ -200,13 +200,108 @@ function setOrDrop(doc: Document, key: "tiers" | "targets" | "require", value: o
   else delete doc[key];
 }
 
-/** A one-line summary, as a profile list shows it: "flac/alac > opus > aac > mp3". */
+/** A one-line summary, as a profile list shows it: "flac/alac > opus > aac > mp3", or a video profile's resolutions. */
 export function summarise(json: string): string {
   try {
     const rules = parseAudioRules(json);
-    const tiers = rules.codecs.length > 0 ? rules.codecs : rules.containers;
+    const resolutions = (JSON.parse(json || "{}") as Document).tiers?.resolution ?? [];
+    const audio = rules.codecs.length > 0 ? rules.codecs : rules.containers;
+    const tiers = resolutions.length > 0 ? resolutions : audio;
     return tiers.map((tier) => tier.join("/")).join(" > ");
   } catch {
     return "";
   }
+}
+
+/** What the form edits of a video profile (TV): the tiers in the order they rank, the resolution gate, the audio
+ *  language gate and the release groups that score higher. Everything else in the document is kept as it was. */
+export interface VideoRules {
+  resolutions: string[][];
+  sources: string[][];
+  videoCodecs: string[][];
+  hdr: string[][];
+  audioCodecs: string[][];
+  audioChannels: string[][];
+  rejectCodecs: string[];
+  /** The lowest and highest resolution accepted; empty means no limit on that side. */
+  minResolution: string;
+  maxResolution: string;
+  /** Audio languages of which at least one must be present; empty means no gate. */
+  audioLanguages: string[];
+  preferredGroups: string[];
+}
+
+const VIDEO_TIERS: readonly [keyof VideoRules, string][] = [
+  ["resolutions", "resolution"],
+  ["sources", "source"],
+  ["videoCodecs", "video_codec"],
+  ["hdr", "hdr"],
+  ["audioChannels", "audio_channels"],
+  ["audioCodecs", "audio_codec"],
+];
+
+const GROUP_PREFIX = "Preferred release group: ";
+/** Heard as a tie-breaker between releases of equal quality, as the language preferences are. */
+const GROUP_SCORE = 5;
+
+type VideoDocument = Document & { require?: { resolution?: { min?: string; max?: string }; audio_language?: { any_of?: string[] } } };
+
+export function parseVideoRules(json: string): VideoRules {
+  const doc = JSON.parse(json || "{}") as VideoDocument;
+  return {
+    resolutions: doc.tiers?.resolution ?? [],
+    sources: doc.tiers?.source ?? [],
+    videoCodecs: doc.tiers?.video_codec ?? [],
+    hdr: doc.tiers?.hdr ?? [],
+    audioCodecs: doc.tiers?.audio_codec ?? [],
+    audioChannels: doc.tiers?.audio_channels ?? [],
+    rejectCodecs: doc.require?.reject_codecs ?? [],
+    minResolution: doc.require?.resolution?.min ?? "",
+    maxResolution: doc.require?.resolution?.max ?? "",
+    audioLanguages: doc.require?.audio_language?.any_of ?? [],
+    preferredGroups: (doc.scoring ?? []).filter((rule) => rule.name.startsWith(GROUP_PREFIX)).map((rule) => rule.name.slice(GROUP_PREFIX.length)),
+  };
+}
+
+/** The rules document with the form's parts replaced and everything else (targets, other scoring rules) as it was. */
+export function buildVideoRules(json: string, name: string, rules: VideoRules): string {
+  const doc = JSON.parse(json || "{}") as VideoDocument;
+  doc.quality_profile = name;
+
+  const tiers = { ...(doc.tiers ?? {}) };
+  for (const [key, dimension] of VIDEO_TIERS) {
+    const value = rules[key] as string[][];
+    if (value.length > 0) tiers[dimension] = value;
+    else delete tiers[dimension];
+  }
+  setOrDrop(doc, "tiers", tiers);
+
+  const require = { ...(doc.require ?? {}) };
+  if (rules.rejectCodecs.length > 0) require.reject_codecs = rules.rejectCodecs;
+  else delete require.reject_codecs;
+  if (rules.minResolution && rules.maxResolution) require.resolution = { min: rules.minResolution, max: rules.maxResolution };
+  else delete require.resolution;
+  if (rules.audioLanguages.length > 0) require.audio_language = { any_of: rules.audioLanguages };
+  else delete require.audio_language;
+  setOrDrop(doc, "require", require);
+
+  let compare = (doc.compare ?? []).filter((entry) => {
+    const owner = VIDEO_TIERS.find(([, owned]) => owned === entry);
+    return !owner || (rules[owner[0]] as string[][]).length > 0;
+  });
+  for (const [key, entry] of VIDEO_TIERS) {
+    if ((rules[key] as string[][]).length > 0 && !compare.includes(entry)) {
+      compare = compare.filter((existing) => existing !== "score").concat(entry);
+    }
+  }
+  doc.compare = compare.filter((entry) => entry !== "score").concat("score");
+
+  const scoring = (doc.scoring ?? []).filter((rule) => !rule.name.startsWith(GROUP_PREFIX));
+  for (const group of rules.preferredGroups) {
+    scoring.push({ name: GROUP_PREFIX + group, score: GROUP_SCORE, specs: [{ field: "release_group", eq: group, required: true }] });
+  }
+  if (scoring.length > 0) doc.scoring = scoring;
+  else delete doc.scoring;
+
+  return JSON.stringify(doc);
 }

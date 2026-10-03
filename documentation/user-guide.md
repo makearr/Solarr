@@ -102,6 +102,10 @@ Under a TV library: **Series** (posters with a progress bar, filters by status, 
 writers and guest stars; **Edit** re-applies any monitor choice to what you already hold and gives the series its own
 quality profile. Wanting one episode also wants its season.
 
+**Quality profiles** for TV are edited with a form (Quality profiles in the sidebar): rank resolution, source, codec, HDR and
+audio best first, set the lowest and highest resolution accepted, name codecs never to accept, require an audio language, and
+list **preferred release groups** that rank above an otherwise equal release.
+
 **Follow** (on a person's or a network's page, with your TMDB key) adds their new series for you: a person by the roles you
 tick (acting, directing, writing, ...), a network for everything new it airs. At most five series per follow are added each
 time it runs, with the monitor choice you set; older series only if you ask for the back catalogue. The task **Refresh

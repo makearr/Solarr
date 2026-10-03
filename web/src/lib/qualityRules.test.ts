@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildAudioRules, parseAudioRules, summarise } from "./qualityRules";
+import { buildAudioRules, buildVideoRules, parseAudioRules, parseVideoRules, summarise } from "./qualityRules";
 
 // The shipped "Lossless preferred", exactly as migration 0012 stores it.
 const LOSSLESS_PREFERRED =
@@ -74,5 +74,57 @@ describe("quality rules", () => {
     expect(parseAudioRules(JSON.stringify(doc)).languages.lyrics).toEqual(["de", "en"]);
     rules.languages.lyrics = [];
     expect(JSON.parse(buildAudioRules(JSON.stringify(doc), "x", rules)).scoring).toEqual(JSON.parse(own).scoring);
+  });
+});
+
+// A shipped TV profile in the shape migration 0032 stores it.
+const WEB_1080P =
+  '{"quality_profile":"WEB 1080p","require":{"resolution":{"min":"720p","max":"1080p"},"reject_codecs":["xvid","divx"]},' +
+  '"compare":["resolution","source","video_codec","audio_channels","audio_codec","score"],' +
+  '"tiers":{"resolution":[["1080p","1080i"],["720p"],["576p","480p","360p"],["2160p"]],"source":[["webdl"],["webrip"],["bluray","remux"],["hdtv"]],' +
+  '"video_codec":[["h264"],["h265","av1"]],"audio_channels":[["5.1"],["2.0"]],"audio_codec":[["eac3","ac3"],["aac"]]}}';
+
+describe("video quality rules", () => {
+  it("reads a shipped TV profile into the form and writes it back unchanged", () => {
+    const rules = parseVideoRules(WEB_1080P);
+    expect(rules.resolutions[0]).toEqual(["1080p", "1080i"]);
+    expect(rules.minResolution).toBe("720p");
+    expect(rules.maxResolution).toBe("1080p");
+    expect(rules.rejectCodecs).toEqual(["xvid", "divx"]);
+    expect(summarise(WEB_1080P)).toBe("1080p/1080i > 720p > 576p/480p/360p > 2160p");
+    expect(JSON.parse(buildVideoRules(WEB_1080P, "WEB 1080p", rules))).toEqual(JSON.parse(WEB_1080P));
+  });
+
+  it("adds a preferred group as a scoring rule and removes it again", () => {
+    const rules = parseVideoRules(WEB_1080P);
+    rules.preferredGroups = ["MeGusta"];
+    const added = JSON.parse(buildVideoRules(WEB_1080P, "WEB 1080p", rules));
+    expect(added.scoring).toEqual([
+      { name: "Preferred release group: MeGusta", score: 5, specs: [{ field: "release_group", eq: "MeGusta", required: true }] },
+    ]);
+    expect(parseVideoRules(JSON.stringify(added)).preferredGroups).toEqual(["MeGusta"]);
+    rules.preferredGroups = [];
+    expect(JSON.parse(buildVideoRules(JSON.stringify(added), "WEB 1080p", rules)).scoring).toBeUndefined();
+  });
+
+  it("sets and clears the resolution limit and the audio language gate, and ranks a new dimension before the score", () => {
+    const rules = parseVideoRules(WEB_1080P);
+    rules.minResolution = "";
+    rules.maxResolution = "";
+    rules.audioLanguages = ["ja", "en"];
+    rules.hdr = [["hdr10"]];
+    const built = JSON.parse(buildVideoRules(WEB_1080P, "WEB 1080p", rules));
+    expect(built.require.resolution).toBeUndefined();
+    expect(built.require.audio_language).toEqual({ any_of: ["ja", "en"] });
+    expect(built.compare.at(-1)).toBe("score");
+    expect(built.compare).toContain("hdr");
+    expect(built.tiers.hdr).toEqual([["hdr10"]]);
+  });
+
+  it("keeps targets and rules the form does not show", () => {
+    const withTarget = JSON.stringify({ ...JSON.parse(WEB_1080P), targets: { bitrate_distance: [{ ideal: "8Mbps" }] }, scoring: [{ name: "Own rule", score: 3, specs: [] }] });
+    const rebuilt = JSON.parse(buildVideoRules(withTarget, "WEB 1080p", parseVideoRules(withTarget)));
+    expect(rebuilt.targets).toEqual({ bitrate_distance: [{ ideal: "8Mbps" }] });
+    expect(rebuilt.scoring).toEqual([{ name: "Own rule", score: 3, specs: [] }]);
   });
 });

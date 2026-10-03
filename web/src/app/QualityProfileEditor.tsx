@@ -5,7 +5,9 @@ import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { buildAudioRules, containerOf, parseAudioRules, summarise, type AudioRules, type Range } from "@/lib/qualityRules";
+import {
+  buildAudioRules, buildVideoRules, containerOf, parseAudioRules, parseVideoRules, summarise, type AudioRules, type Range, type VideoRules,
+} from "@/lib/qualityRules";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { LanguagePicker } from "./LanguagePicker";
@@ -15,6 +17,22 @@ type QualityProfile = components["schemas"]["QualityProfile"];
 // Every media type Solarr plans (settings.MediaTypes); the audio ones have a form.
 const MEDIA_TYPES = ["music", "audiobook", "podcast", "tv", "movie", "youtube", "news", "book", "comic", "rom", "adult"];
 const AUDIO = new Set(["music", "audiobook", "podcast"]);
+const VIDEO = new Set(["tv"]);
+
+const RESOLUTIONS: Record<string, string> = {
+  "2160p": "2160p (4K)", "1080p": "1080p", "1080i": "1080i", "720p": "720p", "576p": "576p", "480p": "480p", "360p": "360p",
+};
+const SOURCES: Record<string, string> = {
+  remux: "Remux", bluray: "Blu-ray", webdl: "WEB-DL", webrip: "WEBRip", hdtv: "HDTV", dvd: "DVD", sdtv: "SDTV",
+};
+const VIDEO_CODECS: Record<string, string> = { h265: "H.265 (HEVC)", av1: "AV1", h264: "H.264 (AVC)", vp9: "VP9", mpeg2: "MPEG-2", xvid: "Xvid", divx: "DivX" };
+const HDR_KINDS: Record<string, string> = {
+  "dolby-vision": "Dolby Vision", hdr10plus: "HDR10+", hdr10: "HDR10", hdr: "HDR", hlg: "HLG",
+};
+const VIDEO_AUDIO_CODECS: Record<string, string> = {
+  truehd: "TrueHD", dts: "DTS", eac3: "E-AC-3 (Dolby Digital Plus)", ac3: "AC-3 (Dolby Digital)", aac: "AAC", opus: "Opus", mp3: "MP3",
+};
+const VIDEO_CHANNELS: Record<string, string> = { "7.1": "7.1", "5.1": "Surround (5.1)", "2.0": "Stereo (2.0)", "1.0": "Mono (1.0)" };
 
 const CODECS: Record<string, string> = {
   flac: "FLAC", alac: "ALAC", wav: "WAV", ape: "APE", opus: "Opus", vorbis: "Vorbis", ogg: "Ogg",
@@ -145,16 +163,19 @@ function ProfileForm({
   const [rules, setRules] = useState<AudioRules>(() =>
     initial ? parseAudioRules(initial.rules) : { ...parseAudioRules(""), sampleRate: SAMPLE_RATE_FALLBACK },
   );
+  const [video, setVideo] = useState<VideoRules>(() => parseVideoRules(initial?.media_type === "tv" ? initial.rules : ""));
   const [json, setJson] = useState(initial?.rules ?? "");
   const [asJSON, setAsJSON] = useState(false);
   const [upgrade, setUpgrade] = useState(initial?.upgrade ?? DEFAULT_UPGRADE);
-  const hasForm = AUDIO.has(mediaType);
+  const isVideo = VIDEO.has(mediaType);
+  const hasForm = AUDIO.has(mediaType) || isVideo;
+  const built = () => (isVideo ? buildVideoRules(initial?.rules ?? "", name, video) : buildAudioRules(initial?.rules ?? "", name, rules));
 
   const save = useMutation({
     mutationFn: async () => {
       const body = {
         name,
-        rules: hasForm && !asJSON ? buildAudioRules(initial?.rules ?? "", name, rules) : json,
+        rules: hasForm && !asJSON ? built() : json,
         upgrade,
         media_type: mediaType,
       };
@@ -196,7 +217,8 @@ function ProfileForm({
         </label>
       </div>
 
-      {hasForm && !asJSON && <AudioRulesForm rules={rules} onChange={setRules} />}
+      {hasForm && !asJSON && !isVideo && <AudioRulesForm rules={rules} onChange={setRules} />}
+      {hasForm && !asJSON && isVideo && <VideoRulesForm rules={video} onChange={setVideo} />}
       {(!hasForm || asJSON) && (
         <label className="flex flex-col gap-1 text-xs text-ink-muted">
           {hasForm ? "Rules (JSON)" : `${mediaTypeName(mediaType)} is not built yet, so its rules are written as JSON.`}
@@ -213,7 +235,8 @@ function ProfileForm({
                   type="checkbox"
                   checked={asJSON}
                   onChange={(event) => {
-                    if (event.target.checked) setJson(buildAudioRules(initial?.rules ?? "", name, rules));
+                    if (event.target.checked) setJson(built());
+                    else if (isVideo) setVideo(parseVideoRules(json));
                     else setRules(parseAudioRules(json));
                     setAsJSON(event.target.checked);
                   }}
@@ -241,6 +264,112 @@ function ProfileForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/** A video profile's parts: what it prefers, in order, what it never accepts and which languages and groups it wants. */
+function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rules: VideoRules) => void }) {
+  const set = (patch: Partial<VideoRules>) => onChange({ ...rules, ...patch });
+  const order = Object.keys(RESOLUTIONS);
+  const [typed, setTyped] = useState("");
+  const addGroups = () => {
+    const names = typed.split(",").map((name) => name.trim()).filter((name) => name !== "" && !rules.preferredGroups.includes(name));
+    if (names.length > 0) set({ preferredGroups: [...rules.preferredGroups, ...names] });
+    setTyped("");
+  };
+  return (
+    <div className="flex flex-col gap-4">
+      <RankedList
+        label="Resolution, best first"
+        help="Equal tiers rank together. A resolution not listed is accepted but ranks last."
+        options={RESOLUTIONS}
+        value={rules.resolutions}
+        onChange={(resolutions) => set({ resolutions })}
+      />
+      <fieldset className="flex flex-wrap items-end gap-3 text-xs">
+        <legend className="mb-1 font-medium">Accept only resolutions between</legend>
+        <label className="flex flex-col gap-1 text-ink-muted">
+          Lowest
+          <select
+            value={rules.minResolution}
+            className={input}
+            onChange={(event) => set({ minResolution: event.target.value, maxResolution: event.target.value && !rules.maxResolution ? order[0]! : rules.maxResolution })}
+          >
+            <option value="">No limit</option>
+            {[...order].reverse().map((name) => (
+              <option key={name} value={name}>
+                {RESOLUTIONS[name]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-ink-muted">
+          Highest
+          <select
+            value={rules.maxResolution}
+            className={input}
+            onChange={(event) => set({ maxResolution: event.target.value, minResolution: event.target.value && !rules.minResolution ? order[order.length - 1]! : rules.minResolution })}
+          >
+            <option value="">No limit</option>
+            {order.map((name) => (
+              <option key={name} value={name}>
+                {RESOLUTIONS[name]}
+              </option>
+            ))}
+          </select>
+        </label>
+        {(rules.minResolution || rules.maxResolution) && (
+          <button type="button" className={smallButton} onClick={() => set({ minResolution: "", maxResolution: "" })}>
+            No limit
+          </button>
+        )}
+      </fieldset>
+      <RankedList label="Source, best first" options={SOURCES} value={rules.sources} onChange={(sources) => set({ sources })} />
+      <RankedList label="Video codec, best first" options={VIDEO_CODECS} value={rules.videoCodecs} onChange={(videoCodecs) => set({ videoCodecs })} />
+      <Chips label="Never accept these video codecs" options={VIDEO_CODECS} value={rules.rejectCodecs} onChange={(rejectCodecs) => set({ rejectCodecs })} />
+      <RankedList label="HDR, best first" options={HDR_KINDS} value={rules.hdr} onChange={(hdr) => set({ hdr })} />
+      <RankedList label="Audio codec, best first" options={VIDEO_AUDIO_CODECS} value={rules.audioCodecs} onChange={(audioCodecs) => set({ audioCodecs })} />
+      <RankedList label="Audio channels, best first" options={VIDEO_CHANNELS} value={rules.audioChannels} onChange={(audioChannels) => set({ audioChannels })} />
+      <LanguagePicker
+        label="Accept only files with one of these audio languages"
+        help="Read from the file once it is probed; a release's name alone never decides. Empty accepts any."
+        value={rules.audioLanguages}
+        onChange={(audioLanguages) => set({ audioLanguages })}
+      />
+      <fieldset className="flex flex-col gap-1.5">
+        <legend className="text-xs font-medium">Preferred release groups</legend>
+        <p className="text-xs text-ink-muted">A release from one of these ranks above an otherwise equal one.</p>
+        <div className="flex flex-wrap items-center gap-1 text-xs">
+          {rules.preferredGroups.map((group) => (
+            <span key={group} className="flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-ink">
+              {group}
+              <button
+                type="button"
+                aria-label={`Remove ${group}`}
+                onClick={() => set({ preferredGroups: rules.preferredGroups.filter((other) => other !== group) })}
+                className="text-ink-muted hover:text-ink"
+              >
+                <X aria-hidden className="size-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            value={typed}
+            placeholder="Group name, Enter to add"
+            aria-label="Add a preferred release group"
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                addGroups();
+              }
+            }}
+            onBlur={addGroups}
+            className={`${input} w-52 text-xs`}
+          />
+        </div>
+      </fieldset>
+    </div>
   );
 }
 
