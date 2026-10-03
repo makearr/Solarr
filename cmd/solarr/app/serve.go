@@ -448,6 +448,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerBridgeJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerTVArtworkJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerSubscriptionExpandJob(registry, executor); err != nil {
 		return err
 	}

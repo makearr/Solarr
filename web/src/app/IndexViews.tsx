@@ -66,10 +66,10 @@ export const DEFAULT_POSTER_OPTIONS: PosterOptions = {
   size: "medium", showTitle: true, showMonitored: true, showAvailability: true, showSearch: false,
 };
 
-/** A poster row's height for the options chosen: the square cover, then what is shown under it. */
-export function posterRowHeight(options: PosterOptions, cellWidth: number): number {
+/** A poster row's height for the options chosen: the cover (square, or taller by imageRatio), then what is shown under it. */
+export function posterRowHeight(options: PosterOptions, cellWidth: number, imageRatio = 1): number {
   return (
-    cellWidth + POSTER_GAP + (options.showTitle ? POSTER_LABEL_HEIGHT : 0) +
+    cellWidth * imageRatio + POSTER_GAP + (options.showTitle ? POSTER_LABEL_HEIGHT : 0) +
     (options.showAvailability ? POSTER_BAR_HEIGHT : 0) + (options.showSearch ? POSTER_SEARCH_HEIGHT : 0)
   );
 }

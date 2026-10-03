@@ -93,9 +93,10 @@ const (
 	TVSourceAniList = "anilist"
 )
 
-// DefaultTVSources is open and fast first: Skyhook and TVmaze need no key and answer in one call; the keyed TMDB and
-// TheTVDB follow, and AniList, which only knows anime, last.
-var DefaultTVSources = []string{TVSourceSkyhook, TVSourceTVmaze, TVSourceTMDB, TVSourceTVDB, TVSourceAniList}
+// DefaultTVSources is the measured order (documentation/tv-providers-benchmark.md, 2026-10-03): Skyhook answers fastest
+// and complete, TMDB adds cast, logos and certification quickly, TheTVDB direct is slower for the same facts, TVmaze
+// is slowest and thinnest but alone knows time zones, and AniList, which only knows anime, comes last.
+var DefaultTVSources = []string{TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze, TVSourceAniList}
 
 func validTVSource(name string) bool {
 	return slices.Contains(DefaultTVSources, name)

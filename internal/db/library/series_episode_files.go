@@ -14,6 +14,10 @@ type EpisodeFile struct {
 	Subtitles                   []string
 	VideoBitrate, DurationMs    int64
 	Container                   string
+	// Languages are the audio languages the probe read; FrameRate and AudioBitrate (bit/s) are what it measured.
+	Languages    []string
+	FrameRate    float64
+	AudioBitrate int64
 }
 
 // episodeFiles maps each covered episode (by media_ref) to its first file.
@@ -21,7 +25,8 @@ func (r SeriesReader) episodeFiles(ctx context.Context, workID int64) (map[strin
 	rows, err := r.store.Read().QueryContext(ctx,
 		`SELECT f.media_ref, mo.id, mo.size_bytes, COALESCE(ma.resolution, ''), COALESCE(ma.video_codec, ''), COALESCE(ma.hdr, ''),
        COALESCE(ma.audio_codec, ''), COALESCE(ma.audio_channels, ''), COALESCE(ma.subtitles, ''),
-       COALESCE(mo.video_bitrate, 0), COALESCE(mo.duration_ms, 0), COALESCE(ma.container, '')
+       COALESCE(mo.video_bitrate, 0), COALESCE(mo.duration_ms, 0), COALESCE(ma.container, ''),
+       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0)
 FROM desired_item_file f
 JOIN desired_item d ON d.id = f.desired_item_id
 JOIN media_object mo ON mo.id = f.media_object_id
@@ -34,13 +39,15 @@ ORDER BY f.media_ref, mo.id`, workID)
 	defer func() { _ = rows.Close() }()
 	files := map[string]*EpisodeFile{}
 	for rows.Next() {
-		var ref, subtitles string
+		var ref, subtitles, languages string
 		var file EpisodeFile
 		if err := rows.Scan(&ref, &file.MediaObjectID, &file.SizeBytes, &file.Resolution, &file.VideoCodec, &file.HDR,
-			&file.AudioCodec, &file.AudioChannels, &subtitles, &file.VideoBitrate, &file.DurationMs, &file.Container); err != nil {
+			&file.AudioCodec, &file.AudioChannels, &subtitles, &file.VideoBitrate, &file.DurationMs, &file.Container,
+			&languages, &file.FrameRate, &file.AudioBitrate); err != nil {
 			return nil, fmt.Errorf("library: scan episode file: %w", err)
 		}
 		file.Subtitles = jsonStrings(nullString(subtitles))
+		file.Languages = jsonStrings(nullString(languages))
 		if _, have := files[ref]; !have {
 			files[ref] = &file
 		}

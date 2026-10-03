@@ -232,3 +232,5 @@ Files a library scan could not identify wait under **Library → Music → Unide
 
 On posters and artist pages: **green** complete, **red** missing, **purple** downloading,
 **yellow** not released yet, **grey** unverified.
+
+**TV quality targets and profiles (run 10).** A quality profile's target for video now also takes file types (mkv, mp4, avi, wmv, mpeg, ts ...), audio channels, audio and subtitle languages, audio and video bitrate (kbit/s, within a tolerance) and frame rate; the same fields exist in the general profile editor as tiers and targets. TV People, Series and Networks use the same scrolling grid, tile sizes, view options and selection as music. A background task, **Fetching series pictures**, caches posters and photos ahead of time so the first scroll is as quick as music; the provider speeds behind the default order are in [tv-providers-benchmark.md](tv-providers-benchmark.md).

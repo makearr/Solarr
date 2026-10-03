@@ -20,7 +20,8 @@ func (r SeriesReader) HeldEpisodes(ctx context.Context, categoryID int64) ([]Hel
 		`SELECT p.id, w.id, w.canonical_title, p.media_ref, COALESCE(p.title, ''), COALESCE(p.date, ''),
        mo.id, mo.size_bytes, COALESCE(ma.resolution, ''), COALESCE(ma.video_codec, ''), COALESCE(ma.hdr, ''),
        COALESCE(ma.audio_codec, ''), COALESCE(ma.audio_channels, ''), COALESCE(ma.subtitles, ''),
-       COALESCE(mo.video_bitrate, 0), COALESCE(ma.container, '')
+       COALESCE(mo.video_bitrate, 0), COALESCE(ma.container, ''),
+       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0)
 FROM work w
 JOIN work_part p ON p.work_id = w.id
 JOIN desired_item_file f ON f.media_ref = p.media_ref AND f.role = 'primary'
@@ -37,14 +38,16 @@ ORDER BY w.sort_title COLLATE NOCASE, w.id, p.sort_key, p.id`, categoryID)
 	var held []HeldEpisode
 	for rows.Next() {
 		var episode HeldEpisode
-		var ref, subtitles string
+		var ref, subtitles, languages string
 		if err := rows.Scan(&episode.PartID, &episode.WorkID, &episode.SeriesTitle, &ref, &episode.Title, &episode.Date,
 			&episode.File.MediaObjectID, &episode.File.SizeBytes, &episode.File.Resolution, &episode.File.VideoCodec, &episode.File.HDR,
-			&episode.File.AudioCodec, &episode.File.AudioChannels, &subtitles, &episode.File.VideoBitrate, &episode.File.Container); err != nil {
+			&episode.File.AudioCodec, &episode.File.AudioChannels, &subtitles, &episode.File.VideoBitrate, &episode.File.Container,
+			&languages, &episode.File.FrameRate, &episode.File.AudioBitrate); err != nil {
 			return nil, fmt.Errorf("library: scan held episode: %w", err)
 		}
 		episode.Season, episode.Number = parseSeriesRef(ref)
 		episode.File.Subtitles = jsonStrings(nullString(subtitles))
+		episode.File.Languages = jsonStrings(nullString(languages))
 		held = append(held, episode)
 	}
 	return held, rows.Err()

@@ -29,3 +29,36 @@ func TestMeetsTarget_AVideoTargetNamesOnlyWhatItCaresAbout(t *testing.T) {
 		}
 	}
 }
+
+func TestMeetsTarget_ChannelsLanguagesBitratesFrameRateAndSeveralFileTypes(t *testing.T) {
+	file := score.FileFacts{
+		Resolution: "1080p", VideoCodec: "h264", AudioChannels: "5.1", AudioLanguages: []string{"de", "en"}, SubtitleLanguages: []string{"en"},
+		VideoBitrate: 4_200_000, AudioBitrate: 384_000, FrameRate: 23.976, Container: "avi",
+	}
+	four, audio := int64(4000), int64(384)
+	cases := []struct {
+		name   string
+		target settings.QualityTarget
+		want   bool
+	}{
+		{"one of several file types", settings.QualityTarget{Resolution: "1080p", Container: "mkv,avi,wmv"}, true},
+		{"none of the file types", settings.QualityTarget{Resolution: "1080p", Container: "mkv,mp4"}, false},
+		{"channels equal", settings.QualityTarget{AudioChannels: "5.1"}, true},
+		{"channels differ", settings.QualityTarget{AudioChannels: "2.0"}, false},
+		{"one wanted audio language present", settings.QualityTarget{AudioLanguages: []string{"fr", "de"}}, true},
+		{"no wanted audio language present", settings.QualityTarget{AudioLanguages: []string{"fr"}}, false},
+		{"subtitle language present", settings.QualityTarget{SubtitleLanguages: []string{"en"}}, true},
+		{"video bitrate within the default margin", settings.QualityTarget{VideoBitrateKbps: &four}, true},
+		{"audio bitrate within the margin", settings.QualityTarget{AudioBitrateKbps: &audio, TolerancePct: 5}, true},
+		{"frame rate 24 is 23.976", settings.QualityTarget{FrameRate: 24}, true},
+		{"frame rate 30 is not", settings.QualityTarget{FrameRate: 30}, false},
+	}
+	for _, c := range cases {
+		if got := quality.MeetsTarget(c.target, file); got != c.want {
+			t.Errorf("%s: MeetsTarget = %v, want %v", c.name, got, c.want)
+		}
+	}
+	if !quality.MeetsTarget(settings.QualityTarget{AudioLanguages: []string{"fr"}}, score.FileFacts{Resolution: "1080p"}) {
+		t.Error("a file whose languages the probe could not read was held against a language target")
+	}
+}

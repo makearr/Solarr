@@ -322,8 +322,8 @@ function TVProvidersCard({
         onChange={onOrder}
       />
       <p className="text-[0.6875rem] text-ink-muted">
-        The default is open and fast first: Skyhook and TVmaze need no key and answer at once, then TMDB and TheTVDB, then AniList (anime
-        only). Numbering and episode names always follow TheTVDB, whatever the order.
+        The default follows a measurement of the providers (fastest and fullest first): Skyhook, then TMDB, TheTVDB and TVmaze, then AniList
+        (anime only). Numbering and episode names always follow TheTVDB, whatever the order.
       </p>
       <Switch
         label="Wikidata"

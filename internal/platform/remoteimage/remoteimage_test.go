@@ -102,3 +102,35 @@ func TestAProviderErrorOrANonImageIsUnavailable(t *testing.T) {
 		}
 	}
 }
+
+type pathHTTP struct {
+	fakeHTTP
+	refuse string
+}
+
+func (f *pathHTTP) Get(ctx context.Context, address string) (*http.Response, error) {
+	if strings.Contains(address, f.refuse) {
+		f.asked = append(f.asked, address)
+		return &http.Response{StatusCode: http.StatusNotFound, Body: io.NopCloser(bytes.NewReader(nil))}, nil
+	}
+	return f.fakeHTTP.Get(ctx, address)
+}
+
+func TestATMDBPictureIsFetchedSmallAndFullOnlyWhenTheSmallOneIsNotThere(t *testing.T) {
+	smallOnly := &fakeHTTP{body: picture(t)}
+	cache, _ := newCache(t, smallOnly)
+	address := "https://image.tmdb.org/t/p/original/abc.jpg"
+	if _, err := cache.Ensure(t.Context(), address); err != nil || len(smallOnly.asked) != 1 || !strings.Contains(smallOnly.asked[0], "/t/p/w500/") {
+		t.Fatalf("asked %v, %v; want the 500-pixel rendition alone", smallOnly.asked, err)
+	}
+	if !cache.Cached(address) {
+		t.Error("a stored picture is not reported cached")
+	}
+
+	profile := &pathHTTP{fakeHTTP: fakeHTTP{body: picture(t)}, refuse: "/t/p/w500/"}
+	cache, _ = newCache(t, &profile.fakeHTTP)
+	cache.HTTP = profile
+	if _, err := cache.Ensure(t.Context(), address); err != nil || len(profile.asked) != 2 || !strings.Contains(profile.asked[1], "/t/p/original/") {
+		t.Fatalf("asked %v, %v; want the original after the small one was refused", profile.asked, err)
+	}
+}

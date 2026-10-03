@@ -366,10 +366,10 @@ func (p *process) tvService() tv.Service {
 		wall := clock.NewSystem()
 		guard := httpx.NewGuard(nil, nil, nil)
 		limiter := httpx.NewLimiter(wall, httpx.Config{Providers: map[string]httpx.Limits{
-			"skyhook": {MinInterval: 250 * time.Millisecond},
+			"skyhook": {MinInterval: 100 * time.Millisecond},
 			"tvmaze":  {MinInterval: 500 * time.Millisecond},
-			"tmdb":    {MinInterval: 50 * time.Millisecond},
-			"tvdb":    {MinInterval: 100 * time.Millisecond},
+			"tmdb":    {MinInterval: 25 * time.Millisecond},
+			"tvdb":    {MinInterval: 50 * time.Millisecond},
 			"anilist": {MinInterval: 2 * time.Second},
 		}}, nil)
 		client := func(name string) *httpx.Client {

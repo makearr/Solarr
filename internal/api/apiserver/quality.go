@@ -64,6 +64,12 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 			Resolution: strings.ToLower(strings.TrimSpace(derefOr(body.Target.Resolution, ""))),
 			VideoCodec: strings.ToLower(strings.TrimSpace(derefOr(body.Target.VideoCodec, ""))),
 			HDR:        strings.ToLower(strings.TrimSpace(derefOr(body.Target.Hdr, ""))),
+
+			AudioChannels:     strings.TrimSpace(derefOr(body.Target.AudioChannels, "")),
+			AudioLanguages:    lowerAll(derefOr(body.Target.AudioLanguages, nil)),
+			SubtitleLanguages: lowerAll(derefOr(body.Target.SubtitleLanguages, nil)),
+			AudioBitrateKbps:  body.Target.AudioBitrateKbps, VideoBitrateKbps: body.Target.VideoBitrateKbps,
+			FrameRate: float64(derefOr(body.Target.FrameRate, 0)),
 		}
 	}
 	err = s.auth.Settings.SetCategoryQuality(r.Context(), id, body.ProfileIds, body.CutoffProfileId, target)
@@ -147,6 +153,18 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 		setPtr(&view.Target.Resolution, target.Resolution)
 		setPtr(&view.Target.VideoCodec, target.VideoCodec)
 		setPtr(&view.Target.Hdr, target.HDR)
+		setPtr(&view.Target.AudioChannels, target.AudioChannels)
+		if len(target.AudioLanguages) > 0 {
+			view.Target.AudioLanguages = &target.AudioLanguages
+		}
+		if len(target.SubtitleLanguages) > 0 {
+			view.Target.SubtitleLanguages = &target.SubtitleLanguages
+		}
+		view.Target.AudioBitrateKbps, view.Target.VideoBitrateKbps = target.AudioBitrateKbps, target.VideoBitrateKbps
+		if target.FrameRate > 0 {
+			rate := float32(target.FrameRate)
+			view.Target.FrameRate = &rate
+		}
 		if warning := targetOutsideProfiles(snapshot, view.Profiles, targetFacts(*target)); warning != "" {
 			view.Warnings = append(view.Warnings, warning)
 		}
@@ -174,11 +192,21 @@ func targetOutsideProfiles(snapshot *settings.Snapshot, profiles []gen.QualityPr
 	return fmt.Sprintf("The target falls in none of this library's quality profiles (%s).", strings.Join(reasons, "; "))
 }
 
+func lowerAll(values []string) []string {
+	var out []string
+	for _, value := range values {
+		if value = strings.ToLower(strings.TrimSpace(value)); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
 // targetFacts is the target as the file facts a profile judges.
 func targetFacts(target settings.QualityTarget) score.Facts {
 	facts := score.Facts{File: score.FileFacts{
 		AudioCodec: target.AudioCodec, Extension: target.Container, Lossless: target.BitrateKbps == nil && target.AudioCodec != "",
-		Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR,
+		Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR, AudioChannels: target.AudioChannels,
 	}}
 	if target.BitrateKbps != nil {
 		facts.File.AudioBitrate = *target.BitrateKbps * 1000

@@ -6860,6 +6860,12 @@ components:
         resolution: { type: string, description: 'A video library''s target resolution, e.g. 1080p; empty when it does not care.' }
         video_codec: { type: string, description: 'e.g. h265, h264, av1; empty when it does not care.' }
         hdr: { type: string, description: 'sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care.' }
+        audio_channels: { type: string, description: 'Channel layout such as 2.0, 5.1, 7.1; empty when it does not care.' }
+        audio_languages: { type: array, items: { type: string }, description: 'Language codes of which one is enough; empty when it does not care.' }
+        subtitle_languages: { type: array, items: { type: string }, description: 'Language codes of which one is enough; empty when it does not care.' }
+        audio_bitrate_kbps: { type: integer, format: int64, description: 'kbit/s, within tolerance_pct (25 when 0) of it.' }
+        video_bitrate_kbps: { type: integer, format: int64, description: 'kbit/s, within tolerance_pct (25 when 0) of it.' }
+        frame_rate: { type: number, description: 'Frames a second, within 2 %; 24 meets 23.976. 0 or absent when it does not care.' }
         bitrate_kbps:
           type: integer
           format: int64

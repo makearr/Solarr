@@ -77,7 +77,7 @@ func measuredFieldFor(dimension string) string {
 // a unit suffix, everything else is a bare number.
 func parseTargetValue(dimension, raw string) (float64, error) {
 	switch dimension {
-	case "bitrate":
+	case "bitrate", "video_bitrate", "audio_bitrate", "overall_bitrate":
 		return parseBitRate(raw)
 	case "sample_rate":
 		return parseSampleRate(raw)

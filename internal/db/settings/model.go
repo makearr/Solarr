@@ -126,6 +126,14 @@ type QualityTarget struct {
 	Resolution string
 	VideoCodec string
 	HDR        string
+	// AudioChannels is "2.0", "5.1" and so on; AudioLanguages and SubtitleLanguages are two-letter codes of which
+	// one is enough; the bitrates are kbit/s within TolerancePct; FrameRate is frames a second within a small margin.
+	AudioChannels     string
+	AudioLanguages    []string
+	SubtitleLanguages []string
+	AudioBitrateKbps  *int64
+	VideoBitrateKbps  *int64
+	FrameRate         float64
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

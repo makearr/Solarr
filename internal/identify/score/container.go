@@ -11,6 +11,9 @@ var containerOfName = map[string]string{
 	"wma": "asf", "asf": "asf",
 	"mkv": "matroska", "mka": "matroska", "webm": "matroska", "matroska": "matroska",
 	"aac": "aac", "ape": "ape", "wv": "wavpack",
+	// Video files: ffprobe names the demuxer, a file name the extension.
+	"m4v": "mp4", "avi": "avi", "wmv": "asf", "mpg": "mpeg", "mpeg": "mpeg", "vob": "mpeg", "m2v": "mpeg",
+	"ts": "mpegts", "m2ts": "mpegts", "mts": "mpegts", "mpegts": "mpegts", "flv": "flv", "ogm": "ogg", "3gp": "mp4",
 }
 
 // CanonicalContainer is the container a name stands for; an unknown name is itself, lower-cased.

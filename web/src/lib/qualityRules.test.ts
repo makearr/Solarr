@@ -121,6 +121,26 @@ describe("video quality rules", () => {
     expect(built.tiers.hdr).toEqual([["hdr10"]]);
   });
 
+  it("writes file types, bitrate and frame-rate targets and language preferences, and reads them back", () => {
+    const rules = parseVideoRules(WEB_1080P);
+    rules.containers = [["matroska"], ["mp4", "avi"]];
+    rules.videoBitrate = { min: "2000", ideal: "4000", max: "8000" };
+    rules.frameRate = { min: "", ideal: "24", max: "" };
+    rules.languages = { audio: ["de"], lyrics: [], subtitle: ["en"] };
+    const built = JSON.parse(buildVideoRules(WEB_1080P, "WEB 1080p", rules));
+    expect(built.tiers.container).toEqual([["matroska"], ["mp4", "avi"]]);
+    expect(built.targets.video_bitrate).toEqual([{ min: "2000kbps", ideal: "4000kbps", max: "8000kbps" }]);
+    expect(built.targets.frame_rate).toEqual([{ ideal: "24" }]);
+    expect(built.compare).toEqual(expect.arrayContaining(["container", "video_bitrate_distance", "frame_rate_distance"]));
+    expect(built.compare.at(-1)).toBe("score");
+    expect(built.scoring.map((rule: { name: string }) => rule.name)).toEqual(["Preferred audio language: de", "Preferred subtitle language: en"]);
+    const again = parseVideoRules(JSON.stringify(built));
+    expect(again.videoBitrate).toEqual({ min: "2000", ideal: "4000", max: "8000" });
+    expect(again.languages.audio).toEqual(["de"]);
+    rules.videoBitrate = null;
+    expect(JSON.parse(buildVideoRules(JSON.stringify(built), "WEB 1080p", rules)).compare).not.toContain("video_bitrate_distance");
+  });
+
   it("keeps targets and rules the form does not show", () => {
     const withTarget = JSON.stringify({ ...JSON.parse(WEB_1080P), targets: { bitrate_distance: [{ ideal: "8Mbps" }] }, scoring: [{ name: "Own rule", score: 3, specs: [] }] });
     const rebuilt = JSON.parse(buildVideoRules(withTarget, "WEB 1080p", parseVideoRules(withTarget)));

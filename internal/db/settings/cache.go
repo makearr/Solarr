@@ -226,11 +226,7 @@ func withQuality(
 	}
 	for _, row := range targets {
 		if i, ok := index[row.CategoryID]; ok {
-			categories[i].QualityTarget = &QualityTarget{
-				AudioCodec: row.AudioCodec, Container: row.Container,
-				BitrateKbps: nullInt64Ptr(row.BitrateKbps), TolerancePct: row.TolerancePct,
-				Resolution: row.Resolution, VideoCodec: row.VideoCodec, HDR: row.Hdr,
-			}
+			categories[i].QualityTarget = targetFromRow(row)
 		}
 	}
 	return categories

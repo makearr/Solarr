@@ -6,6 +6,8 @@ import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { api } from "@/api/client";
 import { parseAudioRules } from "@/lib/qualityRules";
 import { useLibrary } from "@/lib/useLibrary";
+
+import { LanguagePicker } from "./LanguagePicker";
 import type { components } from "@/api/schema";
 
 /** A library's own quality: which shared profiles it accepts, in order, where upgrades stop, and
@@ -59,7 +61,13 @@ const RESOLUTIONS = ["2160p", "1080p", "720p", "576p", "480p"] as const;
 const VIDEO_CODECS = ["h265", "h264", "av1", "vp9", "mpeg2"] as const;
 const HDR_FORMATS = ["sdr", "hdr10", "hdr10plus", "dolby-vision", "hlg"] as const;
 const VIDEO_AUDIO = ["aac", "eac3", "ac3", "dts", "truehd", "flac", "opus"] as const;
-const VIDEO_CONTAINERS = ["mkv", "mp4"] as const;
+// File types a video file comes in; one target may name several.
+const VIDEO_FILE_TYPES: [string, string][] = [
+  ["mkv", ".mkv"], ["mp4", ".mp4, .m4v"], ["avi", ".avi"], ["wmv", ".wmv"], ["mpeg", ".mpg, .mpeg"], ["mov", ".mov"],
+  ["ts", ".ts, .m2ts"], ["webm", ".webm"], ["flv", ".flv"], ["ogm", ".ogm"],
+];
+const CHANNEL_LAYOUTS = ["1.0", "2.0", "2.1", "5.1", "7.1"] as const;
+const FRAME_RATES: [number, string][] = [[24, "24 (23.976)"], [25, "25"], [30, "30 (29.97)"], [50, "50"], [60, "60 (59.94)"]];
 
 /** A video library's target starts at the first profile's best tier: its top resolution and codec. */
 export function videoTargetFromProfile(rulesJSON: string | undefined): QualityTarget {
@@ -90,13 +98,76 @@ function VideoTargetFields({ target, onChange }: { target: QualityTarget; onChan
       </select>
     </label>
   );
+  const fileTypes = (target.container ?? "").split(",").filter(Boolean);
+  const toggleType = (type: string) => {
+    const next = fileTypes.includes(type) ? fileTypes.filter((entry) => entry !== type) : [...fileTypes, type];
+    onChange({ ...target, container: next.join(",") });
+  };
+  const number = (label: string, value: number | undefined, set: (value: number | undefined) => Partial<QualityTarget>, hint: string) => (
+    <label className="flex flex-col gap-1 text-ink-muted" title={hint}>
+      {label}
+      <input
+        type="number"
+        min={0}
+        value={value ?? ""}
+        placeholder="any"
+        onChange={(event) => onChange({ ...target, ...set(event.target.value === "" ? undefined : Number(event.target.value)) })}
+        className={`${inputStyle} w-28`}
+      />
+    </label>
+  );
   return (
-    <div className="flex flex-wrap items-end gap-3 text-xs">
-      {pick("Resolution", target.resolution, RESOLUTIONS, (resolution) => ({ resolution }))}
-      {pick("Video codec", target.video_codec, VIDEO_CODECS, (video_codec) => ({ video_codec }))}
-      {pick("HDR", target.hdr, HDR_FORMATS, (hdr) => ({ hdr }))}
-      {pick("Audio codec", target.audio_codec, VIDEO_AUDIO, (audio_codec) => ({ audio_codec }))}
-      {pick("File type", target.container, VIDEO_CONTAINERS, (container) => ({ container }))}
+    <div className="flex flex-col gap-3 text-xs">
+      <div className="flex flex-wrap items-end gap-3">
+        {pick("Resolution", target.resolution, RESOLUTIONS, (resolution) => ({ resolution }))}
+        {pick("Video codec", target.video_codec, VIDEO_CODECS, (video_codec) => ({ video_codec }))}
+        {pick("HDR", target.hdr, HDR_FORMATS, (hdr) => ({ hdr }))}
+        <label className="flex flex-col gap-1 text-ink-muted">
+          Frame rate
+          <select
+            value={target.frame_rate ?? ""}
+            onChange={(event) => onChange({ ...target, frame_rate: event.target.value === "" ? undefined : Number(event.target.value) })}
+            className={inputStyle}
+          >
+            <option value="">any</option>
+            {FRAME_RATES.map(([rate, label]) => (
+              <option key={rate} value={rate}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {pick("Audio codec", target.audio_codec, VIDEO_AUDIO, (audio_codec) => ({ audio_codec }))}
+        {pick("Audio channels", target.audio_channels, CHANNEL_LAYOUTS, (audio_channels) => ({ audio_channels }))}
+      </div>
+      <fieldset className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <legend className="mb-1 text-ink-muted">File types (any of the ticked; none ticked is any)</legend>
+        {VIDEO_FILE_TYPES.map(([type, label]) => (
+          <label key={type} className="flex items-center gap-1">
+            <input type="checkbox" checked={fileTypes.includes(type)} onChange={() => toggleType(type)} />
+            {label}
+          </label>
+        ))}
+      </fieldset>
+      <div className="flex flex-wrap items-end gap-3">
+        {number("Video bitrate (kbit/s)", target.video_bitrate_kbps, (video_bitrate_kbps) => ({ video_bitrate_kbps }), "A release's size over its length stands in before download")}
+        {number("Audio bitrate (kbit/s)", target.audio_bitrate_kbps, (audio_bitrate_kbps) => ({ audio_bitrate_kbps }), "Within the tolerance of this")}
+        {number("Tolerance (±%)", target.tolerance_pct || undefined, (tolerance_pct) => ({ tolerance_pct: tolerance_pct ?? 0 }), "How far a bitrate may be from the target; 25 when empty")}
+      </div>
+      <div className="flex flex-wrap gap-6">
+        <LanguagePicker
+          label="Audio language (any of)"
+          help="Read from the file's tags; a file that states none is not held against it."
+          value={target.audio_languages ?? []}
+          onChange={(audio_languages) => onChange({ ...target, audio_languages })}
+        />
+        <LanguagePicker
+          label="Subtitle language (any of)"
+          help="Embedded tracks and sidecar files count."
+          value={target.subtitle_languages ?? []}
+          onChange={(subtitle_languages) => onChange({ ...target, subtitle_languages })}
+        />
+      </div>
     </div>
   );
 }

@@ -525,11 +525,7 @@ func (c *Cache) SetCategoryQuality(
 		if target == nil {
 			return queries.DeleteCategoryQualityTarget(ctx, categoryID)
 		}
-		return queries.UpsertCategoryQualityTarget(ctx, settingsdb.UpsertCategoryQualityTargetParams{
-			CategoryID: categoryID, AudioCodec: target.AudioCodec, Container: target.Container,
-			BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
-			Resolution: target.Resolution, VideoCodec: target.VideoCodec, Hdr: target.HDR,
-		})
+		return queries.UpsertCategoryQualityTarget(ctx, target.upsertParams(categoryID))
 	})
 }
 
@@ -541,7 +537,7 @@ func validateQualityTarget(target *QualityTarget) config.Problems {
 		return nil
 	}
 	var problems config.Problems
-	video := target.Resolution != "" || target.VideoCodec != "" || target.HDR != ""
+	video := target.IsVideo()
 	if !video && strings.TrimSpace(target.AudioCodec) == "" {
 		problems = append(problems, config.Problem{Path: "target.audio_codec", Expectation: "a codec, e.g. aac (or a resolution or video codec for a video library)"})
 	}
@@ -551,6 +547,21 @@ func validateQualityTarget(target *QualityTarget) config.Problems {
 	if target.BitrateKbps != nil && *target.BitrateKbps <= 0 {
 		problems = append(problems, config.Problem{Path: "target.bitrate_kbps",
 			Value: strconv.FormatInt(*target.BitrateKbps, 10), Expectation: "a bitrate above 0, or none for lossless"})
+	}
+	for path, kbps := range map[string]*int64{"target.audio_bitrate_kbps": target.AudioBitrateKbps, "target.video_bitrate_kbps": target.VideoBitrateKbps} {
+		if kbps != nil && *kbps <= 0 {
+			problems = append(problems, config.Problem{Path: path, Value: strconv.FormatInt(*kbps, 10), Expectation: "a bitrate above 0, or none"})
+		}
+	}
+	if target.FrameRate < 0 || target.FrameRate > 240 {
+		problems = append(problems, config.Problem{Path: "target.frame_rate", Value: strconv.FormatFloat(target.FrameRate, 'f', -1, 64), Expectation: "frames a second up to 240, or none"})
+	}
+	for path, languages := range map[string][]string{"target.audio_languages": target.AudioLanguages, "target.subtitle_languages": target.SubtitleLanguages} {
+		for _, language := range languages {
+			if len(language) < 2 || len(language) > 3 {
+				problems = append(problems, config.Problem{Path: path, Value: language, Expectation: "language codes such as en or de"})
+			}
+		}
 	}
 	if target.TolerancePct < 0 || target.TolerancePct > maxTargetTolerancePct {
 		problems = append(problems, config.Problem{Path: "target.tolerance_pct",

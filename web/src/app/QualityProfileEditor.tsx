@@ -33,6 +33,11 @@ const VIDEO_AUDIO_CODECS: Record<string, string> = {
   truehd: "TrueHD", dts: "DTS", eac3: "E-AC-3 (Dolby Digital Plus)", ac3: "AC-3 (Dolby Digital)", aac: "AAC", opus: "Opus", mp3: "MP3",
 };
 const VIDEO_CHANNELS: Record<string, string> = { "7.1": "7.1", "5.1": "Surround (5.1)", "2.0": "Stereo (2.0)", "1.0": "Mono (1.0)" };
+// File types by the container format they stand for (an .m4v is MP4, a .wmv is ASF).
+const VIDEO_CONTAINERS: Record<string, string> = {
+  matroska: "Matroska (.mkv, .webm)", mp4: "MP4 (.mp4, .m4v, .mov)", avi: "AVI (.avi)", asf: "Windows Media (.wmv)", mpeg: "MPEG (.mpg, .mpeg, .vob)",
+  mpegts: "Transport stream (.ts, .m2ts)", flv: "Flash video (.flv)", ogg: "Ogg (.ogm)",
+};
 
 const CODECS: Record<string, string> = {
   flac: "FLAC", alac: "ALAC", wav: "WAV", ape: "APE", opus: "Opus", vorbis: "Vorbis", ogg: "Ogg",
@@ -330,6 +335,34 @@ function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rul
       <RankedList label="HDR, best first" options={HDR_KINDS} value={rules.hdr} onChange={(hdr) => set({ hdr })} />
       <RankedList label="Audio codec, best first" options={VIDEO_AUDIO_CODECS} value={rules.audioCodecs} onChange={(audioCodecs) => set({ audioCodecs })} />
       <RankedList label="Audio channels, best first" options={VIDEO_CHANNELS} value={rules.audioChannels} onChange={(audioChannels) => set({ audioChannels })} />
+      <RankedList
+        label="File type, best first"
+        help="What the file holds, whatever it is called. A type not listed is accepted but ranks last."
+        options={VIDEO_CONTAINERS}
+        value={rules.containers}
+        onChange={(containers) => set({ containers })}
+      />
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-xs font-medium">Aim for (the nearest ranks first, above or below)</legend>
+        <OptionalRange label="Video bitrate (kbit/s)" value={rules.videoBitrate} fallback={{ min: "2000", ideal: "4000", max: "8000" }} onChange={(videoBitrate) => set({ videoBitrate })} />
+        <OptionalRange label="Audio bitrate (kbit/s)" value={rules.audioBitrate} fallback={{ min: "128", ideal: "384", max: "640" }} onChange={(audioBitrate) => set({ audioBitrate })} />
+        <OptionalRange label="Frame rate (frames a second)" value={rules.frameRate} fallback={{ min: "", ideal: "24", max: "" }} onChange={(frameRate) => set({ frameRate })} />
+        <p className="text-xs text-ink-muted">
+          A release shows no bitrate before download, so its size over the episode's length stands in for it; the probe measures the real one afterwards.
+        </p>
+      </fieldset>
+      <LanguagePicker
+        label="Prefer files with these audio languages"
+        help="A tie-breaker between equal releases, never a gate."
+        value={rules.languages.audio}
+        onChange={(audio) => set({ languages: { ...rules.languages, audio } })}
+      />
+      <LanguagePicker
+        label="Prefer files with these subtitle languages"
+        help="Embedded tracks and sidecar files count once the file is probed."
+        value={rules.languages.subtitle}
+        onChange={(subtitle) => set({ languages: { ...rules.languages, subtitle } })}
+      />
       <LanguagePicker
         label="Accept only files with one of these audio languages"
         help="Read from the file once it is probed; a release's name alone never decides. Empty accepts any."

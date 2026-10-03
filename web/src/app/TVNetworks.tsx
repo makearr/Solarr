@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Radio } from "lucide-react";
@@ -6,8 +7,16 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { FollowPanel } from "./FollowPanel";
-import { SeriesTile } from "./SeriesIndex";
+import { SeriesPosterTile } from "./SeriesIndex";
 import { remoteImage } from "@/lib/remoteImage";
+import { usePreference } from "@/lib/usePreference";
+import { PosterGrid } from "@/list/PosterGrid";
+import { useGridMetrics } from "@/list/useGridMetrics";
+import { useLibraryList } from "@/list/useLibraryList";
+import { useRouteView } from "@/list/useRouteView";
+
+import { DEFAULT_POSTER_OPTIONS, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight, type PosterOptions } from "./IndexViews";
+import { Poster } from "./Poster";
 
 type Network = components["schemas"]["SeriesNetwork"];
 
@@ -19,9 +28,14 @@ function Logo({ network, size }: { network: Network; size: string }) {
   );
 }
 
-/** A TV library's Networks level: where its series air, most first. */
+/** A TV library's Networks level: where its series air, most first, on the same wall as every other level. */
 export function TVNetworks() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
+  const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
+  const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
+  const frameRef = useRef<HTMLDivElement>(null);
+  const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
+  const view = useRouteView([]);
   const networks = useQuery({
     queryKey: ["series-networks", categoryId],
     queryFn: async () => {
@@ -30,29 +44,47 @@ export function TVNetworks() {
       return data;
     },
   });
+  const list = useLibraryList<Network>(
+    {
+      name: `series-networks-${categoryId}-${networks.dataUpdatedAt}`,
+      idOf: (network) => network.id,
+      rowHeight: posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
+      itemsPerRow: metrics.columns,
+      fetchPage: async () => ({ items: networks.data ?? [] }),
+    },
+    view,
+  );
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <h1 className="text-lg font-semibold">Networks</h1>
-      {networks.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {networks.isError && <p className="text-sm text-danger">The networks could not be loaded.</p>}
-      {networks.data && networks.data.length === 0 && <p className="text-sm text-ink-muted">No series with a known network yet.</p>}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(10rem,1fr))] gap-3">
-        {(networks.data ?? []).map((network) => (
-          <Link
-            key={network.id}
-            to="/library/$categoryId/networks/$networkId"
-            params={{ categoryId, networkId: String(network.id) }}
-            className="flex flex-col items-center gap-2 rounded-lg border border-border-subtle bg-surface p-3 text-center hover:border-accent
-                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <span className="flex h-12 items-center justify-center">
-              <Logo network={network} size="max-h-12 max-w-32" />
-            </span>
-            <span className="w-full truncate text-sm font-medium">{network.name}</span>
-            <span className="text-xs text-ink-muted">{network.series_count} series</span>
-          </Link>
-        ))}
+    <div ref={frameRef} className="flex h-full flex-col">
+      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
+        <h2 className="text-sm font-medium">Networks</h2>
+        <div className="ml-auto">
+          <PosterOptionsMenu options={options} onChange={setOptions} />
+        </div>
+      </div>
+      <div className="min-h-0 flex-1">
+        {networks.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
+        {networks.isError && <p className="p-4 text-sm text-danger">The networks could not be loaded.</p>}
+        {networks.data && networks.data.length === 0 && <p className="p-4 text-sm text-ink-muted">No series with a known network yet.</p>}
+        {list.items.length > 0 && (
+          <PosterGrid
+            list={list}
+            idOf={(network) => network.id}
+            renderPoster={(network) => (
+              <Poster
+                subject="works"
+                imageId={null}
+                imageSrc={network.logo_url ? remoteImage(network.logo_url, "small") : undefined}
+                contain
+                title={network.name}
+                subtitle={`${network.series_count} series`}
+                link={{ to: "/library/$categoryId/networks/$networkId", params: { categoryId, networkId: String(network.id) } }}
+                showTitle={options.showTitle}
+              />
+            )}
+          />
+        )}
       </div>
     </div>
   );
@@ -92,7 +124,7 @@ export function TVNetwork() {
       <FollowPanel kind="network" subjectId={network.id} categoryId={categoryId} follow={follow} followable={followable} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-4">
         {series.map((entry) => (
-          <SeriesTile key={entry.id} series={entry} categoryId={categoryId} />
+          <SeriesPosterTile key={entry.id} series={entry} categoryId={categoryId} />
         ))}
       </div>
     </div>

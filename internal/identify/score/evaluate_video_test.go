@@ -157,3 +157,25 @@ func TestSeriesStandard_NegatedSpecStopsTheRuleWhenTitleMatches(t *testing.T) {
 		}
 	}
 }
+
+func TestEvaluate_AVideoProfileWithFileTypeBitrateAndFrameRateTargetsAndLanguagePreferences(t *testing.T) {
+	profile, err := Parse([]byte(`{"quality_profile":"Own","compare":["resolution","container","video_bitrate_distance","frame_rate_distance","score"],
+	  "tiers":{"resolution":[["1080p"],["720p"]],"container":[["matroska"],["mp4","avi"]]},
+	  "targets":{"video_bitrate":[{"min":"2000kbps","ideal":"4000kbps","max":"8000kbps"}],"frame_rate":[{"ideal":"24"}]},
+	  "scoring":[{"name":"Preferred audio language: de","score":2,"specs":[{"field":"audio_languages","has":"de","required":true}]}]}`))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	near := Facts{File: FileFacts{Resolution: "1080p", Container: "matroska,webm", VideoBitrate: 4_100_000, FrameRate: 23.976, AudioLanguages: []string{"de"}}}
+	far := Facts{File: FileFacts{Resolution: "1080p", Container: "avi", VideoBitrate: 12_000_000, FrameRate: 23.976}}
+	a, b := Evaluate(profile, near, nil), Evaluate(profile, far, nil)
+	if a.Outcome != model.OutcomeAccept || b.Outcome != model.OutcomeAccept {
+		t.Fatalf("outcomes = %v, %v", a.Outcome, b.Outcome)
+	}
+	if winner, tier := model.Compare(a.Quality, b.Quality); winner != -1 {
+		t.Errorf("winner = %d at tier %d, want the matroska file near the bitrate ideal", winner, tier)
+	}
+	if a.Score() <= b.Score() {
+		t.Errorf("score %v vs %v, want the preferred language to add", a.Score(), b.Score())
+	}
+}

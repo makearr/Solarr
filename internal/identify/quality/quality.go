@@ -69,7 +69,7 @@ func judgeProfile(
 
 // MeetsTarget is codec and container equal, and the bitrate within the tolerance unless lossless.
 func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
-	if target.Resolution != "" || target.VideoCodec != "" || target.HDR != "" {
+	if target.IsVideo() {
 		return meetsVideoTarget(target, file)
 	}
 	// The target's file type is an extension ("m4a"), met by the same container as well as the same name.
@@ -89,7 +89,14 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 	return math.Abs(got-want) <= want*float64(target.TolerancePct)/100
 }
 
-// meetsVideoTarget is every field the target names equal to what the probe measured; a field it leaves empty is free.
+// frameRateMargin is how far a frame rate may be from the target's: 23.976 is 24 and 29.97 is 30.
+const frameRateMargin = 0.02
+
+// defaultBitrateTolerancePct is the margin of a video target that names none; pictures vary far more than sound does.
+const defaultBitrateTolerancePct = 25
+
+// meetsVideoTarget is every part the target names equal to what the probe measured; a part it leaves empty is free,
+// and a part the probe could not read (no language tag, no frame rate) does not count against the file.
 func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool {
 	if target.Resolution != "" && !strings.EqualFold(target.Resolution, file.Resolution) {
 		return false
@@ -109,9 +116,63 @@ func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool 
 	if target.AudioCodec != "" && !strings.EqualFold(target.AudioCodec, file.AudioCodec) {
 		return false
 	}
+	if target.AudioChannels != "" && file.AudioChannels != "" && target.AudioChannels != file.AudioChannels {
+		return false
+	}
+	if !anyContainer(target.Container, file) || !shares(target.AudioLanguages, file.AudioLanguages) || !shares(target.SubtitleLanguages, file.SubtitleLanguages) {
+		return false
+	}
+	tolerance := float64(target.TolerancePct)
+	if tolerance <= 0 {
+		tolerance = defaultBitrateTolerancePct
+	}
+	if !withinPct(target.VideoBitrateKbps, file.VideoBitrate, tolerance) || !withinPct(target.AudioBitrateKbps, file.AudioBitrate, tolerance) {
+		return false
+	}
+	if target.FrameRate > 0 && file.FrameRate > 0 && math.Abs(file.FrameRate-target.FrameRate) > target.FrameRate*frameRateMargin {
+		return false
+	}
+	return true
+}
+
+// anyContainer is the file's container among the target's file types (comma separated), or any when none is named.
+func anyContainer(want string, file score.FileFacts) bool {
+	if strings.TrimSpace(want) == "" {
+		return true
+	}
 	name := file.Extension
 	if name == "" {
 		name = file.Container
 	}
-	return target.Container == "" || score.CanonicalContainer(target.Container) == score.CanonicalContainer(name)
+	for _, option := range strings.Split(want, ",") {
+		if score.CanonicalContainer(option) == score.CanonicalContainer(name) {
+			return true
+		}
+	}
+	return false
+}
+
+// shares is at least one wanted language among the file's, or true when none is wanted or the file states none.
+func shares(want, have []string) bool {
+	if len(want) == 0 || len(have) == 0 {
+		return true
+	}
+	for _, language := range want {
+		for _, present := range have {
+			if strings.EqualFold(language, present) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// withinPct is the measured bits per second within tolerance percent of the target kbit/s; true when no target is named
+// or nothing was measured.
+func withinPct(target *int64, measuredBps int64, tolerance float64) bool {
+	if target == nil || measuredBps <= 0 {
+		return true
+	}
+	want := float64(*target)
+	return math.Abs(float64(measuredBps)/1000-want) <= want*tolerance/100
 }

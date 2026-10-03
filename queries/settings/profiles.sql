@@ -77,15 +77,21 @@ UPDATE category SET quality_upgrades = ? WHERE id = ?;
 UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id = ?;
 
 -- name: ListCategoryQualityTargets :many
-SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr FROM category_quality_target;
+SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+       audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate
+FROM category_quality_target;
 
 -- name: UpsertCategoryQualityTarget :exec
-INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   audio_codec = excluded.audio_codec, container = excluded.container,
   bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct,
-  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr;
+  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr,
+  audio_channels = excluded.audio_channels, audio_languages = excluded.audio_languages,
+  subtitle_languages = excluded.subtitle_languages, audio_bitrate_kbps = excluded.audio_bitrate_kbps,
+  video_bitrate_kbps = excluded.video_bitrate_kbps, frame_rate = excluded.frame_rate;
 
 -- name: DeleteCategoryQualityTarget :exec
 DELETE FROM category_quality_target WHERE category_id = ?;

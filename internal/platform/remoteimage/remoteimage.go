@@ -113,6 +113,9 @@ func (c *Cache) path(key string, size artwork.Size) string {
 	return filepath.Join(c.Dir, key+"-"+name+".webp")
 }
 
+// Cached says whether the picture at the address is already stored at every size.
+func (c *Cache) Cached(address string) bool { return c.cached(Key(address)) }
+
 func (c *Cache) cached(key string) bool {
 	_, err := c.FS.Stat(c.path(key, artwork.Full))
 	return err == nil
@@ -130,7 +133,20 @@ func (c *Cache) lockFor(key string) *sync.Mutex {
 	return c.locks[key]
 }
 
+// tmdbOriginal is the path TMDB serves a picture in its full size under; its 500-pixel rendition is all a wall needs.
+const tmdbOriginal = "/t/p/original/"
+
 func (c *Cache) download(ctx context.Context, address string) ([]byte, error) {
+	if strings.HasPrefix(address, "https://image.tmdb.org"+tmdbOriginal) {
+		smaller := strings.Replace(address, tmdbOriginal, "/t/p/w500/", 1)
+		if source, err := c.fetch(ctx, smaller); err == nil {
+			return source, nil
+		}
+	}
+	return c.fetch(ctx, address)
+}
+
+func (c *Cache) fetch(ctx context.Context, address string) ([]byte, error) {
 	response, err := c.HTTP.Get(ctx, address)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)

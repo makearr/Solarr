@@ -260,6 +260,13 @@ type QualityTargetEntry struct {
 	Resolution   string `yaml:"resolution,omitempty"`
 	VideoCodec   string `yaml:"video_codec,omitempty"`
 	HDR          string `yaml:"hdr,omitempty"`
+
+	AudioChannels     string   `yaml:"audio_channels,omitempty"`
+	AudioLanguages    []string `yaml:"audio_languages,omitempty"`
+	SubtitleLanguages []string `yaml:"subtitle_languages,omitempty"`
+	AudioBitrateKbps  *int64   `yaml:"audio_bitrate_kbps,omitempty"`
+	VideoBitrateKbps  *int64   `yaml:"video_bitrate_kbps,omitempty"`
+	FrameRate         float64  `yaml:"frame_rate,omitempty"`
 }
 
 // qualityProfileNames is the library's list, reading an older document's single profile as one.
@@ -446,11 +453,7 @@ func (c *Cache) Export() Document {
 			entry.QualityCutoff = qualityNameByID[*category.QualityCutoffID]
 		}
 		if target := category.QualityTarget; target != nil {
-			entry.QualityTarget = &QualityTargetEntry{
-				AudioCodec: target.AudioCodec, Container: target.Container,
-				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
-				Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR,
-			}
+			entry.QualityTarget = target.entry()
 		}
 		if !category.QualityUpgrades {
 			off := false
@@ -770,11 +773,8 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			})
 		}
 		if target := category.QualityTarget; target != nil {
-			for _, problem := range validateQualityTarget(&QualityTarget{
-				AudioCodec: target.AudioCodec, Container: target.Container,
-				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
-				Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR,
-			}) {
+			entry := target.target()
+			for _, problem := range validateQualityTarget(&entry) {
 				problem.Path = where + ".quality_" + strings.TrimPrefix(problem.Path, "target.")
 				problems = append(problems, problem)
 			}
@@ -1009,11 +1009,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				}
 			}
 			if target := category.QualityTarget; target != nil {
-				if err := queries.UpsertCategoryQualityTarget(ctx, settingsdb.UpsertCategoryQualityTargetParams{
-					CategoryID: id, AudioCodec: target.AudioCodec, Container: target.Container,
-					BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
-					Resolution: target.Resolution, VideoCodec: target.VideoCodec, Hdr: target.HDR,
-				}); err != nil {
+				if err := queries.UpsertCategoryQualityTarget(ctx, target.target().upsertParams(id)); err != nil {
 					return fmt.Errorf("category %q quality target: %w", key, err)
 				}
 			}

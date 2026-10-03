@@ -1,24 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import * as Dialog from "@radix-ui/react-dialog";
-import { CheckSquare, LayoutGrid, List, Plus, Rows3, Search, Tv } from "lucide-react";
+import { Bookmark, BookmarkCheck, Plus, Search, Tv } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { albumStatusLabel, type AlbumStatus } from "@/lib/albumStatus";
+import { remoteImage } from "@/lib/remoteImage";
 import { useLibrary } from "@/lib/useLibrary";
 import { usePreference } from "@/lib/usePreference";
+import { PosterGrid } from "@/list/PosterGrid";
+import { ListTable, type Column } from "@/list/ListTable";
 import { useGridMetrics } from "@/list/useGridMetrics";
-import { remoteImage } from "@/lib/remoteImage";
+import { useLibraryList } from "@/list/useLibraryList";
+import { useNarrow } from "@/list/useNarrow";
+import { useRouteView } from "@/list/useRouteView";
+
+import {
+  DEFAULT_POSTER_OPTIONS, IndexViewToggle, OVERVIEW_ROW_HEIGHT, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight,
+  type IndexView, type PosterOptions,
+} from "./IndexViews";
+import { Poster } from "./Poster";
 
 type Series = components["schemas"]["SeriesSummary"];
 
-const POSTER_MIN_WIDTH = 150;
-const POSTER_GAP = 16;
-const POSTER_PADDING = 16;
-// The progress bar, two lines of caption and the gaps between them under a poster.
-const TILE_CAPTION = 70;
+const FILTER_KEYS: readonly string[] = ["q", "status", "network", "genre", "profile", "monitored", "missing"];
+const POSTER_RATIO = 1.5;
 
 type SortKey = "title" | "year" | "added" | "network" | "next" | "progress";
 
@@ -27,185 +35,216 @@ const SORTS: Record<SortKey, { label: string; compare: (a: Series, b: Series) =>
   year: { label: "Year", compare: (a, b) => (b.year ?? 0) - (a.year ?? 0) },
   added: { label: "Recently added", compare: (a, b) => b.added_at - a.added_at },
   network: { label: "Network", compare: (a, b) => (a.network ?? "~").localeCompare(b.network ?? "~") },
-  next: {
-    label: "Next airing",
-    compare: (a, b) => (a.next_airing ?? "9999").localeCompare(b.next_airing ?? "9999"),
-  },
+  next: { label: "Next airing", compare: (a, b) => (a.next_airing ?? "9999").localeCompare(b.next_airing ?? "9999") },
   progress: { label: "Episodes missing", compare: (a, b) => b.counts.aired_missing - a.counts.aired_missing },
 };
 
-/** Sonarr's bar under a poster: green when everything wanted is here, red when aired episodes are missing. */
-export function progressTone(series: Pick<Series, "counts" | "monitored">): { fill: string; label: string } {
+/** The bar under a poster in the vocabulary every library shares: grey unmonitored, red missing, green complete, yellow still to air. */
+export function seriesStatus(series: Pick<Series, "counts" | "monitored">): AlbumStatus {
   const { monitored, present, aired_missing: missing } = series.counts;
-  if (!series.monitored || monitored === 0) return { fill: "bg-ink-muted", label: "Unmonitored" };
-  if (missing > 0 && present === 0) return { fill: "bg-danger", label: "Missing" };
-  if (missing > 0) return { fill: "bg-warn", label: "Partial" };
-  if (present >= monitored) return { fill: "bg-ok", label: "Complete" };
-  return { fill: "bg-accent", label: "Waiting for air dates" };
+  if (!series.monitored || monitored === 0) return "unverified";
+  if (missing > 0) return "incomplete";
+  if (present >= monitored) return "complete";
+  return "unreleased";
 }
 
-export function SeriesTile({ series, categoryId }: { series: Series; categoryId: string }) {
-  const tone = progressTone(series);
-  const percent = series.counts.monitored > 0 ? Math.min(100, (100 * series.counts.present) / series.counts.monitored) : 0;
+/** Sonarr's progress bar colour, kept for the Networks page's own tiles. */
+export function progressTone(series: Pick<Series, "counts" | "monitored">): { fill: string; label: string } {
+  const status = seriesStatus(series);
+  const fill = { complete: "bg-ok", incomplete: "bg-danger", downloading: "bg-busy", unreleased: "bg-accent", unverified: "bg-ink-muted" }[status];
+  return { fill, label: albumStatusLabel(status) };
+}
+
+async function fetchAll(categoryId: string): Promise<Series[]> {
+  const all: Series[] = [];
+  let cursor: string | undefined;
+  do {
+    const { data, error } = await api.GET("/series", { params: { query: { category_id: Number(categoryId), limit: 200, ...(cursor ? { cursor } : {}) } } });
+    if (error) throw error;
+    all.push(...data.items);
+    cursor = data.next_cursor || undefined;
+  } while (cursor);
+  return all;
+}
+
+/** Every series of a library, read once and kept: a library of a thousand series is five requests of two hundred. */
+function loadAll(queryClient: QueryClient, categoryId: string): Promise<Series[]> {
+  return queryClient.fetchQuery({ queryKey: ["series", categoryId, "all"], staleTime: 15_000, queryFn: () => fetchAll(categoryId) });
+}
+
+function matching(all: Series[], filters: Readonly<Record<string, string>>): Series[] {
+  const needle = (filters.q ?? "").trim().toLowerCase();
+  return all
+    .filter((series) => needle === "" || series.title.toLowerCase().includes(needle))
+    .filter((series) => !filters.network || series.network === filters.network)
+    .filter((series) => !filters.genre || (series.genres ?? []).includes(filters.genre))
+    .filter((series) => !filters.profile || series.quality_profile_id === Number(filters.profile))
+    .filter((series) => !filters.status || series.status === filters.status)
+    .filter((series) => filters.missing !== "1" || series.counts.aired_missing > 0)
+    .filter((series) => filters.monitored !== "1" || series.monitored);
+}
+
+/** The monitored bookmark of a poster or row: Radarr's, in the same corner. */
+function MonitorBookmark({ series, categoryId }: { series: Series; categoryId: string }) {
+  const queryClient = useQueryClient();
+  const set = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PUT("/series/{id}/monitoring", {
+        params: { path: { id: series.id }, query: { category_id: Number(categoryId) } },
+        body: { option: series.monitored ? "none" : "existing" },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["series", categoryId, "all"] });
+    },
+  });
+  const Icon = series.monitored ? BookmarkCheck : Bookmark;
+  const label = series.monitored ? "Monitored: click to stop" : "Not monitored: click to monitor the episodes on disk";
   return (
-    <Link
-      to="/library/$categoryId/series/$seriesId"
-      params={{ categoryId, seriesId: String(series.id) }}
-      className="group flex flex-col gap-1.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      disabled={set.isPending}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        set.mutate();
+      }}
+      className={`flex size-7 items-center justify-center rounded-full border border-border-subtle bg-canvas/85 shadow-sm hover:text-ink disabled:opacity-50 ${series.monitored ? "text-accent" : "text-ink-muted"}`}
     >
-      <span className="relative block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
-        {series.poster_url ? (
-          <img src={remoteImage(series.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
-        ) : (
-          <span className="flex size-full items-center justify-center text-ink-muted">
-            <Tv aria-hidden className="size-10" />
-          </span>
-        )}
-        {series.status === "ended" && (
-          <span className="absolute right-1.5 top-1.5 rounded bg-canvas/85 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-muted">
-            Ended
-          </span>
-        )}
-      </span>
-      <span className="block h-1.5 overflow-hidden rounded-full bg-border-subtle" title={`${tone.label}: ${series.counts.present} of ${series.counts.monitored}`}>
-        <span className={`block h-full ${tone.fill}`} style={{ width: `${percent}%` }} />
-      </span>
-      <span className="truncate text-sm font-medium group-hover:underline">{series.title}</span>
-      <span className="truncate text-xs text-ink-muted">
-        {[series.year, series.network, `${series.counts.present}/${series.counts.monitored}`].filter(Boolean).join(" · ")}
-      </span>
-    </Link>
+      <Icon aria-hidden className="size-4" />
+    </button>
   );
 }
 
-type ViewKey = "posters" | "overview" | "table";
-
-const VIEWS: { key: ViewKey; label: string; icon: typeof LayoutGrid }[] = [
-  { key: "posters", label: "Posters", icon: LayoutGrid },
-  { key: "overview", label: "Overview", icon: Rows3 },
-  { key: "table", label: "Table", icon: List },
-];
-
-const OVERVIEW_ROW = 132;
-const TABLE_ROW = 40;
-
-function ProgressBar({ series }: { series: Series }) {
-  const tone = progressTone(series);
-  const percent = series.counts.monitored > 0 ? Math.min(100, (100 * series.counts.present) / series.counts.monitored) : 0;
+/** One series as a tile of the same wall the music library uses: the poster, its title and what is on disk. */
+export function SeriesPosterTile({ series, categoryId, options = DEFAULT_POSTER_OPTIONS }: { series: Series; categoryId: string; options?: PosterOptions }) {
   return (
-    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-border-subtle" title={`${tone.label}: ${series.counts.present} of ${series.counts.monitored}`}>
-      <span className={`block h-full ${tone.fill}`} style={{ width: `${percent}%` }} />
-    </span>
+    <Poster
+      subject="works"
+      imageId={null}
+      imageSrc={series.poster_url ? remoteImage(series.poster_url, "small") : undefined}
+      portrait
+      title={series.title}
+      subtitle={[series.year, series.network, `${series.counts.present}/${series.counts.monitored}`].filter(Boolean).join(" · ")}
+      link={{ to: "/library/$categoryId/series/$seriesId", params: { categoryId, seriesId: String(series.id) } }}
+      topLeft={options.showMonitored ? <MonitorBookmark series={series} categoryId={categoryId} /> : undefined}
+      showTitle={options.showTitle}
+      status={options.showAvailability ? seriesStatus(series) : undefined}
+      presentCount={series.counts.present}
+      requiredCount={series.counts.monitored}
+    />
   );
 }
 
-/** Sonarr's overview: a small poster beside the title, facts and the start of the plot. */
-function OverviewRow({ series, categoryId }: { series: Series; categoryId: string }) {
+/** Radarr's overview, as the music library draws it: a cover, the name, a paragraph and the details, a row each. */
+function SeriesOverviewList({ list, categoryId }: { list: ReturnType<typeof useLibraryList<Series>>; categoryId: string }) {
   return (
-    <Link
-      to="/library/$categoryId/series/$seriesId"
-      params={{ categoryId, seriesId: String(series.id) }}
-      className="flex h-full min-h-0 gap-3 overflow-hidden rounded-lg border border-border-subtle p-2 hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
-    >
-      <span className="block aspect-[2/3] h-full max-h-full shrink-0 overflow-hidden rounded bg-surface">
-        {series.poster_url ? (
-          <img src={remoteImage(series.poster_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
-        ) : (
-          <span className="flex size-full items-center justify-center text-ink-muted">
-            <Tv aria-hidden className="size-6" />
-          </span>
-        )}
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-baseline gap-2">
-          <span className="truncate text-sm font-semibold">{series.title}</span>
-          <span className="shrink-0 text-xs text-ink-muted">
-            {[series.year, series.network, series.status === "ended" ? "Ended" : "Continuing"].filter(Boolean).join(" · ")}
-          </span>
-        </span>
-        <span className="line-clamp-3 text-xs text-ink-muted">{series.overview || "No overview."}</span>
-        <span className="mt-auto flex items-center gap-3 text-xs text-ink-muted">
-          <span className="w-40">
-            <ProgressBar series={series} />
-          </span>
-          <span>
-            {series.counts.present}/{series.counts.monitored} episodes
-          </span>
-          {(series.genres ?? []).length > 0 && <span className="truncate">{(series.genres ?? []).slice(0, 3).join(", ")}</span>}
-        </span>
-      </span>
-    </Link>
+    <div ref={list.scrollRef} className="h-full overflow-auto">
+      <div style={{ height: list.totalSize, position: "relative" }}>
+        {list.virtualItems.map((virtual) => {
+          const series = list.items[virtual.index];
+          if (!series) return null;
+          const details = [series.year, series.network, series.status === "ended" ? "Ended" : "Continuing", `${series.counts.present} of ${series.counts.monitored} episodes`, ...(series.genres ?? []).slice(0, 3)].filter(Boolean);
+          return (
+            <div key={series.id} className="absolute inset-x-0 px-4" style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}>
+              <Link
+                to="/library/$categoryId/series/$seriesId"
+                params={{ categoryId, seriesId: String(series.id) }}
+                className="block h-full hover:bg-surface"
+              >
+                <div className="flex h-full gap-4 border-b border-border-subtle py-3">
+                  <div className="relative h-full shrink-0 overflow-hidden rounded-md border border-border-subtle bg-surface" style={{ width: (OVERVIEW_ROW_HEIGHT - 24) * 0.67 }}>
+                    {series.poster_url ? (
+                      <img src={remoteImage(series.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
+                    ) : (
+                      <span className="flex size-full items-center justify-center text-ink-muted">
+                        <Tv aria-hidden className="size-6" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <div className="flex items-center gap-2">
+                      <MonitorBookmark series={series} categoryId={categoryId} />
+                      <span className="truncate text-base font-medium">{series.title}</span>
+                    </div>
+                    {series.overview && <p className="line-clamp-3 text-sm text-ink-muted">{series.overview}</p>}
+                    <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted">
+                      <span className={`size-2 rounded-full ${progressTone(series).fill}`} />
+                      {details.map((detail) => (
+                        <span key={String(detail)}>{detail}</span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
-const TABLE_COLUMNS: { header: string; sort?: SortKey; width: string; cell: (series: Series, profile: string) => React.ReactNode }[] = [
-  { header: "Title", sort: "title", width: "minmax(12rem,2fr)", cell: (series) => <span className="truncate font-medium">{series.title}</span> },
-  { header: "Year", sort: "year", width: "4.5rem", cell: (series) => series.year ?? "" },
-  { header: "Network", sort: "network", width: "minmax(7rem,1fr)", cell: (series) => <span className="truncate">{series.network ?? ""}</span> },
-  { header: "Status", width: "6rem", cell: (series) => (series.status === "ended" ? "Ended" : "Continuing") },
-  { header: "Seasons", width: "5rem", cell: (series) => (series.season_states ?? []).filter((season) => season.number > 0).length },
-  { header: "Episodes", sort: "progress", width: "minmax(8rem,1fr)", cell: (series) => (
-    <span className="flex w-full items-center gap-2">
-      <span className="w-16 shrink-0">
-        <ProgressBar series={series} />
-      </span>
-      {series.counts.present}/{series.counts.monitored}
-    </span>
-  ) },
-  { header: "Quality profile", width: "minmax(7rem,1fr)", cell: (_series, profile) => <span className="truncate">{profile}</span> },
-  { header: "Monitored", width: "5.5rem", cell: (series) => (series.monitored ? "Yes" : "No") },
-  { header: "Added", sort: "added", width: "6.5rem", cell: (series) => new Date(series.added_at * 1000).toLocaleDateString() },
-];
-
-const TABLE_GRID = TABLE_COLUMNS.map((column) => column.width).join(" ");
-const TABLE_GRID_SELECTING = `2rem ${TABLE_GRID}`;
-
-/** A TV library's Series level: every series as a poster, with Sonarr's filters and sorts applied in the browser. */
+/** A TV library's Series level, built from the same parts as the music Albums level: one list core with the URL as its view
+ *  state, poster, overview and table views, the poster options, and a selection with its bar. */
 export function SeriesIndex() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const library = useLibrary(categoryId);
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = usePreference<SortKey>(`series.sort.${categoryId}`, "title");
-  const [status, setStatus] = useState<"all" | "continuing" | "ended">("all");
-  const [onlyMissing, setOnlyMissing] = useState(false);
-  const [onlyMonitored, setOnlyMonitored] = useState(false);
-  const [network, setNetwork] = useState("");
-  const [genre, setGenre] = useState("");
-  const [profile, setProfile] = useState(0);
-  const [view, setView] = usePreference<ViewKey>(`series.view.${categoryId}`, "posters");
-  const [selecting, setSelecting] = useState(false);
-  const [selected, setSelected] = useState<Set<number>>(new Set());
-
-  const pages = useInfiniteQuery({
-    queryKey: ["series", categoryId],
-    initialPageParam: "",
-    queryFn: async ({ pageParam }) => {
-      const { data, error } = await api.GET("/series", {
-        params: { query: { category_id: Number(categoryId), limit: 500, ...(pageParam ? { cursor: pageParam } : {}) } },
-      });
+  const view = useRouteView(FILTER_KEYS);
+  const [storedMode, setMode] = usePreference<IndexView>(`series.view.${categoryId}`, "poster");
+  const mode: IndexView = storedMode === "list" || storedMode === "overview" ? storedMode : "poster";
+  const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
+  const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
+  const frameRef = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow();
+  const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
+  const isPoster = mode === "poster";
+  const profileNames = useQuery({
+    queryKey: ["qualityprofiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
       if (error) throw error;
       return data;
     },
-    getNextPageParam: (last) => last.next_cursor || undefined,
   });
-  // A library of a thousand series is two requests; read them all so filters and sorts see everything.
-  if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
+  const everything = useQuery({ queryKey: ["series", categoryId, "all"], queryFn: () => fetchAll(categoryId), staleTime: 15_000 });
 
-  const all = useMemo(() => (pages.data?.pages ?? []).flatMap((page) => page.items), [pages.data]);
-  // The choices each filter offers are what this library actually holds, most common first.
+  const list = useLibraryList<Series>(
+    {
+      // A new read of the library renames the list, which reads it again.
+      name: `series-index-${categoryId}-${everything.dataUpdatedAt}`,
+      idOf: (series) => series.id,
+      rowHeight: isPoster ? posterRowHeight(options, metrics.cellWidth, POSTER_RATIO) : mode === "overview" ? OVERVIEW_ROW_HEIGHT : narrow ? 120 : 40,
+      itemsPerRow: isPoster ? metrics.columns : 1,
+      fetchPage: async ({ query }) => {
+        const found = matching(await loadAll(queryClient, categoryId), query.filters);
+        const key = (query.sort && query.sort in SORTS ? query.sort : "title") as SortKey;
+        found.sort(SORTS[key].compare);
+        if (query.direction === "desc") found.reverse();
+        return { items: found };
+      },
+    },
+    view,
+  );
+
   const choices = useMemo(() => {
     const count = (values: (string | undefined)[]) => {
       const tally = new Map<string, number>();
       for (const value of values) if (value) tally.set(value, (tally.get(value) ?? 0) + 1);
       return [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([value]) => value);
     };
+    const all = everything.data ?? [];
     return {
       networks: count(all.map((series) => series.network)),
       genres: count(all.flatMap((series) => series.genres ?? [])),
       profiles: [...new Set(all.map((series) => series.quality_profile_id).filter((id): id is number => id != null))],
     };
-  }, [all]);
+  }, [everything.data]);
+
   const exclusions = useQuery({
     queryKey: ["series-exclusions"],
     retry: false,
@@ -222,166 +261,141 @@ export function SeriesIndex() {
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["series-exclusions"] }),
   });
-  const profileNames = useQuery({
-    queryKey: ["qualityprofiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualityprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
-  const shown = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    return all
-      .filter((series) => needle === "" || series.title.toLowerCase().includes(needle))
-      .filter((series) => network === "" || series.network === network)
-      .filter((series) => genre === "" || (series.genres ?? []).includes(genre))
-      .filter((series) => profile === 0 || series.quality_profile_id === profile)
-      .filter((series) => status === "all" || series.status === status)
-      .filter((series) => !onlyMissing || series.counts.aired_missing > 0)
-      .filter((series) => !onlyMonitored || series.monitored)
-      .sort(SORTS[sort].compare);
-  }, [all, search, network, genre, profile, status, onlyMissing, onlyMonitored, sort]);
 
-  // The wall is virtualised a row of posters at a time: a library of a thousand series must not mount a thousand images.
-  const scroller = useRef<HTMLDivElement>(null);
-  const metrics = useGridMetrics(scroller, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
-  const columns = view === "posters" ? metrics.columns : 1;
-  const rowCount = Math.ceil(shown.length / columns);
-  const rowHeight = view === "posters" ? metrics.cellWidth * 1.5 + TILE_CAPTION + POSTER_GAP : view === "overview" ? OVERVIEW_ROW + 8 : TABLE_ROW;
-  const virtualizer = useVirtualizer({
-    count: rowCount,
-    getScrollElement: () => scroller.current,
-    estimateSize: () => rowHeight,
-    overscan: 3,
-  });
-  useEffect(() => virtualizer.measure(), [virtualizer, view, rowHeight]);
+  const setFilter = (key: string, value: string) => view.setQuery({ ...view.query, filters: { ...view.query.filters, [key]: value } });
+  const filters = view.query.filters;
+  const manage = library?.permission === "manage";
+  const selectedIds = list.items.filter((series) => list.isSelected(series.id)).map((series) => series.id);
 
-  const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+  const quiet = "rounded-md border border-border-subtle px-2 py-1 text-ink-muted enabled:hover:text-ink disabled:opacity-50";
+  const control = "rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink";
+  const columns: readonly Column<Series>[] = [
+    { key: "title", header: "Title", sortable: true, width: "minmax(12rem,2fr)", render: (series) => <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(series.id) }} className="hover:underline" onClick={(event) => event.stopPropagation()}>{series.title}</Link> },
+    { key: "year", header: "Year", sortable: true, width: "4.5rem", render: (series) => series.year ?? "" },
+    { key: "network", header: "Network", sortable: true, width: "minmax(7rem,1fr)", render: (series) => series.network ?? "" },
+    { key: "status", header: "Status", width: "6rem", render: (series) => (series.status === "ended" ? "Ended" : "Continuing") },
+    { key: "seasons", header: "Seasons", width: "5rem", render: (series) => (series.season_states ?? []).filter((season) => season.number > 0).length },
+    { key: "progress", header: "Episodes", sortable: true, width: "8rem", render: (series) => `${series.counts.present}/${series.counts.monitored}` },
+    { key: "profile", header: "Quality profile", width: "minmax(7rem,1fr)", render: (series) => (profileNames.data ?? []).find((entry) => entry.id === series.quality_profile_id)?.name ?? "" },
+    { key: "monitored", header: "Monitored", width: "6rem", render: (series) => <MonitorBookmark series={series} categoryId={categoryId} /> },
+    { key: "added", header: "Added", sortable: true, width: "6.5rem", render: (series) => new Date(series.added_at * 1000).toLocaleDateString() },
+  ];
+
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h1 className="text-base font-semibold">{library?.name ?? "Series"}</h1>
-        <span className="text-xs text-ink-muted">{shown.length === all.length ? `${all.length} series` : `${shown.length} of ${all.length}`}</span>
-        <label className="relative ml-auto flex items-center">
-          <Search aria-hidden className="pointer-events-none absolute left-2 size-3.5 text-ink-muted" />
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Filter series"
-            aria-label="Filter series"
-            className={`${control} w-48 pl-7`}
-          />
-        </label>
-        <span role="group" aria-label="View" className="flex overflow-hidden rounded-md border border-border-subtle">
-          {VIEWS.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={view === key}
-              title={label}
-              onClick={() => setView(key)}
-              className={`flex items-center gap-1 px-2 py-1 text-xs ${view === key ? "bg-accent/10 text-ink" : "text-ink-muted hover:text-ink"}`}
-            >
-              <Icon aria-hidden className="size-3.5" />
-              <span className="hidden sm:inline">{label}</span>
-            </button>
-          ))}
+    <div ref={frameRef} className="flex h-full flex-col">
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
+        <h2 className="text-sm font-medium">{library?.name ?? "Series"}</h2>
+        <span className="text-xs text-ink-muted">
+          {list.items.length === (everything.data?.length ?? 0) ? `${list.items.length} series` : `${list.items.length} of ${everything.data?.length ?? 0}`}
         </span>
-        <label className="flex items-center gap-1 text-xs text-ink-muted">
-          Sort
-          <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} className={control}>
-            {(Object.keys(SORTS) as SortKey[]).map((key) => (
-              <option key={key} value={key}>
-                {SORTS[key].label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex items-center gap-1 text-xs text-ink-muted">
-          Status
-          <select value={status} onChange={(event) => setStatus(event.target.value as typeof status)} className={control}>
-            <option value="all">All</option>
-            <option value="continuing">Continuing</option>
-            <option value="ended">Ended</option>
-          </select>
-        </label>
-        {choices.networks.length > 1 && (
-          <label className="flex items-center gap-1 text-xs text-ink-muted">
-            Network
-            <select value={network} onChange={(event) => setNetwork(event.target.value)} className={`${control} max-w-40`}>
+        <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
+          <label className="relative flex items-center">
+            <Search aria-hidden className="pointer-events-none absolute left-2 size-3.5 text-ink-muted" />
+            <input
+              defaultValue={filters.q ?? ""}
+              onChange={(event) => setFilter("q", event.target.value)}
+              placeholder="Filter series"
+              aria-label="Filter series"
+              className={`${control} w-44 pl-7`}
+            />
+          </label>
+          <label className="flex items-center gap-1 text-ink-muted">
+            Status
+            <select value={filters.status ?? ""} onChange={(event) => setFilter("status", event.target.value)} className={control}>
               <option value="">All</option>
-              {choices.networks.map((name) => (
-                <option key={name} value={name}>
-                  {name}
+              <option value="continuing">Continuing</option>
+              <option value="ended">Ended</option>
+            </select>
+          </label>
+          {choices.networks.length > 1 && (
+            <label className="flex items-center gap-1 text-ink-muted">
+              Network
+              <select value={filters.network ?? ""} onChange={(event) => setFilter("network", event.target.value)} className={`${control} max-w-40`}>
+                <option value="">All</option>
+                {choices.networks.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {choices.genres.length > 1 && (
+            <label className="flex items-center gap-1 text-ink-muted">
+              Genre
+              <select value={filters.genre ?? ""} onChange={(event) => setFilter("genre", event.target.value)} className={control}>
+                <option value="">All</option>
+                {choices.genres.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {choices.profiles.length > 1 && (
+            <label className="flex items-center gap-1 text-ink-muted">
+              Quality
+              <select value={filters.profile ?? ""} onChange={(event) => setFilter("profile", event.target.value)} className={control}>
+                <option value="">All</option>
+                {choices.profiles.map((id) => (
+                  <option key={id} value={id}>
+                    {(profileNames.data ?? []).find((entry) => entry.id === id)?.name ?? `Profile ${id}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className="flex items-center gap-1 text-ink-muted">
+            <input type="checkbox" checked={filters.monitored === "1"} onChange={(event) => setFilter("monitored", event.target.checked ? "1" : "")} /> Monitored
+          </label>
+          <label className="flex items-center gap-1 text-ink-muted">
+            <input type="checkbox" checked={filters.missing === "1"} onChange={(event) => setFilter("missing", event.target.checked ? "1" : "")} /> Missing episodes
+          </label>
+          <label className="flex items-center gap-1 text-ink-muted">
+            Sort
+            <select
+              value={view.query.sort ?? "title"}
+              onChange={(event) => view.setQuery({ ...view.query, sort: event.target.value })}
+              className={control}
+            >
+              {(Object.keys(SORTS) as SortKey[]).map((key) => (
+                <option key={key} value={key}>
+                  {SORTS[key].label}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        {choices.genres.length > 1 && (
-          <label className="flex items-center gap-1 text-xs text-ink-muted">
-            Genre
-            <select value={genre} onChange={(event) => setGenre(event.target.value)} className={control}>
-              <option value="">All</option>
-              {choices.genres.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {choices.profiles.length > 1 && (
-          <label className="flex items-center gap-1 text-xs text-ink-muted">
-            Quality
-            <select value={profile} onChange={(event) => setProfile(Number(event.target.value))} className={control}>
-              <option value={0}>All</option>
-              {choices.profiles.map((id) => (
-                <option key={id} value={id}>
-                  {(profileNames.data ?? []).find((entry) => entry.id === id)?.name ?? `Profile ${id}`}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <label className="flex items-center gap-1 text-xs text-ink-muted">
-          <input type="checkbox" checked={onlyMonitored} onChange={(event) => setOnlyMonitored(event.target.checked)} /> Monitored
-        </label>
-        <label className="flex items-center gap-1 text-xs text-ink-muted">
-          <input type="checkbox" checked={onlyMissing} onChange={(event) => setOnlyMissing(event.target.checked)} /> Missing episodes
-        </label>
-        {library?.permission === "manage" && (
-          <button
-            type="button"
-            aria-pressed={selecting}
-            onClick={() => {
-              setSelecting(!selecting);
-              setSelected(new Set());
-              if (!selecting) setView("table");
-            }}
-            className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selecting ? "border-accent bg-accent/10 text-ink" : "border-border-subtle text-ink-muted hover:text-ink"}`}
-          >
-            <CheckSquare aria-hidden className="size-3.5" /> Edit several
-          </button>
-        )}
-        <Link
-          to="/library/$categoryId/discover"
-          params={{ categoryId }}
-          className="flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-ink"
-        >
-          <Plus aria-hidden className="size-3.5" /> Add series
-        </Link>
+          {manage && !list.selectionIsEmpty && (
+            <>
+              <span className="text-ink-muted">{selectedIds.length} selected</span>
+              <button type="button" onClick={list.clearSelection} className={quiet}>
+                Clear
+              </button>
+            </>
+          )}
+          {manage && (
+            <button type="button" onClick={list.selectAllMatching} className={quiet}>
+              Select all matching
+            </button>
+          )}
+          <IndexViewToggle view={mode} onChange={setMode} />
+          {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
+          <Link to="/library/$categoryId/discover" params={{ categoryId }} className="ml-1 flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink">
+            <Plus aria-hidden className="size-4" />
+            Add new
+          </Link>
+        </div>
       </div>
-      {selecting && (
+      {manage && selectedIds.length > 0 && (
         <SeriesBulkBar
           categoryId={categoryId}
-          ids={[...selected]}
+          ids={selectedIds}
           profiles={profileNames.data ?? []}
           onDone={() => {
-            setSelected(new Set());
-            void queryClient.invalidateQueries({ queryKey: ["series", categoryId] });
-          }}
+            list.clearSelection();
+            void queryClient.invalidateQueries({ queryKey: ["series", categoryId, "all"] });
+                }}
         />
       )}
       {(exclusions.data ?? []).length > 0 && (
@@ -399,101 +413,28 @@ export function SeriesIndex() {
           </ul>
         </details>
       )}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-auto" style={{ padding: POSTER_PADDING }}>
-        {pages.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-        {pages.error !== null && !pages.isLoading && <p className="text-sm text-danger">The series could not be read.</p>}
-        {!pages.isLoading && all.length === 0 && pages.error === null && (
+      <div className="min-h-0 flex-1">
+        {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading the library…</p>}
+        {list.error !== null && <p className="p-4 text-sm text-danger">The series could not be read.</p>}
+        {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="mx-auto mt-16 flex max-w-md flex-col items-center gap-3 text-center">
             <Tv aria-hidden className="size-10 text-ink-muted" />
-            <p className="text-sm">No series in this library yet.</p>
-            <Link to="/library/$categoryId/discover" params={{ categoryId }} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink">
-              Add your first series
-            </Link>
-          </div>
-        )}
-        {view === "table" && shown.length > 0 && (
-          <div
-            role="row"
-            className="sticky top-0 z-10 grid items-center gap-2 border-b border-border-subtle bg-canvas px-2 py-1.5 text-xs font-medium text-ink-muted"
-            style={{ gridTemplateColumns: selecting ? TABLE_GRID_SELECTING : TABLE_GRID }}
-          >
-            {selecting && (
-              <input
-                type="checkbox"
-                aria-label="Select every series shown"
-                checked={shown.length > 0 && shown.every((series) => selected.has(series.id))}
-                onChange={(event) => setSelected(event.target.checked ? new Set(shown.map((series) => series.id)) : new Set())}
-              />
-            )}
-            {TABLE_COLUMNS.map((column) =>
-              column.sort ? (
-                <button key={column.header} type="button" onClick={() => setSort(column.sort as SortKey)} className="text-left hover:text-ink">
-                  {column.header}
-                  {sort === column.sort ? " ▾" : ""}
-                </button>
-              ) : (
-                <span key={column.header}>{column.header}</span>
-              ),
+            <p className="text-sm">{(everything.data?.length ?? 0) === 0 ? "No series in this library yet." : "No series match these filters."}</p>
+            {(everything.data?.length ?? 0) === 0 && (
+              <Link to="/library/$categoryId/discover" params={{ categoryId }} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-ink">
+                Add your first series
+              </Link>
             )}
           </div>
         )}
-        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((row) => {
-            const slice = shown.slice(row.index * columns, (row.index + 1) * columns);
-            return (
-              <div
-                key={row.key}
-                className="absolute inset-x-0 grid"
-                style={{
-                  height: row.size,
-                  transform: `translateY(${row.start}px)`,
-                  gap: view === "posters" ? POSTER_GAP : 0,
-                  gridTemplateColumns: view === "posters" ? `repeat(${metrics.columns}, minmax(0, 1fr))` : "minmax(0, 1fr)",
-                  gridTemplateRows: "minmax(0, 1fr)",
-                }}
-              >
-                {slice.map((series) =>
-                  view === "posters" ? (
-                    <SeriesTile key={series.id} series={series} categoryId={categoryId} />
-                  ) : view === "overview" ? (
-                    <div key={series.id} className="h-full pb-2">
-                      <OverviewRow series={series} categoryId={categoryId} />
-                    </div>
-                  ) : (
-                    <div
-                      key={series.id}
-                      className="grid items-center gap-2 border-b border-border-subtle px-2 text-xs hover:bg-surface"
-                      style={{ gridTemplateColumns: selecting ? TABLE_GRID_SELECTING : TABLE_GRID }}
-                    >
-                      {selecting && (
-                        <input
-                          type="checkbox"
-                          aria-label={`Select ${series.title}`}
-                          checked={selected.has(series.id)}
-                          onChange={(event) =>
-                            setSelected((current) => {
-                              const next = new Set(current);
-                              if (event.target.checked) next.add(series.id);
-                              else next.delete(series.id);
-                              return next;
-                            })
-                          }
-                        />
-                      )}
-                      <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(series.id) }} className="contents">
-                        {TABLE_COLUMNS.map((column) => (
-                          <span key={column.header} className="flex min-w-0 items-center truncate">
-                            {column.cell(series, (profileNames.data ?? []).find((entry) => entry.id === series.quality_profile_id)?.name ?? "")}
-                          </span>
-                        ))}
-                      </Link>
-                    </div>
-                  ),
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {list.items.length > 0 &&
+          (mode === "list" ? (
+            <ListTable list={list} columns={columns} idOf={(series) => series.id} />
+          ) : mode === "overview" ? (
+            <SeriesOverviewList list={list} categoryId={categoryId} />
+          ) : (
+            <PosterGrid list={list} idOf={(series) => series.id} renderPoster={(series) => <SeriesPosterTile series={series} categoryId={categoryId} options={options} />} />
+          ))}
       </div>
     </div>
   );

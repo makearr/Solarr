@@ -238,7 +238,9 @@ func (q *Queries) ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQu
 }
 
 const listCategoryQualityTargets = `-- name: ListCategoryQualityTargets :many
-SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr FROM category_quality_target
+SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+       audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate
+FROM category_quality_target
 `
 
 func (q *Queries) ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error) {
@@ -259,6 +261,12 @@ func (q *Queries) ListCategoryQualityTargets(ctx context.Context) ([]CategoryQua
 			&i.Resolution,
 			&i.VideoCodec,
 			&i.Hdr,
+			&i.AudioChannels,
+			&i.AudioLanguages,
+			&i.SubtitleLanguages,
+			&i.AudioBitrateKbps,
+			&i.VideoBitrateKbps,
+			&i.FrameRate,
 		); err != nil {
 			return nil, err
 		}
@@ -473,23 +481,33 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 }
 
 const upsertCategoryQualityTarget = `-- name: UpsertCategoryQualityTarget :exec
-INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   audio_codec = excluded.audio_codec, container = excluded.container,
   bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct,
-  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr
+  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr,
+  audio_channels = excluded.audio_channels, audio_languages = excluded.audio_languages,
+  subtitle_languages = excluded.subtitle_languages, audio_bitrate_kbps = excluded.audio_bitrate_kbps,
+  video_bitrate_kbps = excluded.video_bitrate_kbps, frame_rate = excluded.frame_rate
 `
 
 type UpsertCategoryQualityTargetParams struct {
-	CategoryID   int64
-	AudioCodec   string
-	Container    string
-	BitrateKbps  sql.NullInt64
-	TolerancePct int64
-	Resolution   string
-	VideoCodec   string
-	Hdr          string
+	CategoryID        int64
+	AudioCodec        string
+	Container         string
+	BitrateKbps       sql.NullInt64
+	TolerancePct      int64
+	Resolution        string
+	VideoCodec        string
+	Hdr               string
+	AudioChannels     string
+	AudioLanguages    string
+	SubtitleLanguages string
+	AudioBitrateKbps  sql.NullInt64
+	VideoBitrateKbps  sql.NullInt64
+	FrameRate         sql.NullFloat64
 }
 
 func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error {
@@ -502,6 +520,12 @@ func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCat
 		arg.Resolution,
 		arg.VideoCodec,
 		arg.Hdr,
+		arg.AudioChannels,
+		arg.AudioLanguages,
+		arg.SubtitleLanguages,
+		arg.AudioBitrateKbps,
+		arg.VideoBitrateKbps,
+		arg.FrameRate,
 	)
 	return err
 }

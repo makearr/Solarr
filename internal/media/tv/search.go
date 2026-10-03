@@ -71,6 +71,8 @@ type wanted struct {
 	// anime series are also searched by the absolute number releases carry; absolute maps it to the episode number.
 	anime    bool
 	absolute map[int]int
+	// runtimeMs is an episode's usual length, to turn a release's size into a bitrate; zero when nothing says.
+	runtimeMs int64
 }
 
 func seasonNumber(mediaRef string) (int, bool) {
@@ -97,11 +99,15 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
 	}
 	today := now.UTC().Format("2006-01-02")
+	var runtimeSum, runtimeCount int64
 	for _, episode := range detail.Episodes {
 		if episode.Season != season {
 			continue
 		}
 		w.allCount++
+		if episode.RuntimeMs > 0 {
+			runtimeSum, runtimeCount = runtimeSum+episode.RuntimeMs, runtimeCount+1
+		}
 		if absolute, err := strconv.Atoi(episode.Absolute); err == nil && absolute > 0 {
 			w.absolute[absolute] = episode.Number
 		}
@@ -114,6 +120,12 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		case episode.Monitored && !episode.Present && aired:
 			w.missing[episode.Number] = episode
 		}
+	}
+	switch {
+	case runtimeCount > 0:
+		w.runtimeMs = runtimeSum / runtimeCount
+	default:
+		w.runtimeMs = detail.RuntimeMs
 	}
 	return w, nil
 }
@@ -306,6 +318,7 @@ func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Fin
 			continue
 		}
 		facts := factsFromRelease(info, raw, conn.Impl)
+		estimateBitrate(&facts, raw.SizeBytes, releaseEpisodes(info, covered, y.wanted.allCount), y.wanted.runtimeMs)
 		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
 		fraction := float64(covered) / float64(len(y.wanted.missing))
 		finds = append(finds, judge.Find{
@@ -425,4 +438,29 @@ func (s Search) decide(ctx context.Context, itemID int64, finds []judge.Find, so
 		decisions = append(decisions, detail)
 	}
 	return decisions, nil
+}
+
+// releaseEpisodes is how many episodes a release holds: the ones its name numbers, else the season it is a pack of.
+func releaseEpisodes(info parsetv.Info, covered, seasonEpisodes int) int {
+	switch {
+	case len(info.EpisodeNumbers) > 0:
+		return len(info.EpisodeNumbers)
+	case info.FullSeason || info.MultiSeason:
+		return max(seasonEpisodes, covered)
+	}
+	return max(covered, 1)
+}
+
+// videoShare is the part of a file's bits the picture takes; the sound is the rest. A guess, as the size is the
+// only fact before download, and good enough to rank a bloated release above a starved one.
+const videoShare = 0.92
+
+// estimateBitrate stands the release's size over its length in for the bitrate the probe will measure.
+func estimateBitrate(facts *score.Facts, sizeBytes int64, episodes int, runtimeMs int64) {
+	if sizeBytes <= 0 || episodes <= 0 || runtimeMs <= 0 {
+		return
+	}
+	overall := float64(sizeBytes) * 8 / (float64(episodes) * float64(runtimeMs) / 1000)
+	facts.File.OverallBitrate = int64(overall)
+	facts.File.VideoBitrate = int64(overall * videoShare)
 }

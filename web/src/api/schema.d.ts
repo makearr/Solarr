@@ -4315,6 +4315,24 @@ export interface components {
             video_codec?: string;
             /** @description sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care. */
             hdr?: string;
+            /** @description Channel layout such as 2.0, 5.1, 7.1; empty when it does not care. */
+            audio_channels?: string;
+            /** @description Language codes of which one is enough; empty when it does not care. */
+            audio_languages?: string[];
+            /** @description Language codes of which one is enough; empty when it does not care. */
+            subtitle_languages?: string[];
+            /**
+             * Format: int64
+             * @description kbit/s, within tolerance_pct (25 when 0) of it.
+             */
+            audio_bitrate_kbps?: number;
+            /**
+             * Format: int64
+             * @description kbit/s, within tolerance_pct (25 when 0) of it.
+             */
+            video_bitrate_kbps?: number;
+            /** @description Frames a second, within 2 %; 24 meets 23.976. 0 or absent when it does not care. */
+            frame_rate?: number;
             /**
              * Format: int64
              * @description Absent for a lossless codec.

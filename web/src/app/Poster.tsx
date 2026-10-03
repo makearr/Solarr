@@ -25,6 +25,9 @@ export function Poster({
   status,
   presentCount,
   requiredCount,
+  imageSrc,
+  portrait = false,
+  contain = false,
 }: {
   subject: "works" | "people";
   imageId: number | null;
@@ -42,12 +45,26 @@ export function Poster({
   status?: AlbumStatus;
   presentCount?: number;
   requiredCount?: number;
+  /** A picture from the provider's cache, for a work that has no cover of its own (a series' poster, a person's photo). */
+  imageSrc?: string;
+  /** A film or series poster is taller than wide; the tile width stays the wall's. */
+  portrait?: boolean;
+  /** A logo is shown whole on a light ground instead of cropped to the tile. */
+  contain?: boolean;
 }) {
   const shape = round ? "rounded-full" : "rounded-lg";
   const body = (
     <>
       <span className="relative block">
-        {imageId != null ? (
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt=""
+            loading="lazy"
+            className={`${portrait ? "aspect-[2/3]" : "aspect-square"} w-full ${contain ? "bg-white object-contain p-4" : "bg-surface object-cover"} ${shape}
+                        border border-border-subtle group-hover:border-accent`}
+          />
+        ) : imageId != null ? (
           <CoverArt
             subject={subject}
             workId={imageId}
@@ -58,7 +75,7 @@ export function Poster({
           />
         ) : (
           <span
-            className={`flex aspect-square w-full items-center justify-center border border-border-subtle
+            className={`flex ${portrait ? "aspect-[2/3]" : "aspect-square"} w-full items-center justify-center border border-border-subtle
                         bg-surface text-2xl text-ink-muted ${shape}`}
           >
             {title.trim().charAt(0).toUpperCase() || "?"}

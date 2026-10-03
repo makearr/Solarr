@@ -60,6 +60,8 @@ const OWNED: readonly [keyof AudioRules, string][] = [
 export const CONTAINER_OF: Record<string, string> = {
   m4a: "mp4", m4b: "mp4", mp4: "mp4", mp3: "mp3", flac: "flac", wav: "wav", ogg: "ogg", oga: "ogg",
   opus: "ogg", wma: "asf", asf: "asf", aac: "aac", ape: "ape", mka: "matroska", mkv: "matroska",
+  m4v: "mp4", mov: "mp4", webm: "matroska", avi: "avi", wmv: "asf", mpg: "mpeg", mpeg: "mpeg", vob: "mpeg",
+  ts: "mpegts", m2ts: "mpegts", flv: "flv", ogm: "ogg",
 };
 export const containerOf = (name: string) => CONTAINER_OF[name.toLowerCase().replace(/^\./, "")] ?? name.toLowerCase();
 
@@ -97,9 +99,10 @@ export function kbps(value: string | undefined): string {
   return match ? match[1]! : (value ?? "");
 }
 
-function range(target: Target | undefined): Range | null {
+function range(target: Target | undefined, unit = ""): Range | null {
   if (!target) return null;
-  return { min: target.min ?? "", ideal: target.ideal, max: target.max ?? "" };
+  const strip = (value: string | undefined) => (unit && value ? value.replace(new RegExp(`${unit}$`, "i"), "") : (value ?? ""));
+  return { min: strip(target.min), ideal: strip(target.ideal), max: strip(target.max) };
 }
 
 export function parseAudioRules(json: string): AudioRules {
@@ -229,6 +232,14 @@ export interface VideoRules {
   /** Audio languages of which at least one must be present; empty means no gate. */
   audioLanguages: string[];
   preferredGroups: string[];
+  /** The file types (container formats) in the order they rank. */
+  containers: string[][];
+  /** What the numbers aim for: kbit/s for the bitrates, frames a second for the rate; null ranks them as measured. */
+  videoBitrate: Range | null;
+  audioBitrate: Range | null;
+  frameRate: Range | null;
+  /** Languages preferred (a tie-breaker, never a gate) among the audio and the subtitles. */
+  languages: LanguagePreferences;
 }
 
 const VIDEO_TIERS: readonly [keyof VideoRules, string][] = [
@@ -238,7 +249,17 @@ const VIDEO_TIERS: readonly [keyof VideoRules, string][] = [
   ["hdr", "hdr"],
   ["audioChannels", "audio_channels"],
   ["audioCodecs", "audio_codec"],
+  ["containers", "container"],
 ];
+
+/** The compare entry of each numeric target, owned like the tiers. */
+const VIDEO_TARGETS: readonly [keyof VideoRules, string, string][] = [
+  ["videoBitrate", "video_bitrate", "kbps"],
+  ["audioBitrate", "audio_bitrate", "kbps"],
+  ["frameRate", "frame_rate", ""],
+];
+
+const VIDEO_LANGUAGE_FIELDS = LANGUAGE_FIELDS.filter(([key]) => key !== "lyrics");
 
 const GROUP_PREFIX = "Preferred release group: ";
 /** Heard as a tie-breaker between releases of equal quality, as the language preferences are. */
@@ -260,6 +281,11 @@ export function parseVideoRules(json: string): VideoRules {
     maxResolution: doc.require?.resolution?.max ?? "",
     audioLanguages: doc.require?.audio_language?.any_of ?? [],
     preferredGroups: (doc.scoring ?? []).filter((rule) => rule.name.startsWith(GROUP_PREFIX)).map((rule) => rule.name.slice(GROUP_PREFIX.length)),
+    containers: canonicalTiers(doc.tiers?.container ?? []),
+    videoBitrate: range(doc.targets?.video_bitrate?.[0], "kbps"),
+    audioBitrate: range(doc.targets?.audio_bitrate?.[0], "kbps"),
+    frameRate: range(doc.targets?.frame_rate?.[0]),
+    languages: parseLanguages(doc),
   };
 }
 
@@ -276,6 +302,14 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
   }
   setOrDrop(doc, "tiers", tiers);
 
+  const targets = { ...(doc.targets ?? {}) };
+  for (const [key, dimension, unit] of VIDEO_TARGETS) {
+    const value = rules[key] as Range | null;
+    if (value) targets[dimension] = [toTarget(value, unit, targets[dimension]?.[0])];
+    else delete targets[dimension];
+  }
+  setOrDrop(doc, "targets", targets);
+
   const require = { ...(doc.require ?? {}) };
   if (rules.rejectCodecs.length > 0) require.reject_codecs = rules.rejectCodecs;
   else delete require.reject_codecs;
@@ -287,6 +321,8 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
 
   let compare = (doc.compare ?? []).filter((entry) => {
     const owner = VIDEO_TIERS.find(([, owned]) => owned === entry);
+    const target = VIDEO_TARGETS.find(([, dimension]) => `${dimension}_distance` === entry);
+    if (target) return rules[target[0]] !== null;
     return !owner || (rules[owner[0]] as string[][]).length > 0;
   });
   for (const [key, entry] of VIDEO_TIERS) {
@@ -294,9 +330,20 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
       compare = compare.filter((existing) => existing !== "score").concat(entry);
     }
   }
+  for (const [key, dimension] of VIDEO_TARGETS) {
+    if (rules[key] !== null && !compare.includes(`${dimension}_distance`)) {
+      compare = compare.filter((existing) => existing !== "score").concat(`${dimension}_distance`);
+    }
+  }
   doc.compare = compare.filter((entry) => entry !== "score").concat("score");
 
-  const scoring = (doc.scoring ?? []).filter((rule) => !rule.name.startsWith(GROUP_PREFIX));
+  const languageRule = (rule: ScoringRule) => VIDEO_LANGUAGE_FIELDS.some(([, , prefix]) => rule.name.startsWith(prefix));
+  const scoring = (doc.scoring ?? []).filter((rule) => !rule.name.startsWith(GROUP_PREFIX) && !languageRule(rule));
+  for (const [key, field, prefix] of VIDEO_LANGUAGE_FIELDS) {
+    for (const code of rules.languages[key]) {
+      scoring.push({ name: prefix + code, score: LANGUAGE_SCORE, specs: [{ field, has: code, required: true }] });
+    }
+  }
   for (const group of rules.preferredGroups) {
     scoring.push({ name: GROUP_PREFIX + group, score: GROUP_SCORE, specs: [{ field: "release_group", eq: group, required: true }] });
   }

@@ -3082,8 +3082,17 @@ type QualityProfileWrite struct {
 
 // QualityTarget defines model for QualityTarget.
 type QualityTarget struct {
+	// AudioBitrateKbps kbit/s, within tolerance_pct (25 when 0) of it.
+	AudioBitrateKbps *int64 `json:"audio_bitrate_kbps,omitempty"`
+
+	// AudioChannels Channel layout such as 2.0, 5.1, 7.1; empty when it does not care.
+	AudioChannels *string `json:"audio_channels,omitempty"`
+
 	// AudioCodec As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target.
 	AudioCodec string `json:"audio_codec"`
+
+	// AudioLanguages Language codes of which one is enough; empty when it does not care.
+	AudioLanguages *[]string `json:"audio_languages,omitempty"`
 
 	// BitrateKbps Absent for a lossless codec.
 	BitrateKbps *int64 `json:"bitrate_kbps,omitempty"`
@@ -3091,12 +3100,21 @@ type QualityTarget struct {
 	// Container The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.
 	Container string `json:"container"`
 
+	// FrameRate Frames a second, within 2 %; 24 meets 23.976. 0 or absent when it does not care.
+	FrameRate *float32 `json:"frame_rate,omitempty"`
+
 	// Hdr sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care.
 	Hdr *string `json:"hdr,omitempty"`
 
 	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
-	Resolution   *string `json:"resolution,omitempty"`
-	TolerancePct int64   `json:"tolerance_pct"`
+	Resolution *string `json:"resolution,omitempty"`
+
+	// SubtitleLanguages Language codes of which one is enough; empty when it does not care.
+	SubtitleLanguages *[]string `json:"subtitle_languages,omitempty"`
+	TolerancePct      int64     `json:"tolerance_pct"`
+
+	// VideoBitrateKbps kbit/s, within tolerance_pct (25 when 0) of it.
+	VideoBitrateKbps *int64 `json:"video_bitrate_kbps,omitempty"`
 
 	// VideoCodec e.g. h265, h264, av1; empty when it does not care.
 	VideoCodec *string `json:"video_codec,omitempty"`

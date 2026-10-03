@@ -94,14 +94,20 @@ type CategoryQualityProfile struct {
 }
 
 type CategoryQualityTarget struct {
-	CategoryID   int64
-	AudioCodec   string
-	Container    string
-	BitrateKbps  sql.NullInt64
-	TolerancePct int64
-	Resolution   string
-	VideoCodec   string
-	Hdr          string
+	CategoryID        int64
+	AudioCodec        string
+	Container         string
+	BitrateKbps       sql.NullInt64
+	TolerancePct      int64
+	Resolution        string
+	VideoCodec        string
+	Hdr               string
+	AudioChannels     string
+	AudioLanguages    string
+	SubtitleLanguages string
+	AudioBitrateKbps  sql.NullInt64
+	VideoBitrateKbps  sql.NullInt64
+	FrameRate         sql.NullFloat64
 }
 
 type CategoryRootFolder struct {
