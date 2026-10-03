@@ -12,6 +12,11 @@ SET state = ?, finished_at = ?, error = ?,
     artists_created = ?, artists_matched = ?, albums_created = ?, albums_matched = ?, items_parked = ?
 WHERE id = ?;
 
+-- A run still RUNNING when the process starts was cut short by the restart: nothing is working on it any more.
+-- name: AbandonRunningArrImports :execrows
+UPDATE arr_import SET state = 'FAILED', finished_at = ?, error = 'interrupted by a restart; run it again, what was added is kept'
+WHERE state = 'RUNNING';
+
 -- name: SetArrImportState :exec
 UPDATE arr_import SET state = ? WHERE id = ?;
 

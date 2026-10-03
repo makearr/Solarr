@@ -146,6 +146,20 @@ func (a ArrImports) Finish(
 	return nil
 }
 
+// AbandonRunning marks the runs a restart cut short as failed, so a new one can start; it answers how many there were.
+func (a ArrImports) AbandonRunning(ctx context.Context, at int64) (int64, error) {
+	var abandoned int64
+	err := a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		count, err := librarydb.New(tx).AbandonRunningArrImports(ctx, sql.NullInt64{Int64: at, Valid: true})
+		abandoned = count
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: abandon running arr imports: %w", err)
+	}
+	return abandoned, nil
+}
+
 // setState is ArrImportRevert's own use: flip a finished run to REVERTED
 // once its items are undone. Unexported -- every other transition (RUNNING
 // to DONE/FAILED with its own counts) goes through Finish instead.

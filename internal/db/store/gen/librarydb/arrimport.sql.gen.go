@@ -10,6 +10,20 @@ import (
 	"database/sql"
 )
 
+const abandonRunningArrImports = `-- name: AbandonRunningArrImports :execrows
+UPDATE arr_import SET state = 'FAILED', finished_at = ?, error = 'interrupted by a restart; run it again, what was added is kept'
+WHERE state = 'RUNNING'
+`
+
+// A run still RUNNING when the process starts was cut short by the restart: nothing is working on it any more.
+func (q *Queries) AbandonRunningArrImports(ctx context.Context, finishedAt sql.NullInt64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, abandonRunningArrImports, finishedAt)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const addArrImportItem = `-- name: AddArrImportItem :one
 INSERT INTO arr_import_item (import_id, kind, source_id, title, person_id, person_created,
                              subscription_id, work_id, work_created,

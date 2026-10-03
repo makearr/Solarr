@@ -10,6 +10,8 @@ import (
 )
 
 type Querier interface {
+	// A run still RUNNING when the process starts was cut short by the restart: nothing is working on it any more.
+	AbandonRunningArrImports(ctx context.Context, finishedAt sql.NullInt64) (int64, error)
 	AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error
 	AddArrImportItem(ctx context.Context, arg AddArrImportItemParams) (ArrImportItem, error)
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error

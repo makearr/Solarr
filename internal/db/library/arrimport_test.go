@@ -253,3 +253,29 @@ func TestArrImportRevert_DeletesTheWorkBeforeItsOwnPrimaryArtist(t *testing.T) {
 		t.Errorf("result = %+v, want one work and one person deleted", result)
 	}
 }
+
+func TestAbandonRunningMarksOnlyTheRunsARestartCutShort(t *testing.T) {
+	opened, _ := newLibrary(t)
+	imports := library.NewArrImports(opened)
+	running, err := imports.Start(t.Context(), 1, "sonarr", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done, err := imports.Start(t.Context(), 2, "sonarr", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := imports.Finish(t.Context(), done, library.ArrImportDone, 200, "", library.ArrImportCounts{}); err != nil {
+		t.Fatal(err)
+	}
+	abandoned, err := imports.AbandonRunning(t.Context(), 300)
+	if err != nil || abandoned != 1 {
+		t.Fatalf("abandoned = %d, err = %v; want the one running run", abandoned, err)
+	}
+	for id, want := range map[int64]string{running: library.ArrImportFailed, done: library.ArrImportDone} {
+		run, err := imports.Get(t.Context(), id)
+		if err != nil || run.State != want {
+			t.Errorf("run %d: state = %q, err = %v; want %q", id, run.State, err, want)
+		}
+	}
+}
