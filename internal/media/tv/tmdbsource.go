@@ -54,6 +54,7 @@ func FromTMDB(in tmdb.Series, seasons []tmdb.Season, country string) Series {
 	for _, season := range seasons {
 		for _, episode := range season.Episodes {
 			series.Credits = append(series.Credits, tmdbEpisodeCredits(episode)...)
+			series.TMDBEpisodes = append(series.TMDBEpisodes, tmdbEpisode(episode))
 		}
 	}
 	return series
@@ -75,6 +76,18 @@ func tmdbImages(in tmdb.Series) []Image {
 		}
 	}
 	return images
+}
+
+func tmdbEpisode(in tmdb.Episode) Episode {
+	episode := Episode{
+		Season: in.SeasonNumber, Number: in.EpisodeNumber, Title: in.Name, Overview: in.Overview, AirDate: in.AirDate,
+		RuntimeMin: in.Runtime, Image: tmdb.ImageURL(in.StillPath), Special: in.SeasonNumber == 0,
+		IDs: map[string]int64{ProviderTMDB: in.ID}, AirConfidence: ConfidenceUnknown,
+	}
+	if in.AirDate != "" {
+		episode.AirConfidence, episode.AirBasis = ConfidenceLow, "tmdb air date"
+	}
+	return episode
 }
 
 func tmdbSeriesCredits(in tmdb.Series) []Credit {

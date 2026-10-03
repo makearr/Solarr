@@ -266,7 +266,7 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 	add("network", series.Network)
 	add("original_network", series.OriginalNetwork)
 	add("original_country", series.OriginalCountry)
-	add("numbering_basis", ProviderTVDB+":aired")
+	add("numbering_basis", orDefault(series.Basis, ProviderTVDB+":aired"))
 	if series.AirTime != nil {
 		add("air_time", fmt.Sprintf("%02d:%02d %s", series.AirTime.Hour, series.AirTime.Minute, series.AirTime.Timezone))
 	}
@@ -286,6 +286,13 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 		}
 	}
 	return fields
+}
+
+func orDefault(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 // SortTitle lowercases a title, collapses whitespace and drops a leading article, so "The Show" sorts under S.

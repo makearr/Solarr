@@ -119,6 +119,9 @@ func (c SeriesCatalog) Lookup(ctx context.Context, _ int64, query string, limit 
 	views := make([]gen.SeriesCandidate, len(found))
 	for i, candidate := range found {
 		view := gen.SeriesCandidate{Provider: tv.ProviderTVDB, ExternalId: strconv.FormatInt(candidate.TVDBID, 10), Title: candidate.Title}
+		if candidate.TVDBID == 0 {
+			view.Provider, view.ExternalId = tv.ProviderTMDB, strconv.FormatInt(candidate.TMDBID, 10)
+		}
 		if candidate.Year > 0 {
 			year := int64(candidate.Year)
 			view.Year = &year
@@ -130,7 +133,7 @@ func (c SeriesCatalog) Lookup(ctx context.Context, _ int64, query string, limit 
 			status := gen.SeriesCandidateStatus(candidate.Status)
 			view.Status = &status
 		}
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, tv.ProviderTVDB, view.ExternalId); err == nil && held {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, view.Provider, view.ExternalId); err == nil && held {
 			view.LibraryId = &id
 		}
 		views[i] = view

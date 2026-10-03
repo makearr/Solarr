@@ -24,12 +24,34 @@ const MONITOR_OPTIONS: { value: NonNullable<Monitor>; label: string; help: strin
   { value: "none", label: "None", help: "Add the series without wanting anything yet." },
 ];
 
+/** "Start search for missing episodes": one search per monitored season that has aired episodes without a file. */
+async function searchEachMonitoredSeason(seriesId: number, categoryId: number) {
+  const { data } = await api.GET("/series/{id}", { params: { path: { id: seriesId }, query: { category_id: categoryId } } });
+  for (const season of data?.seasons ?? []) {
+    if (season.monitored && season.number > 0 && season.counts.aired_missing > 0) {
+      await api.POST("/series/{id}/seasons/{season}/grab", {
+        params: { path: { id: seriesId, season: season.number }, query: { category_id: categoryId } },
+      });
+    }
+  }
+}
+
 /** Sonarr's add dialog for one found series: where it goes is the library, what is wanted is the Monitor choice. */
 function AddPanel({ candidate, categoryId, onDone }: { candidate: Candidate; categoryId: string; onDone: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [monitor, setMonitor] = usePreference<NonNullable<Monitor>>("series.add.monitor", "all");
   const [specials, setSpecials] = useState(false);
+  const [profileId, setProfileId] = useState(0);
+  const [searchMissing, setSearchMissing] = usePreference<boolean>("series.add.search", false);
+  const profiles = useQuery({
+    queryKey: ["qualityprofiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
   const add = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/series", {
@@ -39,9 +61,11 @@ function AddPanel({ candidate, categoryId, onDone }: { candidate: Candidate; cat
           external_id: candidate.external_id,
           monitor,
           monitor_specials: specials,
+          quality_profile_id: profileId || undefined,
         },
       });
       if (error) throw error;
+      if (searchMissing) await searchEachMonitoredSeason(data.series_id, Number(categoryId));
       return data;
     },
     onSuccess: (result) => {
@@ -69,9 +93,31 @@ function AddPanel({ candidate, categoryId, onDone }: { candidate: Candidate; cat
         </select>
         <span className="text-xs text-ink-muted">{help}</span>
       </label>
+      <label className="flex flex-wrap items-center gap-2">
+        <span className="w-20 text-xs text-ink-muted">Quality</span>
+        <select
+          value={profileId}
+          onChange={(event) => setProfileId(Number(event.target.value))}
+          className="rounded-md border border-border-subtle bg-surface px-2 py-1 text-sm"
+        >
+          <option value={0}>The library&apos;s default</option>
+          {(profiles.data ?? [])
+            .filter((profile) => profile.media_type === "tv")
+            .map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.name}
+              </option>
+            ))}
+        </select>
+      </label>
       <label className="flex items-center gap-2 text-xs text-ink-muted">
         <span className="w-20" />
         <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> Also monitor specials
+      </label>
+      <label className="flex items-center gap-2 text-xs text-ink-muted">
+        <span className="w-20" />
+        <input type="checkbox" checked={searchMissing} onChange={(event) => setSearchMissing(event.target.checked)} /> Start search for missing
+        episodes
       </label>
       <div className="flex items-center gap-3">
         <span className="w-20" />
@@ -147,6 +193,11 @@ export function AddSeries() {
                     <span className="text-xs text-ink-muted">
                       {[candidate.year, candidate.network, candidate.status].filter(Boolean).join(" · ")}
                     </span>
+                    {candidate.provider === "tmdb" && (
+                      <span className="rounded bg-canvas px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-ink-muted" title="TheTVDB does not list it; its episodes come from TMDB">
+                        TMDB only
+                      </span>
+                    )}
                   </div>
                   {candidate.overview && <p className="line-clamp-3 text-xs text-ink-muted">{candidate.overview}</p>}
                   <div className="mt-auto">

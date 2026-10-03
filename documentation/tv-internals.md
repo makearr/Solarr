@@ -31,7 +31,10 @@ year, dates, status, ids, the episode list), so a library named after TheTVDB ke
 win the overview, genres, certification and artwork order, and TVmaze adds air times (`high` airstamp, `medium` TVDB UTC,
 `low` date only) and aliases. TMDB carries **no episode list**: its default order is not the basis, so an episode-scoped
 credit is kept only when its episode aired on the same date under the basis (`guardEpisodeCredits`). TVmaze alone is enough
-to list episodes; without a TMDB key everything works on the other two.
+to list episodes; without a TMDB key everything works on the other two. **Only when no other source lists episodes** (a show TheTVDB
+lacks, typically new or announced) TMDB's own list becomes the basis, stored as `numbering_basis` `tmdb:default`. Search asks Skyhook,
+and TMDB too when keyed, dropping a TMDB hit already found at Skyhook (by TMDB id, else by title without "(US)" and year); a
+TMDB-only hit is added by its TMDB id (`provider: tmdb`), and TheTVDB's id is looked up from TMDB's external ids when it has one.
 
 ## Storage (`library.Series.Upsert`)
 

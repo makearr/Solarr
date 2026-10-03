@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"regexp"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -40,6 +41,7 @@ type RichSource interface {
 	Season(ctx context.Context, seriesID int64, number int) (tmdb.Season, error)
 	FindByTVDB(ctx context.Context, tvdbID int64) (tmdb.Hit, error)
 	FindByIMDb(ctx context.Context, imdbID string) (tmdb.Hit, error)
+	Search(ctx context.Context, term string) ([]tmdb.Hit, error)
 }
 
 // AnimeSource is the AniList client as the service needs it.
@@ -49,6 +51,9 @@ type AnimeSource interface {
 
 // maxAnimeEntries bounds how many of an anime's cours are asked of AniList, which splits one series into several entries.
 const maxAnimeEntries = 5
+
+// maxTMDBOnlyHits is how many search slots shows only TMDB lists may take, so Skyhook's long answer cannot hide them.
+const maxTMDBOnlyHits = 5
 
 // maxCreditSeasons bounds the per-season calls guest stars and episode crew cost.
 const maxCreditSeasons = 40
@@ -115,6 +120,9 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 	}
 	merged := Merge(sources...)
 	if haveRich {
+		if len(merged.Episodes) == 0 && len(rich.TMDBEpisodes) > 0 {
+			merged.Episodes, merged.Basis = rich.TMDBEpisodes, ProviderTMDB+":default"
+		}
 		PreferRicher(&merged, rich)
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
 	}
@@ -399,7 +407,9 @@ func (s Service) ensureSeasons(
 
 // Candidate is one series a search found.
 type Candidate struct {
+	// TVDBID is TheTVDB's id; zero for a show only TMDB lists, which carries TMDBID instead.
 	TVDBID   int64
+	TMDBID   int64
 	Title    string
 	Year     int
 	Network  string
@@ -408,31 +418,73 @@ type Candidate struct {
 	Poster   string
 }
 
-// Search finds series by name through Skyhook; an empty answer is not an error.
+// Search finds series by name through Skyhook, and through TMDB when a key is stored for shows TheTVDB does not list
+// (new or announced ones); an empty answer is not an error. A TMDB hit already found at Skyhook, by name and year, is dropped.
 func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidate, error) {
-	if s.Skyhook == nil {
+	if s.Skyhook == nil && (s.TMDB == nil || !s.TMDB.Configured()) {
 		return nil, ErrNoSource
 	}
-	hits, err := s.Skyhook.Search(ctx, term)
-	if err != nil {
-		return nil, fmt.Errorf("tv: search %q: %w", term, err)
-	}
-	candidates := make([]Candidate, 0, min(len(hits), limit))
-	for _, hit := range hits {
-		if len(candidates) == limit {
-			break
+	var candidates []Candidate
+	var skyhookErr error
+	if s.Skyhook != nil {
+		hits, err := s.Skyhook.Search(ctx, term)
+		if err != nil {
+			skyhookErr = fmt.Errorf("tv: search %q: %w", term, err)
 		}
-		candidate := Candidate{TVDBID: hit.TVDBID, Title: hit.Title, Year: yearOf(hit.FirstAired), Network: hit.Network, Status: statusOf(hit.Status), Overview: hit.Overview}
-		for _, image := range hit.Images {
-			if imageKind(image.CoverType) == "poster" {
-				candidate.Poster = image.URL
-				break
+		for _, hit := range hits {
+			candidate := Candidate{TVDBID: hit.TVDBID, TMDBID: hit.TMDBID, Title: hit.Title, Year: yearOf(hit.FirstAired), Network: hit.Network, Status: statusOf(hit.Status), Overview: hit.Overview}
+			for _, image := range hit.Images {
+				if imageKind(image.CoverType) == "poster" {
+					candidate.Poster = image.URL
+					break
+				}
 			}
+			candidates = append(candidates, candidate)
 		}
-		candidates = append(candidates, candidate)
 	}
+	extra := s.searchTMDB(ctx, term, candidates)
+	if len(candidates)+len(extra) == 0 && skyhookErr != nil {
+		return nil, skyhookErr
+	}
+	reserved := min(len(extra), maxTMDBOnlyHits, limit)
+	candidates = append(candidates[:min(len(candidates), limit-reserved)], extra[:reserved]...)
 	return candidates, nil
 }
+
+// searchTMDB lists TMDB's hits for a term that the earlier candidates do not already cover.
+func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) []Candidate {
+	if s.TMDB == nil || !s.TMDB.Configured() {
+		return nil
+	}
+	hits, err := s.TMDB.Search(ctx, term)
+	if err != nil {
+		s.warn("tmdb search", 0, err)
+		return nil
+	}
+	covered := make(map[string]bool, len(have))
+	for _, candidate := range have {
+		covered[searchKey(candidate.Title, candidate.Year)] = true
+		if candidate.TMDBID > 0 {
+			covered["tmdb:"+strconv.FormatInt(candidate.TMDBID, 10)] = true
+		}
+	}
+	var found []Candidate
+	for _, hit := range hits {
+		year := yearOf(hit.FirstAirDate)
+		if covered[searchKey(hit.Name, year)] || covered["tmdb:"+strconv.FormatInt(hit.ID, 10)] {
+			continue
+		}
+		found = append(found, Candidate{TMDBID: hit.ID, Title: hit.Name, Year: year, Overview: hit.Overview, Poster: tmdb.ImageURL(hit.PosterPath)})
+	}
+	return found
+}
+
+// searchKey names a hit by title without TheTVDB's "(US)" or "(2019)" disambiguation, and year.
+func searchKey(title string, year int) string {
+	return SortTitle(trailingBrackets.ReplaceAllString(title, "")) + "|" + strconv.Itoa(year)
+}
+
+var trailingBrackets = regexp.MustCompile(`\s*\([^)]*\)\s*$`)
 
 // ParseID reads a provider id out of the decimal string a work stores it as.
 func ParseID(externalID string) (int64, bool) {

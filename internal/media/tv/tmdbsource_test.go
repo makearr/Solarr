@@ -72,6 +72,7 @@ func (f fixedSkyhook) Search(context.Context, string) ([]skyhook.Series, error) 
 type fakeTMDB struct {
 	series  tmdb.Series
 	seasons []tmdb.Season
+	hits    []tmdb.Hit
 }
 
 func (f fakeTMDB) Configured() bool { return true }
@@ -89,6 +90,7 @@ func (f fakeTMDB) Season(_ context.Context, _ int64, number int) (tmdb.Season, e
 func (f fakeTMDB) FindByTVDB(context.Context, int64) (tmdb.Hit, error) {
 	return tmdb.Hit{ID: f.series.ID}, nil
 }
+func (f fakeTMDB) Search(context.Context, string) ([]tmdb.Hit, error) { return f.hits, nil }
 func (f fakeTMDB) FindByIMDb(context.Context, string) (tmdb.Hit, error) {
 	return tmdb.Hit{}, tmdb.ErrNotFound
 }
@@ -194,5 +196,47 @@ func TestASeriesWithoutAniListIDsIsNotAskedOfAniList(t *testing.T) {
 	service := tv.Service{Skyhook: fixedSkyhook{skyhookShow()}, AniList: fakeAnime{}}
 	if _, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestSearchAddsTMDBShowsTheTVDBDoesNotListAndDropsTheOnesItDoes(t *testing.T) {
+	hits := []tmdb.Hit{
+		{ID: 7, Name: "Example Show", FirstAirDate: "2020-01-05", Overview: "Same show, found twice."},
+		{ID: 8, Name: "Announced Show", FirstAirDate: "2027-02-01", Overview: "Only TMDB has it.", PosterPath: "/p.jpg"},
+	}
+	service := tv.Service{Skyhook: searchSkyhook{series: skyhookShow()}, TMDB: fakeTMDB{hits: hits}}
+	found, err := service.Search(t.Context(), "show", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 2 || found[0].TVDBID != 1234 || found[1].TMDBID != 8 || found[1].TVDBID != 0 || found[1].Poster != "https://image.tmdb.org/t/p/original/p.jpg" {
+		t.Errorf("found = %+v, want the Skyhook show then the TMDB-only one", found)
+	}
+}
+
+func TestSearchWithOnlyTMDBStillAnswers(t *testing.T) {
+	service := tv.Service{TMDB: fakeTMDB{hits: []tmdb.Hit{{ID: 8, Name: "Announced Show"}}}}
+	found, err := service.Search(t.Context(), "show", 10)
+	if err != nil || len(found) != 1 || found[0].TMDBID != 8 {
+		t.Errorf("found = %+v, err = %v", found, err)
+	}
+}
+
+func TestAShowOnlyTMDBListsTakesTMDBsEpisodesAsItsBasis(t *testing.T) {
+	only := sampleTMDB()
+	only.ExternalIDs.TVDB = 0
+	season := sampleTMDBSeason()
+	season.Episodes = append(season.Episodes, tmdb.Episode{ID: 5, SeasonNumber: 1, EpisodeNumber: 2, Name: "Two", AirDate: "2020-01-12"})
+	service := tv.Service{TMDB: fakeTMDB{series: only, seasons: []tmdb.Season{season}}}
+
+	series, err := service.Fetch(t.Context(), tv.IDs{TMDB: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(series.Episodes) != 2 || series.Basis != "tmdb:default" || series.Episodes[1].IDs[tv.ProviderTMDB] != 5 {
+		t.Errorf("episodes = %+v, basis = %q: TMDB's list is the basis when nothing else has one", series.Episodes, series.Basis)
+	}
+	if len(series.Credits) == 0 {
+		t.Error("the credits were lost on the way")
 	}
 }

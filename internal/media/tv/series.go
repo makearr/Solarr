@@ -166,6 +166,10 @@ type Series struct {
 	Keywords         []string
 	Images           []Image
 	Episodes         []Episode
+	// TMDBEpisodes is TMDB's own list; it becomes Episodes only for a series no other source lists episodes for.
+	TMDBEpisodes []Episode
+	// Basis names the provider and ordering the episode numbers follow ("tvdb:aired"); empty means TheTVDB's aired order.
+	Basis string
 	// Sources lists the providers that contributed, in priority order.
 	Sources []string
 }
