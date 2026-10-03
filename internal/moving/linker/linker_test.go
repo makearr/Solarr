@@ -149,3 +149,26 @@ func TestApply_OnTheRealFilesystemSharesOneInode(t *testing.T) {
 		t.Errorf("second Plan = %+v, %v; want none", links, err)
 	}
 }
+
+func TestMake_PutsALinkWhereTheOldFileWasMovedAway(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	put(t, fsys, "/a/keep.flac", []byte("kept bytes"))
+	if err := fsys.MkdirAll("/b", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	fsys.SetReflinkSupported(false)
+
+	method, err := linker.Make(fsys, "/a/keep.flac", "/b/other.flac")
+	if err != nil || method != linker.Hardlink {
+		t.Fatalf("Make = %q, %v; want a hardlink", method, err)
+	}
+	file, err := fsys.Open("/b/other.flac")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = file.Close() }()
+	got, _ := io.ReadAll(file)
+	if string(got) != "kept bytes" {
+		t.Errorf("linked file holds %q, want the kept file's bytes", got)
+	}
+}

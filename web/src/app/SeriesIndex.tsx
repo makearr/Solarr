@@ -104,9 +104,9 @@ function OverviewRow({ series, categoryId }: { series: Series; categoryId: strin
     <Link
       to="/library/$categoryId/series/$seriesId"
       params={{ categoryId, seriesId: String(series.id) }}
-      className="flex h-full gap-3 rounded-lg border border-border-subtle p-2 hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
+      className="flex h-full min-h-0 gap-3 overflow-hidden rounded-lg border border-border-subtle p-2 hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
     >
-      <span className="block aspect-[2/3] h-full shrink-0 overflow-hidden rounded bg-surface">
+      <span className="block aspect-[2/3] h-full max-h-full shrink-0 overflow-hidden rounded bg-surface">
         {series.poster_url ? (
           <img src={remoteImage(series.poster_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
         ) : (
@@ -412,13 +412,14 @@ export function SeriesIndex() {
                   transform: `translateY(${row.start}px)`,
                   gap: view === "posters" ? POSTER_GAP : 0,
                   gridTemplateColumns: view === "posters" ? `repeat(${metrics.columns}, minmax(0, 1fr))` : "minmax(0, 1fr)",
+                  gridTemplateRows: "minmax(0, 1fr)",
                 }}
               >
                 {slice.map((series) =>
                   view === "posters" ? (
                     <SeriesTile key={series.id} series={series} categoryId={categoryId} />
                   ) : view === "overview" ? (
-                    <div key={series.id} className="pb-2">
+                    <div key={series.id} className="h-full pb-2">
                       <OverviewRow series={series} categoryId={categoryId} />
                     </div>
                   ) : (

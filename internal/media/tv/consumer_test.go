@@ -403,3 +403,25 @@ func TestScanDoesNotNameASmallFolderByNumbersAlone(t *testing.T) {
 		t.Fatalf("list = %+v, want nothing: two files are too little to name a series by", list)
 	}
 }
+
+func titled(show skyhook.Series, names ...string) skyhook.Series {
+	for i := range show.Episodes {
+		show.Episodes[i].Title = names[i%len(names)]
+	}
+	return show
+}
+
+func TestScanBreaksATieBetweenTwoSeriesByTheEpisodeTitlesInTheFileNames(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{
+		titled(showWith(1, "Example Show", "1980-01-01", 12), "Old One", "Old Two", "Old Three"),
+		titled(showWith(2, "Example Show", "2018-01-01", 12), "Pilot", "Second Chance", "Third Time"),
+	}},
+		"Example Show/Season 1/Example Show - S01E01 - Pilot.mkv", "Example Show/Season 1/Example Show - S01E02 - Second Chance.mkv",
+		"Example Show/Season 1/Example Show - S01E03 - Third Time.mkv")
+	if len(list) != 1 || list[0].Counts.Present != 3 {
+		t.Fatalf("list = %+v, want one series with its three episodes", list)
+	}
+	if list[0].Year != 2018 {
+		t.Errorf("year = %d, want the series whose episode titles the files carry", list[0].Year)
+	}
+}

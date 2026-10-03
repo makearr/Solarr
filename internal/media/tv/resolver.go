@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -103,7 +104,7 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 	if id, found := c.inLibrary(ctx, categoryID, guess); found {
 		return id, nil
 	}
-	candidates, err := c.Service.Search(ctx, guess.Title, 10)
+	candidates, err := c.search(ctx, guess)
 	if err != nil {
 		c.Logger.Warn("tv series lookup failed", slog.String("folder", folder), slog.Any("error", err))
 		return 0, nil
@@ -114,6 +115,45 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 		}
 	}
 	return 0, identifications(candidates)
+}
+
+// searchLimit is how many hits one search keeps; a short list hides the right series behind its namesakes.
+const searchLimit = 20
+
+// search asks the providers for the folder's title and, when the folder gives a year, for the title with the year in
+// brackets as TheTVDB names such a series: that puts "Forever (2014)" first where "Forever" buries it.
+func (c Resolver) search(ctx context.Context, guess FolderGuess) ([]Candidate, error) {
+	found, err := c.Service.Search(ctx, guess.Title, searchLimit)
+	asked := 1
+	failed := 0
+	if err != nil {
+		failed++
+	}
+	merge := func(term string) {
+		more, moreErr := c.Service.Search(ctx, term, searchLimit)
+		asked++
+		if moreErr != nil {
+			failed++
+		}
+		for _, candidate := range more {
+			if !slices.ContainsFunc(found, func(have Candidate) bool {
+				return (candidate.TVDBID != 0 && have.TVDBID == candidate.TVDBID) || (candidate.TVDBID == 0 && have.TMDBID == candidate.TMDBID)
+			}) {
+				found = append(found, candidate)
+			}
+		}
+	}
+	if guess.Year > 0 {
+		merge(guess.Title + " (" + strconv.Itoa(guess.Year) + ")")
+	}
+	// Sonarr writes "Title - Subtitle" for TheTVDB's "Title: Subtitle".
+	if len(titleMatches(found, guess)) == 0 && strings.Contains(guess.Title, " - ") {
+		merge(strings.ReplaceAll(guess.Title, " - ", ": "))
+	}
+	if failed == asked {
+		return nil, err
+	}
+	return found, nil
 }
 
 func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderGuess) (int64, bool) {
@@ -270,6 +310,7 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 		return Candidate{}, false
 	}
 	type numbering struct{ season, episode int }
+	titles := map[numbering]string{}
 	var seasonal []numbering
 	var absolute []int
 	for _, relPath := range relPaths {
@@ -279,6 +320,9 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 		}
 		for _, number := range info.EpisodeNumbers {
 			seasonal = append(seasonal, numbering{info.SeasonNumber, number})
+			if title := fileEpisodeTitle(relPath); title != "" && len(info.EpisodeNumbers) == 1 {
+				titles[numbering{info.SeasonNumber, number}] = title
+			}
 		}
 		if len(info.EpisodeNumbers) == 0 {
 			absolute = append(absolute, info.AbsoluteNumbers...)
@@ -288,7 +332,7 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 	if total < 2 {
 		return Candidate{}, false
 	}
-	best, second, bestAt := -1.0, -1.0, -1
+	best, second, bestAt, bestNumbers := -1.0, -1.0, -1, 0.0
 	for index, candidate := range candidates {
 		if candidate.TVDBID == 0 {
 			continue
@@ -298,9 +342,11 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 			continue
 		}
 		seen := make(map[numbering]bool, len(show.Episodes))
+		titleOf := make(map[numbering]string, len(show.Episodes))
 		seenAbsolute := map[int]bool{}
 		for _, episode := range show.Episodes {
 			seen[numbering{episode.SeasonNumber, episode.EpisodeNumber}] = true
+			titleOf[numbering{episode.SeasonNumber, episode.EpisodeNumber}] = episodeKey(episode.Title)
 			if episode.AbsoluteEpisodeNumber != nil {
 				seenAbsolute[*episode.AbsoluteEpisodeNumber] = true
 			}
@@ -316,15 +362,26 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 				fits++
 			}
 		}
-		fit := float64(fits) / float64(total)
+		numbersFit := float64(fits) / float64(total)
+		fit := numbersFit
+		if len(titles) >= 2 {
+			// The names of the episodes break a tie the numbers cannot: two series both have an S01E01.
+			same := 0
+			for number, title := range titles {
+				if titleOf[number] == title {
+					same++
+				}
+			}
+			fit = (numbersFit + float64(same)/float64(len(titles))) / 2
+		}
 		switch {
 		case fit > best:
-			best, second, bestAt = fit, best, index
+			best, second, bestAt, bestNumbers = fit, best, index, numbersFit
 		case fit > second:
 			second = fit
 		}
 	}
-	if bestAt < 0 || best < episodeFit || best-max(second, 0) < episodeLead {
+	if bestAt < 0 || bestNumbers < episodeFit || best-max(second, 0) < episodeLead {
 		return Candidate{}, false
 	}
 	return candidates[bestAt], true
@@ -343,3 +400,15 @@ func identifications(candidates []Candidate) []model.Identification {
 	}
 	return out
 }
+
+var fileTitle = regexp.MustCompile(`(?i)s\d{1,3}e\d{1,3}\s*-\s*(.+?)(?:\.[a-z0-9]{2,4})?$`)
+
+// fileEpisodeTitle is the episode title a Sonarr-style file name carries after its numbering, normalised.
+func fileEpisodeTitle(relPath string) string {
+	if m := fileTitle.FindStringSubmatch(path.Base(relPath)); m != nil {
+		return episodeKey(m[1])
+	}
+	return ""
+}
+
+func episodeKey(title string) string { return parsetv.CleanTitle(parsetv.NormalizeEpisodeTitle(title)) }
