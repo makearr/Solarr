@@ -3133,6 +3133,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/people/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Follow a person by role; their new series are added to the library automatically through TMDB. */
+        put: operations["followSeriesPerson"];
+        post?: never;
+        /** Stop following a person. Series already added stay. */
+        delete: operations["unfollowSeriesPerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/networks/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Follow a network; the new series it airs are added to the library automatically through TMDB. */
+        put: operations["followSeriesNetwork"];
+        post?: never;
+        /** Stop following a network. Series already added stay. */
+        delete: operations["unfollowSeriesNetwork"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/networks": {
         parameters: {
             query?: never;
@@ -5312,6 +5352,31 @@ export interface components {
             /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
             credits?: components["schemas"]["SeriesCredit"][];
         };
+        SeriesFollowRequest: {
+            /**
+             * Format: int64
+             * @description The library new series are added to.
+             */
+            category_id: number;
+            /** @description A person's roles that count (actor, creator, showrunner, director, writer, executive_producer, producer, composer); any when empty. Ignored for a network. */
+            roles?: string[];
+            /**
+             * @description The add dialog's monitor choice for every series the follow adds.
+             * @default future
+             * @enum {string}
+             */
+            monitor: "all" | "future" | "missing" | "existing" | "recent" | "pilot" | "first_season" | "last_season" | "none";
+            /**
+             * @description Also add older series
+             * @default false
+             */
+            back_catalogue: boolean;
+        };
+        SeriesFollow: {
+            roles: string[];
+            monitor: string;
+            back_catalogue: boolean;
+        };
         SeriesPerson: {
             /** Format: int64 */
             id: number;
@@ -5372,6 +5437,10 @@ export interface components {
             credits: components["schemas"]["SeriesPersonCredit"][];
             /** @description Titles TMDB lists for the person that this library does not hold; absent without a TMDB key. */
             elsewhere?: components["schemas"]["SeriesPersonElsewhere"][];
+            /** @description The caller's follow of this person, absent when there is none. */
+            follow?: components["schemas"]["SeriesFollow"];
+            /** @description Whether the person has a TMDB id */
+            followable?: boolean;
         };
         SeriesNetwork: {
             /** Format: int64 */
@@ -5385,6 +5454,10 @@ export interface components {
         SeriesNetworkDetail: {
             network: components["schemas"]["SeriesNetwork"];
             series: components["schemas"]["SeriesSummary"][];
+            /** @description The caller's follow of this network, absent when there is none. */
+            follow?: components["schemas"]["SeriesFollow"];
+            /** @description Whether the network has a TMDB id */
+            followable?: boolean;
         };
         SeriesCredit: {
             /** Format: int64 */
@@ -5438,8 +5511,11 @@ export interface components {
         AddSeriesRequest: {
             /** Format: int64 */
             category_id: number;
-            /** @default tvdb */
-            provider: string;
+            /**
+             * @default tvdb
+             * @enum {string}
+             */
+            provider: "tvdb" | "tmdb";
             external_id: string;
             /**
              * @default all
@@ -6254,6 +6330,11 @@ export interface components {
              * @enum {string}
              */
             monitor_discovered: "monitored" | "unmonitored" | "none";
+            /**
+             * @description What a scan monitors of a series it finds in a TV library: only the episodes on disk (existing), every episode (all), or none.
+             * @enum {string}
+             */
+            tv_monitor?: "existing" | "all" | "none";
         };
         CategoryWrite: {
             name: string;
@@ -6274,6 +6355,11 @@ export interface components {
              * @enum {string}
              */
             monitor_discovered: "monitored" | "unmonitored" | "none";
+            /**
+             * @description TV libraries only; absent leaves it as it is.
+             * @enum {string}
+             */
+            tv_monitor?: "existing" | "all" | "none";
         };
         /** @description A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel. */
         Library: {
@@ -12085,6 +12171,118 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    followSeriesPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesFollowRequest"];
+            };
+        };
+        responses: {
+            /** @description The follow as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesFollow"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    unfollowSeriesPerson: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unfollowed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    followSeriesNetwork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeriesFollowRequest"];
+            };
+        };
+        responses: {
+            /** @description The follow as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesFollow"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    unfollowSeriesNetwork: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unfollowed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     listSeriesNetworks: {

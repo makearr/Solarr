@@ -1,13 +1,13 @@
 -- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes
+       preferred_protocol, protocol_delay_minutes, tv_monitor
 FROM category ORDER BY priority_rank, name;
 
 -- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes
+       preferred_protocol, protocol_delay_minutes, tv_monitor
 FROM category WHERE id = ?;
 
 -- name: CreateCategory :one
@@ -15,13 +15,16 @@ INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
           monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes;
+       preferred_protocol, protocol_delay_minutes, tv_monitor;
 
 -- name: UpdateCategory :exec
 UPDATE category SET name = ?, priority_rank = ? WHERE id = ?;
 
 -- name: SetCategoryMonitorDiscovered :exec
 UPDATE category SET monitor_discovered = ? WHERE id = ?;
+
+-- name: SetCategoryTVMonitor :exec
+UPDATE category SET tv_monitor = ? WHERE id = ?;
 
 -- name: SetCategoryMonitorReleaseTypes :exec
 UPDATE category SET monitor_release_types = ? WHERE id = ?;

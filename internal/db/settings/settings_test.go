@@ -539,3 +539,42 @@ func TestSetUserTier_MissingUserAnswersErrNotFound(t *testing.T) {
 		t.Errorf("SetUserTier on a missing user = %v, want ErrNotFound", err)
 	}
 }
+
+func TestSetCategoryTVMonitor_DefaultsToExistingValidatesAndExportsOnlyWhenChanged(t *testing.T) {
+	cache, _ := newCache(t)
+	category, err := cache.CreateCategory(t.Context(), "tv", "Series", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	if category.TVMonitor != settings.TVMonitorExisting {
+		t.Errorf("TVMonitor = %q, want the default %q", category.TVMonitor, settings.TVMonitorExisting)
+	}
+	exported := func() string {
+		for _, entry := range cache.Export().Categories {
+			if entry.Name == "Series" {
+				return entry.TVMonitor
+			}
+		}
+		return "missing"
+	}
+	if got := exported(); got != "" {
+		t.Errorf("exported tv_monitor = %q for the default, want it omitted", got)
+	}
+
+	if _, err := cache.SetCategoryTVMonitor(t.Context(), category.ID, settings.TVMonitorAll); err != nil {
+		t.Fatalf("SetCategoryTVMonitor: %v", err)
+	}
+	if found, _ := cache.Snapshot().Category(category.ID); found.TVMonitor != settings.TVMonitorAll {
+		t.Errorf("stored TVMonitor = %q, want all", found.TVMonitor)
+	}
+	if got := exported(); got != settings.TVMonitorAll {
+		t.Errorf("exported tv_monitor = %q, want all", got)
+	}
+
+	if _, err := cache.SetCategoryTVMonitor(t.Context(), category.ID, "sometimes"); err == nil {
+		t.Error("an unknown policy was accepted")
+	}
+	if _, err := cache.SetCategoryTVMonitor(t.Context(), 999999, settings.TVMonitorNone); err == nil {
+		t.Error("an unknown category was accepted")
+	}
+}

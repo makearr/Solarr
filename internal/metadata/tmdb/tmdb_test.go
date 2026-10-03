@@ -143,3 +143,15 @@ func TestPersonReadsBiographyAndCredits(t *testing.T) {
 		t.Errorf("person = %+v", person)
 	}
 }
+
+func TestNewOnNetworkAsksForShowsSinceADate(t *testing.T) {
+	transport := &canned{body: `{"results":[{"id":7,"name":"New Show","first_air_date":"2026-09-01"}]}`}
+	hits, err := newClient(t, transport, "k").NewOnNetwork(t.Context(), 9, "2026-08-01")
+	if err != nil || len(hits) != 1 || hits[0].FirstAirDate != "2026-09-01" {
+		t.Fatalf("hits = %+v, err = %v", hits, err)
+	}
+	query := transport.requested[0].URL.Query()
+	if query.Get("with_networks") != "9" || query.Get("first_air_date.gte") != "2026-08-01" || query.Get("sort_by") != "first_air_date.desc" {
+		t.Errorf("query = %v", query)
+	}
+}

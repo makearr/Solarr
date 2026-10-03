@@ -136,12 +136,28 @@ func (c Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 	if category, ok := c.Categories.Category(categoryID); ok {
 		profile = c.Categories.ProfileFor(category, profile)
 	}
-	result, err := c.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: categoryID, ProfileID: profile, Monitor: MonitorExisting})
+	monitor := MonitorExisting
+	if category, ok := c.Categories.Category(categoryID); ok {
+		monitor = scanMonitor(category.TVMonitor)
+	}
+	result, err := c.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: categoryID, ProfileID: profile, Monitor: monitor})
 	if err != nil {
 		c.Logger.Warn("tv series could not be added", slog.Int64("tvdb", ids.TVDB), slog.Any("error", err))
 		return 0
 	}
 	return result.WorkID
+}
+
+// scanMonitor is the monitoring a scan gives a series it finds, from the library's own choice.
+func scanMonitor(policy string) MonitorOption {
+	switch policy {
+	case settings.TVMonitorAll:
+		return MonitorAll
+	case settings.TVMonitorNone:
+		return MonitorNone
+	default:
+		return MonitorExisting
+	}
 }
 
 // pickCandidate accepts a search result only when exactly one candidate has the folder's title (and year when the

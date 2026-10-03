@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -37,6 +38,20 @@ func (p *process) registerSubscriptionExpandJob(registry *jobs.Registry, executo
 		},
 	})
 	executor.Handle(music.SubscriptionExpandJobType, job)
+	return p.registerFollowJob(registry, executor)
+}
+
+// registerFollowJob wires the TV counterpart: the new series of followed people and networks, found through TMDB.
+func (p *process) registerFollowJob(registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(tv.FollowDefinition); err != nil {
+		return err
+	}
+	p.tvService()
+	executor.Handle(tv.FollowJobType, tv.NewFollowJob(tv.FollowConfig{
+		Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library), Source: p.tmdbShared,
+		Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		Clock: clock.NewSystem(), Logger: p.logger,
+	}))
 	return nil
 }
 
@@ -47,6 +62,9 @@ func (p *process) enqueueSubscriptionExpand(ctx context.Context) (jobs.EnqueueRe
 	result, err := music.EnqueueSubscriptionExpand(ctx, p.queue)
 	if err != nil {
 		p.logger.Warn("enqueue subscription expand", slog.Any("error", err))
+	}
+	if _, followErr := tv.EnqueueFollow(ctx, p.queue, 0); followErr != nil {
+		p.logger.Warn("enqueue tv follow sweep", slog.Any("error", followErr))
 	}
 	return result, err
 }

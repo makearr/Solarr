@@ -470,6 +470,11 @@ func (p *process) tvProviders() adapters.TVProviders {
 func (p *process) seriesPeople() adapters.SeriesPeople {
 	p.tvService()
 	return adapters.SeriesPeople{
-		Reader: library.NewSeriesReader(p.library), Persons: library.NewPeople(p.library), TMDB: p.tmdbShared, Clock: clock.NewSystem(),
+		Reader: library.NewSeriesReader(p.library), Persons: library.NewPeople(p.library),
+		Subscriptions: library.NewSubscriptions(p.library), TMDB: p.tmdbShared, Clock: clock.NewSystem(),
+		EnqueueFollow: func(ctx context.Context, subscriptionID int64) error {
+			_, err := tv.EnqueueFollow(ctx, p.queue, subscriptionID)
+			return err
+		},
 	}
 }

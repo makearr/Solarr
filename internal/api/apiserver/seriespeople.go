@@ -2,6 +2,8 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
@@ -17,9 +20,29 @@ import (
 type SeriesPeopleCatalog interface {
 	// People returns up to limit+1 people after the cursor, by name.
 	People(ctx context.Context, categoryID int64, roles []string, prefix string, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error)
-	Person(ctx context.Context, categoryID, personID int64) (gen.SeriesPersonDetail, error)
+	Person(ctx context.Context, categoryID, personID, userID int64) (gen.SeriesPersonDetail, error)
 	Networks(ctx context.Context, categoryID int64) ([]gen.SeriesNetwork, error)
-	Network(ctx context.Context, categoryID, networkID int64) (gen.SeriesNetworkDetail, error)
+	Network(ctx context.Context, categoryID, networkID, userID int64) (gen.SeriesNetworkDetail, error)
+	// Follow subscribes the user to a "person" or an "organisation" so the library adds their new series itself.
+	Follow(ctx context.Context, userID, categoryID int64, subject string, subjectID int64, request gen.SeriesFollowRequest) (gen.SeriesFollow, error)
+	Unfollow(ctx context.Context, userID int64, subject string, subjectID int64) error
+}
+
+// ErrFollowUnavailable means the subject cannot be followed (no TMDB id to follow by, or it is followed for another
+// media type); answered as 409 with the reason.
+var ErrFollowUnavailable = errors.New("apiserver: this cannot be followed")
+
+// peopleAccessAs is peopleAccess for a caller who needs more than reading, and answers who they are.
+func (s *Server) peopleAccessAs(w http.ResponseWriter, r *http.Request, categoryID int64, need settings.Permission) (int64, bool) {
+	access, ok := s.seriesAccess(w, r, categoryID, need)
+	if !ok {
+		return 0, false
+	}
+	if s.seriesPeople == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "series people are not available")
+		return 0, false
+	}
+	return access.UserID(), true
 }
 
 // peopleAccess is seriesAccess for the people endpoints, which also need their own catalogue wired.
@@ -114,7 +137,12 @@ func (s *Server) GetSeriesPerson(w http.ResponseWriter, r *http.Request, id int6
 	if !s.peopleAccess(w, r, params.CategoryId) {
 		return
 	}
-	detail, err := s.seriesPeople.Person(r.Context(), params.CategoryId, id)
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	detail, err := s.seriesPeople.Person(r.Context(), params.CategoryId, id, access.UserID())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -155,10 +183,90 @@ func (s *Server) GetSeriesNetwork(w http.ResponseWriter, r *http.Request, id int
 	if !s.peopleAccess(w, r, params.CategoryId) {
 		return
 	}
-	detail, err := s.seriesPeople.Network(r.Context(), params.CategoryId, id)
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	detail, err := s.seriesPeople.Network(r.Context(), params.CategoryId, id, access.UserID())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, detail)
+}
+
+func (s *Server) routeFollowSeriesPerson(w http.ResponseWriter, r *http.Request) {
+	s.followSubject(w, r, "person")
+}
+
+func (s *Server) routeFollowSeriesNetwork(w http.ResponseWriter, r *http.Request) {
+	s.followSubject(w, r, "organisation")
+}
+
+// FollowSeriesPerson and FollowSeriesNetwork satisfy the generated interface; the route functions are what is mounted.
+func (s *Server) FollowSeriesPerson(w http.ResponseWriter, r *http.Request, _ int64) {
+	s.followSubject(w, r, "person")
+}
+
+// FollowSeriesNetwork see FollowSeriesPerson.
+func (s *Server) FollowSeriesNetwork(w http.ResponseWriter, r *http.Request, _ int64) {
+	s.followSubject(w, r, "organisation")
+}
+
+func (s *Server) followSubject(w http.ResponseWriter, r *http.Request, subject string) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "id must be a number")
+		return
+	}
+	var body gen.SeriesFollowRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+		return
+	}
+	userID, ok := s.peopleAccessAs(w, r, body.CategoryId, settings.PermissionManage)
+	if !ok {
+		return
+	}
+	follow, err := s.seriesPeople.Follow(r.Context(), userID, body.CategoryId, subject, id, body)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, follow)
+}
+
+func (s *Server) routeUnfollowSeriesPerson(w http.ResponseWriter, r *http.Request) {
+	s.unfollowSubject(w, r, "person")
+}
+
+func (s *Server) routeUnfollowSeriesNetwork(w http.ResponseWriter, r *http.Request) {
+	s.unfollowSubject(w, r, "organisation")
+}
+
+// UnfollowSeriesPerson and UnfollowSeriesNetwork satisfy the generated interface; the route functions are mounted.
+func (s *Server) UnfollowSeriesPerson(w http.ResponseWriter, r *http.Request, _ int64, _ gen.UnfollowSeriesPersonParams) {
+	s.unfollowSubject(w, r, "person")
+}
+
+// UnfollowSeriesNetwork see UnfollowSeriesPerson.
+func (s *Server) UnfollowSeriesNetwork(w http.ResponseWriter, r *http.Request, _ int64, _ gen.UnfollowSeriesNetworkParams) {
+	s.unfollowSubject(w, r, "organisation")
+}
+
+func (s *Server) unfollowSubject(w http.ResponseWriter, r *http.Request, subject string) {
+	id, categoryID, ok := s.idAndCategory(w, r)
+	if !ok {
+		return
+	}
+	userID, ok := s.peopleAccessAs(w, r, categoryID, settings.PermissionManage)
+	if !ok {
+		return
+	}
+	if err := s.seriesPeople.Unfollow(r.Context(), userID, subject, id); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

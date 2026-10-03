@@ -144,10 +144,17 @@ func (c SeriesCatalog) Add(ctx context.Context, userID int64, request gen.AddSer
 	if !ok {
 		return gen.AddSeriesResult{}, apiserver.ErrSeriesNotFound
 	}
-	provider := derefString(request.Provider, tv.ProviderTVDB)
+	provider := tv.ProviderTVDB
+	if request.Provider != nil {
+		provider = string(*request.Provider)
+	}
 	id, valid := tv.ParseID(request.ExternalId)
-	if provider != tv.ProviderTVDB || !valid {
-		return gen.AddSeriesResult{}, fmt.Errorf("%w: only a numeric tvdb id can be added", apiserver.ErrDiscoverUnsupportedMediaType)
+	if (provider != tv.ProviderTVDB && provider != tv.ProviderTMDB) || !valid {
+		return gen.AddSeriesResult{}, fmt.Errorf("%w: only a numeric tvdb or tmdb id can be added", apiserver.ErrDiscoverUnsupportedMediaType)
+	}
+	ids := tv.IDs{TVDB: id}
+	if provider == tv.ProviderTMDB {
+		ids = tv.IDs{TMDB: id}
 	}
 	monitor := tv.MonitorAll
 	if request.Monitor != nil {
@@ -158,7 +165,7 @@ func (c SeriesCatalog) Add(ctx context.Context, userID int64, request gen.AddSer
 		profile = *request.QualityProfileId
 	}
 	result, err := c.Service.Add(ctx, tv.AddRequest{
-		IDs: tv.IDs{TVDB: id}, CategoryID: request.CategoryId, ProfileID: profile, Monitor: monitor,
+		IDs: ids, CategoryID: request.CategoryId, ProfileID: profile, Monitor: monitor,
 		Specials: request.MonitorSpecials != nil && *request.MonitorSpecials, AddedBy: &userID,
 	})
 	if err != nil {
@@ -289,13 +296,6 @@ func setString(into **string, value string) {
 	if value != "" {
 		*into = &value
 	}
-}
-
-func derefString(value *string, fallback string) string {
-	if value == nil || *value == "" {
-		return fallback
-	}
-	return *value
 }
 
 // Wanted lists the library's missing episodes.

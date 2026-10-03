@@ -173,6 +173,9 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	}
 	updated, err := s.auth.Settings.UpdateCategory(r.Context(), id, body.Name, body.PriorityRank,
 		body.QualityProfileId, body.LanguageProfileId, monitorDiscovered)
+	if err == nil && body.TvMonitor != nil {
+		updated, err = s.auth.Settings.SetCategoryTVMonitor(r.Context(), id, string(*body.TvMonitor))
+	}
 	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -186,11 +189,20 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(updated))
 }
 
+func tvMonitorView(policy string) *gen.CategorySettingsTvMonitor {
+	if policy == "" {
+		return nil
+	}
+	typed := gen.CategorySettingsTvMonitor(policy)
+	return &typed
+}
+
 func categorySettingsView(c settings.Category) gen.CategorySettings {
 	return gen.CategorySettings{
 		Id: c.ID, MediaType: c.MediaType, Name: c.Name, PriorityRank: c.PriorityRank,
 		QualityProfileId: c.QualityProfileID, LanguageProfileId: c.LanguageProfileID,
 		MonitorDiscovered: gen.CategorySettingsMonitorDiscovered(c.MonitorDiscovered),
+		TvMonitor:         tvMonitorView(c.TVMonitor),
 	}
 }
 

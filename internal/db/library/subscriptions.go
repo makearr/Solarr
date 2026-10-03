@@ -27,6 +27,8 @@ type Subscription struct {
 	// CategoryID is the library the subscription was created in, 0 when it
 	// predates that being recorded.
 	CategoryID int64
+	// CreatedAt is when the subscription was made, in Unix seconds.
+	CreatedAt int64
 }
 
 // Subscriptions is subscription CRUD's read side -- People.Subscribe already
@@ -64,6 +66,7 @@ func subscriptionFrom(row librarydb.Subscription) Subscription {
 		MonitorBackCatalogue: row.MonitorBackCatalogue == 1,
 		FiltersJSON:          row.FiltersJson.String,
 		CategoryID:           row.CategoryID.Int64,
+		CreatedAt:            row.CreatedAt,
 	}
 }
 

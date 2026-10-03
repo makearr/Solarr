@@ -284,3 +284,14 @@ LEFT JOIN person_refresh r ON r.person_id = p.id
 WHERE p.monitored = 1 AND (r.refreshed_at IS NULL OR r.refreshed_at < sqlc.arg(before))
 ORDER BY COALESCE(r.refreshed_at, 0), p.id
 LIMIT sqlc.arg(page_size);
+
+-- name: UpdateSubscriptionScope :exec
+UPDATE subscription SET media_types_json = ?, roles_json = ?, category_id = ?, filters_json = ?,
+                        monitor_back_catalogue = ?, enabled = 1
+WHERE id = ?;
+
+-- name: ListOrganisationExternalIDs :many
+SELECT provider, external_id FROM organisation_external_id WHERE organisation_id = ? ORDER BY provider, external_id;
+
+-- name: SetOrganisationMonitored :exec
+UPDATE organisation SET monitored = ? WHERE id = ?;

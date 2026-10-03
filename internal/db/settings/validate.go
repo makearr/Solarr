@@ -56,6 +56,15 @@ func validateMonitorDiscovered(policy string) config.Problems {
 	}
 }
 
+func validateTVMonitor(policy string) config.Problems {
+	switch policy {
+	case TVMonitorExisting, TVMonitorAll, TVMonitorNone:
+		return nil
+	default:
+		return config.Problems{{Path: "tv_monitor", Value: policy, Expectation: "one of existing, all, none"}}
+	}
+}
+
 // validateRootFolder checks a library root before it is written. Whether the
 // path is writable is reported elsewhere and never refused.
 func validateRootFolder(path string) config.Problems {

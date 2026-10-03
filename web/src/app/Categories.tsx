@@ -27,6 +27,15 @@ export const MEDIA_TYPE_NAME: Record<MediaType, string> = {
 
 const MONITOR_DISCOVERED_OPTIONS: readonly MonitorDiscovered[] = ["monitored", "unmonitored", "none"];
 
+type TVMonitor = NonNullable<components["schemas"]["CategorySettings"]["tv_monitor"]>;
+
+/** What a scan monitors of a series it finds; Sonarr adopts a library as "all", which would hunt every gap. */
+const TV_MONITOR_OPTIONS: readonly { value: TVMonitor; label: string }[] = [
+  { value: "existing", label: "Only the episodes on disk" },
+  { value: "all", label: "Every episode (hunts the gaps)" },
+  { value: "none", label: "None" },
+];
+
 /** The policy boundary for naming, profiles and access (ADR-27). Section 21.14's
  *  "no POST /categories at all" gap: standing one up used to need a hand-written
  *  settings/import YAML document. Editing (todo 4.6's own remaining gap, landed
@@ -263,6 +272,8 @@ function EditCategoryFields({
   const [qualityProfileId, setQualityProfileId] = useState(initial.quality_profile_id ?? 0);
   const [languageProfileId, setLanguageProfileId] = useState(initial.language_profile_id ?? 0);
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
+  const [tvMonitor, setTvMonitor] = useState<TVMonitor>(initial.tv_monitor ?? "existing");
+  const isTV = initial.media_type === "tv";
   const queryClient = useQueryClient();
 
   const save = useMutation({
@@ -275,6 +286,7 @@ function EditCategoryFields({
           quality_profile_id: qualityProfileId || undefined,
           language_profile_id: languageProfileId || undefined,
           monitor_discovered: monitorDiscovered,
+          tv_monitor: isTV ? tvMonitor : undefined,
         },
       });
       if (error) throw error;
@@ -347,20 +359,33 @@ function EditCategoryFields({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
-          Monitor discovered
-          <select
-            className={inputStyle}
-            value={monitorDiscovered}
-            onChange={(event) => setMonitorDiscovered(event.target.value as MonitorDiscovered)}
-          >
-            {MONITOR_DISCOVERED_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
+        {isTV ? (
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Monitor series found by a scan
+            <select className={inputStyle} value={tvMonitor} onChange={(event) => setTvMonitor(event.target.value as TVMonitor)}>
+              {TV_MONITOR_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            Monitor discovered
+            <select
+              className={inputStyle}
+              value={monitorDiscovered}
+              onChange={(event) => setMonitorDiscovered(event.target.value as MonitorDiscovered)}
+            >
+              {MONITOR_DISCOVERED_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       {save.isError && (
         <p className="text-xs text-danger">

@@ -36,7 +36,24 @@ func (s searchSkyhook) Search(context.Context, string) ([]skyhook.Series, error)
 	return []skyhook.Series{hit}, nil
 }
 
+// choosing is a library whose scan policy is the given TV monitor choice.
+type choosing struct{ policy string }
+
+func (c choosing) Category(int64) (settings.Category, bool) {
+	return settings.Category{TVMonitor: c.policy}, true
+}
+func (choosing) ProfileFor(_ settings.Category, fallback int64) int64 { return fallback }
+
 func newConsumer(t *testing.T, sky tv.SeriesSource) (tv.Consumer, *store.Store, *fsx.Mem) {
+	return newConsumerIn(t, sky, categories{})
+}
+
+type scanCategories interface {
+	Category(int64) (settings.Category, bool)
+	ProfileFor(settings.Category, int64) int64
+}
+
+func newConsumerIn(t *testing.T, sky tv.SeriesSource, policy scanCategories) (tv.Consumer, *store.Store, *fsx.Mem) {
 	t.Helper()
 	opened := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
@@ -48,7 +65,7 @@ func newConsumer(t *testing.T, sky tv.SeriesSource) (tv.Consumer, *store.Store, 
 	service := tv.Service{Skyhook: sky, TVmaze: fakeTVmaze{err: tvmaze.ErrNotFound}, Series: library.NewSeries(opened), Desired: library.NewDesired(opened), Clock: fake}
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service,
-		Reader: library.NewSeriesReader(opened), Clock: fake, DefaultProfileID: 1, Categories: categories{},
+		Reader: library.NewSeriesReader(opened), Clock: fake, DefaultProfileID: 1, Categories: policy,
 	})
 	return consumer, opened, fsys
 }
@@ -107,6 +124,26 @@ func TestScanAddsTheSeriesAndAttachesEpisodes(t *testing.T) {
 	}
 	if present != 2 {
 		t.Errorf("present episodes = %d", present)
+	}
+}
+
+func TestScanMonitorsWhatTheLibraryAsksFor(t *testing.T) {
+	for policy, want := range map[string]int64{settings.TVMonitorExisting: 2, settings.TVMonitorAll: 5, settings.TVMonitorNone: 0} {
+		consumer, opened, fsys := newConsumerIn(t, searchSkyhook{series: fixtureSkyhook()}, choosing{policy: policy})
+		batch := []scan.Observed{
+			writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv"),
+			writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E02 - Episode.mkv"),
+		}
+		if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
+			t.Fatal(err)
+		}
+		list, err := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("%s: list = %+v, %v", policy, list, err)
+		}
+		if got := list[0].Counts.Monitored; got != want {
+			t.Errorf("tv_monitor %q: %d episodes monitored, want %d", policy, got, want)
+		}
 	}
 }
 

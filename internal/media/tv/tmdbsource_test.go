@@ -135,3 +135,14 @@ func TestFetchWithoutATMDBKeyStaysOnTheOtherSources(t *testing.T) {
 		t.Errorf("series = %+v, err = %v", series, err)
 	}
 }
+
+func TestFetchFromATMDBIDFindsTheTVDBIDForSkyhook(t *testing.T) {
+	service := tv.Service{Skyhook: fixedSkyhook{skyhookShow()}, TMDB: fakeTMDB{series: sampleTMDB(), seasons: []tmdb.Season{sampleTMDBSeason()}}}
+	series, err := service.Fetch(t.Context(), tv.IDs{TMDB: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if series.IDs.TVDB != 1234 || len(series.Episodes) != 2 || series.IDs.TMDB != 7 {
+		t.Errorf("ids = %+v, episodes = %d: the TVDB id comes from TMDB's external ids and Skyhook then lists the episodes", series.IDs, len(series.Episodes))
+	}
+}

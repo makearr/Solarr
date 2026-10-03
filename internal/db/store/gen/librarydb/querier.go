@@ -514,6 +514,7 @@ type Querier interface {
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.
 	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]MoveJob, error)
+	ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
@@ -853,6 +854,7 @@ type Querier interface {
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
 	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
+	SetOrganisationMonitored(ctx context.Context, arg SetOrganisationMonitoredParams) error
 	SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error
 	// A provider's picture of a person is kept in fields_json and never replaces one already there.
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
@@ -891,6 +893,7 @@ type Querier interface {
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
+	UpdateSubscriptionScope(ctx context.Context, arg UpdateSubscriptionScopeParams) error
 	// Same "enrichment fills a gap, never overwrites" rule as year: a work
 	// created before this column existed, or from a source with no MusicBrainz
 	// answer, only gets its primary_type backfilled here.

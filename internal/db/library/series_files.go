@@ -23,6 +23,8 @@ type PartKey struct {
 type SeriesFileLink struct {
 	MediaObjectID int64
 	Parts         []PartKey
+	// KeepMonitoring leaves the episodes' and seasons' monitoring as it is, instead of wanting what has a file.
+	KeepMonitoring bool
 }
 
 // FileAttachment reports what attaching a batch did.
@@ -71,7 +73,7 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 					result.Unresolved = append(result.Unresolved, link.MediaObjectID)
 					continue
 				}
-				if part.Monitored == 0 {
+				if part.Monitored == 0 && !link.KeepMonitoring {
 					if err := queries.SetWorkPartMonitored(ctx, librarydb.SetWorkPartMonitoredParams{Monitored: 1, ID: part.ID}); err != nil {
 						return fmt.Errorf("monitor part: %w", err)
 					}
@@ -81,7 +83,7 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 				}); err != nil {
 					return fmt.Errorf("attach file: %w", err)
 				}
-				if unmonitoredItem[itemID] {
+				if unmonitoredItem[itemID] && !link.KeepMonitoring {
 					if err := queries.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{Monitored: 1, ID: itemID}); err != nil {
 						return fmt.Errorf("monitor season: %w", err)
 					}

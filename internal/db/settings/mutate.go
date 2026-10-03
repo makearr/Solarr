@@ -82,7 +82,7 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 		return Category{}, fmt.Errorf("settings: create category %q: %w", name, err)
 	}
 	return Category{ID: created.ID, MediaType: created.MediaType, Name: created.Name,
-		PriorityRank: created.PriorityRank, MonitorDiscovered: created.MonitorDiscovered,
+		PriorityRank: created.PriorityRank, MonitorDiscovered: created.MonitorDiscovered, TVMonitor: created.TvMonitor,
 		MonitorReleaseTypes: decodeReleaseTypes(created.MonitorReleaseTypes)}, nil
 }
 
@@ -178,6 +178,24 @@ func (c *Cache) SetCategoryMonitorDiscovered(ctx context.Context, id int64, poli
 		return queries.SetCategoryMonitorDiscovered(ctx,
 			settingsdb.SetCategoryMonitorDiscoveredParams{MonitorDiscovered: policy, ID: id})
 	})
+}
+
+// SetCategoryTVMonitor sets what a scan monitors of a series it finds in a TV library, answering the category as written.
+func (c *Cache) SetCategoryTVMonitor(ctx context.Context, id int64, policy string) (Category, error) {
+	if _, found := c.Snapshot().Category(id); !found {
+		return Category{}, fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	if problems := validateTVMonitor(policy); len(problems) > 0 {
+		return Category{}, problems
+	}
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryTVMonitor(ctx, settingsdb.SetCategoryTVMonitorParams{TvMonitor: policy, ID: id})
+	})
+	if err != nil {
+		return Category{}, err
+	}
+	updated, _ := c.Snapshot().Category(id)
+	return updated, nil
 }
 
 // DeleteCategory removes a category, or refuses and says what still uses it (Invariant 41).

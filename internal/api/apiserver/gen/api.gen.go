@@ -46,6 +46,12 @@ const (
 	AddSeriesRequestMonitorRecent      AddSeriesRequestMonitor = "recent"
 )
 
+// Defines values for AddSeriesRequestProvider.
+const (
+	AddSeriesRequestProviderTmdb AddSeriesRequestProvider = "tmdb"
+	AddSeriesRequestProviderTvdb AddSeriesRequestProvider = "tvdb"
+)
+
 // Defines values for ArrApp.
 const (
 	ArrAppLidarr   ArrApp = "lidarr"
@@ -135,11 +141,25 @@ const (
 	CategorySettingsMonitorDiscoveredUnmonitored CategorySettingsMonitorDiscovered = "unmonitored"
 )
 
+// Defines values for CategorySettingsTvMonitor.
+const (
+	CategorySettingsTvMonitorAll      CategorySettingsTvMonitor = "all"
+	CategorySettingsTvMonitorExisting CategorySettingsTvMonitor = "existing"
+	CategorySettingsTvMonitorNone     CategorySettingsTvMonitor = "none"
+)
+
 // Defines values for CategoryWriteMonitorDiscovered.
 const (
 	CategoryWriteMonitorDiscoveredMonitored   CategoryWriteMonitorDiscovered = "monitored"
 	CategoryWriteMonitorDiscoveredNone        CategoryWriteMonitorDiscovered = "none"
 	CategoryWriteMonitorDiscoveredUnmonitored CategoryWriteMonitorDiscovered = "unmonitored"
+)
+
+// Defines values for CategoryWriteTvMonitor.
+const (
+	CategoryWriteTvMonitorAll      CategoryWriteTvMonitor = "all"
+	CategoryWriteTvMonitorExisting CategoryWriteTvMonitor = "existing"
+	CategoryWriteTvMonitorNone     CategoryWriteTvMonitor = "none"
 )
 
 // Defines values for DecisionOutcome.
@@ -593,6 +613,19 @@ const (
 	SeriesEpisodeStateUnmonitored SeriesEpisodeState = "unmonitored"
 )
 
+// Defines values for SeriesFollowRequestMonitor.
+const (
+	SeriesFollowRequestMonitorAll         SeriesFollowRequestMonitor = "all"
+	SeriesFollowRequestMonitorExisting    SeriesFollowRequestMonitor = "existing"
+	SeriesFollowRequestMonitorFirstSeason SeriesFollowRequestMonitor = "first_season"
+	SeriesFollowRequestMonitorFuture      SeriesFollowRequestMonitor = "future"
+	SeriesFollowRequestMonitorLastSeason  SeriesFollowRequestMonitor = "last_season"
+	SeriesFollowRequestMonitorMissing     SeriesFollowRequestMonitor = "missing"
+	SeriesFollowRequestMonitorNone        SeriesFollowRequestMonitor = "none"
+	SeriesFollowRequestMonitorPilot       SeriesFollowRequestMonitor = "pilot"
+	SeriesFollowRequestMonitorRecent      SeriesFollowRequestMonitor = "recent"
+)
+
 // Defines values for SeriesPersonElsewhereMediaType.
 const (
 	SeriesPersonElsewhereMediaTypeMovie SeriesPersonElsewhereMediaType = "movie"
@@ -895,11 +928,11 @@ type AddIndexerRequest struct {
 
 // AddSeriesRequest defines model for AddSeriesRequest.
 type AddSeriesRequest struct {
-	CategoryId      int64                    `json:"category_id"`
-	ExternalId      string                   `json:"external_id"`
-	Monitor         *AddSeriesRequestMonitor `json:"monitor,omitempty"`
-	MonitorSpecials *bool                    `json:"monitor_specials,omitempty"`
-	Provider        *string                  `json:"provider,omitempty"`
+	CategoryId      int64                     `json:"category_id"`
+	ExternalId      string                    `json:"external_id"`
+	Monitor         *AddSeriesRequestMonitor  `json:"monitor,omitempty"`
+	MonitorSpecials *bool                     `json:"monitor_specials,omitempty"`
+	Provider        *AddSeriesRequestProvider `json:"provider,omitempty"`
 
 	// QualityProfileId The library's default when absent.
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
@@ -907,6 +940,9 @@ type AddSeriesRequest struct {
 
 // AddSeriesRequestMonitor defines model for AddSeriesRequest.Monitor.
 type AddSeriesRequestMonitor string
+
+// AddSeriesRequestProvider defines model for AddSeriesRequest.Provider.
+type AddSeriesRequestProvider string
 
 // AddSeriesResult defines model for AddSeriesResult.
 type AddSeriesResult struct {
@@ -1328,10 +1364,16 @@ type CategorySettings struct {
 	// PriorityRank Lower is more important (ADR-36's composite acquisition priority).
 	PriorityRank     int64  `json:"priority_rank"`
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+
+	// TvMonitor What a scan monitors of a series it finds in a TV library: only the episodes on disk (existing), every episode (all), or none.
+	TvMonitor *CategorySettingsTvMonitor `json:"tv_monitor,omitempty"`
 }
 
 // CategorySettingsMonitorDiscovered What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
 type CategorySettingsMonitorDiscovered string
+
+// CategorySettingsTvMonitor What a scan monitors of a series it finds in a TV library: only the episodes on disk (existing), every episode (all), or none.
+type CategorySettingsTvMonitor string
 
 // CategoryStatistics defines model for CategoryStatistics.
 type CategoryStatistics struct {
@@ -1362,10 +1404,16 @@ type CategoryWrite struct {
 
 	// QualityProfileId Absent or null clears it -- no default profile.
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+
+	// TvMonitor TV libraries only; absent leaves it as it is.
+	TvMonitor *CategoryWriteTvMonitor `json:"tv_monitor,omitempty"`
 }
 
 // CategoryWriteMonitorDiscovered defines model for CategoryWrite.MonitorDiscovered.
 type CategoryWriteMonitorDiscovered string
+
+// CategoryWriteTvMonitor TV libraries only; absent leaves it as it is.
+type CategoryWriteTvMonitor string
 
 // ConnectionTestResult defines model for ConnectionTestResult.
 type ConnectionTestResult struct {
@@ -3350,6 +3398,31 @@ type SeriesEpisodeAirConfidence string
 // SeriesEpisodeState What a person wants to see in the column.
 type SeriesEpisodeState string
 
+// SeriesFollow defines model for SeriesFollow.
+type SeriesFollow struct {
+	BackCatalogue bool     `json:"back_catalogue"`
+	Monitor       string   `json:"monitor"`
+	Roles         []string `json:"roles"`
+}
+
+// SeriesFollowRequest defines model for SeriesFollowRequest.
+type SeriesFollowRequest struct {
+	// BackCatalogue Also add older series
+	BackCatalogue *bool `json:"back_catalogue,omitempty"`
+
+	// CategoryId The library new series are added to.
+	CategoryId int64 `json:"category_id"`
+
+	// Monitor The add dialog's monitor choice for every series the follow adds.
+	Monitor *SeriesFollowRequestMonitor `json:"monitor,omitempty"`
+
+	// Roles A person's roles that count (actor, creator, showrunner, director, writer, executive_producer, producer, composer); any when empty. Ignored for a network.
+	Roles *[]string `json:"roles,omitempty"`
+}
+
+// SeriesFollowRequestMonitor The add dialog's monitor choice for every series the follow adds.
+type SeriesFollowRequestMonitor string
+
 // SeriesNetwork defines model for SeriesNetwork.
 type SeriesNetwork struct {
 	Country     *string `json:"country,omitempty"`
@@ -3361,8 +3434,13 @@ type SeriesNetwork struct {
 
 // SeriesNetworkDetail defines model for SeriesNetworkDetail.
 type SeriesNetworkDetail struct {
-	Network SeriesNetwork   `json:"network"`
-	Series  []SeriesSummary `json:"series"`
+	// Follow The caller's follow of this network, absent when there is none.
+	Follow *SeriesFollow `json:"follow,omitempty"`
+
+	// Followable Whether the network has a TMDB id
+	Followable *bool           `json:"followable,omitempty"`
+	Network    SeriesNetwork   `json:"network"`
+	Series     []SeriesSummary `json:"series"`
 }
 
 // SeriesPage defines model for SeriesPage.
@@ -3416,11 +3494,17 @@ type SeriesPersonDetail struct {
 
 	// Elsewhere Titles TMDB lists for the person that this library does not hold; absent without a TMDB key.
 	Elsewhere *[]SeriesPersonElsewhere `json:"elsewhere,omitempty"`
-	Id        int64                    `json:"id"`
-	Ids       map[string]string        `json:"ids"`
-	ImageUrl  *string                  `json:"image_url,omitempty"`
-	Monitored bool                     `json:"monitored"`
-	Name      string                   `json:"name"`
+
+	// Follow The caller's follow of this person, absent when there is none.
+	Follow *SeriesFollow `json:"follow,omitempty"`
+
+	// Followable Whether the person has a TMDB id
+	Followable *bool             `json:"followable,omitempty"`
+	Id         int64             `json:"id"`
+	Ids        map[string]string `json:"ids"`
+	ImageUrl   *string           `json:"image_url,omitempty"`
+	Monitored  bool              `json:"monitored"`
+	Name       string            `json:"name"`
 }
 
 // SeriesPersonElsewhere defines model for SeriesPersonElsewhere.
@@ -4305,6 +4389,11 @@ type GetSeriesNetworkParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// UnfollowSeriesNetworkParams defines parameters for UnfollowSeriesNetwork.
+type UnfollowSeriesNetworkParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // ListSeriesPeopleParams defines parameters for ListSeriesPeople.
 type ListSeriesPeopleParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -4320,6 +4409,11 @@ type ListSeriesPeopleParams struct {
 
 // GetSeriesPersonParams defines parameters for GetSeriesPerson.
 type GetSeriesPersonParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// UnfollowSeriesPersonParams defines parameters for UnfollowSeriesPerson.
+type UnfollowSeriesPersonParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
@@ -4764,6 +4858,12 @@ type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 
 // AddSeriesJSONRequestBody defines body for AddSeries for application/json ContentType.
 type AddSeriesJSONRequestBody = AddSeriesRequest
+
+// FollowSeriesNetworkJSONRequestBody defines body for FollowSeriesNetwork for application/json ContentType.
+type FollowSeriesNetworkJSONRequestBody = SeriesFollowRequest
+
+// FollowSeriesPersonJSONRequestBody defines body for FollowSeriesPerson for application/json ContentType.
+type FollowSeriesPersonJSONRequestBody = SeriesFollowRequest
 
 // SetEpisodeMonitoredJSONRequestBody defines body for SetEpisodeMonitored for application/json ContentType.
 type SetEpisodeMonitoredJSONRequestBody SetEpisodeMonitoredJSONBody
@@ -5349,12 +5449,24 @@ type ServerInterface interface {
 	// One network with the library's series on it.
 	// (GET /series/networks/{id})
 	GetSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesNetworkParams)
+	// Stop following a network. Series already added stay.
+	// (DELETE /series/networks/{id}/follow)
+	UnfollowSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64, params UnfollowSeriesNetworkParams)
+	// Follow a network; the new series it airs are added to the library automatically through TMDB.
+	// (PUT /series/networks/{id}/follow)
+	FollowSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of the people credited on one TV library's series, by name.
 	// (GET /series/people)
 	ListSeriesPeople(w http.ResponseWriter, r *http.Request, params ListSeriesPeopleParams)
 	// One person with their credits in this library and, from TMDB when a key is stored, elsewhere.
 	// (GET /series/people/{id})
 	GetSeriesPerson(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPersonParams)
+	// Stop following a person. Series already added stay.
+	// (DELETE /series/people/{id}/follow)
+	UnfollowSeriesPerson(w http.ResponseWriter, r *http.Request, id int64, params UnfollowSeriesPersonParams)
+	// Follow a person by role; their new series are added to the library automatically through TMDB.
+	// (PUT /series/people/{id}/follow)
+	FollowSeriesPerson(w http.ResponseWriter, r *http.Request, id int64)
 	// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
 	// (GET /series/wanted)
 	ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams)
@@ -6576,6 +6688,18 @@ func (_ Unimplemented) GetSeriesNetwork(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Stop following a network. Series already added stay.
+// (DELETE /series/networks/{id}/follow)
+func (_ Unimplemented) UnfollowSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64, params UnfollowSeriesNetworkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Follow a network; the new series it airs are added to the library automatically through TMDB.
+// (PUT /series/networks/{id}/follow)
+func (_ Unimplemented) FollowSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // A page of the people credited on one TV library's series, by name.
 // (GET /series/people)
 func (_ Unimplemented) ListSeriesPeople(w http.ResponseWriter, r *http.Request, params ListSeriesPeopleParams) {
@@ -6585,6 +6709,18 @@ func (_ Unimplemented) ListSeriesPeople(w http.ResponseWriter, r *http.Request, 
 // One person with their credits in this library and, from TMDB when a key is stored, elsewhere.
 // (GET /series/people/{id})
 func (_ Unimplemented) GetSeriesPerson(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPersonParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop following a person. Series already added stay.
+// (DELETE /series/people/{id}/follow)
+func (_ Unimplemented) UnfollowSeriesPerson(w http.ResponseWriter, r *http.Request, id int64, params UnfollowSeriesPersonParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Follow a person by role; their new series are added to the library automatically through TMDB.
+// (PUT /series/people/{id}/follow)
+func (_ Unimplemented) FollowSeriesPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12477,6 +12613,90 @@ func (siw *ServerInterfaceWrapper) GetSeriesNetwork(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// UnfollowSeriesNetwork operation middleware
+func (siw *ServerInterfaceWrapper) UnfollowSeriesNetwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnfollowSeriesNetworkParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnfollowSeriesNetwork(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// FollowSeriesNetwork operation middleware
+func (siw *ServerInterfaceWrapper) FollowSeriesNetwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FollowSeriesNetwork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSeriesPeople operation middleware
 func (siw *ServerInterfaceWrapper) ListSeriesPeople(w http.ResponseWriter, r *http.Request) {
 
@@ -12593,6 +12813,90 @@ func (siw *ServerInterfaceWrapper) GetSeriesPerson(w http.ResponseWriter, r *htt
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSeriesPerson(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnfollowSeriesPerson operation middleware
+func (siw *ServerInterfaceWrapper) UnfollowSeriesPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnfollowSeriesPersonParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnfollowSeriesPerson(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// FollowSeriesPerson operation middleware
+func (siw *ServerInterfaceWrapper) FollowSeriesPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.FollowSeriesPerson(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15236,10 +15540,22 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/series/networks/{id}", wrapper.GetSeriesNetwork)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/series/networks/{id}/follow", wrapper.UnfollowSeriesNetwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/networks/{id}/follow", wrapper.FollowSeriesNetwork)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/people", wrapper.ListSeriesPeople)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/people/{id}", wrapper.GetSeriesPerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/series/people/{id}/follow", wrapper.UnfollowSeriesPerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/people/{id}/follow", wrapper.FollowSeriesPerson)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/wanted", wrapper.ListWantedEpisodes)

@@ -35,7 +35,7 @@ function AddPanel({ candidate, categoryId, onDone }: { candidate: Candidate; cat
       const { data, error } = await api.POST("/series", {
         body: {
           category_id: Number(categoryId),
-          provider: candidate.provider,
+          provider: candidate.provider === "tmdb" ? "tmdb" : "tvdb",
           external_id: candidate.external_id,
           monitor,
           monitor_specials: specials,

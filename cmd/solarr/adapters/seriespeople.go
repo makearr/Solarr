@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -28,10 +29,13 @@ type PersonSource interface {
 
 // SeriesPeople satisfies apiserver.SeriesPeopleCatalog over the library's series reader and TMDB.
 type SeriesPeople struct {
-	Reader  library.SeriesReader
-	Persons library.People
-	TMDB    PersonSource
-	Clock   clock.Clock
+	Reader        library.SeriesReader
+	Persons       library.People
+	Subscriptions library.Subscriptions
+	TMDB          PersonSource
+	// EnqueueFollow asks the follow sweep to look at one subscription now; nil leaves it to the schedule.
+	EnqueueFollow func(ctx context.Context, subscriptionID int64) error
+	Clock         clock.Clock
 }
 
 // People maps a page of the people credited in a TV library.
@@ -51,7 +55,7 @@ func (c SeriesPeople) People(ctx context.Context, categoryID int64, roles []stri
 }
 
 // Person maps one person's page: credits here, then biography and other titles from TMDB when a key is stored.
-func (c SeriesPeople) Person(ctx context.Context, categoryID, personID int64) (gen.SeriesPersonDetail, error) {
+func (c SeriesPeople) Person(ctx context.Context, categoryID, personID, userID int64) (gen.SeriesPersonDetail, error) {
 	detail, err := c.Reader.Person(ctx, categoryID, personID)
 	if err != nil {
 		return gen.SeriesPersonDetail{}, translatePeopleError(err)
@@ -61,6 +65,9 @@ func (c SeriesPeople) Person(ctx context.Context, categoryID, personID int64) (g
 		c.keep(ctx, &detail, remote)
 	}
 	view := gen.SeriesPersonDetail{Id: detail.ID, Name: detail.Name, Monitored: detail.Monitored, Ids: detail.IDs}
+	_, hasTMDB := tv.ParseID(detail.IDs[tv.ProviderTMDB])
+	view.Followable = &hasTMDB
+	view.Follow = c.followOf(ctx, "person", detail.ID, userID)
 	setString(&view.ImageUrl, detail.ImageURL)
 	setString(&view.Biography, detail.Biography)
 	setString(&view.Born, detail.Born)
@@ -221,7 +228,7 @@ func (c SeriesPeople) Networks(ctx context.Context, categoryID int64) ([]gen.Ser
 }
 
 // Network maps one network with the library's series on it.
-func (c SeriesPeople) Network(ctx context.Context, categoryID, networkID int64) (gen.SeriesNetworkDetail, error) {
+func (c SeriesPeople) Network(ctx context.Context, categoryID, networkID, userID int64) (gen.SeriesNetworkDetail, error) {
 	network, ids, err := c.Reader.NetworkSeries(ctx, categoryID, networkID)
 	if err != nil {
 		return gen.SeriesNetworkDetail{}, translatePeopleError(err)
@@ -234,7 +241,98 @@ func (c SeriesPeople) Network(ctx context.Context, categoryID, networkID int64) 
 	for i, summary := range summaries {
 		series[i] = summaryView(summary)
 	}
-	return gen.SeriesNetworkDetail{Network: networkView(network), Series: series}, nil
+	view := gen.SeriesNetworkDetail{Network: networkView(network), Series: series}
+	_, followable, err := c.Subscriptions.OrganisationExternalID(ctx, networkID, tv.ProviderTMDB)
+	if err != nil {
+		return gen.SeriesNetworkDetail{}, err
+	}
+	view.Followable = &followable
+	view.Follow = c.followOf(ctx, "organisation", networkID, userID)
+	return view, nil
+}
+
+// followOf maps the user's follow of a subject, nil when they have none.
+func (c SeriesPeople) followOf(ctx context.Context, subject string, subjectID, userID int64) *gen.SeriesFollow {
+	subscription, found, err := c.Subscriptions.FollowOf(ctx, subject, subjectID, userID)
+	if err != nil || !found || !slices.Contains(subscription.MediaTypes, tv.MediaType) {
+		return nil
+	}
+	var filters tv.FollowFilters
+	_ = json.Unmarshal([]byte(subscription.FiltersJSON), &filters)
+	if filters.Monitor == "" {
+		filters.Monitor = string(tv.MonitorFuture)
+	}
+	roles := subscription.Roles
+	if roles == nil {
+		roles = []string{}
+	}
+	return &gen.SeriesFollow{Roles: roles, Monitor: filters.Monitor, BackCatalogue: subscription.MonitorBackCatalogue}
+}
+
+// Follow subscribes the user to a person or a network that TMDB knows, and asks the sweep to look at it at once.
+func (c SeriesPeople) Follow(ctx context.Context, userID, categoryID int64, subject string, subjectID int64, request gen.SeriesFollowRequest) (gen.SeriesFollow, error) {
+	if err := c.knownSubject(ctx, categoryID, subject, subjectID); err != nil {
+		return gen.SeriesFollow{}, err
+	}
+	monitor := tv.MonitorFuture
+	if request.Monitor != nil {
+		monitor = tv.MonitorOption(*request.Monitor)
+	}
+	if !monitor.Valid() {
+		return gen.SeriesFollow{}, fmt.Errorf("%w: unknown monitor option %q", apiserver.ErrFollowUnavailable, monitor)
+	}
+	filters, err := json.Marshal(tv.FollowFilters{Monitor: string(monitor)})
+	if err != nil {
+		return gen.SeriesFollow{}, err
+	}
+	var roles []string
+	if request.Roles != nil && subject == "person" {
+		roles = *request.Roles
+	}
+	back := request.BackCatalogue != nil && *request.BackCatalogue
+	id, err := c.Subscriptions.Follow(ctx, c.Clock.Now(), subject, subjectID, userID, tv.MediaType, library.FollowRequest{
+		CategoryID: categoryID, Roles: roles, FiltersJSON: string(filters), BackCatalogue: back,
+	})
+	if errors.Is(err, library.ErrFollowConflict) {
+		return gen.SeriesFollow{}, fmt.Errorf("%w: %w", apiserver.ErrFollowUnavailable, err)
+	}
+	if err != nil {
+		return gen.SeriesFollow{}, err
+	}
+	if c.EnqueueFollow != nil {
+		_ = c.EnqueueFollow(ctx, id)
+	}
+	if roles == nil {
+		roles = []string{}
+	}
+	return gen.SeriesFollow{Roles: roles, Monitor: string(monitor), BackCatalogue: back}, nil
+}
+
+// knownSubject checks the subject is in the library and has the TMDB id a follow works by.
+func (c SeriesPeople) knownSubject(ctx context.Context, categoryID int64, subject string, subjectID int64) error {
+	switch subject {
+	case "person":
+		detail, err := c.Reader.Person(ctx, categoryID, subjectID)
+		if err != nil {
+			return translatePeopleError(err)
+		}
+		if _, ok := tv.ParseID(detail.IDs[tv.ProviderTMDB]); !ok {
+			return fmt.Errorf("%w: this person has no TMDB id", apiserver.ErrFollowUnavailable)
+		}
+	case "organisation":
+		if _, _, err := c.Reader.NetworkSeries(ctx, categoryID, subjectID); err != nil {
+			return translatePeopleError(err)
+		}
+		if _, found, err := c.Subscriptions.OrganisationExternalID(ctx, subjectID, tv.ProviderTMDB); err != nil || !found {
+			return fmt.Errorf("%w: this network has no TMDB id", apiserver.ErrFollowUnavailable)
+		}
+	}
+	return nil
+}
+
+// Unfollow removes the user's follow.
+func (c SeriesPeople) Unfollow(ctx context.Context, userID int64, subject string, subjectID int64) error {
+	return c.Subscriptions.Unfollow(ctx, subject, subjectID, userID)
 }
 
 func networkView(row library.TVNetworkRow) gen.SeriesNetwork {

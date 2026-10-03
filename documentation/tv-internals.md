@@ -45,6 +45,18 @@ person page is first opened. Networks are `organisation` rows (`kind` network, l
 `work_organisation`; keywords are `work_classification` rows. A refresh adds and updates credits and never removes one.
 The People and Networks levels read these through `library.SeriesReader` (`/series/people`, `/series/networks`).
 
+## Following people and networks (`internal/media/tv/follow_job.go`)
+
+A person (by role) or a network can be followed from its page: a `subscription` row (media type `tv`, roles, the library it adds
+to, `filters_json` `{"monitor": ...}`, back-catalogue flag). The registered task "Subscription expand" also enqueues
+`tv.follow_expand`, which asks TMDB per follow: a person's combined credits (tv only, the followed roles, first aired since the
+follow was made less 30 days, or a regular role with 3+ episodes for a back-catalogue follow) or `/discover/tv` for a network. Each
+show not yet held is added with the follow's monitor choice, **at most 5 per follow per run** (25 for a back catalogue). Additive
+only, and a show whose TMDB id has no TheTVDB id is skipped (no episode list). Making or changing a follow enqueues its own run.
+
+A scan's monitoring of series it finds is the library's `tv_monitor` (`category.tv_monitor`): `existing` (default; only the episodes
+on disk), `all` (Sonarr's adoption: hunts every gap) or `none` (nothing, also not the episodes found).
+
 ## Naming (`internal/media/tv/naming.go`)
 
 Sonarr's six formats (standard, daily, anime, series folder, season folder, specials folder), its token spellings and

@@ -64,6 +64,7 @@ type Category struct {
 	QualityUpgrades        int64
 	PreferredProtocol      string
 	ProtocolDelayMinutes   int64
+	TvMonitor              string
 }
 
 type CategoryFileManagement struct {

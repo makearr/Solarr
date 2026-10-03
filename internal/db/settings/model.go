@@ -90,6 +90,8 @@ type Category struct {
 	// disk that nobody asked for: "monitored" (default), "unmonitored", or
 	// "none" at all (section 19.6, todo 4.4).
 	MonitorDiscovered string
+	// TVMonitor is what a scan monitors of a series it finds: "existing" (the episodes on disk), "all", or "none".
+	TVMonitor string
 	// MonitorReleaseTypes is which release types a monitored artist in this
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).
@@ -141,6 +143,11 @@ const (
 	MonitorDiscoveredMonitored   = "monitored"
 	MonitorDiscoveredUnmonitored = "unmonitored"
 	MonitorDiscoveredNone        = "none"
+
+	// The TV scan's choices (a TV library's own, beside MonitorDiscovered's album ones).
+	TVMonitorExisting = "existing"
+	TVMonitorAll      = "all"
+	TVMonitorNone     = "none"
 )
 
 // Exclusion pattern actions (exclusion_pattern.action, ADR-53 part 1).

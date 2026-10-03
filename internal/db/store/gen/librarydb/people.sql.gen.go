@@ -1062,6 +1062,38 @@ func (q *Queries) ListGenresForPersonDiscography(ctx context.Context, personID i
 	return items, nil
 }
 
+const listOrganisationExternalIDs = `-- name: ListOrganisationExternalIDs :many
+SELECT provider, external_id FROM organisation_external_id WHERE organisation_id = ? ORDER BY provider, external_id
+`
+
+type ListOrganisationExternalIDsRow struct {
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOrganisationExternalIDs, organisationID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganisationExternalIDsRow{}
+	for rows.Next() {
+		var i ListOrganisationExternalIDsRow
+		if err := rows.Scan(&i.Provider, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganisationSubtree = `-- name: ListOrganisationSubtree :many
 WITH RECURSIVE subtree(org_id) AS (
   SELECT organisation.id FROM organisation WHERE organisation.id = ?
@@ -1345,6 +1377,20 @@ func (q *Queries) RecordPersonRefresh(ctx context.Context, arg RecordPersonRefre
 	return err
 }
 
+const setOrganisationMonitored = `-- name: SetOrganisationMonitored :exec
+UPDATE organisation SET monitored = ? WHERE id = ?
+`
+
+type SetOrganisationMonitoredParams struct {
+	Monitored int64
+	ID        int64
+}
+
+func (q *Queries) SetOrganisationMonitored(ctx context.Context, arg SetOrganisationMonitoredParams) error {
+	_, err := q.db.ExecContext(ctx, setOrganisationMonitored, arg.Monitored, arg.ID)
+	return err
+}
+
 const setPersonMonitored = `-- name: SetPersonMonitored :exec
 UPDATE person SET monitored = ? WHERE id = ?
 `
@@ -1356,5 +1402,32 @@ type SetPersonMonitoredParams struct {
 
 func (q *Queries) SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error {
 	_, err := q.db.ExecContext(ctx, setPersonMonitored, arg.Monitored, arg.ID)
+	return err
+}
+
+const updateSubscriptionScope = `-- name: UpdateSubscriptionScope :exec
+UPDATE subscription SET media_types_json = ?, roles_json = ?, category_id = ?, filters_json = ?,
+                        monitor_back_catalogue = ?, enabled = 1
+WHERE id = ?
+`
+
+type UpdateSubscriptionScopeParams struct {
+	MediaTypesJson       string
+	RolesJson            sql.NullString
+	CategoryID           sql.NullInt64
+	FiltersJson          sql.NullString
+	MonitorBackCatalogue int64
+	ID                   int64
+}
+
+func (q *Queries) UpdateSubscriptionScope(ctx context.Context, arg UpdateSubscriptionScopeParams) error {
+	_, err := q.db.ExecContext(ctx, updateSubscriptionScope,
+		arg.MediaTypesJson,
+		arg.RolesJson,
+		arg.CategoryID,
+		arg.FiltersJson,
+		arg.MonitorBackCatalogue,
+		arg.ID,
+	)
 	return err
 }

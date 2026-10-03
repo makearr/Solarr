@@ -147,6 +147,10 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	attached, matched := 0, 0
 	for folder, indexes := range byFolder {
 		series, candidates := c.resolver.Resolve(ctx, categoryID, folder, readable[indexes[0]].File.RelPath)
+		keepMonitoring := false
+		if category, found := c.config.Categories.Category(categoryID); found {
+			keepMonitoring = category.TVMonitor == settings.TVMonitorNone
+		}
 		var links []library.SeriesFileLink
 		var leftover []int
 		for _, i := range indexes {
@@ -156,7 +160,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 				leftover = append(leftover, i)
 				continue
 			}
-			links = append(links, library.SeriesFileLink{MediaObjectID: registered[i].MediaObjectID, Parts: keys})
+			links = append(links, library.SeriesFileLink{MediaObjectID: registered[i].MediaObjectID, Parts: keys, KeepMonitoring: keepMonitoring})
 		}
 		if len(links) > 0 {
 			result, err := c.config.Service.Series.AttachFiles(ctx, now, series, root.ID, links)

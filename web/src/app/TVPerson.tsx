@@ -5,6 +5,7 @@ import { Film, Tv, UserRound } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { FollowPanel } from "./FollowPanel";
 import { roleLabel } from "./TVPeople";
 
 type Credit = components["schemas"]["SeriesPersonCredit"];
@@ -111,6 +112,14 @@ export function TVPerson() {
           ) : (
             <p className="text-sm text-ink-muted">No biography yet. It comes from TMDB once a key is stored under Settings → Metadata.</p>
           )}
+          <FollowPanel
+            kind="person"
+            subjectId={data.id}
+            categoryId={categoryId}
+            follow={data.follow}
+            followable={data.followable}
+            suggestedRoles={[...new Set(data.credits.map((credit) => credit.role).filter((role) => role !== "guest_star"))]}
+          />
           <div className="mt-auto flex gap-3 text-xs">
             {links.map(([label, , href]) =>
               href ? (

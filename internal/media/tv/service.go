@@ -59,6 +59,7 @@ type Service struct {
 // Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
 // artwork, TVmaze air times. A failing source is skipped; only all failing is an error.
 func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
+	ids = s.completeIDs(ctx, ids)
 	var sources []Series
 	if ids.TVDB > 0 && s.Skyhook != nil {
 		series, err := s.Skyhook.Series(ctx, ids.TVDB)
@@ -95,6 +96,24 @@ func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
 	}
 	return merged, nil
+}
+
+// completeIDs finds TheTVDB's id from TMDB's when only that is known, so a series added from TMDB still gets Skyhook's
+// episodes.
+func (s Service) completeIDs(ctx context.Context, ids IDs) IDs {
+	if ids.TVDB > 0 || ids.TMDB == 0 || s.TMDB == nil || !s.TMDB.Configured() {
+		return ids
+	}
+	series, err := s.TMDB.Series(ctx, ids.TMDB)
+	if err != nil {
+		s.warn("tmdb", ids.TMDB, err)
+		return ids
+	}
+	ids.TVDB = series.ExternalIDs.TVDB
+	if ids.IMDb == "" {
+		ids.IMDb = series.ExternalIDs.IMDb
+	}
+	return ids
 }
 
 // fetchTMDB asks TMDB for the series and every season's guest stars; TMDB's own id is found from TheTVDB's or IMDb's

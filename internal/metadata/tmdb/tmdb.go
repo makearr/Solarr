@@ -301,6 +301,17 @@ func (c Client) Search(ctx context.Context, term string) ([]Hit, error) {
 	return answer.Results, c.get(ctx, "/search/tv", url.Values{"query": {term}}, &answer)
 }
 
+// NewOnNetwork lists the shows that first aired on a network on or after a date (yyyy-MM-dd), newest first.
+func (c Client) NewOnNetwork(ctx context.Context, networkID int64, since string) ([]Hit, error) {
+	var answer struct {
+		Results []Hit `json:"results"`
+	}
+	query := url.Values{
+		"with_networks": {strconv.FormatInt(networkID, 10)}, "sort_by": {"first_air_date.desc"}, "first_air_date.gte": {since},
+	}
+	return answer.Results, c.get(ctx, "/discover/tv", query, &answer)
+}
+
 // FindByTVDB resolves a TheTVDB id to TMDB's show; ErrNotFound when TMDB maps none.
 func (c Client) FindByTVDB(ctx context.Context, tvdbID int64) (Hit, error) {
 	return c.find(ctx, strconv.FormatInt(tvdbID, 10), "tvdb_id")

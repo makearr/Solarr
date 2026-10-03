@@ -5,6 +5,7 @@ import { Radio } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { FollowPanel } from "./FollowPanel";
 import { SeriesTile } from "./SeriesIndex";
 
 type Network = components["schemas"]["SeriesNetwork"];
@@ -72,7 +73,7 @@ export function TVNetwork() {
   if (detail.isLoading) return <p className="p-4 text-sm text-ink-muted">Loading…</p>;
   if (detail.isError || !detail.data) return <p className="p-4 text-sm text-danger">This network could not be found.</p>;
 
-  const { network, series } = detail.data;
+  const { network, series, follow, followable } = detail.data;
   return (
     <div className="flex flex-col gap-4 p-4">
       <Link to="/library/$categoryId/$level" params={{ categoryId, level: "networks" }} className="text-xs text-ink-muted hover:text-ink">
@@ -87,6 +88,7 @@ export function TVNetwork() {
           </p>
         </div>
       </div>
+      <FollowPanel kind="network" subjectId={network.id} categoryId={categoryId} follow={follow} followable={followable} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-4">
         {series.map((entry) => (
           <SeriesTile key={entry.id} series={entry} categoryId={categoryId} />
