@@ -12,8 +12,8 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// seriesPartChunk keeps each write transaction under the bulk-write budget (ADR-3).
-const seriesPartChunk = 200
+// seriesPartChunk keeps each write transaction under the bulk-write budget (ADR-3); a part is several statements.
+const seriesPartChunk = 60
 
 // ExternalIDWrite is one provider id of a work, with how sure the provider is of the mapping.
 type ExternalIDWrite struct {

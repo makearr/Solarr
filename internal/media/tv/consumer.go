@@ -169,6 +169,15 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 			}
 			attached += result.Attached
 			matched += len(links) - len(result.Unresolved)
+			placed := make([]int64, 0, len(links))
+			for _, link := range links {
+				if !slices.Contains(result.Unresolved, link.MediaObjectID) {
+					placed = append(placed, link.MediaObjectID)
+				}
+			}
+			if err := c.config.Unidentified.Clear(ctx, placed); err != nil {
+				return fmt.Errorf("tv: %w", err)
+			}
 			for _, id := range result.Unresolved {
 				for _, i := range indexes {
 					if registered[i].MediaObjectID == id {

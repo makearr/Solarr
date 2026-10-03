@@ -11,7 +11,7 @@ import (
 )
 
 // seriesCreditChunk keeps each credit transaction under the bulk-write budget (ADR-3).
-const seriesCreditChunk = 200
+const seriesCreditChunk = 80
 
 // writeCredits resolves each credited person by provider id, creating who is new, and stores the credit on the work
 // or on the episode its PartRef names. A refresh adds and updates; a credit a provider dropped is left in place.

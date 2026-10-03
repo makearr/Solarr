@@ -164,6 +164,49 @@ func TestScanQueuesAFolderItCannotPlace(t *testing.T) {
 	}
 }
 
+// switchSkyhook finds nothing until it is switched on, like a provider that was down at the first scan.
+type switchSkyhook struct {
+	on     *bool
+	series skyhook.Series
+}
+
+func (s switchSkyhook) Series(ctx context.Context, id int64) (skyhook.Series, error) {
+	return searchSkyhook{series: s.series}.Series(ctx, id)
+}
+func (s switchSkyhook) Search(ctx context.Context, term string) ([]skyhook.Series, error) {
+	if !*s.on {
+		return nil, nil
+	}
+	return searchSkyhook{series: s.series}.Search(ctx, term)
+}
+
+func TestAFileQueuedForReviewLeavesTheQueueOnceALaterScanPlacesIt(t *testing.T) {
+	on := false
+	consumer, opened, fsys := newConsumer(t, switchSkyhook{on: &on, series: fixtureSkyhook()})
+	root := settings.RootFolder{ID: 1, Path: scanRoot, Online: true}
+	batch := []scan.Observed{writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv")}
+	queued := func() int64 {
+		n, err := librarydb.New(opened.Read()).CountUnidentified(t.Context(), librarydb.CountUnidentifiedParams{FilterRootFolders: 0, RootFolderIds: "[]"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if queued() != 1 {
+		t.Fatalf("queued = %d after the first scan, want the file waiting for review", queued())
+	}
+	on = true
+	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if queued() != 0 {
+		t.Errorf("queued = %d after the file was placed, want the review entry gone", queued())
+	}
+}
+
 func TestScanFindsASeriesAlreadyInTheLibraryByAliasAndMultiEpisodeFiles(t *testing.T) {
 	sky := fixtureSkyhook()
 	consumer, opened, fsys := newConsumer(t, searchSkyhook{series: sky})
