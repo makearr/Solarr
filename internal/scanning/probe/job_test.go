@@ -169,7 +169,7 @@ type slowTool struct {
 }
 
 func (s *slowTool) ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error) {
-	s.clock.Advance(time.Minute)
+	s.clock.Advance(3 * time.Minute)
 	return s.fakeTool.ReadTags(ctx, paths)
 }
 

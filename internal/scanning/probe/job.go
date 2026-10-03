@@ -117,17 +117,14 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 				break
 			}
 
-			for _, file := range batch {
-				afterID = file.MediaObjectID
-				total++
-				if err := j.probeOne(ctx, file); err != nil {
-					failed++
-					// One file failing (an unmounted root, a corrupted file, a
-					// stalled network mount) is not a reason to stop the sweep --
-					// it simply stays unmeasured and is retried next run.
-					j.logger.WarnContext(ctx, "probe failed",
-						slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
-				}
+			afterID = batch[len(batch)-1].MediaObjectID
+			total += len(batch)
+			for file, err := range j.probeBatch(ctx, batch) {
+				failed++
+				// One file failing (an unmounted root, a corrupted file, a
+				// stalled network mount) is not a reason to stop the sweep --
+				// it simply stays unmeasured and is retried next run.
+				j.logger.WarnContext(ctx, "probe failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
 			}
 			if len(batch) < batchSize {
 				break
@@ -151,25 +148,52 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	return nil
 }
 
-func (j *Job) probeOne(ctx context.Context, file library.UnmeasuredFile) error {
-	root, found := j.roots.RootFolder(file.RootFolderID)
-	if !found {
-		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
+// probeBatch reads a whole batch at once (the tool runs its files side by side up to its own limit) and records what
+// each answered; it returns the files that failed, each with why.
+func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) func(yield func(library.UnmeasuredFile, error) bool) {
+	paths := make([]string, 0, len(files))
+	asked := make([]library.UnmeasuredFile, 0, len(files))
+	var failures []failedFile
+	for _, file := range files {
+		root, found := j.roots.RootFolder(file.RootFolderID)
+		if !found {
+			failures = append(failures, failedFile{file, fmt.Errorf("root folder %d is not configured", file.RootFolderID)})
+			continue
+		}
+		paths = append(paths, path.Join(root.Path, file.RelPath))
+		asked = append(asked, file)
 	}
-	absolute := path.Join(root.Path, file.RelPath)
+	probes, err := j.tool.ReadTags(ctx, paths)
+	for index, file := range asked {
+		switch {
+		case err != nil:
+			failures = append(failures, failedFile{file, fmt.Errorf("ffprobe: %w", err)})
+		case index >= len(probes):
+			failures = append(failures, failedFile{file, fmt.Errorf("ffprobe returned %d results for %d files", len(probes), len(asked))})
+		case probes[index].Err != nil:
+			failures = append(failures, failedFile{file, probes[index].Err})
+		default:
+			if recordErr := j.record(ctx, file, paths[index], probes[index]); recordErr != nil {
+				failures = append(failures, failedFile{file, recordErr})
+			}
+		}
+	}
+	return func(yield func(library.UnmeasuredFile, error) bool) {
+		for _, failure := range failures {
+			if !yield(failure.file, failure.err) {
+				return
+			}
+		}
+	}
+}
 
-	probes, err := j.tool.ReadTags(ctx, []string{absolute})
-	if err != nil {
-		return fmt.Errorf("ffprobe: %w", err)
-	}
-	if len(probes) != 1 {
-		return fmt.Errorf("ffprobe returned %d results for one file", len(probes))
-	}
-	if probes[0].Err != nil {
-		return probes[0].Err
-	}
+type failedFile struct {
+	file library.UnmeasuredFile
+	err  error
+}
 
-	measured := probes[0].Measured
+func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute string, probe mediatool.Probe) error {
+	measured := probe.Measured
 	claim := attributeClaimFromMeasured(measured, sidecarSubtitleLanguages(j.fs, absolute))
 	probeJSON, err := json.Marshal(measured)
 	if err != nil {

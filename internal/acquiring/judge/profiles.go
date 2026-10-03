@@ -45,6 +45,9 @@ func LibraryProfiles(
 		if err != nil {
 			return nil, fmt.Errorf("quality profile %d: %w", id, err)
 		}
+		if category, found := snapshot.Category(categoryID); found && category.QualityTarget != nil {
+			rules = WithTarget(rules, *category.QualityTarget)
+		}
 		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules})
 	}
 	return profiles, nil
