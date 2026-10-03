@@ -59,6 +59,18 @@ episodes is, also when one episode is toggled by hand, so wanting a single episo
 planner. `PUT /series/{id}/quality` gives every season of a series its own quality profile (the album precedent,
 `desired_profile_override`). The Season pass level is a grid of series and season chips over these.
 
+## Deleting, series type, pictures
+
+`DELETE /series/{id}` removes a series with its episodes, credits and desired items; `delete_files` sends its files to the recycle
+bin (never deleted directly) and `exclude` writes every id the series carries to `series_exclusion`, so the scan (files left
+alone, not queued), a follow and an import list leave it out; adding it by hand lifts the exclusion. **Series type** (`series_type`
+field) is detected on every add and refresh (anime: Japanese and listed by AniList, AniDB or MyAnimeList; daily: a talk, news, soap
+or game show) and the user's own choice (`__manual__`) wins; naming reads it, and an anime season is also searched by absolute
+number ("Title 062", up to five missing episodes) with absolute-only releases matched to their episode. Provider pictures are
+served by `GET /images/remote` from `internal/platform/remoteimage`: fetched once from an allow-listed https image host, resized
+to the three cover sizes and stored in the flat `cache/images` directory (so the budget evicts them), and the browser never
+contacts a provider's CDN.
+
 ## Following people and networks (`internal/media/tv/follow_job.go`)
 
 A person (by role) or a network can be followed from its page: a `subscription` row (media type `tv`, roles, the library it adds

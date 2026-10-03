@@ -102,6 +102,11 @@ Under a TV library: **Series** (posters with a progress bar, filters by status, 
 writers and guest stars; **Edit** re-applies any monitor choice to what you already hold and gives the series its own
 quality profile. Wanting one episode also wants its season.
 
+**Edit → Delete series** removes a series; tick "move its files to the recycle bin" to recycle them, and keep "do not add it back"
+ticked so a scan, a follow or an import list leaves it out (the Series index lists the deleted ones, with **Allow again**).
+**Edit → Series type** shows what was detected (anime, daily or standard) and lets you change it; anime seasons are also searched
+by absolute episode number. Posters and photos are fetched once and served by Solarr itself.
+
 **Quality profiles** for TV are edited with a form (Quality profiles in the sidebar): rank resolution, source, codec, HDR and
 audio best first, set the lowest and highest resolution accepted, name codecs never to accept, require an audio language, and
 list **preferred release groups** that rank above an otherwise equal release.
