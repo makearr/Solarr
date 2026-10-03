@@ -622,6 +622,7 @@ func (p *process) startServer(ctx context.Context) error {
 		TVProviders:       p.tvProviders(),
 		SeriesPeople:      p.seriesPeople(),
 		RemoteImages:      p.remoteImages(),
+		UnidentifiedTV:    p.unidentifiedTV(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),

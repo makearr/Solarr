@@ -499,3 +499,15 @@ func (p *process) remoteImages() *remoteimage.Cache {
 	})
 	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), Hosts: remoteimage.DefaultHosts}
 }
+
+// unidentifiedTV places queued TV files by a person's choice.
+func (p *process) unidentifiedTV() adapters.UnidentifiedTV {
+	queue := library.NewUnidentified(p.library)
+	return adapters.UnidentifiedTV{
+		Identifier: tv.Identifier{
+			Service: p.tvService(), Unidentified: queue, Clock: clock.NewSystem(), DefaultProfileID: p.defaultQualityProfileID,
+			Categories: adapters.Categories{Cache: p.cache},
+		},
+		Unidentified: queue, Cache: p.cache, Exclusions: p.seriesCatalog(),
+	}
+}

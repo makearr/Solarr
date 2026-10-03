@@ -10596,10 +10596,14 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description Only musicbrainz:release-group is supported today. */
+                    /** @description musicbrainz:release-group for music, tvdb or tmdb for a file in a TV library (the series' id there). */
                     provider: string;
                     external_id: string;
-                    /** @description Also resolve every other queued file directly in the same folder to this album ("identify the whole folder as"). */
+                    /** @description TV only: the file's season, when its name does not say. */
+                    season?: number;
+                    /** @description TV only: the episodes the file holds, when its name does not say. */
+                    episodes?: number[];
+                    /** @description Also resolve every other queued file directly in the same folder to this album or series ("identify the whole folder as"); a TV file is placed by its own name. */
                     whole_folder?: boolean;
                 };
             };

@@ -126,6 +126,11 @@ type IdentificationEvidence struct {
 	Kind, Detail string
 }
 
+// TVUnidentifiedResolver places a queued file of a TV library by a person's choice of series, season and episodes.
+type TVUnidentifiedResolver interface {
+	ResolveTV(ctx context.Context, mediaObjectID int64, provider, externalID string, season int, episodes []int, wholeFolder bool) (workID, resolved int64, err error)
+}
+
 // ErrUnsupportedProvider mirrors music.ErrUnsupportedProvider without this
 // package importing internal/media/music (WorksReader's own doc comment explains
 // why) -- the caller's adapter translates.
@@ -158,8 +163,22 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 	}
 
 	wholeFolder := body.WholeFolder != nil && *body.WholeFolder
-	workID, resolved, err := s.unidentifiedResolver.ResolveUnidentified(
-		r.Context(), mediaObjectID, body.Provider, body.ExternalId, wholeFolder)
+	resolve := func() (int64, int64, error) {
+		return s.unidentifiedResolver.ResolveUnidentified(r.Context(), mediaObjectID, body.Provider, body.ExternalId, wholeFolder)
+	}
+	if (body.Provider == "tvdb" || body.Provider == "tmdb") && s.unidentifiedTV != nil {
+		resolve = func() (int64, int64, error) {
+			season, episodes := 0, []int(nil)
+			if body.Season != nil {
+				season = *body.Season
+			}
+			if body.Episodes != nil {
+				episodes = *body.Episodes
+			}
+			return s.unidentifiedTV.ResolveTV(r.Context(), mediaObjectID, body.Provider, body.ExternalId, season, episodes, wholeFolder)
+		}
+	}
+	workID, resolved, err := resolve()
 	if err != nil {
 		if errors.Is(err, ErrUnsupportedProvider) {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())

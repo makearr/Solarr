@@ -7,6 +7,7 @@ import type { components } from "@/api/schema";
 import { attemptLabel, outcomeLabel, passLabel } from "@/lib/identificationEvidence";
 
 import { IdentificationCandidates, type IdentificationCandidateView } from "./IdentificationCandidates";
+import { IdentifyTVFile } from "./IdentifyTVFile";
 import { ManualAlbumSearch } from "./ManualAlbumSearch";
 
 type IdentificationAttempt = components["schemas"]["IdentificationAttempt"];
@@ -20,6 +21,24 @@ export function UnidentifiedReview() {
   const navigate = useNavigate();
   const [wholeFolder, setWholeFolder] = useState(false);
   const [confirmingNotMedia, setConfirmingNotMedia] = useState(false);
+
+  // A file in a TV library is placed by series and episode, not by album.
+  const roots = useQuery({
+    queryKey: ["rootfolders"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/rootfolders");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const libraries = useQuery({
+    queryKey: ["libraries"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/libraries");
+      if (error) throw error;
+      return data;
+    },
+  });
 
   const review = useQuery({
     queryKey: ["unidentified", mediaObjectId, "attempts"],
@@ -67,6 +86,10 @@ export function UnidentifiedReview() {
   }
 
   const [latest, ...older] = review.data.items;
+  const rootFolder = (roots.data ?? []).find((root) => root.id === review.data.file.root_folder_id);
+  const tvLibrary = (libraries.data ?? []).find(
+    (library) => library.media_type === "tv" && (rootFolder?.categories ?? []).some((category) => category.id === library.id),
+  );
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
@@ -76,7 +99,7 @@ export function UnidentifiedReview() {
           </Link>
           <h1 className="break-all font-mono text-sm text-ink">{review.data.file.rel_path}</h1>
           <p className="text-xs text-ink-muted">
-            Pick the album this file belongs to. Each pass below shows what it looked at and why it
+            {tvLibrary ? "Pick the series and episode this file is." : "Pick the album this file belongs to."} Each pass below shows what it looked at and why it
             did not decide on its own.
           </p>
         </header>
@@ -84,7 +107,7 @@ export function UnidentifiedReview() {
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <label className="flex items-center gap-1.5 text-ink">
             <input type="checkbox" checked={wholeFolder} onChange={(event) => setWholeFolder(event.target.checked)} />
-            Use the album I pick for every file waiting in this folder
+            {tvLibrary ? "Also place the other files waiting in this folder in that series, each by its own name" : "Use the album I pick for every file waiting in this folder"}
           </label>
           <span className="ml-auto flex items-center gap-1.5">
             {confirmingNotMedia ? (
@@ -122,11 +145,24 @@ export function UnidentifiedReview() {
         {choose.isError && <p className="text-xs text-danger">That album could not be applied.</p>}
         {notMedia.isError && <p className="text-xs text-danger">The file could not be marked.</p>}
 
-        <ManualAlbumSearch
-          relPath={review.data.file.rel_path}
-          onChoose={(result) => choose.mutate(result)}
-          busy={choose.isPending}
-        />
+        {tvLibrary ? (
+          <IdentifyTVFile
+            categoryId={tvLibrary.id}
+            mediaObjectId={mediaObjectId as number}
+            relPath={review.data.file.rel_path}
+            wholeFolder={wholeFolder}
+            onDone={() => {
+              void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+              void navigate({ to: "/unidentified" });
+            }}
+          />
+        ) : (
+          <ManualAlbumSearch
+            relPath={review.data.file.rel_path}
+            onChoose={(result) => choose.mutate(result)}
+            busy={choose.isPending}
+          />
+        )}
 
         {latest === undefined ? (
           <p className="text-xs text-ink-muted">

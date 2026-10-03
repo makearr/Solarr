@@ -4261,12 +4261,17 @@ type ListUnidentifiedParams struct {
 
 // ResolveUnidentifiedJSONBody defines parameters for ResolveUnidentified.
 type ResolveUnidentifiedJSONBody struct {
+	// Episodes TV only: the episodes the file holds, when its name does not say.
+	Episodes   *[]int `json:"episodes,omitempty"`
 	ExternalId string `json:"external_id"`
 
-	// Provider Only musicbrainz:release-group is supported today.
+	// Provider musicbrainz:release-group for music, tvdb or tmdb for a file in a TV library (the series' id there).
 	Provider string `json:"provider"`
 
-	// WholeFolder Also resolve every other queued file directly in the same folder to this album ("identify the whole folder as").
+	// Season TV only: the file's season, when its name does not say.
+	Season *int `json:"season,omitempty"`
+
+	// WholeFolder Also resolve every other queued file directly in the same folder to this album or series ("identify the whole folder as"); a TV file is placed by its own name.
 	WholeFolder *bool `json:"whole_folder,omitempty"`
 }
 
