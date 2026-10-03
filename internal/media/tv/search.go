@@ -373,9 +373,10 @@ func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Fin
 		}
 		covered := len(numbers)
 		facts := factsFromRelease(info, raw, conn.Impl)
-		estimateBitrate(&facts, raw.SizeBytes, releaseEpisodes(info, covered, y.wanted.allCount), y.wanted.runtimeMs)
+		held := releaseEpisodes(info, covered, y.wanted.allCount)
+		estimateBitrate(&facts, raw.SizeBytes, held, y.wanted.runtimeMs)
 		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
-		y.requireUpgrade(&decision, facts, numbers)
+		y.requireUpgrade(&decision, facts, numbers, held)
 		fraction := float64(covered) / float64(len(y.wanted.missing))
 		finds = append(finds, judge.Find{
 			Conn: conn, Raw: raw, ParseConfidence: 1, Distance: 1 - fraction, MatchConfidence: max(0.5, fraction), Decision: decision,
@@ -443,8 +444,16 @@ func (y yardstick) coverage(info parsetv.Info) ([]int, bool) {
 // requireUpgrade rejects an accepted release that does not beat the file of every episode it would replace by quality
 // (Invariant 72: a tie keeps what is owned). Only what a file can show is compared: a release name states a source, a
 // group and a repack that the measured file does not, so with them it would always out-rank the file it replaces.
-func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts, numbers []int) {
-	if decision.Outcome != model.OutcomeAccept {
+func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts, numbers []int, held int) {
+	if decision.Outcome != model.OutcomeAccept || len(y.incumbents) == 0 {
+		return
+	}
+	// A pack mostly of episodes that are fine as they are would place a second copy of each.
+	if held > 1 && len(numbers)*2 < held {
+		decision.Outcome = model.OutcomeReject
+		decision.Rejections = append(decision.Rejections, model.Rejection{
+			Rule: "upgrade", Field: "pack", Wanted: "a pack mostly of episodes below the cutoff", Got: "most of it is already good enough",
+		})
 		return
 	}
 	facts.File.Source, facts.File.ReleaseGroup, facts.File.ProperRepack = "", "", false
