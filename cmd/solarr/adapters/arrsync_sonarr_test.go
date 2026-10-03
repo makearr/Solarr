@@ -29,7 +29,8 @@ func (r *recordingTV) SetEpisodeMonitoring(_ context.Context, _, _ int64, wanted
 	r.wanted = wanted
 	return nil
 }
-func (*recordingTV) SetProfile(context.Context, int64, int64, *int64) error { return nil }
+func (*recordingTV) SetProfile(context.Context, int64, int64, *int64) error    { return nil }
+func (*recordingTV) SetSeriesType(context.Context, int64, tv.SeriesType) error { return nil }
 
 func TestCarryOverMonitoringGivesTheCreatedSeriesSonarrsEpisodeChoices(t *testing.T) {
 	recorder := &recordingTV{}

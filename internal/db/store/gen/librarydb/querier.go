@@ -228,6 +228,7 @@ type Querier interface {
 	// The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
 	DeleteUserTag(ctx context.Context, id int64) (int64, error)
 	DeleteWork(ctx context.Context, id int64) error
+	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
 	DeleteWorkTitlesBySource(ctx context.Context, arg DeleteWorkTitlesBySourceParams) error
@@ -402,6 +403,8 @@ type Querier interface {
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
+	// A part's number under one other scheme ("absolute" for anime), for a whole work.
+	ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersForWorkParams) ([]ListAltNumbersForWorkRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	// Revert's own lookup (library.ArrImportRevert): every item this run itself
 	// created something for, the only rows a revert is allowed to touch.

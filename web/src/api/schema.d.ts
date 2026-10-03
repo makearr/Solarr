@@ -3313,6 +3313,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/{id}/type": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Say what kind of series this is, or return to what the providers say. */
+        put: operations["setSeriesType"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/{id}/quality": {
         parameters: {
             query: {
@@ -5339,6 +5360,11 @@ export interface components {
             year?: number;
             /** @enum {string} */
             status?: "continuing" | "ended" | "upcoming";
+            /**
+             * @description Detected from the providers, or the person's own choice; anime is also searched by absolute number.
+             * @enum {string}
+             */
+            series_type?: "standard" | "daily" | "anime";
             network?: string;
             poster_url?: string;
             overview?: string;
@@ -12599,6 +12625,39 @@ export interface operations {
         };
         responses: {
             /** @description Applied. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setSeriesType: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    type: "standard" | "daily" | "anime" | "auto";
+                };
+            };
+        };
+        responses: {
+            /** @description Set. */
             204: {
                 headers: {
                     [name: string]: unknown;

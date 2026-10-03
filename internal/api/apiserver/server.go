@@ -523,6 +523,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)
 			secured.Put("/series/{id}/monitoring", server.routeApplySeriesMonitoring)
 			secured.Put("/series/{id}/quality", server.routeSetSeriesQuality)
+			secured.Put("/series/{id}/type", server.routeSetSeriesType)
 			secured.Put("/series/{id}/episodes/{part_id}/monitored", server.routeSetEpisodeMonitored)
 			secured.Put("/series/{id}/seasons/{season}/monitored", server.routeSetSeasonMonitored)
 			secured.Post("/series/{id}/seasons/{season}/search", server.routeSearchSeason)

@@ -175,3 +175,11 @@ SELECT CAST(COUNT(*) AS INTEGER) AS excluded FROM series_exclusion WHERE provide
 SELECT wf.media_object_id FROM work_file wf WHERE wf.work_id = sqlc.arg(work_id)
 UNION
 SELECT f.media_object_id FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id WHERE d.work_id = sqlc.arg(work_id);
+
+-- A part's number under one other scheme ("absolute" for anime), for a whole work.
+-- name: ListAltNumbersForWork :many
+SELECT a.part_id, a.alt_ref FROM alt_numbering a JOIN work_part p ON p.id = a.part_id
+WHERE p.work_id = sqlc.arg(work_id) AND a.scheme = sqlc.arg(scheme);
+
+-- name: DeleteWorkFieldByProvider :exec
+DELETE FROM work_field WHERE work_id = ? AND field = ? AND provider = ?;

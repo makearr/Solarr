@@ -293,6 +293,20 @@ func (c SeriesCatalog) ApplyMonitor(ctx context.Context, categoryID, seriesID in
 	return c.Service.ApplyMonitor(ctx, categoryID, seriesID, tv.MonitorOption(option), specials)
 }
 
+// SetType says what kind of series this is; "auto" returns to what the providers say.
+func (c SeriesCatalog) SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error {
+	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
+		return translateSeriesError(err)
+	}
+	value := seriesType
+	if seriesType == "auto" {
+		value = ""
+	} else if !tv.SeriesType(seriesType).Valid() {
+		return fmt.Errorf("%w: unknown series type %q", apiserver.ErrInvalidChoice, seriesType)
+	}
+	return c.Service.Series.SetManualField(ctx, c.Clock.Now(), seriesID, "series_type", value)
+}
+
 // SetProfile gives the series a quality profile of its own, or the library's when nil.
 func (c SeriesCatalog) SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error {
 	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
@@ -367,6 +381,10 @@ func summaryView(row library.SeriesSummary) gen.SeriesSummary {
 		view.Status = &typed
 	}
 	setString(&view.Network, row.Fields["network"])
+	if kind := tv.SeriesType(row.Fields["series_type"]); kind.Valid() {
+		typed := gen.SeriesSummarySeriesType(kind)
+		view.SeriesType = &typed
+	}
 	setString(&view.Overview, row.Description)
 	setString(&view.PosterUrl, posterOf(row.Fields["images"]))
 	if row.NextAvailable > 0 {

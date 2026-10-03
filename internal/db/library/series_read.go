@@ -175,10 +175,18 @@ func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now tim
 	for _, ref := range covered {
 		hasFile[ref] = true
 	}
+	absolutes, err := queries.ListAltNumbersForWork(ctx, librarydb.ListAltNumbersForWorkParams{WorkID: workID, Scheme: "absolute"})
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: absolute numbers: %w", err)
+	}
+	absoluteOf := make(map[int64]string, len(absolutes))
+	for _, alt := range absolutes {
+		absoluteOf[alt.PartID] = alt.AltRef
+	}
 	for _, part := range parts {
 		season, number := parseSeriesRef(part.MediaRef)
 		detail.Episodes = append(detail.Episodes, SeriesEpisode{
-			PartID: part.ID, Season: season, Number: number, Title: part.Title.String, Date: part.Date.String,
+			PartID: part.ID, Season: season, Number: number, Absolute: absoluteOf[part.ID], Title: part.Title.String, Date: part.Date.String,
 			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
 			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,
 		})

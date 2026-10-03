@@ -19,6 +19,7 @@ type TVAdder interface {
 	Add(ctx context.Context, request tv.AddRequest) (tv.AddResult, error)
 	SetEpisodeMonitoring(ctx context.Context, categoryID, workID int64, wanted map[tv.Key]bool) error
 	SetProfile(ctx context.Context, categoryID, workID int64, profileID *int64) error
+	SetSeriesType(ctx context.Context, workID int64, kind tv.SeriesType) error
 }
 
 // syncSonarr adds every series Sonarr holds by its TVDB id, best-effort per series. A series Solarr already holds is
@@ -118,6 +119,11 @@ func (a ArrSync) syncSeries(
 			return false, err
 		}
 		a.carryOverProfile(ctx, categoryID, result.WorkID, series, profileNames)
+		if kind := tv.SeriesType(series.SeriesType); kind == tv.SeriesAnime || kind == tv.SeriesDaily {
+			if err := a.TV.SetSeriesType(ctx, result.WorkID, kind); err != nil {
+				return false, fmt.Errorf("series type: %w", err)
+			}
+		}
 	}
 	workID := result.WorkID
 	if _, err := a.Imports.AddItem(ctx, importID, library.NewArrImportItem{

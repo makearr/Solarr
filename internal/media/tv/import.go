@@ -436,8 +436,12 @@ func (i Importer) finish(rootPath, fileAbs string, fileManagement settings.FileM
 // episodeNaming gathers everything a placed file's name can draw on.
 func episodeNaming(detail library.SeriesDetailRow, file fileEpisodes) EpisodeNaming {
 	summary := detail.Summary
+	seriesType := SeriesType(summary.Fields["series_type"])
+	if !seriesType.Valid() {
+		seriesType = SeriesStandard
+	}
 	naming := EpisodeNaming{
-		SeriesType: SeriesStandard, SeriesTitle: summary.Title, SeriesYear: int(summary.Year),
+		SeriesType: seriesType, SeriesTitle: summary.Title, SeriesYear: int(summary.Year),
 		IDs:          idsOf(detail.IDs),
 		QualityTitle: qualityTitle(file.info.Claims), Proper: file.info.Claims.Version > 1, Version: file.info.Claims.Version,
 		VideoCodec: strings.ToUpper(file.info.Claims.VideoCodec), DynamicRange: file.info.Claims.HDR,

@@ -47,6 +47,8 @@ type SeriesCatalog interface {
 	RemoveExclusion(ctx context.Context, provider, externalID string) error
 	// ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.
 	ApplyMonitor(ctx context.Context, categoryID, seriesID int64, option string, specials bool) error
+	// SetType says what kind of series this is; "auto" returns to what the providers say.
+	SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error
 	// SetProfile gives the series a quality profile of its own, or the library's when nil.
 	SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error
 	// Wanted returns up to limit+1 missing episodes after the cursor (date, id), newest first.
@@ -488,6 +490,37 @@ func (s *Server) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	if err := s.series.RemoveExclusion(r.Context(), params.Provider, params.ExternalId); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) routeSetSeriesType(w http.ResponseWriter, r *http.Request) {
+	id, category, ok := s.seriesPath(w, r)
+	if !ok {
+		return
+	}
+	s.setSeriesType(w, r, id, category)
+}
+
+// SetSeriesType satisfies the generated interface; routeSetSeriesType is what is mounted.
+func (s *Server) SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params gen.SetSeriesTypeParams) {
+	s.setSeriesType(w, r, id, params.CategoryId)
+}
+
+func (s *Server) setSeriesType(w http.ResponseWriter, r *http.Request, id, categoryID int64) {
+	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
+		return
+	}
+	var body struct {
+		Type string `json:"type"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || body.Type == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "type is required")
+		return
+	}
+	if err := s.series.SetType(r.Context(), categoryID, id, body.Type); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

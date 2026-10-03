@@ -120,6 +120,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 		return Series{}, ErrNoSource
 	}
 	merged := Merge(sources...)
+	merged.Type = DetectType(merged)
 	if haveRich {
 		if len(merged.Episodes) == 0 && len(rich.TMDBEpisodes) > 0 {
 			merged.Episodes, merged.Basis = rich.TMDBEpisodes, ProviderTMDB+":default"
@@ -379,6 +380,11 @@ func (s Service) SetEpisodeMonitoring(ctx context.Context, categoryID, workID in
 		}
 	}
 	return s.Desired.ApplyPartMonitoring(ctx, workID, byPart)
+}
+
+// SetSeriesType records the user's own choice of series type; an empty type returns to what the providers say.
+func (s Service) SetSeriesType(ctx context.Context, workID int64, kind SeriesType) error {
+	return s.Series.SetManualField(ctx, s.Clock.Now(), workID, "series_type", string(kind))
 }
 
 // SetProfile gives every season of a series the quality profile, or returns them to the library's when nil.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -67,6 +68,9 @@ type wanted struct {
 	aliases  []string
 	tvdb     string
 	year     int64
+	// anime series are also searched by the absolute number releases carry; absolute maps it to the episode number.
+	anime    bool
+	absolute map[int]int
 }
 
 func seasonNumber(mediaRef string) (int, bool) {
@@ -87,13 +91,20 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem) (want
 	if err != nil {
 		return wanted{}, fmt.Errorf("series %d: %w", item.WorkID, err)
 	}
-	w := wanted{season: season, missing: map[int]library.SeriesEpisode{}, title: detail.Summary.Title, aliases: detail.Aliases, tvdb: detail.IDs[ProviderTVDB], year: detail.Summary.Year}
+	w := wanted{
+		season: season, missing: map[int]library.SeriesEpisode{}, title: detail.Summary.Title, aliases: detail.Aliases,
+		tvdb: detail.IDs[ProviderTVDB], year: detail.Summary.Year, absolute: map[int]int{},
+		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
+	}
 	today := now.UTC().Format("2006-01-02")
 	for _, episode := range detail.Episodes {
 		if episode.Season != season {
 			continue
 		}
 		w.allCount++
+		if absolute, err := strconv.Atoi(episode.Absolute); err == nil && absolute > 0 {
+			w.absolute[absolute] = episode.Number
+		}
 		aired := (episode.AvailableAt > 0 && episode.AvailableAt <= now.Unix()) || (episode.AvailableAt == 0 && episode.Date != "" && episode.Date <= today)
 		if episode.Monitored && !episode.Present && aired {
 			w.missing[episode.Number] = episode
@@ -147,12 +158,35 @@ func (w wanted) queries() [][]judge.Query {
 		}
 	}
 	tiers = append(tiers, text)
+	if w.anime {
+		tiers = append(tiers, w.absoluteQueries(names))
+	}
 
 	var spelled []judge.Query
 	for _, name := range names {
 		spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", cleanQuery(name), w.season)})
 	}
 	return append(tiers, spelled)
+}
+
+// maxAbsoluteQueries bounds the per-episode searches an anime season may cost.
+const maxAbsoluteQueries = 5
+
+// absoluteQueries are the text searches anime releases answer to: "Title 062", one per missing episode that has an
+// absolute number, the lowest first.
+func (w wanted) absoluteQueries(names []string) []judge.Query {
+	var numbers []int
+	for absolute, number := range w.absolute {
+		if _, missing := w.missing[number]; missing {
+			numbers = append(numbers, absolute)
+		}
+	}
+	slices.Sort(numbers)
+	var queries []judge.Query
+	for _, absolute := range numbers[:min(len(numbers), maxAbsoluteQueries)] {
+		queries = append(queries, judge.Query{Function: "search", Text: fmt.Sprintf("%s %03d", cleanQuery(names[0]), absolute)})
+	}
+	return queries
 }
 
 // cleanQuery drops the punctuation indexers' text search chokes on.
@@ -299,6 +333,16 @@ func (y yardstick) coverage(info parsetv.Info) (int, bool) {
 		for _, number := range info.EpisodeNumbers {
 			if _, missing := y.wanted.missing[number]; missing {
 				covered++
+			}
+		}
+		return covered, covered > 0
+	case len(info.AbsoluteNumbers) > 0 && y.wanted.anime:
+		covered := 0
+		for _, absolute := range info.AbsoluteNumbers {
+			if number, known := y.wanted.absolute[absolute]; known {
+				if _, missing := y.wanted.missing[number]; missing {
+					covered++
+				}
 			}
 		}
 		return covered, covered > 0

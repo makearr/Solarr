@@ -101,3 +101,21 @@ func (s Series) DeleteSeries(ctx context.Context, workID int64) error {
 	}
 	return nil
 }
+
+// SetManualField gives a series field a value of the user's own, which every provider's value gives way to; an empty
+// value returns the field to the providers'.
+func (s Series) SetManualField(ctx context.Context, at time.Time, workID int64, field, value string) error {
+	err := s.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if value == "" {
+			return queries.DeleteWorkFieldByProvider(ctx, librarydb.DeleteWorkFieldByProviderParams{WorkID: workID, Field: field, Provider: "__manual__"})
+		}
+		return queries.SetWorkField(ctx, librarydb.SetWorkFieldParams{
+			WorkID: workID, Field: field, Provider: "__manual__", Value: sql.NullString{String: value, Valid: true}, FetchedAt: at.Unix(),
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set %s of series %d: %w", field, workID, err)
+	}
+	return nil
+}

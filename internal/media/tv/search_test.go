@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/migrations"
@@ -151,4 +152,61 @@ func clockAt(_ interface{ Unix() int64 }) clock.Clock {
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
 	return fake
+}
+
+// queryIndexer answers only the exact query it was given an answer for.
+type queryIndexer struct {
+	answers  map[string][]indexer.RawItem
+	requests []string
+}
+
+func (q *queryIndexer) Search(_ context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
+	q.requests = append(q.requests, request.Query)
+	return q.answers[request.Query], nil
+}
+
+func animeSkyhook() skyhook.Series {
+	absolute := func(n int) *int { return &n }
+	return skyhook.Series{
+		TVDBID: 1234, Title: "Example Show", FirstAired: "2020-01-05", Status: "Continuing", OriginalLanguage: "jpn", AniListIDs: []int64{9},
+		Episodes: []skyhook.Episode{
+			{TVDBID: 1, SeasonNumber: 1, EpisodeNumber: 1, AbsoluteEpisodeNumber: absolute(1), Title: "One", AirDate: "2020-01-05"},
+			{TVDBID: 2, SeasonNumber: 1, EpisodeNumber: 2, AbsoluteEpisodeNumber: absolute(2), Title: "Two", AirDate: "2020-01-12"},
+		},
+	}
+}
+
+func TestAnAnimeSeasonIsAlsoSearchedByAbsoluteNumberAndFoundThatWay(t *testing.T) {
+	cache := settingsCache(t)
+	service, opened := newService(t, searchSkyhook{series: animeSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := library.NewSeriesReader(opened).Get(t.Context(), 7, added.WorkID, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Summary.Fields["series_type"] != "anime" {
+		t.Fatalf("series type = %q, want anime detected from the AniList id and the Japanese language", detail.Summary.Fields["series_type"])
+	}
+	items, _ := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
+	var season1 int64
+	for _, item := range items {
+		if item.MediaRef == "s01" {
+			season1 = item.ID
+		}
+	}
+	fake := &queryIndexer{answers: map[string][]indexer.RawItem{
+		"Example Show 002": {{Title: "[SubGroup] Example Show - 02 (1080p) [ABCD1234]", GUID: "g", Link: "https://example.test/g"}},
+	}}
+	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: library.NewCandidates(opened), Settings: cache, Clock: clockAt(addNow)}
+	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Decisions) != 1 {
+		t.Errorf("decisions = %d after queries %v; the absolute-number release should cover episode 2", len(result.Decisions), fake.requests)
+	}
 }

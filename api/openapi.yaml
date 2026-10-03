@@ -5335,6 +5335,36 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /series/{id}/type:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setSeriesType
+      tags: [series]
+      summary: Say what kind of series this is, or return to what the providers say.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type]
+              properties:
+                type: { type: string, enum: [standard, daily, anime, auto] }
+      responses:
+        "204": { description: Set. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /series/{id}/quality:
     parameters:
       - name: category_id
@@ -8107,6 +8137,10 @@ components:
         sort_title: { type: string }
         year: { type: integer, format: int64 }
         status: { type: string, enum: [continuing, ended, upcoming] }
+        series_type:
+          type: string
+          enum: [standard, daily, anime]
+          description: Detected from the providers, or the person's own choice; anime is also searched by absolute number.
         network: { type: string }
         poster_url: { type: string }
         overview: { type: string }

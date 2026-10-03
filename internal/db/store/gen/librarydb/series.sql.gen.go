@@ -140,6 +140,21 @@ func (q *Queries) DeleteSeriesExclusion(ctx context.Context, arg DeleteSeriesExc
 	return err
 }
 
+const deleteWorkFieldByProvider = `-- name: DeleteWorkFieldByProvider :exec
+DELETE FROM work_field WHERE work_id = ? AND field = ? AND provider = ?
+`
+
+type DeleteWorkFieldByProviderParams struct {
+	WorkID   int64
+	Field    string
+	Provider string
+}
+
+func (q *Queries) DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkFieldByProvider, arg.WorkID, arg.Field, arg.Provider)
+	return err
+}
+
 const deleteWorkRating = `-- name: DeleteWorkRating :exec
 DELETE FROM work_rating WHERE work_id = ? AND provider = ?
 `
@@ -275,6 +290,45 @@ type LinkOrganisationExternalIDParams struct {
 func (q *Queries) LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error {
 	_, err := q.db.ExecContext(ctx, linkOrganisationExternalID, arg.Provider, arg.ExternalID, arg.OrganisationID)
 	return err
+}
+
+const listAltNumbersForWork = `-- name: ListAltNumbersForWork :many
+SELECT a.part_id, a.alt_ref FROM alt_numbering a JOIN work_part p ON p.id = a.part_id
+WHERE p.work_id = ?1 AND a.scheme = ?2
+`
+
+type ListAltNumbersForWorkParams struct {
+	WorkID int64
+	Scheme string
+}
+
+type ListAltNumbersForWorkRow struct {
+	PartID int64
+	AltRef string
+}
+
+// A part's number under one other scheme ("absolute" for anime), for a whole work.
+func (q *Queries) ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersForWorkParams) ([]ListAltNumbersForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAltNumbersForWork, arg.WorkID, arg.Scheme)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAltNumbersForWorkRow{}
+	for rows.Next() {
+		var i ListAltNumbersForWorkRow
+		if err := rows.Scan(&i.PartID, &i.AltRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listSeriesExclusions = `-- name: ListSeriesExclusions :many

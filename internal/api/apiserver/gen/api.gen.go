@@ -632,6 +632,13 @@ const (
 	SeriesPersonElsewhereMediaTypeTv    SeriesPersonElsewhereMediaType = "tv"
 )
 
+// Defines values for SeriesSummarySeriesType.
+const (
+	SeriesSummarySeriesTypeAnime    SeriesSummarySeriesType = "anime"
+	SeriesSummarySeriesTypeDaily    SeriesSummarySeriesType = "daily"
+	SeriesSummarySeriesTypeStandard SeriesSummarySeriesType = "standard"
+)
+
 // Defines values for SeriesSummaryStatus.
 const (
 	SeriesSummaryStatusContinuing SeriesSummaryStatus = "continuing"
@@ -824,6 +831,14 @@ const (
 	ApplySeriesMonitoringJSONBodyOptionNone        ApplySeriesMonitoringJSONBodyOption = "none"
 	ApplySeriesMonitoringJSONBodyOptionPilot       ApplySeriesMonitoringJSONBodyOption = "pilot"
 	ApplySeriesMonitoringJSONBodyOptionRecent      ApplySeriesMonitoringJSONBodyOption = "recent"
+)
+
+// Defines values for SetSeriesTypeJSONBodyType.
+const (
+	SetSeriesTypeJSONBodyTypeAnime    SetSeriesTypeJSONBodyType = "anime"
+	SetSeriesTypeJSONBodyTypeAuto     SetSeriesTypeJSONBodyType = "auto"
+	SetSeriesTypeJSONBodyTypeDaily    SetSeriesTypeJSONBodyType = "daily"
+	SetSeriesTypeJSONBodyTypeStandard SetSeriesTypeJSONBodyType = "standard"
 )
 
 // Defines values for ListLogsParamsLevel.
@@ -3583,12 +3598,18 @@ type SeriesSummary struct {
 	} `json:"season_states,omitempty"`
 
 	// Seasons Seasons with episodes
-	Seasons   int                  `json:"seasons"`
-	SortTitle string               `json:"sort_title"`
-	Status    *SeriesSummaryStatus `json:"status,omitempty"`
-	Title     string               `json:"title"`
-	Year      *int64               `json:"year,omitempty"`
+	Seasons int `json:"seasons"`
+
+	// SeriesType Detected from the providers, or the person's own choice; anime is also searched by absolute number.
+	SeriesType *SeriesSummarySeriesType `json:"series_type,omitempty"`
+	SortTitle  string                   `json:"sort_title"`
+	Status     *SeriesSummaryStatus     `json:"status,omitempty"`
+	Title      string                   `json:"title"`
+	Year       *int64                   `json:"year,omitempty"`
 }
+
+// SeriesSummarySeriesType Detected from the providers, or the person's own choice; anime is also searched by absolute number.
+type SeriesSummarySeriesType string
 
 // SeriesSummaryStatus defines model for SeriesSummary.Status.
 type SeriesSummaryStatus string
@@ -4557,6 +4578,19 @@ type SearchSeasonParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// SetSeriesTypeJSONBody defines parameters for SetSeriesType.
+type SetSeriesTypeJSONBody struct {
+	Type SetSeriesTypeJSONBodyType `json:"type"`
+}
+
+// SetSeriesTypeParams defines parameters for SetSeriesType.
+type SetSeriesTypeParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// SetSeriesTypeJSONBodyType defines parameters for SetSeriesType.
+type SetSeriesTypeJSONBodyType string
+
 // SetAuthPolicyJSONBody defines parameters for SetAuthPolicy.
 type SetAuthPolicyJSONBody struct {
 	AuthRequired bool    `json:"auth_required"`
@@ -4951,6 +4985,9 @@ type SetSeriesQualityJSONRequestBody SetSeriesQualityJSONBody
 
 // SetSeasonMonitoredJSONRequestBody defines body for SetSeasonMonitored for application/json ContentType.
 type SetSeasonMonitoredJSONRequestBody SetSeasonMonitoredJSONBody
+
+// SetSeriesTypeJSONRequestBody defines body for SetSeriesType for application/json ContentType.
+type SetSeriesTypeJSONRequestBody SetSeriesTypeJSONBody
 
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
@@ -5590,6 +5627,9 @@ type ServerInterface interface {
 	// Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
 	// (POST /series/{id}/seasons/{season}/search)
 	SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams)
+	// Say what kind of series this is, or return to what the providers say.
+	// (PUT /series/{id}/type)
+	SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesTypeParams)
 	// Whether a login is required.
 	// (GET /settings/auth)
 	GetAuthPolicy(w http.ResponseWriter, r *http.Request)
@@ -6901,6 +6941,12 @@ func (_ Unimplemented) SetSeasonMonitored(w http.ResponseWriter, r *http.Request
 // Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
 // (POST /series/{id}/seasons/{season}/search)
 func (_ Unimplemented) SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Say what kind of series this is, or return to what the providers say.
+// (PUT /series/{id}/type)
+func (_ Unimplemented) SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesTypeParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13809,6 +13855,57 @@ func (siw *ServerInterfaceWrapper) SearchSeason(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// SetSeriesType operation middleware
+func (siw *ServerInterfaceWrapper) SetSeriesType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetSeriesTypeParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSeriesType(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetAuthPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -15972,6 +16069,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/search", wrapper.SearchSeason)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/{id}/type", wrapper.SetSeriesType)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/auth", wrapper.GetAuthPolicy)

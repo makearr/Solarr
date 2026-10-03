@@ -44,10 +44,11 @@ const MONITOR_CHOICES: { value: MonitorChoice; label: string }[] = [
 ];
 
 /** Sonarr's series edit: re-apply a monitor choice to what is already here, and give the series its own quality profile. */
-function SeriesEdit({ seriesId, categoryId, profileId, onChanged }: { seriesId: number; categoryId: string; profileId: number | undefined; onChanged: () => void }) {
+function SeriesEdit({ seriesId, categoryId, profileId, seriesType, onChanged }: { seriesId: number; categoryId: string; profileId: number | undefined; seriesType: string | undefined; onChanged: () => void }) {
   const [choice, setChoice] = useState<MonitorChoice>("all");
   const [specials, setSpecials] = useState(false);
   const [profile, setProfile] = useState(profileId ?? 0);
+  const [kind, setKind] = useState("auto");
   const profiles = useQuery({
     queryKey: ["qualityprofiles"],
     queryFn: async () => {
@@ -69,6 +70,16 @@ function SeriesEdit({ seriesId, categoryId, profileId, onChanged }: { seriesId: 
       const { error } = await api.PUT("/series/{id}/quality", {
         params: { path: { id: seriesId }, query },
         body: { quality_profile_id: profile || null },
+      });
+      if (error) throw error;
+    },
+    onSuccess: onChanged,
+  });
+  const saveKind = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PUT("/series/{id}/type", {
+        params: { path: { id: seriesId }, query },
+        body: { type: kind as "standard" | "daily" | "anime" | "auto" },
       });
       if (error) throw error;
     },
@@ -130,6 +141,20 @@ function SeriesEdit({ seriesId, categoryId, profileId, onChanged }: { seriesId: 
         </button>
         {saveProfile.isError && <span className="text-danger">That could not be saved.</span>}
         {saveProfile.isSuccess && <span className="text-ok">Saved.</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-24 text-ink-muted">Series type</span>
+        <select value={kind} onChange={(event) => setKind(event.target.value)} className={select}>
+          <option value="auto">Automatic{seriesType ? ` (now ${seriesType})` : ""}</option>
+          <option value="standard">Standard: seasons and episodes</option>
+          <option value="daily">Daily: by air date</option>
+          <option value="anime">Anime: also found by absolute number</option>
+        </select>
+        <button type="button" disabled={saveKind.isPending} onClick={() => saveKind.mutate()} className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50">
+          Save
+        </button>
+        {saveKind.isError && <span className="text-danger">That could not be saved.</span>}
+        {saveKind.isSuccess && <span className="text-ok">Saved.</span>}
       </div>
       <div className="flex flex-col gap-2 border-t border-border-subtle pt-3">
         {!confirming ? (
@@ -505,7 +530,7 @@ export function SeriesPage() {
           </div>
         </div>
       </div>
-      {editing && canManage && <SeriesEdit seriesId={Number(seriesId)} categoryId={categoryId} profileId={series.quality_profile_id} onChanged={changed} />}
+      {editing && canManage && <SeriesEdit seriesId={Number(seriesId)} categoryId={categoryId} profileId={series.quality_profile_id} seriesType={series.series_type} onChanged={changed} />}
       <CastStrip credits={credits} categoryId={categoryId} />
       {seasons.map((season) => (
         <SeasonSection

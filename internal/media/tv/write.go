@@ -267,6 +267,9 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 	add("original_network", series.OriginalNetwork)
 	add("original_country", series.OriginalCountry)
 	add("numbering_basis", orDefault(series.Basis, ProviderTVDB+":aired"))
+	if series.Type != "" {
+		fields = append(fields, library.SeriesFieldWrite{Field: "series_type", Provider: "detected", Value: string(series.Type)})
+	}
 	if series.AirTime != nil {
 		add("air_time", fmt.Sprintf("%02d:%02d %s", series.AirTime.Hour, series.AirTime.Minute, series.AirTime.Timezone))
 	}
