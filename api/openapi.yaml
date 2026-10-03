@@ -5088,6 +5088,70 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /series/people/{id}/follow/preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: previewSeriesPersonFollow
+      tags: [series]
+      summary: What following a person would add right now, without following.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: roles
+          in: query
+          description: Comma-separated roles; absent means any role.
+          schema: { type: string }
+        - name: back_catalogue
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: The series the next run would add.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeriesFollowPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /series/networks/{id}/follow/preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: previewSeriesNetworkFollow
+      tags: [series]
+      summary: What following a network would add right now, without following.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: back_catalogue
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: The series the next run would add.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeriesFollowPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /series/networks/{id}/follow:
     parameters:
       - name: id
@@ -8385,10 +8449,45 @@ components:
           type: array
           description: Titles TMDB lists for the person that this library does not hold; absent without a TMDB key.
           items: { $ref: "#/components/schemas/SeriesPersonElsewhere" }
+        other_works:
+          type: array
+          description: What the same person did in other media (the albums of a musician who also acts), found through the Wikidata bridge.
+          items: { $ref: "#/components/schemas/SeriesPersonOtherWork" }
         follow:
           allOf: [{ $ref: "#/components/schemas/SeriesFollow" }]
           description: The caller's follow of this person, absent when there is none.
         followable: { type: boolean, description: Whether the person has a TMDB id, which a follow needs. }
+
+    SeriesFollowPreview:
+      type: object
+      required: [would_add, more, held, limit]
+      properties:
+        would_add:
+          type: array
+          items: { $ref: "#/components/schemas/SeriesFollowCandidate" }
+        more: { type: integer, description: Further candidates beyond the per-run limit, added by later runs. }
+        held: { type: integer, description: Candidates the library already holds or has excluded. }
+        limit: { type: integer, description: The most one run adds. }
+
+    SeriesFollowCandidate:
+      type: object
+      required: [tmdb_id, title]
+      properties:
+        tmdb_id: { type: integer, format: int64 }
+        title: { type: string }
+        year: { type: integer, format: int64 }
+        poster_url: { type: string }
+        role: { type: string }
+
+    SeriesPersonOtherWork:
+      type: object
+      required: [work_id, media_type, title, role]
+      properties:
+        work_id: { type: integer, format: int64 }
+        media_type: { type: string }
+        title: { type: string }
+        year: { type: integer, format: int64 }
+        role: { type: string }
 
     SeriesNetwork:
       type: object

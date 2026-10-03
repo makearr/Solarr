@@ -524,6 +524,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/series/people/{id}", server.routeGetSeriesPerson)
 			secured.Put("/series/people/{id}/follow", server.routeFollowSeriesPerson)
 			secured.Delete("/series/people/{id}/follow", server.routeUnfollowSeriesPerson)
+			secured.Get("/series/people/{id}/follow/preview", server.routePreviewSeriesPersonFollow)
+			secured.Get("/series/networks/{id}/follow/preview", server.routePreviewSeriesNetworkFollow)
 			secured.Put("/series/networks/{id}/follow", server.routeFollowSeriesNetwork)
 			secured.Delete("/series/networks/{id}/follow", server.routeUnfollowSeriesNetwork)
 			secured.Get("/series/networks", server.routeListSeriesNetworks)

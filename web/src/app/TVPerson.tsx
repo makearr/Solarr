@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Film, Tv, UserRound } from "lucide-react";
+import { Disc3, Film, Tv, UserRound } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -68,6 +69,7 @@ function ElsewhereTile({ title }: { title: Elsewhere }) {
 /** One person of a TV library: who they are, what they did in these series, and what else they are known for. */
 export function TVPerson() {
   const { categoryId, personId } = useParams({ strict: false }) as { categoryId: string; personId: string };
+  const [role, setRole] = useState("");
   const person = useQuery({
     queryKey: ["series-person", categoryId, personId],
     queryFn: async () => {
@@ -85,6 +87,9 @@ export function TVPerson() {
   const data = person.data;
   const dates = [data.born && `Born ${data.born}`, data.died && `Died ${data.died}`, data.birthplace].filter(Boolean);
   const roles = [...new Set(data.credits.map((credit) => roleLabel(credit.role)))];
+  const roleKeys = [...new Set(data.credits.map((credit) => credit.role))];
+  const shown = role ? data.credits.filter((credit) => credit.role === role) : data.credits;
+  const seriesCount = new Set(shown.map((credit) => credit.series_id)).size;
   const links: [string, string, string | undefined][] = [
     ["TMDB", "tmdb", data.ids.tmdb ? `https://www.themoviedb.org/person/${data.ids.tmdb}` : undefined],
     ["IMDb", "imdb", data.ids.imdb ? `https://www.imdb.com/name/${data.ids.imdb}/` : undefined],
@@ -134,13 +139,60 @@ export function TVPerson() {
       </div>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-semibold">In this library</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="mr-2 text-sm font-semibold">
+            In this library <span className="font-normal text-ink-muted">· {seriesCount} series</span>
+          </h2>
+          {roleKeys.length > 1 &&
+            ["", ...roleKeys].map((key) => (
+              <button
+                key={key || "all"}
+                type="button"
+                aria-pressed={key === role}
+                onClick={() => setRole(key)}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  key === role ? "border-accent bg-accent/10 text-ink" : "border-border-subtle text-ink-muted hover:text-ink"
+                }`}
+              >
+                {key ? roleLabel(key) : "All"}
+              </button>
+            ))}
+        </div>
         <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
-          {data.credits.map((credit) => (
+          {shown.map((credit) => (
             <CreditTile key={`${credit.series_id}-${credit.role}-${credit.character ?? ""}`} credit={credit} categoryId={categoryId} />
           ))}
         </div>
       </section>
+
+      {data.other_works && data.other_works.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold">Also in your other libraries</h2>
+            <Link to="/people/$id" params={{ id: String(data.id) }} className="text-xs text-accent hover:underline">
+              Open full profile
+            </Link>
+          </div>
+          <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
+            {data.other_works.map((work) => (
+              <li key={`${work.work_id}-${work.role}`}>
+                <Link
+                  to="/works/$id"
+                  params={{ id: String(work.work_id) }}
+                  className="flex items-center gap-2 rounded-lg border border-border-subtle bg-surface p-2 text-sm hover:border-accent"
+                >
+                  <Disc3 aria-hidden className="size-4 shrink-0 text-ink-muted" />
+                  <span className="min-w-0 flex-1 truncate">
+                    {work.title}
+                    {work.year ? <span className="text-ink-muted"> ({work.year})</span> : null}
+                  </span>
+                  <span className="text-xs text-ink-muted">{roleLabel(work.role)}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {data.elsewhere && data.elsewhere.length > 0 && (
         <section className="flex flex-col gap-3">

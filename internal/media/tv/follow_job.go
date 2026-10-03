@@ -139,17 +139,68 @@ func (j *FollowJob) follow(ctx context.Context, subscription library.Subscriptio
 		if added == limit {
 			break
 		}
-		held, err := j.held(ctx, candidate)
-		if err != nil || held || j.config.Service.IsExcluded(ctx, IDs{TMDB: candidate}) {
+		held, err := j.held(ctx, candidate.TMDBID)
+		if err != nil || held || j.config.Service.IsExcluded(ctx, IDs{TMDB: candidate.TMDBID}) {
 			continue
 		}
-		if err := j.add(ctx, subscription, candidate); err != nil {
-			j.logger.WarnContext(ctx, "tv follow could not add a series", slog.Int64("tmdb", candidate), slog.Any("error", err))
+		if err := j.add(ctx, subscription, candidate.TMDBID); err != nil {
+			j.logger.WarnContext(ctx, "tv follow could not add a series", slog.Int64("tmdb", candidate.TMDBID), slog.Any("error", err))
 			continue
 		}
 		added++
 	}
 	return added, nil
+}
+
+// FollowCandidate is a series a follow would add.
+type FollowCandidate struct {
+	TMDBID    int64
+	Title     string
+	Year      int64
+	PosterURL string
+	// Role is what the person did on it; empty for a network.
+	Role string
+}
+
+// FollowPreview is what a follow would do right now, so the user can see it before turning the follow on.
+type FollowPreview struct {
+	// WouldAdd is what the next run adds, at most Limit.
+	WouldAdd []FollowCandidate
+	// More counts candidates beyond the limit, added by later runs.
+	More int
+	// Held counts candidates the library already has or has excluded.
+	Held  int
+	Limit int
+}
+
+// Preview lists what the follow would add, without adding anything or storing the follow.
+func (j *FollowJob) Preview(ctx context.Context, subscription library.Subscription) (FollowPreview, error) {
+	if j.config.Source == nil || !j.config.Source.Configured() {
+		return FollowPreview{}, nil
+	}
+	candidates, err := j.candidates(ctx, subscription)
+	if err != nil {
+		return FollowPreview{}, err
+	}
+	preview := FollowPreview{Limit: maxPerFollow}
+	if subscription.MonitorBackCatalogue {
+		preview.Limit = maxPerBackCatalogue
+	}
+	for _, candidate := range candidates {
+		held, err := j.held(ctx, candidate.TMDBID)
+		if err != nil {
+			return FollowPreview{}, err
+		}
+		switch {
+		case held || j.config.Service.IsExcluded(ctx, IDs{TMDB: candidate.TMDBID}):
+			preview.Held++
+		case len(preview.WouldAdd) < preview.Limit:
+			preview.WouldAdd = append(preview.WouldAdd, candidate)
+		default:
+			preview.More++
+		}
+	}
+	return preview, nil
 }
 
 func (j *FollowJob) held(ctx context.Context, tmdbID int64) (bool, error) {
@@ -172,7 +223,7 @@ func (j *FollowJob) add(ctx context.Context, subscription library.Subscription, 
 }
 
 // candidates lists the TMDB ids of series the follow would add, newest first, before any are checked against the library.
-func (j *FollowJob) candidates(ctx context.Context, subscription library.Subscription) ([]int64, error) {
+func (j *FollowJob) candidates(ctx context.Context, subscription library.Subscription) ([]FollowCandidate, error) {
 	since := time.Unix(subscription.CreatedAt, 0).UTC().Add(-newSeriesWindow).Format("2006-01-02")
 	if subscription.MonitorBackCatalogue {
 		since = ""
@@ -186,7 +237,7 @@ func (j *FollowJob) candidates(ctx context.Context, subscription library.Subscri
 	return nil, nil
 }
 
-func (j *FollowJob) personCandidates(ctx context.Context, subscription library.Subscription, since string) ([]int64, error) {
+func (j *FollowJob) personCandidates(ctx context.Context, subscription library.Subscription, since string) ([]FollowCandidate, error) {
 	external, found, err := j.config.People.ExternalIDFor(ctx, subscription.SubjectID, ProviderTMDB)
 	if err != nil || !found {
 		return nil, err
@@ -202,11 +253,8 @@ func (j *FollowJob) personCandidates(ctx context.Context, subscription library.S
 	wanted := func(role string) bool {
 		return len(subscription.Roles) == 0 || slices.Contains(subscription.Roles, role)
 	}
-	type dated struct {
-		id   int64
-		date string
-	}
-	var listed []dated
+	var listed []FollowCandidate
+	dates := map[int64]string{}
 	add := func(credit tmdb.Credit, role string) {
 		if credit.MediaType != "tv" || !wanted(role) || (since != "" && credit.FirstAirDate < since) {
 			return
@@ -217,7 +265,10 @@ func (j *FollowJob) personCandidates(ctx context.Context, subscription library.S
 		if credit.FirstAirDate == "" {
 			return
 		}
-		listed = append(listed, dated{credit.ID, credit.FirstAirDate})
+		dates[credit.ID] = credit.FirstAirDate
+		listed = append(listed, FollowCandidate{
+			TMDBID: credit.ID, Title: credit.Name, Year: int64(yearOf(credit.FirstAirDate)), PosterURL: tmdb.ImageURL(credit.PosterPath), Role: role,
+		})
 	}
 	for _, credit := range person.CombinedCredits.Cast {
 		add(credit, RoleActor)
@@ -227,17 +278,17 @@ func (j *FollowJob) personCandidates(ctx context.Context, subscription library.S
 			add(credit, role)
 		}
 	}
-	slices.SortStableFunc(listed, func(a, b dated) int { return -strings.Compare(a.date, b.date) })
-	ids := make([]int64, 0, len(listed))
+	slices.SortStableFunc(listed, func(a, b FollowCandidate) int { return -strings.Compare(dates[a.TMDBID], dates[b.TMDBID]) })
+	unique := make([]FollowCandidate, 0, len(listed))
 	for _, entry := range listed {
-		if !slices.Contains(ids, entry.id) {
-			ids = append(ids, entry.id)
+		if !slices.ContainsFunc(unique, func(seen FollowCandidate) bool { return seen.TMDBID == entry.TMDBID }) {
+			unique = append(unique, entry)
 		}
 	}
-	return ids, nil
+	return unique, nil
 }
 
-func (j *FollowJob) networkCandidates(ctx context.Context, subscription library.Subscription, since string) ([]int64, error) {
+func (j *FollowJob) networkCandidates(ctx context.Context, subscription library.Subscription, since string) ([]FollowCandidate, error) {
 	external, found, err := j.config.Subscriptions.OrganisationExternalID(ctx, subscription.SubjectID, ProviderTMDB)
 	if err != nil || !found {
 		return nil, err
@@ -253,11 +304,11 @@ func (j *FollowJob) networkCandidates(ctx context.Context, subscription library.
 	if err != nil {
 		return nil, fmt.Errorf("tv: follow network %d: %w", id, err)
 	}
-	ids := make([]int64, len(hits))
+	candidates := make([]FollowCandidate, len(hits))
 	for i, hit := range hits {
-		ids[i] = hit.ID
+		candidates[i] = FollowCandidate{TMDBID: hit.ID, Title: hit.Name, Year: int64(yearOf(hit.FirstAirDate)), PosterURL: tmdb.ImageURL(hit.PosterPath)}
 	}
-	return ids, nil
+	return candidates, nil
 }
 
 // EnqueueFollow submits one follow sweep, or the one follow named by subscriptionID, deduplicated by FollowActionKey.

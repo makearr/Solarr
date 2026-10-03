@@ -109,3 +109,31 @@ func TestPlanArtistMerges_LeavesAnArtistAlsoInAnotherLibrary(t *testing.T) {
 		t.Fatalf("merges = %+v (err %v), want none: the local artist has work in library 2", merges, err)
 	}
 }
+
+func TestLinkWikidata_TheSameQIDMergesTheTwoAndTheMusicArtistSurvives(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	actor, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "tmdb", ExternalID: "1", Person: library.PersonIdentity{Name: "Vutu Doci"},
+	})
+	if err != nil {
+		t.Fatalf("ResolvePerson actor: %v", err)
+	}
+	artist := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
+	if _, err := people.LinkWikidata(t.Context(), artist, "q42"); err != nil {
+		t.Fatalf("LinkWikidata artist: %v", err)
+	}
+	if survivor, err := people.LinkWikidata(t.Context(), artist, "Q42"); err != nil || survivor != artist {
+		t.Fatalf("relinking own QID = %d, %v; want %d", survivor, err, artist)
+	}
+	survivor, err := people.LinkWikidata(t.Context(), actor, "Q42")
+	if err != nil || survivor != artist {
+		t.Fatalf("LinkWikidata actor = %d, %v; want survivor %d", survivor, err, artist)
+	}
+	if _, err := librarydb.New(opened.Read()).GetPerson(t.Context(), actor); err == nil {
+		t.Errorf("merged person %d still exists", actor)
+	}
+	if id, found, err := people.FindByExternalID(t.Context(), "wikidata", "Q42"); err != nil || !found || id != artist {
+		t.Errorf("wikidata Q42 -> %d, %v, %v; want %d", id, found, err, artist)
+	}
+}

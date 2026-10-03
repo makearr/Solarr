@@ -220,6 +220,7 @@ func (j *EnrichJob) refreshDetails(ctx context.Context, personID int64, artistMB
 		j.logger.WarnContext(ctx, "artist refresh: details not refreshed", slog.Int64("person_id", personID), slog.Any("error", err))
 		return
 	}
+	j.linkWikidata(ctx, personID, artist.WikidataQID)
 	if err := j.people.BackfillDetails(ctx, personID, library.PersonIdentity{
 		Name: artist.Name, Disambiguation: artist.Disambiguation,
 		Kind: artist.Type, Gender: artist.Gender, Country: artist.Country, Born: artist.Born, Died: artist.Died,

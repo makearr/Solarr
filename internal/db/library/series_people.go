@@ -195,6 +195,40 @@ ORDER BY w.sort_title, w.id, c.role, c.character, p.sort_key`, categoryID, perso
 	return detail, nil
 }
 
+// PersonOtherWork is a work of another media type the person is credited on, found through the shared person.
+type PersonOtherWork struct {
+	WorkID    int64
+	MediaType string
+	Title     string
+	Year      int64
+	Role      string
+}
+
+// maxOtherWorks bounds the works listed from other libraries.
+const maxOtherWorks = 100
+
+// OtherWorks lists what the person did outside TV: the albums of a music artist who is also an actor.
+func (r SeriesReader) OtherWorks(ctx context.Context, personID int64) ([]PersonOtherWork, error) {
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT DISTINCT w.id, w.media_type, w.canonical_title, COALESCE(w.year, 0), c.role
+FROM credit c JOIN work w ON w.id = c.work_id
+WHERE c.person_id = ? AND c.edition_id = 0 AND c.part_id = 0 AND w.media_type <> 'tv'
+ORDER BY w.media_type, COALESCE(w.year, 0) DESC, w.id LIMIT ?`, personID, maxOtherWorks)
+	if err != nil {
+		return nil, fmt.Errorf("library: person other works: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var works []PersonOtherWork
+	for rows.Next() {
+		var work PersonOtherWork
+		if err := rows.Scan(&work.WorkID, &work.MediaType, &work.Title, &work.Year, &work.Role); err != nil {
+			return nil, fmt.Errorf("library: scan person other work: %w", err)
+		}
+		works = append(works, work)
+	}
+	return works, rows.Err()
+}
+
 func imageFromFields(raw sql.NullString) string {
 	if !raw.Valid {
 		return ""

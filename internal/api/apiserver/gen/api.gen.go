@@ -3453,6 +3453,28 @@ type SeriesFollow struct {
 	Roles         []string `json:"roles"`
 }
 
+// SeriesFollowCandidate defines model for SeriesFollowCandidate.
+type SeriesFollowCandidate struct {
+	PosterUrl *string `json:"poster_url,omitempty"`
+	Role      *string `json:"role,omitempty"`
+	Title     string  `json:"title"`
+	TmdbId    int64   `json:"tmdb_id"`
+	Year      *int64  `json:"year,omitempty"`
+}
+
+// SeriesFollowPreview defines model for SeriesFollowPreview.
+type SeriesFollowPreview struct {
+	// Held Candidates the library already holds or has excluded.
+	Held int `json:"held"`
+
+	// Limit The most one run adds.
+	Limit int `json:"limit"`
+
+	// More Further candidates beyond the per-run limit
+	More     int                     `json:"more"`
+	WouldAdd []SeriesFollowCandidate `json:"would_add"`
+}
+
 // SeriesFollowRequest defines model for SeriesFollowRequest.
 type SeriesFollowRequest struct {
 	// BackCatalogue Also add older series
@@ -3553,6 +3575,9 @@ type SeriesPersonDetail struct {
 	ImageUrl   *string           `json:"image_url,omitempty"`
 	Monitored  bool              `json:"monitored"`
 	Name       string            `json:"name"`
+
+	// OtherWorks What the same person did in other media (the albums of a musician who also acts), found through the Wikidata bridge.
+	OtherWorks *[]SeriesPersonOtherWork `json:"other_works,omitempty"`
 }
 
 // SeriesPersonElsewhere defines model for SeriesPersonElsewhere.
@@ -3569,6 +3594,15 @@ type SeriesPersonElsewhere struct {
 
 // SeriesPersonElsewhereMediaType defines model for SeriesPersonElsewhere.MediaType.
 type SeriesPersonElsewhereMediaType string
+
+// SeriesPersonOtherWork defines model for SeriesPersonOtherWork.
+type SeriesPersonOtherWork struct {
+	MediaType string `json:"media_type"`
+	Role      string `json:"role"`
+	Title     string `json:"title"`
+	WorkId    int64  `json:"work_id"`
+	Year      *int64 `json:"year,omitempty"`
+}
 
 // SeriesSeason defines model for SeriesSeason.
 type SeriesSeason struct {
@@ -4474,6 +4508,12 @@ type UnfollowSeriesNetworkParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// PreviewSeriesNetworkFollowParams defines parameters for PreviewSeriesNetworkFollow.
+type PreviewSeriesNetworkFollowParams struct {
+	CategoryId    int64 `form:"category_id" json:"category_id"`
+	BackCatalogue *bool `form:"back_catalogue,omitempty" json:"back_catalogue,omitempty"`
+}
+
 // ListSeriesPeopleParams defines parameters for ListSeriesPeople.
 type ListSeriesPeopleParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -4495,6 +4535,15 @@ type GetSeriesPersonParams struct {
 // UnfollowSeriesPersonParams defines parameters for UnfollowSeriesPerson.
 type UnfollowSeriesPersonParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// PreviewSeriesPersonFollowParams defines parameters for PreviewSeriesPersonFollow.
+type PreviewSeriesPersonFollowParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// Roles Comma-separated roles; absent means any role.
+	Roles         *string `form:"roles,omitempty" json:"roles,omitempty"`
+	BackCatalogue *bool   `form:"back_catalogue,omitempty" json:"back_catalogue,omitempty"`
 }
 
 // ListWantedEpisodesParams defines parameters for ListWantedEpisodes.
@@ -5609,6 +5658,9 @@ type ServerInterface interface {
 	// Follow a network; the new series it airs are added to the library automatically through TMDB.
 	// (PUT /series/networks/{id}/follow)
 	FollowSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64)
+	// What following a network would add right now, without following.
+	// (GET /series/networks/{id}/follow/preview)
+	PreviewSeriesNetworkFollow(w http.ResponseWriter, r *http.Request, id int64, params PreviewSeriesNetworkFollowParams)
 	// A page of the people credited on one TV library's series, by name.
 	// (GET /series/people)
 	ListSeriesPeople(w http.ResponseWriter, r *http.Request, params ListSeriesPeopleParams)
@@ -5621,6 +5673,9 @@ type ServerInterface interface {
 	// Follow a person by role; their new series are added to the library automatically through TMDB.
 	// (PUT /series/people/{id}/follow)
 	FollowSeriesPerson(w http.ResponseWriter, r *http.Request, id int64)
+	// What following a person would add right now, without following.
+	// (GET /series/people/{id}/follow/preview)
+	PreviewSeriesPersonFollow(w http.ResponseWriter, r *http.Request, id int64, params PreviewSeriesPersonFollowParams)
 	// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
 	// (GET /series/wanted)
 	ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams)
@@ -6884,6 +6939,12 @@ func (_ Unimplemented) FollowSeriesNetwork(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// What following a network would add right now, without following.
+// (GET /series/networks/{id}/follow/preview)
+func (_ Unimplemented) PreviewSeriesNetworkFollow(w http.ResponseWriter, r *http.Request, id int64, params PreviewSeriesNetworkFollowParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // A page of the people credited on one TV library's series, by name.
 // (GET /series/people)
 func (_ Unimplemented) ListSeriesPeople(w http.ResponseWriter, r *http.Request, params ListSeriesPeopleParams) {
@@ -6905,6 +6966,12 @@ func (_ Unimplemented) UnfollowSeriesPerson(w http.ResponseWriter, r *http.Reque
 // Follow a person by role; their new series are added to the library automatically through TMDB.
 // (PUT /series/people/{id}/follow)
 func (_ Unimplemented) FollowSeriesPerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What following a person would add right now, without following.
+// (GET /series/people/{id}/follow/preview)
+func (_ Unimplemented) PreviewSeriesPersonFollow(w http.ResponseWriter, r *http.Request, id int64, params PreviewSeriesPersonFollowParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13034,6 +13101,65 @@ func (siw *ServerInterfaceWrapper) FollowSeriesNetwork(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewSeriesNetworkFollow operation middleware
+func (siw *ServerInterfaceWrapper) PreviewSeriesNetworkFollow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewSeriesNetworkFollowParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "back_catalogue" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "back_catalogue", r.URL.Query(), &params.BackCatalogue)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "back_catalogue", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewSeriesNetworkFollow(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSeriesPeople operation middleware
 func (siw *ServerInterfaceWrapper) ListSeriesPeople(w http.ResponseWriter, r *http.Request) {
 
@@ -13234,6 +13360,73 @@ func (siw *ServerInterfaceWrapper) FollowSeriesPerson(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.FollowSeriesPerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewSeriesPersonFollow operation middleware
+func (siw *ServerInterfaceWrapper) PreviewSeriesPersonFollow(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params PreviewSeriesPersonFollowParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "roles" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "roles", r.URL.Query(), &params.Roles)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "roles", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "back_catalogue" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "back_catalogue", r.URL.Query(), &params.BackCatalogue)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "back_catalogue", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewSeriesPersonFollow(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16128,6 +16321,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/series/networks/{id}/follow", wrapper.FollowSeriesNetwork)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/networks/{id}/follow/preview", wrapper.PreviewSeriesNetworkFollow)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/people", wrapper.ListSeriesPeople)
 	})
 	r.Group(func(r chi.Router) {
@@ -16138,6 +16334,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/people/{id}/follow", wrapper.FollowSeriesPerson)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/people/{id}/follow/preview", wrapper.PreviewSeriesPersonFollow)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/wanted", wrapper.ListWantedEpisodes)

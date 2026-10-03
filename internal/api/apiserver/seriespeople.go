@@ -26,6 +26,8 @@ type SeriesPeopleCatalog interface {
 	// Follow subscribes the user to a "person" or an "organisation" so the library adds their new series itself.
 	Follow(ctx context.Context, userID, categoryID int64, subject string, subjectID int64, request gen.SeriesFollowRequest) (gen.SeriesFollow, error)
 	Unfollow(ctx context.Context, userID int64, subject string, subjectID int64) error
+	// PreviewFollow says what a follow would add now, changing nothing.
+	PreviewFollow(ctx context.Context, categoryID int64, subject string, subjectID int64, roles []string, backCatalogue bool) (gen.SeriesFollowPreview, error)
 }
 
 // ErrFollowUnavailable means the subject cannot be followed (no TMDB id to follow by, or it is followed for another
@@ -235,6 +237,44 @@ func (s *Server) followSubject(w http.ResponseWriter, r *http.Request, subject s
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, follow)
+}
+
+func (s *Server) routePreviewSeriesPersonFollow(w http.ResponseWriter, r *http.Request) {
+	s.previewFollow(w, r, "person")
+}
+
+func (s *Server) routePreviewSeriesNetworkFollow(w http.ResponseWriter, r *http.Request) {
+	s.previewFollow(w, r, "organisation")
+}
+
+// PreviewSeriesPersonFollow and PreviewSeriesNetworkFollow satisfy the generated interface; the route functions are mounted.
+func (s *Server) PreviewSeriesPersonFollow(w http.ResponseWriter, r *http.Request, _ int64, _ gen.PreviewSeriesPersonFollowParams) {
+	s.previewFollow(w, r, "person")
+}
+
+// PreviewSeriesNetworkFollow see PreviewSeriesPersonFollow.
+func (s *Server) PreviewSeriesNetworkFollow(w http.ResponseWriter, r *http.Request, _ int64, _ gen.PreviewSeriesNetworkFollowParams) {
+	s.previewFollow(w, r, "organisation")
+}
+
+func (s *Server) previewFollow(w http.ResponseWriter, r *http.Request, subject string) {
+	id, categoryID, ok := s.idAndCategory(w, r)
+	if !ok {
+		return
+	}
+	if _, ok := s.peopleAccessAs(w, r, categoryID, settings.PermissionManage); !ok {
+		return
+	}
+	var roles []string
+	if raw := r.URL.Query().Get("roles"); raw != "" && subject == "person" {
+		roles = strings.Split(raw, ",")
+	}
+	preview, err := s.seriesPeople.PreviewFollow(r.Context(), categoryID, subject, id, roles, r.URL.Query().Get("back_catalogue") == "true")
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, preview)
 }
 
 func (s *Server) routeUnfollowSeriesPerson(w http.ResponseWriter, r *http.Request) {

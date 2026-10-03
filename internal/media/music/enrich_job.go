@@ -537,6 +537,7 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 		return backfillFailed
 	}
 
+	j.linkWikidata(ctx, candidate.PersonID, artist.WikidataQID)
 	bio, err := j.wikidataLookup(ctx, artist)
 	if err == nil {
 		bio = j.withArtistArt(ctx, artist, bio)
@@ -573,6 +574,16 @@ func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArt
 		return backfillAbsent
 	default:
 		return backfillFailed
+	}
+}
+
+// linkWikidata keeps the artist's QID, which also folds in the same human known from another library.
+func (j *EnrichJob) linkWikidata(ctx context.Context, personID int64, qid string) {
+	if qid == "" {
+		return
+	}
+	if _, err := j.people.LinkWikidata(ctx, personID, qid); err != nil {
+		j.logger.WarnContext(ctx, "artist wikidata link failed", slog.Int64("person_id", personID), slog.Any("error", err))
 	}
 }
 

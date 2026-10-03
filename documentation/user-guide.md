@@ -119,6 +119,13 @@ list **preferred release groups** that rank above an otherwise equal release.
 tick (acting, directing, writing, ...), a network for everything new it airs. At most five series per follow are added each
 time it runs, with the monitor choice you set; older series only if you ask for the back catalogue. The task **Refresh
 series** (Settings → Scheduler) re-reads running series twice a day so new episodes and seasons arrive by themselves.
+Before you follow, the panel lists the series it would add right now (and how many already are in your library), so nothing
+arrives unseen.
+
+**The same person in more than one library**: an actor who is also a musician in your music library is one person. Solarr
+recognises them through their Wikidata item (never by name alone): the task **Match people across libraries** asks TMDB for
+the item of TV people who share a name with a music artist, and a refreshed artist records theirs. Their TV page then shows
+**Also in your other libraries** (their albums), with a link to the full profile.
 
 **Import from Sonarr** (Connections → Arr): the series, the monitored state of every episode and the quality profile (by
 name) of each series come over; import before the first scan, because a series already in Solarr is left as it is.

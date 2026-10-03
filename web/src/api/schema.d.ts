@@ -3153,6 +3153,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/people/{id}/follow/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** What following a person would add right now, without following. */
+        get: operations["previewSeriesPersonFollow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/networks/{id}/follow/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** What following a network would add right now, without following. */
+        get: operations["previewSeriesNetworkFollow"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/networks/{id}/follow": {
         parameters: {
             query?: never;
@@ -5563,10 +5601,39 @@ export interface components {
             credits: components["schemas"]["SeriesPersonCredit"][];
             /** @description Titles TMDB lists for the person that this library does not hold; absent without a TMDB key. */
             elsewhere?: components["schemas"]["SeriesPersonElsewhere"][];
+            /** @description What the same person did in other media (the albums of a musician who also acts), found through the Wikidata bridge. */
+            other_works?: components["schemas"]["SeriesPersonOtherWork"][];
             /** @description The caller's follow of this person, absent when there is none. */
             follow?: components["schemas"]["SeriesFollow"];
             /** @description Whether the person has a TMDB id */
             followable?: boolean;
+        };
+        SeriesFollowPreview: {
+            would_add: components["schemas"]["SeriesFollowCandidate"][];
+            /** @description Further candidates beyond the per-run limit */
+            more: number;
+            /** @description Candidates the library already holds or has excluded. */
+            held: number;
+            /** @description The most one run adds. */
+            limit: number;
+        };
+        SeriesFollowCandidate: {
+            /** Format: int64 */
+            tmdb_id: number;
+            title: string;
+            /** Format: int64 */
+            year?: number;
+            poster_url?: string;
+            role?: string;
+        };
+        SeriesPersonOtherWork: {
+            /** Format: int64 */
+            work_id: number;
+            media_type: string;
+            title: string;
+            /** Format: int64 */
+            year?: number;
+            role: string;
         };
         SeriesNetwork: {
             /** Format: int64 */
@@ -12357,6 +12424,68 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    previewSeriesPersonFollow: {
+        parameters: {
+            query: {
+                category_id: number;
+                /** @description Comma-separated roles; absent means any role. */
+                roles?: string;
+                back_catalogue?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The series the next run would add. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesFollowPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    previewSeriesNetworkFollow: {
+        parameters: {
+            query: {
+                category_id: number;
+                back_catalogue?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The series the next run would add. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesFollowPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     followSeriesNetwork: {

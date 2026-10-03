@@ -46,13 +46,17 @@ func (p *process) registerFollowJob(registry *jobs.Registry, executor *jobs.Exec
 	if err := registry.Register(tv.FollowDefinition); err != nil {
 		return err
 	}
-	p.tvService()
-	executor.Handle(tv.FollowJobType, tv.NewFollowJob(tv.FollowConfig{
+	executor.Handle(tv.FollowJobType, p.followJob())
+	return nil
+}
+
+// followJob is the follow sweep; the person page's preview asks the same one, so the two cannot disagree.
+func (p *process) followJob() *tv.FollowJob {
+	return tv.NewFollowJob(tv.FollowConfig{
 		Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library), Source: p.tmdbShared,
 		Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
 		Clock: clock.NewSystem(), Logger: p.logger,
-	}))
-	return nil
+	})
 }
 
 // enqueueSubscriptionExpand submits one expand sweep. Registered as a task

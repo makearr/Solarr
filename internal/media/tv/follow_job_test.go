@@ -189,3 +189,65 @@ func TestUnfollowRemovesTheFollow(t *testing.T) {
 		t.Error("follow still there after unfollow")
 	}
 }
+
+func TestPreviewListsWhatAFollowWouldAddAndAddsNothing(t *testing.T) {
+	var person tmdb.Person
+	recent := addNow.AddDate(0, 0, -10).Format("2006-01-02")
+	person.CombinedCredits.Cast = []tmdb.Credit{recentCredit(7, recent, 1), recentCredit(70, "2019-03-01", 40)}
+	person.CombinedCredits.Crew = []tmdb.Credit{{ID: 72, MediaType: "tv", Name: "Directed", FirstAirDate: recent, Job: "Director"}}
+	fixture := newFollowFixture(t, fakeFollowSource{person: person})
+	subscription := library.Subscription{SubjectType: "person", SubjectID: fixture.person, CategoryID: 3, Roles: []string{tv.RoleActor}, CreatedAt: addNow.Unix()}
+
+	preview, err := fixture.job.Preview(t.Context(), subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(preview.WouldAdd) != 1 || preview.WouldAdd[0].TMDBID != 7 || preview.WouldAdd[0].Title != "Example Show" || preview.WouldAdd[0].Role != tv.RoleActor {
+		t.Errorf("would add = %+v, want only the new acting credit 7", preview.WouldAdd)
+	}
+	if preview.Limit != 5 || preview.More != 0 || preview.Held != 0 {
+		t.Errorf("preview = %+v, want limit 5 and nothing else", preview)
+	}
+	if fixture.held(t) != 0 || len(fixture.asked) != 0 {
+		t.Errorf("a preview added %d series and looked up %v", fixture.held(t), fixture.asked)
+	}
+}
+
+type fakeBridgeSource struct{ wikidata map[int64]string }
+
+func (fakeBridgeSource) Configured() bool { return true }
+func (f fakeBridgeSource) Person(_ context.Context, id int64) (tmdb.Person, error) {
+	var person tmdb.Person
+	person.ExternalIDs.Wikidata = f.wikidata[id]
+	return person, nil
+}
+
+func TestBridgeSweepLinksTheActorWhoSharesAMusicArtistsNameAndMergesOnTheSameItem(t *testing.T) {
+	opened := newLibrary(t)
+	people := library.NewPeople(opened)
+	artist, err := people.ResolvePerson(t.Context(), addNow, library.PersonLink{Provider: "musicbrainz:artist", ExternalID: "m1", Person: library.PersonIdentity{Name: "Vutu Doci"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := people.ResolvePerson(t.Context(), addNow, library.PersonLink{Provider: "tmdb", ExternalID: "11", Person: library.PersonIdentity{Name: "Vutu Doci"}}); err != nil {
+		t.Fatal(err)
+	}
+	_, err = people.ResolvePerson(t.Context(), addNow, library.PersonLink{Provider: "tmdb", ExternalID: "12", Person: library.PersonIdentity{Name: "Other Name"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := people.LinkWikidata(t.Context(), artist, "Q7"); err != nil {
+		t.Fatal(err)
+	}
+	job := tv.NewBridgeJob(tv.BridgeConfig{People: people, Source: fakeBridgeSource{wikidata: map[int64]string{11: "Q7", 12: "Q8"}}})
+
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if id, found, _ := people.FindByExternalID(t.Context(), "tmdb", "11"); !found || id != artist {
+		t.Errorf("tmdb 11 -> %d, found %v; want the actor folded into artist %d", id, found, artist)
+	}
+	if _, found, _ := people.FindByExternalID(t.Context(), "wikidata", "Q8"); found {
+		t.Errorf("the stranger shares no artist's name and must not be asked about")
+	}
+}

@@ -71,11 +71,20 @@ served by `GET /images/remote` from `internal/platform/remoteimage`: fetched onc
 to the three cover sizes and stored in the flat `cache/images` directory (so the budget evicts them), and the browser never
 contacts a provider's CDN.
 
+## One person across libraries (`library.People.LinkWikidata`, `tv.BridgeJob`)
+
+The Wikidata QID is a `person_external_id` (provider `wikidata`, unique): linking a QID another person already holds merges the two
+with the music-artist person surviving (`mergeArtist`, the loser's name becomes an alias; a follow held by both keeps the
+survivor's). The QID comes from MusicBrainz (stored by artist refresh and backfill) and from TMDB's `external_ids.wikidata_id`
+(stored when a person page opens and by the daily `people.bridge` sweep, which only asks about TMDB people whose `sort_name`
+equals a music artist's, 60 a run; `wikidata:none` records an answer of "no item"). A TV person page lists `OtherWorks`: non-TV
+works the same person is credited on. Merging on name alone is deliberately not done.
+
 ## Following people and networks (`internal/media/tv/follow_job.go`)
 
 A person (by role) or a network can be followed from its page: a `subscription` row (media type `tv`, roles, the library it adds
 to, `filters_json` `{"monitor": ...}`, back-catalogue flag). The registered task "Subscription expand" also enqueues
-`tv.follow_expand`, which asks TMDB per follow: a person's combined credits (tv only, the followed roles, first aired since the
+`tv.follow_expand` (the follow panel's preview, `GET /series/{people,networks}/{id}/follow/preview`, runs the same candidate code through `FollowJob.Preview`), which asks TMDB per follow: a person's combined credits (tv only, the followed roles, first aired since the
 follow was made less 30 days, or a regular role with 3+ episodes for a back-catalogue follow) or `/discover/tv` for a network. Each
 show not yet held is added with the follow's monitor choice, **at most 5 per follow per run** (25 for a back catalogue). Additive
 only, and a show whose TMDB id has no TheTVDB id is skipped (no episode list). Making or changing a follow enqueues its own run.

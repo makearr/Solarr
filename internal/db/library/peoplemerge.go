@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -185,4 +186,116 @@ func mergeArtist(ctx context.Context, queries *librarydb.Queries, merge ArtistMe
 		}
 	}
 	return nil
+}
+
+// ProviderWikidata is the external-id provider of a person's Wikidata QID, the bridge between libraries.
+const ProviderWikidata = "wikidata"
+
+// musicbrainzArtistProvider mirrors music.ProviderArtist, which this package cannot import.
+const musicbrainzArtistProvider = "musicbrainz:artist"
+
+// LinkWikidata records a person's QID. When another person already holds it they are one human, so the two
+// merge (the music artist survives: its folders are named by it) and the survivor's id is answered.
+func (p People) LinkWikidata(ctx context.Context, personID int64, qid string) (int64, error) {
+	qid = strings.ToUpper(strings.TrimSpace(qid))
+	if qid == "" {
+		return personID, nil
+	}
+	survivor := personID
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		survivor = personID
+		owner, err := queries.GetPersonByExternalID(ctx, librarydb.GetPersonByExternalIDParams{Provider: ProviderWikidata, ExternalID: qid})
+		switch {
+		case errors.Is(err, sql.ErrNoRows):
+		case err != nil:
+			return err
+		case owner.ID != personID:
+			merge, err := bridgeMerge(ctx, queries, owner, personID)
+			if err != nil {
+				return err
+			}
+			if err := mergeArtist(ctx, queries, merge); err != nil {
+				return err
+			}
+			survivor = merge.WinnerID
+		}
+		return queries.LinkPersonExternalID(ctx, librarydb.LinkPersonExternalIDParams{
+			Provider: ProviderWikidata, ExternalID: qid, PersonID: survivor,
+		})
+	})
+	if err != nil {
+		return personID, fmt.Errorf("library: link wikidata %s to person %d: %w", qid, personID, err)
+	}
+	return survivor, nil
+}
+
+func bridgeMerge(ctx context.Context, queries *librarydb.Queries, owner librarydb.Person, other int64) (ArtistMerge, error) {
+	otherPerson, err := queries.GetPerson(ctx, other)
+	if err != nil {
+		return ArtistMerge{}, err
+	}
+	ownerIDs, err := queries.ListPersonExternalIDs(ctx, owner.ID)
+	if err != nil {
+		return ArtistMerge{}, err
+	}
+	winner, loser := owner, otherPerson
+	for _, external := range ownerIDs {
+		if external.Provider == musicbrainzArtistProvider {
+			return ArtistMerge{WinnerID: winner.ID, LoserID: loser.ID, WinnerName: winner.Name, LoserName: loser.Name}, nil
+		}
+	}
+	otherIDs, err := queries.ListPersonExternalIDs(ctx, other)
+	if err != nil {
+		return ArtistMerge{}, err
+	}
+	for _, external := range otherIDs {
+		if external.Provider == musicbrainzArtistProvider {
+			winner, loser = otherPerson, owner
+		}
+	}
+	return ArtistMerge{WinnerID: winner.ID, LoserID: loser.ID, WinnerName: winner.Name, LoserName: loser.Name}, nil
+}
+
+// providerWikidataNone marks a person whose TMDB page names no Wikidata item, so the bridge sweep stops asking.
+const providerWikidataNone = "wikidata:none"
+
+// BridgeCandidate is a person known from TMDB who shares a name with a music artist, and so may be the same human.
+type BridgeCandidate struct {
+	PersonID int64
+	TMDBID   string
+}
+
+// BridgeCandidates lists up to limit such people that have no Wikidata item recorded or ruled out yet.
+func (p People) BridgeCandidates(ctx context.Context, limit int) ([]BridgeCandidate, error) {
+	rows, err := p.store.Read().QueryContext(ctx,
+		`SELECT DISTINCT x.person_id, x.external_id
+FROM person m
+JOIN person_external_id me ON me.person_id = m.id AND me.provider = ?
+JOIN person t ON t.sort_name = m.sort_name AND t.id <> m.id
+JOIN person_external_id x ON x.person_id = t.id AND x.provider = 'tmdb'
+WHERE NOT EXISTS (SELECT 1 FROM person_external_id w WHERE w.person_id = t.id AND w.provider IN (?, ?))
+ORDER BY x.person_id LIMIT ?`, musicbrainzArtistProvider, ProviderWikidata, providerWikidataNone, limit)
+	if err != nil {
+		return nil, fmt.Errorf("library: bridge candidates: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var candidates []BridgeCandidate
+	for rows.Next() {
+		var candidate BridgeCandidate
+		if err := rows.Scan(&candidate.PersonID, &candidate.TMDBID); err != nil {
+			return nil, fmt.Errorf("library: scan bridge candidate: %w", err)
+		}
+		candidates = append(candidates, candidate)
+	}
+	return candidates, rows.Err()
+}
+
+// RuleOutWikidata records that no Wikidata item is known for the person.
+func (p People) RuleOutWikidata(ctx context.Context, personID int64, tmdbID string) error {
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).LinkPersonExternalID(ctx, librarydb.LinkPersonExternalIDParams{
+			Provider: providerWikidataNone, ExternalID: tmdbID, PersonID: personID,
+		})
+	})
 }

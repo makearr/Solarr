@@ -33,6 +33,8 @@ type SeriesPeople struct {
 	Persons       library.People
 	Subscriptions library.Subscriptions
 	TMDB          PersonSource
+	// Preview asks what a follow would add; nil answers an empty preview.
+	Preview func(ctx context.Context, subscription library.Subscription) (tv.FollowPreview, error)
 	// EnqueueFollow asks the follow sweep to look at one subscription now; nil leaves it to the schedule.
 	EnqueueFollow func(ctx context.Context, subscriptionID int64) error
 	Clock         clock.Clock
@@ -62,7 +64,11 @@ func (c SeriesPeople) Person(ctx context.Context, categoryID, personID, userID i
 	}
 	remote, haveRemote := c.remote(ctx, detail)
 	if haveRemote {
-		c.keep(ctx, &detail, remote)
+		if survivor := c.keep(ctx, &detail, remote); survivor != detail.ID {
+			if detail, err = c.Reader.Person(ctx, categoryID, survivor); err != nil {
+				return gen.SeriesPersonDetail{}, translatePeopleError(err)
+			}
+		}
 	}
 	view := gen.SeriesPersonDetail{Id: detail.ID, Name: detail.Name, Monitored: detail.Monitored, Ids: detail.IDs}
 	_, hasTMDB := tv.ParseID(detail.IDs[tv.ProviderTMDB])
@@ -107,6 +113,20 @@ func (c SeriesPeople) Person(ctx context.Context, categoryID, personID, userID i
 		}
 		view.Credits[i] = entry
 	}
+	others, err := c.Reader.OtherWorks(ctx, detail.ID)
+	if err != nil {
+		return gen.SeriesPersonDetail{}, err
+	}
+	if len(others) > 0 {
+		views := make([]gen.SeriesPersonOtherWork, len(others))
+		for i, other := range others {
+			views[i] = gen.SeriesPersonOtherWork{WorkId: other.WorkID, MediaType: other.MediaType, Title: other.Title, Role: other.Role}
+			if other.Year > 0 {
+				views[i].Year = &other.Year
+			}
+		}
+		view.OtherWorks = &views
+	}
 	if haveRemote {
 		elsewhere := c.elsewhere(ctx, detail, remote)
 		view.Elsewhere = &elsewhere
@@ -131,10 +151,19 @@ func (c SeriesPeople) remote(ctx context.Context, detail library.TVPersonDetail)
 }
 
 // keep stores what the TMDB page adds to the person, filling only what is empty, and shows it on this very page.
-func (c SeriesPeople) keep(ctx context.Context, detail *library.TVPersonDetail, remote tmdb.Person) {
+func (c SeriesPeople) keep(ctx context.Context, detail *library.TVPersonDetail, remote tmdb.Person) int64 {
+	survivor := detail.ID
+	if remote.ExternalIDs.Wikidata != "" {
+		if linked, err := c.Persons.LinkWikidata(ctx, detail.ID, remote.ExternalIDs.Wikidata); err == nil {
+			survivor = linked
+		}
+	}
 	identity := library.PersonIdentity{Name: detail.Name, Born: remote.Birthday, Died: remote.Deathday}
+	if survivor != detail.ID {
+		return survivor
+	}
 	if err := c.Persons.BackfillDetails(ctx, detail.ID, identity); err != nil {
-		return
+		return survivor
 	}
 	if detail.Biography == "" && remote.Biography != "" {
 		if err := c.Persons.SetBiography(ctx, detail.ID, remote.Biography); err == nil {
@@ -147,6 +176,7 @@ func (c SeriesPeople) keep(ctx context.Context, detail *library.TVPersonDetail, 
 	if detail.Died == "" {
 		detail.Died = remote.Deathday
 	}
+	return survivor
 }
 
 // elsewhere lists TMDB's titles for the person that the library does not hold, newest first.
@@ -328,6 +358,35 @@ func (c SeriesPeople) knownSubject(ctx context.Context, categoryID int64, subjec
 		}
 	}
 	return nil
+}
+
+// PreviewFollow lists what a follow of the subject would add now, as the follow job would.
+func (c SeriesPeople) PreviewFollow(ctx context.Context, categoryID int64, subject string, subjectID int64, roles []string, backCatalogue bool) (gen.SeriesFollowPreview, error) {
+	if err := c.knownSubject(ctx, categoryID, subject, subjectID); err != nil {
+		return gen.SeriesFollowPreview{}, err
+	}
+	view := gen.SeriesFollowPreview{WouldAdd: []gen.SeriesFollowCandidate{}}
+	if c.Preview == nil {
+		return view, nil
+	}
+	preview, err := c.Preview(ctx, library.Subscription{
+		SubjectType: subject, SubjectID: subjectID, CategoryID: categoryID, Roles: roles,
+		MonitorBackCatalogue: backCatalogue, CreatedAt: c.Clock.Now().Unix(),
+	})
+	if err != nil {
+		return gen.SeriesFollowPreview{}, err
+	}
+	view.More, view.Held, view.Limit = preview.More, preview.Held, preview.Limit
+	for _, candidate := range preview.WouldAdd {
+		entry := gen.SeriesFollowCandidate{TmdbId: candidate.TMDBID, Title: candidate.Title}
+		if candidate.Year > 0 {
+			entry.Year = &candidate.Year
+		}
+		setString(&entry.PosterUrl, candidate.PosterURL)
+		setString(&entry.Role, candidate.Role)
+		view.WouldAdd = append(view.WouldAdd, entry)
+	}
+	return view, nil
 }
 
 // Unfollow removes the user's follow.

@@ -388,7 +388,8 @@ type Person struct {
 	KnownForDepartment string   `json:"known_for_department"`
 	AlsoKnownAs        []string `json:"also_known_as"`
 	ExternalIDs        struct {
-		IMDb string `json:"imdb_id"`
+		IMDb     string `json:"imdb_id"`
+		Wikidata string `json:"wikidata_id"`
 	} `json:"external_ids"`
 	CombinedCredits struct {
 		Cast []Credit `json:"cast"`
