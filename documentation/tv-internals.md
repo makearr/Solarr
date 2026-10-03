@@ -113,3 +113,14 @@ and the Review page's button) feeds the waiting files through `Consumer.Observe`
 Speed: the season directories of one series are read side by side by the scan (eight directories at once), so `FolderLocks` makes them ask the
 providers once between them, and TVmaze's cast is skipped when a TMDB key is stored (its bucket is the slowest). Measured 2026-10-03 on 60
 real series (2,167 files, probing included): 300 s before, 130 s after.
+
+## Measured video facts and quality (`probe`, `judge.WithTarget`, `quality.Judge`)
+
+The probe (`internal/scanning/probe`) reads a video file's resolution, codec (`hevc` becomes `h265`), HDR (`dolby-vision`, `hdr10plus`, `hdr10`,
+`hlg`; empty is sdr), frame rate, scan type, audio codec and channel layout, and subtitle languages: embedded tracks plus sidecar files
+named like the video (`probe.sidecarSubtitleLanguages`; a sidecar with no language in its name is `und`). They are interned in
+`media_attributes` as the measured half (ADR-39). Files measured before this are read again (`ListStaleVideoProbes`, keyed on the stored probe
+JSON lacking `SubtitleLanguages`), a batch at a time (the tool runs 16 ffprobe processes side by side).
+A TV library's target is resolution, video codec, HDR, audio codec and file type (`settings.QualityTarget`, migration 0034); `judge.WithTarget` makes
+the named resolution/codec/HDR the best tier of their dimension and puts them first in the comparison, inside the profile's own gates, and
+`quality.MeetsTarget` judges a file (every named part equal). `SeriesReader.HeldEpisodes` + `quality.Judge` feed Wanted > Cutoff unmet.
