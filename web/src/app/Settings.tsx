@@ -78,7 +78,7 @@ export function NetworkSettings() {
 
 export function MetadataSettingsPage() {
   return (
-    <SettingsPage title="Metadata" requiredTier="advanced">
+    <SettingsPage title="Metadata" requiredTier="normal">
       <MetadataSettings />
     </SettingsPage>
   );

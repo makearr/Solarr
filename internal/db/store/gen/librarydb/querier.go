@@ -23,6 +23,7 @@ type Querier interface {
 	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
 	AddTagSelfClosure(ctx context.Context, arg AddTagSelfClosureParams) error
+	AddWorkOrganisation(ctx context.Context, arg AddWorkOrganisationParams) error
 	AddWorkPartTitle(ctx context.Context, arg AddWorkPartTitleParams) (WorkPartTitle, error)
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
 	// excluded.value is the delta: sqlc cannot substitute a named argument inside DO UPDATE.
@@ -314,6 +315,7 @@ type Querier interface {
 	GetMediaObjectByOshash(ctx context.Context, oshash sql.NullString) (MediaObject, error)
 	GetMoveJob(ctx context.Context, id int64) (MoveJob, error)
 	GetOrganisation(ctx context.Context, id int64) (Organisation, error)
+	GetOrganisationByExternalID(ctx context.Context, arg GetOrganisationByExternalIDParams) (Organisation, error)
 	GetPack(ctx context.Context, id int64) (Pack, error)
 	GetPathByLocation(ctx context.Context, arg GetPathByLocationParams) (LibraryPath, error)
 	GetPerson(ctx context.Context, id int64) (Person, error)
@@ -365,6 +367,7 @@ type Querier interface {
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
 	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
+	LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
 	LinkWorkExternalID(ctx context.Context, arg LinkWorkExternalIDParams) error
 	// Every file a work was resolved from, each once. A row goes with its file
@@ -849,6 +852,9 @@ type Querier interface {
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
 	SetMoveJobRunning(ctx context.Context, id int64) error
+	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
+	// A provider's picture of a person is kept in fields_json and never replaces one already there.
+	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error

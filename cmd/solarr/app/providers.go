@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
@@ -19,6 +20,8 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
+	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -362,14 +365,19 @@ func (p *process) tvService() tv.Service {
 		limiter := httpx.NewLimiter(wall, httpx.Config{Providers: map[string]httpx.Limits{
 			"skyhook": {MinInterval: 250 * time.Millisecond},
 			"tvmaze":  {MinInterval: 500 * time.Millisecond},
+			"tmdb":    {MinInterval: 50 * time.Millisecond},
+			"tvdb":    {MinInterval: 100 * time.Millisecond},
 		}}, nil)
 		client := func(name string) *httpx.Client {
 			return httpx.NewClient(wall, guard, limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
 				Provider: name, UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
 			})
 		}
+		p.tmdbShared = tmdb.New(client("tmdb"), p.tmdbCredential, "")
+		p.tvdbShared = tvdb.New(client("tvdb"), p.tvdbKey, nil, wall.Now)
+		p.skyhookShared, p.tvmazeShared = skyhook.New(client("skyhook"), "en"), tvmaze.New(client("tvmaze"))
 		p.tvShared = tv.Service{
-			Skyhook: skyhook.New(client("skyhook"), "en"), TVmaze: tvmaze.New(client("tvmaze")),
+			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared,
 			Series: library.NewSeries(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
 		}
 	})
@@ -392,4 +400,68 @@ func (p *process) seasonSearch() adapters.SeasonSearch {
 		Conns: p.tvIndexerConns, Clock: clock.NewSystem(),
 		Views: adapters.CandidateSearch{Search: p.musicSearch(), Dispatch: p.musicDispatch(), Clock: clock.NewSystem()},
 	}
+}
+
+// tmdbCredential is the user's own TMDB key, empty until they store one.
+func (p *process) tmdbCredential() string {
+	key, err := p.cache.TMDBAPIKey()
+	if err != nil {
+		p.logger.Warn("tmdb key could not be opened; TMDB stays off", "error", err)
+		return ""
+	}
+	return string(key)
+}
+
+// tvdbKey is the user's own TheTVDB key, else Solarr's built-in project key.
+func (p *process) tvdbKey() string {
+	if key, err := p.cache.TVDBAPIKey(); err == nil && key != "" {
+		return string(key)
+	}
+	return tvdb.ProjectKey
+}
+
+// tvProviders is apiserver.TVProviders over the process's four TV sources.
+func (p *process) tvProviders() adapters.TVProviders {
+	p.tvService()
+	snapshot := func() *settings.Snapshot { return p.cache.Snapshot() }
+	return adapters.TVProviders{Probes: []adapters.TVProviderProbe{
+		{
+			Info: apiserver.TVProviderInfo{ID: "skyhook", Name: "Skyhook (Sonarr's TheTVDB proxy)", Key: "not_needed",
+				Adds: "Series, episodes in TheTVDB's aired order, cast and artwork. The numbering basis."},
+			Ping: func(ctx context.Context) error { _, err := p.skyhookShared.Search(ctx, "test"); return err },
+		},
+		{
+			Info: apiserver.TVProviderInfo{ID: "tvmaze", Name: "TVmaze", Key: "not_needed",
+				Adds: "Air times with the network's time zone, aliases and web channels."},
+			Ping: func(ctx context.Context) error { _, err := p.tvmazeShared.Show(ctx, 1); return err },
+		},
+		{
+			Info: apiserver.TVProviderInfo{ID: "tmdb", Name: "TMDB", Key: "missing",
+				Adds: "Cast, crew and guest stars, artwork, keywords, networks and alternative titles. Needs your own free key."},
+			Keyed: func() string {
+				if snapshot().TMDBConfigured() {
+					return "stored"
+				}
+				return "missing"
+			},
+			Ping: func(ctx context.Context) error {
+				err := p.tmdbShared.Ping(ctx)
+				if errors.Is(err, tmdb.ErrBadKey) {
+					return errors.New("TMDB refused the key")
+				}
+				return err
+			},
+		},
+		{
+			Info: apiserver.TVProviderInfo{ID: "tvdb", Name: "TheTVDB", Key: "built_in",
+				Adds: "Direct access to TheTVDB: every ordering (DVD, absolute), characters and artwork."},
+			Keyed: func() string {
+				if snapshot().TVDBConfigured() {
+					return "stored"
+				}
+				return "built_in"
+			},
+			Ping: func(ctx context.Context) error { return p.tvdbShared.Ping(ctx) },
+		},
+	}}
 }

@@ -10,6 +10,7 @@ import { Card, Toggle } from "./SettingsCard";
 type MetadataSource = components["schemas"]["MetadataSource"];
 type Settings = components["schemas"]["MetadataSettings"];
 type CoverSource = NonNullable<Settings["cover_sources"]>[number];
+type TVProvider = components["schemas"]["TVProvider"];
 
 const COVER_SOURCES: readonly SourceEntry<CoverSource>[] = [
   {
@@ -96,6 +97,28 @@ export function MetadataSettings() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
   });
 
+  const saveTMDBKey = useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await api.POST("/metadata/tmdb/apikey", { body: { api_key: key } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["tv-providers"] });
+    },
+  });
+
+  const saveTVDBKey = useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await api.POST("/metadata/tvdb/apikey", { body: { api_key: key } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["tv-providers"] });
+    },
+  });
+
   const saveAcoustIDKey = useMutation({
     mutationFn: async (key: string) => {
       const { error } = await api.POST("/metadata/acoustid/apikey", { body: { api_key: key } });
@@ -104,7 +127,7 @@ export function MetadataSettings() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
   });
 
-  if (!isTierVisible(tier, "advanced")) return null;
+  const advanced = isTierVisible(tier, "advanced");
   if (metadata.error !== null || !metadata.data) return null;
 
   const settings = metadata.data;
@@ -114,6 +137,8 @@ export function MetadataSettings() {
 
   return (
     <section className="flex flex-col gap-4">
+      {advanced && (
+        <>
       <p className="max-w-2xl text-sm text-ink-muted">
         Where artist and album facts, covers and photos come from. Sources are set per media type; every library of that type uses
         them. {musicLibraries.length === 0 ? "No music library uses these yet." : `Music is used by ${musicLibraries.join(", ")}.`}
@@ -209,8 +234,131 @@ export function MetadataSettings() {
         </ApiKeyForm>
         {saveAcoustIDKey.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
       </Card>
+        </>
+      )}
+      <TVProvidersCard
+        settings={settings}
+        advanced={advanced}
+        saveTMDB={(key) => saveTMDBKey.mutate(key)}
+        savingTMDB={saveTMDBKey.isPending}
+        failedTMDB={saveTMDBKey.isError}
+        saveTVDB={(key) => saveTVDBKey.mutate(key)}
+        savingTVDB={saveTVDBKey.isPending}
+        failedTVDB={saveTVDBKey.isError}
+      />
       {patch.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
+  );
+}
+
+const KEY_NOTE: Record<TVProvider["key"], string> = {
+  not_needed: "no key needed",
+  missing: "needs your key",
+  stored: "your key is stored",
+  built_in: "built-in key in use",
+};
+
+/** The TV providers, what each adds and whether it can be used; TMDB and TheTVDB take the user's own key. */
+function TVProvidersCard({
+  settings,
+  advanced,
+  saveTMDB,
+  savingTMDB,
+  failedTMDB,
+  saveTVDB,
+  savingTVDB,
+  failedTVDB,
+}: {
+  settings: Settings;
+  advanced: boolean;
+  saveTMDB: (key: string) => void;
+  savingTMDB: boolean;
+  failedTMDB: boolean;
+  saveTVDB: (key: string) => void;
+  savingTVDB: boolean;
+  failedTVDB: boolean;
+}) {
+  const providers = useQuery({
+    queryKey: ["tv-providers"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/metadata/tv/providers");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const test = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/metadata/tv/providers/test");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const results = new Map((test.data ?? []).map((result) => [result.id, result]));
+
+  return (
+    <Card
+      title="TV series"
+      help="Series, episodes, cast and artwork come from these providers in turn. TMDB adds cast, crew, guest stars and artwork; it is free and needs your own key."
+    >
+      <ul className="flex flex-col gap-2">
+        {(providers.data ?? []).map((provider) => {
+          const result = results.get(provider.id);
+          return (
+            <li key={provider.id} className="flex flex-col gap-0.5 text-xs">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="text-ink">{provider.name}</span>
+                <span className={provider.key === "missing" ? "text-warn" : "text-ink-muted"}>{KEY_NOTE[provider.key]}</span>
+                {result && <span className={result.ok ? "text-ok" : "text-danger"}>{result.message}</span>}
+              </span>
+              <span className="text-[0.6875rem] text-ink-muted">{provider.adds}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <div>
+        <button
+          type="button"
+          disabled={test.isPending}
+          onClick={() => test.mutate()}
+          className="w-fit rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {test.isPending ? "Testing..." : "Test the providers"}
+        </button>
+        {test.isError && <span className="ml-2 text-xs text-danger">The test could not run.</span>}
+      </div>
+      <ApiKeyForm
+        key={`tmdb-${String(settings.tmdb_api_key?.has_value ?? false)}`}
+        label="TMDB key"
+        unset="not set"
+        stored={settings.tmdb_api_key?.has_value ?? false}
+        onSave={saveTMDB}
+        busy={savingTMDB}
+        maxLength={512}
+      >
+        Free: create an account at{" "}
+        <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+          themoviedb.org/settings/api
+        </a>{" "}
+        and paste either the API Read Access Token (the long one) or the API key.
+      </ApiKeyForm>
+      {failedTMDB && <p className="text-xs text-danger">That key could not be stored.</p>}
+      {advanced && (
+        <>
+          <ApiKeyForm
+            key={`tvdb-${String(settings.tvdb_api_key?.has_value ?? false)}`}
+            label="TheTVDB key"
+            unset="the built-in key is used"
+            stored={settings.tvdb_api_key?.has_value ?? false}
+            onSave={saveTVDB}
+            busy={savingTVDB}
+          >
+            Optional. TheTVDB works with Solarr&apos;s own project key; a key of your own from thetvdb.com replaces it.
+          </ApiKeyForm>
+          {failedTVDB && <p className="text-xs text-danger">That key could not be stored.</p>}
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -252,6 +400,7 @@ function ApiKeyForm({
   stored,
   onSave,
   busy,
+  maxLength = 128,
   children,
 }: {
   label: string;
@@ -259,6 +408,7 @@ function ApiKeyForm({
   stored: boolean;
   onSave: (apiKey: string) => void;
   busy: boolean;
+  maxLength?: number;
   children: React.ReactNode;
 }) {
   const [apiKey, setApiKey] = useState("");
@@ -285,7 +435,7 @@ function ApiKeyForm({
           disabled={busy}
           spellCheck={false}
           autoComplete="off"
-          maxLength={128}
+          maxLength={maxLength}
           placeholder={stored ? "A key is stored. Type a new one to replace it." : "Paste the key"}
           onChange={(event) => setApiKey(event.target.value)}
           className={`${inputStyle} max-w-md font-mono`}

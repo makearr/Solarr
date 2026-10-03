@@ -190,6 +190,15 @@ func mergeInto(into *Series, other Series) {
 	if len(into.Cast) == 0 {
 		into.Cast = other.Cast
 	}
+	if len(into.Credits) == 0 {
+		into.Credits = other.Credits
+	}
+	if len(into.Networks) == 0 {
+		into.Networks = other.Networks
+	}
+	if len(into.Keywords) == 0 {
+		into.Keywords = other.Keywords
+	}
 	if len(into.Seasons) == 0 {
 		into.Seasons = other.Seasons
 	}
@@ -198,6 +207,21 @@ func mergeInto(into *Series, other Series) {
 	mergeIDs(&into.IDs, other.IDs)
 	mergeAirTime(into, other)
 	mergeEpisodes(into, other)
+}
+
+// PreferRicher lets the richer source win prose, genres, certification and artwork; identity stays with the numbering
+// basis, so a library named after TheTVDB keeps its names.
+func PreferRicher(into *Series, richer Series) {
+	if strings.TrimSpace(richer.Overview) != "" {
+		into.Overview = richer.Overview
+	}
+	if len(richer.Genres) > 0 {
+		into.Genres = richer.Genres
+	}
+	if richer.ContentRating != "" {
+		into.ContentRating = richer.ContentRating
+	}
+	into.Images = append(append([]Image(nil), richer.Images...), into.Images...)
 }
 
 func mergeAirTime(into *Series, other Series) {

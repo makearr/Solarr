@@ -34,6 +34,8 @@ type PersonIdentity struct {
 	Biography string
 	// Aliases are the provider's other names for the person; only BackfillDetails stores them.
 	Aliases []string
+	// ImageURL is the provider's picture of the person, kept in fields_json.
+	ImageURL string
 }
 
 // PersonLink is one external id to resolve to a person.
@@ -580,15 +582,16 @@ func biographyFromFields(raw sql.NullString) string {
 // column (ADR-23's pattern), currently just the one field a biography needs.
 type personFields struct {
 	Biography string `json:"biography,omitempty"`
+	ImageURL  string `json:"image_url,omitempty"`
 }
 
 // personFieldsJSON is empty when identity has nothing worth recording, so a
 // person resolved with no biography gets a NULL fields_json rather than "{}".
 func personFieldsJSON(identity PersonIdentity) string {
-	if identity.Biography == "" {
+	if identity.Biography == "" && identity.ImageURL == "" {
 		return ""
 	}
-	encoded, err := json.Marshal(personFields{Biography: identity.Biography})
+	encoded, err := json.Marshal(personFields{Biography: identity.Biography, ImageURL: identity.ImageURL})
 	if err != nil {
 		return ""
 	}

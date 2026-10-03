@@ -617,6 +617,30 @@ const (
 	SettingDefinitionTierNormal   SettingDefinitionTier = "normal"
 )
 
+// Defines values for TVProviderId.
+const (
+	TVProviderIdSkyhook TVProviderId = "skyhook"
+	TVProviderIdTmdb    TVProviderId = "tmdb"
+	TVProviderIdTvdb    TVProviderId = "tvdb"
+	TVProviderIdTvmaze  TVProviderId = "tvmaze"
+)
+
+// Defines values for TVProviderKey.
+const (
+	TVProviderKeyBuiltIn   TVProviderKey = "built_in"
+	TVProviderKeyMissing   TVProviderKey = "missing"
+	TVProviderKeyNotNeeded TVProviderKey = "not_needed"
+	TVProviderKeyStored    TVProviderKey = "stored"
+)
+
+// Defines values for TVProviderTestId.
+const (
+	TVProviderTestIdSkyhook TVProviderTestId = "skyhook"
+	TVProviderTestIdTmdb    TVProviderTestId = "tmdb"
+	TVProviderTestIdTvdb    TVProviderTestId = "tvdb"
+	TVProviderTestIdTvmaze  TVProviderTestId = "tvmaze"
+)
+
 // Defines values for Tier.
 const (
 	TierAdvanced Tier = "advanced"
@@ -2479,6 +2503,12 @@ type MetadataSettings struct {
 	// TheaudiodbApiKey Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here.
 	TheaudiodbApiKey *SecretMask `json:"theaudiodb_api_key,omitempty"`
 
+	// TmdbApiKey Whether the user's own TMDB credential is stored. Read-only here; written through POST /metadata/tmdb/apikey.
+	TmdbApiKey *SecretMask `json:"tmdb_api_key,omitempty"`
+
+	// TvdbApiKey Whether an own TheTVDB key is stored; without one the built-in project key is used. Read-only here.
+	TvdbApiKey *SecretMask `json:"tvdb_api_key,omitempty"`
+
 	// Wikidata Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.
 	Wikidata *bool `json:"wikidata,omitempty"`
 }
@@ -3404,6 +3434,34 @@ type SubscriptionPreview struct {
 	ReleaseGroups                 []PreviewReleaseGroup `json:"release_groups"`
 }
 
+// TVProvider defines model for TVProvider.
+type TVProvider struct {
+	// Adds What this provider contributes to a series.
+	Adds string       `json:"adds"`
+	Id   TVProviderId `json:"id"`
+
+	// Key not_needed: works without a key. missing: needs the user's own key and has none. stored: the user's own key is stored. built_in: Solarr's own project key is in use and an own one is optional.
+	Key  TVProviderKey `json:"key"`
+	Name string        `json:"name"`
+}
+
+// TVProviderId defines model for TVProvider.Id.
+type TVProviderId string
+
+// TVProviderKey not_needed: works without a key. missing: needs the user's own key and has none. stored: the user's own key is stored. built_in: Solarr's own project key is in use and an own one is optional.
+type TVProviderKey string
+
+// TVProviderTest defines model for TVProviderTest.
+type TVProviderTest struct {
+	Id       TVProviderTestId `json:"id"`
+	Message  string           `json:"message"`
+	Ok       bool             `json:"ok"`
+	TestedAt time.Time        `json:"tested_at"`
+}
+
+// TVProviderTestId defines model for TVProviderTest.Id.
+type TVProviderTestId string
+
 // Tagging What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder.
 type Tagging struct {
 	// EmbedCover Embed the fetched cover into files that carry no picture.
@@ -3984,6 +4042,16 @@ type SetTheAudioDBAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
 }
 
+// SetTMDBAPIKeyJSONBody defines parameters for SetTMDBAPIKey.
+type SetTMDBAPIKeyJSONBody struct {
+	ApiKey *string `json:"api_key,omitempty"`
+}
+
+// SetTVDBAPIKeyJSONBody defines parameters for SetTVDBAPIKey.
+type SetTVDBAPIKeyJSONBody struct {
+	ApiKey *string `json:"api_key,omitempty"`
+}
+
 // ListMoveJobsParams defines parameters for ListMoveJobs.
 type ListMoveJobsParams struct {
 	Reason *ListMoveJobsParamsReason `form:"reason,omitempty" json:"reason,omitempty"`
@@ -4514,6 +4582,12 @@ type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
 // SetTheAudioDBAPIKeyJSONRequestBody defines body for SetTheAudioDBAPIKey for application/json ContentType.
 type SetTheAudioDBAPIKeyJSONRequestBody SetTheAudioDBAPIKeyJSONBody
 
+// SetTMDBAPIKeyJSONRequestBody defines body for SetTMDBAPIKey for application/json ContentType.
+type SetTMDBAPIKeyJSONRequestBody SetTMDBAPIKeyJSONBody
+
+// SetTVDBAPIKeyJSONRequestBody defines body for SetTVDBAPIKey for application/json ContentType.
+type SetTVDBAPIKeyJSONRequestBody SetTVDBAPIKeyJSONBody
+
 // UpdateNetworkSettingsJSONRequestBody defines body for UpdateNetworkSettings for application/json ContentType.
 type UpdateNetworkSettingsJSONRequestBody = NetworkSettingsUpdate
 
@@ -4993,6 +5067,18 @@ type ServerInterface interface {
 	// Replace or clear an own TheAudioDB key; clearing it goes back to the public key. Administrator only.
 	// (POST /metadata/theaudiodb/apikey)
 	SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request)
+	// Replace or clear the user's own TMDB credential, a v4 read access token or a v3 API key. Administrator only.
+	// (POST /metadata/tmdb/apikey)
+	SetTMDBAPIKey(w http.ResponseWriter, r *http.Request)
+	// The TV metadata providers, what each adds and whether it has the key it needs. Asks nothing of the providers.
+	// (GET /metadata/tv/providers)
+	ListTVProviders(w http.ResponseWriter, r *http.Request)
+	// Ask each TV metadata provider one cheap question and report what came back. Administrator only.
+	// (POST /metadata/tv/providers/test)
+	TestTVProviders(w http.ResponseWriter, r *http.Request)
+	// Replace or clear an own TheTVDB v4 project key; clearing it goes back to the built-in key. Administrator only.
+	// (POST /metadata/tvdb/apikey)
+	SetTVDBAPIKey(w http.ResponseWriter, r *http.Request)
 	// Every move job (ADR-51), newest first.
 	// (GET /moves)
 	ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams)
@@ -6043,6 +6129,30 @@ func (_ Unimplemented) UpdateMetadataSettings(w http.ResponseWriter, r *http.Req
 // Replace or clear an own TheAudioDB key; clearing it goes back to the public key. Administrator only.
 // (POST /metadata/theaudiodb/apikey)
 func (_ Unimplemented) SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace or clear the user's own TMDB credential, a v4 read access token or a v3 API key. Administrator only.
+// (POST /metadata/tmdb/apikey)
+func (_ Unimplemented) SetTMDBAPIKey(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The TV metadata providers, what each adds and whether it has the key it needs. Asks nothing of the providers.
+// (GET /metadata/tv/providers)
+func (_ Unimplemented) ListTVProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Ask each TV metadata provider one cheap question and report what came back. Administrator only.
+// (POST /metadata/tv/providers/test)
+func (_ Unimplemented) TestTVProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace or clear an own TheTVDB v4 project key; clearing it goes back to the built-in key. Administrator only.
+// (POST /metadata/tvdb/apikey)
+func (_ Unimplemented) SetTVDBAPIKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10556,6 +10666,94 @@ func (siw *ServerInterfaceWrapper) SetTheAudioDBAPIKey(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// SetTMDBAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) SetTMDBAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTMDBAPIKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListTVProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListTVProviders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListTVProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestTVProviders operation middleware
+func (siw *ServerInterfaceWrapper) TestTVProviders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestTVProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetTVDBAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) SetTVDBAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetTVDBAPIKey(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListMoveJobs operation middleware
 func (siw *ServerInterfaceWrapper) ListMoveJobs(w http.ResponseWriter, r *http.Request) {
 
@@ -14500,6 +14698,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/metadata/theaudiodb/apikey", wrapper.SetTheAudioDBAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/metadata/tmdb/apikey", wrapper.SetTMDBAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/metadata/tv/providers", wrapper.ListTVProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/metadata/tv/providers/test", wrapper.TestTVProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/metadata/tvdb/apikey", wrapper.SetTVDBAPIKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/moves", wrapper.ListMoveJobs)

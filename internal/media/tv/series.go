@@ -93,6 +93,45 @@ type Person struct {
 	Image     string `json:"image,omitempty"`
 }
 
+// Credit roles a series stores, in the credit table's vocabulary.
+const (
+	RoleActor             = "actor"
+	RoleGuestStar         = "guest_star"
+	RoleCreator           = "creator"
+	RoleShowrunner        = "showrunner"
+	RoleDirector          = "director"
+	RoleWriter            = "writer"
+	RoleExecutiveProducer = "executive_producer"
+	RoleProducer          = "producer"
+	RoleComposer          = "composer"
+)
+
+// Credit is one person's part in a series: the whole run, or one episode when Season and Episode are set.
+type Credit struct {
+	TMDBID int64
+	Name   string
+	Image  string
+	Role   string
+	// Character is the part played; empty for crew.
+	Character string
+	// Order ranks cast within the series or episode, 0 first.
+	Order int
+	// Season and Episode scope a credit to one episode (guest stars, directors, writers); zero means the series.
+	Season, Episode int
+	// EpisodeAirDate guards the scope: the credit is dropped when the merged episode aired on another date.
+	EpisodeAirDate string
+	// Episodes is how many episodes the person appears in, 0 when unknown.
+	Episodes int
+}
+
+// NetworkRef is a broadcaster or streamer with the provider's id for it.
+type NetworkRef struct {
+	TMDBID  int64
+	Name    string
+	Country string
+	Logo    string
+}
+
 // Image is one piece of series artwork of a kind: poster, banner, fanart, logo, clearart.
 type Image struct {
 	Kind   string `json:"kind"`
@@ -122,6 +161,9 @@ type Series struct {
 	OriginalCountry  string
 	Seasons          []Season
 	Cast             []Person
+	Credits          []Credit
+	Networks         []NetworkRef
+	Keywords         []string
 	Images           []Image
 	Episodes         []Episode
 	// Sources lists the providers that contributed, in priority order.

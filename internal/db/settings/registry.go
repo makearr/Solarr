@@ -386,6 +386,18 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "TMDB key",
+		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyTVDBAPIKey, Kind: KindString, Tier: TierAdvanced,
+		Name:     "TheTVDB key",
+		HelpText: "Optional: your own TheTVDB v4 project key. Without one the built-in project key is used.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyBrainzMashUserAgent, Kind: KindString, Tier: TierAdvanced,
 		Name:     "BrainzMash User-Agent",
 		HelpText: "Sent to BrainzMash, whose front door refuses agents not starting \"Lidarr/\".",

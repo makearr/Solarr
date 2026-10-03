@@ -260,3 +260,55 @@ func TestSetAcoustIDAPIKey_StoresTheKeyEvenIfTheRetryFails(t *testing.T) {
 		t.Errorf("stored key = %q (err %v), want it stored despite the retry failing", string(stored), err)
 	}
 }
+
+// A TV provider key is sealed like AcoustID's: the page learns that one exists, never what it is (Invariant 61).
+func TestSetTMDBAndTVDBKeys_AreSealedAndReportedAsPresenceOnly(t *testing.T) {
+	fixture := newWorksFixture(t)
+	cipher, err := secrets.New(testArrCipherKey())
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	fixture.cache.EnableSecrets(cipher)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	for path, secret := range map[string]string{"/api/v1/metadata/tmdb/apikey": "tmdb-secret", "/api/v1/metadata/tvdb/apikey": "tvdb-secret"} {
+		if recorder := fixture.do(authedPost(t, cookies, path, `{"api_key":"`+secret+`"}`)); recorder.Code != http.StatusNoContent {
+			t.Fatalf("%s: status = %d, body = %s", path, recorder.Code, recorder.Body)
+		}
+	}
+	view := fixture.do(authedGet(t, cookies, "/api/v1/metadata/settings"))
+	var body struct {
+		TMDB struct {
+			HasValue bool `json:"has_value"`
+		} `json:"tmdb_api_key"`
+		TVDB struct {
+			HasValue bool `json:"has_value"`
+		} `json:"tvdb_api_key"`
+	}
+	if err := json.Unmarshal(view.Body.Bytes(), &body); err != nil || !body.TMDB.HasValue || !body.TVDB.HasValue {
+		t.Errorf("settings = %s, err = %v", view.Body, err)
+	}
+	if bytes.Contains(view.Body.Bytes(), []byte("tmdb-secret")) || bytes.Contains(view.Body.Bytes(), []byte("tvdb-secret")) {
+		t.Error("the response carries a raw key")
+	}
+	if stored, err := fixture.cache.TMDBAPIKey(); err != nil || string(stored) != "tmdb-secret" {
+		t.Errorf("stored TMDB key = %q, err = %v", stored, err)
+	}
+
+	fixture.do(authedPost(t, cookies, "/api/v1/metadata/tmdb/apikey", `{"api_key":""}`))
+	if stored, err := fixture.cache.TMDBAPIKey(); err != nil || stored != "" {
+		t.Errorf("TMDB key after clearing = %q, err = %v", stored, err)
+	}
+}
+
+func TestTVProviderKeysAndTestsRequireAnAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+	for _, path := range []string{"/api/v1/metadata/tmdb/apikey", "/api/v1/metadata/tvdb/apikey", "/api/v1/metadata/tv/providers/test"} {
+		if recorder := fixture.do(authedPost(t, cookies, path, `{"api_key":"k"}`)); recorder.Code != http.StatusForbidden {
+			t.Errorf("%s: status = %d, want 403", path, recorder.Code)
+		}
+	}
+}

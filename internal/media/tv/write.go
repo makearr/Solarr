@@ -167,9 +167,36 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		write.Dates = append(write.Dates, library.SeriesDateWrite{Kind: "last_aired", Date: series.LastAired, Source: source})
 	}
 
+	write.Keywords = series.Keywords
+	for _, network := range series.Networks {
+		if network.Name == series.Network {
+			continue
+		}
+		write.MoreNetworks = append(write.MoreNetworks, library.SeriesNetworkWrite{
+			Name: network.Name, Country: network.Country, Provider: ProviderTMDB, ExternalID: strconv.FormatInt(network.TMDBID, 10), LogoURL: network.Logo,
+		})
+	}
+	for _, credit := range series.Credits {
+		if credit.TMDBID == 0 || credit.Name == "" {
+			continue
+		}
+		write.Credits = append(write.Credits, creditWrite(credit))
+	}
+
 	monitoring := newMonitors(options.Monitor, options.Specials, options.Now, series.Episodes)
 	for _, episode := range series.Episodes {
 		write.Parts = append(write.Parts, partWrite(episode, monitoring.wants(episode)))
+	}
+	return write
+}
+
+func creditWrite(credit Credit) library.SeriesCreditWrite {
+	write := library.SeriesCreditWrite{
+		Provider: ProviderTMDB, ExternalID: strconv.FormatInt(credit.TMDBID, 10), Name: credit.Name, ImageURL: credit.Image,
+		Role: credit.Role, Character: credit.Character, Ord: credit.Order,
+	}
+	if credit.Season != 0 || credit.Episode != 0 {
+		write.PartRef = MediaRef(credit.Season, credit.Episode)
 	}
 	return write
 }

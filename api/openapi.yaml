@@ -1390,6 +1390,75 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /metadata/tmdb/apikey:
+    post:
+      operationId: setTMDBAPIKey
+      tags: [settings]
+      summary: Replace or clear the user's own TMDB credential, a v4 read access token or a v3 API key. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /metadata/tvdb/apikey:
+    post:
+      operationId: setTVDBAPIKey
+      tags: [settings]
+      summary: Replace or clear an own TheTVDB v4 project key; clearing it goes back to the built-in key. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string }
+      responses:
+        "204": { description: Replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /metadata/tv/providers:
+    get:
+      operationId: listTVProviders
+      tags: [settings]
+      summary: The TV metadata providers, what each adds and whether it has the key it needs. Asks nothing of the providers.
+      responses:
+        "200":
+          description: One entry per provider, in the order they are asked.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TVProvider" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /metadata/tv/providers/test:
+    post:
+      operationId: testTVProviders
+      tags: [settings]
+      summary: Ask each TV metadata provider one cheap question and report what came back. Administrator only.
+      responses:
+        "200":
+          description: One result per provider.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TVProviderTest" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /import/settings:
     get:
       operationId: getImportSettings
@@ -7480,6 +7549,29 @@ components:
           items: { type: integer }
           description: Newznab categories for music; omitted or empty means [3000] (Audio).
 
+    TVProvider:
+      type: object
+      required: [id, name, adds, key]
+      properties:
+        id: { type: string, enum: [skyhook, tvmaze, tmdb, tvdb] }
+        name: { type: string }
+        adds: { type: string, description: What this provider contributes to a series. }
+        key:
+          type: string
+          enum: [not_needed, missing, stored, built_in]
+          description: >-
+            not_needed: works without a key. missing: needs the user's own key and has none. stored: the user's own key
+            is stored. built_in: Solarr's own project key is in use and an own one is optional.
+
+    TVProviderTest:
+      type: object
+      required: [id, ok, message, tested_at]
+      properties:
+        id: { type: string, enum: [skyhook, tvmaze, tmdb, tvdb] }
+        ok: { type: boolean }
+        message: { type: string }
+        tested_at: { type: string, format: date-time }
+
     ConnectionTestResult:
       type: object
       required: [ok, message, tested_at]
@@ -8538,6 +8630,12 @@ components:
         theaudiodb_api_key:
           allOf: [{ $ref: "#/components/schemas/SecretMask" }]
           description: Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here.
+        tmdb_api_key:
+          allOf: [{ $ref: "#/components/schemas/SecretMask" }]
+          description: Whether the user's own TMDB credential is stored. Read-only here; written through POST /metadata/tmdb/apikey.
+        tvdb_api_key:
+          allOf: [{ $ref: "#/components/schemas/SecretMask" }]
+          description: Whether an own TheTVDB key is stored; without one the built-in project key is used. Read-only here.
         people_backfill_per_run:
           type: integer
           format: int64

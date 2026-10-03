@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -31,18 +32,32 @@ type ShowSource interface {
 	Cast(ctx context.Context, id int64) ([]tvmaze.CastMember, error)
 }
 
+// RichSource is the TMDB client as the service needs it.
+type RichSource interface {
+	Configured() bool
+	Series(ctx context.Context, id int64) (tmdb.Series, error)
+	Season(ctx context.Context, seriesID int64, number int) (tmdb.Season, error)
+	FindByTVDB(ctx context.Context, tvdbID int64) (tmdb.Hit, error)
+	FindByIMDb(ctx context.Context, imdbID string) (tmdb.Hit, error)
+}
+
+// maxCreditSeasons bounds the per-season calls guest stars and episode crew cost.
+const maxCreditSeasons = 40
+
 // Service reads series from the providers and stores them.
 type Service struct {
 	Skyhook SeriesSource
 	TVmaze  ShowSource
+	// TMDB is nil or unconfigured until the user gives a key; TV then works on the other two.
+	TMDB    RichSource
 	Series  library.Series
 	Desired library.Desired
 	Clock   clock.Clock
 	Logger  *slog.Logger
 }
 
-// Fetch reads one series from every source that knows it and merges them (ADR-8): Skyhook first, TVmaze adding the
-// air times and aliases. A source that fails is skipped; only both failing is an error.
+// Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
+// artwork, TVmaze air times. A failing source is skipped; only all failing is an error.
 func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
 	var sources []Series
 	if ids.TVDB > 0 && s.Skyhook != nil {
@@ -54,7 +69,17 @@ func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
 			if ids.TVmaze == 0 {
 				ids.TVmaze = series.TVMazeID
 			}
+			if ids.TMDB == 0 {
+				ids.TMDB = series.TMDBID
+			}
+			if ids.IMDb == "" {
+				ids.IMDb = series.IMDbID
+			}
 		}
+	}
+	rich, haveRich := s.fetchTMDB(ctx, ids)
+	if haveRich {
+		sources = append(sources, rich)
 	}
 	if s.TVmaze != nil {
 		if show, found := s.findShow(ctx, ids); found {
@@ -64,7 +89,73 @@ func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
 	if len(sources) == 0 {
 		return Series{}, ErrNoSource
 	}
-	return Merge(sources...), nil
+	merged := Merge(sources...)
+	if haveRich {
+		PreferRicher(&merged, rich)
+		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
+	}
+	return merged, nil
+}
+
+// fetchTMDB asks TMDB for the series and every season's guest stars; TMDB's own id is found from TheTVDB's or IMDb's
+// when Skyhook did not carry it.
+func (s Service) fetchTMDB(ctx context.Context, ids IDs) (Series, bool) {
+	if s.TMDB == nil || !s.TMDB.Configured() {
+		return Series{}, false
+	}
+	id := ids.TMDB
+	if id == 0 && ids.TVDB > 0 {
+		if hit, err := s.TMDB.FindByTVDB(ctx, ids.TVDB); err == nil {
+			id = hit.ID
+		}
+	}
+	if id == 0 && ids.IMDb != "" {
+		if hit, err := s.TMDB.FindByIMDb(ctx, ids.IMDb); err == nil {
+			id = hit.ID
+		}
+	}
+	if id == 0 {
+		return Series{}, false
+	}
+	series, err := s.TMDB.Series(ctx, id)
+	if err != nil {
+		s.warn("tmdb", id, err)
+		return Series{}, false
+	}
+	var seasons []tmdb.Season
+	for _, entry := range series.Seasons {
+		if len(seasons) == maxCreditSeasons {
+			break
+		}
+		season, err := s.TMDB.Season(ctx, id, entry.SeasonNumber)
+		if err != nil {
+			s.warn("tmdb season", id, err)
+			continue
+		}
+		seasons = append(seasons, season)
+	}
+	return FromTMDB(series, seasons, ""), true
+}
+
+// guardEpisodeCredits drops an episode credit whose episode aired on another date under the numbering basis, or is
+// missing: a guest star on the wrong episode is worse than none.
+func guardEpisodeCredits(credits []Credit, episodes []Episode) []Credit {
+	aired := make(map[Key]string, len(episodes))
+	for _, episode := range episodes {
+		aired[Key{episode.Season, episode.Number}] = episode.AirDate
+	}
+	kept := credits[:0:0]
+	for _, credit := range credits {
+		if credit.Season == 0 && credit.Episode == 0 {
+			kept = append(kept, credit)
+			continue
+		}
+		date, found := aired[Key{credit.Season, credit.Episode}]
+		if found && (credit.EpisodeAirDate == "" || date == "" || credit.EpisodeAirDate == date) {
+			kept = append(kept, credit)
+		}
+	}
+	return kept
 }
 
 func (s Service) findShow(ctx context.Context, ids IDs) (tvmaze.Show, bool) {

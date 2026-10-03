@@ -87,7 +87,7 @@ const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] =
   // An entry whose page shows nothing at a tier is hidden at that tier (2026-09-25).
   { to: "/settings/blocklists", label: "Blocklists", tier: "expert" },
   { to: "/settings/network", label: "Network", tier: "advanced" },
-  { to: "/settings/metadata", label: "Metadata", tier: "advanced" },
+  { to: "/settings/metadata", label: "Metadata", tier: "normal" },
   { to: "/settings/user", label: "User" },
   { to: "/settings/scheduler", label: "Scheduler" },
   { to: "/settings/logs", label: "Logs", tier: "advanced" },

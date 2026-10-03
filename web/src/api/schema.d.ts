@@ -916,6 +916,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metadata/tmdb/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace or clear the user's own TMDB credential, a v4 read access token or a v3 API key. Administrator only. */
+        post: operations["setTMDBAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metadata/tvdb/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace or clear an own TheTVDB v4 project key; clearing it goes back to the built-in key. Administrator only. */
+        post: operations["setTVDBAPIKey"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metadata/tv/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The TV metadata providers, what each adds and whether it has the key it needs. Asks nothing of the providers. */
+        get: operations["listTVProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metadata/tv/providers/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask each TV metadata provider one cheap question and report what came back. Administrator only. */
+        post: operations["testTVProviders"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/import/settings": {
         parameters: {
             query?: never;
@@ -4875,6 +4943,26 @@ export interface components {
             /** @description Newznab categories for music; omitted or empty means [3000] (Audio). */
             music_categories?: number[];
         };
+        TVProvider: {
+            /** @enum {string} */
+            id: "skyhook" | "tvmaze" | "tmdb" | "tvdb";
+            name: string;
+            /** @description What this provider contributes to a series. */
+            adds: string;
+            /**
+             * @description not_needed: works without a key. missing: needs the user's own key and has none. stored: the user's own key is stored. built_in: Solarr's own project key is in use and an own one is optional.
+             * @enum {string}
+             */
+            key: "not_needed" | "missing" | "stored" | "built_in";
+        };
+        TVProviderTest: {
+            /** @enum {string} */
+            id: "skyhook" | "tvmaze" | "tmdb" | "tvdb";
+            ok: boolean;
+            message: string;
+            /** Format: date-time */
+            tested_at: string;
+        };
         ConnectionTestResult: {
             ok: boolean;
             /** @description What was found -- the indexer/client's own reported version or capability summary when ok, or why the call failed otherwise. */
@@ -5693,6 +5781,10 @@ export interface components {
             theaudiodb?: boolean;
             /** @description Whether an own TheAudioDB key is stored; without one the public key is used. Read-only here. */
             theaudiodb_api_key?: components["schemas"]["SecretMask"];
+            /** @description Whether the user's own TMDB credential is stored. Read-only here; written through POST /metadata/tmdb/apikey. */
+            tmdb_api_key?: components["schemas"]["SecretMask"];
+            /** @description Whether an own TheTVDB key is stored; without one the built-in project key is used. Read-only here. */
+            tvdb_api_key?: components["schemas"]["SecretMask"];
             /**
              * Format: int64
              * @description How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
@@ -7985,6 +8077,103 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setTMDBAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setTVDBAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Replaced. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listTVProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per provider, in the order they are asked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TVProvider"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    testTVProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One result per provider. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TVProviderTest"][];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
         };

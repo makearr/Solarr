@@ -129,3 +129,24 @@ WHERE w.media_type = 'tv'
   AND (COALESCE(p.date, '') < sqlc.arg(after_date) OR (COALESCE(p.date, '') = sqlc.arg(after_date) AND p.id < sqlc.arg(after_id)))
 ORDER BY COALESCE(p.date, '') DESC, p.id DESC
 LIMIT sqlc.arg(page_size);
+
+-- A provider's picture of a person is kept in fields_json and never replaces one already there.
+-- name: SetPersonImageURL :exec
+UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.image_url', sqlc.arg(image_url))
+WHERE id = sqlc.arg(id) AND json_extract(COALESCE(fields_json, '{}'), '$.image_url') IS NULL;
+
+-- name: LinkOrganisationExternalID :exec
+INSERT OR IGNORE INTO organisation_external_id (provider, external_id, organisation_id) VALUES (?, ?, ?);
+
+-- name: GetOrganisationByExternalID :one
+SELECT o.id, o.name, o.sort_name, o.kind, o.parent_id, o.country, o.fields_json, o.monitored
+FROM organisation o
+JOIN organisation_external_id e ON e.organisation_id = o.id
+WHERE e.provider = ? AND e.external_id = ?;
+
+-- name: SetOrganisationLogo :exec
+UPDATE organisation SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.logo', sqlc.arg(logo))
+WHERE id = sqlc.arg(id);
+
+-- name: AddWorkOrganisation :exec
+INSERT OR IGNORE INTO work_organisation (work_id, organisation_id, role) VALUES (?, ?, ?);

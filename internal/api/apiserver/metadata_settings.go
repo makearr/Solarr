@@ -151,26 +151,47 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 		AcoustidApiKey:       &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
 		Theaudiodb:           stored.TheAudioDB,
 		TheaudiodbApiKey:     &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TheAudioDBConfigured()},
+		TmdbApiKey:           &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TMDBConfigured()},
+		TvdbApiKey:           &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TVDBConfigured()},
 		PeopleBackfillPerRun: stored.PeopleBackfillPerRun,
 	}
 }
 
 // SetTheAudioDBAPIKey replaces or clears an own TheAudioDB key. Administrator only.
 func (s *Server) SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request) {
+	s.setProviderKey(w, r, settings.KeyTheAudioDBAPIKey, s.auth.Settings.SetTheAudioDBAPIKey)
+}
+
+// SetTMDBAPIKey replaces or clears the user's own TMDB credential. Administrator only.
+func (s *Server) SetTMDBAPIKey(w http.ResponseWriter, r *http.Request) {
+	s.setProviderKey(w, r, settings.KeyTMDBAPIKey, s.auth.Settings.SetTMDBAPIKey)
+}
+
+// SetTVDBAPIKey replaces or clears an own TheTVDB key. Administrator only.
+func (s *Server) SetTVDBAPIKey(w http.ResponseWriter, r *http.Request) {
+	s.setProviderKey(w, r, settings.KeyTVDBAPIKey, s.auth.Settings.SetTVDBAPIKey)
+}
+
+func (s *Server) setProviderKey(
+	w http.ResponseWriter, r *http.Request, settingKey string,
+	store func(context.Context, clock.Clock, secrets.Secret) error,
+) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
-	var body gen.SetTheAudioDBAPIKeyJSONRequestBody
+	var body struct {
+		APIKey *string `json:"api_key"`
+	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a JSON object")
 		return
 	}
-	if err := s.auth.Registry.LookupAll(settings.KeyTheAudioDBAPIKey); err != nil {
+	if err := s.auth.Registry.LookupAll(settingKey); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	key := secrets.Secret(strings.TrimSpace(derefOr(body.ApiKey, "")))
-	if err := s.auth.Settings.SetTheAudioDBAPIKey(r.Context(), clock.NewSystem(), key); err != nil {
+	key := secrets.Secret(strings.TrimSpace(derefOr(body.APIKey, "")))
+	if err := store(r.Context(), clock.NewSystem(), key); err != nil {
 		if errors.Is(err, settings.ErrSecretsUnavailable) {
 			writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 				"Unavailable", "no encryption key is configured; an api key cannot be stored")

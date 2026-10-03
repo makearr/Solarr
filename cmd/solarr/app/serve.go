@@ -29,6 +29,10 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
+	"github.com/makearr/Solarr/internal/metadata/skyhook"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
+	"github.com/makearr/Solarr/internal/metadata/tvdb"
+	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -106,6 +110,11 @@ type process struct {
 	// tvOnce builds the TV providers once so every caller shares their rate buckets (ADR-13).
 	tvOnce   sync.Once
 	tvShared tv.Service
+	// The shared clients behind tvShared, for the provider test and the people pages.
+	skyhookShared skyhook.Client
+	tvmazeShared  tvmaze.Client
+	tmdbShared    tmdb.Client
+	tvdbShared    tvdb.Client
 }
 
 // Serve is the startup sequence of architecture section 15.1, in order.
@@ -605,6 +614,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Clock: clock.NewSystem(),
 		},
 		CandidateSearcher: p.candidateSearcher(),
+		TVProviders:       p.tvProviders(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),

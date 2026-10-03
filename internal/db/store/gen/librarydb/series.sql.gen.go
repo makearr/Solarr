@@ -11,6 +11,21 @@ import (
 	"strings"
 )
 
+const addWorkOrganisation = `-- name: AddWorkOrganisation :exec
+INSERT OR IGNORE INTO work_organisation (work_id, organisation_id, role) VALUES (?, ?, ?)
+`
+
+type AddWorkOrganisationParams struct {
+	WorkID         int64
+	OrganisationID int64
+	Role           string
+}
+
+func (q *Queries) AddWorkOrganisation(ctx context.Context, arg AddWorkOrganisationParams) error {
+	_, err := q.db.ExecContext(ctx, addWorkOrganisation, arg.WorkID, arg.OrganisationID, arg.Role)
+	return err
+}
+
 const clearWorkOrganisationRole = `-- name: ClearWorkOrganisationRole :exec
 DELETE FROM work_organisation WHERE work_id = ? AND role = ?
 `
@@ -128,6 +143,34 @@ func (q *Queries) FindOrganisationByName(ctx context.Context, arg FindOrganisati
 	return i, err
 }
 
+const getOrganisationByExternalID = `-- name: GetOrganisationByExternalID :one
+SELECT o.id, o.name, o.sort_name, o.kind, o.parent_id, o.country, o.fields_json, o.monitored
+FROM organisation o
+JOIN organisation_external_id e ON e.organisation_id = o.id
+WHERE e.provider = ? AND e.external_id = ?
+`
+
+type GetOrganisationByExternalIDParams struct {
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) GetOrganisationByExternalID(ctx context.Context, arg GetOrganisationByExternalIDParams) (Organisation, error) {
+	row := q.db.QueryRowContext(ctx, getOrganisationByExternalID, arg.Provider, arg.ExternalID)
+	var i Organisation
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.SortName,
+		&i.Kind,
+		&i.ParentID,
+		&i.Country,
+		&i.FieldsJson,
+		&i.Monitored,
+	)
+	return i, err
+}
+
 const getSeriesInCategory = `-- name: GetSeriesInCategory :one
 SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms
 FROM work w
@@ -165,6 +208,21 @@ func (q *Queries) GetSeriesInCategory(ctx context.Context, arg GetSeriesInCatego
 		&i.RuntimeMs,
 	)
 	return i, err
+}
+
+const linkOrganisationExternalID = `-- name: LinkOrganisationExternalID :exec
+INSERT OR IGNORE INTO organisation_external_id (provider, external_id, organisation_id) VALUES (?, ?, ?)
+`
+
+type LinkOrganisationExternalIDParams struct {
+	Provider       string
+	ExternalID     string
+	OrganisationID int64
+}
+
+func (q *Queries) LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error {
+	_, err := q.db.ExecContext(ctx, linkOrganisationExternalID, arg.Provider, arg.ExternalID, arg.OrganisationID)
+	return err
 }
 
 const listSeriesInCategory = `-- name: ListSeriesInCategory :many
@@ -506,6 +564,37 @@ func (q *Queries) SeriesPartCounts(ctx context.Context, arg SeriesPartCountsPara
 		return nil, err
 	}
 	return items, nil
+}
+
+const setOrganisationLogo = `-- name: SetOrganisationLogo :exec
+UPDATE organisation SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.logo', ?1)
+WHERE id = ?2
+`
+
+type SetOrganisationLogoParams struct {
+	Logo interface{}
+	ID   int64
+}
+
+func (q *Queries) SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error {
+	_, err := q.db.ExecContext(ctx, setOrganisationLogo, arg.Logo, arg.ID)
+	return err
+}
+
+const setPersonImageURL = `-- name: SetPersonImageURL :exec
+UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.image_url', ?1)
+WHERE id = ?2 AND json_extract(COALESCE(fields_json, '{}'), '$.image_url') IS NULL
+`
+
+type SetPersonImageURLParams struct {
+	ImageUrl interface{}
+	ID       int64
+}
+
+// A provider's picture of a person is kept in fields_json and never replaces one already there.
+func (q *Queries) SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error {
+	_, err := q.db.ExecContext(ctx, setPersonImageURL, arg.ImageUrl, arg.ID)
+	return err
 }
 
 const setSeasonPartsMonitored = `-- name: SetSeasonPartsMonitored :exec

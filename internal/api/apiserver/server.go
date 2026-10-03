@@ -221,6 +221,8 @@ type Config struct {
 	DownloaderTester DownloaderTester
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
+	// TVProviders reports and tests the TV metadata providers; without it those endpoints answer 503.
+	TVProviders TVProviders
 }
 
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
@@ -297,6 +299,7 @@ type Server struct {
 	indexerTester           IndexerTester
 	prowlarr                ProwlarrLister
 	downloaderTester        DownloaderTester
+	tvProviders             TVProviders
 	candidateSearcher       CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
@@ -397,6 +400,7 @@ func New(config Config) (*Server, error) {
 		prowlarr:                config.Prowlarr,
 		downloaderTester:        config.DownloaderTester,
 		candidateSearcher:       config.CandidateSearcher,
+		tvProviders:             config.TVProviders,
 		effectivePort:           config.Port,
 		healthPath:              base + APIPrefix + "/health",
 		address:                 net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -629,6 +633,10 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/metadata/settings", server.UpdateMetadataSettings)
 			secured.Post("/metadata/acoustid/apikey", server.SetAcoustIDAPIKey)
 			secured.Post("/metadata/theaudiodb/apikey", server.SetTheAudioDBAPIKey)
+			secured.Post("/metadata/tmdb/apikey", server.SetTMDBAPIKey)
+			secured.Post("/metadata/tvdb/apikey", server.SetTVDBAPIKey)
+			secured.Get("/metadata/tv/providers", server.ListTVProviders)
+			secured.Post("/metadata/tv/providers/test", server.TestTVProviders)
 			secured.Post("/cache/clear", server.ClearCache)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
