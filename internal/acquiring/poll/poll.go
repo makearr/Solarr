@@ -326,6 +326,7 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 	if client.LocalPath != nil {
 		localPath = client.LocalPath(entry.Path)
 	}
+	localPath = j.jobFolder(ctx, localPath)
 	if err := j.config.Acquisitions.SetPath(ctx, acquisition.ID, localPath, now); err != nil {
 		return err
 	}
@@ -338,6 +339,27 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCompleted, "import could not start: "+err.Error(), now)
 	}
 	return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, "", now)
+}
+
+// jobFolder is the folder a download lives in: a client that names the one file it produced (SABnzbd does for a
+// single-file job) means its folder, but never a download folder itself, which holds everything else too.
+func (j *Job) jobFolder(ctx context.Context, localPath string) string {
+	clean := path.Clean(localPath)
+	info, err := j.config.FS.Stat(clean)
+	if err != nil || info.IsDir {
+		return localPath
+	}
+	parent := path.Dir(clean)
+	folders, err := j.config.DownloadFolders(ctx)
+	if err != nil {
+		return localPath
+	}
+	for _, folder := range folders {
+		if strings.HasPrefix(parent, path.Clean(folder)+"/") {
+			return parent
+		}
+	}
+	return localPath
 }
 
 // checkPath refuses a path outside every download folder or that does not exist (ADR-14): a path

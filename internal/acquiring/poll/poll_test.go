@@ -203,6 +203,26 @@ func TestPoll_FollowsADownloadToImporting(t *testing.T) {
 	}
 }
 
+// A client that names the one file of a single-file job means the job's folder, never the download folder itself.
+func TestPoll_AFilePathMeansItsJobFolder(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	if err := e.fsys.MkdirAll("/downloads/complete/Heka-Zanuvode", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file, err := e.fsys.Create("/downloads/complete/Heka-Zanuvode/episode.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "x", State: download.StateCompleted,
+		Path: "/downloads/complete/Heka-Zanuvode/episode.mkv"}}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting || !slices.Equal(e.imported, []string{"/downloads/complete/Heka-Zanuvode"}) {
+		t.Errorf("= %s, imported %v; want the job folder imported", got.State, e.imported)
+	}
+}
+
 // A path outside every download folder is reported and never imported (ADR-14).
 func TestPoll_RefusesAPathOutsideTheDownloadFolders(t *testing.T) {
 	e := newEnv(t)
