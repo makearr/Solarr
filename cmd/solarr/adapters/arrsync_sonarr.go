@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -21,6 +22,9 @@ type TVAdder interface {
 	SetProfile(ctx context.Context, categoryID, workID int64, profileID *int64) error
 	SetSeriesType(ctx context.Context, workID int64, kind tv.SeriesType) error
 }
+
+// sonarrWorkers is how many series an import adds at once.
+const sonarrWorkers = 4
 
 // syncSonarr adds every series Sonarr holds by its TVDB id, best-effort per series. A series Solarr already holds is
 // matched and left as it is; one it creates takes Sonarr's monitored flags, series and season. Series are counted
@@ -52,24 +56,38 @@ func (a ArrSync) syncSonarr(
 			total++
 		}
 	}
-	var walked int64
+	// A few series are added at once: each waits mostly on the providers, whose own rate limits still pace the calls.
+	var (
+		mu     sync.Mutex
+		walked int64
+		group  sync.WaitGroup
+		gate   = make(chan struct{}, sonarrWorkers)
+	)
 	for _, series := range all {
 		if !wanted(series.Monitored) {
 			continue
 		}
-		a.Progress.set(importID, walked, total)
-		walked++
-		created, err := a.syncSeries(ctx, importID, instance, roots, series, options, client, profileNames)
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", series.Title, err))
-			continue
-		}
-		if created {
-			counts.ArtistsCreated++
-		} else {
-			counts.ArtistsMatched++
-		}
+		group.Add(1)
+		gate <- struct{}{}
+		go func() {
+			defer group.Done()
+			defer func() { <-gate }()
+			created, err := a.syncSeries(ctx, importID, instance, roots, series, options, client, profileNames)
+			mu.Lock()
+			defer mu.Unlock()
+			a.Progress.set(importID, walked, total)
+			walked++
+			switch {
+			case err != nil:
+				failures = append(failures, fmt.Sprintf("%s: %v", series.Title, err))
+			case created:
+				counts.ArtistsCreated++
+			default:
+				counts.ArtistsMatched++
+			}
+		}()
 	}
+	group.Wait()
 	if len(failures) > 0 {
 		return counts, errors.New(strings.Join(failures, "; "))
 	}

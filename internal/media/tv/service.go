@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -104,17 +105,35 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 			}
 		}
 	}
-	rich, haveRich := s.fetchTMDB(ctx, ids, recentOnly)
+	// The three remaining sources each have their own rate bucket, so they are asked at the same time; the order
+	// they are merged in stays TMDB, AniList, TVmaze.
+	var (
+		rich, anime, maze Series
+		haveRich, haveAni bool
+		haveMaze          bool
+		asking            sync.WaitGroup
+	)
+	asking.Add(3)
+	go func() { defer asking.Done(); rich, haveRich = s.fetchTMDB(ctx, ids, recentOnly) }()
+	go func() { defer asking.Done(); anime, haveAni = s.fetchAniList(ctx, ids) }()
+	go func() {
+		defer asking.Done()
+		if s.TVmaze == nil {
+			return
+		}
+		if show, found := s.findShow(ctx, ids); found {
+			maze, haveMaze = s.fromShow(ctx, show), true
+		}
+	}()
+	asking.Wait()
 	if haveRich {
 		sources = append(sources, rich)
 	}
-	if anime, found := s.fetchAniList(ctx, ids); found {
+	if haveAni {
 		sources = append(sources, anime)
 	}
-	if s.TVmaze != nil {
-		if show, found := s.findShow(ctx, ids); found {
-			sources = append(sources, s.fromShow(ctx, show))
-		}
+	if haveMaze {
+		sources = append(sources, maze)
 	}
 	if len(sources) == 0 {
 		return Series{}, ErrNoSource
@@ -199,26 +218,55 @@ func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Serie
 		s.warn("tmdb", id, err)
 		return Series{}, false
 	}
-	var seasons []tmdb.Season
 	newest := 0
 	for _, entry := range series.Seasons {
 		newest = max(newest, entry.SeasonNumber)
 	}
+	var wanted []int
 	for _, entry := range series.Seasons {
-		if len(seasons) == maxCreditSeasons {
+		if len(wanted) == maxCreditSeasons {
 			break
 		}
 		if recentOnly && entry.SeasonNumber < newest-1 {
 			continue
 		}
-		season, err := s.TMDB.Season(ctx, id, entry.SeasonNumber)
-		if err != nil {
-			s.warn("tmdb season", id, err)
-			continue
-		}
-		seasons = append(seasons, season)
+		wanted = append(wanted, entry.SeasonNumber)
 	}
+	seasons := s.fetchSeasons(ctx, id, wanted)
 	return FromTMDB(series, seasons, ""), true
+}
+
+// seasonWorkers is how many of a series' seasons are asked of TMDB at once; its bucket still paces the calls.
+const seasonWorkers = 4
+
+// fetchSeasons reads the seasons' guest stars and episode crew, a few at a time, in the order asked; one that fails is
+// skipped.
+func (s Service) fetchSeasons(ctx context.Context, id int64, numbers []int) []tmdb.Season {
+	answers := make([]*tmdb.Season, len(numbers))
+	var wg sync.WaitGroup
+	gate := make(chan struct{}, seasonWorkers)
+	for index, number := range numbers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			gate <- struct{}{}
+			defer func() { <-gate }()
+			season, err := s.TMDB.Season(ctx, id, number)
+			if err != nil {
+				s.warn("tmdb season", id, err)
+				return
+			}
+			answers[index] = &season
+		}()
+	}
+	wg.Wait()
+	var seasons []tmdb.Season
+	for _, answer := range answers {
+		if answer != nil {
+			seasons = append(seasons, *answer)
+		}
+	}
+	return seasons
 }
 
 // guardEpisodeCredits drops an episode credit whose episode aired on another date under the numbering basis, or is
