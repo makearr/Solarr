@@ -5,6 +5,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 func TestClearPlacedDropsOnlyTheEntriesWhoseFileIsAttached(t *testing.T) {
@@ -38,6 +39,15 @@ func TestClearPlacedDropsOnlyTheEntriesWhoseFileIsAttached(t *testing.T) {
 		{MediaObjectID: registered[0].MediaObjectID, Parts: []library.PartKey{{MediaRef: "s01:e01"}}},
 	}); err != nil {
 		t.Fatal(err)
+	}
+
+	hidden, err := librarydb.New(opened.Read()).CountUnidentified(t.Context(), librarydb.CountUnidentifiedParams{FilterRootFolders: 0, RootFolderIds: "[]"})
+	if err != nil || hidden != 1 {
+		t.Errorf("counted = %d, err = %v; an attached episode's entry must not be counted even before it is cleared", hidden, err)
+	}
+	rows, err := queue.List(t.Context(), nil, paginate.Cursor{}, 10)
+	if err != nil || len(rows) != 1 || rows[0].RelPath != "a/waiting.mkv" {
+		t.Fatalf("rows = %+v, err = %v; want only the file nothing has taken", rows, err)
 	}
 
 	if err := queue.ClearPlaced(t.Context()); err != nil {

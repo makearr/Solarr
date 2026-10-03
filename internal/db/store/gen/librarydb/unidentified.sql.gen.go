@@ -12,8 +12,12 @@ import (
 const countUnidentified = `-- name: CountUnidentified :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM identification_queue
-WHERE ?1 = 0
-   OR root_folder_id IN (SELECT value FROM json_each(?2))
+WHERE (?1 = 0
+       OR root_folder_id IN (SELECT value FROM json_each(?2)))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f
+                  JOIN desired_item d ON d.id = f.desired_item_id
+                  JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+                  WHERE f.media_object_id = identification_queue.media_object_id)
 `
 
 type CountUnidentifiedParams struct {
@@ -32,10 +36,14 @@ func (q *Queries) CountUnidentified(ctx context.Context, arg CountUnidentifiedPa
 
 const deletePlacedUnidentified = `-- name: DeletePlacedUnidentified :exec
 DELETE FROM identification_queue
-WHERE EXISTS (SELECT 1 FROM desired_item_file f WHERE f.media_object_id = identification_queue.media_object_id)
+WHERE EXISTS (SELECT 1 FROM desired_item_file f
+              JOIN desired_item d ON d.id = f.desired_item_id
+              JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+              WHERE f.media_object_id = identification_queue.media_object_id)
 `
 
-// A file that covers an episode or a track is identified, whoever placed it and whenever.
+// A file that covers an episode is identified, whoever placed it and whenever. TV only: an unverified album's files
+// are attached to it and still await identification (D6).
 func (q *Queries) DeletePlacedUnidentified(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, deletePlacedUnidentified)
 	return err
@@ -110,7 +118,11 @@ FROM identification_queue
 WHERE (?1 = 0
        OR root_folder_id IN (SELECT value FROM json_each(?2)))
   AND (first_seen_at > ?3
-       OR (first_seen_at = ?3 AND media_object_id > ?4))
+       OR (first_seen_at = ?3 AND identification_queue.media_object_id > ?4))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f
+                  JOIN desired_item d ON d.id = f.desired_item_id
+                  JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+                  WHERE f.media_object_id = identification_queue.media_object_id)
 ORDER BY first_seen_at, media_object_id
 LIMIT ?5
 `

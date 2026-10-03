@@ -22,10 +22,14 @@ ON CONFLICT (media_object_id) DO UPDATE SET
 -- name: DeleteUnidentified :exec
 DELETE FROM identification_queue WHERE media_object_id = ?;
 
--- A file that covers an episode or a track is identified, whoever placed it and whenever.
+-- A file that covers an episode is identified, whoever placed it and whenever. TV only: an unverified album's files
+-- are attached to it and still await identification (D6).
 -- name: DeletePlacedUnidentified :exec
 DELETE FROM identification_queue
-WHERE EXISTS (SELECT 1 FROM desired_item_file f WHERE f.media_object_id = identification_queue.media_object_id);
+WHERE EXISTS (SELECT 1 FROM desired_item_file f
+              JOIN desired_item d ON d.id = f.desired_item_id
+              JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+              WHERE f.media_object_id = identification_queue.media_object_id);
 
 -- One entry, for the manual resolve action -- confirming a candidate needs the
 -- file's own root_folder_id (to link work_root_folder), which the ranked
@@ -39,8 +43,12 @@ FROM identification_queue WHERE media_object_id = ?;
 -- name: CountUnidentified :one
 SELECT CAST(count(*) AS INTEGER) AS total
 FROM identification_queue
-WHERE sqlc.arg(filter_root_folders) = 0
-   OR root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)));
+WHERE (sqlc.arg(filter_root_folders) = 0
+       OR root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids))))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f
+                  JOIN desired_item d ON d.id = f.desired_item_id
+                  JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+                  WHERE f.media_object_id = identification_queue.media_object_id);
 
 -- filter_root_folders=0 means unfiltered; =1 filters to root_folder_ids, which is
 -- empty when the caller can see nothing -- same ADR-27 shape as search.sql's
@@ -51,7 +59,11 @@ FROM identification_queue
 WHERE (sqlc.arg(filter_root_folders) = 0
        OR root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids))))
   AND (first_seen_at > sqlc.arg(after_seen)
-       OR (first_seen_at = sqlc.arg(after_seen) AND media_object_id > sqlc.arg(after_id)))
+       OR (first_seen_at = sqlc.arg(after_seen) AND identification_queue.media_object_id > sqlc.arg(after_id)))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f
+                  JOIN desired_item d ON d.id = f.desired_item_id
+                  JOIN work w ON w.id = d.work_id AND w.media_type = 'tv'
+                  WHERE f.media_object_id = identification_queue.media_object_id)
 ORDER BY first_seen_at, media_object_id
 LIMIT sqlc.arg(page_size);
 
