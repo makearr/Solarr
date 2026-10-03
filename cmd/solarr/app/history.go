@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
 )
@@ -66,7 +66,7 @@ func (p *process) describeAcquisition(ctx context.Context, acquisition library.A
 			if work, err := library.NewWorks(p.library).Detail(ctx, workID); err == nil {
 				data.Album = work.Work.CanonicalTitle
 				if p.isTV(item.CategoryID) && item.MediaRef != "" {
-					data.Album += " " + strings.ToUpper(item.MediaRef)
+					data.Album += " " + tv.ReleaseLabel(acquisition.CandidateTitle, item.MediaRef, clock.NewSystem().Now())
 				}
 				for _, credit := range work.Credits {
 					if credit.Role == music.CreditRoleArtist {
