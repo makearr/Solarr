@@ -30,6 +30,17 @@ func (q *Queries) CountUnidentified(ctx context.Context, arg CountUnidentifiedPa
 	return total, err
 }
 
+const deletePlacedUnidentified = `-- name: DeletePlacedUnidentified :exec
+DELETE FROM identification_queue
+WHERE EXISTS (SELECT 1 FROM desired_item_file f WHERE f.media_object_id = identification_queue.media_object_id)
+`
+
+// A file that covers an episode or a track is identified, whoever placed it and whenever.
+func (q *Queries) DeletePlacedUnidentified(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deletePlacedUnidentified)
+	return err
+}
+
 const deleteUnidentified = `-- name: DeleteUnidentified :exec
 DELETE FROM identification_queue WHERE media_object_id = ?
 `

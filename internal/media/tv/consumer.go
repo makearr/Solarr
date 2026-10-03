@@ -196,6 +196,9 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	if err := c.config.Unidentified.Record(ctx, queued); err != nil {
 		return fmt.Errorf("tv: %w", err)
 	}
+	if err := c.config.Unidentified.ClearPlaced(ctx); err != nil {
+		return fmt.Errorf("tv: %w", err)
+	}
 	c.logger.Info("tv scan batch recorded", slog.Int64("root_folder_id", root.ID), slog.Int("files", len(readable)),
 		slog.Int("episodes_attached", attached), slog.Int("queued", len(queued)))
 	return nil

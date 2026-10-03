@@ -135,6 +135,14 @@ func (u Unidentified) Clear(ctx context.Context, mediaObjectIDs []int64) error {
 	})
 }
 
+// ClearPlaced drops the entries whose file has since been attached to something, which a scan that skips unchanged
+// folders never revisits.
+func (u Unidentified) ClearPlaced(ctx context.Context) error {
+	return u.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeletePlacedUnidentified(ctx)
+	})
+}
+
 // MarkNotMedia takes a file out of the queue for good: these bytes are never queued again
 // (F29's "not media", 2026-09-24). A later full scan still sees the file; it just asks nothing.
 func (u Unidentified) MarkNotMedia(ctx context.Context, mediaObjectID, at int64) error {

@@ -210,6 +210,8 @@ type Querier interface {
 	DeletePersonSubscriptions(ctx context.Context, subjectID int64) error
 	// What the winner already had stays; the loser's duplicates go with it.
 	DeletePersonTagAssignments(ctx context.Context, subjectID int64) error
+	// A file that covers an episode or a track is identified, whoever placed it and whenever.
+	DeletePlacedUnidentified(ctx context.Context) error
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error

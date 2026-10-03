@@ -22,6 +22,11 @@ ON CONFLICT (media_object_id) DO UPDATE SET
 -- name: DeleteUnidentified :exec
 DELETE FROM identification_queue WHERE media_object_id = ?;
 
+-- A file that covers an episode or a track is identified, whoever placed it and whenever.
+-- name: DeletePlacedUnidentified :exec
+DELETE FROM identification_queue
+WHERE EXISTS (SELECT 1 FROM desired_item_file f WHERE f.media_object_id = identification_queue.media_object_id);
+
 -- One entry, for the manual resolve action -- confirming a candidate needs the
 -- file's own root_folder_id (to link work_root_folder), which the ranked
 -- candidates list alone does not carry.
