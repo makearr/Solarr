@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
+	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
@@ -367,6 +368,7 @@ func (p *process) tvService() tv.Service {
 			"tvmaze":  {MinInterval: 500 * time.Millisecond},
 			"tmdb":    {MinInterval: 50 * time.Millisecond},
 			"tvdb":    {MinInterval: 100 * time.Millisecond},
+			"anilist": {MinInterval: 700 * time.Millisecond},
 		}}, nil)
 		client := func(name string) *httpx.Client {
 			return httpx.NewClient(wall, guard, limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
@@ -375,9 +377,10 @@ func (p *process) tvService() tv.Service {
 		}
 		p.tmdbShared = tmdb.New(client("tmdb"), p.tmdbCredential, "")
 		p.tvdbShared = tvdb.New(client("tvdb"), p.tvdbKey, nil, wall.Now)
+		p.anilistShared = anilist.New(client("anilist"))
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client("skyhook"), "en"), tvmaze.New(client("tvmaze"))
 		p.tvShared = tv.Service{
-			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared,
+			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
 			Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
 		}
 	})
@@ -451,6 +454,11 @@ func (p *process) tvProviders() adapters.TVProviders {
 				}
 				return err
 			},
+		},
+		{
+			Info: apiserver.TVProviderInfo{ID: "anilist", Name: "AniList", Key: "not_needed",
+				Adds: "The titles anime is released under (romaji, English, native, synonyms) and banners; only for anime."},
+			Ping: func(ctx context.Context) error { return p.anilistShared.Ping(ctx) },
 		},
 		{
 			Info: apiserver.TVProviderInfo{ID: "tvdb", Name: "TheTVDB", Key: "built_in",

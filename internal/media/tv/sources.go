@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 )
@@ -13,6 +14,7 @@ import (
 const (
 	sourceSkyhook = "skyhook"
 	sourceTVmaze  = "tvmaze"
+	sourceAniList = "anilist"
 )
 
 // FromSkyhook reads Sonarr's TheTVDB proxy answer into the module's own types.
@@ -144,6 +146,30 @@ func tvmazeEpisode(in tvmaze.Episode, timezone string) Episode {
 		episode.AirConfidence, episode.AirBasis = ConfidenceLow, "tvmaze air date"
 	}
 	return episode
+}
+
+// FromAniList reads the entries AniList lists for one anime series into aliases and a banner: the romaji, English and
+// native titles and the synonyms are what release groups name anime by.
+func FromAniList(entries []anilist.Media) Series {
+	series := Series{Sources: []string{sourceAniList}}
+	for _, entry := range entries {
+		for _, title := range entry.Titles() {
+			series.Aliases = appendDistinct(series.Aliases, title)
+		}
+		if entry.BannerImage != "" && !hasImage(series.Images, entry.BannerImage) {
+			series.Images = append(series.Images, Image{Kind: "banner", URL: entry.BannerImage, Source: sourceAniList})
+		}
+	}
+	return series
+}
+
+func hasImage(images []Image, url string) bool {
+	for _, image := range images {
+		if image.URL == url {
+			return true
+		}
+	}
+	return false
 }
 
 // Merge combines what several sources know about one series, the first source winning field by field (ADR-8): a later

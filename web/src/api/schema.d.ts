@@ -5057,7 +5057,7 @@ export interface components {
         };
         TVProvider: {
             /** @enum {string} */
-            id: "skyhook" | "tvmaze" | "tmdb" | "tvdb";
+            id: "skyhook" | "tvmaze" | "tmdb" | "anilist" | "tvdb";
             name: string;
             /** @description What this provider contributes to a series. */
             adds: string;
@@ -5069,7 +5069,7 @@ export interface components {
         };
         TVProviderTest: {
             /** @enum {string} */
-            id: "skyhook" | "tvmaze" | "tmdb" | "tvdb";
+            id: "skyhook" | "tvmaze" | "tmdb" | "anilist" | "tvdb";
             ok: boolean;
             message: string;
             /** Format: date-time */

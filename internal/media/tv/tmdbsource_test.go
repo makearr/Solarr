@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
@@ -144,5 +145,54 @@ func TestFetchFromATMDBIDFindsTheTVDBIDForSkyhook(t *testing.T) {
 	}
 	if series.IDs.TVDB != 1234 || len(series.Episodes) != 2 || series.IDs.TMDB != 7 {
 		t.Errorf("ids = %+v, episodes = %d: the TVDB id comes from TMDB's external ids and Skyhook then lists the episodes", series.IDs, len(series.Episodes))
+	}
+}
+
+type fakeAnime struct{ entries map[int64]anilist.Media }
+
+func (f fakeAnime) Media(_ context.Context, id int64) (anilist.Media, error) {
+	if entry, ok := f.entries[id]; ok {
+		return entry, nil
+	}
+	return anilist.Media{}, anilist.ErrNotFound
+}
+
+func TestFetchAddsTheTitlesAnimeIsReleasedUnder(t *testing.T) {
+	show := skyhookShow()
+	show.AniListIDs = []int64{11, 12, 99}
+	var first, second anilist.Media
+	first.Title.Romaji, first.Title.English, first.Synonyms, first.BannerImage = "Shingeki Example", "Example Titan", []string{"ExT"}, "https://example.test/b.jpg"
+	second.Title.Romaji = "Shingeki Example 2"
+	service := tv.Service{Skyhook: fixedSkyhook{show}, AniList: fakeAnime{entries: map[int64]anilist.Media{11: first, 12: second}}}
+
+	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234})
+	if err != nil {
+		t.Fatal(err)
+	}
+	have := map[string]bool{}
+	for _, alias := range series.Aliases {
+		have[alias] = true
+	}
+	for _, want := range []string{"Shingeki Example", "Example Titan", "ExT", "Shingeki Example 2"} {
+		if !have[want] {
+			t.Errorf("aliases = %v, missing %q (an unknown AniList id is skipped, not fatal)", series.Aliases, want)
+		}
+	}
+	banner := false
+	for _, image := range series.Images {
+		banner = banner || (image.Kind == "banner" && image.Source == "anilist")
+	}
+	if !banner {
+		t.Errorf("images = %+v, want AniList's banner", series.Images)
+	}
+	if series.Title != "Example Show (US)" {
+		t.Errorf("title = %q: AniList adds aliases, never the identity", series.Title)
+	}
+}
+
+func TestASeriesWithoutAniListIDsIsNotAskedOfAniList(t *testing.T) {
+	service := tv.Service{Skyhook: fixedSkyhook{skyhookShow()}, AniList: fakeAnime{}}
+	if _, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234}); err != nil {
+		t.Fatal(err)
 	}
 }

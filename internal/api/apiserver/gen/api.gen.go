@@ -658,6 +658,7 @@ const (
 
 // Defines values for TVProviderId.
 const (
+	TVProviderIdAnilist TVProviderId = "anilist"
 	TVProviderIdSkyhook TVProviderId = "skyhook"
 	TVProviderIdTmdb    TVProviderId = "tmdb"
 	TVProviderIdTvdb    TVProviderId = "tvdb"
@@ -674,6 +675,7 @@ const (
 
 // Defines values for TVProviderTestId.
 const (
+	TVProviderTestIdAnilist TVProviderTestId = "anilist"
 	TVProviderTestIdSkyhook TVProviderTestId = "skyhook"
 	TVProviderTestIdTmdb    TVProviderTestId = "tmdb"
 	TVProviderTestIdTvdb    TVProviderTestId = "tvdb"

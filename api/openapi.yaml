@@ -7741,7 +7741,7 @@ components:
       type: object
       required: [id, name, adds, key]
       properties:
-        id: { type: string, enum: [skyhook, tvmaze, tmdb, tvdb] }
+        id: { type: string, enum: [skyhook, tvmaze, tmdb, anilist, tvdb] }
         name: { type: string }
         adds: { type: string, description: What this provider contributes to a series. }
         key:
@@ -7755,7 +7755,7 @@ components:
       type: object
       required: [id, ok, message, tested_at]
       properties:
-        id: { type: string, enum: [skyhook, tvmaze, tmdb, tvdb] }
+        id: { type: string, enum: [skyhook, tvmaze, tmdb, anilist, tvdb] }
         ok: { type: boolean }
         message: { type: string }
         tested_at: { type: string, format: date-time }

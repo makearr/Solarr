@@ -22,7 +22,9 @@ and the best source of air times (`airstamp`) and the network's timezone. **TMDB
 Metadata; a v4 read token or a v3 key, sent as bearer or parameter) and adds the overview, genres, certification, artwork,
 networks with logos, keywords, alternative titles and the credits: aggregate cast, key crew jobs, and per season the guest
 stars and each episode's director and writers. **TheTVDB v4** has a client (login reused, every ordering by season type)
-and Solarr's own project key as the default; nothing reads it yet. Each provider has its own rate bucket (ADR-13).
+and Solarr's own project key as the default; nothing reads it yet. **AniList** (GraphQL, no key) is asked for each cour Skyhook
+lists an AniList id for (up to five) and adds the romaji, English and native titles and the synonyms as aliases, plus the
+banner: release groups name anime by those, so they are what title matching needs. Each provider has its own rate bucket (ADR-13).
 
 `internal/media/tv` maps each into a `Series` and `Merge`s them. **Skyhook sets the identity and the numbering basis** (title,
 year, dates, status, ids, the episode list), so a library named after TheTVDB keeps its names; `PreferRicher` then lets TMDB

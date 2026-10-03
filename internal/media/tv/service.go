@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -41,6 +42,14 @@ type RichSource interface {
 	FindByIMDb(ctx context.Context, imdbID string) (tmdb.Hit, error)
 }
 
+// AnimeSource is the AniList client as the service needs it.
+type AnimeSource interface {
+	Media(ctx context.Context, id int64) (anilist.Media, error)
+}
+
+// maxAnimeEntries bounds how many of an anime's cours are asked of AniList, which splits one series into several entries.
+const maxAnimeEntries = 5
+
 // maxCreditSeasons bounds the per-season calls guest stars and episode crew cost.
 const maxCreditSeasons = 40
 
@@ -49,7 +58,9 @@ type Service struct {
 	Skyhook SeriesSource
 	TVmaze  ShowSource
 	// TMDB is nil or unconfigured until the user gives a key; TV then works on the other two.
-	TMDB    RichSource
+	TMDB RichSource
+	// AniList adds the titles anime is released under; nil skips it.
+	AniList AnimeSource
 	Series  library.Series
 	Reader  library.SeriesReader
 	Desired library.Desired
@@ -82,11 +93,17 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 			if ids.IMDb == "" {
 				ids.IMDb = series.IMDbID
 			}
+			if len(ids.AniList) == 0 {
+				ids.AniList = series.AniListIDs
+			}
 		}
 	}
 	rich, haveRich := s.fetchTMDB(ctx, ids, recentOnly)
 	if haveRich {
 		sources = append(sources, rich)
+	}
+	if anime, found := s.fetchAniList(ctx, ids); found {
+		sources = append(sources, anime)
 	}
 	if s.TVmaze != nil {
 		if show, found := s.findShow(ctx, ids); found {
@@ -102,6 +119,26 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
 	}
 	return merged, nil
+}
+
+// fetchAniList asks AniList for each cour of an anime Skyhook knows by AniList id; a series with none is not asked.
+func (s Service) fetchAniList(ctx context.Context, ids IDs) (Series, bool) {
+	if s.AniList == nil || len(ids.AniList) == 0 {
+		return Series{}, false
+	}
+	var entries []anilist.Media
+	for _, id := range ids.AniList[:min(len(ids.AniList), maxAnimeEntries)] {
+		entry, err := s.AniList.Media(ctx, id)
+		if err != nil {
+			s.warn("anilist", id, err)
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	if len(entries) == 0 {
+		return Series{}, false
+	}
+	return FromAniList(entries), true
 }
 
 // completeIDs finds TheTVDB's id from TMDB's when only that is known, so a series added from TMDB still gets Skyhook's
