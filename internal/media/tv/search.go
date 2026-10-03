@@ -103,13 +103,6 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
 	}
 	today := now.UTC().Format("2006-01-02")
-	belowCutoff, err := s.belowCutoff(ctx, item, only)
-	if err != nil {
-		return wanted{}, err
-	}
-	if belowCutoff != nil {
-		w.owned = map[int]library.EpisodeFile{}
-	}
 	var runtimeSum, runtimeCount int64
 	for _, episode := range detail.Episodes {
 		if episode.Season != season {
@@ -128,14 +121,12 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 			if episode.Number == only {
 				w.missing[episode.Number] = episode
 			}
-		case belowCutoff != nil:
-			if file, below := belowCutoff[episode.Number]; below && episode.Monitored {
-				w.missing[episode.Number] = episode
-				w.owned[episode.Number] = file
-			}
 		case episode.Monitored && !episode.Present && aired:
 			w.missing[episode.Number] = episode
 		}
+	}
+	if err := s.addUpgrades(ctx, item, only, detail, &w); err != nil {
+		return wanted{}, err
 	}
 	switch {
 	case runtimeCount > 0:
@@ -146,34 +137,47 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 	return w, nil
 }
 
-// belowCutoff is, for an UPGRADABLE season, the present episodes whose measured file misses the library's cutoff,
-// each with that file; nil for any other search.
-func (s Search) belowCutoff(ctx context.Context, item librarydb.DesiredItem, only int) (map[int]library.EpisodeFile, error) {
-	if item.State != ItemStateUpgradable || only > 0 || s.Settings == nil {
-		return nil, nil
+// addUpgrades makes the monitored episodes whose file misses the library's cutoff the wanted ones when the season has
+// no aired gap left to fill: an UPGRADABLE season, or one that is only partial because episodes have yet to air.
+func (s Search) addUpgrades(ctx context.Context, item librarydb.DesiredItem, only int, detail library.SeriesDetailRow, w *wanted) error {
+	if only > 0 || len(w.missing) > 0 || s.Settings == nil || (item.State != ItemStateUpgradable && item.State != "PARTIAL") {
+		return nil
 	}
 	snapshot := s.Settings.Snapshot()
 	category, found := snapshot.Category(item.CategoryID)
-	if !found {
-		return nil, nil
+	if !found || !category.QualityUpgrades {
+		return nil
 	}
 	files, err := s.Series.SeasonFiles(ctx, item.ID)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	below := map[int]library.EpisodeFile{}
+	tooNew := s.Clock.Now().Add(-upgradeMinFileAge).Unix()
+	owned := map[int]library.EpisodeFile{}
 	for _, file := range files {
-		if !file.Measured {
+		if !file.Measured || file.AddedAt > tooNew {
 			continue
 		}
 		if judged, ok := quality.Judge(snapshot, category, FileFacts(file.File)); ok && !judged.MeetsCutoff {
-			if _, has := below[file.Episode]; !has {
-				below[file.Episode] = file.File
+			if _, has := owned[file.Episode]; !has {
+				owned[file.Episode] = file.File
 			}
 		}
 	}
-	return below, nil
+	for _, episode := range detail.Episodes {
+		if file, below := owned[episode.Number]; below && episode.Season == w.season && episode.Monitored {
+			w.missing[episode.Number] = episode
+			if w.owned == nil {
+				w.owned = map[int]library.EpisodeFile{}
+			}
+			w.owned[episode.Number] = file
+		}
+	}
+	return nil
 }
+
+// upgradeMinFileAge keeps a file that has just arrived from being replaced at once.
+const upgradeMinFileAge = 24 * time.Hour
 
 // titles are every name a release may call the series by, cleaned for comparison.
 func (w wanted) titles() map[string]bool {

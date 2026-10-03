@@ -85,7 +85,7 @@ func upgradeSeries(t *testing.T, owned, brought string) upgradeFixture {
 			t.Fatal(err)
 		}
 	}
-	if _, err := library.NewSeries(opened).AttachFiles(t.Context(), addNow, added.WorkID, 1, links); err != nil {
+	if _, err := library.NewSeries(opened).AttachFiles(t.Context(), addNow.Add(-72*time.Hour), added.WorkID, 1, links); err != nil {
 		t.Fatal(err)
 	}
 	if brought != "" {
@@ -185,5 +185,49 @@ func TestSearchOfAnUpgradableSeasonOnlyAcceptsAReleaseThatBeatsTheOwnedFile(t *t
 	}
 	if len(outcomes) != 2 || outcomes["better"] != "ACCEPT" || outcomes["same"] != "REJECT" {
 		t.Errorf("outcomes = %v; want the 1080p accepted, the 720p rejected and the episode that is not below the cutoff not searched", outcomes)
+	}
+}
+
+// A season that is partial only because episodes have yet to air still upgrades the ones it has.
+func TestSearchOfAPartialSeasonWithNothingAiredMissingUpgradesItsEpisodes(t *testing.T) {
+	fixture := upgradeSeries(t, "1080p", "")
+	items, _ := library.NewDesired(fixture.opened).AlbumItemsForWork(t.Context(), fixture.workID)
+	var season2 int64
+	for _, item := range items {
+		if item.MediaRef == "s02" {
+			season2 = item.ID
+		}
+	}
+	physical := library.NewPhysical(fixture.opened)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{{RelPath: "Example Show/Season 02/e01.mkv", SizeBytes: 1, QuickHash: "s2", FirstSeenAt: time.Unix(1, 0)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	object := registered[0].MediaObjectID
+	if err := physical.RecordMeasured(t.Context(), object, library.AttributeClaim{Resolution: "720p", VideoCodec: "h264", Container: "mkv"}, library.MeasuredScalars{VideoBitrate: 3_000_000}, "", 1); err != nil {
+		t.Fatal(err)
+	}
+	links := []library.SeriesFileLink{{MediaObjectID: object, Parts: []library.PartKey{{MediaRef: tv.MediaRef(2, 1)}}}}
+	if _, err := library.NewSeries(fixture.opened).AttachFiles(t.Context(), addNow.Add(-72*time.Hour), fixture.workID, 1, links); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"tvsearch": {
+		{Title: "Example.Show.S02E01.720p.HDTV.x264-GRP", GUID: "same", Link: "https://example.test/same"},
+		{Title: "Example.Show.S02E01.1080p.WEB-DL.DDP5.1.H.264-GRP", GUID: "better", Link: "https://example.test/better"},
+	}}}
+	search := tv.Search{
+		Desired: library.NewDesired(fixture.opened), Series: library.NewSeriesReader(fixture.opened), Candidates: library.NewCandidates(fixture.opened),
+		Settings: fixture.cache, Clock: clockAt(addNow),
+	}
+	result, err := search.SearchItem(t.Context(), season2, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes := map[string]string{}
+	for _, detail := range result.Decisions {
+		outcomes[detail.ReleaseCandidate.GUID] = detail.Decision.Outcome
+	}
+	if outcomes["better"] != "ACCEPT" || outcomes["same"] != "REJECT" {
+		t.Errorf("outcomes = %v; want the 1080p accepted over the owned 720p and the 720p rejected", outcomes)
 	}
 }

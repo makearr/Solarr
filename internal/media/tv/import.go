@@ -69,6 +69,9 @@ type ImporterConfig struct {
 	TransferLadder func() []mover.PlaceMethod
 	RenameOnImport func() bool
 	GroupID        func(name string) (int, error)
+	// BelowCutoff says an owned file misses its library's cutoff, so a download may replace it; nil lets any owned
+	// file of an upgrading season be replaced.
+	BelowCutoff func(categoryID int64, file library.EpisodeFile) bool
 }
 
 // Importer is the TV module's batch importer: it works out which episodes a folder of video files holds, names and
@@ -159,7 +162,7 @@ func (i Importer) seedSeries(ctx context.Context, acquisitionID int64) (workID i
 	if err != nil {
 		return 0, false
 	}
-	return item.WorkID, item.State == ItemStateUpgradable
+	return item.WorkID, item.State == ItemStateUpgradable || item.State == "PARTIAL"
 }
 
 var errNothingToPlace = errors.New("tv: no file of the unit covers an episode that is wanted")
@@ -169,6 +172,8 @@ type fileEpisodes struct {
 	media inspect.File
 	info  parsetv.Info
 	parts []library.ResolvedPart
+	// replacing says the file is for an episode that already has one.
+	replacing bool
 }
 
 func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
@@ -178,9 +183,12 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return nil, fmt.Errorf("series %d: %w", workID, err)
 	}
 	present := map[string]bool{}
+	replaceable := map[string]bool{}
 	for _, episode := range detail.Episodes {
 		if episode.Present {
-			present[MediaRef(episode.Season, episode.Number)] = true
+			ref := MediaRef(episode.Season, episode.Number)
+			present[ref] = true
+			replaceable[ref] = upgrade && episode.File != nil && (i.config.BelowCutoff == nil || i.config.BelowCutoff(request.CategoryID, *episode.File))
 		}
 	}
 
@@ -195,12 +203,14 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		if err != nil {
 			return nil, err
 		}
-		// An upgrade brings a second file for an episode; the cutoff check keeps the better one once both are measured.
-		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] && !upgrade })
+		// An upgrade brings a second file for an episode below the cutoff; the cutoff check keeps the better one once both
+		// are measured.
+		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] && !replaceable[part.MediaRef] })
 		if len(fresh) == 0 {
 			continue
 		}
-		files = append(files, fileEpisodes{media: media, info: info, parts: fresh})
+		replacing := slices.ContainsFunc(fresh, func(part library.ResolvedPart) bool { return present[part.MediaRef] })
+		files = append(files, fileEpisodes{media: media, info: info, parts: fresh, replacing: replacing})
 		totalBytes += media.SizeBytes
 	}
 	if len(files) == 0 {
@@ -227,7 +237,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 			return undo(fmt.Errorf("name %q: %w", file.media.RelPath, err))
 		}
 		sourceAbs := path.Join(request.SourcePath, file.media.RelPath)
-		if upgrade {
+		if file.replacing {
 			destRel = i.freeName(destRoot.Path, destRel)
 		}
 		destAbs := path.Join(destRoot.Path, destRel)

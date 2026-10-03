@@ -79,6 +79,9 @@ func (j CutoffJob) Run(ctx context.Context, job jobs.Job) error {
 				return err
 			}
 			replaced += settled
+			if item.State == "PARTIAL" {
+				continue // a season with gaps is not marked; only a second file in it is settled
+			}
 			state, decided, err := j.stateFor(ctx, snapshot, item)
 			if err != nil {
 				return err

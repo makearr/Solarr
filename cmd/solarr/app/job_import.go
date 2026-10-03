@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -194,6 +195,17 @@ func (p *process) tvImporter() tv.Importer {
 			DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
 		},
 		Categories: categories, BlockedContent: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID,
+		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID, BelowCutoff: p.belowCutoff,
 	})
+}
+
+// belowCutoff says a measured episode file misses its library's cutoff.
+func (p *process) belowCutoff(categoryID int64, file library.EpisodeFile) bool {
+	snapshot := p.cache.Snapshot()
+	category, found := snapshot.Category(categoryID)
+	if !found || file.VideoCodec == "" {
+		return false
+	}
+	judged, ok := quality.Judge(snapshot, category, tv.FileFacts(file))
+	return ok && !judged.MeetsCutoff
 }

@@ -30,7 +30,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
 		"internal/db/store", "internal/identify/priority", "internal/identify/score", "internal/importing/unpack", "internal/importing/arrimport",
 		"internal/importing/downloadwatch", "internal/importing/importjob", "internal/jobs",
-		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/importing/batch", "internal/media/music", "internal/media/tv", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/tvdb", "internal/metadata/anilist", "internal/metadata/metacache",
+		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/importing/batch", "internal/media/music", "internal/media/tv", "internal/identify/quality", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/tvdb", "internal/metadata/anilist", "internal/metadata/metacache",
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz", "internal/metadata/theaudiodb",
 		"internal/metadata/wikidata", "internal/moving/drainjob",
 		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/platform/clock", "internal/platform/config",
