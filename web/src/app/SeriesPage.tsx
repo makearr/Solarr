@@ -284,6 +284,8 @@ function SeasonSection({
   onEpisode,
   onAutoSearch,
   onInteractive,
+  onEpisodeSearch,
+  onEpisodeInteractive,
   searchNote,
   initiallyOpen,
   episodeCredits,
@@ -296,6 +298,8 @@ function SeasonSection({
   onEpisode: (episode: Episode, monitored: boolean) => void;
   onAutoSearch: () => void;
   onInteractive: () => void;
+  onEpisodeSearch: (episode: Episode) => void;
+  onEpisodeInteractive: (episode: Episode) => void;
   searchNote: string | undefined;
   initiallyOpen: boolean;
   episodeCredits: Map<number, Credit[]>;
@@ -369,6 +373,28 @@ function SeasonSection({
                 </td>
                 <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">{airDate(episode)}</td>
                 <td className={`whitespace-nowrap py-1.5 pr-3 text-right text-xs ${STATE[episode.state].tone}`}>{STATE[episode.state].label}</td>
+                <td className="w-16 whitespace-nowrap py-1.5 pr-3 text-right">
+                  <button
+                    type="button"
+                    title="Search for this episode and send the best release"
+                    aria-label={`Search episode ${episode.number}`}
+                    disabled={!canManage}
+                    onClick={() => onEpisodeSearch(episode)}
+                    className="mr-2 text-ink-muted enabled:hover:text-ink disabled:opacity-50"
+                  >
+                    <Search aria-hidden className="size-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Interactive search: choose the release for this episode"
+                    aria-label={`Interactive search episode ${episode.number}`}
+                    disabled={!canManage}
+                    onClick={() => onEpisodeInteractive(episode)}
+                    className="text-ink-muted enabled:hover:text-ink disabled:opacity-50"
+                  >
+                    <User aria-hidden className="size-3.5" />
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -431,7 +457,23 @@ export function SeriesPage() {
 
   const [editing, setEditing] = useState(false);
   const [dialogSeason, setDialogSeason] = useState<number | null>(null);
+  const [dialogEpisode, setDialogEpisode] = useState<number | undefined>(undefined);
   const [notes, setNotes] = useState<Record<number, string>>({});
+  const grabEpisode = useMutation({
+    mutationFn: async (target: { season: number; episode: number }) => {
+      const { data, error } = await api.POST("/series/{id}/seasons/{season}/grab", {
+        params: { path: { id: Number(seriesId), season: target.season }, query: { category_id: Number(categoryId), episode: target.episode } },
+      });
+      if (error) throw error;
+      return { season: target.season, data };
+    },
+    onSuccess: ({ season, data }) => {
+      const note = data.sent ? "Sent to the download client" : data.already_downloading ? "Already downloading" : data.held ? "Held for room in the client's queue" : data.found === 0 ? "Nothing found" : "Found releases, none could be sent";
+      setNotes((current) => ({ ...current, [season]: note }));
+      changed();
+    },
+    onError: (_error, target) => setNotes((current) => ({ ...current, [target.season]: "Search failed: is an indexer connected?" })),
+  });
   const grab = useMutation({
     mutationFn: async (season: number) => {
       const { data, error } = await api.POST("/series/{id}/seasons/{season}/grab", {
@@ -545,7 +587,15 @@ export function SeriesPage() {
           onSeason={(monitored) => setSeason.mutate({ season: season.number, monitored })}
           onEpisode={(episode, monitored) => setEpisode.mutate({ episode, monitored })}
           onAutoSearch={() => grab.mutate(season.number)}
-          onInteractive={() => setDialogSeason(season.number)}
+          onInteractive={() => {
+            setDialogEpisode(undefined);
+            setDialogSeason(season.number);
+          }}
+          onEpisodeSearch={(episode) => grabEpisode.mutate({ season: season.number, episode: episode.number })}
+          onEpisodeInteractive={(episode) => {
+            setDialogEpisode(episode.number);
+            setDialogSeason(season.number);
+          }}
           searchNote={grab.isPending && grab.variables === season.number ? "Searching…" : notes[season.number]}
         />
       ))}
@@ -554,7 +604,8 @@ export function SeriesPage() {
           categoryId={Number(categoryId)}
           seriesId={Number(seriesId)}
           season={dialogSeason}
-          title={`${series.title}, ${seasonLabel(dialogSeason)}`}
+          episode={dialogEpisode}
+          title={`${series.title}, ${seasonLabel(dialogSeason)}${dialogEpisode ? ` episode ${dialogEpisode}` : ""}`}
           onClose={() => setDialogSeason(null)}
         />
       )}

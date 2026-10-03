@@ -15,9 +15,9 @@ import (
 // is scoped to one library the caller was checked for.
 type SeasonAcquirer interface {
 	// Search is the interactive search: decisions are recorded, nothing is sent.
-	Search(ctx context.Context, categoryID, seriesID int64, season int) (SearchItemResult, error)
+	Search(ctx context.Context, categoryID, seriesID int64, season, episode int) (SearchItemResult, error)
 	// Grab is the automatic search: search, then send the best accepted release.
-	Grab(ctx context.Context, categoryID, seriesID int64, season int) (GrabResult, error)
+	Grab(ctx context.Context, categoryID, seriesID int64, season, episode int) (GrabResult, error)
 	Candidates(ctx context.Context, categoryID, seriesID int64, season int) ([]CandidateDecision, error)
 	Send(ctx context.Context, categoryID, seriesID int64, season int, decisionID int64) (Acquisition, error)
 }
@@ -51,13 +51,19 @@ func (s *Server) routeSearchSeason(w http.ResponseWriter, r *http.Request) {
 	s.searchSeason(w, r, id, category, season)
 }
 
+// episodeParam reads the optional episode a search is limited to.
+func episodeParam(r *http.Request) int {
+	episode, _ := strconv.Atoi(r.URL.Query().Get("episode"))
+	return max(episode, 0)
+}
+
 // SearchSeason satisfies the generated interface; routeSearchSeason is what is mounted.
 func (s *Server) SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params gen.SearchSeasonParams) {
 	s.searchSeason(w, r, id, params.CategoryId, season)
 }
 
 func (s *Server) searchSeason(w http.ResponseWriter, r *http.Request, id, categoryID int64, season int) {
-	result, err := s.seasons.Search(r.Context(), categoryID, id, season)
+	result, err := s.seasons.Search(r.Context(), categoryID, id, season, episodeParam(r))
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
@@ -79,7 +85,7 @@ func (s *Server) GrabSeason(w http.ResponseWriter, r *http.Request, id int64, se
 }
 
 func (s *Server) grabSeason(w http.ResponseWriter, r *http.Request, id, categoryID int64, season int) {
-	result, err := s.seasons.Grab(r.Context(), categoryID, id, season)
+	result, err := s.seasons.Grab(r.Context(), categoryID, id, season, episodeParam(r))
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return

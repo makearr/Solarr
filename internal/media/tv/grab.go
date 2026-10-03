@@ -37,12 +37,17 @@ type GrabResult struct {
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the best accepted release,
 // or holds it when origin may wait. Finding nothing acceptable is not an error.
 func (g Grab) SearchAndSend(ctx context.Context, itemID int64, conns []judge.Conn, origin dispatch.GrabOrigin, at time.Time) (GrabResult, error) {
+	return g.SearchEpisodeAndSend(ctx, itemID, 0, conns, origin, at)
+}
+
+// SearchEpisodeAndSend is SearchAndSend for one episode of the season; zero is what the season is missing.
+func (g Grab) SearchEpisodeAndSend(ctx context.Context, itemID int64, episode int, conns []judge.Conn, origin dispatch.GrabOrigin, at time.Time) (GrabResult, error) {
 	if _, inFlight, err := g.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
 		return GrabResult{}, fmt.Errorf("tv: grab item %d: %w", itemID, err)
 	} else if inFlight {
 		return GrabResult{AlreadyInFlight: true}, nil
 	}
-	found, err := g.Search.SearchItem(ctx, itemID, conns, at)
+	found, err := g.Search.SearchEpisode(ctx, itemID, episode, conns, at)
 	if err != nil {
 		return GrabResult{Search: found}, err
 	}

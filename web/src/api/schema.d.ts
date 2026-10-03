@@ -12768,6 +12768,8 @@ export interface operations {
             query: {
                 /** @description The library the series is in; access is checked against it. */
                 category_id: number;
+                /** @description Search this one episode (even if it is unmonitored or present) instead of the season's missing ones. */
+                episode?: number;
             };
             header?: never;
             path: {
@@ -12805,6 +12807,8 @@ export interface operations {
             query: {
                 /** @description The library the series is in; access is checked against it. */
                 category_id: number;
+                /** @description Search this one episode (even if it is unmonitored or present) instead of the season's missing ones. */
+                episode?: number;
             };
             header?: never;
             path: {

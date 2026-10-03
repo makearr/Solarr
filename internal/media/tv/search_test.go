@@ -210,3 +210,31 @@ func TestAnAnimeSeasonIsAlsoSearchedByAbsoluteNumberAndFoundThatWay(t *testing.T
 		t.Errorf("decisions = %d after queries %v; the absolute-number release should cover episode 2", len(result.Decisions), fake.requests)
 	}
 }
+
+func TestOneEpisodeCanBeSearchedWhateverItsMonitoring(t *testing.T) {
+	cache := settingsCache(t)
+	service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	added, _ := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorNone})
+	items, _ := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
+	var season1 int64
+	for _, item := range items {
+		if item.MediaRef == "s01" {
+			season1 = item.ID
+		}
+	}
+	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"tvsearch": {
+		{Title: "Example Show S01E02 720p HDTV x264-GRP", GUID: "g", Link: "https://example.test/g"},
+	}}}
+	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: library.NewCandidates(opened), Settings: cache, Clock: clockAt(addNow)}
+	nothing, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
+	if err != nil || len(nothing.Decisions) != 0 || len(fake.requests) != 0 {
+		t.Fatalf("a season with nothing wanted asked %d times and found %d (err %v)", len(fake.requests), len(nothing.Decisions), err)
+	}
+	result, err := search.SearchEpisode(t.Context(), season1, 2, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Decisions) != 1 || len(fake.requests) == 0 || fake.requests[0].Extra["ep"] != "2" {
+		t.Errorf("decisions = %d, requests = %+v; want a search for episode 2 that finds its release", len(result.Decisions), fake.requests)
+	}
+}

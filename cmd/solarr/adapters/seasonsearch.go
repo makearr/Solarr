@@ -54,7 +54,7 @@ func (c SeasonSearch) conns(ctx context.Context) ([]judge.Conn, error) {
 }
 
 // Search runs the interactive search: decisions recorded, nothing sent.
-func (c SeasonSearch) Search(ctx context.Context, categoryID, seriesID int64, season int) (apiserver.SearchItemResult, error) {
+func (c SeasonSearch) Search(ctx context.Context, categoryID, seriesID int64, season, episode int) (apiserver.SearchItemResult, error) {
 	itemID, err := c.item(ctx, categoryID, seriesID, season)
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
@@ -63,7 +63,7 @@ func (c SeasonSearch) Search(ctx context.Context, categoryID, seriesID int64, se
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
 	}
-	result, err := c.Acquire.Search.SearchItem(ctx, itemID, conns, c.Clock.Now())
+	result, err := c.Acquire.Search.SearchEpisode(ctx, itemID, episode, conns, c.Clock.Now())
 	if err != nil {
 		return apiserver.SearchItemResult{}, seasonSearchError(err)
 	}
@@ -77,7 +77,7 @@ func (c SeasonSearch) Search(ctx context.Context, categoryID, seriesID int64, se
 }
 
 // Grab is the automatic search of the season: search, then send the best release.
-func (c SeasonSearch) Grab(ctx context.Context, categoryID, seriesID int64, season int) (apiserver.GrabResult, error) {
+func (c SeasonSearch) Grab(ctx context.Context, categoryID, seriesID int64, season, episode int) (apiserver.GrabResult, error) {
 	itemID, err := c.item(ctx, categoryID, seriesID, season)
 	if err != nil {
 		return apiserver.GrabResult{}, err
@@ -86,7 +86,7 @@ func (c SeasonSearch) Grab(ctx context.Context, categoryID, seriesID int64, seas
 	if err != nil {
 		return apiserver.GrabResult{}, err
 	}
-	result, err := c.Acquire.SearchAndSend(ctx, itemID, conns, dispatch.GrabUser, c.Clock.Now())
+	result, err := c.Acquire.SearchEpisodeAndSend(ctx, itemID, episode, conns, dispatch.GrabUser, c.Clock.Now())
 	if err != nil {
 		return apiserver.GrabResult{}, seasonSearchError(err)
 	}

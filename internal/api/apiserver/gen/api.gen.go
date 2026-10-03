@@ -4578,6 +4578,9 @@ type SendSeasonCandidateParams struct {
 
 // GrabSeasonParams defines parameters for GrabSeason.
 type GrabSeasonParams struct {
+	// Episode Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
+	Episode *int `form:"episode,omitempty" json:"episode,omitempty"`
+
 	// CategoryId The library the series is in; access is checked against it.
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
@@ -4595,6 +4598,9 @@ type SetSeasonMonitoredParams struct {
 
 // SearchSeasonParams defines parameters for SearchSeason.
 type SearchSeasonParams struct {
+	// Episode Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
+	Episode *int `form:"episode,omitempty" json:"episode,omitempty"`
+
 	// CategoryId The library the series is in; access is checked against it.
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
@@ -13789,6 +13795,14 @@ func (siw *ServerInterfaceWrapper) GrabSeason(w http.ResponseWriter, r *http.Req
 	// Parameter object where we will unmarshal all parameters from the context
 	var params GrabSeasonParams
 
+	// ------------- Optional query parameter "episode" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "episode", r.URL.Query(), &params.Episode)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "episode", Err: err})
+		return
+	}
+
 	// ------------- Required query parameter "category_id" -------------
 
 	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
@@ -13908,6 +13922,14 @@ func (siw *ServerInterfaceWrapper) SearchSeason(w http.ResponseWriter, r *http.R
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params SearchSeasonParams
+
+	// ------------- Optional query parameter "episode" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "episode", r.URL.Query(), &params.Episode)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "episode", Err: err})
+		return
+	}
 
 	// ------------- Required query parameter "category_id" -------------
 

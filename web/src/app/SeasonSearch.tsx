@@ -12,19 +12,22 @@ export function SeasonSearchDialog({
   categoryId,
   seriesId,
   season,
+  episode,
   title,
   onClose,
 }: {
   categoryId: number;
   seriesId: number;
   season: number;
+  /** Search this one episode instead of what the season is missing. */
+  episode?: number;
   title: string;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const params = { path: { id: seriesId, season }, query: { category_id: categoryId } };
+  const params = { path: { id: seriesId, season }, query: { category_id: categoryId, ...(episode ? { episode } : {}) } };
   const found = useQuery({
-    queryKey: ["series", String(categoryId), String(seriesId), "season", season, "interactive-search"],
+    queryKey: ["series", String(categoryId), String(seriesId), "season", season, episode ?? 0, "interactive-search"],
     queryFn: async () => {
       const { data, error } = await api.POST("/series/{id}/seasons/{season}/search", { params });
       if (error) throw error;

@@ -78,7 +78,7 @@ func seasonNumber(mediaRef string) (int, bool) {
 	return number, err == nil && strings.HasPrefix(mediaRef, "s")
 }
 
-func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem) (wanted, error) {
+func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only int) (wanted, error) {
 	if item.SatisfactionKind != "SET" {
 		return wanted{}, ErrNotSearchable
 	}
@@ -106,7 +106,12 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem) (want
 			w.absolute[absolute] = episode.Number
 		}
 		aired := (episode.AvailableAt > 0 && episode.AvailableAt <= now.Unix()) || (episode.AvailableAt == 0 && episode.Date != "" && episode.Date <= today)
-		if episode.Monitored && !episode.Present && aired {
+		switch {
+		case only > 0:
+			if episode.Number == only {
+				w.missing[episode.Number] = episode
+			}
+		case episode.Monitored && !episode.Present && aired:
 			w.missing[episode.Number] = episode
 		}
 	}
@@ -207,11 +212,17 @@ func cleanQuery(title string) string {
 // SearchItem searches one season item: tiers widen until one finds a release that covers a missing episode, and every
 // release that did is judged and recorded (a REJECT or DEFER is a finding, not silence).
 func (s Search) SearchItem(ctx context.Context, itemID int64, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
+	return s.SearchEpisode(ctx, itemID, 0, conns, at)
+}
+
+// SearchEpisode is SearchItem for one episode of the season, whether or not it is monitored or already on disk; zero
+// searches what the season is missing.
+func (s Search) SearchEpisode(ctx context.Context, itemID int64, episode int, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
 	item, err := s.Desired.Get(ctx, itemID)
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("tv: search item %d: %w", itemID, err)
 	}
-	w, err := s.wantedFor(ctx, item)
+	w, err := s.wantedFor(ctx, item, episode)
 	if err != nil {
 		return ItemSearchResult{}, err
 	}

@@ -5461,6 +5461,11 @@ paths:
       summary: >-
         Interactive search: ask every indexer for this season (id query first, then text) and record a decision per
         release that covers a wanted episode. Nothing is sent.
+      parameters:
+        - name: episode
+          in: query
+          description: Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
+          schema: { type: integer, minimum: 0 }
       responses:
         "200":
           description: What this run found, decided and persisted.
@@ -5494,6 +5499,11 @@ paths:
       operationId: grabSeason
       tags: [series]
       summary: "Automatic search, as in Sonarr: search the season and send its best accepted release to a download client."
+      parameters:
+        - name: episode
+          in: query
+          description: Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
+          schema: { type: integer, minimum: 0 }
       responses:
         "200":
           description: What the search found and what, if anything, was sent.
