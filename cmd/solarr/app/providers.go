@@ -368,7 +368,7 @@ func (p *process) tvService() tv.Service {
 			"tvmaze":  {MinInterval: 500 * time.Millisecond},
 			"tmdb":    {MinInterval: 50 * time.Millisecond},
 			"tvdb":    {MinInterval: 100 * time.Millisecond},
-			"anilist": {MinInterval: 700 * time.Millisecond},
+			"anilist": {MinInterval: 2 * time.Second},
 		}}, nil)
 		client := func(name string) *httpx.Client {
 			return httpx.NewClient(wall, guard, limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{

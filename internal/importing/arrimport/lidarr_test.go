@@ -208,3 +208,22 @@ func TestSonarrClient_SeriesReadsTheV3APIWithTheKey(t *testing.T) {
 		t.Fatalf("request = %s key %q", transport.requested[0].Method, got)
 	}
 }
+
+func TestSonarrClient_ReadsEpisodesAndQualityProfiles(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://sonarr.local/api/v3/episode?seriesId=7": {status: 200, body: `[{"seasonNumber":1,"episodeNumber":2,"monitored":false,"hasFile":true},{"seasonNumber":0,"episodeNumber":1,"monitored":true}]`},
+		"http://sonarr.local/api/v3/qualityprofile":     {status: 200, body: `[{"id":1,"name":"Any","cutoff":1}]`},
+	}}
+	client := arrimport.NewLidarrClient(newTestClient(t, transport), "http://sonarr.local", "key").Sonarr()
+	episodes, err := client.Episodes(t.Context(), 7)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []arrimport.SonarrEpisode{{SeasonNumber: 1, EpisodeNumber: 2, HasFile: true}, {SeasonNumber: 0, EpisodeNumber: 1, Monitored: true}}; !reflect.DeepEqual(episodes, want) {
+		t.Errorf("episodes = %+v, want %+v", episodes, want)
+	}
+	profiles, err := client.QualityProfiles(t.Context())
+	if err != nil || len(profiles) != 1 || profiles[0].Name != "Any" || profiles[0].ID != 1 {
+		t.Errorf("profiles = %+v, err = %v", profiles, err)
+	}
+}

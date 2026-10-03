@@ -303,3 +303,19 @@ func TestApplyMonitorReappliesSonarrsChoicesToAHeldSeries(t *testing.T) {
 		t.Error("an unknown option was accepted")
 	}
 }
+
+func TestSetEpisodeMonitoringChangesOnlyTheEpisodesItNames(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := service.SetEpisodeMonitoring(t.Context(), 3, added.WorkID, map[tv.Key]bool{{Season: 1, Number: 2}: false, {Season: 2, Number: 1}: true}); err != nil {
+		t.Fatal(err)
+	}
+	parts := partMonitoring(t, opened, added.WorkID)
+	if parts["s01:e01"] != 1 || parts["s01:e02"] != 0 || parts["s02:e01"] != 1 || parts["s02:e03"] != 1 {
+		t.Errorf("parts = %v: the unnamed ones stay as the add left them", parts)
+	}
+}

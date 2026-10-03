@@ -2,6 +2,7 @@ package arrimport
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -64,4 +65,36 @@ func (c SonarrClient) Series(ctx context.Context) ([]SonarrSeries, error) {
 		return nil, err
 	}
 	return series, nil
+}
+
+// SonarrEpisode is one episode's monitored flag and whether Sonarr has a file for it.
+type SonarrEpisode struct {
+	SeasonNumber  int  `json:"seasonNumber"`
+	EpisodeNumber int  `json:"episodeNumber"`
+	Monitored     bool `json:"monitored"`
+	HasFile       bool `json:"hasFile"`
+}
+
+// Episodes answers every episode of one series, with the monitoring Sonarr holds for each.
+func (c SonarrClient) Episodes(ctx context.Context, seriesID int64) ([]SonarrEpisode, error) {
+	var episodes []SonarrEpisode
+	if err := c.inner.get(ctx, "/api/v3/episode?seriesId="+strconv.FormatInt(seriesID, 10), &episodes); err != nil {
+		return nil, err
+	}
+	return episodes, nil
+}
+
+// SonarrQualityProfile is a quality profile's id and name.
+type SonarrQualityProfile struct {
+	ID   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
+// QualityProfiles answers the instance's quality profiles, so a series' profile id can be read as a name.
+func (c SonarrClient) QualityProfiles(ctx context.Context) ([]SonarrQualityProfile, error) {
+	var profiles []SonarrQualityProfile
+	if err := c.inner.get(ctx, "/api/v3/qualityprofile", &profiles); err != nil {
+		return nil, err
+	}
+	return profiles, nil
 }

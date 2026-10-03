@@ -365,6 +365,22 @@ func (s Service) ApplyMonitor(ctx context.Context, categoryID, workID int64, opt
 	return s.Desired.ApplyPartMonitoring(ctx, workID, wanted)
 }
 
+// SetEpisodeMonitoring sets the monitored flag of the episodes named by (season, number), leaving any it does not name
+// as it is, and each season follows; a Sonarr import carries its own per-episode choices over this way.
+func (s Service) SetEpisodeMonitoring(ctx context.Context, categoryID, workID int64, wanted map[Key]bool) error {
+	detail, err := s.Reader.Get(ctx, categoryID, workID, s.Clock.Now())
+	if err != nil {
+		return err
+	}
+	byPart := make(map[int64]bool, len(wanted))
+	for _, held := range detail.Episodes {
+		if on, named := wanted[Key{held.Season, held.Number}]; named {
+			byPart[held.PartID] = on
+		}
+	}
+	return s.Desired.ApplyPartMonitoring(ctx, workID, byPart)
+}
+
 // SetProfile gives every season of a series the quality profile, or returns them to the library's when nil.
 func (s Service) SetProfile(ctx context.Context, categoryID, workID int64, profileID *int64) error {
 	detail, err := s.Reader.Get(ctx, categoryID, workID, s.Clock.Now())
