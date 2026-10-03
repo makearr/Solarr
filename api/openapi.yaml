@@ -5168,6 +5168,39 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /series/exclusions:
+    get:
+      operationId: listSeriesExclusions
+      tags: [series]
+      summary: The series that were deleted and must not be added again, by any library.
+      responses:
+        "200":
+          description: One entry per deleted series.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/SeriesExclusion" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: removeSeriesExclusion
+      tags: [series]
+      summary: Allow a deleted series to be added again. Administrator only.
+      parameters:
+        - name: provider
+          in: query
+          required: true
+          schema: { type: string }
+        - name: external_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Allowed again. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /series/lookup:
     get:
       operationId: lookupSeries
@@ -5220,6 +5253,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SeriesDetail" }
         "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteSeries
+      tags: [series]
+      summary: Remove a series from the library, with its files in the recycle bin when asked.
+      parameters:
+        - name: delete_files
+          in: query
+          schema: { type: boolean, default: false }
+          description: Send the series' files to the recycle bin; never deleted directly.
+        - name: exclude
+          in: query
+          schema: { type: boolean, default: true }
+          description: Remember the series so a scan, a follow or an import list does not add it back.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
   /series/{id}/refresh:
@@ -8174,6 +8225,15 @@ components:
           items: { type: string }
         monitor: { type: string }
         back_catalogue: { type: boolean }
+
+    SeriesExclusion:
+      type: object
+      required: [title, provider, external_id, created_at]
+      properties:
+        title: { type: string }
+        provider: { type: string, description: One id the series was excluded by; removing it allows the series again. }
+        external_id: { type: string }
+        created_at: { type: integer, format: int64, description: Unix seconds. }
 
     SeriesPerson:
       type: object

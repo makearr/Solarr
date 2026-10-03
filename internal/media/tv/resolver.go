@@ -57,6 +57,10 @@ func GuessFolder(name string) FolderGuess {
 	return guess
 }
 
+// ExcludedSeries is what Resolve answers for a series the user deleted and asked not to see again: not a place to put
+// the file, and not something to queue for review either.
+const ExcludedSeries int64 = -1
+
 // Resolve finds the series a folder is, adding it from the providers when it is new and unambiguous. Zero means
 // it could not be placed; the candidates then say what was considered.
 func (c Resolver) Resolve(ctx context.Context, categoryID int64, folder, relPath string) (int64, []model.Identification) {
@@ -132,6 +136,9 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 }
 
 func (c Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
+	if c.Service.IsExcluded(ctx, ids) {
+		return ExcludedSeries
+	}
 	profile := c.DefaultProfileID
 	if category, ok := c.Categories.Category(categoryID); ok {
 		profile = c.Categories.ProfileFor(category, profile)

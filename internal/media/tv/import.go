@@ -110,7 +110,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			}
 			workID, candidates = i.config.Resolver.Resolve(ctx, request.CategoryID, folder, firstMedia(unit))
 		}
-		if workID == 0 {
+		if workID <= 0 {
 			result.Decisions[index] = decision
 			result.Decisions[index].CandidatesJSON = library.CandidatesJSON(candidates)
 			continue

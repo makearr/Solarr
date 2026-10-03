@@ -624,6 +624,13 @@ type ScanState struct {
 	DirectoriesRead int64
 }
 
+type SeriesExclusion struct {
+	Provider   string
+	ExternalID string
+	Title      string
+	CreatedAt  int64
+}
+
 type StatRollup struct {
 	Metric     string
 	Dimension  string

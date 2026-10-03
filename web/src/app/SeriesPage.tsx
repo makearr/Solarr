@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Pencil, RefreshCw, Search, Tv, User } from "lucide-react";
 
@@ -75,6 +75,24 @@ function SeriesEdit({ seriesId, categoryId, profileId, onChanged }: { seriesId: 
     onSuccess: onChanged,
   });
   const select = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs";
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const [deleteFiles, setDeleteFiles] = useState(false);
+  const [exclude, setExclude] = useState(true);
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE("/series/{id}", {
+        params: { path: { id: seriesId }, query: { ...query, delete_files: deleteFiles, exclude } },
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["series", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+      void navigate({ to: "/library/$categoryId/$level", params: { categoryId, level: "series" } });
+    },
+  });
   return (
     <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
       <div className="flex flex-wrap items-center gap-2">
@@ -112,6 +130,39 @@ function SeriesEdit({ seriesId, categoryId, profileId, onChanged }: { seriesId: 
         </button>
         {saveProfile.isError && <span className="text-danger">That could not be saved.</span>}
         {saveProfile.isSuccess && <span className="text-ok">Saved.</span>}
+      </div>
+      <div className="flex flex-col gap-2 border-t border-border-subtle pt-3">
+        {!confirming ? (
+          <button type="button" onClick={() => setConfirming(true)} className="w-fit rounded-md border border-border-subtle px-2 py-1 text-danger hover:bg-canvas">
+            Delete series…
+          </button>
+        ) : (
+          <>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={deleteFiles} onChange={(event) => setDeleteFiles(event.target.checked)} />
+              Also move its files to the recycle bin (they stay recoverable for the retention period)
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" checked={exclude} onChange={(event) => setExclude(event.target.checked)} />
+              Do not add it back: a scan, a follow or an import list leaves it out
+            </label>
+            {!deleteFiles && !exclude && <p className="text-warn">The files stay and the next scan will add the series again.</p>}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+                className="rounded-md bg-danger px-3 py-1 text-white disabled:opacity-50"
+              >
+                {remove.isPending ? "Deleting…" : "Delete"}
+              </button>
+              <button type="button" onClick={() => setConfirming(false)} className="rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink">
+                Cancel
+              </button>
+              {remove.isError && <span className="text-danger">That could not be deleted.</span>}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

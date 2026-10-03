@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus, Search, Tv } from "lucide-react";
 
@@ -80,6 +80,7 @@ export function SeriesTile({ series, categoryId }: { series: Series; categoryId:
 export function SeriesIndex() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const library = useLibrary(categoryId);
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [sort, setSort] = usePreference<SortKey>(`series.sort.${categoryId}`, "title");
   const [status, setStatus] = useState<"all" | "continuing" | "ended">("all");
@@ -118,6 +119,22 @@ export function SeriesIndex() {
       profiles: [...new Set(all.map((series) => series.quality_profile_id).filter((id): id is number => id != null))],
     };
   }, [all]);
+  const exclusions = useQuery({
+    queryKey: ["series-exclusions"],
+    retry: false,
+    queryFn: async () => {
+      const { data, error } = await api.GET("/series/exclusions");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const allow = useMutation({
+    mutationFn: async (entry: { provider: string; external_id: string }) => {
+      const { error } = await api.DELETE("/series/exclusions", { params: { query: entry } });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["series-exclusions"] }),
+  });
   const profileNames = useQuery({
     queryKey: ["qualityprofiles"],
     queryFn: async () => {
@@ -237,6 +254,21 @@ export function SeriesIndex() {
           <Plus aria-hidden className="size-3.5" /> Add series
         </Link>
       </div>
+      {(exclusions.data ?? []).length > 0 && (
+        <details className="border-b border-border-subtle px-4 py-1.5 text-xs text-ink-muted">
+          <summary className="cursor-pointer">Deleted series that are not added back ({exclusions.data?.length})</summary>
+          <ul className="mt-1 flex flex-col gap-1">
+            {(exclusions.data ?? []).map((entry) => (
+              <li key={`${entry.provider}:${entry.external_id}`} className="flex items-center gap-2">
+                <span className="text-ink">{entry.title}</span>
+                <button type="button" disabled={allow.isPending} onClick={() => allow.mutate(entry)} className="rounded border border-border-subtle px-1.5 py-0.5 hover:text-ink">
+                  Allow again
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       <div ref={scroller} className="min-h-0 flex-1 overflow-auto" style={{ padding: POSTER_PADDING }}>
         {pages.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
         {pages.error !== null && !pages.isLoading && <p className="text-sm text-danger">The series could not be read.</p>}

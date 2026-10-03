@@ -470,6 +470,16 @@ func (s Service) ensureSeasons(
 	return len(seen), nil
 }
 
+// IsExcluded reports whether the user deleted this series and asked not to see it again.
+func (s Service) IsExcluded(ctx context.Context, ids IDs) bool {
+	excluded, err := s.Series.Excluded(ctx, idWrites(ids))
+	if err != nil {
+		s.warn("exclusion check", ids.TVDB, err)
+		return false
+	}
+	return excluded
+}
+
 // Candidate is one series a search found.
 type Candidate struct {
 	// TVDBID is TheTVDB's id; zero for a show only TMDB lists, which carries TMDBID instead.

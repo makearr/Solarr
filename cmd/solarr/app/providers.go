@@ -392,6 +392,7 @@ func (p *process) seriesCatalog() adapters.SeriesCatalog {
 	return adapters.SeriesCatalog{
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 		Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
+		Remover: p.fileRemover(),
 	}
 }
 

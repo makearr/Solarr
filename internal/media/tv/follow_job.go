@@ -140,7 +140,7 @@ func (j *FollowJob) follow(ctx context.Context, subscription library.Subscriptio
 			break
 		}
 		held, err := j.held(ctx, candidate)
-		if err != nil || held {
+		if err != nil || held || j.config.Service.IsExcluded(ctx, IDs{TMDB: candidate}) {
 			continue
 		}
 		if err := j.add(ctx, subscription, candidate); err != nil {

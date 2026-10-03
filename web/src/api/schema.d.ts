@@ -3209,6 +3209,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The series that were deleted and must not be added again, by any library. */
+        get: operations["listSeriesExclusions"];
+        put?: never;
+        post?: never;
+        /** Allow a deleted series to be added again. Administrator only. */
+        delete: operations["removeSeriesExclusion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/lookup": {
         parameters: {
             query?: never;
@@ -3242,7 +3260,8 @@ export interface paths {
         get: operations["getSeries"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove a series from the library, with its files in the recycle bin when asked. */
+        delete: operations["deleteSeries"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5426,6 +5445,17 @@ export interface components {
             roles: string[];
             monitor: string;
             back_catalogue: boolean;
+        };
+        SeriesExclusion: {
+            title: string;
+            /** @description One id the series was excluded by; removing it allows the series again. */
+            provider: string;
+            external_id: string;
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            created_at: number;
         };
         SeriesPerson: {
             /** Format: int64 */
@@ -12387,6 +12417,51 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    listSeriesExclusions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per deleted series. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesExclusion"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    removeSeriesExclusion: {
+        parameters: {
+            query: {
+                provider: string;
+                external_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Allowed again. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
     lookupSeries: {
         parameters: {
             query: {
@@ -12439,6 +12514,36 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteSeries: {
+        parameters: {
+            query: {
+                /** @description The library the series is in; access is checked against it. */
+                category_id: number;
+                /** @description Send the series' files to the recycle bin; never deleted directly. */
+                delete_files?: boolean;
+                /** @description Remember the series so a scan, a follow or an import list does not add it back. */
+                exclude?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

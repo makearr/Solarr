@@ -147,6 +147,9 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	attached, matched := 0, 0
 	for folder, indexes := range byFolder {
 		series, candidates := c.resolver.Resolve(ctx, categoryID, folder, readable[indexes[0]].File.RelPath)
+		if series == ExcludedSeries {
+			continue
+		}
 		keepMonitoring := false
 		if category, found := c.config.Categories.Category(categoryID); found {
 			keepMonitoring = category.TVMonitor == settings.TVMonitorNone

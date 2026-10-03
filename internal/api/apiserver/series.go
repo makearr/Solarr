@@ -39,6 +39,12 @@ type SeriesCatalog interface {
 	Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error)
 	SetEpisodeMonitored(ctx context.Context, categoryID, seriesID, partID int64, monitored bool) error
 	SetSeasonMonitored(ctx context.Context, categoryID, seriesID int64, season int, monitored bool) error
+	// Delete removes a series; deleteFiles sends its files to the recycle bin, exclude remembers it so it is not added back.
+	Delete(ctx context.Context, categoryID, seriesID int64, deleteFiles, exclude bool) error
+	// Exclusions lists the deleted series that must not be added again.
+	Exclusions(ctx context.Context) ([]gen.SeriesExclusion, error)
+	// RemoveExclusion allows the series the id belongs to again.
+	RemoveExclusion(ctx context.Context, provider, externalID string) error
 	// ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.
 	ApplyMonitor(ctx context.Context, categoryID, seriesID int64, option string, specials bool) error
 	// SetProfile gives the series a quality profile of its own, or the library's when nil.
@@ -412,6 +418,76 @@ func (s *Server) setSeriesQuality(w http.ResponseWriter, r *http.Request, id, ca
 		return
 	}
 	if err := s.series.SetProfile(r.Context(), categoryID, id, body.QualityProfileID); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) routeDeleteSeries(w http.ResponseWriter, r *http.Request) {
+	id, category, ok := s.seriesPath(w, r)
+	if !ok {
+		return
+	}
+	query := r.URL.Query()
+	params := gen.DeleteSeriesParams{CategoryId: category}
+	for name, target := range map[string]**bool{"delete_files": &params.DeleteFiles, "exclude": &params.Exclude} {
+		if raw := query.Get(name); raw != "" {
+			value, err := strconv.ParseBool(raw)
+			if err != nil {
+				writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", name+" must be true or false")
+				return
+			}
+			*target = &value
+		}
+	}
+	s.DeleteSeries(w, r, id, params)
+}
+
+// DeleteSeries removes a series from a TV library, its files going to the recycle bin when asked.
+func (s *Server) DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params gen.DeleteSeriesParams) {
+	if _, ok := s.seriesAccess(w, r, params.CategoryId, settings.PermissionManage); !ok {
+		return
+	}
+	if err := s.series.Delete(r.Context(), params.CategoryId, id, derefOr(params.DeleteFiles, false), derefOr(params.Exclude, true)); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ListSeriesExclusions answers the deleted series that are not added again. Administrator only.
+func (s *Server) ListSeriesExclusions(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.series == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "series are not available")
+		return
+	}
+	list, err := s.series.Exclusions(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, list)
+}
+
+func (s *Server) routeRemoveSeriesExclusion(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	s.RemoveSeriesExclusion(w, r, gen.RemoveSeriesExclusionParams{Provider: query.Get("provider"), ExternalId: query.Get("external_id")})
+}
+
+// RemoveSeriesExclusion lets a deleted series be added again. Administrator only.
+func (s *Server) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, params gen.RemoveSeriesExclusionParams) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.series == nil || params.Provider == "" || params.ExternalId == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "provider and external_id are required")
+		return
+	}
+	if err := s.series.RemoveExclusion(r.Context(), params.Provider, params.ExternalId); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

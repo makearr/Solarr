@@ -147,6 +147,24 @@ func TestScanMonitorsWhatTheLibraryAsksFor(t *testing.T) {
 	}
 }
 
+func TestAnExcludedSeriesIsNeitherAddedNorQueued(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t, searchSkyhook{series: fixtureSkyhook()})
+	if err := library.NewSeries(opened).Exclude(t.Context(), addNow, "Example Show", []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "1234"}}); err != nil {
+		t.Fatal(err)
+	}
+	batch := []scan.Observed{writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv")}
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow); len(list) != 0 {
+		t.Errorf("an excluded series was added: %+v", list)
+	}
+	queued, err := librarydb.New(opened.Read()).CountUnidentified(t.Context(), librarydb.CountUnidentifiedParams{FilterRootFolders: 0, RootFolderIds: "[]"})
+	if err != nil || queued != 0 {
+		t.Errorf("queued = %d, err = %v; an excluded series' files are left alone, not sent to review", queued, err)
+	}
+}
+
 func TestScanQueuesAFolderItCannotPlace(t *testing.T) {
 	sky := fixtureSkyhook()
 	sky.Title = "Something Else Entirely"

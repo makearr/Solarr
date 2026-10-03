@@ -19,6 +19,7 @@ type Querier interface {
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
 	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
+	AddSeriesExclusion(ctx context.Context, arg AddSeriesExclusionParams) error
 	// The closure is materialised, so inserting a tag inserts its ancestry too.
 	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
@@ -124,6 +125,7 @@ type Querier interface {
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
+	CountSeriesExclusion(ctx context.Context, arg CountSeriesExclusionParams) (int64, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
@@ -216,6 +218,7 @@ type Querier interface {
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
+	DeleteSeriesExclusion(ctx context.Context, arg DeleteSeriesExclusionParams) error
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
@@ -576,9 +579,12 @@ type Querier interface {
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
+	ListSeriesExclusions(ctx context.Context) ([]SeriesExclusion, error)
 	// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
 	// ordered by sort title with the id as the tie-break.
 	ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error)
+	// Every media object that belongs to a series: attached to an episode or linked to the work.
+	ListSeriesMediaObjects(ctx context.Context, workID int64) ([]int64, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
 	ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.

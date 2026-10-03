@@ -24,6 +24,8 @@ type SeriesCatalog struct {
 	Categories       Categories
 	DefaultProfileID int64
 	Clock            clock.Clock
+	// Remover sends a deleted series' files to the recycle bin.
+	Remover FileRemover
 }
 
 // List maps a page of series.
@@ -167,6 +169,9 @@ func (c SeriesCatalog) Add(ctx context.Context, userID int64, request gen.AddSer
 	if request.QualityProfileId != nil {
 		profile = *request.QualityProfileId
 	}
+	if err := c.RemoveExclusion(ctx, provider, request.ExternalId); err != nil {
+		return gen.AddSeriesResult{}, err
+	}
 	result, err := c.Service.Add(ctx, tv.AddRequest{
 		IDs: ids, CategoryID: request.CategoryId, ProfileID: profile, Monitor: monitor,
 		Specials: request.MonitorSpecials != nil && *request.MonitorSpecials, AddedBy: &userID,
@@ -197,6 +202,84 @@ func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) 
 		return gen.AddSeriesResult{}, err
 	}
 	return gen.AddSeriesResult{SeriesId: result.WorkID, Created: false, Episodes: result.Episodes, Seasons: result.Seasons}, nil
+}
+
+// Delete removes a series. Its files go to the recycle bin when asked (never deleted directly), and the series is
+// remembered when it must not be added back; with neither, the next scan finds the folder and adds it again.
+func (c SeriesCatalog) Delete(ctx context.Context, categoryID, seriesID int64, deleteFiles, exclude bool) error {
+	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
+		return translateSeriesError(err)
+	}
+	summaries, err := c.Reader.SummariesByIDs(ctx, categoryID, []int64{seriesID}, c.Clock.Now())
+	if err != nil || len(summaries) == 0 {
+		return translateSeriesError(library.ErrSeriesNotFound)
+	}
+	provider, err := c.Reader.ProviderIDs(ctx, seriesID)
+	if err != nil {
+		return err
+	}
+	if deleteFiles {
+		files, err := c.Reader.MediaObjects(ctx, seriesID)
+		if err != nil {
+			return err
+		}
+		recycling := RecyclingFor(c.Categories, []int64{categoryID})
+		for _, mediaObjectID := range files {
+			if err := c.Remover.RecycleFile(ctx, mediaObjectID, recycling); err != nil {
+				return fmt.Errorf("recycle file %d: %w", mediaObjectID, err)
+			}
+		}
+	}
+	if exclude {
+		var ids []library.ExternalIDWrite
+		for name, id := range provider {
+			ids = append(ids, library.ExternalIDWrite{Provider: name, ExternalID: id})
+		}
+		if err := c.Service.Series.Exclude(ctx, c.Clock.Now(), summaries[0].Title, ids); err != nil {
+			return err
+		}
+	}
+	return c.Service.Series.DeleteSeries(ctx, seriesID)
+}
+
+// Exclusions lists the deleted series that are not added again, one entry per series.
+func (c SeriesCatalog) Exclusions(ctx context.Context) ([]gen.SeriesExclusion, error) {
+	rows, err := c.Service.Series.Exclusions(ctx)
+	if err != nil {
+		return nil, err
+	}
+	type key struct {
+		title string
+		at    int64
+	}
+	seen := map[key]bool{}
+	views := make([]gen.SeriesExclusion, 0, len(rows))
+	for _, row := range rows {
+		if k := (key{row.Title, row.CreatedAt}); !seen[k] {
+			seen[k] = true
+			views = append(views, gen.SeriesExclusion{Title: row.Title, Provider: row.Provider, ExternalId: row.ExternalID, CreatedAt: row.CreatedAt})
+		}
+	}
+	return views, nil
+}
+
+// RemoveExclusion allows the series the id belongs to again, by every id it was excluded by.
+func (c SeriesCatalog) RemoveExclusion(ctx context.Context, provider, externalID string) error {
+	rows, err := c.Service.Series.Exclusions(ctx)
+	if err != nil {
+		return err
+	}
+	var ids []library.ExternalIDWrite
+	for _, row := range rows {
+		if row.Provider == provider && row.ExternalID == externalID {
+			for _, sibling := range rows {
+				if sibling.Title == row.Title && sibling.CreatedAt == row.CreatedAt {
+					ids = append(ids, library.ExternalIDWrite{Provider: sibling.Provider, ExternalID: sibling.ExternalID})
+				}
+			}
+		}
+	}
+	return c.Service.Series.Unexclude(ctx, ids)
 }
 
 // ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.

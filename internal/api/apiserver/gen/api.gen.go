@@ -3413,6 +3413,17 @@ type SeriesEpisodeAirConfidence string
 // SeriesEpisodeState What a person wants to see in the column.
 type SeriesEpisodeState string
 
+// SeriesExclusion defines model for SeriesExclusion.
+type SeriesExclusion struct {
+	// CreatedAt Unix seconds.
+	CreatedAt  int64  `json:"created_at"`
+	ExternalId string `json:"external_id"`
+
+	// Provider One id the series was excluded by; removing it allows the series again.
+	Provider string `json:"provider"`
+	Title    string `json:"title"`
+}
+
 // SeriesFollow defines model for SeriesFollow.
 type SeriesFollow struct {
 	BackCatalogue bool     `json:"back_catalogue"`
@@ -4393,6 +4404,12 @@ type ListSeriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// RemoveSeriesExclusionParams defines parameters for RemoveSeriesExclusion.
+type RemoveSeriesExclusionParams struct {
+	Provider   string `form:"provider" json:"provider"`
+	ExternalId string `form:"external_id" json:"external_id"`
+}
+
 // LookupSeriesParams defines parameters for LookupSeries.
 type LookupSeriesParams struct {
 	CategoryId int64  `form:"category_id" json:"category_id"`
@@ -4443,6 +4460,18 @@ type ListWantedEpisodesParams struct {
 	CategoryId int64   `form:"category_id" json:"category_id"`
 	Cursor     *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit      *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// DeleteSeriesParams defines parameters for DeleteSeries.
+type DeleteSeriesParams struct {
+	// DeleteFiles Send the series' files to the recycle bin; never deleted directly.
+	DeleteFiles *bool `form:"delete_files,omitempty" json:"delete_files,omitempty"`
+
+	// Exclude Remember the series so a scan, a follow or an import list does not add it back.
+	Exclude *bool `form:"exclude,omitempty" json:"exclude,omitempty"`
+
+	// CategoryId The library the series is in; access is checked against it.
+	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
 // GetSeriesParams defines parameters for GetSeries.
@@ -5492,6 +5521,12 @@ type ServerInterface interface {
 	// Add a series to a library (Sonarr's add dialog).
 	// (POST /series)
 	AddSeries(w http.ResponseWriter, r *http.Request)
+	// Allow a deleted series to be added again. Administrator only.
+	// (DELETE /series/exclusions)
+	RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, params RemoveSeriesExclusionParams)
+	// The series that were deleted and must not be added again, by any library.
+	// (GET /series/exclusions)
+	ListSeriesExclusions(w http.ResponseWriter, r *http.Request)
 	// Search the metadata sources for a series to add.
 	// (GET /series/lookup)
 	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
@@ -5522,6 +5557,9 @@ type ServerInterface interface {
 	// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
 	// (GET /series/wanted)
 	ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams)
+	// Remove a series from the library, with its files in the recycle bin when asked.
+	// (DELETE /series/{id})
+	DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams)
 	// A series with its seasons and episodes.
 	// (GET /series/{id})
 	GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams)
@@ -6728,6 +6766,18 @@ func (_ Unimplemented) AddSeries(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Allow a deleted series to be added again. Administrator only.
+// (DELETE /series/exclusions)
+func (_ Unimplemented) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, params RemoveSeriesExclusionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The series that were deleted and must not be added again, by any library.
+// (GET /series/exclusions)
+func (_ Unimplemented) ListSeriesExclusions(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Search the metadata sources for a series to add.
 // (GET /series/lookup)
 func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams) {
@@ -6785,6 +6835,12 @@ func (_ Unimplemented) FollowSeriesPerson(w http.ResponseWriter, r *http.Request
 // Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
 // (GET /series/wanted)
 func (_ Unimplemented) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a series from the library, with its files in the recycle bin when asked.
+// (DELETE /series/{id})
+func (_ Unimplemented) DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12525,6 +12581,85 @@ func (siw *ServerInterfaceWrapper) AddSeries(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// RemoveSeriesExclusion operation middleware
+func (siw *ServerInterfaceWrapper) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveSeriesExclusionParams
+
+	// ------------- Required query parameter "provider" -------------
+
+	if paramValue := r.URL.Query().Get("provider"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "provider", r.URL.Query(), &params.Provider)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "external_id" -------------
+
+	if paramValue := r.URL.Query().Get("external_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "external_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "external_id", r.URL.Query(), &params.ExternalId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "external_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveSeriesExclusion(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSeriesExclusions operation middleware
+func (siw *ServerInterfaceWrapper) ListSeriesExclusions(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSeriesExclusions(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // LookupSeries operation middleware
 func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.Request) {
 
@@ -13025,6 +13160,73 @@ func (siw *ServerInterfaceWrapper) ListWantedEpisodes(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListWantedEpisodes(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteSeries operation middleware
+func (siw *ServerInterfaceWrapper) DeleteSeries(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteSeriesParams
+
+	// ------------- Optional query parameter "delete_files" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "delete_files", r.URL.Query(), &params.DeleteFiles)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "delete_files", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "exclude" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "exclude", r.URL.Query(), &params.Exclude)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteSeries(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15703,6 +15905,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/series", wrapper.AddSeries)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/series/exclusions", wrapper.RemoveSeriesExclusion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/exclusions", wrapper.ListSeriesExclusions)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
 	})
 	r.Group(func(r chi.Router) {
@@ -15731,6 +15939,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/wanted", wrapper.ListWantedEpisodes)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/series/{id}", wrapper.DeleteSeries)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/{id}", wrapper.GetSeries)
