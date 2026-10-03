@@ -145,8 +145,11 @@ export function TVPeople() {
       {people.isError && <p className="text-sm text-danger">The people could not be loaded.</p>}
       {!people.isLoading && items.length === 0 && (
         <p className="max-w-xl text-sm text-ink-muted">
-          Nobody is credited here yet. Cast, crew and guest stars come from TMDB: store your TMDB key under Settings → Metadata, then
-          refresh a series.
+          {monitored === "true"
+            ? "Nobody is followed yet. Open a person and choose Follow to have their new series added for you."
+            : monitored === "false"
+              ? "Everyone listed here is followed."
+              : "Nobody is credited here yet. Cast, crew and guest stars come from TMDB: store your TMDB key under Settings → Metadata, then refresh a series."}
         </p>
       )}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">

@@ -25,6 +25,15 @@ func normaliseLanguage(raw string) string {
 	return code
 }
 
+// LanguageCode answers a language tag or file-name token as a two-letter code, or "" when it is not one that says a language.
+func LanguageCode(raw string) string {
+	code := normaliseLanguage(raw)
+	if len(code) == 2 || len(code) == 3 {
+		return code
+	}
+	return ""
+}
+
 // lyricsLanguages reads the language the lyrics are in: ID3's USLT shows up as "lyrics-<code>", a Vorbis
 // comment as LYRICS beside a LANGUAGE tag.
 func lyricsLanguages(tags Tags) []string {

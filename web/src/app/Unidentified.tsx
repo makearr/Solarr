@@ -190,6 +190,7 @@ function describeBest(file: UnidentifiedFile): string {
   const best = file.candidates[0];
   if (best === undefined) return "No match found";
   const confidence = Math.round(best.confidence * 100);
+  if (best.title) return `${best.title} (${confidence}%)`;
   return `${best.provider ?? best.strategy} (${confidence}%)`;
 }
 

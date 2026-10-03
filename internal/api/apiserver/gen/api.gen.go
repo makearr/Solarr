@@ -1452,6 +1452,15 @@ type CategoryStatistics struct {
 	// GrowthByMonth Files and bytes first seen per month, oldest first; the first scan lands in one month.
 	GrowthByMonth []StatisticsFiles `json:"growth_by_month"`
 
+	// SeriesBySize Video libraries only; the 20 series taking most space.
+	SeriesBySize *[]StatisticsSeries `json:"series_by_size,omitempty"`
+
+	// SeriesGaps Video libraries only; the 20 series with most aired episodes missing, with how many are still to air.
+	SeriesGaps *[]StatisticsSeries `json:"series_gaps,omitempty"`
+
+	// SizePerHour Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec.
+	SizePerHour *[]StatisticsPicture `json:"size_per_hour,omitempty"`
+
 	// WindowDays How many days back the download figures reach.
 	WindowDays int `json:"window_days"`
 }
@@ -3076,7 +3085,7 @@ type QualityTarget struct {
 	// Container The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.
 	Container string `json:"container"`
 
-	// Hdr sdr, hdr10, dolby_vision...; empty when it does not care.
+	// Hdr sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care.
 	Hdr *string `json:"hdr,omitempty"`
 
 	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
@@ -3477,6 +3486,9 @@ type SeriesEpisode struct {
 	AirDate       *string                     `json:"air_date,omitempty"`
 	AirTime       *time.Time                  `json:"air_time,omitempty"`
 
+	// File The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
+	File *SeriesEpisodeFile `json:"file,omitempty"`
+
 	// Id The part id.
 	Id             int64   `json:"id"`
 	Monitored      bool    `json:"monitored"`
@@ -3495,6 +3507,25 @@ type SeriesEpisodeAirConfidence string
 
 // SeriesEpisodeState What a person wants to see in the column.
 type SeriesEpisodeState string
+
+// SeriesEpisodeFile The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
+type SeriesEpisodeFile struct {
+	AudioChannels *string `json:"audio_channels,omitempty"`
+	AudioCodec    *string `json:"audio_codec,omitempty"`
+	Container     *string `json:"container,omitempty"`
+	Hdr           *string `json:"hdr,omitempty"`
+	MediaObjectId int64   `json:"media_object_id"`
+
+	// MeetsTarget Absent when the library has no target or the file is not measured yet.
+	MeetsTarget *bool   `json:"meets_target,omitempty"`
+	Resolution  *string `json:"resolution,omitempty"`
+	SizeBytes   int64   `json:"size_bytes"`
+
+	// Subtitles Language codes of embedded and sidecar subtitles; und when a file names none.
+	Subtitles        []string `json:"subtitles"`
+	VideoBitrateKbps *int     `json:"video_bitrate_kbps,omitempty"`
+	VideoCodec       *string  `json:"video_codec,omitempty"`
+}
 
 // SeriesExclusion defines model for SeriesExclusion.
 type SeriesExclusion struct {
@@ -3770,6 +3801,26 @@ type StatisticsFiles struct {
 	Key string `json:"key"`
 }
 
+// StatisticsPicture defines model for StatisticsPicture.
+type StatisticsPicture struct {
+	BytesPerHour int64 `json:"bytes_per_hour"`
+	Files        int64 `json:"files"`
+
+	// Key Resolution and codec, e.g. "1080p h265".
+	Key       string `json:"key"`
+	VideoKbps int64  `json:"video_kbps"`
+}
+
+// StatisticsSeries defines model for StatisticsSeries.
+type StatisticsSeries struct {
+	Bytes    *int64 `json:"bytes,omitempty"`
+	Files    *int64 `json:"files,omitempty"`
+	Missing  *int64 `json:"missing,omitempty"`
+	SeriesId int64  `json:"series_id"`
+	Title    string `json:"title"`
+	Unaired  *int64 `json:"unaired,omitempty"`
+}
+
 // SubscriptionPreview defines model for SubscriptionPreview.
 type SubscriptionPreview struct {
 	// DefaultExcludedSecondaryTypes music.DefaultExcludedSecondaryTypes, so the client can pre-check the same boxes a subscription with no filter override would get.
@@ -3863,6 +3914,9 @@ type UnidentifiedCandidate struct {
 	ExternalId *string `json:"external_id,omitempty"`
 	Provider   *string `json:"provider,omitempty"`
 	Strategy   string  `json:"strategy"`
+
+	// Title What the candidate is called
+	Title *string `json:"title,omitempty"`
 }
 
 // UnidentifiedFile defines model for UnidentifiedFile.

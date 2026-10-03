@@ -7,6 +7,7 @@ package librarydb
 
 import (
 	"context"
+	"database/sql"
 )
 
 const aggregateAcquisitionsByCategoryAndState = `-- name: AggregateAcquisitionsByCategoryAndState :many
@@ -269,6 +270,169 @@ func (q *Queries) AggregateFilesByRootAndVideo(ctx context.Context) ([]Aggregate
 			&i.AudioChannels,
 			&i.Files,
 			&i.Bytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const aggregateSeriesGaps = `-- name: AggregateSeriesGaps :many
+SELECT d.category_id, wp.work_id, w.canonical_title AS title,
+       CAST(SUM(CASE WHEN COALESCE(wp.date, '') <> '' AND wp.date <= ?1 THEN 1 ELSE 0 END) AS INTEGER) AS missing,
+       CAST(SUM(CASE WHEN COALESCE(wp.date, '') = '' OR wp.date > ?1 THEN 1 ELSE 0 END) AS INTEGER) AS unaired
+FROM work_part wp
+JOIN work w ON w.id = wp.work_id AND w.media_type = 'tv'
+JOIN (SELECT DISTINCT work_id, category_id FROM desired_item) d ON d.work_id = wp.work_id
+WHERE wp.monitored = 1 AND wp.media_ref NOT LIKE 's00e%'
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item di ON di.id = f.desired_item_id
+                  WHERE di.work_id = wp.work_id AND f.role = 'primary' AND f.media_ref = wp.media_ref)
+GROUP BY d.category_id, wp.work_id
+HAVING missing + unaired > 0
+ORDER BY missing DESC, unaired DESC
+LIMIT 2000
+`
+
+type AggregateSeriesGapsRow struct {
+	CategoryID int64
+	WorkID     int64
+	Title      string
+	Missing    int64
+	Unaired    int64
+}
+
+// Monitored episodes without a file, by series: aired ones are missing, the rest are still to come.
+func (q *Queries) AggregateSeriesGaps(ctx context.Context, today sql.NullString) ([]AggregateSeriesGapsRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateSeriesGaps, today)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateSeriesGapsRow{}
+	for rows.Next() {
+		var i AggregateSeriesGapsRow
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.WorkID,
+			&i.Title,
+			&i.Missing,
+			&i.Unaired,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const aggregateSeriesSize = `-- name: AggregateSeriesSize :many
+SELECT x.category_id, x.work_id, w.canonical_title AS title,
+       CAST(COUNT(*) AS INTEGER) AS files,
+       CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes
+FROM (SELECT DISTINCT d.category_id, d.work_id, f.media_object_id
+      FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+      WHERE f.role = 'primary') x
+JOIN work w ON w.id = x.work_id AND w.media_type = 'tv'
+JOIN media_object mo ON mo.id = x.media_object_id
+GROUP BY x.category_id, x.work_id
+ORDER BY bytes DESC
+LIMIT 2000
+`
+
+type AggregateSeriesSizeRow struct {
+	CategoryID int64
+	WorkID     int64
+	Title      string
+	Files      int64
+	Bytes      int64
+}
+
+// The series of a video library by what they take on disk; each file counted once however many items cover it.
+func (q *Queries) AggregateSeriesSize(ctx context.Context) ([]AggregateSeriesSizeRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateSeriesSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateSeriesSizeRow{}
+	for rows.Next() {
+		var i AggregateSeriesSizeRow
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.WorkID,
+			&i.Title,
+			&i.Files,
+			&i.Bytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const aggregateSizePerHour = `-- name: AggregateSizePerHour :many
+SELECT lp.root_folder_id,
+       CAST(ma.resolution AS TEXT) AS resolution,
+       CAST(ma.video_codec AS TEXT) AS video_codec,
+       CAST(COUNT(*) AS INTEGER) AS files,
+       CAST(SUM(mo.size_bytes) AS INTEGER) AS bytes,
+       CAST(SUM(mo.duration_ms) AS INTEGER) AS duration_ms,
+       CAST(COALESCE(AVG(NULLIF(mo.video_bitrate, 0)), 0) AS INTEGER) AS video_bitrate
+FROM library_path lp
+JOIN media_object mo ON mo.id = lp.media_object_id
+JOIN media_attributes ma ON ma.id = mo.measured_attributes_id
+WHERE ma.video_codec IS NOT NULL AND ma.video_codec <> '' AND ma.resolution IS NOT NULL AND mo.duration_ms > 0
+GROUP BY lp.root_folder_id, resolution, video_codec
+`
+
+type AggregateSizePerHourRow struct {
+	RootFolderID int64
+	Resolution   string
+	VideoCodec   string
+	Files        int64
+	Bytes        int64
+	DurationMs   int64
+	VideoBitrate int64
+}
+
+// Bytes per hour of picture and the average video bitrate by resolution and codec: bloated or starved files show here.
+func (q *Queries) AggregateSizePerHour(ctx context.Context) ([]AggregateSizePerHourRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateSizePerHour)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateSizePerHourRow{}
+	for rows.Next() {
+		var i AggregateSizePerHourRow
+		if err := rows.Scan(
+			&i.RootFolderID,
+			&i.Resolution,
+			&i.VideoCodec,
+			&i.Files,
+			&i.Bytes,
+			&i.DurationMs,
+			&i.VideoBitrate,
 		); err != nil {
 			return nil, err
 		}

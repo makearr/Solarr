@@ -19,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -61,6 +62,7 @@ type Job struct {
 	coverage library.ProbeCoverage
 	roots    Roots
 	tool     mediatool.Tool
+	fs       fsx.FS
 	clock    clock.Clock
 	logger   *slog.Logger
 }
@@ -71,8 +73,10 @@ type Config struct {
 	Coverage library.ProbeCoverage
 	Roots    Roots
 	Tool     mediatool.Tool
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	// FS lists the folder of a video for subtitle files beside it; nil leaves those out.
+	FS     fsx.FS
+	Clock  clock.Clock
+	Logger *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -83,7 +87,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, clock: config.Clock, logger: logger,
+		tool: config.Tool, fs: config.FS, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -97,7 +101,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	total, failed := 0, 0
 	// Unmeasured files first; then those measured before the probe read lyrics languages.
 	for _, list := range []func(context.Context, int64, int64) ([]library.UnmeasuredFile, error){
-		j.physical.ListUnmeasured, j.physical.ListStaleProbes,
+		j.physical.ListUnmeasured, j.physical.ListStaleProbes, j.physical.ListStaleVideoProbes,
 	} {
 		var afterID int64
 		for {
@@ -166,7 +170,7 @@ func (j *Job) probeOne(ctx context.Context, file library.UnmeasuredFile) error {
 	}
 
 	measured := probes[0].Measured
-	claim := attributeClaimFromMeasured(measured)
+	claim := attributeClaimFromMeasured(measured, sidecarSubtitleLanguages(j.fs, absolute))
 	probeJSON, err := json.Marshal(measured)
 	if err != nil {
 		return fmt.Errorf("marshal probe json: %w", err)

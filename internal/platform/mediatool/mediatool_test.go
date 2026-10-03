@@ -110,7 +110,7 @@ func TestReadTags_ReportsWhatWasMeasuredNotWhatWasClaimed(t *testing.T) {
 	want := mediatool.Measured{
 		FormatName: "flac", Duration: 215 * time.Second,
 		OverallBitrate: 705600, AudioBitrate: 705600,
-		AudioCodec: "flac", SampleRate: 44100, Channels: 2,
+		AudioCodec: "flac", SampleRate: 44100, Channels: 2, ChannelLayout: "2.0",
 	}
 	if !reflect.DeepEqual(probes[0].Measured, want) {
 		t.Errorf("Measured = %+v, want %+v", probes[0].Measured, want)
@@ -558,5 +558,33 @@ func TestReadTags_ReadsTheLanguagesAFileStates(t *testing.T) {
 				t.Errorf("audio %v lyrics %v, want audio %v lyrics %v", got.AudioLanguages, got.LyricsLanguages, tc.wantAudio, tc.wantLyrics)
 			}
 		})
+	}
+}
+
+func TestReadTags_ReportsAVideoFilesPictureTracksAndSubtitles(t *testing.T) {
+	runner := &fakeRunner{respond: probeReplying(`{
+	  "streams": [
+	    {"codec_name":"mjpeg","codec_type":"video","width":600,"height":600,"disposition":{"attached_pic":1}},
+	    {"codec_name":"hevc","codec_type":"video","width":3840,"height":2160,"avg_frame_rate":"24000/1001",
+	     "field_order":"progressive","color_transfer":"smpte2084","bit_rate":"15000000"},
+	    {"codec_name":"eac3","codec_type":"audio","channels":6,"channel_layout":"5.1(side)","tags":{"language":"eng"}},
+	    {"codec_name":"subrip","codec_type":"subtitle","tags":{"language":"ger"}},
+	    {"codec_name":"subrip","codec_type":"subtitle","tags":{"language":"eng"}},
+	    {"codec_name":"subrip","codec_type":"subtitle","tags":{"language":"ger"}}],
+	  "format": {"format_name":"matroska,webm","duration":"3600","bit_rate":"16000000"}
+	}`)}
+	probes, err := mediatool.New(runner, 1).ReadTags(t.Context(), []string{"/tv/a.mkv"})
+	if err != nil {
+		t.Fatalf("ReadTags: %v", err)
+	}
+	got := probes[0].Measured
+	if got.VideoCodec != "hevc" || got.Width != 3840 || got.Height != 2160 || got.HDR != "hdr10" || got.ScanType != "progressive" {
+		t.Errorf("picture = %+v, want the hevc stream, not the cover picture", got)
+	}
+	if got.FrameRate < 23.9 || got.FrameRate > 24 || got.ChannelLayout != "5.1" {
+		t.Errorf("frame rate = %v, layout = %q", got.FrameRate, got.ChannelLayout)
+	}
+	if len(got.SubtitleLanguages) != 2 || got.SubtitleLanguages[0] != "de" || got.SubtitleLanguages[1] != "en" {
+		t.Errorf("subtitle languages = %v, want de and en once each", got.SubtitleLanguages)
 	}
 }

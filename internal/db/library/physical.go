@@ -202,6 +202,19 @@ func (p Physical) ListStaleProbes(ctx context.Context, afterID int64, pageSize i
 	return files, nil
 }
 
+// ListStaleVideoProbes pages through the video files measured before the probe read the picture and subtitle tracks.
+func (p Physical) ListStaleVideoProbes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+	rows, err := librarydb.New(p.store.Read()).ListStaleVideoProbes(ctx, librarydb.ListStaleVideoProbesParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: list stale video probes: %w", err)
+	}
+	files := make([]UnmeasuredFile, len(rows))
+	for index, row := range rows {
+		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return files, nil
+}
+
 // FileOnRoot is one real file currently on a root, for ADR-51's drain --
 // the primary path only (see ListPathsForRootWithSize's own doc comment for
 // the narrow cross-entry-hardlink gap this leaves).

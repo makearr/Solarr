@@ -11,6 +11,9 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/quality"
+	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/paginate"
@@ -73,8 +76,12 @@ func (c SeriesCatalog) Get(ctx context.Context, categoryID, seriesID int64) (gen
 		}
 		detail.Seasons = append(detail.Seasons, view)
 	}
+	category, haveCategory := c.Categories.Category(categoryID)
 	for i, episode := range row.Episodes {
 		detail.Episodes[i] = episodeView(episode, now)
+		if episode.File != nil {
+			detail.Episodes[i].File = episodeFileView(*episode.File, category, haveCategory)
+		}
 	}
 	credits := make([]gen.SeriesCredit, len(row.Credits))
 	for i, credit := range row.Credits {
@@ -461,4 +468,28 @@ func (c SeriesCatalog) Wanted(ctx context.Context, categoryID int64, after pagin
 		views[i] = view
 	}
 	return views, nil
+}
+
+func episodeFileView(file library.EpisodeFile, category settings.Category, haveCategory bool) *gen.SeriesEpisodeFile {
+	view := &gen.SeriesEpisodeFile{MediaObjectId: file.MediaObjectID, SizeBytes: file.SizeBytes, Subtitles: file.Subtitles}
+	if view.Subtitles == nil {
+		view.Subtitles = []string{}
+	}
+	setString(&view.Resolution, file.Resolution)
+	setString(&view.VideoCodec, file.VideoCodec)
+	setString(&view.Hdr, file.HDR)
+	setString(&view.AudioCodec, file.AudioCodec)
+	setString(&view.AudioChannels, file.AudioChannels)
+	setString(&view.Container, file.Container)
+	if file.VideoBitrate > 0 {
+		kbps := int(file.VideoBitrate / 1000)
+		view.VideoBitrateKbps = &kbps
+	}
+	if haveCategory && category.QualityTarget != nil && file.VideoCodec != "" {
+		meets := quality.MeetsTarget(*category.QualityTarget, score.FileFacts{
+			Resolution: file.Resolution, VideoCodec: file.VideoCodec, HDR: file.HDR, AudioCodec: file.AudioCodec, Container: file.Container,
+		})
+		view.MeetsTarget = &meets
+	}
+	return view
 }

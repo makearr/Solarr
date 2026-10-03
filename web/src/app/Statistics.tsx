@@ -60,6 +60,40 @@ function Breakdown({ title, note, rows }: { title: string; note: string; rows: F
   );
 }
 
+type SeriesFigures = components["schemas"]["StatisticsSeries"][];
+
+/** The series that take most space, or have most episodes missing, each a link to its page. */
+function SeriesList({ title, note, rows, categoryId, gaps }: { title: string; note: string; rows: SeriesFigures | undefined; categoryId: string; gaps?: boolean }) {
+  if (!rows || rows.length === 0) return null;
+  const largest = Math.max(1, ...rows.map((row) => (gaps ? (row.missing ?? 0) : (row.bytes ?? 0))));
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">{title}</h2>
+      <p className="text-xs text-ink-muted">{note}</p>
+      <ul className="flex flex-col gap-1.5">
+        {rows.map((row) => {
+          const value = gaps ? (row.missing ?? 0) : (row.bytes ?? 0);
+          return (
+            <li key={row.series_id} className="flex items-center gap-3 text-sm">
+              <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(row.series_id) }} className="w-56 shrink-0 truncate hover:underline" title={row.title}>
+                {row.title}
+              </Link>
+              <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+                <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${Math.max(1, Math.round((value / largest) * 100))}%` }} />
+              </span>
+              <span className="w-52 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+                {gaps
+                  ? `${row.missing ?? 0} missing${(row.unaired ?? 0) > 0 ? ` · ${row.unaired} to air` : ""}`
+                  : `${row.files ?? 0} files · ${formatBytes(row.bytes ?? 0)}`}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
 /** Where a figure leads: the filtered view that shows exactly those items. */
 function stateLink(categoryId: string, state: string): { to: string; search?: Record<string, string> } {
   if (state === "COMPLETE") return { to: `/library/${categoryId}/albums` };
@@ -135,6 +169,27 @@ export function Statistics() {
               <Breakdown title="Video codec" note="As the probe measured each file." rows={data.files_by_video_codec} />
               <Breakdown title="HDR" note="Files without an HDR format count as sdr." rows={data.files_by_hdr} />
               <Breakdown title="Audio" note="Codec and channel layout of the first audio track." rows={data.files_by_audio} />
+              <section className="flex flex-col gap-2">
+                {(data.size_per_hour ?? []).length > 0 && (
+                  <>
+                    <h2 className="text-sm font-medium">Size and bitrate per hour</h2>
+                    <p className="text-xs text-ink-muted">Bytes per hour of picture and the average video bitrate: a file far above its neighbours is bloated, far below starved.</p>
+                    <ul className="flex flex-col gap-1.5">
+                      {(data.size_per_hour ?? []).map((row) => (
+                        <li key={row.key} className="flex items-center gap-3 text-sm">
+                          <span className="w-28 shrink-0 uppercase">{row.key}</span>
+                          <span className="flex-1 text-xs tabular-nums text-ink-muted">
+                            {formatBytes(row.bytes_per_hour)} per hour · {row.video_kbps > 0 ? `${(row.video_kbps / 1000).toFixed(1)} Mbit/s video` : "bitrate unknown"}
+                          </span>
+                          <span className="w-24 shrink-0 text-right text-xs tabular-nums text-ink-muted">{row.files} files</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </section>
+              <SeriesList title="Biggest series" note="The 20 series taking most space, each file counted once." rows={data.series_by_size} categoryId={categoryId ?? ""} />
+              <SeriesList title="Gaps" note="Monitored episodes without a file: the aired ones are missing, the others are still to air." rows={data.series_gaps} categoryId={categoryId ?? ""} gaps />
             </>
           )}
           <section className="flex flex-col gap-2">

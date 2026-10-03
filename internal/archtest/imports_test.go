@@ -42,7 +42,7 @@ var allowedInternalImports = map[string][]string{
 	"cmd/solarr/adapters": {
 		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings",
-		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
+		"internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/media/music", "internal/media/tv", "internal/metadata/tmdb", "internal/moving/naming", "internal/api/apiserver/gen", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/musicbrainz",
 		"internal/moving/drainjob", "internal/moving/linker", "internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob",
@@ -247,7 +247,7 @@ var allowedInternalImports = map[string][]string{
 	// no more than scan itself does.
 	"internal/scanning/probe": {
 		"internal/platform/clock", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
-		"internal/db/settings",
+		"internal/db/settings", "internal/platform/fsx",
 	},
 	// ADR-48's import.inspect job: internal/importing/inspect for WALK/GROUP/SHAPE,
 	// internal/identify/model for the ADR-24 chain's own types (RunChainForFiles,

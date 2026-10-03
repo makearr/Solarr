@@ -30,6 +30,7 @@ type UnidentifiedCandidate struct {
 	Provider   string
 	ExternalID string
 	Confidence float64
+	Title      string
 }
 
 // UnidentifiedRow is one queued file.
@@ -280,6 +281,9 @@ func toCandidateViews(from []UnidentifiedCandidate) []gen.UnidentifiedCandidate 
 		}
 		if candidate.ExternalID != "" {
 			view.ExternalId = &candidate.ExternalID
+		}
+		if candidate.Title != "" {
+			view.Title = &candidate.Title
 		}
 		views[index] = view
 	}

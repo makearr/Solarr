@@ -25,6 +25,7 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		Coverage: library.NewProbeCoverage(p.library, clock.NewSystem()),
 		Roots:    adapters.Roots{Cache: p.cache},
 		Tool:     mediatool.New(nil, 0),
+		FS:       p.fsys,
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
 	})

@@ -736,6 +736,60 @@ func (q *Queries) ListStaleProbes(ctx context.Context, arg ListStaleProbesParams
 	return items, nil
 }
 
+const listStaleVideoProbes = `-- name: ListStaleVideoProbes :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
+  AND o.probe_json NOT LIKE '%"SubtitleLanguages"%' AND o.id > ?1
+  AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
+       OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
+       OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListStaleVideoProbesParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListStaleVideoProbesRow struct {
+	ID           int64
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Video files measured before the probe read the picture (resolution, HDR, frame rate) and the subtitle tracks.
+func (q *Queries) ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listStaleVideoProbes, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListStaleVideoProbesRow{}
+	for rows.Next() {
+		var i ListStaleVideoProbesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.RootFolderID,
+			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnfingerprinted = `-- name: ListUnfingerprinted :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,

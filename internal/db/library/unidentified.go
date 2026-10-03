@@ -42,6 +42,8 @@ type Candidate struct {
 	Provider   string  `json:"provider,omitempty"`
 	ExternalID string  `json:"external_id,omitempty"`
 	Confidence float64 `json:"confidence"`
+	// Title is what the candidate is called, when the strategy knows (a searched series' name).
+	Title string `json:"title,omitempty"`
 }
 
 // Row is one page entry.
@@ -58,6 +60,12 @@ func encodeCandidates(candidates []model.Identification) (string, error) {
 	encoded := make([]Candidate, len(candidates))
 	for index, candidate := range candidates {
 		entry := Candidate{Strategy: candidate.Strategy, Confidence: candidate.Confidence}
+		for _, evidence := range candidate.Evidence {
+			if evidence.Kind == "parse" && evidence.Detail != "" {
+				entry.Title = evidence.Detail
+				break
+			}
+		}
 		if candidate.ExternalID != nil {
 			entry.Provider = candidate.ExternalID.Provider
 			entry.ExternalID = candidate.ExternalID.ExternalID

@@ -45,6 +45,12 @@ type Querier interface {
 	AggregateFilesByRootAndCodec(ctx context.Context) ([]AggregateFilesByRootAndCodecRow, error)
 	// Files and bytes per root folder and measured video attributes; what the probe could not read is "unknown".
 	AggregateFilesByRootAndVideo(ctx context.Context) ([]AggregateFilesByRootAndVideoRow, error)
+	// Monitored episodes without a file, by series: aired ones are missing, the rest are still to come.
+	AggregateSeriesGaps(ctx context.Context, today sql.NullString) ([]AggregateSeriesGapsRow, error)
+	// The series of a video library by what they take on disk; each file counted once however many items cover it.
+	AggregateSeriesSize(ctx context.Context) ([]AggregateSeriesSizeRow, error)
+	// Bytes per hour of picture and the average video bitrate by resolution and codec: bloated or starved files show here.
+	AggregateSizePerHour(ctx context.Context) ([]AggregateSizePerHourRow, error)
 	// Whether any unverified album exists, so a scan skips the per-file check on a library with none.
 	AnyUnverifiedWork(ctx context.Context) (int64, error)
 	AssignTag(ctx context.Context, arg AssignTagParams) error
@@ -598,6 +604,8 @@ type Querier interface {
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
 	ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error)
+	// Video files measured before the probe read the picture (resolution, HDR, frame rate) and the subtitle tracks.
+	ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.

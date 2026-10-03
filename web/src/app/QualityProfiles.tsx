@@ -57,7 +57,7 @@ export function targetFromProfile(rulesJSON: string | undefined): QualityTarget 
 
 const RESOLUTIONS = ["2160p", "1080p", "720p", "576p", "480p"] as const;
 const VIDEO_CODECS = ["h265", "h264", "av1", "vp9", "mpeg2"] as const;
-const HDR_FORMATS = ["sdr", "hdr10", "hdr10plus", "dolby_vision", "hlg"] as const;
+const HDR_FORMATS = ["sdr", "hdr10", "hdr10plus", "dolby-vision", "hlg"] as const;
 const VIDEO_AUDIO = ["aac", "eac3", "ac3", "dts", "truehd", "flac", "opus"] as const;
 const VIDEO_CONTAINERS = ["mkv", "mp4"] as const;
 
@@ -266,7 +266,7 @@ function LibraryQualityEditor() {
           <span className="flex flex-col">
             <span className="text-ink">Upgrades allowed</span>
             <span className="text-ink-muted">
-              Off, an album with every track is complete whatever its quality: nothing is searched for an upgrade.
+              {video ? "Off, a season with every episode is complete whatever its quality: nothing is searched for an upgrade." : "Off, an album with every track is complete whatever its quality: nothing is searched for an upgrade."}
             </span>
           </span>
         </label>
@@ -292,7 +292,7 @@ function LibraryQualityEditor() {
         <h2 className="text-sm font-medium">Delay profile</h2>
         <p className="text-xs text-ink-muted">
           Prefer one kind of download and give it a head start: a release of the other kind is held back until it has been
-          posted this long, then taken like any other. Nothing is refused, so an album only one kind has is still found.
+          posted this long, then taken like any other. Nothing is refused, so {video ? "an episode" : "an album"} only one kind has is still found.
         </p>
         <div className="flex flex-wrap items-end gap-3 text-xs text-ink-muted">
           <label className="flex flex-col gap-1">

@@ -76,6 +76,13 @@ type Measured struct {
 	// AudioLanguages and LyricsLanguages are two-letter codes; empty when the file states none.
 	AudioLanguages  []string
 	LyricsLanguages []string
+	// The facts of a video file's picture and tracks; zero for audio. HDR is "" for sdr, else dolby-vision,
+	// hdr10plus, hdr10 or hlg; ChannelLayout is "5.1", "2.0" and so on; SubtitleLanguages are the embedded tracks'.
+	FrameRate         float64
+	ScanType          string
+	HDR               string
+	ChannelLayout     string
+	SubtitleLanguages []string
 }
 
 // Probe is one file, as one invocation reported it.

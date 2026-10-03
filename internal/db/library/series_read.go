@@ -51,6 +51,8 @@ type SeriesSummary struct {
 
 // SeriesEpisode is one part of a series with its coverage.
 type SeriesEpisode struct {
+	// File is the first file that covers the episode, with what the probe measured; nil without one.
+	File                *EpisodeFile
 	PartID              int64
 	Season, Number      int
 	Title               string
@@ -183,9 +185,14 @@ func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now tim
 	for _, alt := range absolutes {
 		absoluteOf[alt.PartID] = alt.AltRef
 	}
+	files, err := r.episodeFiles(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, err
+	}
 	for _, part := range parts {
 		season, number := parseSeriesRef(part.MediaRef)
-		detail.Episodes = append(detail.Episodes, SeriesEpisode{
+		file := files[part.MediaRef]
+		detail.Episodes = append(detail.Episodes, SeriesEpisode{File: file,
 			PartID: part.ID, Season: season, Number: number, Absolute: absoluteOf[part.ID], Title: part.Title.String, Date: part.Date.String,
 			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
 			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,

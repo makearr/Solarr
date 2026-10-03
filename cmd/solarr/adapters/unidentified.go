@@ -128,7 +128,7 @@ func toCandidateRows(from []library.Candidate) []apiserver.UnidentifiedCandidate
 	for index, candidate := range from {
 		views[index] = apiserver.UnidentifiedCandidate{
 			Strategy: candidate.Strategy, Provider: candidate.Provider,
-			ExternalID: candidate.ExternalID, Confidence: candidate.Confidence,
+			ExternalID: candidate.ExternalID, Confidence: candidate.Confidence, Title: candidate.Title,
 		}
 	}
 	return views

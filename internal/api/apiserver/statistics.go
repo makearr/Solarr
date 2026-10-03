@@ -3,6 +3,9 @@ package apiserver
 import (
 	"context"
 	"net/http"
+	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -26,6 +29,10 @@ type StatisticsView struct {
 	FilesByResolution  []StatisticsFigure
 	FilesByHDR         []StatisticsFigure
 	FilesByAudio       []StatisticsFigure
+	SeriesSize         []StatisticsFigure
+	SeriesGaps         []StatisticsFigure
+	SizePerHour        []StatisticsFigure
+	VideoBitrate       []StatisticsFigure
 	AlbumsByState      []StatisticsFigure
 	DownloadsByState   []StatisticsFigure
 	GrowthByMonth      []StatisticsFigure
@@ -89,6 +96,8 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 	}
 	out.FilesByVideoCodec, out.FilesByResolution = files(view.FilesByVideoCodec), files(view.FilesByResolution)
 	out.FilesByHdr, out.FilesByAudio = files(view.FilesByHDR), files(view.FilesByAudio)
+	out.SeriesBySize, out.SeriesGaps = seriesFigures(view.SeriesSize, false), seriesFigures(view.SeriesGaps, true)
+	out.SizePerHour = pictureFigures(view.SizePerHour, view.VideoBitrate)
 	if !view.ComputedAt.IsZero() {
 		out.ComputedAt = &view.ComputedAt
 	}
@@ -101,4 +110,53 @@ func counts(figures []StatisticsFigure) []gen.StatisticsCount {
 		out[index] = gen.StatisticsCount{Key: figure.Key, Count: figure.Count}
 	}
 	return out
+}
+
+// seriesFigures reads "<work id>|<title>" keys; for size lists value is bytes and count files, for gap lists value is
+// the aired episodes missing and count the ones still to come.
+func seriesFigures(figures []StatisticsFigure, gaps bool) *[]gen.StatisticsSeries {
+	if len(figures) == 0 {
+		return nil
+	}
+	out := make([]gen.StatisticsSeries, 0, len(figures))
+	for _, figure := range figures {
+		id, title, found := strings.Cut(figure.Key, "|")
+		workID, err := strconv.ParseInt(id, 10, 64)
+		if !found || err != nil {
+			continue
+		}
+		row := gen.StatisticsSeries{SeriesId: workID, Title: title}
+		if gaps {
+			row.Missing, row.Unaired = int64Ptr(int64(figure.Value)), int64Ptr(figure.Count)
+		} else {
+			row.Bytes, row.Files = int64Ptr(int64(figure.Value)), int64Ptr(figure.Count)
+		}
+		out = append(out, row)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if gaps {
+			return derefOr(out[i].Missing, 0) > derefOr(out[j].Missing, 0)
+		}
+		return derefOr(out[i].Bytes, 0) > derefOr(out[j].Bytes, 0)
+	})
+	return &out
+}
+
+func int64Ptr(value int64) *int64 { return &value }
+
+// pictureFigures joins bytes per hour with the average video bitrate of the same resolution and codec.
+func pictureFigures(perHour, bitrate []StatisticsFigure) *[]gen.StatisticsPicture {
+	if len(perHour) == 0 {
+		return nil
+	}
+	kbps := make(map[string]int64, len(bitrate))
+	for _, figure := range bitrate {
+		kbps[figure.Key] = int64(figure.Value)
+	}
+	out := make([]gen.StatisticsPicture, len(perHour))
+	for i, figure := range perHour {
+		out[i] = gen.StatisticsPicture{Key: figure.Key, Files: figure.Count, BytesPerHour: int64(figure.Value), VideoKbps: kbps[figure.Key]}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Files > out[j].Files })
+	return &out
 }

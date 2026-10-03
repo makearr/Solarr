@@ -7,12 +7,39 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 
+import { formatBytes } from "./Queue";
 import { SeasonSearchDialog } from "./SeasonSearch";
 import { remoteImage } from "@/lib/remoteImage";
 
 type Episode = components["schemas"]["SeriesEpisode"];
 type Season = components["schemas"]["SeriesSeason"];
 type Credit = components["schemas"]["SeriesCredit"];
+
+type EpisodeFile = NonNullable<Episode["file"]>;
+
+/** What the probe measured of an episode's file, as chips under its title; a part not measured yet is simply missing. */
+function EpisodeFileChips({ file }: { file: EpisodeFile }) {
+  const chips = [
+    file.resolution,
+    file.video_codec?.toUpperCase(),
+    file.hdr && file.hdr !== "" ? file.hdr.toUpperCase() : undefined,
+    file.audio_codec ? `${file.audio_codec.toUpperCase()}${file.audio_channels ? ` ${file.audio_channels}` : ""}` : undefined,
+    formatBytes(file.size_bytes),
+    file.subtitles.length > 0 ? `subs: ${file.subtitles.join(", ")}` : undefined,
+  ].filter(Boolean);
+  return (
+    <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[0.6875rem] text-ink-muted">
+      {chips.map((chip) => (
+        <span key={chip} className="rounded border border-border-subtle px-1.5 leading-4">
+          {chip}
+        </span>
+      ))}
+      {file.meets_target !== undefined && (
+        <span className={file.meets_target ? "text-ok" : "text-warn"}>{file.meets_target ? "meets the target" : "below the target"}</span>
+      )}
+    </span>
+  );
+}
 
 const STATE: Record<Episode["state"], { label: string; tone: string }> = {
   present: { label: "On disk", tone: "text-ok" },
@@ -369,6 +396,7 @@ function SeasonSection({
                 <td className="py-1.5">
                   <span>{episode.title ?? "TBA"}</span>
                   {episode.absolute != null && <span className="ml-2 text-xs text-ink-muted">#{episode.absolute}</span>}
+                  {episode.file && <EpisodeFileChips file={episode.file} />}
                   <EpisodeCredits credits={episodeCredits.get(episode.id) ?? []} categoryId={categoryId} />
                 </td>
                 <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">{airDate(episode)}</td>

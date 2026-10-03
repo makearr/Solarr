@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -22,6 +23,15 @@ const (
 	StatFilesByResolution = "files_by_resolution"
 	StatFilesByHDR        = "files_by_hdr"
 	StatFilesByAudio      = "files_by_audio"
+	// StatSeriesSize: a video library's biggest series, key "<work id>|<title>", value bytes, count files.
+	StatSeriesSize = "series_size"
+	// StatSeriesGaps: series with monitored episodes still without a file, key "<work id>|<title>", value the aired
+	// ones (missing), count the ones still to air.
+	StatSeriesGaps = "series_gaps"
+	// StatSizePerHour: key "<resolution> <codec>", value bytes per hour of picture, count files.
+	StatSizePerHour = "size_per_hour"
+	// StatVideoBitrate: the same keys, value the average video bitrate in kbit/s, count files.
+	StatVideoBitrate = "video_bitrate"
 	// StatAlbumsByState: value and count the monitored albums, key their desired state.
 	StatAlbumsByState = "albums_by_state"
 	// StatDownloadsByState: value and count the downloads of the last 30 days, key their state.
@@ -31,6 +41,9 @@ const (
 	// StatDecisionsByOutcome: value and count the release decisions of the last 30 days, key ACCEPT, REJECT or DEFER.
 	StatDecisionsByOutcome = "decisions_by_outcome"
 )
+
+// topSeries is how many series the size and gap lists keep per library.
+const topSeries = 20
 
 // StatisticsWindowDays is how far back the download figures reach.
 const StatisticsWindowDays = 30
@@ -80,12 +93,63 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 		return fmt.Errorf("library: statistics: video: %w", err)
 	}
 
+	seriesSize, err := reader.AggregateSeriesSize(ctx)
+	if err != nil {
+		return fmt.Errorf("library: statistics: series size: %w", err)
+	}
+	seriesGaps, err := reader.AggregateSeriesGaps(ctx, sql.NullString{String: time.Unix(now, 0).UTC().Format("2006-01-02"), Valid: true})
+	if err != nil {
+		return fmt.Errorf("library: statistics: series gaps: %w", err)
+	}
+	perHour, err := reader.AggregateSizePerHour(ctx)
+	if err != nil {
+		return fmt.Errorf("library: statistics: size per hour: %w", err)
+	}
+
 	type figure struct {
 		metric, dimension string
 		value             float64
 		count             int64
 	}
 	var figures []figure
+	taken := map[string]int{}
+	for _, row := range seriesSize {
+		if key := dimensionOf(row.CategoryID, fmt.Sprintf("%d|%s", row.WorkID, row.Title)); taken[StatSeriesSize+strconv.FormatInt(row.CategoryID, 10)] < topSeries {
+			taken[StatSeriesSize+strconv.FormatInt(row.CategoryID, 10)]++
+			figures = append(figures, figure{StatSeriesSize, key, float64(row.Bytes), row.Files})
+		}
+	}
+	for _, row := range seriesGaps {
+		if key := dimensionOf(row.CategoryID, fmt.Sprintf("%d|%s", row.WorkID, row.Title)); taken[StatSeriesGaps+strconv.FormatInt(row.CategoryID, 10)] < topSeries {
+			taken[StatSeriesGaps+strconv.FormatInt(row.CategoryID, 10)]++
+			figures = append(figures, figure{StatSeriesGaps, key, float64(row.Missing), row.Unaired})
+		}
+	}
+	type pictureTotal struct{ bytes, duration, files, bitrateSum int64 }
+	pictures := map[string]*pictureTotal{}
+	for _, row := range perHour {
+		category, found := categoryOfRoot[row.RootFolderID]
+		if !found {
+			continue
+		}
+		key := dimensionOf(category, row.Resolution+" "+row.VideoCodec)
+		total := pictures[key]
+		if total == nil {
+			total = &pictureTotal{}
+			pictures[key] = total
+		}
+		total.bytes += row.Bytes
+		total.duration += row.DurationMs
+		total.files += row.Files
+		total.bitrateSum += row.VideoBitrate * row.Files
+	}
+	for key, total := range pictures {
+		if total.duration > 0 && total.files > 0 {
+			figures = append(figures,
+				figure{StatSizePerHour, key, float64(total.bytes) / (float64(total.duration) / 3_600_000), total.files},
+				figure{StatVideoBitrate, key, float64(total.bitrateSum) / float64(total.files) / 1000, total.files})
+		}
+	}
 	byVideo := map[string]*figure{}
 	addVideo := func(metric string, category int64, key string, files, bytes int64) {
 		dimension := metric + "/" + dimensionOf(category, key)
@@ -159,7 +223,7 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 
 	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		for _, metric := range []string{StatFilesByCodec, StatFilesByVideoCodec, StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth, StatDecisionsByOutcome} {
+		for _, metric := range []string{StatSeriesSize, StatSeriesGaps, StatSizePerHour, StatVideoBitrate, StatFilesByCodec, StatFilesByVideoCodec, StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth, StatDecisionsByOutcome} {
 			if err := queries.DeleteStatRollupMetric(ctx, metric); err != nil {
 				return err
 			}

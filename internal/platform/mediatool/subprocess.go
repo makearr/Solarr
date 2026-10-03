@@ -262,6 +262,17 @@ type ffprobeOutput struct {
 		Width            int               `json:"width"`
 		Height           int               `json:"height"`
 		Tags             map[string]string `json:"tags"`
+		AvgFrameRate     string            `json:"avg_frame_rate"`
+		RFrameRate       string            `json:"r_frame_rate"`
+		FieldOrder       string            `json:"field_order"`
+		ColorTransfer    string            `json:"color_transfer"`
+		ChannelLayout    string            `json:"channel_layout"`
+		Disposition      struct {
+			AttachedPic int `json:"attached_pic"`
+		} `json:"disposition"`
+		SideDataList []struct {
+			SideDataType string `json:"side_data_type"`
+		} `json:"side_data_list"`
 	} `json:"streams"`
 }
 
@@ -279,7 +290,7 @@ func parseProbe(output []byte) (Probe, error) {
 	// Stream tags first, so a format-level tag of the same name wins: Vorbis
 	// comments land at format level and are the authoritative copy.
 	tags := Tags{}
-	var streamLanguages []string
+	var streamLanguages, subtitleLanguages []string
 	for _, stream := range decoded.Streams {
 		mergeTags(tags, stream.Tags)
 		switch stream.CodecType {
@@ -291,13 +302,29 @@ func parseProbe(output []byte) (Probe, error) {
 				measured.SampleRate = int(parseInt(stream.SampleRate))
 				measured.BitDepth = int(parseInt(stream.BitsPerRawSample))
 				measured.Channels = stream.Channels
+				measured.ChannelLayout = channelLayout(stream.ChannelLayout, stream.Channels)
+			}
+		case "subtitle":
+			if language := normaliseLanguage(stream.Tags["language"]); language != "" {
+				subtitleLanguages = append(subtitleLanguages, language)
 			}
 		case "video":
-			if measured.VideoCodec == "" {
+			// A cover picture is a video stream to ffprobe; it is not the file's picture.
+			if measured.VideoCodec == "" && stream.Disposition.AttachedPic == 0 {
 				measured.VideoCodec = stream.CodecName
 				measured.VideoBitrate = parseInt(stream.BitRate)
 				measured.Width = stream.Width
 				measured.Height = stream.Height
+				measured.FrameRate = frameRate(stream.AvgFrameRate, stream.RFrameRate)
+				measured.ScanType = scanType(stream.FieldOrder)
+				measured.HDR = hdrOf(stream.ColorTransfer, func(kind string) bool {
+					for _, side := range stream.SideDataList {
+						if strings.Contains(strings.ToLower(side.SideDataType), kind) {
+							return true
+						}
+					}
+					return false
+				})
 			}
 		}
 		// A container with no format-level duration still has one per stream.
@@ -306,6 +333,7 @@ func parseProbe(output []byte) (Probe, error) {
 		}
 	}
 	mergeTags(tags, decoded.Format.Tags)
+	measured.SubtitleLanguages = uniqueStrings(subtitleLanguages)
 	measured.AudioLanguages = audioLanguages(streamLanguages, tags)
 	measured.LyricsLanguages = lyricsLanguages(tags)
 

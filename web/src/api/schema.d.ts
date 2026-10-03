@@ -4313,7 +4313,7 @@ export interface components {
             resolution?: string;
             /** @description e.g. h265, h264, av1; empty when it does not care. */
             video_codec?: string;
-            /** @description sdr, hdr10, dolby_vision...; empty when it does not care. */
+            /** @description sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care. */
             hdr?: string;
             /**
              * Format: int64
@@ -5502,6 +5502,25 @@ export interface components {
              * @enum {string}
              */
             state: "present" | "missing" | "unaired" | "unmonitored";
+            file?: components["schemas"]["SeriesEpisodeFile"];
+        };
+        /** @description The file behind a present episode and what the probe measured of it; a part the probe has not read is absent. */
+        SeriesEpisodeFile: {
+            /** Format: int64 */
+            media_object_id: number;
+            /** Format: int64 */
+            size_bytes: number;
+            resolution?: string;
+            video_codec?: string;
+            hdr?: string;
+            audio_codec?: string;
+            audio_channels?: string;
+            container?: string;
+            video_bitrate_kbps?: number;
+            /** @description Language codes of embedded and sidecar subtitles; und when a file names none. */
+            subtitles: string[];
+            /** @description Absent when the library has no target or the file is not measured yet. */
+            meets_target?: boolean;
         };
         SeriesSeason: {
             number: number;
@@ -5978,6 +5997,8 @@ export interface components {
             /** @example musicbrainz:release-group */
             provider?: string;
             external_id?: string;
+            /** @description What the candidate is called */
+            title?: string;
             confidence: number;
         };
         UnidentifiedFile: {
@@ -6924,6 +6945,12 @@ export interface components {
             files_by_hdr?: components["schemas"]["StatisticsFiles"][];
             /** @description Audio codec and channel layout, e.g. "eac3 5.1". */
             files_by_audio?: components["schemas"]["StatisticsFiles"][];
+            /** @description Video libraries only; the 20 series taking most space. */
+            series_by_size?: components["schemas"]["StatisticsSeries"][];
+            /** @description Video libraries only; the 20 series with most aired episodes missing, with how many are still to air. */
+            series_gaps?: components["schemas"]["StatisticsSeries"][];
+            /** @description Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec. */
+            size_per_hour?: components["schemas"]["StatisticsPicture"][];
             albums_by_state: components["schemas"]["StatisticsCount"][];
             downloads_by_state: components["schemas"]["StatisticsCount"][];
             /** @description Files and bytes first seen per month, oldest first; the first scan lands in one month. */
@@ -6938,6 +6965,29 @@ export interface components {
             files: number;
             /** Format: int64 */
             bytes: number;
+        };
+        StatisticsSeries: {
+            /** Format: int64 */
+            series_id: number;
+            title: string;
+            /** Format: int64 */
+            files?: number;
+            /** Format: int64 */
+            bytes?: number;
+            /** Format: int64 */
+            missing?: number;
+            /** Format: int64 */
+            unaired?: number;
+        };
+        StatisticsPicture: {
+            /** @description Resolution and codec, e.g. "1080p h265". */
+            key: string;
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            bytes_per_hour: number;
+            /** Format: int64 */
+            video_kbps: number;
         };
         StatisticsCount: {
             key: string;

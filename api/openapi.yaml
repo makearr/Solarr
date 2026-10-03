@@ -6855,7 +6855,7 @@ components:
         container: { type: string, description: 'The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.' }
         resolution: { type: string, description: 'A video library''s target resolution, e.g. 1080p; empty when it does not care.' }
         video_codec: { type: string, description: 'e.g. h265, h264, av1; empty when it does not care.' }
-        hdr: { type: string, description: 'sdr, hdr10, dolby_vision...; empty when it does not care.' }
+        hdr: { type: string, description: 'sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care.' }
         bitrate_kbps:
           type: integer
           format: int64
@@ -8353,6 +8353,24 @@ components:
           type: string
           enum: [present, missing, unaired, unmonitored]
           description: What a person wants to see in the column.
+        file: { $ref: "#/components/schemas/SeriesEpisodeFile" }
+
+    SeriesEpisodeFile:
+      type: object
+      description: The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
+      required: [media_object_id, size_bytes, subtitles]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        size_bytes: { type: integer, format: int64 }
+        resolution: { type: string }
+        video_codec: { type: string }
+        hdr: { type: string }
+        audio_codec: { type: string }
+        audio_channels: { type: string }
+        container: { type: string }
+        video_bitrate_kbps: { type: integer }
+        subtitles: { type: array, items: { type: string }, description: Language codes of embedded and sidecar subtitles; und when a file names none. }
+        meets_target: { type: boolean, description: Absent when the library has no target or the file is not measured yet. }
 
     SeriesSeason:
       type: object
@@ -8961,6 +8979,7 @@ components:
         strategy: { type: string, example: "embedded-tag" }
         provider: { type: string, example: "musicbrainz:release-group" }
         external_id: { type: string }
+        title: { type: string, description: What the candidate is called, when the strategy knows (a searched series' name). }
         confidence: { type: number }
 
     UnidentifiedFile:
@@ -10273,6 +10292,18 @@ components:
           type: array
           description: Audio codec and channel layout, e.g. "eac3 5.1".
           items: { $ref: "#/components/schemas/StatisticsFiles" }
+        series_by_size:
+          type: array
+          description: Video libraries only; the 20 series taking most space.
+          items: { $ref: "#/components/schemas/StatisticsSeries" }
+        series_gaps:
+          type: array
+          description: Video libraries only; the 20 series with most aired episodes missing, with how many are still to air.
+          items: { $ref: "#/components/schemas/StatisticsSeries" }
+        size_per_hour:
+          type: array
+          description: Video libraries only; bytes per hour of picture and average video bitrate by resolution and codec.
+          items: { $ref: "#/components/schemas/StatisticsPicture" }
         albums_by_state:
           type: array
           items: { $ref: "#/components/schemas/StatisticsCount" }
@@ -10295,6 +10326,26 @@ components:
         key: { type: string, description: The audio codec, or unknown until the probe has measured the file. }
         files: { type: integer, format: int64 }
         bytes: { type: integer, format: int64 }
+
+    StatisticsSeries:
+      type: object
+      required: [series_id, title]
+      properties:
+        series_id: { type: integer, format: int64 }
+        title: { type: string }
+        files: { type: integer, format: int64 }
+        bytes: { type: integer, format: int64 }
+        missing: { type: integer, format: int64 }
+        unaired: { type: integer, format: int64 }
+
+    StatisticsPicture:
+      type: object
+      required: [key, files, bytes_per_hour, video_kbps]
+      properties:
+        key: { type: string, description: 'Resolution and codec, e.g. "1080p h265".' }
+        files: { type: integer, format: int64 }
+        bytes_per_hour: { type: integer, format: int64 }
+        video_kbps: { type: integer, format: int64 }
 
     StatisticsCount:
       type: object

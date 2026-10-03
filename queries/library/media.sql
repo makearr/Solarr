@@ -126,6 +126,19 @@ WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- Video files measured before the probe read the picture (resolution, HDR, frame rate) and the subtitle tracks.
+-- name: ListStaleVideoProbes :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
+  AND o.probe_json NOT LIKE '%"SubtitleLanguages"%' AND o.id > sqlc.arg(after_id)
+  AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
+       OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
+       OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')
+ORDER BY o.id
+LIMIT sqlc.arg(page_size);
+
 -- Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
 -- answers for the denominator (library.CategoryCounters' own precedent) --
 -- "probed" is the numerator a coverage counter reconciles against it.
