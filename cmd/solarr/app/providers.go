@@ -53,7 +53,7 @@ func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
 // rate-limit/breaker buckets, neither shared with MusicBrainz's own (a
 // Wikidata or Wikipedia outage must never count against the MusicBrainz
 // breaker, and vice versa).
-func (p *process) wikidataFetcher() music.Biographer {
+func (p *process) wikidataFetcher() wikidata.Fetcher {
 	wall := clock.NewSystem()
 	guard := httpx.NewGuard(nil, nil, nil)
 	agent := httpx.UserAgent(p.build.Version)

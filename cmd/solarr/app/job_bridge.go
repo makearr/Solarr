@@ -14,7 +14,7 @@ func (p *process) registerBridgeJob(registry *jobs.Registry, executor *jobs.Exec
 	if err := registry.Register(tv.BridgeDefinition); err != nil {
 		return err
 	}
-	executor.Handle(tv.BridgeJobType, tv.NewBridgeJob(tv.BridgeConfig{People: library.NewPeople(p.library), Source: p.tmdbShared, Logger: p.logger}))
+	executor.Handle(tv.BridgeJobType, tv.NewBridgeJob(tv.BridgeConfig{People: library.NewPeople(p.library), Source: p.tmdbShared, Wikidata: p.wikidataFetcher(), Logger: p.logger}))
 	return nil
 }
 

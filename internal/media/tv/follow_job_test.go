@@ -251,3 +251,37 @@ func TestBridgeSweepLinksTheActorWhoSharesAMusicArtistsNameAndMergesOnTheSameIte
 		t.Errorf("the stranger shares no artist's name and must not be asked about")
 	}
 }
+
+type fakeArtistIDs map[string]string
+
+func (f fakeArtistIDs) MusicBrainzArtists(_ context.Context, qids []string) (map[string]string, error) {
+	answers := map[string]string{}
+	for _, qid := range qids {
+		if id, found := f[qid]; found {
+			answers[qid] = id
+		}
+	}
+	return answers, nil
+}
+
+func TestBridgeSweepMergesAnActorIntoTheArtistWikidataSaysTheyAre(t *testing.T) {
+	opened := newLibrary(t)
+	people := library.NewPeople(opened)
+	artist, err := people.ResolvePerson(t.Context(), addNow, library.PersonLink{Provider: "musicbrainz:artist", ExternalID: "m1", Person: library.PersonIdentity{Name: "Vutu Doci"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := people.ResolvePerson(t.Context(), addNow, library.PersonLink{Provider: "tmdb", ExternalID: "11", Person: library.PersonIdentity{Name: "Vutu Doci"}}); err != nil {
+		t.Fatal(err)
+	}
+	job := tv.NewBridgeJob(tv.BridgeConfig{
+		People: people, Source: fakeBridgeSource{wikidata: map[int64]string{11: "Q9"}}, Wikidata: fakeArtistIDs{"Q9": "m1"},
+	})
+
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if id, found, _ := people.FindByExternalID(t.Context(), "tmdb", "11"); !found || id != artist {
+		t.Errorf("tmdb 11 -> %d, found %v; want it folded into the artist %d although the artist carried no item", id, found, artist)
+	}
+}

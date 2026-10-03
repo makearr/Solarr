@@ -78,7 +78,7 @@ with the music-artist person surviving (`mergeArtist`, the loser's name becomes 
 survivor's). The QID comes from MusicBrainz (stored by artist refresh and backfill) and from TMDB's `external_ids.wikidata_id`
 (stored when a person page opens and by the daily `people.bridge` sweep, which only asks about TMDB people whose `sort_name`
 equals a music artist's, 60 a run; `wikidata:none` records an answer of "no item"). A TV person page lists `OtherWorks`: non-TV
-works the same person is credited on. Merging on name alone is deliberately not done.
+works the same person is credited on. Merging on name alone is deliberately not done. The sweep also asks Wikidata (`MusicBrainzArtists`, property P434) which music artist an item is, so an actor is merged into the artist the library already holds even before that artist's own refresh recorded an item; measured on the real library: 42 people merged at once (a singer in a series' guest cast is one person in both libraries).
 
 ## Following people and networks (`internal/media/tv/follow_job.go`)
 

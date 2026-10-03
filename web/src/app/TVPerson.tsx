@@ -6,6 +6,7 @@ import { Disc3, Film, Tv, UserRound } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
+import { CoverArt } from "./CoverArt";
 import { FollowPanel } from "./FollowPanel";
 import { roleLabel } from "./TVPeople";
 import { remoteImage } from "@/lib/remoteImage";
@@ -104,6 +105,8 @@ export function TVPerson() {
         <span className="block size-40 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface">
           {data.image_url ? (
             <img src={remoteImage(data.image_url, "small")} alt="" className="size-full object-cover" />
+          ) : data.other_works && data.other_works.length > 0 ? (
+            <CoverArt subject="people" workId={data.id} title={data.name} size="full" className="size-full object-cover" />
           ) : (
             <span className="flex size-full items-center justify-center text-ink-muted">
               <UserRound aria-hidden className="size-14" />

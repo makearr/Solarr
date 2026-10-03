@@ -299,3 +299,31 @@ func (p People) RuleOutWikidata(ctx context.Context, personID int64, tmdbID stri
 		})
 	})
 }
+
+// BridgeLinked lists TV people whose Wikidata item is known but who still stand apart from the music artist of their
+// name: the ones a Wikidata look-up of the item may yet join. Answers person id to item, up to limit.
+func (p People) BridgeLinked(ctx context.Context, limit int) (map[int64]string, error) {
+	rows, err := p.store.Read().QueryContext(ctx,
+		`SELECT DISTINCT t.id, w.external_id
+FROM person m
+JOIN person_external_id me ON me.person_id = m.id AND me.provider = ?
+JOIN person t ON t.sort_name = m.sort_name AND t.id <> m.id
+JOIN person_external_id x ON x.person_id = t.id AND x.provider = 'tmdb'
+JOIN person_external_id w ON w.person_id = t.id AND w.provider = ?
+WHERE NOT EXISTS (SELECT 1 FROM person_external_id mw WHERE mw.person_id = m.id AND mw.provider = ?)
+ORDER BY t.id LIMIT ?`, musicbrainzArtistProvider, ProviderWikidata, ProviderWikidata, limit)
+	if err != nil {
+		return nil, fmt.Errorf("library: bridge linked: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	linked := map[int64]string{}
+	for rows.Next() {
+		var id int64
+		var qid string
+		if err := rows.Scan(&id, &qid); err != nil {
+			return nil, fmt.Errorf("library: scan bridge linked: %w", err)
+		}
+		linked[id] = qid
+	}
+	return linked, rows.Err()
+}
