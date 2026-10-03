@@ -85,6 +85,22 @@ func (p *process) registerTVScanJob(registry *jobs.Registry, executor *jobs.Exec
 		Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
 	})
+	if err := registry.Register(tv.RetryDefinition); err != nil {
+		return err
+	}
+	executor.Handle(tv.RetryJobType, tv.NewRetryJob(tv.RetryConfig{
+		Unidentified: library.NewUnidentified(p.library), Consumer: consumer, FS: p.fsys, Logger: p.logger,
+		Libraries: func() []tv.RetryLibrary {
+			snapshot := p.cache.Snapshot()
+			var libraries []tv.RetryLibrary
+			for _, category := range snapshot.Categories() {
+				if category.MediaType == tv.MediaType {
+					libraries = append(libraries, tv.RetryLibrary{CategoryID: category.ID, Roots: snapshot.RootFoldersForCategory(category.ID)})
+				}
+			}
+			return libraries
+		},
+	}))
 	job := scan.NewJob(scan.Config{
 		FS: p.fsys, Scans: library.NewScans(p.library), Roots: adapters.Roots{Cache: p.cache}, Tool: tool, Consumer: consumer,
 		Physical: physical, Clock: clock.NewSystem(), Logger: p.logger, Include: tv.IsVideo,

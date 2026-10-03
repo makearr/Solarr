@@ -215,3 +215,21 @@ func unexpected(err error) error {
 	}
 	return err
 }
+
+// Make puts destination in place as a link to keep, reflink first, replacing whatever is there; the caller has
+// already moved a file it wants to keep out of the way. The swap is atomic like Apply's.
+func Make(fsys fsx.FS, keep, destination string) (Method, error) {
+	temp := destination + tempSuffix
+	_ = fsys.Remove(temp)
+	for _, method := range ladder {
+		if err := place(fsys, method, keep, temp); err != nil {
+			continue
+		}
+		if err := fsys.Rename(temp, destination); err != nil {
+			_ = fsys.Remove(temp)
+			return "", fmt.Errorf("linker: place %s: %w", path.Base(destination), err)
+		}
+		return method, nil
+	}
+	return "", ErrNoMethod
+}

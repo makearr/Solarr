@@ -356,6 +356,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  `["coverartarchive","embedded"]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataTVSources, Kind: KindStringList, Tier: TierAdvanced,
+		Name:     "TV source order",
+		HelpText: "Which TV provider supplies a series' text, genres, rating and artwork first; one left out is not used. Numbering stays with TheTVDB's.",
+		Default:  `["skyhook","tvmaze","tmdb","tvdb","anilist"]`,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataWikidata, Kind: KindBool, Tier: TierAdvanced,
 		Name:     "Wikidata",
 		HelpText: "Artist photos and biographies from Wikidata and Wikipedia.",

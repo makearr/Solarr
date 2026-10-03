@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
@@ -68,11 +69,13 @@ type Service struct {
 	TMDB RichSource
 	// AniList adds the titles anime is released under; nil skips it.
 	AniList AnimeSource
-	Series  library.Series
-	Reader  library.SeriesReader
-	Desired library.Desired
-	Clock   clock.Clock
-	Logger  *slog.Logger
+	// Priority is the configured TV source order, read per fetch; nil is the default order.
+	Priority func() []string
+	Series   library.Series
+	Reader   library.SeriesReader
+	Desired  library.Desired
+	Clock    clock.Clock
+	Logger   *slog.Logger
 }
 
 // Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
@@ -85,12 +88,14 @@ func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
 func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, error) {
 	ids = s.completeIDs(ctx, ids)
 	var sources []Series
+	bySource := map[string]Series{}
 	if ids.TVDB > 0 && s.Skyhook != nil {
 		series, err := s.Skyhook.Series(ctx, ids.TVDB)
 		if err != nil {
 			s.warn("skyhook", ids.TVDB, err)
 		} else {
 			sources = append(sources, FromSkyhook(series))
+			bySource[settings.TVSourceSkyhook] = sources[len(sources)-1]
 			if ids.TVmaze == 0 {
 				ids.TVmaze = series.TVMazeID
 			}
@@ -128,12 +133,15 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 	asking.Wait()
 	if haveRich {
 		sources = append(sources, rich)
+		bySource[settings.TVSourceTMDB] = rich
 	}
 	if haveAni {
 		sources = append(sources, anime)
+		bySource[settings.TVSourceAniList] = anime
 	}
 	if haveMaze {
 		sources = append(sources, maze)
+		bySource[settings.TVSourceTVmaze] = maze
 	}
 	if len(sources) == 0 {
 		return Series{}, ErrNoSource
@@ -149,9 +157,13 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 		if len(merged.Episodes) == 0 && len(rich.TMDBEpisodes) > 0 {
 			merged.Episodes, merged.Basis = rich.TMDBEpisodes, ProviderTMDB+":default"
 		}
-		PreferRicher(&merged, rich)
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
 	}
+	order := settings.DefaultTVSources
+	if s.Priority != nil {
+		order = s.Priority()
+	}
+	ApplyPriority(&merged, bySource, order)
 	return merged, nil
 }
 
@@ -550,6 +562,8 @@ type Candidate struct {
 	Status   Status
 	Overview string
 	Poster   string
+	// AltTitles are other names providers give it (TMDB's original title), which a folder may be named by.
+	AltTitles []string
 }
 
 // Search finds series by name through Skyhook, and through TMDB when a key is stored for shows TheTVDB does not list
@@ -576,7 +590,10 @@ func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidat
 			candidates = append(candidates, candidate)
 		}
 	}
-	extra := s.searchTMDB(ctx, term, candidates)
+	extra, alternatives := s.searchTMDB(ctx, term, candidates)
+	for i := range candidates {
+		candidates[i].AltTitles = alternatives[searchKey(candidates[i].Title, candidates[i].Year)]
+	}
 	if len(candidates)+len(extra) == 0 && skyhookErr != nil {
 		return nil, skyhookErr
 	}
@@ -586,15 +603,16 @@ func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidat
 }
 
 // searchTMDB lists TMDB's hits for a term that the earlier candidates do not already cover.
-func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) []Candidate {
+func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) ([]Candidate, map[string][]string) {
 	if s.TMDB == nil || !s.TMDB.Configured() {
-		return nil
+		return nil, nil
 	}
 	hits, err := s.TMDB.Search(ctx, term)
 	if err != nil {
 		s.warn("tmdb search", 0, err)
-		return nil
+		return nil, nil
 	}
+	alternatives := map[string][]string{}
 	covered := make(map[string]bool, len(have))
 	for _, candidate := range have {
 		covered[searchKey(candidate.Title, candidate.Year)] = true
@@ -606,11 +624,15 @@ func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) 
 	for _, hit := range hits {
 		year := yearOf(hit.FirstAirDate)
 		if covered[searchKey(hit.Name, year)] || covered["tmdb:"+strconv.FormatInt(hit.ID, 10)] {
+			if hit.OriginalName != "" && hit.OriginalName != hit.Name {
+				key := searchKey(hit.Name, year)
+				alternatives[key] = append(alternatives[key], hit.OriginalName)
+			}
 			continue
 		}
 		found = append(found, Candidate{TMDBID: hit.ID, Title: hit.Name, Year: year, Overview: hit.Overview, Poster: tmdb.ImageURL(hit.PosterPath)})
 	}
-	return found
+	return found, alternatives
 }
 
 // searchKey names a hit by title without TheTVDB's "(US)" or "(2019)" disambiguation, and year.

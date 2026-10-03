@@ -17,6 +17,11 @@ import (
 const (
 	// StatFilesByCodec: value bytes, count files, key the audio codec.
 	StatFilesByCodec = "files_by_codec"
+	// The video breakdowns of a TV library: value bytes, count files, key the measured value.
+	StatFilesByVideoCodec = "files_by_video_codec"
+	StatFilesByResolution = "files_by_resolution"
+	StatFilesByHDR        = "files_by_hdr"
+	StatFilesByAudio      = "files_by_audio"
 	// StatAlbumsByState: value and count the monitored albums, key their desired state.
 	StatAlbumsByState = "albums_by_state"
 	// StatDownloadsByState: value and count the downloads of the last 30 days, key their state.
@@ -70,12 +75,44 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 		return fmt.Errorf("library: statistics: decisions: %w", err)
 	}
 
+	video, err := reader.AggregateFilesByRootAndVideo(ctx)
+	if err != nil {
+		return fmt.Errorf("library: statistics: video: %w", err)
+	}
+
 	type figure struct {
 		metric, dimension string
 		value             float64
 		count             int64
 	}
 	var figures []figure
+	byVideo := map[string]*figure{}
+	addVideo := func(metric string, category int64, key string, files, bytes int64) {
+		dimension := metric + "/" + dimensionOf(category, key)
+		if existing, ok := byVideo[dimension]; ok {
+			existing.value += float64(bytes)
+			existing.count += files
+			return
+		}
+		byVideo[dimension] = &figure{metric, dimensionOf(category, key), float64(bytes), files}
+	}
+	for _, row := range video {
+		category, found := categoryOfRoot[row.RootFolderID]
+		if !found {
+			continue
+		}
+		addVideo(StatFilesByVideoCodec, category, row.VideoCodec, row.Files, row.Bytes)
+		addVideo(StatFilesByResolution, category, row.Resolution, row.Files, row.Bytes)
+		addVideo(StatFilesByHDR, category, row.Hdr, row.Files, row.Bytes)
+		audio := row.AudioCodec
+		if row.AudioChannels != "" {
+			audio += " " + row.AudioChannels
+		}
+		addVideo(StatFilesByAudio, category, audio, row.Files, row.Bytes)
+	}
+	for _, one := range byVideo {
+		figures = append(figures, *one)
+	}
 	byCodec := map[string]*figure{}
 	for _, row := range codecs {
 		category, found := categoryOfRoot[row.RootFolderID]
@@ -122,7 +159,7 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 
 	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		for _, metric := range []string{StatFilesByCodec, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth, StatDecisionsByOutcome} {
+		for _, metric := range []string{StatFilesByCodec, StatFilesByVideoCodec, StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth, StatDecisionsByOutcome} {
 			if err := queries.DeleteStatRollupMetric(ctx, metric); err != nil {
 				return err
 			}

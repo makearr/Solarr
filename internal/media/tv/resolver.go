@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -64,6 +65,15 @@ const ExcludedSeries int64 = -1
 // Resolve finds the series a folder is, adding it from the providers when it is new and unambiguous. Zero means
 // it could not be placed; the candidates then say what was considered.
 func (c Resolver) Resolve(ctx context.Context, categoryID int64, folder, relPath string) (int64, []model.Identification) {
+	return c.ResolveFiles(ctx, categoryID, folder, []string{relPath})
+}
+
+// ResolveFiles is Resolve with every file of the folder, whose episode numbers settle a title the providers list twice.
+func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder string, relPaths []string) (int64, []model.Identification) {
+	relPath := ""
+	if len(relPaths) > 0 {
+		relPath = relPaths[0]
+	}
 	name := folder
 	if name == "" {
 		if info, ok := parsetv.Parse(path.Base(relPath), c.Clock.Now()); ok {
@@ -98,8 +108,8 @@ func (c Resolver) Resolve(ctx context.Context, categoryID int64, folder, relPath
 		c.Logger.Warn("tv series lookup failed", slog.String("folder", folder), slog.Any("error", err))
 		return 0, nil
 	}
-	if pick, ok := pickCandidate(candidates, guess); ok {
-		if id := c.add(ctx, categoryID, IDs{TVDB: pick.TVDBID}); id != 0 {
+	if pick, ok := c.pick(ctx, candidates, guess, relPaths); ok {
+		if id := c.add(ctx, categoryID, IDs{TVDB: pick.TVDBID, TMDB: pick.TMDBID}); id != 0 {
 			return id, nil
 		}
 	}
@@ -167,24 +177,157 @@ func scanMonitor(policy string) MonitorOption {
 	}
 }
 
-// pickCandidate accepts a search result only when exactly one candidate has the folder's title (and year when the
-// folder gives one); anything less is a person's decision.
-func pickCandidate(candidates []Candidate, guess FolderGuess) (Candidate, bool) {
-	want := parsetv.CleanTitle(guess.Title)
-	var exact []Candidate
-	for _, candidate := range candidates {
-		if parsetv.CleanTitle(candidate.Title) != want {
-			continue
-		}
-		if guess.Year > 0 && candidate.Year != guess.Year {
-			continue
-		}
-		exact = append(exact, candidate)
+// pick chooses the candidate a folder is: the one with its title (and year), or, when several have it or none does, the
+// one whose episodes the folder's files fit. Anything less clear is a person's decision.
+func (c Resolver) pick(ctx context.Context, candidates []Candidate, guess FolderGuess, relPaths []string) (Candidate, bool) {
+	matches := titleMatches(candidates, guess)
+	if len(matches) == 1 {
+		return matches[0], true
 	}
-	if len(exact) != 1 {
+	if len(matches) == 0 {
+		matches = nearTitles(candidates, guess)
+	}
+	if len(matches) == 0 && countNumbered(relPaths, c.Clock.Now()) >= episodesToTrustTheNumbers {
+		// A folder named in another language still has its episode numbers: the top hits are judged by those alone.
+		matches = candidates[:min(len(candidates), maxEpisodeJudged)]
+	}
+	return c.byEpisodes(ctx, matches, relPaths, c.Clock.Now())
+}
+
+// titleMatches are the candidates named like the folder, ignoring TheTVDB's "(2014)" or "(US)" qualifier; a year the
+// folder gives must be the candidate's, unless nothing has it and a candidate states none.
+func titleMatches(candidates []Candidate, guess FolderGuess) []Candidate {
+	want := parsetv.CleanTitle(guess.Title)
+	var exact, yearless []Candidate
+	for _, candidate := range candidates {
+		if !hasTitle(candidate, want) {
+			continue
+		}
+		switch {
+		case guess.Year == 0 || candidate.Year == guess.Year:
+			exact = append(exact, candidate)
+		case candidate.Year == 0:
+			yearless = append(yearless, candidate)
+		}
+	}
+	if len(exact) == 0 {
+		return yearless
+	}
+	return exact
+}
+
+// hasTitle reports whether a title of the candidate, with or without TheTVDB's qualifier, is the wanted one.
+func hasTitle(candidate Candidate, want string) bool {
+	for _, title := range append([]string{candidate.Title}, candidate.AltTitles...) {
+		if parsetv.CleanTitle(title) == want || parsetv.CleanTitle(trailingBrackets.ReplaceAllString(title, "")) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// nearTitles are the first few candidates whose title starts or ends with the folder's, for the episodes to judge.
+func nearTitles(candidates []Candidate, guess FolderGuess) []Candidate {
+	want := parsetv.CleanTitle(guess.Title)
+	var near []Candidate
+	for _, candidate := range candidates {
+		have := parsetv.CleanTitle(candidate.Title)
+		if len(want) >= 4 && (strings.HasPrefix(have, want) || strings.HasSuffix(have, want)) && (guess.Year == 0 || candidate.Year == guess.Year || candidate.Year == 0) {
+			near = append(near, candidate)
+		}
+		if len(near) == maxEpisodeJudged {
+			break
+		}
+	}
+	return near
+}
+
+// episodesToTrustTheNumbers is how many numbered files a folder needs for its numbers to name a series by themselves.
+const episodesToTrustTheNumbers = 8
+
+func countNumbered(relPaths []string, now time.Time) int {
+	count := 0
+	for _, relPath := range relPaths {
+		if info, ok := parsetv.ParsePath(relPath, now); ok && !info.Special && len(info.EpisodeNumbers) > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+const (
+	// maxEpisodeJudged bounds the series fetched to compare episodes with.
+	maxEpisodeJudged = 4
+	// episodeFit is the share of a folder's numbered files a series must have the episodes of, and episodeLead how far
+	// ahead of the next one it must be.
+	episodeFit  = 0.8
+	episodeLead = 0.15
+)
+
+// byEpisodes picks the candidate whose episode list has the most of the folder's files' numbers.
+func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPaths []string, now time.Time) (Candidate, bool) {
+	if len(candidates) == 0 || c.Service.Skyhook == nil {
 		return Candidate{}, false
 	}
-	return exact[0], true
+	type numbering struct{ season, episode int }
+	var seasonal []numbering
+	var absolute []int
+	for _, relPath := range relPaths {
+		info, ok := parsetv.ParsePath(relPath, now)
+		if !ok || info.Special || info.SeasonNumber == 0 && len(info.AbsoluteNumbers) == 0 {
+			continue
+		}
+		for _, number := range info.EpisodeNumbers {
+			seasonal = append(seasonal, numbering{info.SeasonNumber, number})
+		}
+		if len(info.EpisodeNumbers) == 0 {
+			absolute = append(absolute, info.AbsoluteNumbers...)
+		}
+	}
+	total := len(seasonal) + len(absolute)
+	if total < 2 {
+		return Candidate{}, false
+	}
+	best, second, bestAt := -1.0, -1.0, -1
+	for index, candidate := range candidates {
+		if candidate.TVDBID == 0 {
+			continue
+		}
+		show, err := c.Service.Skyhook.Series(ctx, candidate.TVDBID)
+		if err != nil {
+			continue
+		}
+		seen := make(map[numbering]bool, len(show.Episodes))
+		seenAbsolute := map[int]bool{}
+		for _, episode := range show.Episodes {
+			seen[numbering{episode.SeasonNumber, episode.EpisodeNumber}] = true
+			if episode.AbsoluteEpisodeNumber != nil {
+				seenAbsolute[*episode.AbsoluteEpisodeNumber] = true
+			}
+		}
+		fits := 0
+		for _, n := range seasonal {
+			if seen[n] {
+				fits++
+			}
+		}
+		for _, n := range absolute {
+			if seenAbsolute[n] {
+				fits++
+			}
+		}
+		fit := float64(fits) / float64(total)
+		switch {
+		case fit > best:
+			best, second, bestAt = fit, best, index
+		case fit > second:
+			second = fit
+		}
+	}
+	if bestAt < 0 || best < episodeFit || best-max(second, 0) < episodeLead {
+		return Candidate{}, false
+	}
+	return candidates[bestAt], true
 }
 
 func identifications(candidates []Candidate) []model.Identification {

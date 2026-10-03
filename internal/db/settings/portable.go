@@ -71,6 +71,7 @@ type ScalarSettingsEntry struct {
 	// Pointers, so "all cover sources off" and "switched off" survive a round trip; absent keeps
 	// the stored value.
 	MetadataCoverSources *[]string `yaml:"metadata_cover_sources,omitempty"`
+	MetadataTVSources    *[]string `yaml:"metadata_tv_sources,omitempty"`
 	MetadataWikidata     *bool     `yaml:"metadata_wikidata,omitempty"`
 	MetadataAcoustID     *bool     `yaml:"metadata_acoustid,omitempty"`
 	MetadataTheAudioDB   *bool     `yaml:"metadata_theaudiodb,omitempty"`
@@ -375,6 +376,7 @@ func (c *Cache) Export() Document {
 		BrainzMashUserAgent:          snapshot.MetadataSettings().BrainzMashUserAgent,
 		MetadataSourceOrder:          snapshot.MetadataSettings().SourceOrder,
 		MetadataCoverSources:         &metadata.CoverSources,
+		MetadataTVSources:            &metadata.TVSources,
 		MetadataWikidata:             metadata.Wikidata,
 		UsersNewLibraryPermission:    snapshot.NewLibraryPermission(),
 		BackupRetention:              snapshot.BackupRetention().Mode,
@@ -617,6 +619,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		if covers := d.Settings.MetadataCoverSources; covers != nil {
 			for _, problem := range validateMetadataSettings(MetadataSettings{
 				BrainzMashUserAgent: DefaultBrainzMashUserAgent, CoverSources: *covers}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if sources := d.Settings.MetadataTVSources; sources != nil {
+			for _, problem := range validateMetadataSettings(MetadataSettings{
+				BrainzMashUserAgent: DefaultBrainzMashUserAgent, TVSources: *sources}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -1154,6 +1162,13 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 			return fmt.Errorf("settings.metadata_cover_sources: %w", err)
 		}
 		values[KeyMetadataCoverSources] = string(encoded)
+	}
+	if entry.MetadataTVSources != nil {
+		encoded, err := json.Marshal(*entry.MetadataTVSources)
+		if err != nil {
+			return fmt.Errorf("settings.metadata_tv_sources: %w", err)
+		}
+		values[KeyMetadataTVSources] = string(encoded)
 	}
 	if entry.MetadataWikidata != nil {
 		values[KeyMetadataWikidata] = strconv.FormatBool(*entry.MetadataWikidata)

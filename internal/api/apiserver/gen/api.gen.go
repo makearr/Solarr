@@ -404,6 +404,15 @@ const (
 	MetadataSettingsCoverSourcesTheaudiodb      MetadataSettingsCoverSources = "theaudiodb"
 )
 
+// Defines values for MetadataSettingsTvSources.
+const (
+	MetadataSettingsTvSourcesAnilist MetadataSettingsTvSources = "anilist"
+	MetadataSettingsTvSourcesSkyhook MetadataSettingsTvSources = "skyhook"
+	MetadataSettingsTvSourcesTmdb    MetadataSettingsTvSources = "tmdb"
+	MetadataSettingsTvSourcesTvdb    MetadataSettingsTvSources = "tvdb"
+	MetadataSettingsTvSourcesTvmaze  MetadataSettingsTvSources = "tvmaze"
+)
+
 // Defines values for MetadataSource.
 const (
 	MetadataSourceBrainzmash       MetadataSource = "brainzmash"
@@ -748,6 +757,12 @@ const (
 	WorkWantedStateMISSING    WorkWantedState = "MISSING"
 	WorkWantedStatePARTIAL    WorkWantedState = "PARTIAL"
 	WorkWantedStateUPGRADABLE WorkWantedState = "UPGRADABLE"
+)
+
+// Defines values for ResolveCategoryDuplicatesJSONBodyDropAction.
+const (
+	ResolveCategoryDuplicatesJSONBodyDropActionLink    ResolveCategoryDuplicatesJSONBodyDropAction = "link"
+	ResolveCategoryDuplicatesJSONBodyDropActionRecycle ResolveCategoryDuplicatesJSONBodyDropAction = "recycle"
 )
 
 // Defines values for GetRemoteImageParamsSize.
@@ -1422,7 +1437,17 @@ type CategoryStatistics struct {
 	// DecisionsByOutcome Release decisions of the last window_days, by ACCEPT, REJECT or DEFER.
 	DecisionsByOutcome []StatisticsCount `json:"decisions_by_outcome"`
 	DownloadsByState   []StatisticsCount `json:"downloads_by_state"`
-	FilesByCodec       []StatisticsFiles `json:"files_by_codec"`
+
+	// FilesByAudio Audio codec and channel layout, e.g. "eac3 5.1".
+	FilesByAudio *[]StatisticsFiles `json:"files_by_audio,omitempty"`
+	FilesByCodec []StatisticsFiles  `json:"files_by_codec"`
+
+	// FilesByHdr HDR format, or sdr.
+	FilesByHdr        *[]StatisticsFiles `json:"files_by_hdr,omitempty"`
+	FilesByResolution *[]StatisticsFiles `json:"files_by_resolution,omitempty"`
+
+	// FilesByVideoCodec Video libraries only; the measured video codec of each file.
+	FilesByVideoCodec *[]StatisticsFiles `json:"files_by_video_codec,omitempty"`
 
 	// GrowthByMonth Files and bytes first seen per month, oldest first; the first scan lands in one month.
 	GrowthByMonth []StatisticsFiles `json:"growth_by_month"`
@@ -1700,6 +1725,20 @@ type DuplicateReport struct {
 
 	// ReclaimableBytes What dropping every copy but the recommended one would free.
 	ReclaimableBytes int64 `json:"reclaimable_bytes"`
+}
+
+// DuplicateResolution defines model for DuplicateResolution.
+type DuplicateResolution struct {
+	FreedBytes int64 `json:"freed_bytes"`
+
+	// Linked Copies now linked to the kept one.
+	Linked int `json:"linked"`
+
+	// Problems One line each for what was left alone and why.
+	Problems []string `json:"problems"`
+
+	// Recycled Copies moved to the recycle bin.
+	Recycled int `json:"recycled"`
 }
 
 // Edition defines model for Edition.
@@ -2597,6 +2636,9 @@ type MetadataSettings struct {
 	// TmdbApiKey Whether the user's own TMDB credential is stored. Read-only here; written through POST /metadata/tmdb/apikey.
 	TmdbApiKey *SecretMask `json:"tmdb_api_key,omitempty"`
 
+	// TvSources Which TV provider supplies a series' text, genres, rating and artwork first, in order; one left out is not used. Numbering stays with TheTVDB's. Omitted on a PATCH leaves it alone.
+	TvSources *[]MetadataSettingsTvSources `json:"tv_sources,omitempty"`
+
 	// TvdbApiKey Whether an own TheTVDB key is stored; without one the built-in project key is used. Read-only here.
 	TvdbApiKey *SecretMask `json:"tvdb_api_key,omitempty"`
 
@@ -2606,6 +2648,9 @@ type MetadataSettings struct {
 
 // MetadataSettingsCoverSources defines model for MetadataSettings.CoverSources.
 type MetadataSettingsCoverSources string
+
+// MetadataSettingsTvSources defines model for MetadataSettings.TvSources.
+type MetadataSettingsTvSources string
 
 // MetadataSource A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.
 type MetadataSource string
@@ -3399,14 +3444,21 @@ type SeriesDetail struct {
 	FirstAired *string         `json:"first_aired,omitempty"`
 
 	// Ids Provider to id, e.g. tvdb, tvmaze, tmdb, imdb.
-	Ids              map[string]string `json:"ids"`
-	LastAired        *string           `json:"last_aired,omitempty"`
-	OriginalCountry  *string           `json:"original_country,omitempty"`
-	OriginalLanguage *string           `json:"original_language,omitempty"`
-	Rating           *float32          `json:"rating,omitempty"`
-	RuntimeMinutes   *int              `json:"runtime_minutes,omitempty"`
-	Seasons          []SeriesSeason    `json:"seasons"`
-	Summary          SeriesSummary     `json:"summary"`
+	Ids       map[string]string `json:"ids"`
+	LastAired *string           `json:"last_aired,omitempty"`
+
+	// LogoUrl The series' clear logo
+	LogoUrl *string `json:"logo_url,omitempty"`
+
+	// NetworkId The network as a Networks-level entity.
+	NetworkId        *int64         `json:"network_id,omitempty"`
+	NetworkLogoUrl   *string        `json:"network_logo_url,omitempty"`
+	OriginalCountry  *string        `json:"original_country,omitempty"`
+	OriginalLanguage *string        `json:"original_language,omitempty"`
+	Rating           *float32       `json:"rating,omitempty"`
+	RuntimeMinutes   *int           `json:"runtime_minutes,omitempty"`
+	Seasons          []SeriesSeason `json:"seasons"`
+	Summary          SeriesSummary  `json:"summary"`
 }
 
 // SeriesEpisode defines model for SeriesEpisode.
@@ -4122,6 +4174,18 @@ type CreateCategoryJSONBody struct {
 	PriorityRank *int64 `json:"priority_rank,omitempty"`
 }
 
+// ResolveCategoryDuplicatesJSONBody defines parameters for ResolveCategoryDuplicates.
+type ResolveCategoryDuplicatesJSONBody struct {
+	Drop []struct {
+		Action        ResolveCategoryDuplicatesJSONBodyDropAction `json:"action"`
+		MediaObjectId int64                                       `json:"media_object_id"`
+	} `json:"drop"`
+	KeepMediaObjectId int64 `json:"keep_media_object_id"`
+}
+
+// ResolveCategoryDuplicatesJSONBodyDropAction defines parameters for ResolveCategoryDuplicates.
+type ResolveCategoryDuplicatesJSONBodyDropAction string
+
 // RenameLibraryJSONBody defines parameters for RenameLibrary.
 type RenameLibraryJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
@@ -4275,6 +4339,9 @@ type ListLibraryLevelParams struct {
 	// Sort Which order to list in. Every level defaults to title (an artist's own name at the Artists level), which is what a browse view opens on. A level that cannot honour a key ignores it.
 	Sort *ListLibraryLevelParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir  *ListLibraryLevelParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+
+	// Monitored At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
+	Monitored *bool `form:"monitored,omitempty" json:"monitored,omitempty"`
 }
 
 // ListLibraryLevelParamsSort defines parameters for ListLibraryLevel.
@@ -4522,9 +4589,12 @@ type ListSeriesPeopleParams struct {
 	Role *string `form:"role,omitempty" json:"role,omitempty"`
 
 	// Q Matches the start of the name.
-	Q      *string `form:"q,omitempty" json:"q,omitempty"`
-	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
+
+	// Monitored Only monitored (true) or only unmonitored (false) people; absent means both.
+	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
+	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetSeriesPersonParams defines parameters for GetSeriesPerson.
@@ -4872,6 +4942,9 @@ type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
 // UpdateCategoryJSONRequestBody defines body for UpdateCategory for application/json ContentType.
 type UpdateCategoryJSONRequestBody = CategoryWrite
+
+// ResolveCategoryDuplicatesJSONRequestBody defines body for ResolveCategoryDuplicates for application/json ContentType.
+type ResolveCategoryDuplicatesJSONRequestBody ResolveCategoryDuplicatesJSONBody
 
 // SetLibraryFileManagementJSONRequestBody defines body for SetLibraryFileManagement for application/json ContentType.
 type SetLibraryFileManagementJSONRequestBody = FileManagement
@@ -5223,6 +5296,9 @@ type ServerInterface interface {
 	// Tracks one library holds more than once, found by artist, title and length (read only).
 	// (GET /categories/{id}/duplicates)
 	GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
+	// Keep one copy of a duplicated track and link or recycle the others (manage access).
+	// (POST /categories/{id}/duplicates/resolve)
+	ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's File Management and Permissions (Sonarr's). Administrator only.
 	// (GET /categories/{id}/file-management)
 	GetLibraryFileManagement(w http.ResponseWriter, r *http.Request, id int64)
@@ -6066,6 +6142,12 @@ func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id
 // Tracks one library holds more than once, found by artist, title and length (read only).
 // (GET /categories/{id}/duplicates)
 func (_ Unimplemented) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Keep one copy of a duplicated track and link or recycle the others (manage access).
+// (POST /categories/{id}/duplicates/resolve)
+func (_ Unimplemented) ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8393,6 +8475,39 @@ func (siw *ServerInterfaceWrapper) GetCategoryDuplicates(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetCategoryDuplicates(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveCategoryDuplicates operation middleware
+func (siw *ServerInterfaceWrapper) ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveCategoryDuplicates(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -10779,6 +10894,14 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "monitored" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "monitored", r.URL.Query(), &params.Monitored)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "monitored", Err: err})
 		return
 	}
 
@@ -13204,6 +13327,14 @@ func (siw *ServerInterfaceWrapper) ListSeriesPeople(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "monitored" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "monitored", r.URL.Query(), &params.Monitored)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "monitored", Err: err})
 		return
 	}
 
@@ -15884,6 +16015,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/duplicates", wrapper.GetCategoryDuplicates)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/duplicates/resolve", wrapper.ResolveCategoryDuplicates)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/file-management", wrapper.GetLibraryFileManagement)

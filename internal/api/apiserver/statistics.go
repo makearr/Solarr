@@ -22,6 +22,10 @@ type StatisticsView struct {
 	ComputedAt         time.Time
 	WindowDays         int
 	FilesByCodec       []StatisticsFigure
+	FilesByVideoCodec  []StatisticsFigure
+	FilesByResolution  []StatisticsFigure
+	FilesByHDR         []StatisticsFigure
+	FilesByAudio       []StatisticsFigure
 	AlbumsByState      []StatisticsFigure
 	DownloadsByState   []StatisticsFigure
 	GrowthByMonth      []StatisticsFigure
@@ -73,6 +77,18 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 	for index, figure := range view.FilesByCodec {
 		out.FilesByCodec[index] = gen.StatisticsFiles{Key: figure.Key, Files: figure.Count, Bytes: int64(figure.Value)}
 	}
+	files := func(figures []StatisticsFigure) *[]gen.StatisticsFiles {
+		if len(figures) == 0 {
+			return nil
+		}
+		out := make([]gen.StatisticsFiles, len(figures))
+		for index, figure := range figures {
+			out[index] = gen.StatisticsFiles{Key: figure.Key, Files: figure.Count, Bytes: int64(figure.Value)}
+		}
+		return &out
+	}
+	out.FilesByVideoCodec, out.FilesByResolution = files(view.FilesByVideoCodec), files(view.FilesByResolution)
+	out.FilesByHdr, out.FilesByAudio = files(view.FilesByHDR), files(view.FilesByAudio)
 	if !view.ComputedAt.IsZero() {
 		out.ComputedAt = &view.ComputedAt
 	}

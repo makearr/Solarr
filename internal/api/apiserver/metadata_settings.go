@@ -38,7 +38,7 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
-		settings.KeyMetadataCoverSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
 		settings.KeyMetadataTheAudioDB, settings.KeyMetadataPeopleBackfillPerRun); err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -52,6 +52,12 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 		wanted.CoverSources = make([]string, 0, len(*body.CoverSources))
 		for _, source := range *body.CoverSources {
 			wanted.CoverSources = append(wanted.CoverSources, string(source))
+		}
+	}
+	if body.TvSources != nil {
+		wanted.TVSources = make([]string, 0, len(*body.TvSources))
+		for _, source := range *body.TvSources {
+			wanted.TVSources = append(wanted.TVSources, string(source))
 		}
 	}
 	wasAcoustID := *s.auth.Settings.Snapshot().MetadataSettings().AcoustID
@@ -145,8 +151,12 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 	for _, source := range stored.CoverSources {
 		covers = append(covers, gen.MetadataSettingsCoverSources(source))
 	}
+	tvSources := make([]gen.MetadataSettingsTvSources, 0, len(stored.TVSources))
+	for _, source := range stored.TVSources {
+		tvSources = append(tvSources, gen.MetadataSettingsTvSources(source))
+	}
 	return gen.MetadataSettings{
-		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order,
+		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order, TvSources: &tvSources,
 		CoverSources: &covers, Wikidata: stored.Wikidata, Acoustid: stored.AcoustID,
 		AcoustidApiKey:       &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
 		Theaudiodb:           stored.TheAudioDB,

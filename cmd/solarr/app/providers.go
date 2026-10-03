@@ -383,7 +383,8 @@ func (p *process) tvService() tv.Service {
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client("skyhook"), "en"), tvmaze.New(client("tvmaze"))
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
-			Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
+			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
+			Series:   library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
 		}
 	})
 	return p.tvShared

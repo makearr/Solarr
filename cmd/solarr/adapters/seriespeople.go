@@ -41,8 +41,8 @@ type SeriesPeople struct {
 }
 
 // People maps a page of the people credited in a TV library.
-func (c SeriesPeople) People(ctx context.Context, categoryID int64, roles []string, prefix string, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error) {
-	rows, err := c.Reader.People(ctx, library.TVPersonFilter{CategoryID: categoryID, Roles: roles, NamePrefix: prefix},
+func (c SeriesPeople) People(ctx context.Context, categoryID int64, roles []string, prefix string, monitored *bool, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error) {
+	rows, err := c.Reader.People(ctx, library.TVPersonFilter{CategoryID: categoryID, Roles: roles, NamePrefix: prefix, Monitored: monitored},
 		library.PersonCursor{SortName: after.Sort, ID: after.ID}, limit)
 	if err != nil {
 		return nil, err

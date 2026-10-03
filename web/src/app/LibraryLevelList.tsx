@@ -23,7 +23,7 @@ import { formatBytes } from "./Queue";
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
 const ROW_HEIGHT = 44;
-const FILTER_KEYS: readonly string[] = [];
+const FILTER_KEYS: readonly string[] = ["monitored"];
 
 // The poster wall's own geometry: a tile is at least this wide, gaps and page
 // padding are the grid's, and a row is one square cover plus its two lines of
@@ -182,11 +182,12 @@ export function LibraryLevelList() {
       rowHeight: isPoster ? posterRowHeight(options, metrics.cellWidth) : view === "overview" ? OVERVIEW_ROW_HEIGHT : ROW_HEIGHT,
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (item) => item.id,
-      fetchPage: async ({ cursor, signal }) => {
+      fetchPage: async ({ cursor, query, signal }) => {
+        const monitored = query.filters.monitored;
         const { data, error } = await api.GET("/libraries/{id}/{level}", {
           params: {
             path: { id: Number(categoryId), level: level ?? "" },
-            query: { cursor, limit: 100, sort, dir },
+            query: { cursor, limit: 100, sort, dir, monitored: monitored ? monitored === "true" : undefined },
           },
           signal,
         });
@@ -202,6 +203,20 @@ export function LibraryLevelList() {
       <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
         <h1 className="text-sm font-semibold capitalize tracking-tight">{level ?? "Library"}</h1>
         <div className="ml-auto flex items-center gap-2">
+          {level === "artists" && (
+            <label className="flex items-center gap-1 text-xs text-ink-muted">
+              Show
+              <select
+                value={list.query.filters.monitored ?? ""}
+                onChange={(event) => list.filterBy("monitored", event.target.value)}
+                className="rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink"
+              >
+                <option value="">All artists</option>
+                <option value="true">Monitored</option>
+                <option value="false">Unmonitored</option>
+              </select>
+            </label>
+          )}
           {view === "list" ? (
             <ColumnChooser level={level} hidden={hidden} onChange={setHidden} />
           ) : (

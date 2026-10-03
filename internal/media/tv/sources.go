@@ -235,19 +235,34 @@ func mergeInto(into *Series, other Series) {
 	mergeEpisodes(into, other)
 }
 
-// PreferRicher lets the richer source win prose, genres, certification and artwork; identity stays with the numbering
-// basis, so a library named after TheTVDB keeps its names.
-func PreferRicher(into *Series, richer Series) {
-	if strings.TrimSpace(richer.Overview) != "" {
-		into.Overview = richer.Overview
+// ApplyPriority lets the first source in the configured order that holds a field supply it: prose, genres, certification
+// and artwork. Identity and numbering stay with the basis, so a library named after TheTVDB keeps its names; a source
+// left out of the order supplies none of these.
+func ApplyPriority(into *Series, bySource map[string]Series, order []string) {
+	var images []Image
+	overview, rating := false, false
+	genres := false
+	for _, name := range order {
+		source, found := bySource[name]
+		if !found {
+			continue
+		}
+		if !overview && strings.TrimSpace(source.Overview) != "" {
+			into.Overview, overview = source.Overview, true
+		}
+		if !genres && len(source.Genres) > 0 {
+			into.Genres, genres = source.Genres, true
+		}
+		if !rating && source.ContentRating != "" {
+			into.ContentRating, rating = source.ContentRating, true
+		}
+		for _, image := range source.Images {
+			if !hasImage(images, image.URL) {
+				images = append(images, image)
+			}
+		}
 	}
-	if len(richer.Genres) > 0 {
-		into.Genres = richer.Genres
-	}
-	if richer.ContentRating != "" {
-		into.ContentRating = richer.ContentRating
-	}
-	into.Images = append(append([]Image(nil), richer.Images...), into.Images...)
+	into.Images = images
 }
 
 func mergeAirTime(into *Series, other Series) {

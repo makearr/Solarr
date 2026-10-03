@@ -251,6 +251,8 @@ type ArtistsFilter struct {
 	RootFolderIDs []int64
 	CategoryIDs   []int64
 	Descending    bool
+	// Monitored narrows to monitored (true) or unmonitored (false) artists; nil is both.
+	Monitored *bool
 }
 
 // ArtistsCursor is a position in the Artists level, ordered by sort name.
@@ -360,6 +362,10 @@ func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 		dir := gen.ListLibraryLevelParamsDir(raw)
 		params.Dir = &dir
 	}
+	if raw := query.Get("monitored"); raw == "true" || raw == "false" {
+		monitored := raw == "true"
+		params.Monitored = &monitored
+	}
 	s.ListLibraryLevel(w, r, id, level, params)
 }
 
@@ -413,7 +419,7 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 	case model.LevelEntityWorkPart:
 		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending)
 	case model.LevelEntityPerson:
-		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending)
+		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending, params.Monitored)
 	default:
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "this level has no reader wired up yet")
@@ -528,7 +534,7 @@ func (s *Server) listLibraryLevelTracks(
 // LibraryArtistsReader.
 func (s *Server) listLibraryLevelArtists(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
-	descending bool,
+	descending bool, monitored *bool,
 ) {
 	if s.libraryArtists == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -536,7 +542,7 @@ func (s *Server) listLibraryLevelArtists(
 		return
 	}
 	rows, err := s.libraryArtists.ListLibraryArtists(r.Context(),
-		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending},
+		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending, Monitored: monitored},
 		ArtistsCursor{SortName: cursor.field(0), ID: cursor.id}, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)

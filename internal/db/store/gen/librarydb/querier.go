@@ -43,6 +43,8 @@ type Querier interface {
 	// from stat_rollup, never live.
 	// Files and bytes per root folder and audio codec; a file with no measured codec yet is "unknown".
 	AggregateFilesByRootAndCodec(ctx context.Context) ([]AggregateFilesByRootAndCodecRow, error)
+	// Files and bytes per root folder and measured video attributes; what the probe could not read is "unknown".
+	AggregateFilesByRootAndVideo(ctx context.Context) ([]AggregateFilesByRootAndVideoRow, error)
 	// Whether any unverified album exists, so a scan skips the per-file check on a library with none.
 	AnyUnverifiedWork(ctx context.Context) (int64, error)
 	AssignTag(ctx context.Context, arg AssignTagParams) error

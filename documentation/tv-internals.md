@@ -57,7 +57,7 @@ monitored or not as the choice says ("existing" wants the episodes with a file, 
 follows (`Desired.ApplyPartMonitoring`, one transaction per season). A season item is monitored exactly when one of its
 episodes is, also when one episode is toggled by hand, so wanting a single episode of an unmonitored season reaches the
 planner. `PUT /series/{id}/quality` gives every season of a series its own quality profile (the album precedent,
-`desired_profile_override`). The Season pass level is a grid of series and season chips over these.
+`desired_profile_override`). The Season pass screen (a grid of series and season chips over these) is reachable at `/library/<id>/seasonpass` but no longer in the navigation (2026-10-03, user).
 
 ## Deleting, series type, pictures
 
@@ -99,3 +99,13 @@ the six multi-episode styles. The shipped default reproduces the user's library:
 `S03E10-E11` and several episode titles joined with `+`. The style is stored as one more entry of the profile's formats
 (`multi_episode_style`) and is stripped before template validation. Plex and Jellyfin presets write their id folders with
 the engine's escapes: `{{` and `}}` for braces, `[[` and `]]` for brackets.
+
+## Identifying a folder (`Resolver`, `RetryJob`)
+
+A folder is named in this order: `{tvdb-N}` in the name, a title or alias already in the library, then the providers' search. `pick`
+accepts the one candidate whose title matches (ignoring TheTVDB's "(2014)" or "(US)" qualifier and TMDB's original title, which
+travels as `Candidate.AltTitles`); when several match, or none does and the folder has at least 8 numbered files, `byEpisodes` fetches the
+top candidates from Skyhook and takes the one that has at least 80 % of the files' season/episode (or absolute) numbers and leads the next
+by 15 points. Anything less sure is queued for a person. A scan only hands over new or changed files, so `RetryJob` (task `tv_retry`, daily,
+and the Review page's button) feeds the waiting files through `Consumer.Observe` again. Measured on the user's 1,062-series library: 5,553 of
+55,970 series files were waiting before; see inflight.md for what remained.

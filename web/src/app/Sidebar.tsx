@@ -161,11 +161,6 @@ export function Sidebar() {
 
   const libraryTree = groups.map((group) => (
     <li key={group.mediaType}>
-      {group.libraries.length > 1 && !collapsed && (
-        <div className="px-2 pt-2 pb-0.5 text-[11px] uppercase tracking-wide text-ink-muted">
-          {group.mediaType}
-        </div>
-      )}
       <ul className="flex flex-col gap-0.5">
         {group.libraries.map((library) => (
           <LibraryNode

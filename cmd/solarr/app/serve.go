@@ -646,6 +646,10 @@ func (p *process) startServer(ctx context.Context) error {
 		ArtworkChoices: p.artworkChoices(),
 		Statistics:     adapters.Statistics{Statistics: library.NewStatistics(p.library)},
 		Duplicates:     adapters.Duplicates{Store: library.NewDuplicates(p.library), Settings: p.cache},
+		DuplicateResolver: adapters.DuplicateResolver{
+			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),
+			Recycler: p.fileRemover(), Settings: p.cache,
+		},
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Statistics: library.NewStatistics(p.library), People: library.NewPeople(p.library),
 		},

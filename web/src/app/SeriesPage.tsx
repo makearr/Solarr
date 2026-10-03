@@ -534,8 +534,26 @@ export function SeriesPage() {
           )}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <h1 className="text-xl font-semibold">{series.title}</h1>
-          <p className="text-sm text-ink-muted">{facts.join(" · ")}</p>
+          {detail.data.logo_url ? (
+            <h1 className="flex items-center">
+              <img src={remoteImage(detail.data.logo_url, "small")} alt={series.title} className="max-h-20 max-w-xs object-contain object-left" />
+            </h1>
+          ) : (
+            <h1 className="text-xl font-semibold">{series.title}</h1>
+          )}
+          <p className="flex flex-wrap items-center gap-x-2 text-sm text-ink-muted">
+            {detail.data.network_id && detail.data.network_logo_url && (
+              <Link
+                to="/library/$categoryId/networks/$networkId"
+                params={{ categoryId, networkId: String(detail.data.network_id) }}
+                title={series.network}
+                className="mr-1 rounded bg-white/90 px-1.5 py-0.5"
+              >
+                <img src={remoteImage(detail.data.network_logo_url, "thumb")} alt={series.network ?? "Network"} className="h-5 object-contain" />
+              </Link>
+            )}
+            {facts.filter((fact) => !(detail.data.network_logo_url && fact === series.network)).join(" · ")}
+          </p>
           <p className="text-sm">
             <span className="font-medium">{series.counts.present}</span> of {series.counts.monitored} monitored episodes on disk
             {series.counts.aired_missing > 0 && <span className="text-danger"> · {series.counts.aired_missing} aired and missing</span>}

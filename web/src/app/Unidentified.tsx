@@ -16,6 +16,16 @@ const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Unidentified() {
   const queryClient = useQueryClient();
+  const retry = useMutation({
+    mutationFn: async () => {
+      const { error, response } = await api.POST("/schedules/{key}/run", { params: { path: { key: "tv_retry" } } });
+      if (error && response.status !== 409) throw error;
+    },
+    onSuccess: () => {
+      // The sweep runs in the background; look again once it has had a moment.
+      window.setTimeout(() => void queryClient.invalidateQueries(), 8000);
+    },
+  });
   const list = useLibraryList<UnidentifiedFile>(
     {
       name: "unidentified",
@@ -101,6 +111,15 @@ export function Unidentified() {
         <span className="text-xs text-ink-muted">
           Files a scan found but could not confidently match to a work
         </span>
+        <button
+          type="button"
+          disabled={retry.isPending}
+          onClick={() => retry.mutate()}
+          title="Ask the providers about the waiting TV files again, with everything the folders' episode numbers say"
+          className="ml-auto rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+        >
+          {retry.isSuccess ? "Started: it runs in the background" : "Try TV files again"}
+        </button>
       </div>
 
       <div className="min-h-0 flex-1">

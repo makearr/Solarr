@@ -478,3 +478,53 @@ func (p Physical) RecomputeWorkItems(ctx context.Context, workID int64) error {
 	}
 	return nil
 }
+
+// MergeObjectInto makes the dropped media object's paths further paths of the kept one, each recorded with the way
+// it now shares bytes (linkKinds, by path id), and moves what the dropped one covered over to the kept one. Whatever
+// the dropped object still had is removed with it: this is for a caller that has already linked every path it wants.
+func (p Physical) MergeObjectInto(ctx context.Context, keepID, dropID int64, linkKinds map[int64]string) ([]int64, error) {
+	var works []int64
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		for pathID, kind := range linkKinds {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE library_path SET media_object_id = ?, link_kind = ?, is_primary = 0 WHERE id = ? AND media_object_id = ?`,
+				keepID, kind, pathID, dropID); err != nil {
+				return err
+			}
+		}
+		var err error
+		if works, err = workIDsOfObject(ctx, tx, dropID); err != nil {
+			return err
+		}
+		for _, statement := range []string{
+			`UPDATE OR IGNORE desired_item_file SET media_object_id = ? WHERE media_object_id = ?`,
+			`UPDATE OR IGNORE work_file SET media_object_id = ? WHERE media_object_id = ?`,
+		} {
+			if _, err := tx.ExecContext(ctx, statement, keepID, dropID); err != nil {
+				return err
+			}
+		}
+		return librarydb.New(tx).DeleteMediaObject(ctx, dropID)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: merge object %d into %d: %w", dropID, keepID, err)
+	}
+	return works, nil
+}
+
+func workIDsOfObject(ctx context.Context, tx *sql.Tx, mediaObjectID int64) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT work_id FROM work_file WHERE media_object_id = ?`, mediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var works []int64
+	for rows.Next() {
+		var workID int64
+		if err := rows.Scan(&workID); err != nil {
+			return nil, err
+		}
+		works = append(works, workID)
+	}
+	return works, rows.Err()
+}

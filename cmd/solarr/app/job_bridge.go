@@ -26,3 +26,12 @@ func (p *process) enqueueBridge(ctx context.Context) (jobs.EnqueueResult, error)
 	}
 	return result, err
 }
+
+// enqueueTVRetry submits one retry of the files waiting for review; registered as the "Identify waiting TV files" task.
+func (p *process) enqueueTVRetry(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := tv.EnqueueRetry(ctx, p.queue)
+	if err != nil {
+		p.logger.Warn("enqueue tv retry", slog.Any("error", err))
+	}
+	return result, err
+}

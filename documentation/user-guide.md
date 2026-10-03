@@ -70,7 +70,7 @@ Tags a metadata provider assigned are never touched. With albums selected (Table
 matching), **Edit** in the toolbar applies only what you change to all of them, after showing the count.
 **Fresh** means released within a week, or shown by an RSS feed within 48 hours whatever the release date
 (a manual search never counts), and those albums are also searched first.
-Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Library → Duplicates** (advanced) lists tracks held more than once, found by artist, title and length (a flac and a 96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality; that list only looks. Above it, **Identical files** covers the other case, the very same bytes stored at two paths: a preview of which second paths can become a reflink (else a hardlink) of the first, per pair on one filesystem, and a **Link identical files** button (manage access) that compares every byte again before swapping a path atomically. Roots that are offline, not writable or read-only are never touched. **Settings → Tags** lists
+Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Library → Duplicates** (advanced) lists tracks held more than once, found by artist, title and length (a flac and a 96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality. You choose the copy to keep (a radio per copy) and, for each other copy, whether its paths become links to the kept file (hardlink or reflink; the other album keeps its track, the old file waits seven days in the recycle bin; only between files of the same extension) or the copy goes to the recycle bin; a confirmation lists every path before anything changes. Above it, **Identical files** covers the other case, the very same bytes stored at two paths: a preview of which second paths can become a reflink (else a hardlink) of the first, per pair on one filesystem, and a **Link identical files** button (manage access) that compares every byte again before swapping a path atomically. Roots that are offline, not writable or read-only are never touched. **Settings → Tags** lists
 the tags you made, with how many albums carry each, and renames or deletes them (administrator).
 
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
@@ -95,9 +95,9 @@ Token or the API key) and then adds cast, crew and guest stars, networks with lo
 the providers** checks all five sources. Anime also gets its romaji and synonym titles from AniList, which release groups
 use.
 
-Under a TV library: **Series** (posters with a progress bar, filters by status, network, genre and quality), **People**
+Under a TV library: **Series** (as posters with a progress bar, as an overview with the plot, or as a sortable table; filters by status, network, genre and quality), **People**
 (everyone credited, by role; open one for their credits here, their biography and what else they are known for),
-**Networks**, **Season pass** (every series with one chip per season: click to want or not want that season), **Wanted**
+**Networks**, **Wanted**
 (aired episodes without a file) and **Unidentified**. A series page lists its seasons and episodes with directors,
 writers and guest stars; **Edit** re-applies any monitor choice to what you already hold and gives the series its own
 quality profile. Wanting one episode also wants its season.
@@ -114,6 +114,12 @@ folder" places each by its own name.
 **Quality profiles** for TV are edited with a form (Quality profiles in the sidebar): rank resolution, source, codec, HDR and
 audio best first, set the lowest and highest resolution accepted, name codecs never to accept, require an audio language, and
 list **preferred release groups** that rank above an otherwise equal release.
+
+A TV file a scan could not place is asked about again every night (task **Identify waiting TV files**) and on demand with
+**Try TV files again** on the Review page. A folder named in another language, or a title TheTVDB lists twice, is settled by the
+episode numbers of its files when they clearly fit one series. **Settings → Metadata → TV series** orders the providers: the
+first one that holds a field (plot, genres, rating, artwork) supplies it; the default is open and fast first (Skyhook, TVmaze,
+TMDB, TheTVDB, AniList). Wikidata is listed there too: it recognises the same person in TV and music.
 
 **Follow** (on a person's or a network's page, with your TMDB key) adds their new series for you: a person by the roles you
 tick (acting, directing, writing, ...), a network for everything new it airs. At most five series per follow are added each

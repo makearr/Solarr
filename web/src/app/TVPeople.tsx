@@ -77,8 +77,9 @@ export function TVPeople() {
     return () => clearTimeout(timer);
   }, [typed]);
 
+  const [monitored, setMonitored] = useState<"" | "true" | "false">("");
   const people = useInfiniteQuery({
-    queryKey: ["series-people", categoryId, group.roles, query],
+    queryKey: ["series-people", categoryId, group.roles, query, monitored],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       const { data, error } = await api.GET("/series/people", {
@@ -87,6 +88,7 @@ export function TVPeople() {
             category_id: Number(categoryId),
             role: group.roles || undefined,
             q: query || undefined,
+            monitored: monitored === "" ? undefined : monitored === "true",
             cursor: pageParam,
             limit: 60,
           },
@@ -116,7 +118,19 @@ export function TVPeople() {
             {entry.label}
           </button>
         ))}
-        <label className="ml-auto flex items-center gap-1.5 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink-muted">
+        <label className="ml-auto flex items-center gap-1 text-xs text-ink-muted">
+          Show
+          <select
+            value={monitored}
+            onChange={(event) => setMonitored(event.target.value as typeof monitored)}
+            className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink"
+          >
+            <option value="">All people</option>
+            <option value="true">Followed</option>
+            <option value="false">Not followed</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-1.5 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink-muted">
           <Search aria-hidden className="size-3.5" />
           <input
             value={typed}

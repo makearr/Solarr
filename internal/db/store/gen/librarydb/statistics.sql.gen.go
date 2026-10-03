@@ -223,6 +223,66 @@ func (q *Queries) AggregateFilesByRootAndCodec(ctx context.Context) ([]Aggregate
 	return items, nil
 }
 
+const aggregateFilesByRootAndVideo = `-- name: AggregateFilesByRootAndVideo :many
+SELECT lp.root_folder_id,
+       CAST(COALESCE(NULLIF(ma.video_codec, ''), 'unknown') AS TEXT) AS video_codec,
+       CAST(COALESCE(NULLIF(ma.resolution, ''), 'unknown') AS TEXT) AS resolution,
+       CAST(COALESCE(NULLIF(ma.hdr, ''), 'sdr') AS TEXT) AS hdr,
+       CAST(COALESCE(NULLIF(ma.audio_codec, ''), 'unknown') AS TEXT) AS audio_codec,
+       CAST(COALESCE(NULLIF(ma.audio_channels, ''), '') AS TEXT) AS audio_channels,
+       CAST(COUNT(*) AS INTEGER) AS files,
+       CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes
+FROM library_path lp
+JOIN media_object mo ON mo.id = lp.media_object_id
+LEFT JOIN media_attributes ma ON ma.id = mo.measured_attributes_id
+WHERE ma.video_codec IS NOT NULL AND ma.video_codec <> ''
+GROUP BY lp.root_folder_id, video_codec, resolution, hdr, audio_codec, audio_channels
+`
+
+type AggregateFilesByRootAndVideoRow struct {
+	RootFolderID  int64
+	VideoCodec    string
+	Resolution    string
+	Hdr           string
+	AudioCodec    string
+	AudioChannels string
+	Files         int64
+	Bytes         int64
+}
+
+// Files and bytes per root folder and measured video attributes; what the probe could not read is "unknown".
+func (q *Queries) AggregateFilesByRootAndVideo(ctx context.Context) ([]AggregateFilesByRootAndVideoRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateFilesByRootAndVideo)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateFilesByRootAndVideoRow{}
+	for rows.Next() {
+		var i AggregateFilesByRootAndVideoRow
+		if err := rows.Scan(
+			&i.RootFolderID,
+			&i.VideoCodec,
+			&i.Resolution,
+			&i.Hdr,
+			&i.AudioCodec,
+			&i.AudioChannels,
+			&i.Files,
+			&i.Bytes,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteStatRollupMetric = `-- name: DeleteStatRollupMetric :exec
 DELETE FROM stat_rollup WHERE metric = ?
 `

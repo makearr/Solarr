@@ -2,9 +2,11 @@ package apiserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"path"
 
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 )
@@ -38,6 +40,26 @@ type DuplicatePathRow struct {
 // DuplicateReader finds the tracks a library holds more than once.
 type DuplicateReader interface {
 	Duplicates(ctx context.Context, categoryID int64, rootFolderIDs []int64, limit int) ([]DuplicateGroupRow, error)
+}
+
+// DuplicateDrop is one copy to give up, and how: "link" turns each of its paths into a link to the kept copy, so the
+// folders it was in stay complete; "recycle" moves it to the recycle bin.
+type DuplicateDrop struct {
+	MediaObjectID int64
+	Action        string
+}
+
+// DuplicateOutcome is what a resolution did.
+type DuplicateOutcome struct {
+	Linked, Recycled int
+	FreedBytes       int64
+	// Problems say, one line each, what was left alone and why.
+	Problems []string
+}
+
+// DuplicateResolver acts on a group of copies: keeps one and gives up the rest.
+type DuplicateResolver interface {
+	ResolveDuplicates(ctx context.Context, categoryID, keepMediaObjectID int64, drops []DuplicateDrop) (DuplicateOutcome, error)
 }
 
 // duplicateGroupLimit bounds one report.
@@ -119,4 +141,48 @@ func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, i
 		report.ReclaimableBytes += view.ReclaimableBytes
 	}
 	writeJSON(w, s.logger, http.StatusOK, report)
+}
+
+func (s *Server) routeResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request) {
+	if id, err := parsePathID(w, s, r, "id", "a category id must be a number"); err == nil {
+		s.ResolveCategoryDuplicates(w, r, id)
+	}
+}
+
+// ResolveCategoryDuplicates keeps the named copy of a track and links or recycles the others; manage access to the library.
+func (s *Server) ResolveCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if _, err := access.Category(id, settings.PermissionManage); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.duplicateResolver == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "duplicates cannot be resolved here")
+		return
+	}
+	var body gen.ResolveCategoryDuplicatesJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || len(body.Drop) == 0 {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "keep and at least one copy to drop are required")
+		return
+	}
+	drops := make([]DuplicateDrop, len(body.Drop))
+	for i, drop := range body.Drop {
+		drops[i] = DuplicateDrop{MediaObjectID: drop.MediaObjectId, Action: string(drop.Action)}
+	}
+	outcome, err := s.duplicateResolver.ResolveDuplicates(r.Context(), id, body.KeepMediaObjectId, drops)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	problems := outcome.Problems
+	if problems == nil {
+		problems = []string{}
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.DuplicateResolution{
+		Linked: outcome.Linked, Recycled: outcome.Recycled, FreedBytes: outcome.FreedBytes, Problems: problems,
+	})
 }

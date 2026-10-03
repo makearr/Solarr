@@ -56,6 +56,12 @@ func (c SeriesCatalog) Get(ctx context.Context, categoryID, seriesID int64) (gen
 		minutes := int(row.RuntimeMs / 60_000)
 		detail.RuntimeMinutes = &minutes
 	}
+	setString(&detail.LogoUrl, imageOfKind(row.Summary.Fields["images"], "logo"))
+	setString(&detail.FanartUrl, imageOfKind(row.Summary.Fields["images"], "fanart"))
+	if network, found, err := c.Reader.NetworkOfSeries(ctx, seriesID); err == nil && found {
+		detail.NetworkId = &network.ID
+		setString(&detail.NetworkLogoUrl, network.LogoURL)
+	}
 	setString(&detail.OriginalLanguage, row.Language)
 	setString(&detail.OriginalCountry, row.Summary.Fields["original_country"])
 	setString(&detail.AirTime, row.Summary.Fields["air_time"])
@@ -404,13 +410,16 @@ func countsView(counts library.SeriesCounts) gen.SeriesCounts {
 	return gen.SeriesCounts{Total: int(counts.Total), Monitored: int(counts.Monitored), Present: int(counts.Present), AiredMissing: int(counts.AiredMissing)}
 }
 
-func posterOf(imagesJSON string) string {
+func posterOf(imagesJSON string) string { return imageOfKind(imagesJSON, "poster") }
+
+// imageOfKind is the first picture of a kind (poster, fanart, logo) in a series' stored images, in the provider order.
+func imageOfKind(imagesJSON, kind string) string {
 	var images []tv.Image
 	if json.Unmarshal([]byte(imagesJSON), &images) != nil {
 		return ""
 	}
 	for _, image := range images {
-		if image.Kind == "poster" {
+		if image.Kind == kind {
 			return image.URL
 		}
 	}

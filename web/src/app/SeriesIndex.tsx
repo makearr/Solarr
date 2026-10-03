@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Plus, Search, Tv } from "lucide-react";
+import { LayoutGrid, List, Plus, Rows3, Search, Tv } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -77,6 +77,87 @@ export function SeriesTile({ series, categoryId }: { series: Series; categoryId:
   );
 }
 
+type ViewKey = "posters" | "overview" | "table";
+
+const VIEWS: { key: ViewKey; label: string; icon: typeof LayoutGrid }[] = [
+  { key: "posters", label: "Posters", icon: LayoutGrid },
+  { key: "overview", label: "Overview", icon: Rows3 },
+  { key: "table", label: "Table", icon: List },
+];
+
+const OVERVIEW_ROW = 132;
+const TABLE_ROW = 40;
+
+function ProgressBar({ series }: { series: Series }) {
+  const tone = progressTone(series);
+  const percent = series.counts.monitored > 0 ? Math.min(100, (100 * series.counts.present) / series.counts.monitored) : 0;
+  return (
+    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-border-subtle" title={`${tone.label}: ${series.counts.present} of ${series.counts.monitored}`}>
+      <span className={`block h-full ${tone.fill}`} style={{ width: `${percent}%` }} />
+    </span>
+  );
+}
+
+/** Sonarr's overview: a small poster beside the title, facts and the start of the plot. */
+function OverviewRow({ series, categoryId }: { series: Series; categoryId: string }) {
+  return (
+    <Link
+      to="/library/$categoryId/series/$seriesId"
+      params={{ categoryId, seriesId: String(series.id) }}
+      className="flex h-full gap-3 rounded-lg border border-border-subtle p-2 hover:border-accent focus-visible:outline-2 focus-visible:outline-accent"
+    >
+      <span className="block aspect-[2/3] h-full shrink-0 overflow-hidden rounded bg-surface">
+        {series.poster_url ? (
+          <img src={remoteImage(series.poster_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
+        ) : (
+          <span className="flex size-full items-center justify-center text-ink-muted">
+            <Tv aria-hidden className="size-6" />
+          </span>
+        )}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="flex items-baseline gap-2">
+          <span className="truncate text-sm font-semibold">{series.title}</span>
+          <span className="shrink-0 text-xs text-ink-muted">
+            {[series.year, series.network, series.status === "ended" ? "Ended" : "Continuing"].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+        <span className="line-clamp-3 text-xs text-ink-muted">{series.overview || "No overview."}</span>
+        <span className="mt-auto flex items-center gap-3 text-xs text-ink-muted">
+          <span className="w-40">
+            <ProgressBar series={series} />
+          </span>
+          <span>
+            {series.counts.present}/{series.counts.monitored} episodes
+          </span>
+          {(series.genres ?? []).length > 0 && <span className="truncate">{(series.genres ?? []).slice(0, 3).join(", ")}</span>}
+        </span>
+      </span>
+    </Link>
+  );
+}
+
+const TABLE_COLUMNS: { header: string; sort?: SortKey; width: string; cell: (series: Series, profile: string) => React.ReactNode }[] = [
+  { header: "Title", sort: "title", width: "minmax(12rem,2fr)", cell: (series) => <span className="truncate font-medium">{series.title}</span> },
+  { header: "Year", sort: "year", width: "4.5rem", cell: (series) => series.year ?? "" },
+  { header: "Network", sort: "network", width: "minmax(7rem,1fr)", cell: (series) => <span className="truncate">{series.network ?? ""}</span> },
+  { header: "Status", width: "6rem", cell: (series) => (series.status === "ended" ? "Ended" : "Continuing") },
+  { header: "Seasons", width: "5rem", cell: (series) => (series.season_states ?? []).filter((season) => season.number > 0).length },
+  { header: "Episodes", sort: "progress", width: "minmax(8rem,1fr)", cell: (series) => (
+    <span className="flex w-full items-center gap-2">
+      <span className="w-16 shrink-0">
+        <ProgressBar series={series} />
+      </span>
+      {series.counts.present}/{series.counts.monitored}
+    </span>
+  ) },
+  { header: "Quality profile", width: "minmax(7rem,1fr)", cell: (_series, profile) => <span className="truncate">{profile}</span> },
+  { header: "Monitored", width: "5.5rem", cell: (series) => (series.monitored ? "Yes" : "No") },
+  { header: "Added", sort: "added", width: "6.5rem", cell: (series) => new Date(series.added_at * 1000).toLocaleDateString() },
+];
+
+const TABLE_GRID = TABLE_COLUMNS.map((column) => column.width).join(" ");
+
 /** A TV library's Series level: every series as a poster, with Sonarr's filters and sorts applied in the browser. */
 export function SeriesIndex() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
@@ -90,6 +171,7 @@ export function SeriesIndex() {
   const [network, setNetwork] = useState("");
   const [genre, setGenre] = useState("");
   const [profile, setProfile] = useState(0);
+  const [view, setView] = usePreference<ViewKey>(`series.view.${categoryId}`, "posters");
 
   const pages = useInfiniteQuery({
     queryKey: ["series", categoryId],
@@ -160,13 +242,16 @@ export function SeriesIndex() {
   // The wall is virtualised a row of posters at a time: a library of a thousand series must not mount a thousand images.
   const scroller = useRef<HTMLDivElement>(null);
   const metrics = useGridMetrics(scroller, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
-  const rowCount = Math.ceil(shown.length / metrics.columns);
+  const columns = view === "posters" ? metrics.columns : 1;
+  const rowCount = Math.ceil(shown.length / columns);
+  const rowHeight = view === "posters" ? metrics.cellWidth * 1.5 + TILE_CAPTION + POSTER_GAP : view === "overview" ? OVERVIEW_ROW + 8 : TABLE_ROW;
   const virtualizer = useVirtualizer({
     count: rowCount,
     getScrollElement: () => scroller.current,
-    estimateSize: () => metrics.cellWidth * 1.5 + TILE_CAPTION + POSTER_GAP,
+    estimateSize: () => rowHeight,
     overscan: 3,
   });
+  useEffect(() => virtualizer.measure(), [virtualizer, view, rowHeight]);
 
   const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
   return (
@@ -184,6 +269,21 @@ export function SeriesIndex() {
             className={`${control} w-48 pl-7`}
           />
         </label>
+        <span role="group" aria-label="View" className="flex overflow-hidden rounded-md border border-border-subtle">
+          {VIEWS.map(({ key, label, icon: Icon }) => (
+            <button
+              key={key}
+              type="button"
+              aria-pressed={view === key}
+              title={label}
+              onClick={() => setView(key)}
+              className={`flex items-center gap-1 px-2 py-1 text-xs ${view === key ? "bg-accent/10 text-ink" : "text-ink-muted hover:text-ink"}`}
+            >
+              <Icon aria-hidden className="size-3.5" />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </span>
         <label className="flex items-center gap-1 text-xs text-ink-muted">
           Sort
           <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} className={control}>
@@ -282,18 +382,64 @@ export function SeriesIndex() {
             </Link>
           </div>
         )}
+        {view === "table" && shown.length > 0 && (
+          <div
+            role="row"
+            className="sticky top-0 z-10 grid items-center gap-2 border-b border-border-subtle bg-canvas px-2 py-1.5 text-xs font-medium text-ink-muted"
+            style={{ gridTemplateColumns: TABLE_GRID }}
+          >
+            {TABLE_COLUMNS.map((column) =>
+              column.sort ? (
+                <button key={column.header} type="button" onClick={() => setSort(column.sort as SortKey)} className="text-left hover:text-ink">
+                  {column.header}
+                  {sort === column.sort ? " ▾" : ""}
+                </button>
+              ) : (
+                <span key={column.header}>{column.header}</span>
+              ),
+            )}
+          </div>
+        )}
         <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((row) => (
-            <div
-              key={row.key}
-              className="absolute inset-x-0 grid"
-              style={{ height: row.size, transform: `translateY(${row.start}px)`, gap: POSTER_GAP, gridTemplateColumns: `repeat(${metrics.columns}, minmax(0, 1fr))` }}
-            >
-              {shown.slice(row.index * metrics.columns, (row.index + 1) * metrics.columns).map((series) => (
-                <SeriesTile key={series.id} series={series} categoryId={categoryId} />
-              ))}
-            </div>
-          ))}
+          {virtualizer.getVirtualItems().map((row) => {
+            const slice = shown.slice(row.index * columns, (row.index + 1) * columns);
+            return (
+              <div
+                key={row.key}
+                className="absolute inset-x-0 grid"
+                style={{
+                  height: row.size,
+                  transform: `translateY(${row.start}px)`,
+                  gap: view === "posters" ? POSTER_GAP : 0,
+                  gridTemplateColumns: view === "posters" ? `repeat(${metrics.columns}, minmax(0, 1fr))` : "minmax(0, 1fr)",
+                }}
+              >
+                {slice.map((series) =>
+                  view === "posters" ? (
+                    <SeriesTile key={series.id} series={series} categoryId={categoryId} />
+                  ) : view === "overview" ? (
+                    <div key={series.id} className="pb-2">
+                      <OverviewRow series={series} categoryId={categoryId} />
+                    </div>
+                  ) : (
+                    <Link
+                      key={series.id}
+                      to="/library/$categoryId/series/$seriesId"
+                      params={{ categoryId, seriesId: String(series.id) }}
+                      className="grid items-center gap-2 border-b border-border-subtle px-2 text-xs hover:bg-surface"
+                      style={{ gridTemplateColumns: TABLE_GRID }}
+                    >
+                      {TABLE_COLUMNS.map((column) => (
+                        <span key={column.header} className="flex min-w-0 items-center truncate">
+                          {column.cell(series, (profileNames.data ?? []).find((entry) => entry.id === series.quality_profile_id)?.name ?? "")}
+                        </span>
+                      ))}
+                    </Link>
+                  ),
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

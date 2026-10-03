@@ -114,6 +114,8 @@ type Config struct {
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
 	Duplicates DuplicateReader
+	// DuplicateResolver keeps one copy of a track and links or recycles the others. Optional: nil answers 503.
+	DuplicateResolver DuplicateResolver
 	// Links previews and queues the linking of a library's identical copies. Optional: nil answers 503.
 	Links LinkManager
 
@@ -271,6 +273,7 @@ type Server struct {
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
 	duplicates              DuplicateReader
+	duplicateResolver       DuplicateResolver
 	links                   LinkManager
 	incompleteDiscographies IncompleteDiscographies
 	albumRefresher          AlbumRefresher
@@ -374,6 +377,7 @@ func New(config Config) (*Server, error) {
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
 		duplicates:              config.Duplicates,
+		duplicateResolver:       config.DuplicateResolver,
 		links:                   config.Links,
 		incompleteDiscographies: config.IncompleteDiscographies,
 		albumRefresher:          config.AlbumRefresher,
@@ -589,6 +593,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}", server.routeGetCategory)
 			secured.Get("/categories/{id}/statistics", server.routeGetCategoryStatistics)
 			secured.Get("/categories/{id}/duplicates", server.routeGetCategoryDuplicates)
+			secured.Post("/categories/{id}/duplicates/resolve", server.routeResolveCategoryDuplicates)
 			secured.Get("/categories/{id}/links", server.routeGetCategoryLinks)
 			secured.Post("/categories/{id}/links", server.routeLinkCategoryCopies)
 			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)

@@ -146,7 +146,11 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 	var queued []library.QueueEntry
 	attached, matched := 0, 0
 	for folder, indexes := range byFolder {
-		series, candidates := c.resolver.Resolve(ctx, categoryID, folder, readable[indexes[0]].File.RelPath)
+		relPaths := make([]string, len(indexes))
+		for n, i := range indexes {
+			relPaths[n] = readable[i].File.RelPath
+		}
+		series, candidates := c.resolver.ResolveFiles(ctx, categoryID, folder, relPaths)
 		if series == ExcludedSeries {
 			continue
 		}

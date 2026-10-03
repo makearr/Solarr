@@ -22,6 +22,8 @@ type TVPersonFilter struct {
 	CategoryID int64
 	Roles      []string
 	NamePrefix string
+	// Monitored narrows to monitored (true) or unmonitored (false) people; nil is both.
+	Monitored *bool
 }
 
 // TVPersonRow is one person of a TV library with what they did there.
@@ -60,6 +62,9 @@ func (r SeriesReader) People(ctx context.Context, filter TVPersonFilter, after P
 	predicates.Add("EXISTS (SELECT 1 FROM credit c "+join+" WHERE c.person_id = p.id"+roleSQL+")",
 		append([]any{filter.CategoryID}, roleArgs...)...)
 	addTVNamePrefix(&predicates, filter.NamePrefix)
+	if filter.Monitored != nil {
+		predicates.Add("p.monitored = ?", boolInt(*filter.Monitored))
+	}
 	predicates.AddIf(after.SortName != "" || after.ID != 0,
 		"(p.sort_name COLLATE NOCASE > ? OR (p.sort_name COLLATE NOCASE = ? AND p.id > ?))", after.SortName, after.SortName, after.ID)
 
@@ -333,4 +338,21 @@ func (r SeriesReader) SummariesByIDs(ctx context.Context, categoryID int64, ids 
 		return nil, err
 	}
 	return summaries, nil
+}
+
+// NetworkOfSeries answers the network a series airs on, with its logo; found is false for a series with none.
+func (r SeriesReader) NetworkOfSeries(ctx context.Context, workID int64) (TVNetworkRow, bool, error) {
+	var row TVNetworkRow
+	err := r.store.Read().QueryRowContext(ctx,
+		`SELECT o.id, o.name, COALESCE(o.country, ''), COALESCE(json_extract(o.fields_json, '$.logo'), '')
+FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id
+WHERE wo.work_id = ? AND wo.role = 'network' AND o.kind = 'network'
+ORDER BY o.id LIMIT 1`, workID).Scan(&row.ID, &row.Name, &row.Country, &row.LogoURL)
+	if errors.Is(err, sql.ErrNoRows) {
+		return TVNetworkRow{}, false, nil
+	}
+	if err != nil {
+		return TVNetworkRow{}, false, fmt.Errorf("library: series network: %w", err)
+	}
+	return row, true, nil
 }

@@ -1,8 +1,10 @@
+import * as Dialog from "@radix-ui/react-dialog";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
 import { api } from "@/api/client";
+import type { components } from "@/api/schema";
 
 import { formatBytes } from "./Queue";
 
@@ -93,11 +95,158 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
   );
 }
 
+type Group = components["schemas"]["DuplicateReport"]["groups"][number];
+type Copy = Group["copies"][number];
+type Action = "link" | "recycle";
+
+const extensionOf = (path: string) => (path.match(/\.[^./\\]+$/)?.[0] ?? "").toLowerCase();
+
+/** A copy can be linked to the kept one only when the kept copy has a file of the same kind to link to. */
+function linkable(copy: Copy, keep: Copy): boolean {
+  const kept = new Set(keep.paths.map(extensionOf));
+  return copy.paths.every((path) => kept.has(extensionOf(path)));
+}
+
+/** One track held more than once: pick the copy to keep (the library's choice is ticked first), say what becomes of each
+ *  other copy, and confirm. Nothing is removed without the dialog. */
+function GroupCard({ group, categoryId, onDone }: { group: Group; categoryId: number; onDone: () => void }) {
+  const initialKeep = Math.max(0, group.copies.findIndex((copy) => copy.keep));
+  const [keepIndex, setKeepIndex] = useState(initialKeep);
+  const [actions, setActions] = useState<Record<number, Action>>({});
+  const [confirming, setConfirming] = useState(false);
+  const keep = (group.copies[keepIndex] ?? group.copies[0]) as Copy;
+  const others = group.copies.filter((_, index) => index !== keepIndex);
+  const actionFor = (copy: Copy): Action => {
+    const chosen = actions[copy.media_object_id];
+    if (chosen === "link" && !linkable(copy, keep)) return "recycle";
+    return chosen ?? (linkable(copy, keep) ? "link" : "recycle");
+  };
+  const apply = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/categories/{id}/duplicates/resolve", {
+        params: { path: { id: categoryId } },
+        body: { keep_media_object_id: keep.media_object_id, drop: others.map((copy) => ({ media_object_id: copy.media_object_id, action: actionFor(copy) })) },
+      });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const freed = others.reduce((total, copy) => total + copy.size_bytes, 0);
+  const done = apply.data;
+
+  return (
+    <li className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
+        <span className="text-sm font-medium">{group.title}</span>
+        <span className="text-xs text-ink-muted">{group.artist}</span>
+        <span className="ml-auto text-xs text-ink-muted">frees up to {formatBytes(freed)}</span>
+      </div>
+      <ul className="flex flex-col gap-1.5">
+        {group.copies.map((copy, index) => (
+          <li
+            key={copy.media_object_id}
+            className={`flex flex-col gap-0.5 rounded-md border px-2.5 py-1.5 text-xs ${index === keepIndex ? "border-accent bg-accent/5" : "border-border-subtle"}`}
+          >
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
+              <label className="flex items-center gap-1.5">
+                <input type="radio" name={`keep-${group.copies[0]?.media_object_id}`} checked={index === keepIndex} onChange={() => setKeepIndex(index)} />
+                <span className="font-medium">{index === keepIndex ? "Keep this one" : "Keep"}</span>
+              </label>
+              <span className="rounded-full border border-border-subtle px-1.5 uppercase">{copy.audio_codec || "?"}</span>
+              <span>{copy.lossless ? "lossless" : copy.bitrate_kbps > 0 ? `${copy.bitrate_kbps} kbit` : "bitrate unknown"}</span>
+              <span className="text-ink-muted">{formatBytes(copy.size_bytes)}</span>
+              <span className="text-ink-muted">{formatDuration(copy.duration_ms)}</span>
+              <span className="text-ink-muted">on {copy.album}</span>
+              {index !== keepIndex && (
+                <label className="ml-auto flex items-center gap-1.5 text-ink-muted">
+                  Instead
+                  <select
+                    value={actionFor(copy)}
+                    onChange={(event) => setActions({ ...actions, [copy.media_object_id]: event.target.value as Action })}
+                    className="rounded-md border border-border-subtle bg-canvas px-1.5 py-0.5 text-ink"
+                  >
+                    <option value="link" disabled={!linkable(copy, keep)}>
+                      Link to the kept file (hardlink or reflink)
+                    </option>
+                    <option value="recycle">Move to the recycle bin</option>
+                  </select>
+                </label>
+              )}
+            </div>
+            <span className="break-all font-mono text-ink-muted">{copy.paths.join("  =  ")}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-xs text-ink-muted">Library's choice: {group.keep_reason}.</p>
+      {done ? (
+        <p className="text-xs text-ok">
+          Done: {done.linked} linked, {done.recycled} recycled.
+          {done.problems.map((problem) => (
+            <span key={problem} className="block text-warn">
+              {problem}
+            </span>
+          ))}
+        </p>
+      ) : (
+        <div className="flex items-center gap-3">
+          <button type="button" onClick={() => setConfirming(true)} className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink">
+            Keep this copy, deal with the others…
+          </button>
+          {apply.isError && <span className="text-xs text-danger">That could not be done: it needs manage access to the library.</span>}
+        </div>
+      )}
+      <Dialog.Root open={confirming} onOpenChange={setConfirming}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex w-[min(36rem,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-lg border border-border-subtle bg-canvas p-4">
+            <Dialog.Title className="text-sm font-medium">
+              Keep one copy of &ldquo;{group.title}&rdquo;?
+            </Dialog.Title>
+            <Dialog.Description className="text-xs text-ink-muted">
+              Kept: {keep.paths[0]}
+            </Dialog.Description>
+            <ul className="flex flex-col gap-1 text-xs">
+              {others.map((copy) => (
+                <li key={copy.media_object_id} className="flex flex-col">
+                  <span className={actionFor(copy) === "recycle" ? "font-medium text-warn" : "font-medium"}>
+                    {actionFor(copy) === "recycle"
+                      ? "Moved to the recycle bin (restorable for 7 days). The album it is on will miss this track."
+                      : "Every path becomes a link to the kept file; the old file waits in the recycle bin for 7 days."}
+                  </span>
+                  <span className="break-all font-mono text-ink-muted">{copy.paths.join("\n")}</span>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-2">
+              <Dialog.Close className="rounded-md border border-border-subtle px-3 py-1 text-xs text-ink-muted hover:text-ink">Cancel</Dialog.Close>
+              <button
+                type="button"
+                disabled={apply.isPending}
+                onClick={() =>
+                  apply.mutate(undefined, {
+                    onSuccess: () => {
+                      setConfirming(false);
+                      onDone();
+                    },
+                  })
+                }
+                className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
+              >
+                {apply.isPending ? "Working…" : "Yes, do it"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </li>
+  );
+}
+
 /** Tracks this library holds more than once, found by artist, title and length and not by their bytes: a flac and a
- *  96 kbit mp3 of one song are one track twice. Each group says which copy to keep, the one closer to the library's
- *  target quality. A report only: nothing is removed from here. */
+ *  96 kbit mp3 of one song are one track twice. Choose the copy to keep and what becomes of the others. */
 export function Duplicates() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  const queryClient = useQueryClient();
   const report = useQuery({
     queryKey: ["duplicates", categoryId],
     enabled: categoryId !== undefined,
@@ -114,8 +263,9 @@ export function Duplicates() {
         <h1 className="text-lg font-semibold">Duplicates</h1>
         <p className="text-sm text-ink-muted">
           The same recording stored more than once: the same artist and title, lengths within a few seconds, in any format and
-          on any album. The copy to keep is the one closer to this library's target quality. The list below only looks; nothing is
-          removed. Files the probe has not measured yet are not compared.
+          on any album. The library suggests the copy closer to its target quality; you decide. Giving a copy up either links its
+          file to the kept one (so the other album keeps its track) or moves it to the recycle bin. Files the probe has not
+          measured yet are not compared.
         </p>
       </header>
       {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
@@ -129,35 +279,13 @@ export function Duplicates() {
             would free <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
           </p>
           <ul className="flex flex-col gap-2">
-            {data.groups.map((group, index) => (
-              <li key={index} className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
-                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                  <span className="text-sm font-medium">{group.title}</span>
-                  <span className="text-xs text-ink-muted">{group.artist}</span>
-                  <span className="ml-auto text-xs text-ink-muted">frees {formatBytes(group.reclaimable_bytes)}</span>
-                </div>
-                <ul className="flex flex-col gap-1.5">
-                  {group.copies.map((copy) => (
-                    <li
-                      key={copy.media_object_id}
-                      className={`flex flex-col gap-0.5 rounded-md border px-2.5 py-1.5 text-xs ${
-                        copy.keep ? "border-accent bg-accent/5" : "border-border-subtle"
-                      }`}
-                    >
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                        <span className="rounded-full border border-border-subtle px-1.5 uppercase">{copy.audio_codec || "?"}</span>
-                        <span>{copy.lossless ? "lossless" : copy.bitrate_kbps > 0 ? `${copy.bitrate_kbps} kbit` : "bitrate unknown"}</span>
-                        <span className="text-ink-muted">{formatBytes(copy.size_bytes)}</span>
-                        <span className="text-ink-muted">{formatDuration(copy.duration_ms)}</span>
-                        <span className="text-ink-muted">on {copy.album}</span>
-                        {copy.keep && <span className="ml-auto font-medium text-accent">Keep</span>}
-                      </div>
-                      <span className="break-all font-mono text-ink-muted">{copy.paths.join("  =  ")}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-xs text-ink-muted">Keep: {group.keep_reason}.</p>
-              </li>
+            {data.groups.map((group) => (
+              <GroupCard
+                key={group.copies.map((copy) => copy.media_object_id).join("-")}
+                group={group}
+                categoryId={Number(categoryId)}
+                onDone={() => void queryClient.invalidateQueries({ queryKey: ["links", Number(categoryId)] })}
+              />
             ))}
           </ul>
         </>

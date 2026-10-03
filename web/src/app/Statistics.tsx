@@ -2,6 +2,8 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import type { components } from "@/api/schema";
+import { useLibrary } from "@/lib/useLibrary";
 
 import { formatBytes } from "./Queue";
 
@@ -24,6 +26,40 @@ const STATE_LABELS: Record<string, string> = {
   PREPARED: "Prepared",
 };
 
+type FileFigures = components["schemas"]["StatisticsFiles"][];
+
+/** A bar per value of one measured attribute (video codec, resolution, HDR, audio): files and bytes, biggest first. */
+function Breakdown({ title, note, rows }: { title: string; note: string; rows: FileFigures | undefined }) {
+  if (!rows || rows.length === 0) return null;
+  const total = rows.reduce((sum, row) => sum + row.bytes, 0);
+  const files = rows.reduce((sum, row) => sum + row.files, 0);
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">{title}</h2>
+      <p className="text-xs text-ink-muted">
+        {files} files, {formatBytes(total)}. {note}
+      </p>
+      <ul className="flex flex-col gap-1.5">
+        {[...rows]
+          .sort((a, b) => b.bytes - a.bytes)
+          .map((row) => (
+            <li key={row.key} className="flex items-center gap-3 text-sm">
+              <span className="w-28 shrink-0 truncate uppercase" title={row.key}>
+                {row.key}
+              </span>
+              <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+                <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${total > 0 ? Math.max(1, Math.round((row.bytes / total) * 100)) : 0}%` }} />
+              </span>
+              <span className="w-44 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+                {row.files} files · {formatBytes(row.bytes)}
+              </span>
+            </li>
+          ))}
+      </ul>
+    </section>
+  );
+}
+
 /** Where a figure leads: the filtered view that shows exactly those items. */
 function stateLink(categoryId: string, state: string): { to: string; search?: Record<string, string> } {
   if (state === "COMPLETE") return { to: `/library/${categoryId}/albums` };
@@ -45,6 +81,7 @@ export function Statistics() {
     },
   });
   const data = stats.data;
+  const video = useLibrary(categoryId ?? "")?.media_type === "tv";
   const totalFiles = (data?.files_by_codec ?? []).reduce((sum, row) => sum + row.files, 0);
   const totalBytes = (data?.files_by_codec ?? []).reduce((sum, row) => sum + row.bytes, 0);
   const growth = data?.growth_by_month ?? [];
@@ -69,7 +106,9 @@ export function Statistics() {
         <>
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">Completeness</h2>
-            <p className="text-xs text-ink-muted">{albums} monitored albums. Each figure opens those albums.</p>
+            <p className="text-xs text-ink-muted">
+              {albums} monitored {video ? "seasons" : "albums"}. {video ? "" : "Each figure opens those albums."}
+            </p>
             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {data.albums_by_state.map((row) => {
                 const target = stateLink(categoryId ?? "", row.key);
@@ -90,8 +129,16 @@ export function Statistics() {
             </ul>
           </section>
 
+          {video && (
+            <>
+              <Breakdown title="Resolution" note="As the probe measured each file." rows={data.files_by_resolution} />
+              <Breakdown title="Video codec" note="As the probe measured each file." rows={data.files_by_video_codec} />
+              <Breakdown title="HDR" note="Files without an HDR format count as sdr." rows={data.files_by_hdr} />
+              <Breakdown title="Audio" note="Codec and channel layout of the first audio track." rows={data.files_by_audio} />
+            </>
+          )}
           <section className="flex flex-col gap-2">
-            <h2 className="text-sm font-medium">Composition</h2>
+            <h2 className="text-sm font-medium">{video ? "Audio codecs (by file)" : "Composition"}</h2>
             <p className="text-xs text-ink-muted">
               {totalFiles} files, {formatBytes(totalBytes)}, by audio codec. Files the probe has not measured yet are
               unknown.

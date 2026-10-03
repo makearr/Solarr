@@ -10,6 +10,7 @@ import { Card, Toggle } from "./SettingsCard";
 type MetadataSource = components["schemas"]["MetadataSource"];
 type Settings = components["schemas"]["MetadataSettings"];
 type CoverSource = NonNullable<Settings["cover_sources"]>[number];
+type TVSource = NonNullable<Settings["tv_sources"]>[number];
 type TVProvider = components["schemas"]["TVProvider"];
 
 const COVER_SOURCES: readonly SourceEntry<CoverSource>[] = [
@@ -239,6 +240,9 @@ export function MetadataSettings() {
       <TVProvidersCard
         settings={settings}
         advanced={advanced}
+        busy={patch.isPending}
+        onOrder={(order) => patch.mutate({ tv_sources: order })}
+        onWikidata={(wikidata) => patch.mutate({ wikidata })}
         saveTMDB={(key) => saveTMDBKey.mutate(key)}
         savingTMDB={saveTMDBKey.isPending}
         failedTMDB={saveTMDBKey.isError}
@@ -262,6 +266,9 @@ const KEY_NOTE: Record<TVProvider["key"], string> = {
 function TVProvidersCard({
   settings,
   advanced,
+  busy,
+  onOrder,
+  onWikidata,
   saveTMDB,
   savingTMDB,
   failedTMDB,
@@ -271,6 +278,9 @@ function TVProvidersCard({
 }: {
   settings: Settings;
   advanced: boolean;
+  busy: boolean;
+  onOrder: (order: TVSource[]) => void;
+  onWikidata: (on: boolean) => void;
   saveTMDB: (key: string) => void;
   savingTMDB: boolean;
   failedTMDB: boolean;
@@ -300,21 +310,41 @@ function TVProvidersCard({
       title="TV series"
       help="Series, episodes, cast and artwork come from these providers in turn. TMDB adds cast, crew, guest stars and artwork; it is free and needs your own key."
     >
-      <ul className="flex flex-col gap-2">
-        {(providers.data ?? []).map((provider) => {
-          const result = results.get(provider.id);
-          return (
-            <li key={provider.id} className="flex flex-col gap-0.5 text-xs">
-              <span className="flex flex-wrap items-center gap-2">
+      <OrderedSources
+        title="Source order: the first to hold a field supplies it"
+        sources={(providers.data ?? []).map((provider) => ({
+          id: provider.id as TVSource,
+          label: `${provider.name} (${KEY_NOTE[provider.key]})`,
+          note: provider.adds,
+        }))}
+        order={(settings.tv_sources ?? []) as TVSource[]}
+        busy={busy}
+        onChange={onOrder}
+      />
+      <p className="text-[0.6875rem] text-ink-muted">
+        The default is open and fast first: Skyhook and TVmaze need no key and answer at once, then TMDB and TheTVDB, then AniList (anime
+        only). Numbering and episode names always follow TheTVDB, whatever the order.
+      </p>
+      <Switch
+        label="Wikidata"
+        note="Recognises the same person in TV and music, and fills photos and biographies. It is not a series source; it bridges people between libraries."
+        checked={settings.wikidata ?? true}
+        busy={busy}
+        onChange={onWikidata}
+      />
+      {results.size > 0 && (
+        <ul className="flex flex-col gap-0.5 text-xs">
+          {(providers.data ?? []).map((provider) => {
+            const result = results.get(provider.id);
+            return result ? (
+              <li key={provider.id} className="flex gap-2">
                 <span className="text-ink">{provider.name}</span>
-                <span className={provider.key === "missing" ? "text-warn" : "text-ink-muted"}>{KEY_NOTE[provider.key]}</span>
-                {result && <span className={result.ok ? "text-ok" : "text-danger"}>{result.message}</span>}
-              </span>
-              <span className="text-[0.6875rem] text-ink-muted">{provider.adds}</span>
-            </li>
-          );
-        })}
-      </ul>
+                <span className={result.ok ? "text-ok" : "text-danger"}>{result.message}</span>
+              </li>
+            ) : null;
+          })}
+        </ul>
+      )}
       <div>
         <button
           type="button"

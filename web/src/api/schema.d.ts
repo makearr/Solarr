@@ -2972,6 +2972,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/duplicates/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep one copy of a duplicated track and link or recycle the others (manage access).
+         * @description Each dropped copy either has every path turned into a link (reflink, else hardlink) to the kept copy, so the album folders it was in stay complete, or goes to the recycle bin. A link needs the same file extension as a path of the kept copy and the same filesystem; a copy that cannot be linked is left alone and reported.
+         */
+        post: operations["resolveCategoryDuplicates"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/links": {
         parameters: {
             query?: never;
@@ -5502,6 +5524,14 @@ export interface components {
             seasons: components["schemas"]["SeriesSeason"][];
             episodes: components["schemas"]["SeriesEpisode"][];
             fanart_url?: string;
+            /** @description The series' clear logo */
+            logo_url?: string;
+            /**
+             * Format: int64
+             * @description The network as a Networks-level entity.
+             */
+            network_id?: number;
+            network_logo_url?: string;
             /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
             credits?: components["schemas"]["SeriesCredit"][];
         };
@@ -5607,6 +5637,16 @@ export interface components {
             follow?: components["schemas"]["SeriesFollow"];
             /** @description Whether the person has a TMDB id */
             followable?: boolean;
+        };
+        DuplicateResolution: {
+            /** @description Copies now linked to the kept one. */
+            linked: number;
+            /** @description Copies moved to the recycle bin. */
+            recycled: number;
+            /** Format: int64 */
+            freed_bytes: number;
+            /** @description One line each for what was left alone and why. */
+            problems: string[];
         };
         SeriesFollowPreview: {
             would_add: components["schemas"]["SeriesFollowCandidate"][];
@@ -6202,6 +6242,8 @@ export interface components {
             source_order?: components["schemas"]["MetadataSource"][];
             /** @description Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone. */
             cover_sources?: ("coverartarchive" | "embedded" | "theaudiodb")[];
+            /** @description Which TV provider supplies a series' text, genres, rating and artwork first, in order; one left out is not used. Numbering stays with TheTVDB's. Omitted on a PATCH leaves it alone. */
+            tv_sources?: ("skyhook" | "tvmaze" | "tmdb" | "tvdb" | "anilist")[];
             /** @description Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone. */
             wikidata?: boolean;
             /** @description Fingerprint identification, which also needs an API key. Switching it back on re-runs what it skipped. Omitted on a PATCH leaves it alone. */
@@ -6869,6 +6911,13 @@ export interface components {
             /** @description How many days back the download figures reach. */
             window_days: number;
             files_by_codec: components["schemas"]["StatisticsFiles"][];
+            /** @description Video libraries only; the measured video codec of each file. */
+            files_by_video_codec?: components["schemas"]["StatisticsFiles"][];
+            files_by_resolution?: components["schemas"]["StatisticsFiles"][];
+            /** @description HDR format, or sdr. */
+            files_by_hdr?: components["schemas"]["StatisticsFiles"][];
+            /** @description Audio codec and channel layout, e.g. "eac3 5.1". */
+            files_by_audio?: components["schemas"]["StatisticsFiles"][];
             albums_by_state: components["schemas"]["StatisticsCount"][];
             downloads_by_state: components["schemas"]["StatisticsCount"][];
             /** @description Files and bytes first seen per month, oldest first; the first scan lands in one month. */
@@ -11522,6 +11571,8 @@ export interface operations {
                 /** @description Which order to list in. Every level defaults to title (an artist's own name at the Artists level), which is what a browse view opens on. A level that cannot honour a key ignores it. */
                 sort?: "title" | "artist" | "year" | "added";
                 dir?: "asc" | "desc";
+                /** @description At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it. */
+                monitored?: boolean;
             };
             header?: never;
             path: {
@@ -12097,6 +12148,46 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    resolveCategoryDuplicates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    keep_media_object_id: number;
+                    drop: {
+                        /** Format: int64 */
+                        media_object_id: number;
+                        /** @enum {string} */
+                        action: "link" | "recycle";
+                    }[];
+                };
+            };
+        };
+        responses: {
+            /** @description What was done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateResolution"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
     getCategoryLinks: {
         parameters: {
             query?: never;
@@ -12320,6 +12411,8 @@ export interface operations {
                 role?: string;
                 /** @description Matches the start of the name. */
                 q?: string;
+                /** @description Only monitored (true) or only unmonitored (false) people; absent means both. */
+                monitored?: boolean;
                 cursor?: string;
                 limit?: number;
             };

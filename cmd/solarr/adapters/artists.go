@@ -22,7 +22,7 @@ func (a Artists) ListLibraryArtists(
 	rows, err := a.People.ListPeople(ctx,
 		library.PersonFilter{
 			Role: artistCreditRole, RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs,
-			Descending: filter.Descending,
+			Descending: filter.Descending, Monitored: filter.Monitored,
 		},
 		library.PersonCursor{SortName: cursor.SortName, ID: cursor.ID}, pageSize)
 	if err != nil {

@@ -4350,6 +4350,10 @@ paths:
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc] }
+        - name: monitored
+          in: query
+          description: At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
+          schema: { type: boolean }
       responses:
         "200":
           description: One page.
@@ -4800,6 +4804,49 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/duplicates/resolve:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: resolveCategoryDuplicates
+      tags: [library]
+      summary: Keep one copy of a duplicated track and link or recycle the others (manage access).
+      description: >-
+        Each dropped copy either has every path turned into a link (reflink, else hardlink) to the kept copy, so the
+        album folders it was in stay complete, or goes to the recycle bin. A link needs the same file extension as a path
+        of the kept copy and the same filesystem; a copy that cannot be linked is left alone and reported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [keep_media_object_id, drop]
+              properties:
+                keep_media_object_id: { type: integer, format: int64 }
+                drop:
+                  type: array
+                  items:
+                    type: object
+                    required: [media_object_id, action]
+                    properties:
+                      media_object_id: { type: integer, format: int64 }
+                      action: { type: string, enum: [link, recycle] }
+      responses:
+        "200":
+          description: What was done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DuplicateResolution" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/links:
     parameters:
       - name: id
@@ -5006,6 +5053,10 @@ paths:
           in: query
           description: Matches the start of the name.
           schema: { type: string }
+        - name: monitored
+          in: query
+          description: Only monitored (true) or only unmonitored (false) people; absent means both.
+          schema: { type: boolean }
         - name: cursor
           in: query
           schema: { type: string }
@@ -8337,6 +8388,9 @@ components:
           type: array
           items: { $ref: "#/components/schemas/SeriesEpisode" }
         fanart_url: { type: string }
+        logo_url: { type: string, description: The series' clear logo, when a provider has one. }
+        network_id: { type: integer, format: int64, description: The network as a Networks-level entity. }
+        network_logo_url: { type: string }
         credits:
           type: array
           description: Cast and crew of the whole series, and guest stars and episode crew by episode.
@@ -8457,6 +8511,18 @@ components:
           allOf: [{ $ref: "#/components/schemas/SeriesFollow" }]
           description: The caller's follow of this person, absent when there is none.
         followable: { type: boolean, description: Whether the person has a TMDB id, which a follow needs. }
+
+    DuplicateResolution:
+      type: object
+      required: [linked, recycled, freed_bytes, problems]
+      properties:
+        linked: { type: integer, description: Copies now linked to the kept one. }
+        recycled: { type: integer, description: Copies moved to the recycle bin. }
+        freed_bytes: { type: integer, format: int64 }
+        problems:
+          type: array
+          description: One line each for what was left alone and why.
+          items: { type: string }
 
     SeriesFollowPreview:
       type: object
@@ -9253,6 +9319,14 @@ components:
           items:
             type: string
             enum: [coverartarchive, embedded, theaudiodb]
+        tv_sources:
+          type: array
+          description: >-
+            Which TV provider supplies a series' text, genres, rating and artwork first, in order; one left out is
+            not used. Numbering stays with TheTVDB's. Omitted on a PATCH leaves it alone.
+          items:
+            type: string
+            enum: [skyhook, tvmaze, tmdb, tvdb, anilist]
         wikidata:
           type: boolean
           description: Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.
@@ -10180,6 +10254,21 @@ components:
         window_days: { type: integer, description: How many days back the download figures reach. }
         files_by_codec:
           type: array
+          items: { $ref: "#/components/schemas/StatisticsFiles" }
+        files_by_video_codec:
+          type: array
+          description: Video libraries only; the measured video codec of each file.
+          items: { $ref: "#/components/schemas/StatisticsFiles" }
+        files_by_resolution:
+          type: array
+          items: { $ref: "#/components/schemas/StatisticsFiles" }
+        files_by_hdr:
+          type: array
+          description: HDR format, or sdr.
+          items: { $ref: "#/components/schemas/StatisticsFiles" }
+        files_by_audio:
+          type: array
+          description: Audio codec and channel layout, e.g. "eac3 5.1".
           items: { $ref: "#/components/schemas/StatisticsFiles" }
         albums_by_state:
           type: array

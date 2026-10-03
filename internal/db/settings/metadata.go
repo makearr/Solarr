@@ -58,6 +58,8 @@ const (
 	KeyMetadataAcoustID = "metadata.acoustid"
 	// KeyMetadataTheAudioDB turns TheAudioDB's artist photos and biographies on or off (2026-09-25).
 	KeyMetadataTheAudioDB = "metadata.theaudiodb"
+	// KeyMetadataTVSources orders the TV providers: the first to hold a field supplies it; numbering stays with TheTVDB's.
+	KeyMetadataTVSources = "metadata.tv_sources"
 	// KeyMetadataPeopleBackfillPerRun bounds how many artists one enrichment run gives a photo and biography.
 	KeyMetadataPeopleBackfillPerRun = "metadata.people_backfill_per_run"
 )
@@ -82,6 +84,23 @@ func validCoverSource(name string) bool {
 	return name == CoverSourceArchive || name == CoverSourceEmbedded || name == CoverSourceTheAudioDB
 }
 
+// The TV providers, matching internal/media/tv's own names.
+const (
+	TVSourceSkyhook = "skyhook"
+	TVSourceTVmaze  = "tvmaze"
+	TVSourceTMDB    = "tmdb"
+	TVSourceTVDB    = "tvdb"
+	TVSourceAniList = "anilist"
+)
+
+// DefaultTVSources is open and fast first: Skyhook and TVmaze need no key and answer in one call; the keyed TMDB and
+// TheTVDB follow, and AniList, which only knows anime, last.
+var DefaultTVSources = []string{TVSourceSkyhook, TVSourceTVmaze, TVSourceTMDB, TVSourceTVDB, TVSourceAniList}
+
+func validTVSource(name string) bool {
+	return slices.Contains(DefaultTVSources, name)
+}
+
 // MetadataSettings is the metadata providers' own policy.
 type MetadataSettings struct {
 	BrainzMashUserAgent string
@@ -95,6 +114,8 @@ type MetadataSettings struct {
 	// CoverSources is the order covers are taken in; nil on a write leaves it alone, and an empty
 	// non-nil list turns every cover source off.
 	CoverSources []string
+	// TVSources is the order the TV providers rank in; nil on a write leaves it alone.
+	TVSources []string
 	// Wikidata and AcoustID are on unless switched off; nil on a write leaves them alone.
 	Wikidata   *bool
 	AcoustID   *bool
@@ -119,6 +140,7 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 	return MetadataSettings{
 		BrainzMashUserAgent: agent, SourceOrder: order,
 		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
+		TVSources:    s.policyStringListOr(KeyMetadataTVSources, DefaultTVSources),
 		Wikidata:     &wikidata, AcoustID: &acoustID, TheAudioDB: &theAudioDB,
 		PeopleBackfillPerRun: &backfill,
 	}
@@ -138,6 +160,15 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 			return err
 		}
 		if err := c.setPolicy(ctx, cl, KeyMetadataCoverSources, string(encoded)); err != nil {
+			return err
+		}
+	}
+	if ms.TVSources != nil {
+		encoded, err := json.Marshal(ms.TVSources)
+		if err != nil {
+			return err
+		}
+		if err := c.setPolicy(ctx, cl, KeyMetadataTVSources, string(encoded)); err != nil {
 			return err
 		}
 	}
@@ -201,6 +232,16 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 			})
 		}
 		coverSeen[name] = true
+	}
+	tvSeen := make(map[string]bool, len(ms.TVSources))
+	for _, name := range ms.TVSources {
+		if !validTVSource(name) || tvSeen[name] {
+			problems = append(problems, config.Problem{
+				Path: KeyMetadataTVSources, Value: name,
+				Expectation: "skyhook, tvmaze, tmdb, tvdb or anilist, each at most once",
+			})
+		}
+		tvSeen[name] = true
 	}
 	if perRun := ms.PeopleBackfillPerRun; perRun != nil && (*perRun < 1 || *perRun > maxPeopleBackfillPerRun) {
 		problems = append(problems, config.Problem{

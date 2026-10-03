@@ -105,7 +105,10 @@ func TestFetchKeepsTheNumberingBasisIdentityAndTakesTMDBForTheRest(t *testing.T)
 	season.Episodes = append(season.Episodes, tmdb.Episode{SeasonNumber: 1, EpisodeNumber: 2, AirDate: "2019-12-31",
 		GuestStars: []tmdb.GuestStar{{ID: 31, Name: "Wrong Date", Character: "X"}}})
 	season.Episodes = append(season.Episodes, tmdb.Episode{SeasonNumber: 1, EpisodeNumber: 9, GuestStars: []tmdb.GuestStar{{ID: 32, Name: "No Such Episode"}}})
-	service := tv.Service{Skyhook: fixedSkyhook{skyhookShow()}, TMDB: fakeTMDB{series: sampleTMDB(), seasons: []tmdb.Season{season}}}
+	service := tv.Service{
+		Skyhook: fixedSkyhook{skyhookShow()}, TMDB: fakeTMDB{series: sampleTMDB(), seasons: []tmdb.Season{season}},
+		Priority: func() []string { return []string{"tmdb", "skyhook"} },
+	}
 
 	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234})
 	if err != nil {
@@ -238,5 +241,31 @@ func TestAShowOnlyTMDBListsTakesTMDBsEpisodesAsItsBasis(t *testing.T) {
 	}
 	if len(series.Credits) == 0 {
 		t.Error("the credits were lost on the way")
+	}
+}
+
+func TestFetchTakesTextFromTheSourceTheOrderRanksFirstAndNoneForOneLeftOut(t *testing.T) {
+	build := func(order []string) tv.Series {
+		service := tv.Service{
+			Skyhook: fixedSkyhook{skyhookShow()}, TMDB: fakeTMDB{series: sampleTMDB(), seasons: []tmdb.Season{sampleTMDBSeason()}},
+			Priority: func() []string { return order },
+		}
+		series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return series
+	}
+	if got := build(nil).Overview; got != "Plain plot." {
+		t.Errorf("default order: overview = %q, want Skyhook's, the open source first", got)
+	}
+	if got := build([]string{"tmdb", "skyhook"}).Overview; got != "Richer plot." {
+		t.Errorf("TMDB first: overview = %q", got)
+	}
+	left := build([]string{"skyhook"})
+	for _, image := range left.Images {
+		if image.Source == "tmdb" {
+			t.Errorf("a source left out of the order still supplied artwork: %+v", left.Images)
+		}
 	}
 }

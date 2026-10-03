@@ -43,6 +43,10 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 		into *[]apiserver.StatisticsFigure
 	}{
 		{library.StatFilesByCodec, &view.FilesByCodec},
+		{library.StatFilesByVideoCodec, &view.FilesByVideoCodec},
+		{library.StatFilesByResolution, &view.FilesByResolution},
+		{library.StatFilesByHDR, &view.FilesByHDR},
+		{library.StatFilesByAudio, &view.FilesByAudio},
 		{library.StatAlbumsByState, &view.AlbumsByState},
 		{library.StatDownloadsByState, &view.DownloadsByState},
 		{library.StatGrowthByMonth, &view.GrowthByMonth},

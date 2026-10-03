@@ -2,6 +2,7 @@ package tv_test
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"testing"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -272,5 +274,132 @@ func TestIsVideoSkipsSamplesAndExtras(t *testing.T) {
 		if got := tv.IsVideo(rel); got != want {
 			t.Errorf("%q: %v, want %v", rel, got, want)
 		}
+	}
+}
+
+// namedSkyhook searches to a fixed list and answers each id with its own series.
+type namedSkyhook struct{ shows []skyhook.Series }
+
+func (n namedSkyhook) Series(_ context.Context, id int64) (skyhook.Series, error) {
+	for _, show := range n.shows {
+		if show.TVDBID == id {
+			return show, nil
+		}
+	}
+	return skyhook.Series{}, skyhook.ErrNotFound
+}
+func (n namedSkyhook) Search(context.Context, string) ([]skyhook.Series, error) {
+	hits := make([]skyhook.Series, len(n.shows))
+	for i, show := range n.shows {
+		show.Episodes = nil
+		hits[i] = show
+	}
+	return hits, nil
+}
+
+func showWith(id int64, title, aired string, episodes int) skyhook.Series {
+	show := skyhook.Series{TVDBID: id, Title: title, FirstAired: aired, Status: "Ended"}
+	for number := 1; number <= episodes; number++ {
+		show.Episodes = append(show.Episodes, skyhook.Episode{TVDBID: id*100 + int64(number), SeasonNumber: 1, EpisodeNumber: number, Title: "Episode", AirDate: aired})
+	}
+	return show
+}
+
+func scanOne(t *testing.T, sky namedSkyhook, files ...string) []library.SeriesSummary {
+	t.Helper()
+	consumer, opened, fsys := newConsumer(t, sky)
+	var batch []scan.Observed
+	for _, rel := range files {
+		batch = append(batch, writeVideo(t, fsys, rel))
+	}
+	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	list, err := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return list
+}
+
+func TestScanSettlesATitleTheProvidersListTwiceByTheEpisodesTheFilesHave(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show", "2001-01-01", 3), showWith(2, "Example Show", "2004-01-01", 12)}},
+		"Example Show/Season 1/Example Show - S01E05.mkv", "Example Show/Season 1/Example Show - S01E06.mkv", "Example Show/Season 1/Example Show - S01E09.mkv")
+	if len(list) != 1 || list[0].Title != "Example Show" || list[0].Counts.Total != 12 {
+		t.Fatalf("list = %+v, want the 12-episode series chosen by the numbers on disk", list)
+	}
+}
+
+func TestScanTakesTheDisambiguatedTitleWhoseYearTheFolderGives(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show", "1990-01-01", 2), showWith(2, "Example Show (2014)", "2014-01-01", 2)}},
+		"Example Show (2014)/Season 1/Example Show (2014) - S01E01.mkv")
+	if len(list) != 1 || list[0].Title != "Example Show (2014)" {
+		t.Fatalf("list = %+v, want the 2014 series", list)
+	}
+}
+
+func TestScanLeavesATwiceListedTitleToAPersonWhenTheEpisodesDoNotDecide(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show", "2001-01-01", 12), showWith(2, "Example Show", "2004-01-01", 12)}},
+		"Example Show/Season 1/Example Show - S01E01.mkv", "Example Show/Season 1/Example Show - S01E02.mkv")
+	if len(list) != 0 {
+		t.Fatalf("list = %+v, want nothing added: both series fit equally", list)
+	}
+}
+
+func TestRetryPlacesFilesWaitingForReviewOnceTheProvidersKnowTheSeries(t *testing.T) {
+	on := false
+	consumer, opened, fsys := newConsumer(t, switchSkyhook{on: &on, series: fixtureSkyhook()})
+	root := settings.RootFolder{ID: 1, Path: scanRoot, Online: true}
+	batch := []scan.Observed{
+		writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv"),
+		writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E02 - Episode.mkv"),
+	}
+	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	unidentified := library.NewUnidentified(opened)
+	if waiting, _ := unidentified.Count(t.Context()); waiting != 2 {
+		t.Fatalf("waiting = %d, want both files queued", waiting)
+	}
+	job := tv.NewRetryJob(tv.RetryConfig{
+		Unidentified: unidentified, Consumer: consumer, FS: fsys,
+		Libraries: func() []tv.RetryLibrary {
+			return []tv.RetryLibrary{{CategoryID: 3, Roots: []settings.RootFolder{root}}}
+		},
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if waiting, _ := unidentified.Count(t.Context()); waiting != 2 {
+		t.Errorf("waiting = %d after a retry with the provider still off, want 2", waiting)
+	}
+	on = true
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if waiting, _ := unidentified.Count(t.Context()); waiting != 0 {
+		t.Errorf("waiting = %d after the retry, want the files placed", waiting)
+	}
+	if list, _ := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow); len(list) != 1 || list[0].Counts.Present != 2 {
+		t.Errorf("list = %+v, want the series with both episodes present", list)
+	}
+}
+
+func TestScanNamesAFolderInAnotherLanguageByTheEpisodeNumbersOfItsFiles(t *testing.T) {
+	var files []string
+	for number := 1; number <= 10; number++ {
+		files = append(files, fmt.Sprintf("Fremder Titel/Season 1/Fremder Titel - S01E%02d.mkv", number))
+	}
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Alpha", "2001-01-01", 3), showWith(2, "The Foreign Title", "2004-01-01", 12)}}, files...)
+	if len(list) != 1 || list[0].Title != "The Foreign Title" {
+		t.Fatalf("list = %+v, want the series whose episodes the ten files fit", list)
+	}
+}
+
+func TestScanDoesNotNameASmallFolderByNumbersAlone(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(2, "The Foreign Title", "2004-01-01", 12)}},
+		"Fremder Titel/Season 1/Fremder Titel - S01E01.mkv", "Fremder Titel/Season 1/Fremder Titel - S01E02.mkv")
+	if len(list) != 0 {
+		t.Fatalf("list = %+v, want nothing: two files are too little to name a series by", list)
 	}
 }
