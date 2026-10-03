@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -42,7 +43,22 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 		})
 	}
 	checks = append(checks, a.waitingForReview(ctx)...)
-	return append(checks, pausedForRoom(a.Cache.Snapshot())...)
+	snapshot := a.Cache.Snapshot()
+	hasTV := slices.ContainsFunc(snapshot.Categories(), func(category settings.Category) bool { return category.MediaType == "tv" })
+	checks = append(checks, tvKeyCheck(hasTV, snapshot.TMDBConfigured())...)
+	return append(checks, pausedForRoom(snapshot)...)
+}
+
+// tvKeyCheck tells a TV library's owner that TMDB, the one TV provider that needs their own key, is not set up.
+func tvKeyCheck(hasTV, tmdbStored bool) []apiserver.HealthCheck {
+	if !hasTV || tmdbStored {
+		return nil
+	}
+	return []apiserver.HealthCheck{{
+		ID: "tv_no_tmdb_key", Severity: apiserver.HealthWarning,
+		Message: "TV works without a TMDB key, but cast, crew, guest stars, networks and artwork come from TMDB: add your free key under Metadata.",
+		Link:    "/settings/metadata",
+	}}
 }
 
 // waitingForReview counts the downloads whose import is held until someone identifies them on the Import page.
