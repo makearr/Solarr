@@ -124,3 +124,12 @@ JSON lacking `SubtitleLanguages`), a batch at a time (the tool runs 16 ffprobe p
 A TV library's target is resolution, video codec, HDR, audio codec and file type (`settings.QualityTarget`, migration 0034); `judge.WithTarget` makes
 the named resolution/codec/HDR the best tier of their dimension and puts them first in the comparison, inside the profile's own gates, and
 `quality.MeetsTarget` judges a file (every named part equal). `SeriesReader.HeldEpisodes` + `quality.Judge` feed Wanted > Cutoff unmet.
+
+## Upgrades
+
+A monitored season whose episodes are all present is judged by `tv.cutoff_check` (nightly and after every import of that series) against the library's target or cutoff, using what the probe measured: any monitored episode file below it makes the season UPGRADABLE, the state the planner already hunts as an upgrade (24 h minimum file age, three imports a week by default, from the profile's `upgrade` block). A season that still has gaps stays PARTIAL and hunts its gaps first.
+
+The search of an UPGRADABLE season wants only the episodes below the cutoff and rejects a release that does not beat the file it replaces on the quality tiers (a tie keeps the owned file). Source, release group and repack are left out of that comparison: a release name states them and a measured file does not, so they would make every release look better. The importer places an upgrade next to the owned file (suffix ` [upgrade]` when both are named alike) and the cutoff check, once both files are measured, keeps the better one and moves the other to the recycle bin (reason `replaced`, or `rejected_worse` for a download that was no better).
+
+The shipped TV profile **Any** also takes a small additive penalty for a release under 0.4 Mbps or over 25 Mbps of video, so a starved or bloated file loses a tie.
+

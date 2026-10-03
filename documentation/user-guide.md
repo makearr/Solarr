@@ -234,3 +234,6 @@ On posters and artist pages: **green** complete, **red** missing, **purple** dow
 **yellow** not released yet, **grey** unverified.
 
 **TV quality targets and profiles (run 10).** A quality profile's target for video now also takes file types (mkv, mp4, avi, wmv, mpeg, ts ...), audio channels, audio and subtitle languages, audio and video bitrate (kbit/s, within a tolerance) and frame rate; the same fields exist in the general profile editor as tiers and targets. TV People, Series and Networks use the same scrolling grid, tile sizes, view options and selection as music. A background task, **Fetching series pictures**, caches posters and photos ahead of time so the first scroll is as quick as music; the provider speeds behind the default order are in [tv-providers-benchmark.md](tv-providers-benchmark.md).
+
+**TV upgrades.** With a target or cutoff set on a series library, a season whose files all exist but fall short of it is hunted for a better release (Wanted > Cutoff unmet lists the episodes). A download replaces an episode file only when it is better on resolution, codec, HDR, channels, bitrate and the other target fields; an equal one is dropped, and the replaced file waits in the recycle bin. Turn **Upgrades allowed** off in the library's Quality settings to stop it.
+
