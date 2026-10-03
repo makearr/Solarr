@@ -231,7 +231,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		}
 		placed = append(placed, placedEpisode{source: sourceAbs, dest: destAbs, size: file.media.SizeBytes, method: method, rel: destRel, hash: hashes[index], file: file})
 		if method != mover.PlaceSymlink {
-			i.finish(destRoot.Path, destAbs, fileManagement)
+			i.finish(destRoot, destAbs, fileManagement, file.parts)
 		}
 	}
 
@@ -414,7 +414,9 @@ func (i Importer) rootCandidates(categoryID int64) []placement.RootCandidate {
 }
 
 // finish applies the library's Set Permissions to a placed file; a failure is not worth failing an import over.
-func (i Importer) finish(rootPath, fileAbs string, fileManagement settings.FileManagement) {
+func (i Importer) finish(root settings.RootFolder, fileAbs string, fileManagement settings.FileManagement, parts []library.ResolvedPart) {
+	rootPath := root.Path
+	i.changeFileDate(root, fileAbs, fileManagement, parts)
 	if !fileManagement.SetPermissions {
 		return
 	}

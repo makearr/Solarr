@@ -3,6 +3,7 @@ import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
+import { useLibrary } from "@/lib/useLibrary";
 import type { components } from "@/api/schema";
 
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -19,6 +20,7 @@ export function LibraryFileManagement() {
   const queryClient = useQueryClient();
   // Sonarr's basic view: folders and deleted tracks; the recycle bin and the rest are advanced (2026-09-30).
   const advanced = isTierVisible(useTier(), "advanced");
+  const isTV = useLibrary(categoryId ?? "")?.media_type === "tv";
 
   const saved = useQuery({
     queryKey: ["libraryFileManagement", id],
@@ -126,7 +128,7 @@ export function LibraryFileManagement() {
           value={draft.change_file_date}
           options={[
             ["none", "None"],
-            ["release_date", "Album Release Date"],
+            ["release_date", isTV ? "Episode Air Date" : "Album Release Date"],
           ]}
           onChange={(value) => set({ change_file_date: value as FileManagement["change_file_date"] })}
         />
