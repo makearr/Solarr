@@ -77,14 +77,15 @@ UPDATE category SET quality_upgrades = ? WHERE id = ?;
 UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id = ?;
 
 -- name: ListCategoryQualityTargets :many
-SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct FROM category_quality_target;
+SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr FROM category_quality_target;
 
 -- name: UpsertCategoryQualityTarget :exec
-INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   audio_codec = excluded.audio_codec, container = excluded.container,
-  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct;
+  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct,
+  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr;
 
 -- name: DeleteCategoryQualityTarget :exec
 DELETE FROM category_quality_target WHERE category_id = ?;

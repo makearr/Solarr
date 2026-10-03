@@ -99,6 +99,9 @@ type CategoryQualityTarget struct {
 	Container    string
 	BitrateKbps  sql.NullInt64
 	TolerancePct int64
+	Resolution   string
+	VideoCodec   string
+	Hdr          string
 }
 
 type CategoryRootFolder struct {

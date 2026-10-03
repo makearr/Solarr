@@ -331,9 +331,12 @@ func (s Service) fromShow(ctx context.Context, show tvmaze.Show) Series {
 	if err != nil {
 		s.warn("tvmaze aliases", show.ID, err)
 	}
-	cast, err := s.TVmaze.Cast(ctx, show.ID)
-	if err != nil {
-		s.warn("tvmaze cast", show.ID, err)
+	// TMDB's cast is the richer one and TVmaze's bucket is the slowest, so its cast is asked only without a TMDB key.
+	var cast []tvmaze.CastMember
+	if s.TMDB == nil || !s.TMDB.Configured() {
+		if cast, err = s.TVmaze.Cast(ctx, show.ID); err != nil {
+			s.warn("tvmaze cast", show.ID, err)
+		}
 	}
 	return FromTVmaze(show, episodes, aliases, cast)
 }

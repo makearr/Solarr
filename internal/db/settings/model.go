@@ -122,6 +122,10 @@ type QualityTarget struct {
 	Container    string
 	BitrateKbps  *int64
 	TolerancePct int64
+	// Resolution, VideoCodec and HDR are a video library's target; empty means it does not care.
+	Resolution string
+	VideoCodec string
+	HDR        string
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

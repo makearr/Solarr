@@ -528,6 +528,7 @@ func (c *Cache) SetCategoryQuality(
 		return queries.UpsertCategoryQualityTarget(ctx, settingsdb.UpsertCategoryQualityTargetParams{
 			CategoryID: categoryID, AudioCodec: target.AudioCodec, Container: target.Container,
 			BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
+			Resolution: target.Resolution, VideoCodec: target.VideoCodec, Hdr: target.HDR,
 		})
 	})
 }
@@ -540,10 +541,11 @@ func validateQualityTarget(target *QualityTarget) config.Problems {
 		return nil
 	}
 	var problems config.Problems
-	if strings.TrimSpace(target.AudioCodec) == "" {
-		problems = append(problems, config.Problem{Path: "target.audio_codec", Expectation: "a codec, e.g. aac"})
+	video := target.Resolution != "" || target.VideoCodec != "" || target.HDR != ""
+	if !video && strings.TrimSpace(target.AudioCodec) == "" {
+		problems = append(problems, config.Problem{Path: "target.audio_codec", Expectation: "a codec, e.g. aac (or a resolution or video codec for a video library)"})
 	}
-	if strings.TrimSpace(target.Container) == "" {
+	if !video && strings.TrimSpace(target.Container) == "" {
 		problems = append(problems, config.Problem{Path: "target.container", Expectation: "a file type, e.g. m4a"})
 	}
 	if target.BitrateKbps != nil && *target.BitrateKbps <= 0 {

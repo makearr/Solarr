@@ -238,7 +238,7 @@ func (q *Queries) ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQu
 }
 
 const listCategoryQualityTargets = `-- name: ListCategoryQualityTargets :many
-SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct FROM category_quality_target
+SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr FROM category_quality_target
 `
 
 func (q *Queries) ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error) {
@@ -256,6 +256,9 @@ func (q *Queries) ListCategoryQualityTargets(ctx context.Context) ([]CategoryQua
 			&i.Container,
 			&i.BitrateKbps,
 			&i.TolerancePct,
+			&i.Resolution,
+			&i.VideoCodec,
+			&i.Hdr,
 		); err != nil {
 			return nil, err
 		}
@@ -470,11 +473,12 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 }
 
 const upsertCategoryQualityTarget = `-- name: UpsertCategoryQualityTarget :exec
-INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (category_id) DO UPDATE SET
   audio_codec = excluded.audio_codec, container = excluded.container,
-  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct
+  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct,
+  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr
 `
 
 type UpsertCategoryQualityTargetParams struct {
@@ -483,6 +487,9 @@ type UpsertCategoryQualityTargetParams struct {
 	Container    string
 	BitrateKbps  sql.NullInt64
 	TolerancePct int64
+	Resolution   string
+	VideoCodec   string
+	Hdr          string
 }
 
 func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error {
@@ -492,6 +499,9 @@ func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCat
 		arg.Container,
 		arg.BitrateKbps,
 		arg.TolerancePct,
+		arg.Resolution,
+		arg.VideoCodec,
+		arg.Hdr,
 	)
 	return err
 }

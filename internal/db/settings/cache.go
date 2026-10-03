@@ -229,6 +229,7 @@ func withQuality(
 			categories[i].QualityTarget = &QualityTarget{
 				AudioCodec: row.AudioCodec, Container: row.Container,
 				BitrateKbps: nullInt64Ptr(row.BitrateKbps), TolerancePct: row.TolerancePct,
+				Resolution: row.Resolution, VideoCodec: row.VideoCodec, HDR: row.Hdr,
 			}
 		}
 	}

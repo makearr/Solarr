@@ -257,6 +257,9 @@ type QualityTargetEntry struct {
 	Container    string `yaml:"container"`
 	BitrateKbps  *int64 `yaml:"bitrate_kbps,omitempty"`
 	TolerancePct int64  `yaml:"tolerance_pct"`
+	Resolution   string `yaml:"resolution,omitempty"`
+	VideoCodec   string `yaml:"video_codec,omitempty"`
+	HDR          string `yaml:"hdr,omitempty"`
 }
 
 // qualityProfileNames is the library's list, reading an older document's single profile as one.
@@ -446,6 +449,7 @@ func (c *Cache) Export() Document {
 			entry.QualityTarget = &QualityTargetEntry{
 				AudioCodec: target.AudioCodec, Container: target.Container,
 				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
+				Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR,
 			}
 		}
 		if !category.QualityUpgrades {
@@ -769,6 +773,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			for _, problem := range validateQualityTarget(&QualityTarget{
 				AudioCodec: target.AudioCodec, Container: target.Container,
 				BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
+				Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR,
 			}) {
 				problem.Path = where + ".quality_" + strings.TrimPrefix(problem.Path, "target.")
 				problems = append(problems, problem)
@@ -1007,6 +1012,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				if err := queries.UpsertCategoryQualityTarget(ctx, settingsdb.UpsertCategoryQualityTargetParams{
 					CategoryID: id, AudioCodec: target.AudioCodec, Container: target.Container,
 					BitrateKbps: int64PtrToNull(target.BitrateKbps), TolerancePct: target.TolerancePct,
+					Resolution: target.Resolution, VideoCodec: target.VideoCodec, Hdr: target.HDR,
 				}); err != nil {
 					return fmt.Errorf("category %q quality target: %w", key, err)
 				}

@@ -69,6 +69,9 @@ func judgeProfile(
 
 // MeetsTarget is codec and container equal, and the bitrate within the tolerance unless lossless.
 func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
+	if target.Resolution != "" || target.VideoCodec != "" || target.HDR != "" {
+		return meetsVideoTarget(target, file)
+	}
 	// The target's file type is an extension ("m4a"), met by the same container as well as the same name.
 	name := file.Extension
 	if name == "" {
@@ -84,4 +87,31 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 	want := float64(*target.BitrateKbps)
 	got := float64(file.AudioBitrate) / 1000
 	return math.Abs(got-want) <= want*float64(target.TolerancePct)/100
+}
+
+// meetsVideoTarget is every field the target names equal to what the probe measured; a field it leaves empty is free.
+func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool {
+	if target.Resolution != "" && !strings.EqualFold(target.Resolution, file.Resolution) {
+		return false
+	}
+	if target.VideoCodec != "" && !strings.EqualFold(target.VideoCodec, file.VideoCodec) {
+		return false
+	}
+	if target.HDR != "" {
+		have := file.HDR
+		if have == "" {
+			have = "sdr"
+		}
+		if !strings.EqualFold(target.HDR, have) {
+			return false
+		}
+	}
+	if target.AudioCodec != "" && !strings.EqualFold(target.AudioCodec, file.AudioCodec) {
+		return false
+	}
+	name := file.Extension
+	if name == "" {
+		name = file.Container
+	}
+	return target.Container == "" || score.CanonicalContainer(target.Container) == score.CanonicalContainer(name)
 }

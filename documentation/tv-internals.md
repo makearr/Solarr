@@ -109,3 +109,7 @@ top candidates from Skyhook and takes the one that has at least 80 % of the file
 by 15 points. Anything less sure is queued for a person. A scan only hands over new or changed files, so `RetryJob` (task `tv_retry`, daily,
 and the Review page's button) feeds the waiting files through `Consumer.Observe` again. Measured on the user's 1,062-series library: 5,553 of
 55,970 series files were waiting before; see inflight.md for what remained.
+
+Speed: the season directories of one series are read side by side by the scan (eight directories at once), so `FolderLocks` makes them ask the
+providers once between them, and TVmaze's cast is skipped when a TMDB key is stored (its bucket is the slowest). Measured 2026-10-03 on 60
+real series (2,167 files, probing included): 300 s before, 130 s after.

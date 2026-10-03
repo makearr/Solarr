@@ -61,6 +61,9 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 			AudioCodec:  strings.ToLower(strings.TrimSpace(body.Target.AudioCodec)),
 			Container:   strings.ToLower(strings.TrimSpace(body.Target.Container)),
 			BitrateKbps: body.Target.BitrateKbps, TolerancePct: body.Target.TolerancePct,
+			Resolution: strings.ToLower(strings.TrimSpace(derefOr(body.Target.Resolution, ""))),
+			VideoCodec: strings.ToLower(strings.TrimSpace(derefOr(body.Target.VideoCodec, ""))),
+			HDR:        strings.ToLower(strings.TrimSpace(derefOr(body.Target.Hdr, ""))),
 		}
 	}
 	err = s.auth.Settings.SetCategoryQuality(r.Context(), id, body.ProfileIds, body.CutoffProfileId, target)
@@ -136,6 +139,14 @@ func (s *Server) libraryQualityView(category settings.Category) gen.LibraryQuali
 			AudioCodec: target.AudioCodec, Container: target.Container,
 			BitrateKbps: target.BitrateKbps, TolerancePct: target.TolerancePct,
 		}
+		setPtr := func(into **string, value string) {
+			if value != "" {
+				*into = &value
+			}
+		}
+		setPtr(&view.Target.Resolution, target.Resolution)
+		setPtr(&view.Target.VideoCodec, target.VideoCodec)
+		setPtr(&view.Target.Hdr, target.HDR)
 		if warning := targetOutsideProfiles(snapshot, view.Profiles, targetFacts(*target)); warning != "" {
 			view.Warnings = append(view.Warnings, warning)
 		}
@@ -166,7 +177,8 @@ func targetOutsideProfiles(snapshot *settings.Snapshot, profiles []gen.QualityPr
 // targetFacts is the target as the file facts a profile judges.
 func targetFacts(target settings.QualityTarget) score.Facts {
 	facts := score.Facts{File: score.FileFacts{
-		AudioCodec: target.AudioCodec, Extension: target.Container, Lossless: target.BitrateKbps == nil,
+		AudioCodec: target.AudioCodec, Extension: target.Container, Lossless: target.BitrateKbps == nil && target.AudioCodec != "",
+		Resolution: target.Resolution, VideoCodec: target.VideoCodec, HDR: target.HDR,
 	}}
 	if target.BitrateKbps != nil {
 		facts.File.AudioBitrate = *target.BitrateKbps * 1000

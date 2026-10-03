@@ -3067,15 +3067,24 @@ type QualityProfileWrite struct {
 
 // QualityTarget defines model for QualityTarget.
 type QualityTarget struct {
-	// AudioCodec As ffprobe names it: aac, mp3, flac, opus.
+	// AudioCodec As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target.
 	AudioCodec string `json:"audio_codec"`
 
 	// BitrateKbps Absent for a lossless codec.
 	BitrateKbps *int64 `json:"bitrate_kbps,omitempty"`
 
-	// Container The file type: m4a, mp3, flac.
-	Container    string `json:"container"`
-	TolerancePct int64  `json:"tolerance_pct"`
+	// Container The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.
+	Container string `json:"container"`
+
+	// Hdr sdr, hdr10, dolby_vision...; empty when it does not care.
+	Hdr *string `json:"hdr,omitempty"`
+
+	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
+	Resolution   *string `json:"resolution,omitempty"`
+	TolerancePct int64   `json:"tolerance_pct"`
+
+	// VideoCodec e.g. h265, h264, av1; empty when it does not care.
+	VideoCodec *string `json:"video_codec,omitempty"`
 }
 
 // Queue defines model for Queue.

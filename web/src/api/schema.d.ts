@@ -4305,10 +4305,16 @@ export interface components {
             allow_cidrs: string[];
         };
         QualityTarget: {
-            /** @description As ffprobe names it: aac, mp3, flac, opus. */
+            /** @description As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target. */
             audio_codec: string;
-            /** @description The file type: m4a, mp3, flac. */
+            /** @description The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target. */
             container: string;
+            /** @description A video library's target resolution, e.g. 1080p; empty when it does not care. */
+            resolution?: string;
+            /** @description e.g. h265, h264, av1; empty when it does not care. */
+            video_codec?: string;
+            /** @description sdr, hdr10, dolby_vision...; empty when it does not care. */
+            hdr?: string;
             /**
              * Format: int64
              * @description Absent for a lossless codec.

@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, X } from "lucide-react";
 
 import { api } from "@/api/client";
 import { parseAudioRules } from "@/lib/qualityRules";
+import { useLibrary } from "@/lib/useLibrary";
 import type { components } from "@/api/schema";
 
 /** A library's own quality: which shared profiles it accepts, in order, where upgrades stop, and
@@ -54,6 +55,52 @@ export function targetFromProfile(rulesJSON: string | undefined): QualityTarget 
   };
 }
 
+const RESOLUTIONS = ["2160p", "1080p", "720p", "576p", "480p"] as const;
+const VIDEO_CODECS = ["h265", "h264", "av1", "vp9", "mpeg2"] as const;
+const HDR_FORMATS = ["sdr", "hdr10", "hdr10plus", "dolby_vision", "hlg"] as const;
+const VIDEO_AUDIO = ["aac", "eac3", "ac3", "dts", "truehd", "flac", "opus"] as const;
+const VIDEO_CONTAINERS = ["mkv", "mp4"] as const;
+
+/** A video library's target starts at the first profile's best tier: its top resolution and codec. */
+export function videoTargetFromProfile(rulesJSON: string | undefined): QualityTarget {
+  const target: QualityTarget = { audio_codec: "", container: "", tolerance_pct: 0, resolution: "1080p", video_codec: "h265", hdr: "" };
+  if (!rulesJSON) return target;
+  try {
+    const tiers = (JSON.parse(rulesJSON) as { tiers?: { resolution?: string[][]; video_codec?: string[][] } }).tiers;
+    target.resolution = tiers?.resolution?.[0]?.[0] ?? target.resolution;
+    target.video_codec = tiers?.video_codec?.[0]?.[0] ?? target.video_codec;
+  } catch {
+    // An unreadable profile leaves the plain default.
+  }
+  return target;
+}
+
+/** The fields of a video library's target; each "any" leaves that part free. */
+function VideoTargetFields({ target, onChange }: { target: QualityTarget; onChange: (target: QualityTarget) => void }) {
+  const pick = (label: string, value: string | undefined, options: readonly string[], set: (value: string) => Partial<QualityTarget>) => (
+    <label className="flex flex-col gap-1 text-ink-muted">
+      {label}
+      <select value={value ?? ""} onChange={(event) => onChange({ ...target, ...set(event.target.value) })} className={inputStyle}>
+        <option value="">any</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  return (
+    <div className="flex flex-wrap items-end gap-3 text-xs">
+      {pick("Resolution", target.resolution, RESOLUTIONS, (resolution) => ({ resolution }))}
+      {pick("Video codec", target.video_codec, VIDEO_CODECS, (video_codec) => ({ video_codec }))}
+      {pick("HDR", target.hdr, HDR_FORMATS, (hdr) => ({ hdr }))}
+      {pick("Audio codec", target.audio_codec, VIDEO_AUDIO, (audio_codec) => ({ audio_codec }))}
+      {pick("File type", target.container, VIDEO_CONTAINERS, (container) => ({ container }))}
+    </div>
+  );
+}
+
 /** A library's quality (2026-09-19, answered 2026-09-24): the profiles it accepts in order of
  *  preference, the cutoff where upgrades stop, and the one target it aims for. */
 function LibraryQualityEditor() {
@@ -86,6 +133,7 @@ function LibraryQualityEditor() {
   const [preferred, setPreferred] = useState<"" | "usenet" | "torrent">("");
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [target, setTarget] = useState<QualityTarget | undefined>();
+  const video = useLibrary(categoryId)?.media_type === "tv";
   useEffect(() => {
     if (!quality.data) return;
     setOrder(quality.data.profiles.map((profile) => profile.id));
@@ -277,8 +325,9 @@ function LibraryQualityEditor() {
       <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Target</h2>
         <p className="text-xs text-ink-muted">
-          The quality you would pick if you could choose freely. A file meets it with the same codec and
-          file type and a bitrate within the tolerance; a lossless target has no bitrate.
+          {video
+            ? "The picture quality you would pick if you could choose freely. A file meets it when every part you name matches what the probe measured; a part left on any is free."
+            : "The quality you would pick if you could choose freely. A file meets it with the same codec and file type and a bitrate within the tolerance; a lossless target has no bitrate."}
         </p>
         <label className="flex w-fit flex-col gap-1 text-xs text-ink-muted">
           Aim for
@@ -287,17 +336,18 @@ function LibraryQualityEditor() {
             onChange={(event) =>
               setTarget(
                 event.target.value === "exact"
-                  ? targetFromProfile(profiles.data?.find((profile) => profile.id === order?.[0])?.rules)
+                  ? (video ? videoTargetFromProfile : targetFromProfile)(profiles.data?.find((profile) => profile.id === order?.[0])?.rules)
                   : undefined,
               )
             }
             className={inputStyle}
           >
             <option value="none">Nothing in particular: the first profile decides</option>
-            <option value="exact">One exact quality</option>
+            <option value="exact">{video ? "One picture quality" : "One exact quality"}</option>
           </select>
         </label>
-        {target && (
+        {target && video && <VideoTargetFields target={target} onChange={setTarget} />}
+        {target && !video && (
           <div className="flex flex-wrap items-end gap-3 text-xs">
             <label className="flex flex-col gap-1 text-ink-muted">
               Codec

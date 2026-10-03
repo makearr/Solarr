@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -25,10 +26,35 @@ type Resolver struct {
 	Clock            clock.Clock
 	Logger           *slog.Logger
 	DefaultProfileID int64
-	Categories       interface {
+	// Locks serialises the folders of one name, so the season directories of a series a scan reads side by side ask
+	// the providers once between them; nil means no serialising.
+	Locks      *FolderLocks
+	Categories interface {
 		Category(id int64) (settings.Category, bool)
 		ProfileFor(category settings.Category, fallback int64) int64
 	}
+}
+
+// FolderLocks hands out one lock per key.
+type FolderLocks struct {
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+// Lock takes the key's lock and answers how to release it.
+func (l *FolderLocks) Lock(key string) func() {
+	l.mu.Lock()
+	if l.locks == nil {
+		l.locks = map[string]*sync.Mutex{}
+	}
+	lock, found := l.locks[key]
+	if !found {
+		lock = &sync.Mutex{}
+		l.locks[key] = lock
+	}
+	l.mu.Unlock()
+	lock.Lock()
+	return lock.Unlock
 }
 
 // FolderGuess is what a series folder's name says about the series.
@@ -74,6 +100,9 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 	relPath := ""
 	if len(relPaths) > 0 {
 		relPath = relPaths[0]
+	}
+	if c.Locks != nil {
+		defer c.Locks.Lock(strconv.FormatInt(categoryID, 10) + "|" + strings.ToLower(folder))()
 	}
 	name := folder
 	if name == "" {

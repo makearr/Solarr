@@ -6851,8 +6851,11 @@ components:
       type: object
       required: [audio_codec, container, tolerance_pct]
       properties:
-        audio_codec: { type: string, description: 'As ffprobe names it: aac, mp3, flac, opus.' }
-        container: { type: string, description: 'The file type: m4a, mp3, flac.' }
+        audio_codec: { type: string, description: 'As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target.' }
+        container: { type: string, description: 'The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.' }
+        resolution: { type: string, description: 'A video library''s target resolution, e.g. 1080p; empty when it does not care.' }
+        video_codec: { type: string, description: 'e.g. h265, h264, av1; empty when it does not care.' }
+        hdr: { type: string, description: 'sdr, hdr10, dolby_vision...; empty when it does not care.' }
         bitrate_kbps:
           type: integer
           format: int64
