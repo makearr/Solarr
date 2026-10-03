@@ -5966,6 +5966,8 @@ export interface components {
             id: number;
             /** @example music */
             media_type: string;
+            /** @description The libraries that hold or want the work; a video work's own page lives under one of them. */
+            library_ids?: number[];
             title: string;
             sort_title: string;
             year?: number;

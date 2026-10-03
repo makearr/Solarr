@@ -572,7 +572,7 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 	view := gen.WorkDetail{
 		Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
 		Year: yearOf(row.Year), RuntimeMs: row.RuntimeMs, Language: row.Language,
-		Description: row.Description, OnDisk: row.OnDisk,
+		Description: row.Description, OnDisk: row.OnDisk, LibraryIds: &row.CategoryIDs,
 		AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
 		ExternalIds: buildExternalIDViews(row.ExternalIDs),
 		Editions:    buildEditionViews(row.Editions),

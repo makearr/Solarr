@@ -4123,7 +4123,10 @@ type WorkDetail struct {
 	Genres      []string     `json:"genres"`
 	Id          int64        `json:"id"`
 	Language    *string      `json:"language,omitempty"`
-	MediaType   string       `json:"media_type"`
+
+	// LibraryIds The libraries that hold or want the work; a video work's own page lives under one of them.
+	LibraryIds *[]int64 `json:"library_ids,omitempty"`
+	MediaType  string   `json:"media_type"`
 
 	// OnDisk Whether this work is linked to any root folder at all. The coarsest possible "is there really a file for this" signal -- per-track presence needs a media_object-to-work_part link this project does not have yet.
 	OnDisk    bool       `json:"on_disk"`

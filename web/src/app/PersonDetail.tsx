@@ -39,7 +39,8 @@ interface DiscographyGroup {
 function groupDiscography(discography: readonly PersonWork[]): DiscographyGroup[] {
   const byType = new Map<string, PersonWork[]>();
   for (const work of discography) {
-    const key = work.primary_type ?? "";
+    // A series they act in or direct is not a release group: it gets its own group, linking to the series page.
+    const key = work.media_type === "tv" ? "tv" : (work.primary_type ?? "");
     const list = byType.get(key);
     if (list) list.push(work);
     else byType.set(key, [work]);
@@ -55,10 +56,13 @@ function groupDiscography(discography: readonly PersonWork[]): DiscographyGroup[
   }
   const unclassified = byType.get("");
   byType.delete("");
+  const series = byType.get("tv");
+  byType.delete("tv");
   for (const [type, works] of byType) {
     groups.push({ label: type, works });
   }
   if (unclassified) groups.push({ label: UNCLASSIFIED_LABEL, works: unclassified });
+  if (series) groups.push({ label: "TV series", works: series });
   return groups;
 }
 

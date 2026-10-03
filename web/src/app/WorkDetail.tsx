@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Search as SearchIcon, Trash2 as TrashIcon } from "lucide-react";
@@ -57,6 +57,14 @@ export function WorkDetail() {
   });
 
   const navigate = useNavigate();
+
+  // A series is a TV library's page, not an album's: every link to /works/{id} (queue, history, calendar, an artist's credits) lands there.
+  const seriesLibrary = detail.data?.media_type === "tv" ? detail.data.library_ids?.[0] : undefined;
+  useEffect(() => {
+    if (seriesLibrary !== undefined && id !== undefined) {
+      void navigate({ to: "/library/$categoryId/series/$seriesId", params: { categoryId: String(seriesLibrary), seriesId: String(id) }, replace: true });
+    }
+  }, [seriesLibrary, id, navigate]);
 
   const search = useMutation({
     mutationFn: async (terms?: { artist: string; album: string }) => {

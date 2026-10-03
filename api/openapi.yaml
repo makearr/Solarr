@@ -8923,6 +8923,10 @@ components:
             searching, sending and monitoring it would be accepted.
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
+        library_ids:
+          type: array
+          items: { type: integer, format: int64 }
+          description: The libraries that hold or want the work; a video work's own page lives under one of them.
         title: { type: string }
         sort_title: { type: string }
         year: { type: integer }
