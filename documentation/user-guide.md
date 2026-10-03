@@ -81,6 +81,35 @@ comparison has run (Settings → Scheduler → Compare discographies).
 On an album's or artist's page, **Choose image** lists the pictures the metadata providers hold
 (Cover Art Archive, TheAudioDB, Wikidata); the one you pick is kept over later refreshes.
 
+## 4b. Add TV
+
+Create a library of media type **TV** (Settings → Libraries), give it a root folder, and a scan reads your folders:
+each series folder is matched by name, `{tvdb-123}` in the folder name, or what you already added, and every episode file
+is attached to its episode. **Settings → Libraries → Edit** has **Monitor series found by a scan**: only the episodes on
+disk (the default, so nothing is hunted that you did not ask for), every episode, or none.
+
+**Add series** searches TheTVDB (through Sonarr's free proxy) and, with a key, TMDB; choose what to monitor (Sonarr's nine
+options), the quality profile, and whether to search for missing episodes at once. Free metadata is enough to start, but
+**Settings → Metadata → TV series** takes your own **TMDB key** (a free account at themoviedb.org: paste the API Read Access
+Token or the API key) and then adds cast, crew and guest stars, networks with logos, artwork and alternative titles; **Test
+the providers** checks all five sources. Anime also gets its romaji and synonym titles from AniList, which release groups
+use.
+
+Under a TV library: **Series** (posters with a progress bar, filters by status, network, genre and quality), **People**
+(everyone credited, by role; open one for their credits here, their biography and what else they are known for),
+**Networks**, **Season pass** (every series with one chip per season: click to want or not want that season), **Wanted**
+(aired episodes without a file) and **Unidentified**. A series page lists its seasons and episodes with directors,
+writers and guest stars; **Edit** re-applies any monitor choice to what you already hold and gives the series its own
+quality profile. Wanting one episode also wants its season.
+
+**Follow** (on a person's or a network's page, with your TMDB key) adds their new series for you: a person by the roles you
+tick (acting, directing, writing, ...), a network for everything new it airs. At most five series per follow are added each
+time it runs, with the monitor choice you set; older series only if you ask for the back catalogue. The task **Refresh
+series** (Settings → Scheduler) re-reads running series twice a day so new episodes and seasons arrive by themselves.
+
+**Import from Sonarr** (Connections → Arr): the series, the monitored state of every episode and the quality profile (by
+name) of each series come over; import before the first scan, because a series already in Solarr is left as it is.
+
 ## 5. What happens on its own
 
 Three scheduled tasks (Settings → Scheduler) find what is missing without you pressing anything:

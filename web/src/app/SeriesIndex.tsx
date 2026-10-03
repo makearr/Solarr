@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Plus, Search, Tv } from "lucide-react";
 
 import { api } from "@/api/client";
@@ -78,6 +78,9 @@ export function SeriesIndex() {
   const [status, setStatus] = useState<"all" | "continuing" | "ended">("all");
   const [onlyMissing, setOnlyMissing] = useState(false);
   const [onlyMonitored, setOnlyMonitored] = useState(false);
+  const [network, setNetwork] = useState("");
+  const [genre, setGenre] = useState("");
+  const [profile, setProfile] = useState(0);
 
   const pages = useInfiniteQuery({
     queryKey: ["series", categoryId],
@@ -95,15 +98,39 @@ export function SeriesIndex() {
   if (pages.hasNextPage && !pages.isFetchingNextPage) void pages.fetchNextPage();
 
   const all = useMemo(() => (pages.data?.pages ?? []).flatMap((page) => page.items), [pages.data]);
+  // The choices each filter offers are what this library actually holds, most common first.
+  const choices = useMemo(() => {
+    const count = (values: (string | undefined)[]) => {
+      const tally = new Map<string, number>();
+      for (const value of values) if (value) tally.set(value, (tally.get(value) ?? 0) + 1);
+      return [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([value]) => value);
+    };
+    return {
+      networks: count(all.map((series) => series.network)),
+      genres: count(all.flatMap((series) => series.genres ?? [])),
+      profiles: [...new Set(all.map((series) => series.quality_profile_id).filter((id): id is number => id != null))],
+    };
+  }, [all]);
+  const profileNames = useQuery({
+    queryKey: ["qualityprofiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
   const shown = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return all
       .filter((series) => needle === "" || series.title.toLowerCase().includes(needle))
+      .filter((series) => network === "" || series.network === network)
+      .filter((series) => genre === "" || (series.genres ?? []).includes(genre))
+      .filter((series) => profile === 0 || series.quality_profile_id === profile)
       .filter((series) => status === "all" || series.status === status)
       .filter((series) => !onlyMissing || series.counts.aired_missing > 0)
       .filter((series) => !onlyMonitored || series.monitored)
       .sort(SORTS[sort].compare);
-  }, [all, search, status, onlyMissing, onlyMonitored, sort]);
+  }, [all, search, network, genre, profile, status, onlyMissing, onlyMonitored, sort]);
 
   const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
   return (
@@ -139,6 +166,45 @@ export function SeriesIndex() {
             <option value="ended">Ended</option>
           </select>
         </label>
+        {choices.networks.length > 1 && (
+          <label className="flex items-center gap-1 text-xs text-ink-muted">
+            Network
+            <select value={network} onChange={(event) => setNetwork(event.target.value)} className={`${control} max-w-40`}>
+              <option value="">All</option>
+              {choices.networks.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {choices.genres.length > 1 && (
+          <label className="flex items-center gap-1 text-xs text-ink-muted">
+            Genre
+            <select value={genre} onChange={(event) => setGenre(event.target.value)} className={control}>
+              <option value="">All</option>
+              {choices.genres.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {choices.profiles.length > 1 && (
+          <label className="flex items-center gap-1 text-xs text-ink-muted">
+            Quality
+            <select value={profile} onChange={(event) => setProfile(Number(event.target.value))} className={control}>
+              <option value={0}>All</option>
+              {choices.profiles.map((id) => (
+                <option key={id} value={id}>
+                  {(profileNames.data ?? []).find((entry) => entry.id === id)?.name ?? `Profile ${id}`}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className="flex items-center gap-1 text-xs text-ink-muted">
           <input type="checkbox" checked={onlyMonitored} onChange={(event) => setOnlyMonitored(event.target.checked)} /> Monitored
         </label>
