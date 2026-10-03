@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search } from "lucide-react";
@@ -57,6 +57,34 @@ export function SeriesWanted() {
       setNotes((current) => ({ ...current, [`${episode.series_id}:${episode.season}`]: "Search failed: is an indexer connected?" })),
   });
 
+  const [sweep, setSweep] = useState<{ done: number; total: number } | null>(null);
+  const searchListed = async () => {
+    const seasons = new Map<string, Episode>();
+    for (const episode of rows) seasons.set(`${episode.series_id}:${episode.season}`, episode);
+    const queue = [...seasons.values()];
+    for (const [index, episode] of queue.entries()) {
+      setSweep({ done: index, total: queue.length });
+      try {
+        await grab.mutateAsync(episode);
+      } catch {
+        // the row's own note says it failed; the sweep goes on
+      }
+    }
+    setSweep(null);
+  };
+
+  const sentinel = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = pages;
+  useEffect(() => {
+    const element = sentinel.current;
+    if (!element || !hasNextPage) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, rows.length]);
+
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -72,11 +100,22 @@ export function SeriesWanted() {
             {key === "missing" ? "Missing" : "Cutoff unmet"}
           </button>
         ))}
+        {rows.length > 0 && (view === "cutoff" || view === "missing") && (
+          <button
+            type="button"
+            disabled={sweep !== null}
+            onClick={() => void searchListed()}
+            className="ml-auto flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
+          >
+            <Search aria-hidden className="size-3.5" />
+            {sweep ? `Searching ${sweep.done + 1} of ${sweep.total}` : "Search listed seasons"}
+          </button>
+        )}
       </div>
       <p className="text-xs text-ink-muted">
         {view === "missing"
           ? "Monitored episodes that have aired and are not on disk. Search looks for the whole season, so a pack can fill several rows at once."
-          : "Episodes on disk whose file is below the library's target or cutoff (Quality page). Interactive search picks a better release for one episode."}
+          : "Episodes on disk whose file is below the library's target or cutoff (Quality page). Search looks for a strictly better release of the whole season; Interactive picks one for one episode. The hunt also does this on its own, a few a day."}
       </p>
       {view === "cutoff" && !judged && (
         <p className="text-sm text-ink-muted">
@@ -113,10 +152,10 @@ export function SeriesWanted() {
                 </span>
               )}
               {note && <span className="text-xs text-ink-muted">{note}</span>}
-              {view === "missing" && (
+              {(
               <button
                 type="button"
-                title="Search this season and send the best release"
+                title={view === "missing" ? "Search this season and send the best release" : "Search this season for a strictly better release"}
                 aria-label={`Search ${episode.series_title} season ${episode.season}`}
                 onClick={() => grab.mutate(episode)}
                 className="text-ink-muted hover:text-ink"
@@ -136,14 +175,9 @@ export function SeriesWanted() {
         })}
       </ul>
       {pages.hasNextPage && (
-        <button
-          type="button"
-          disabled={pages.isFetchingNextPage}
-          onClick={() => void pages.fetchNextPage()}
-          className="self-start rounded-md border border-border-subtle px-3 py-1.5 text-sm disabled:opacity-50"
-        >
-          {pages.isFetchingNextPage ? "Loading…" : "Load more"}
-        </button>
+        <div ref={sentinel} className="py-2 text-center text-xs text-ink-muted">
+          {pages.isFetchingNextPage ? "Loading…" : ""}
+        </div>
       )}
       {dialog && (
         <SeasonSearchDialog
