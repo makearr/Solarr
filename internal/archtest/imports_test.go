@@ -24,7 +24,7 @@ var allowedInternalImports = map[string][]string{
 		"migrations",
 	},
 	"cmd/solarr/app": {
-		"cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
+		"internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
 		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
@@ -52,7 +52,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/api/auth":  {"internal/platform/clock", "internal/platform/secrets"},
 	"internal/api/authz": {"internal/db/settings"},
 	"internal/api/apiserver": {
-		"internal/api/apiserver/gen", "internal/api/apiserver/legal", "internal/api/auth", "internal/api/authz",
+		"internal/platform/remoteimage", "internal/api/apiserver/gen", "internal/api/apiserver/legal", "internal/api/auth", "internal/api/authz",
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
 		"internal/platform/privilege", "internal/identify/score", "internal/db/settings", "internal/platform/secrets",
@@ -114,7 +114,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/mediatool": {},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
-	"internal/platform/artwork": {},
+	"internal/platform/artwork":     {},
+	"internal/platform/remoteimage": {"internal/platform/artwork", "internal/platform/fsx"},
 	// Section 11.8's path template compiler/renderer: parsing and string
 	// building only, no I/O of its own. fsx is the one dependency, for the
 	// ADR-14 sanitiser choke point every rendered component passes through.

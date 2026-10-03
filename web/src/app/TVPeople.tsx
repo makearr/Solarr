@@ -5,6 +5,7 @@ import { Search, UserRound } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { remoteImage } from "@/lib/remoteImage";
 
 type Person = components["schemas"]["SeriesPerson"];
 
@@ -49,7 +50,7 @@ function PersonTile({ person, categoryId }: { person: Person; categoryId: string
     >
       <span className="block aspect-square w-full overflow-hidden rounded-full border border-border-subtle bg-surface group-hover:border-accent">
         {person.image_url ? (
-          <img src={person.image_url} alt="" loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+          <img src={remoteImage(person.image_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
         ) : (
           <span className="flex size-full items-center justify-center text-ink-muted">
             <UserRound aria-hidden className="size-10" />

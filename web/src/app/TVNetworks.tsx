@@ -7,12 +7,13 @@ import type { components } from "@/api/schema";
 
 import { FollowPanel } from "./FollowPanel";
 import { SeriesTile } from "./SeriesIndex";
+import { remoteImage } from "@/lib/remoteImage";
 
 type Network = components["schemas"]["SeriesNetwork"];
 
 function Logo({ network, size }: { network: Network; size: string }) {
   return network.logo_url ? (
-    <img src={network.logo_url} alt="" loading="lazy" className={`${size} object-contain`} referrerPolicy="no-referrer" />
+    <img src={remoteImage(network.logo_url, "thumb")} alt="" loading="lazy" className={`${size} object-contain`} />
   ) : (
     <Radio aria-hidden className="size-8 text-ink-muted" />
   );

@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { usePreference } from "@/lib/usePreference";
 
 import { useDebouncedValue } from "./useDebouncedValue";
+import { remoteImage } from "@/lib/remoteImage";
 
 type Candidate = components["schemas"]["SeriesCandidate"];
 type Monitor = components["schemas"]["AddSeriesRequest"]["monitor"];
@@ -180,7 +181,7 @@ export function AddSeries() {
               <div className="flex gap-3">
                 <div className="h-28 w-[75px] shrink-0 overflow-hidden rounded-md border border-border-subtle bg-canvas">
                   {candidate.poster_url ? (
-                    <img src={candidate.poster_url} alt="" loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={remoteImage(candidate.poster_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
                   ) : (
                     <span className="flex size-full items-center justify-center text-ink-muted">
                       <Tv aria-hidden className="size-6" />

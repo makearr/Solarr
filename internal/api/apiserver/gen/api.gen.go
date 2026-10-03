@@ -750,6 +750,13 @@ const (
 	WorkWantedStateUPGRADABLE WorkWantedState = "UPGRADABLE"
 )
 
+// Defines values for GetRemoteImageParamsSize.
+const (
+	GetRemoteImageParamsSizeFull  GetRemoteImageParamsSize = "full"
+	GetRemoteImageParamsSizeSmall GetRemoteImageParamsSize = "small"
+	GetRemoteImageParamsSizeThumb GetRemoteImageParamsSize = "thumb"
+)
+
 // Defines values for ListImportSessionsParamsState.
 const (
 	ListImportSessionsParamsStateCANCELLED  ListImportSessionsParamsState = "CANCELLED"
@@ -4159,6 +4166,15 @@ type ListHistoryParams struct {
 	WorkId *int64 `form:"work_id,omitempty" json:"work_id,omitempty"`
 }
 
+// GetRemoteImageParams defines parameters for GetRemoteImage.
+type GetRemoteImageParams struct {
+	Url  string                    `form:"url" json:"url"`
+	Size *GetRemoteImageParamsSize `form:"size,omitempty" json:"size,omitempty"`
+}
+
+// GetRemoteImageParamsSize defines parameters for GetRemoteImage.
+type GetRemoteImageParamsSize string
+
 // ListImportSessionsParams defines parameters for ListImportSessions.
 type ListImportSessionsParams struct {
 	State *ListImportSessionsParamsState `form:"state,omitempty" json:"state,omitempty"`
@@ -5267,6 +5283,9 @@ type ServerInterface interface {
 	// What happened to downloads -- grabbed, imported, failed (section 5.7).
 	// (GET /history)
 	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
+	// A provider's picture (poster, photo, logo) from Solarr's own cache, fetched once on first use.
+	// (GET /images/remote)
+	GetRemoteImage(w http.ResponseWriter, r *http.Request, params GetRemoteImageParams)
 	// Remove an import list. Administrator only.
 	// (DELETE /import-lists/{id})
 	DeleteImportList(w http.ResponseWriter, r *http.Request, id int64)
@@ -6221,6 +6240,12 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 // What happened to downloads -- grabbed, imported, failed (section 5.7).
 // (GET /history)
 func (_ Unimplemented) ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A provider's picture (poster, photo, logo) from Solarr's own cache, fetched once on first use.
+// (GET /images/remote)
+func (_ Unimplemented) GetRemoteImage(w http.ResponseWriter, r *http.Request, params GetRemoteImageParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9599,6 +9624,56 @@ func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListHistory(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetRemoteImage operation middleware
+func (siw *ServerInterfaceWrapper) GetRemoteImage(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetRemoteImageParams
+
+	// ------------- Required query parameter "url" -------------
+
+	if paramValue := r.URL.Query().Get("url"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "url"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "url", r.URL.Query(), &params.Url)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "url", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "size" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "size", r.URL.Query(), &params.Size)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "size", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetRemoteImage(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15709,6 +15784,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/history", wrapper.ListHistory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/images/remote", wrapper.GetRemoteImage)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/import-lists/{id}", wrapper.DeleteImportList)

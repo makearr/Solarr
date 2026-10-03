@@ -5656,6 +5656,32 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /images/remote:
+    get:
+      operationId: getRemoteImage
+      tags: [people]
+      summary: A provider's picture (poster, photo, logo) from Solarr's own cache, fetched once on first use.
+      description: >-
+        Only the metadata providers' image hosts are served (TMDB, TheTVDB, TVmaze, AniList, Fanart.tv), over https;
+        anything else is refused. The picture is resized and stored like cover art and evicted by the cache budget.
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string }
+        - name: size
+          in: query
+          schema: { type: string, enum: [thumb, small, full], default: small }
+      responses:
+        "200":
+          description: The picture as WebP.
+          content:
+            image/webp: { schema: { type: string, format: binary } }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /people/{id}/artwork:
     parameters:
       - name: id

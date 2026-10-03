@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 
 import { SeasonSearchDialog } from "./SeasonSearch";
+import { remoteImage } from "@/lib/remoteImage";
 
 type Episode = components["schemas"]["SeriesEpisode"];
 type Season = components["schemas"]["SeriesSeason"];
@@ -250,7 +251,7 @@ function CastStrip({ credits, categoryId }: { credits: Credit[]; categoryId: str
     >
       <span className="block size-20 overflow-hidden rounded-full border border-border-subtle bg-surface">
         {credit.image_url ? (
-          <img src={credit.image_url} alt="" loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+          <img src={remoteImage(credit.image_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
         ) : (
           <span className="flex size-full items-center justify-center text-ink-muted">
             <User aria-hidden className="size-8" />
@@ -483,7 +484,7 @@ export function SeriesPage() {
       <div className="flex gap-4">
         <div className="h-60 w-40 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-surface">
           {series.poster_url ? (
-            <img src={series.poster_url} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+            <img src={remoteImage(series.poster_url, "small")} alt="" className="size-full object-cover" />
           ) : (
             <span className="flex size-full items-center justify-center text-ink-muted">
               <Tv aria-hidden className="size-10" />

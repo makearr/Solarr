@@ -7,6 +7,7 @@ import type { components } from "@/api/schema";
 
 import { FollowPanel } from "./FollowPanel";
 import { roleLabel } from "./TVPeople";
+import { remoteImage } from "@/lib/remoteImage";
 
 type Credit = components["schemas"]["SeriesPersonCredit"];
 type Elsewhere = components["schemas"]["SeriesPersonElsewhere"];
@@ -16,7 +17,7 @@ function Poster({ url, kind }: { url?: string; kind: "tv" | "movie" }) {
   return (
     <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
       {url ? (
-        <img src={url} alt="" loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+        <img src={remoteImage(url, "small")} alt="" loading="lazy" className="size-full object-cover" />
       ) : (
         <span className="flex size-full items-center justify-center text-ink-muted">
           <Icon aria-hidden className="size-8" />
@@ -97,7 +98,7 @@ export function TVPerson() {
       <div className="flex gap-4">
         <span className="block size-40 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface">
           {data.image_url ? (
-            <img src={data.image_url} alt="" className="size-full object-cover" referrerPolicy="no-referrer" />
+            <img src={remoteImage(data.image_url, "small")} alt="" className="size-full object-cover" />
           ) : (
             <span className="flex size-full items-center justify-center text-ink-muted">
               <UserRound aria-hidden className="size-14" />

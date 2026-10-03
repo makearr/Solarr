@@ -9,6 +9,7 @@ import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 import { usePreference } from "@/lib/usePreference";
 import { useGridMetrics } from "@/list/useGridMetrics";
+import { remoteImage } from "@/lib/remoteImage";
 
 type Series = components["schemas"]["SeriesSummary"];
 
@@ -53,7 +54,7 @@ export function SeriesTile({ series, categoryId }: { series: Series; categoryId:
     >
       <span className="relative block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
         {series.poster_url ? (
-          <img src={series.poster_url} alt="" loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+          <img src={remoteImage(series.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
         ) : (
           <span className="flex size-full items-center justify-center text-ink-muted">
             <Tv aria-hidden className="size-10" />

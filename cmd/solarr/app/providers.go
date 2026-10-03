@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -28,6 +29,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/remoteimage"
 )
 
 // liveProxyPolicy is ADR-58's egress proxy, read live so every client shares
@@ -486,4 +488,14 @@ func (p *process) seriesPeople() adapters.SeriesPeople {
 			return err
 		},
 	}
+}
+
+// remoteImages is the provider picture cache, on its own rate bucket so a wall of posters cannot starve the metadata calls.
+func (p *process) remoteImages() *remoteimage.Cache {
+	wall := clock.NewSystem()
+	limiter := httpx.NewLimiter(wall, httpx.Config{Providers: map[string]httpx.Limits{"images": {MinInterval: 100 * time.Millisecond}}}, nil)
+	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil), limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
+		Provider: "images", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
+	})
+	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), Hosts: remoteimage.DefaultHosts}
 }

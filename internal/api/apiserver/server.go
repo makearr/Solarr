@@ -221,6 +221,8 @@ type Config struct {
 	DownloaderTester DownloaderTester
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
+	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
+	RemoteImages RemoteImages
 	// SeriesPeople feeds the TV people and network screens. Optional: nil answers 503.
 	SeriesPeople SeriesPeopleCatalog
 	// TVProviders reports and tests the TV metadata providers; without it those endpoints answer 503.
@@ -303,6 +305,7 @@ type Server struct {
 	downloaderTester        DownloaderTester
 	tvProviders             TVProviders
 	seriesPeople            SeriesPeopleCatalog
+	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
@@ -405,6 +408,7 @@ func New(config Config) (*Server, error) {
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		seriesPeople:            config.SeriesPeople,
+		remoteImages:            config.RemoteImages,
 		effectivePort:           config.Port,
 		healthPath:              base + APIPrefix + "/health",
 		address:                 net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -507,6 +511,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/series", server.routeListSeries)
 			secured.Post("/series", server.AddSeries)
 			secured.Get("/series/wanted", server.routeListWantedEpisodes)
+			secured.Get("/images/remote", server.routeGetRemoteImage)
 			secured.Get("/series/lookup", server.routeLookupSeries)
 			secured.Get("/series/exclusions", server.ListSeriesExclusions)
 			secured.Delete("/series/exclusions", server.routeRemoveSeriesExclusion)

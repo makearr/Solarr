@@ -1,0 +1,147 @@
+// Package remoteimage keeps provider pictures (posters, photos, logos) in Solarr's own image cache, fetched once when
+// first asked for and resized like cover art, so the browser never talks to a provider's CDN.
+package remoteimage
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"path/filepath"
+	"strings"
+	"sync"
+
+	"github.com/makearr/Solarr/internal/platform/artwork"
+	"github.com/makearr/Solarr/internal/platform/fsx"
+)
+
+// ErrNotAllowed means the address is not one of the providers' image hosts.
+var ErrNotAllowed = errors.New("remoteimage: not an allowed image address")
+
+// ErrUnavailable means the provider did not hand over a usable picture.
+var ErrUnavailable = errors.New("remoteimage: the picture could not be fetched")
+
+// maxBytes bounds one fetched picture.
+const maxBytes = 20 << 20
+
+// Doer is the one method of httpx.Client this package needs.
+type Doer interface {
+	Get(ctx context.Context, url string) (*http.Response, error)
+}
+
+// Cache fetches and stores pictures under Dir, in the same flat directory the cover art uses, so the cache budget
+// evicts them by age and size like the rest.
+type Cache struct {
+	HTTP Doer
+	FS   fsx.FS
+	Dir  string
+	// Hosts are the image hosts that may be fetched, each matching itself and its subdomains.
+	Hosts []string
+
+	mu    sync.Mutex
+	locks map[string]*sync.Mutex
+}
+
+// DefaultHosts are the CDNs the TV providers' pictures live on.
+var DefaultHosts = []string{"image.tmdb.org", "thetvdb.com", "tvmaze.com", "anilist.co", "fanart.tv"}
+
+// Key is the cache key an address is stored under; it is stable, so a repeat request finds the file.
+func Key(address string) string {
+	sum := sha256.Sum256([]byte(address))
+	return "remote-" + hex.EncodeToString(sum[:12])
+}
+
+func (c *Cache) allowed(address string) bool {
+	parsed, err := url.Parse(address)
+	if err != nil || parsed.Scheme != "https" || parsed.User != nil {
+		return false
+	}
+	host := strings.ToLower(parsed.Hostname())
+	for _, allowed := range c.Hosts {
+		if host == allowed || strings.HasSuffix(host, "."+allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+// Ensure makes sure the picture at the address is cached at every size and answers its cache key.
+func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
+	if !c.allowed(address) {
+		return "", ErrNotAllowed
+	}
+	key := Key(address)
+	if c.cached(key) {
+		return key, nil
+	}
+	lock := c.lockFor(key)
+	lock.Lock()
+	defer lock.Unlock()
+	if c.cached(key) {
+		return key, nil
+	}
+	source, err := c.download(ctx, address)
+	if err != nil {
+		return "", err
+	}
+	sizes, err := artwork.Process(source)
+	if err != nil {
+		return "", fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	if err := c.FS.MkdirAll(c.Dir, 0o755); err != nil {
+		return "", fmt.Errorf("remoteimage: create %s: %w", c.Dir, err)
+	}
+	// Full is written last: it is what cached() looks for, so a half-written set is fetched again.
+	for _, size := range []artwork.Size{artwork.Thumb, artwork.Small, artwork.Full} {
+		image := sizes[size]
+		if err := fsx.WriteAtomic(c.FS, c.path(key, size), func(w io.Writer) error {
+			_, err := w.Write(image.Bytes)
+			return err
+		}); err != nil {
+			return "", fmt.Errorf("remoteimage: write: %w", err)
+		}
+	}
+	return key, nil
+}
+
+func (c *Cache) path(key string, size artwork.Size) string {
+	name := map[artwork.Size]string{artwork.Thumb: "thumb", artwork.Small: "small", artwork.Full: "full"}[size]
+	return filepath.Join(c.Dir, key+"-"+name+".webp")
+}
+
+func (c *Cache) cached(key string) bool {
+	_, err := c.FS.Stat(c.path(key, artwork.Full))
+	return err == nil
+}
+
+func (c *Cache) lockFor(key string) *sync.Mutex {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.locks == nil {
+		c.locks = map[string]*sync.Mutex{}
+	}
+	if c.locks[key] == nil {
+		c.locks[key] = &sync.Mutex{}
+	}
+	return c.locks[key]
+}
+
+func (c *Cache) download(ctx context.Context, address string) ([]byte, error) {
+	response, err := c.HTTP.Get(ctx, address)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	if response.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%w: status %d", ErrUnavailable, response.StatusCode)
+	}
+	source, err := io.ReadAll(io.LimitReader(response.Body, maxBytes))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
+	}
+	return source, nil
+}
