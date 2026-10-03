@@ -3270,6 +3270,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/{id}/monitoring": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Re-apply one of Sonarr's monitor choices to a series the library holds.
+         * @description Each episode becomes monitored or not as the choice says, and every season follows. Existing wants the episodes that have a file, Missing those that do not.
+         */
+        put: operations["applySeriesMonitoring"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/quality": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Give the series a quality profile of its own, or return it to the library's. */
+        put: operations["setSeriesQuality"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/{id}/episodes/{part_id}/monitored": {
         parameters: {
             query: {
@@ -5288,6 +5333,11 @@ export interface components {
             /** Format: int64 */
             quality_profile_id?: number;
             genres?: string[];
+            /** @description Each season with episodes, specials included as season 0, and whether it is monitored (Season Pass). */
+            season_states?: {
+                number: number;
+                monitored: boolean;
+            }[];
             /**
              * Format: int64
              * @description Unix seconds.
@@ -12419,6 +12469,77 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
+        };
+    };
+    applySeriesMonitoring: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    option: "all" | "future" | "missing" | "existing" | "recent" | "pilot" | "first_season" | "last_season" | "none";
+                    /** @default false */
+                    specials?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Applied. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setSeriesQuality: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: int64
+                     * @description A TV quality profile; null or absent returns the series to the library's.
+                     */
+                    quality_profile_id?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description Set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     setEpisodeMonitored: {

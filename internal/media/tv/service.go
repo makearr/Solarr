@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strconv"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
@@ -328,6 +329,54 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, err
 	}
 	return AddResult{WorkID: stored.WorkID, Created: stored.Created, Episodes: len(series.Episodes), Seasons: seasons, Series: series}, nil
+}
+
+// ApplyMonitor re-applies one of Sonarr's monitor choices to a series the library holds: the episodes it wants become
+// monitored and the rest unmonitored, and each season follows. "Existing" wants the episodes with a file and "Missing"
+// those without, which only a held series can know.
+func (s Service) ApplyMonitor(ctx context.Context, categoryID, workID int64, option MonitorOption, specials bool) error {
+	if !option.Valid() {
+		return fmt.Errorf("tv: unknown monitor option %q", option)
+	}
+	now := s.Clock.Now()
+	detail, err := s.Reader.Get(ctx, categoryID, workID, now)
+	if err != nil {
+		return err
+	}
+	episodes := make([]Episode, len(detail.Episodes))
+	for i, held := range detail.Episodes {
+		episodes[i] = Episode{Season: held.Season, Number: held.Number, AirDate: held.Date, Special: held.Season == 0}
+		if held.AvailableAt > 0 {
+			episodes[i].AirUTC = time.Unix(held.AvailableAt, 0).UTC()
+		}
+	}
+	monitoring := newMonitors(option, specials, now, episodes)
+	wanted := make(map[int64]bool, len(episodes))
+	for i, held := range detail.Episodes {
+		switch option {
+		case MonitorExisting:
+			wanted[held.PartID] = held.Present && (held.Season > 0 || specials)
+		case MonitorMissing:
+			wanted[held.PartID] = !held.Present && monitoring.wants(episodes[i])
+		default:
+			wanted[held.PartID] = monitoring.wants(episodes[i])
+		}
+	}
+	return s.Desired.ApplyPartMonitoring(ctx, workID, wanted)
+}
+
+// SetProfile gives every season of a series the quality profile, or returns them to the library's when nil.
+func (s Service) SetProfile(ctx context.Context, categoryID, workID int64, profileID *int64) error {
+	detail, err := s.Reader.Get(ctx, categoryID, workID, s.Clock.Now())
+	if err != nil {
+		return err
+	}
+	for _, season := range detail.Summary.Seasons {
+		if err := s.Desired.SetProfileOverride(ctx, season.DesiredItemID, profileID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // RefreshRequest names a series the library holds and the library it is in.

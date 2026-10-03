@@ -279,7 +279,7 @@ func (c SeriesPeople) Follow(ctx context.Context, userID, categoryID int64, subj
 		monitor = tv.MonitorOption(*request.Monitor)
 	}
 	if !monitor.Valid() {
-		return gen.SeriesFollow{}, fmt.Errorf("%w: unknown monitor option %q", apiserver.ErrFollowUnavailable, monitor)
+		return gen.SeriesFollow{}, fmt.Errorf("%w: unknown monitor option %q", apiserver.ErrInvalidChoice, monitor)
 	}
 	filters, err := json.Marshal(tv.FollowFilters{Monitor: string(monitor)})
 	if err != nil {

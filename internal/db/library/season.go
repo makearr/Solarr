@@ -95,3 +95,51 @@ func (d Desired) SetSeasonMonitored(ctx context.Context, workID int64, seasonRef
 	}
 	return found, nil
 }
+
+// ApplyPartMonitoring sets the monitored flag of the given parts (part id to wanted) and then every season item's flag
+// from what is monitored in its scope, one transaction per season. A season with nothing left wanted is unmonitored,
+// one with anything wanted is monitored, so the planner never ignores a wanted episode of an unmonitored season.
+func (d Desired) ApplyPartMonitoring(ctx context.Context, workID int64, wanted map[int64]bool) error {
+	items, err := librarydb.New(d.store.Read()).ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return fmt.Errorf("library: apply monitoring: %w", err)
+	}
+	for _, item := range items {
+		if item.SatisfactionKind != "SET" || item.MediaRef == "" {
+			continue
+		}
+		err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := librarydb.New(tx)
+			parts, err := queries.ListWorkParts(ctx, workID)
+			if err != nil {
+				return fmt.Errorf("list parts: %w", err)
+			}
+			monitored := 0
+			for _, part := range parts {
+				if !partInScope(part.MediaRef, item.MediaRef) {
+					continue
+				}
+				want, asked := wanted[part.ID]
+				if !asked {
+					want = part.Monitored == 1
+				}
+				if asked && want != (part.Monitored == 1) {
+					if err := queries.SetWorkPartMonitored(ctx, librarydb.SetWorkPartMonitoredParams{Monitored: boolToInt(want), ID: part.ID}); err != nil {
+						return fmt.Errorf("set part: %w", err)
+					}
+				}
+				if want {
+					monitored++
+				}
+			}
+			if err := queries.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{Monitored: boolToInt(monitored > 0), ID: item.ID}); err != nil {
+				return fmt.Errorf("set item: %w", err)
+			}
+			return recomputeAlbumTx(ctx, queries, item.ID, workID)
+		})
+		if err != nil {
+			return fmt.Errorf("library: apply monitoring to %s: %w", item.MediaRef, err)
+		}
+	}
+	return nil
+}

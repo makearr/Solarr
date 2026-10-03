@@ -455,7 +455,7 @@ function LibraryNode({
                 params={{ categoryId, level: level.key }}
                 className={sectionLinkClass(isActive && activeLevel === level.key, false)}
               >
-                <span className="truncate">{level.label}</span>
+                <span className="truncate" title={level.label}>{level.label}</span>
                 {level.count != null && <span className="ml-auto shrink-0 text-xs text-ink-muted">{level.count}</span>}
               </Link>
             </li>

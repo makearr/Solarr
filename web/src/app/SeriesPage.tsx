@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, RefreshCw, Search, Tv, User } from "lucide-react";
+import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Pencil, RefreshCw, Search, Tv, User } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -27,6 +27,94 @@ function airDate(episode: Episode): string {
 
 function seasonLabel(number: number): string {
   return number === 0 ? "Specials" : `Season ${number}`;
+}
+
+type MonitorChoice = NonNullable<components["schemas"]["AddSeriesRequest"]["monitor"]>;
+
+const MONITOR_CHOICES: { value: MonitorChoice; label: string }[] = [
+  { value: "all", label: "All episodes" },
+  { value: "future", label: "Future episodes" },
+  { value: "missing", label: "Missing episodes" },
+  { value: "existing", label: "Existing episodes" },
+  { value: "recent", label: "Recent episodes" },
+  { value: "pilot", label: "Pilot episode" },
+  { value: "first_season", label: "First season" },
+  { value: "last_season", label: "Last season" },
+  { value: "none", label: "None" },
+];
+
+/** Sonarr's series edit: re-apply a monitor choice to what is already here, and give the series its own quality profile. */
+function SeriesEdit({ seriesId, categoryId, profileId, onChanged }: { seriesId: number; categoryId: string; profileId: number | undefined; onChanged: () => void }) {
+  const [choice, setChoice] = useState<MonitorChoice>("all");
+  const [specials, setSpecials] = useState(false);
+  const [profile, setProfile] = useState(profileId ?? 0);
+  const profiles = useQuery({
+    queryKey: ["qualityprofiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const query = { category_id: Number(categoryId) };
+  const apply = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PUT("/series/{id}/monitoring", { params: { path: { id: seriesId }, query }, body: { option: choice, specials } });
+      if (error) throw error;
+    },
+    onSuccess: onChanged,
+  });
+  const saveProfile = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PUT("/series/{id}/quality", {
+        params: { path: { id: seriesId }, query },
+        body: { quality_profile_id: profile || null },
+      });
+      if (error) throw error;
+    },
+    onSuccess: onChanged,
+  });
+  const select = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs";
+  return (
+    <div className="flex max-w-xl flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-24 text-ink-muted">Monitor</span>
+        <select value={choice} onChange={(event) => setChoice(event.target.value as MonitorChoice)} className={select}>
+          {MONITOR_CHOICES.map((entry) => (
+            <option key={entry.value} value={entry.value}>
+              {entry.label}
+            </option>
+          ))}
+        </select>
+        <label className="flex items-center gap-1 text-ink-muted">
+          <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> specials
+        </label>
+        <button type="button" disabled={apply.isPending} onClick={() => apply.mutate()} className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50">
+          Apply
+        </button>
+        {apply.isError && <span className="text-danger">That could not be applied.</span>}
+        {apply.isSuccess && <span className="text-ok">Applied.</span>}
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="w-24 text-ink-muted">Quality</span>
+        <select value={profile} onChange={(event) => setProfile(Number(event.target.value))} className={select}>
+          <option value={0}>The library&apos;s default</option>
+          {(profiles.data ?? [])
+            .filter((entry) => entry.media_type === "tv")
+            .map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.name}
+              </option>
+            ))}
+        </select>
+        <button type="button" disabled={saveProfile.isPending} onClick={() => saveProfile.mutate()} className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50">
+          Save
+        </button>
+        {saveProfile.isError && <span className="text-danger">That could not be saved.</span>}
+        {saveProfile.isSuccess && <span className="text-ok">Saved.</span>}
+      </div>
+    </div>
+  );
 }
 
 function PersonLink({ credit, categoryId }: { credit: Credit; categoryId: string }) {
@@ -264,6 +352,7 @@ export function SeriesPage() {
     onSuccess: changed,
   });
 
+  const [editing, setEditing] = useState(false);
   const [dialogSeason, setDialogSeason] = useState<number | null>(null);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const grab = useMutation({
@@ -337,6 +426,16 @@ export function SeriesPage() {
             {canManage && (
               <button
                 type="button"
+                aria-expanded={editing}
+                onClick={() => setEditing(!editing)}
+                className="flex items-center gap-1 rounded-md border border-border-subtle px-2.5 py-1 text-ink-muted hover:text-ink"
+              >
+                <Pencil aria-hidden className="size-3.5" /> Edit
+              </button>
+            )}
+            {canManage && (
+              <button
+                type="button"
                 disabled={refresh.isPending}
                 onClick={() => refresh.mutate()}
                 className="flex items-center gap-1 rounded-md border border-border-subtle px-2.5 py-1 text-ink-muted enabled:hover:text-ink disabled:opacity-50"
@@ -355,6 +454,7 @@ export function SeriesPage() {
           </div>
         </div>
       </div>
+      {editing && canManage && <SeriesEdit seriesId={Number(seriesId)} categoryId={categoryId} profileId={series.quality_profile_id} onChanged={changed} />}
       <CastStrip credits={credits} categoryId={categoryId} />
       {seasons.map((season) => (
         <SeasonSection

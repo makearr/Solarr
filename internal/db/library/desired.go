@@ -265,6 +265,11 @@ func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, mon
 			if item.SatisfactionKind != "SET" {
 				continue
 			}
+			if item.MediaRef != "" && partInScope(part.MediaRef, item.MediaRef) {
+				if err := syncSeasonMonitoring(ctx, queries, workID, item); err != nil {
+					return err
+				}
+			}
 			if err := recomputeAlbumTx(ctx, queries, item.ID, workID); err != nil {
 				return err
 			}
@@ -275,6 +280,23 @@ func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, mon
 		return fmt.Errorf("library: set part monitored: %w", err)
 	}
 	return nil
+}
+
+// syncSeasonMonitoring makes a season item monitored exactly when one of its episodes is, so wanting one episode of an
+// unmonitored season is not silently ignored.
+func syncSeasonMonitoring(ctx context.Context, queries *librarydb.Queries, workID int64, item librarydb.DesiredItem) error {
+	parts, err := queries.ListWorkParts(ctx, workID)
+	if err != nil {
+		return fmt.Errorf("list parts: %w", err)
+	}
+	wanted := false
+	for _, part := range parts {
+		wanted = wanted || (part.Monitored == 1 && partInScope(part.MediaRef, item.MediaRef))
+	}
+	if (item.Monitored == 1) == wanted {
+		return nil
+	}
+	return queries.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{Monitored: boolToInt(wanted), ID: item.ID})
 }
 
 // AllParts answers every part of a work, covered or not: what a replacement file is aligned against.

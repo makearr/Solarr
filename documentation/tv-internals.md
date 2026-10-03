@@ -50,6 +50,15 @@ person page is first opened. Networks are `organisation` rows (`kind` network, l
 `work_organisation`; keywords are `work_classification` rows. A refresh adds and updates credits and never removes one.
 The People and Networks levels read these through `library.SeriesReader` (`/series/people`, `/series/networks`).
 
+## Monitoring a held series (`Service.ApplyMonitor`, Season pass)
+
+`PUT /series/{id}/monitoring` re-applies one of Sonarr's nine monitor choices to what is already held: every episode becomes
+monitored or not as the choice says ("existing" wants the episodes with a file, "missing" those without) and each season item
+follows (`Desired.ApplyPartMonitoring`, one transaction per season). A season item is monitored exactly when one of its
+episodes is, also when one episode is toggled by hand, so wanting a single episode of an unmonitored season reaches the
+planner. `PUT /series/{id}/quality` gives every season of a series its own quality profile (the album precedent,
+`desired_profile_override`). The Season pass level is a grid of series and season chips over these.
+
 ## Following people and networks (`internal/media/tv/follow_job.go`)
 
 A person (by role) or a network can be followed from its page: a `subscription` row (media type `tv`, roles, the library it adds

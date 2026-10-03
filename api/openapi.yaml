@@ -5248,6 +5248,75 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
+  /series/{id}/monitoring:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: applySeriesMonitoring
+      tags: [series]
+      summary: Re-apply one of Sonarr's monitor choices to a series the library holds.
+      description: >-
+        Each episode becomes monitored or not as the choice says, and every season follows. Existing wants the episodes
+        that have a file, Missing those that do not.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [option]
+              properties:
+                option:
+                  type: string
+                  enum: [all, future, missing, existing, recent, pilot, first_season, last_season, none]
+                specials: { type: boolean, default: false }
+      responses:
+        "204": { description: Applied. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}/quality:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setSeriesQuality
+      tags: [series]
+      summary: Give the series a quality profile of its own, or return it to the library's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quality_profile_id:
+                  type: integer
+                  format: int64
+                  nullable: true
+                  description: A TV quality profile; null or absent returns the series to the library's.
+      responses:
+        "204": { description: Set. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /series/{id}/episodes/{part_id}/monitored:
     parameters:
       - name: category_id
@@ -7998,6 +8067,15 @@ components:
         genres:
           type: array
           items: { type: string }
+        season_states:
+          type: array
+          description: Each season with episodes, specials included as season 0, and whether it is monitored (Season Pass).
+          items:
+            type: object
+            required: [number, monitored]
+            properties:
+              number: { type: integer }
+              monitored: { type: boolean }
         added_at: { type: integer, format: int64, description: Unix seconds. }
 
     SeriesPage:

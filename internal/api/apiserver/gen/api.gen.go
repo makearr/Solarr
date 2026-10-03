@@ -813,6 +813,19 @@ const (
 	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
 )
 
+// Defines values for ApplySeriesMonitoringJSONBodyOption.
+const (
+	ApplySeriesMonitoringJSONBodyOptionAll         ApplySeriesMonitoringJSONBodyOption = "all"
+	ApplySeriesMonitoringJSONBodyOptionExisting    ApplySeriesMonitoringJSONBodyOption = "existing"
+	ApplySeriesMonitoringJSONBodyOptionFirstSeason ApplySeriesMonitoringJSONBodyOption = "first_season"
+	ApplySeriesMonitoringJSONBodyOptionFuture      ApplySeriesMonitoringJSONBodyOption = "future"
+	ApplySeriesMonitoringJSONBodyOptionLastSeason  ApplySeriesMonitoringJSONBodyOption = "last_season"
+	ApplySeriesMonitoringJSONBodyOptionMissing     ApplySeriesMonitoringJSONBodyOption = "missing"
+	ApplySeriesMonitoringJSONBodyOptionNone        ApplySeriesMonitoringJSONBodyOption = "none"
+	ApplySeriesMonitoringJSONBodyOptionPilot       ApplySeriesMonitoringJSONBodyOption = "pilot"
+	ApplySeriesMonitoringJSONBodyOptionRecent      ApplySeriesMonitoringJSONBodyOption = "recent"
+)
+
 // Defines values for ListLogsParamsLevel.
 const (
 	ListLogsParamsLevelDebug ListLogsParamsLevel = "debug"
@@ -3552,6 +3565,12 @@ type SeriesSummary struct {
 	PosterUrl        *string    `json:"poster_url,omitempty"`
 	QualityProfileId *int64     `json:"quality_profile_id,omitempty"`
 
+	// SeasonStates Each season with episodes, specials included as season 0, and whether it is monitored (Season Pass).
+	SeasonStates *[]struct {
+		Monitored bool `json:"monitored"`
+		Number    int  `json:"number"`
+	} `json:"season_states,omitempty"`
+
 	// Seasons Seasons with episodes
 	Seasons   int                  `json:"seasons"`
 	SortTitle string               `json:"sort_title"`
@@ -4443,6 +4462,31 @@ type SetEpisodeMonitoredParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
+// ApplySeriesMonitoringJSONBody defines parameters for ApplySeriesMonitoring.
+type ApplySeriesMonitoringJSONBody struct {
+	Option   ApplySeriesMonitoringJSONBodyOption `json:"option"`
+	Specials *bool                               `json:"specials,omitempty"`
+}
+
+// ApplySeriesMonitoringParams defines parameters for ApplySeriesMonitoring.
+type ApplySeriesMonitoringParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// ApplySeriesMonitoringJSONBodyOption defines parameters for ApplySeriesMonitoring.
+type ApplySeriesMonitoringJSONBodyOption string
+
+// SetSeriesQualityJSONBody defines parameters for SetSeriesQuality.
+type SetSeriesQualityJSONBody struct {
+	// QualityProfileId A TV quality profile; null or absent returns the series to the library's.
+	QualityProfileId *int64 `json:"quality_profile_id"`
+}
+
+// SetSeriesQualityParams defines parameters for SetSeriesQuality.
+type SetSeriesQualityParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // RefreshSeriesParams defines parameters for RefreshSeries.
 type RefreshSeriesParams struct {
 	// CategoryId The library the series is in; access is checked against it.
@@ -4869,6 +4913,12 @@ type FollowSeriesPersonJSONRequestBody = SeriesFollowRequest
 
 // SetEpisodeMonitoredJSONRequestBody defines body for SetEpisodeMonitored for application/json ContentType.
 type SetEpisodeMonitoredJSONRequestBody SetEpisodeMonitoredJSONBody
+
+// ApplySeriesMonitoringJSONRequestBody defines body for ApplySeriesMonitoring for application/json ContentType.
+type ApplySeriesMonitoringJSONRequestBody ApplySeriesMonitoringJSONBody
+
+// SetSeriesQualityJSONRequestBody defines body for SetSeriesQuality for application/json ContentType.
+type SetSeriesQualityJSONRequestBody SetSeriesQualityJSONBody
 
 // SetSeasonMonitoredJSONRequestBody defines body for SetSeasonMonitored for application/json ContentType.
 type SetSeasonMonitoredJSONRequestBody SetSeasonMonitoredJSONBody
@@ -5478,6 +5528,12 @@ type ServerInterface interface {
 	// Monitor or unmonitor one episode.
 	// (PUT /series/{id}/episodes/{part_id}/monitored)
 	SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64, params SetEpisodeMonitoredParams)
+	// Re-apply one of Sonarr's monitor choices to a series the library holds.
+	// (PUT /series/{id}/monitoring)
+	ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params ApplySeriesMonitoringParams)
+	// Give the series a quality profile of its own, or return it to the library's.
+	// (PUT /series/{id}/quality)
+	SetSeriesQuality(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesQualityParams)
 	// Re-read the series from the metadata sources. Never changes monitoring.
 	// (POST /series/{id}/refresh)
 	RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams)
@@ -6741,6 +6797,18 @@ func (_ Unimplemented) GetSeries(w http.ResponseWriter, r *http.Request, id int6
 // Monitor or unmonitor one episode.
 // (PUT /series/{id}/episodes/{part_id}/monitored)
 func (_ Unimplemented) SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64, params SetEpisodeMonitoredParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Re-apply one of Sonarr's monitor choices to a series the library holds.
+// (PUT /series/{id}/monitoring)
+func (_ Unimplemented) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params ApplySeriesMonitoringParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Give the series a quality profile of its own, or return it to the library's.
+// (PUT /series/{id}/quality)
+func (_ Unimplemented) SetSeriesQuality(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesQualityParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13077,6 +13145,108 @@ func (siw *ServerInterfaceWrapper) SetEpisodeMonitored(w http.ResponseWriter, r 
 	handler.ServeHTTP(w, r)
 }
 
+// ApplySeriesMonitoring operation middleware
+func (siw *ServerInterfaceWrapper) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ApplySeriesMonitoringParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ApplySeriesMonitoring(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetSeriesQuality operation middleware
+func (siw *ServerInterfaceWrapper) SetSeriesQuality(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetSeriesQualityParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSeriesQuality(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RefreshSeries operation middleware
 func (siw *ServerInterfaceWrapper) RefreshSeries(w http.ResponseWriter, r *http.Request) {
 
@@ -15567,6 +15737,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/episodes/{part_id}/monitored", wrapper.SetEpisodeMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/{id}/monitoring", wrapper.ApplySeriesMonitoring)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/{id}/quality", wrapper.SetSeriesQuality)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/series/{id}/refresh", wrapper.RefreshSeries)

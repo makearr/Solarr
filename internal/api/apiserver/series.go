@@ -18,6 +18,10 @@ import (
 // ErrNotBuiltForMediaType is a feature the media type has no engine for yet; answered as 409 with the reason.
 var ErrNotBuiltForMediaType = errors.New("apiserver: not built for this media type")
 
+// ErrInvalidChoice is a value the request named that the series cannot take (an unknown monitor option, a profile of
+// another media type); answered as 400 with the reason.
+var ErrInvalidChoice = errors.New("apiserver: invalid choice")
+
 // ErrSeriesNotFound is a series id that is not in the library asked about; answered as 404.
 var ErrSeriesNotFound = errors.New("apiserver: series not found")
 
@@ -35,6 +39,10 @@ type SeriesCatalog interface {
 	Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error)
 	SetEpisodeMonitored(ctx context.Context, categoryID, seriesID, partID int64, monitored bool) error
 	SetSeasonMonitored(ctx context.Context, categoryID, seriesID int64, season int, monitored bool) error
+	// ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.
+	ApplyMonitor(ctx context.Context, categoryID, seriesID int64, option string, specials bool) error
+	// SetProfile gives the series a quality profile of its own, or the library's when nil.
+	SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error
 	// Wanted returns up to limit+1 missing episodes after the cursor (date, id), newest first.
 	Wanted(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.WantedEpisode, error)
 }
@@ -345,4 +353,67 @@ func (s *Server) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, para
 		page.NextCursor = &next
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
+}
+
+func (s *Server) routeApplySeriesMonitoring(w http.ResponseWriter, r *http.Request) {
+	id, category, ok := s.seriesPath(w, r)
+	if !ok {
+		return
+	}
+	s.applySeriesMonitoring(w, r, id, category)
+}
+
+// ApplySeriesMonitoring satisfies the generated interface; routeApplySeriesMonitoring is what is mounted.
+func (s *Server) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params gen.ApplySeriesMonitoringParams) {
+	s.applySeriesMonitoring(w, r, id, params.CategoryId)
+}
+
+func (s *Server) applySeriesMonitoring(w http.ResponseWriter, r *http.Request, id, categoryID int64) {
+	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
+		return
+	}
+	var body struct {
+		Option   string `json:"option"`
+		Specials bool   `json:"specials"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || body.Option == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "option is required")
+		return
+	}
+	if err := s.series.ApplyMonitor(r.Context(), categoryID, id, body.Option, body.Specials); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) routeSetSeriesQuality(w http.ResponseWriter, r *http.Request) {
+	id, category, ok := s.seriesPath(w, r)
+	if !ok {
+		return
+	}
+	s.setSeriesQuality(w, r, id, category)
+}
+
+// SetSeriesQuality satisfies the generated interface; routeSetSeriesQuality is what is mounted.
+func (s *Server) SetSeriesQuality(w http.ResponseWriter, r *http.Request, id int64, params gen.SetSeriesQualityParams) {
+	s.setSeriesQuality(w, r, id, params.CategoryId)
+}
+
+func (s *Server) setSeriesQuality(w http.ResponseWriter, r *http.Request, id, categoryID int64) {
+	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
+		return
+	}
+	var body struct {
+		QualityProfileID *int64 `json:"quality_profile_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+		return
+	}
+	if err := s.series.SetProfile(r.Context(), categoryID, id, body.QualityProfileID); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

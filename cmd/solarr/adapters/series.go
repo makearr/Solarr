@@ -199,6 +199,31 @@ func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) 
 	return gen.AddSeriesResult{SeriesId: result.WorkID, Created: false, Episodes: result.Episodes, Seasons: result.Seasons}, nil
 }
 
+// ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.
+func (c SeriesCatalog) ApplyMonitor(ctx context.Context, categoryID, seriesID int64, option string, specials bool) error {
+	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
+		return translateSeriesError(err)
+	}
+	if !tv.MonitorOption(option).Valid() {
+		return fmt.Errorf("%w: unknown monitor option %q", apiserver.ErrInvalidChoice, option)
+	}
+	return c.Service.ApplyMonitor(ctx, categoryID, seriesID, tv.MonitorOption(option), specials)
+}
+
+// SetProfile gives the series a quality profile of its own, or the library's when nil.
+func (c SeriesCatalog) SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error {
+	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
+		return translateSeriesError(err)
+	}
+	if profileID != nil {
+		profile, found := c.Categories.Cache.Snapshot().QualityProfile(*profileID)
+		if !found || profile.MediaType != "tv" {
+			return fmt.Errorf("%w: quality profile %d is not a TV profile", apiserver.ErrInvalidChoice, *profileID)
+		}
+	}
+	return c.Service.SetProfile(ctx, categoryID, seriesID, profileID)
+}
+
 // SetEpisodeMonitored monitors or unmonitors one episode of a series in the library.
 func (c SeriesCatalog) SetEpisodeMonitored(ctx context.Context, categoryID, seriesID, partID int64, monitored bool) error {
 	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
@@ -237,11 +262,20 @@ func summaryView(row library.SeriesSummary) gen.SeriesSummary {
 	view := gen.SeriesSummary{
 		Id: row.WorkID, Title: row.Title, SortTitle: row.SortTitle, Monitored: row.Monitored, Counts: countsView(row.Counts), AddedAt: row.AddedAt,
 	}
+	states := make([]struct {
+		Monitored bool `json:"monitored"`
+		Number    int  `json:"number"`
+	}, 0, len(row.Seasons))
 	for _, season := range row.Seasons {
 		if season.Number > 0 {
 			view.Seasons++
 		}
+		states = append(states, struct {
+			Monitored bool `json:"monitored"`
+			Number    int  `json:"number"`
+		}{Monitored: season.Monitored, Number: season.Number})
 	}
+	view.SeasonStates = &states
 	if row.Year > 0 {
 		view.Year = &row.Year
 	}

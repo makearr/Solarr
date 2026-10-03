@@ -86,8 +86,10 @@ GROUP BY p.work_id;
 
 -- The season items of the given works, with their counts.
 -- name: SeasonItemsForWorks :many
-SELECT d.id, d.work_id, d.media_ref, d.monitored, d.profile_id, d.required_count, d.present_count, d.state
+SELECT d.id, d.work_id, d.media_ref, d.monitored, CAST(COALESCE(o.profile_id, d.profile_id) AS INTEGER) AS profile_id,
+       d.required_count, d.present_count, d.state
 FROM desired_item d
+LEFT JOIN desired_profile_override o ON o.desired_item_id = d.id
 WHERE d.work_id IN (sqlc.slice(work_ids)) AND d.satisfaction_kind = 'SET' AND d.media_ref <> ''
 ORDER BY d.work_id, d.media_sort_key;
 

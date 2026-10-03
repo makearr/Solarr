@@ -264,3 +264,42 @@ func TestRefreshMonitorsNewEpisodesByTheirSeasonAndNewSeasonsWhenTheSeriesIsWant
 		t.Errorf("episodes = %d, want the original six and the four new ones", len(detail.Episodes))
 	}
 }
+
+func TestApplyMonitorReappliesSonarrsChoicesToAHeldSeries(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	monitored := func() (map[string]int64, map[string]bool) {
+		parts := partMonitoring(t, opened, added.WorkID)
+		seasons, err := service.Reader.SeasonMonitoring(t.Context(), added.WorkID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		bySeason := map[string]bool{}
+		for season, on := range seasons {
+			bySeason[tv.SeasonRef(season)] = on
+		}
+		return parts, bySeason
+	}
+
+	if err := service.ApplyMonitor(t.Context(), 3, added.WorkID, tv.MonitorLastSeason, false); err != nil {
+		t.Fatal(err)
+	}
+	parts, seasons := monitored()
+	if parts["s01:e01"] != 0 || parts["s02:e01"] != 1 || parts["s02:e03"] != 1 || seasons["s01"] || !seasons["s02"] {
+		t.Errorf("last season: parts = %v, seasons = %v", parts, seasons)
+	}
+	if err := service.ApplyMonitor(t.Context(), 3, added.WorkID, tv.MonitorNone, false); err != nil {
+		t.Fatal(err)
+	}
+	parts, seasons = monitored()
+	if parts["s02:e01"] != 0 || seasons["s02"] {
+		t.Errorf("none: parts = %v, seasons = %v", parts, seasons)
+	}
+	if err := service.ApplyMonitor(t.Context(), 3, added.WorkID, "sometimes", false); err == nil {
+		t.Error("an unknown option was accepted")
+	}
+}

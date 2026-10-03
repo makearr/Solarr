@@ -31,6 +31,7 @@ import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { AddSeries } from "./AddSeries";
+import { SeasonPass } from "./SeasonPass";
 import { SeriesIndex } from "./SeriesIndex";
 import { SeriesPage } from "./SeriesPage";
 import { SeriesWanted } from "./SeriesWanted";
@@ -93,6 +94,7 @@ function LevelForLibrary() {
     if (level === "series") return <SeriesIndex />;
     if (level === "people") return <TVPeople />;
     if (level === "networks") return <TVNetworks />;
+    if (level === "seasonpass") return <SeasonPass />;
   }
   return <LibraryLevelList />;
 }
