@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { LayoutGrid, List, Plus, Rows3, Search, Tv } from "lucide-react";
+import * as Dialog from "@radix-ui/react-dialog";
+import { CheckSquare, LayoutGrid, List, Plus, Rows3, Search, Tv } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -157,6 +158,7 @@ const TABLE_COLUMNS: { header: string; sort?: SortKey; width: string; cell: (ser
 ];
 
 const TABLE_GRID = TABLE_COLUMNS.map((column) => column.width).join(" ");
+const TABLE_GRID_SELECTING = `2rem ${TABLE_GRID}`;
 
 /** A TV library's Series level: every series as a poster, with Sonarr's filters and sorts applied in the browser. */
 export function SeriesIndex() {
@@ -172,6 +174,8 @@ export function SeriesIndex() {
   const [genre, setGenre] = useState("");
   const [profile, setProfile] = useState(0);
   const [view, setView] = usePreference<ViewKey>(`series.view.${categoryId}`, "posters");
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
 
   const pages = useInfiniteQuery({
     queryKey: ["series", categoryId],
@@ -347,6 +351,20 @@ export function SeriesIndex() {
         <label className="flex items-center gap-1 text-xs text-ink-muted">
           <input type="checkbox" checked={onlyMissing} onChange={(event) => setOnlyMissing(event.target.checked)} /> Missing episodes
         </label>
+        {library?.permission === "manage" && (
+          <button
+            type="button"
+            aria-pressed={selecting}
+            onClick={() => {
+              setSelecting(!selecting);
+              setSelected(new Set());
+              if (!selecting) setView("table");
+            }}
+            className={`flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${selecting ? "border-accent bg-accent/10 text-ink" : "border-border-subtle text-ink-muted hover:text-ink"}`}
+          >
+            <CheckSquare aria-hidden className="size-3.5" /> Edit several
+          </button>
+        )}
         <Link
           to="/library/$categoryId/discover"
           params={{ categoryId }}
@@ -355,6 +373,17 @@ export function SeriesIndex() {
           <Plus aria-hidden className="size-3.5" /> Add series
         </Link>
       </div>
+      {selecting && (
+        <SeriesBulkBar
+          categoryId={categoryId}
+          ids={[...selected]}
+          profiles={profileNames.data ?? []}
+          onDone={() => {
+            setSelected(new Set());
+            void queryClient.invalidateQueries({ queryKey: ["series", categoryId] });
+          }}
+        />
+      )}
       {(exclusions.data ?? []).length > 0 && (
         <details className="border-b border-border-subtle px-4 py-1.5 text-xs text-ink-muted">
           <summary className="cursor-pointer">Deleted series that are not added back ({exclusions.data?.length})</summary>
@@ -386,8 +415,16 @@ export function SeriesIndex() {
           <div
             role="row"
             className="sticky top-0 z-10 grid items-center gap-2 border-b border-border-subtle bg-canvas px-2 py-1.5 text-xs font-medium text-ink-muted"
-            style={{ gridTemplateColumns: TABLE_GRID }}
+            style={{ gridTemplateColumns: selecting ? TABLE_GRID_SELECTING : TABLE_GRID }}
           >
+            {selecting && (
+              <input
+                type="checkbox"
+                aria-label="Select every series shown"
+                checked={shown.length > 0 && shown.every((series) => selected.has(series.id))}
+                onChange={(event) => setSelected(event.target.checked ? new Set(shown.map((series) => series.id)) : new Set())}
+              />
+            )}
             {TABLE_COLUMNS.map((column) =>
               column.sort ? (
                 <button key={column.header} type="button" onClick={() => setSort(column.sort as SortKey)} className="text-left hover:text-ink">
@@ -423,19 +460,34 @@ export function SeriesIndex() {
                       <OverviewRow series={series} categoryId={categoryId} />
                     </div>
                   ) : (
-                    <Link
+                    <div
                       key={series.id}
-                      to="/library/$categoryId/series/$seriesId"
-                      params={{ categoryId, seriesId: String(series.id) }}
                       className="grid items-center gap-2 border-b border-border-subtle px-2 text-xs hover:bg-surface"
-                      style={{ gridTemplateColumns: TABLE_GRID }}
+                      style={{ gridTemplateColumns: selecting ? TABLE_GRID_SELECTING : TABLE_GRID }}
                     >
-                      {TABLE_COLUMNS.map((column) => (
-                        <span key={column.header} className="flex min-w-0 items-center truncate">
-                          {column.cell(series, (profileNames.data ?? []).find((entry) => entry.id === series.quality_profile_id)?.name ?? "")}
-                        </span>
-                      ))}
-                    </Link>
+                      {selecting && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${series.title}`}
+                          checked={selected.has(series.id)}
+                          onChange={(event) =>
+                            setSelected((current) => {
+                              const next = new Set(current);
+                              if (event.target.checked) next.add(series.id);
+                              else next.delete(series.id);
+                              return next;
+                            })
+                          }
+                        />
+                      )}
+                      <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(series.id) }} className="contents">
+                        {TABLE_COLUMNS.map((column) => (
+                          <span key={column.header} className="flex min-w-0 items-center truncate">
+                            {column.cell(series, (profileNames.data ?? []).find((entry) => entry.id === series.quality_profile_id)?.name ?? "")}
+                          </span>
+                        ))}
+                      </Link>
+                    </div>
                   ),
                 )}
               </div>
@@ -443,6 +495,135 @@ export function SeriesIndex() {
           })}
         </div>
       </div>
+    </div>
+  );
+}
+
+type BulkAction =
+  | { kind: "monitor"; option: string }
+  | { kind: "profile"; profileId: number | null }
+  | { kind: "delete"; files: boolean; exclude: boolean };
+
+const MONITOR_OPTIONS: [string, string][] = [
+  ["all", "Every episode"],
+  ["future", "Episodes that have not aired yet"],
+  ["missing", "Missing episodes"],
+  ["existing", "Episodes on disk"],
+  ["first_season", "The first season"],
+  ["last_season", "The last season"],
+  ["none", "Nothing"],
+];
+
+/** Sonarr's series editor: act on every ticked series after a confirmation that says what will happen. */
+function SeriesBulkBar({ categoryId, ids, profiles, onDone }: { categoryId: string; ids: number[]; profiles: { id: number; name: string }[]; onDone: () => void }) {
+  const [option, setOption] = useState("existing");
+  const [profile, setProfile] = useState("");
+  const [files, setFiles] = useState(false);
+  const [exclude, setExclude] = useState(true);
+  const [pending, setPending] = useState<BulkAction | null>(null);
+  const [progress, setProgress] = useState<{ done: number; failed: number } | null>(null);
+
+  const run = useMutation({
+    mutationFn: async (action: BulkAction) => {
+      const query = { category_id: Number(categoryId) };
+      let done = 0;
+      let failed = 0;
+      setProgress({ done, failed });
+      for (const id of ids) {
+        let error: unknown;
+        if (action.kind === "monitor") {
+          ({ error } = await api.PUT("/series/{id}/monitoring", { params: { path: { id }, query }, body: { option: action.option as never } }));
+        } else if (action.kind === "profile") {
+          ({ error } = await api.PUT("/series/{id}/quality", { params: { path: { id }, query }, body: { quality_profile_id: action.profileId } }));
+        } else {
+          ({ error } = await api.DELETE("/series/{id}", { params: { path: { id }, query: { ...query, delete_files: action.files, exclude: action.exclude } } }));
+        }
+        if (error) failed++;
+        else done++;
+        setProgress({ done, failed });
+      }
+    },
+    onSuccess: () => {
+      setPending(null);
+      onDone();
+    },
+  });
+
+  const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink";
+  const button = "rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted enabled:hover:text-ink disabled:opacity-50";
+  const description =
+    pending?.kind === "monitor"
+      ? `Monitor ${MONITOR_OPTIONS.find(([key]) => key === pending.option)?.[1].toLowerCase()} of ${ids.length} series. Episodes already chosen by hand are re-decided.`
+      : pending?.kind === "profile"
+        ? `${ids.length} series ${pending.profileId === null ? "go back to the library's quality profiles" : `get the quality profile ${profiles.find((entry) => entry.id === pending.profileId)?.name}`}.`
+        : pending?.kind === "delete"
+          ? `${ids.length} series are removed from Solarr. ${pending.files ? "Their files move to the recycle bin." : "Their files stay where they are."} ${pending.exclude ? "A scan will not add them back." : "A scan may add them back."}`
+          : "";
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border-subtle bg-surface px-4 py-2 text-xs">
+      <span className="font-medium">{ids.length} selected</span>
+      <label className="flex items-center gap-1">
+        Monitor
+        <select value={option} onChange={(event) => setOption(event.target.value)} className={control}>
+          {MONITOR_OPTIONS.map(([key, label]) => (
+            <option key={key} value={key}>
+              {label}
+            </option>
+          ))}
+        </select>
+        <button type="button" disabled={ids.length === 0} onClick={() => setPending({ kind: "monitor", option })} className={button}>
+          Apply
+        </button>
+      </label>
+      <label className="flex items-center gap-1">
+        Quality profile
+        <select value={profile} onChange={(event) => setProfile(event.target.value)} className={control}>
+          <option value="">The library's own</option>
+          {profiles.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
+            </option>
+          ))}
+        </select>
+        <button type="button" disabled={ids.length === 0} onClick={() => setPending({ kind: "profile", profileId: profile === "" ? null : Number(profile) })} className={button}>
+          Apply
+        </button>
+      </label>
+      <span className="flex items-center gap-2">
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={files} onChange={(event) => setFiles(event.target.checked)} /> files to the recycle bin
+        </label>
+        <label className="flex items-center gap-1">
+          <input type="checkbox" checked={exclude} onChange={(event) => setExclude(event.target.checked)} /> do not add back
+        </label>
+        <button type="button" disabled={ids.length === 0} onClick={() => setPending({ kind: "delete", files, exclude })} className={`${button} text-danger`}>
+          Delete…
+        </button>
+      </span>
+      <Dialog.Root open={pending !== null} onOpenChange={(open) => !open && !run.isPending && setPending(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 flex w-[min(30rem,92vw)] -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-lg border border-border-subtle bg-canvas p-4">
+            <Dialog.Title className="text-sm font-medium">Change {ids.length} series?</Dialog.Title>
+            <Dialog.Description className="text-xs text-ink-muted">{description}</Dialog.Description>
+            {progress && run.isPending && (
+              <p className="text-xs text-ink-muted">
+                {progress.done + progress.failed} of {ids.length} done{progress.failed > 0 ? `, ${progress.failed} failed` : ""}.
+              </p>
+            )}
+            {run.isError && <p className="text-xs text-danger">That could not be done.</p>}
+            <div className="flex justify-end gap-2">
+              <Dialog.Close disabled={run.isPending} className={button}>
+                Cancel
+              </Dialog.Close>
+              <button type="button" disabled={run.isPending || pending === null} onClick={() => pending && run.mutate(pending)} className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50">
+                {run.isPending ? "Working…" : "Yes, do it"}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

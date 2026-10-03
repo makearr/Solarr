@@ -125,6 +125,8 @@ A TV library's **Quality** page takes a **target** of picture quality (resolutio
 on "any" is free). Releases that match it are ranked first inside the profile's own limits, and each episode on the series page shows what
 the probe measured of its file (resolution, codec, HDR, audio, size, subtitles) and whether it meets the target. Subtitles count from the
 file's own tracks and from sidecar files beside it (`Show - S01E01.eng.srt`); a language profile can require or prefer a subtitle language.
+**Edit several** on the Series index (manage access) switches to the table with a checkbox per series; the bar above applies a monitor
+choice or a quality profile to every ticked series, or deletes them, after a confirmation that says what will happen.
 **Wanted → Cutoff unmet** (TV) lists the episodes on disk whose measured file is below the library's target or cutoff, each with an
 interactive search for that one episode; it needs a target or cutoff on the Quality page.
 The TV **Statistics** page breaks the library down by resolution, codec, HDR and audio, shows size and bitrate per hour of picture,
