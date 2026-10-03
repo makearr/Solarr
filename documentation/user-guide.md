@@ -107,6 +107,10 @@ ticked so a scan, a follow or an import list leaves it out (the Series index lis
 **Edit → Series type** shows what was detected (anime, daily or standard) and lets you change it; anime seasons are also searched
 by absolute episode number. Posters and photos are fetched once and served by Solarr itself.
 
+A TV file a scan could not place waits under **Unidentified**: open it, search the series, give the season and episodes when
+the file name does not say ("3", "2, 3" or "4-6"), and it is placed for good; ticking "also place the other files in this
+folder" places each by its own name.
+
 **Quality profiles** for TV are edited with a form (Quality profiles in the sidebar): rank resolution, source, codec, HDR and
 audio best first, set the lowest and highest resolution accepted, name codecs never to accept, require an audio language, and
 list **preferred release groups** that rank above an otherwise equal release.
