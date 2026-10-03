@@ -121,6 +121,14 @@ episode numbers of its files when they clearly fit one series. **Settings → Me
 first one that holds a field (plot, genres, rating, artwork) supplies it; the default is open and fast first (Skyhook, TVmaze,
 TMDB, TheTVDB, AniList). Wikidata is listed there too: it recognises the same person in TV and music.
 
+A TV library's **Quality** page takes a **target** of picture quality (resolution, video codec, HDR, audio codec, file type; a part left
+on "any" is free). Releases that match it are ranked first inside the profile's own limits, and each episode on the series page shows what
+the probe measured of its file (resolution, codec, HDR, audio, size, subtitles) and whether it meets the target. Subtitles count from the
+file's own tracks and from sidecar files beside it (`Show - S01E01.eng.srt`); a language profile can require or prefer a subtitle language.
+The TV **Statistics** page breaks the library down by resolution, codec, HDR and audio, shows size and bitrate per hour of picture,
+the 20 biggest series and the 20 with most episodes missing. The probe reads video files in the background (a first pass over a large
+library takes hours); the figures fill in as it goes.
+
 **Follow** (on a person's or a network's page, with your TMDB key) adds their new series for you: a person by the roles you
 tick (acting, directing, writing, ...), a network for everything new it airs. At most five series per follow are added each
 time it runs, with the monitor choice you set; older series only if you ask for the back catalogue. The task **Refresh

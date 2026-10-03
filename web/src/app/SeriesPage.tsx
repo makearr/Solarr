@@ -17,6 +17,12 @@ type Credit = components["schemas"]["SeriesCredit"];
 
 type EpisodeFile = NonNullable<Episode["file"]>;
 
+/** "subs: en, de"; a subtitle file whose name gives no language is just "subs". */
+function subtitleChip(languages: string[]): string {
+  const known = languages.filter((language) => language !== "und");
+  return known.length > 0 ? `subs: ${known.join(", ")}` : "subs";
+}
+
 /** What the probe measured of an episode's file, as chips under its title; a part not measured yet is simply missing. */
 function EpisodeFileChips({ file }: { file: EpisodeFile }) {
   const chips = [
@@ -25,7 +31,7 @@ function EpisodeFileChips({ file }: { file: EpisodeFile }) {
     file.hdr && file.hdr !== "" ? file.hdr.toUpperCase() : undefined,
     file.audio_codec ? `${file.audio_codec.toUpperCase()}${file.audio_channels ? ` ${file.audio_channels}` : ""}` : undefined,
     formatBytes(file.size_bytes),
-    file.subtitles.length > 0 ? `subs: ${file.subtitles.join(", ")}` : undefined,
+    file.subtitles.length > 0 ? subtitleChip(file.subtitles) : undefined,
   ].filter(Boolean);
   return (
     <span className="mt-0.5 flex flex-wrap items-center gap-1 text-[0.6875rem] text-ink-muted">

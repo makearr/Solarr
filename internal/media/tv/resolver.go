@@ -35,6 +35,15 @@ type Resolver struct {
 	}
 }
 
+// releaseMarker is what a download's folder name has and a library's series folder does not.
+var releaseMarker = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:S\d{1,3}(?:E\d{1,4})?|\d{3,4}[pi]|WEB(?:-?DL|RIP)?|HDTV|BluRay|BDRip|DVDRip|x26[45]|H[. ]?26[45]|HEVC|AAC|DDP?\d|REPACK|PROPER|COMPLETE|NF|AMZN)(?:$|[\s._-])`)
+
+// looksLikeRelease says whether a folder is named like a release rather than a series: "Around the World in 80
+// Gardens" has a number in it and is not one.
+func looksLikeRelease(name string) bool {
+	return releaseMarker.MatchString(name) || (!strings.Contains(name, " ") && strings.Count(name, ".") >= 3)
+}
+
 // FolderLocks hands out one lock per key.
 type FolderLocks struct {
 	mu    sync.Mutex
@@ -111,7 +120,7 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 		}
 	}
 	// A download folder is a release name, not a series folder: its own title is what the series is called.
-	if info, ok := parsetv.Parse(name, c.Clock.Now()); ok && info.SeriesTitle != "" {
+	if info, ok := parsetv.Parse(name, c.Clock.Now()); ok && info.SeriesTitle != "" && looksLikeRelease(name) {
 		if info.Year > 0 {
 			name = info.TitleWithoutYear + " (" + strconv.Itoa(info.Year) + ")"
 		} else {
@@ -273,7 +282,7 @@ func titleMatches(candidates []Candidate, guess FolderGuess) []Candidate {
 			continue
 		}
 		switch {
-		case guess.Year == 0 || candidate.Year == guess.Year:
+		case guess.Year == 0 || yearsAgree(candidate, guess.Year):
 			exact = append(exact, candidate)
 		case candidate.Year == 0:
 			yearless = append(yearless, candidate)
@@ -283,6 +292,15 @@ func titleMatches(candidates []Candidate, guess FolderGuess) []Candidate {
 		return yearless
 	}
 	return exact
+}
+
+// yearsAgree is a candidate first aired within a year of the folder's, or one whose own title carries that year in
+// brackets: TheTVDB's first-aired date and a release's year differ by a year more often than they are wrong.
+func yearsAgree(candidate Candidate, year int) bool {
+	if candidate.Year-year >= -1 && candidate.Year-year <= 1 && candidate.Year != 0 {
+		return true
+	}
+	return strings.Contains(candidate.Title, "("+strconv.Itoa(year)+")")
 }
 
 // hasTitle reports whether a title of the candidate, with or without TheTVDB's qualifier, is the wanted one.

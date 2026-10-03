@@ -425,3 +425,19 @@ func TestScanBreaksATieBetweenTwoSeriesByTheEpisodeTitlesInTheFileNames(t *testi
 		t.Errorf("year = %d, want the series whose episode titles the files carry", list[0].Year)
 	}
 }
+
+func TestScanTakesASeriesWhoseFirstAiredYearIsOneOffTheFolders(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show (1998)", "1997-09-21", 3), showWith(2, "Example Show", "1969-02-08", 3)}},
+		"Example Show (1998)/Season 1/Example Show (1998) - S01E01.mkv")
+	if len(list) != 1 || list[0].Title != "Example Show (1998)" {
+		t.Fatalf("list = %+v, want the series aired in 1997 for a 1998 folder", list)
+	}
+}
+
+func TestScanDoesNotReadANumberInASeriesFolderNameAsAnEpisode(t *testing.T) {
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Opealw the Dofjm in 80 Saszulk", "2008-01-27", 3)}},
+		"Opealw the Dofjm in 80 Saszulk/Season 1/Opealw the Dofjm in 80 Saszulk - S01E01 - Mexico.mkv")
+	if len(list) != 1 || list[0].Title != "Opealw the Dofjm in 80 Saszulk" {
+		t.Fatalf("list = %+v, want the series named by its whole folder", list)
+	}
+}
