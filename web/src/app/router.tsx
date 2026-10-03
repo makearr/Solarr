@@ -34,6 +34,9 @@ import { AddSeries } from "./AddSeries";
 import { SeriesIndex } from "./SeriesIndex";
 import { SeriesPage } from "./SeriesPage";
 import { SeriesWanted } from "./SeriesWanted";
+import { TVNetwork, TVNetworks } from "./TVNetworks";
+import { TVPeople } from "./TVPeople";
+import { TVPerson } from "./TVPerson";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
 import { Duplicates } from "./Duplicates";
@@ -86,7 +89,12 @@ function WantedForLibrary() {
 function LevelForLibrary() {
   const { categoryId, level } = useParams({ strict: false }) as { categoryId: string; level: string };
   const library = useLibrary(categoryId);
-  return library?.media_type === "tv" && level === "series" ? <SeriesIndex /> : <LibraryLevelList />;
+  if (library?.media_type === "tv") {
+    if (level === "series") return <SeriesIndex />;
+    if (level === "people") return <TVPeople />;
+    if (level === "networks") return <TVNetworks />;
+  }
+  return <LibraryLevelList />;
 }
 
 const rootRoute = createRootRoute({
@@ -186,6 +194,8 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/series/$seriesId", component: SeriesPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/people/$personId", component: TVPerson }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/networks/$networkId", component: TVNetwork }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LevelForLibrary }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),

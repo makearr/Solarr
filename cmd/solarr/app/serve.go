@@ -615,6 +615,7 @@ func (p *process) startServer(ctx context.Context) error {
 		},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
+		SeriesPeople:      p.seriesPeople(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),

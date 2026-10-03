@@ -34,7 +34,7 @@ export function progressTone(series: Pick<Series, "counts" | "monitored">): { fi
   return { fill: "bg-accent", label: "Waiting for air dates" };
 }
 
-function SeriesTile({ series, categoryId }: { series: Series; categoryId: string }) {
+export function SeriesTile({ series, categoryId }: { series: Series; categoryId: string }) {
   const tone = progressTone(series);
   const percent = series.counts.monitored > 0 ? Math.min(100, (100 * series.counts.present) / series.counts.monitored) : 0;
   return (

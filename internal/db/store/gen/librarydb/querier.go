@@ -853,6 +853,7 @@ type Querier interface {
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
 	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
+	SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error
 	// A provider's picture of a person is kept in fields_json and never replaces one already there.
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error

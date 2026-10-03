@@ -63,6 +63,17 @@ type SeriesEpisode struct {
 	Absolute            string
 }
 
+// SeriesCreditRow is one person's credit on a series; PartID is the episode of an episode-scoped credit, 0 for the series.
+type SeriesCreditRow struct {
+	PersonID  int64
+	Name      string
+	ImageURL  string
+	Role      string
+	Character string
+	Order     int64
+	PartID    int64
+}
+
 // SeriesDetailRow is a series with every episode, alias and external id.
 type SeriesDetailRow struct {
 	Summary   SeriesSummary
@@ -71,6 +82,7 @@ type SeriesDetailRow struct {
 	IDs       map[string]string
 	Language  string
 	RuntimeMs int64
+	Credits   []SeriesCreditRow
 }
 
 // SeriesCursor is where the next page of a series list starts.
@@ -148,6 +160,9 @@ func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now tim
 		detail.Aliases = append(detail.Aliases, title.Title)
 	}
 
+	if detail.Credits, err = r.credits(ctx, workID); err != nil {
+		return SeriesDetailRow{}, err
+	}
 	parts, err := queries.ListWorkParts(ctx, workID)
 	if err != nil {
 		return SeriesDetailRow{}, fmt.Errorf("library: series parts: %w", err)
@@ -169,6 +184,26 @@ func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now tim
 		})
 	}
 	return detail, nil
+}
+
+func (r SeriesReader) credits(ctx context.Context, workID int64) ([]SeriesCreditRow, error) {
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT c.person_id, p.name, COALESCE(json_extract(p.fields_json, '$.image_url'), ''), c.role, c.character, COALESCE(c.ord, 0), c.part_id
+FROM credit c JOIN person p ON p.id = c.person_id
+WHERE c.work_id = ? ORDER BY c.part_id != 0, c.ord, p.name COLLATE NOCASE, p.id`, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: series credits: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var credits []SeriesCreditRow
+	for rows.Next() {
+		var credit SeriesCreditRow
+		if err := rows.Scan(&credit.PersonID, &credit.Name, &credit.ImageURL, &credit.Role, &credit.Character, &credit.Order, &credit.PartID); err != nil {
+			return nil, fmt.Errorf("library: scan series credit: %w", err)
+		}
+		credits = append(credits, credit)
+	}
+	return credits, rows.Err()
 }
 
 func (r SeriesReader) fill(ctx context.Context, queries *librarydb.Queries, summaries []SeriesSummary, ids []int64, now time.Time) error {

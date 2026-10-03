@@ -581,6 +581,21 @@ func (q *Queries) SetOrganisationLogo(ctx context.Context, arg SetOrganisationLo
 	return err
 }
 
+const setPersonBiography = `-- name: SetPersonBiography :exec
+UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.biography', ?1)
+WHERE id = ?2 AND COALESCE(json_extract(COALESCE(fields_json, '{}'), '$.biography'), '') = ''
+`
+
+type SetPersonBiographyParams struct {
+	Biography interface{}
+	ID        int64
+}
+
+func (q *Queries) SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error {
+	_, err := q.db.ExecContext(ctx, setPersonBiography, arg.Biography, arg.ID)
+	return err
+}
+
 const setPersonImageURL = `-- name: SetPersonImageURL :exec
 UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.image_url', ?1)
 WHERE id = ?2 AND json_extract(COALESCE(fields_json, '{}'), '$.image_url') IS NULL

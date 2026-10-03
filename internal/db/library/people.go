@@ -109,6 +109,13 @@ func (p People) BackfillDetails(ctx context.Context, personID int64, identity Pe
 	})
 }
 
+// SetBiography stores a provider's biography for a person who has none.
+func (p People) SetBiography(ctx context.Context, personID int64, biography string) error {
+	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetPersonBiography(ctx, librarydb.SetPersonBiographyParams{Biography: biography, ID: personID})
+	})
+}
+
 // ResolveFolderArtist is the artist of an album known only by its folder (D6): the one provider-identified
 // person of that name when there is exactly one, else a local person keyed by the name.
 func (p People) ResolveFolderArtist(ctx context.Context, at time.Time, provider, name string) (int64, error) {

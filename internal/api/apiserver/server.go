@@ -221,6 +221,8 @@ type Config struct {
 	DownloaderTester DownloaderTester
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
+	// SeriesPeople feeds the TV people and network screens. Optional: nil answers 503.
+	SeriesPeople SeriesPeopleCatalog
 	// TVProviders reports and tests the TV metadata providers; without it those endpoints answer 503.
 	TVProviders TVProviders
 }
@@ -300,6 +302,7 @@ type Server struct {
 	prowlarr                ProwlarrLister
 	downloaderTester        DownloaderTester
 	tvProviders             TVProviders
+	seriesPeople            SeriesPeopleCatalog
 	candidateSearcher       CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
@@ -401,6 +404,7 @@ func New(config Config) (*Server, error) {
 		downloaderTester:        config.DownloaderTester,
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
+		seriesPeople:            config.SeriesPeople,
 		effectivePort:           config.Port,
 		healthPath:              base + APIPrefix + "/health",
 		address:                 net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),
@@ -504,6 +508,10 @@ func New(config Config) (*Server, error) {
 			secured.Post("/series", server.AddSeries)
 			secured.Get("/series/wanted", server.routeListWantedEpisodes)
 			secured.Get("/series/lookup", server.routeLookupSeries)
+			secured.Get("/series/people", server.routeListSeriesPeople)
+			secured.Get("/series/people/{id}", server.routeGetSeriesPerson)
+			secured.Get("/series/networks", server.routeListSeriesNetworks)
+			secured.Get("/series/networks/{id}", server.routeGetSeriesNetwork)
 			secured.Get("/series/{id}", server.routeGetSeries)
 			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)
 			secured.Put("/series/{id}/episodes/{part_id}/monitored", server.routeSetEpisodeMonitored)

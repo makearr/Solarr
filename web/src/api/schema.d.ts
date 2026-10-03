@@ -3097,6 +3097,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page of the people credited on one TV library's series, by name. */
+        get: operations["listSeriesPeople"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/people/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One person with their credits in this library and, from TMDB when a key is stored, elsewhere. */
+        get: operations["getSeriesPerson"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/networks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The networks and streamers of one TV library's series, most series first. */
+        get: operations["listSeriesNetworks"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/networks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One network with the library's series on it. */
+        get: operations["getSeriesNetwork"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/lookup": {
         parameters: {
             query?: never;
@@ -5237,6 +5309,96 @@ export interface components {
             seasons: components["schemas"]["SeriesSeason"][];
             episodes: components["schemas"]["SeriesEpisode"][];
             fanart_url?: string;
+            /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
+            credits?: components["schemas"]["SeriesCredit"][];
+        };
+        SeriesPerson: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            image_url?: string;
+            /** @description Every role the person has in this library. */
+            roles: string[];
+            /**
+             * Format: int64
+             * @description Series of this library the person is credited on in the asked-for roles.
+             */
+            series_count: number;
+            /** @description The first part they played here. */
+            character?: string;
+            monitored: boolean;
+        };
+        SeriesPeoplePage: {
+            items: components["schemas"]["SeriesPerson"][];
+            next_cursor?: string;
+        };
+        SeriesPersonCredit: {
+            /** Format: int64 */
+            series_id: number;
+            series_title: string;
+            /** Format: int64 */
+            year?: number;
+            poster_url?: string;
+            role: string;
+            character?: string;
+            /** @description Episodes of an episode-scoped role, as S01E02. */
+            episodes?: string[];
+        };
+        SeriesPersonElsewhere: {
+            /** Format: int64 */
+            tmdb_id: number;
+            /** @enum {string} */
+            media_type: "tv" | "movie";
+            title: string;
+            /** Format: int64 */
+            year?: number;
+            /** @description The character played */
+            role?: string;
+            poster_url?: string;
+        };
+        SeriesPersonDetail: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            image_url?: string;
+            biography?: string;
+            born?: string;
+            died?: string;
+            birthplace?: string;
+            monitored: boolean;
+            ids: {
+                [key: string]: string;
+            };
+            credits: components["schemas"]["SeriesPersonCredit"][];
+            /** @description Titles TMDB lists for the person that this library does not hold; absent without a TMDB key. */
+            elsewhere?: components["schemas"]["SeriesPersonElsewhere"][];
+        };
+        SeriesNetwork: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            country?: string;
+            logo_url?: string;
+            /** Format: int64 */
+            series_count: number;
+        };
+        SeriesNetworkDetail: {
+            network: components["schemas"]["SeriesNetwork"];
+            series: components["schemas"]["SeriesSummary"][];
+        };
+        SeriesCredit: {
+            /** Format: int64 */
+            person_id: number;
+            name: string;
+            image_url?: string;
+            role: string;
+            character?: string;
+            order: number;
+            /**
+             * Format: int64
+             * @description The part id of an episode-scoped credit; absent for the whole series.
+             */
+            episode_id?: number;
         };
         WantedEpisode: {
             /** Format: int64 */
@@ -11860,6 +12022,116 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WantedEpisodePage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listSeriesPeople: {
+        parameters: {
+            query: {
+                category_id: number;
+                /** @description Comma-separated roles (actor, guest_star, creator, showrunner, director, writer, executive_producer, producer, composer); any when absent. */
+                role?: string;
+                /** @description Matches the start of the name. */
+                q?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesPeoplePage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSeriesPerson: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The person. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesPersonDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listSeriesNetworks: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The networks. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesNetwork"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSeriesNetwork: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The network. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeriesNetworkDetail"];
                 };
             };
             400: components["responses"]["Problem"];

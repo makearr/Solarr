@@ -465,3 +465,11 @@ func (p *process) tvProviders() adapters.TVProviders {
 		},
 	}}
 }
+
+// seriesPeople is the TV people and network screens' data source.
+func (p *process) seriesPeople() adapters.SeriesPeople {
+	p.tvService()
+	return adapters.SeriesPeople{
+		Reader: library.NewSeriesReader(p.library), Persons: library.NewPeople(p.library), TMDB: p.tmdbShared, Clock: clock.NewSystem(),
+	}
+}

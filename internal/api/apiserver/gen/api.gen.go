@@ -593,6 +593,12 @@ const (
 	SeriesEpisodeStateUnmonitored SeriesEpisodeState = "unmonitored"
 )
 
+// Defines values for SeriesPersonElsewhereMediaType.
+const (
+	SeriesPersonElsewhereMediaTypeMovie SeriesPersonElsewhereMediaType = "movie"
+	SeriesPersonElsewhereMediaTypeTv    SeriesPersonElsewhereMediaType = "tv"
+)
+
 // Defines values for SeriesSummaryStatus.
 const (
 	SeriesSummaryStatusContinuing SeriesSummaryStatus = "continuing"
@@ -3281,15 +3287,31 @@ type SeriesCounts struct {
 	Total        int `json:"total"`
 }
 
+// SeriesCredit defines model for SeriesCredit.
+type SeriesCredit struct {
+	Character *string `json:"character,omitempty"`
+
+	// EpisodeId The part id of an episode-scoped credit; absent for the whole series.
+	EpisodeId *int64  `json:"episode_id,omitempty"`
+	ImageUrl  *string `json:"image_url,omitempty"`
+	Name      string  `json:"name"`
+	Order     int     `json:"order"`
+	PersonId  int64   `json:"person_id"`
+	Role      string  `json:"role"`
+}
+
 // SeriesDetail defines model for SeriesDetail.
 type SeriesDetail struct {
 	// AirTime Local clock time and zone, e.g. 22:00 America/New_York.
-	AirTime       *string         `json:"air_time,omitempty"`
-	Aliases       *[]string       `json:"aliases,omitempty"`
-	Certification *string         `json:"certification,omitempty"`
-	Episodes      []SeriesEpisode `json:"episodes"`
-	FanartUrl     *string         `json:"fanart_url,omitempty"`
-	FirstAired    *string         `json:"first_aired,omitempty"`
+	AirTime       *string   `json:"air_time,omitempty"`
+	Aliases       *[]string `json:"aliases,omitempty"`
+	Certification *string   `json:"certification,omitempty"`
+
+	// Credits Cast and crew of the whole series, and guest stars and episode crew by episode.
+	Credits    *[]SeriesCredit `json:"credits,omitempty"`
+	Episodes   []SeriesEpisode `json:"episodes"`
+	FanartUrl  *string         `json:"fanart_url,omitempty"`
+	FirstAired *string         `json:"first_aired,omitempty"`
 
 	// Ids Provider to id, e.g. tvdb, tvmaze, tmdb, imdb.
 	Ids              map[string]string `json:"ids"`
@@ -3328,11 +3350,93 @@ type SeriesEpisodeAirConfidence string
 // SeriesEpisodeState What a person wants to see in the column.
 type SeriesEpisodeState string
 
+// SeriesNetwork defines model for SeriesNetwork.
+type SeriesNetwork struct {
+	Country     *string `json:"country,omitempty"`
+	Id          int64   `json:"id"`
+	LogoUrl     *string `json:"logo_url,omitempty"`
+	Name        string  `json:"name"`
+	SeriesCount int64   `json:"series_count"`
+}
+
+// SeriesNetworkDetail defines model for SeriesNetworkDetail.
+type SeriesNetworkDetail struct {
+	Network SeriesNetwork   `json:"network"`
+	Series  []SeriesSummary `json:"series"`
+}
+
 // SeriesPage defines model for SeriesPage.
 type SeriesPage struct {
 	Items      []SeriesSummary `json:"items"`
 	NextCursor *string         `json:"next_cursor,omitempty"`
 }
+
+// SeriesPeoplePage defines model for SeriesPeoplePage.
+type SeriesPeoplePage struct {
+	Items      []SeriesPerson `json:"items"`
+	NextCursor *string        `json:"next_cursor,omitempty"`
+}
+
+// SeriesPerson defines model for SeriesPerson.
+type SeriesPerson struct {
+	// Character The first part they played here.
+	Character *string `json:"character,omitempty"`
+	Id        int64   `json:"id"`
+	ImageUrl  *string `json:"image_url,omitempty"`
+	Monitored bool    `json:"monitored"`
+	Name      string  `json:"name"`
+
+	// Roles Every role the person has in this library.
+	Roles []string `json:"roles"`
+
+	// SeriesCount Series of this library the person is credited on in the asked-for roles.
+	SeriesCount int64 `json:"series_count"`
+}
+
+// SeriesPersonCredit defines model for SeriesPersonCredit.
+type SeriesPersonCredit struct {
+	Character *string `json:"character,omitempty"`
+
+	// Episodes Episodes of an episode-scoped role, as S01E02.
+	Episodes    *[]string `json:"episodes,omitempty"`
+	PosterUrl   *string   `json:"poster_url,omitempty"`
+	Role        string    `json:"role"`
+	SeriesId    int64     `json:"series_id"`
+	SeriesTitle string    `json:"series_title"`
+	Year        *int64    `json:"year,omitempty"`
+}
+
+// SeriesPersonDetail defines model for SeriesPersonDetail.
+type SeriesPersonDetail struct {
+	Biography  *string              `json:"biography,omitempty"`
+	Birthplace *string              `json:"birthplace,omitempty"`
+	Born       *string              `json:"born,omitempty"`
+	Credits    []SeriesPersonCredit `json:"credits"`
+	Died       *string              `json:"died,omitempty"`
+
+	// Elsewhere Titles TMDB lists for the person that this library does not hold; absent without a TMDB key.
+	Elsewhere *[]SeriesPersonElsewhere `json:"elsewhere,omitempty"`
+	Id        int64                    `json:"id"`
+	Ids       map[string]string        `json:"ids"`
+	ImageUrl  *string                  `json:"image_url,omitempty"`
+	Monitored bool                     `json:"monitored"`
+	Name      string                   `json:"name"`
+}
+
+// SeriesPersonElsewhere defines model for SeriesPersonElsewhere.
+type SeriesPersonElsewhere struct {
+	MediaType SeriesPersonElsewhereMediaType `json:"media_type"`
+	PosterUrl *string                        `json:"poster_url,omitempty"`
+
+	// Role The character played
+	Role   *string `json:"role,omitempty"`
+	Title  string  `json:"title"`
+	TmdbId int64   `json:"tmdb_id"`
+	Year   *int64  `json:"year,omitempty"`
+}
+
+// SeriesPersonElsewhereMediaType defines model for SeriesPersonElsewhere.MediaType.
+type SeriesPersonElsewhereMediaType string
 
 // SeriesSeason defines model for SeriesSeason.
 type SeriesSeason struct {
@@ -4189,6 +4293,34 @@ type LookupSeriesParams struct {
 	CategoryId int64  `form:"category_id" json:"category_id"`
 	Q          string `form:"q" json:"q"`
 	Limit      *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListSeriesNetworksParams defines parameters for ListSeriesNetworks.
+type ListSeriesNetworksParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// GetSeriesNetworkParams defines parameters for GetSeriesNetwork.
+type GetSeriesNetworkParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// ListSeriesPeopleParams defines parameters for ListSeriesPeople.
+type ListSeriesPeopleParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// Role Comma-separated roles (actor, guest_star, creator, showrunner, director, writer, executive_producer, producer, composer); any when absent.
+	Role *string `form:"role,omitempty" json:"role,omitempty"`
+
+	// Q Matches the start of the name.
+	Q      *string `form:"q,omitempty" json:"q,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetSeriesPersonParams defines parameters for GetSeriesPerson.
+type GetSeriesPersonParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
 // ListWantedEpisodesParams defines parameters for ListWantedEpisodes.
@@ -5211,6 +5343,18 @@ type ServerInterface interface {
 	// Search the metadata sources for a series to add.
 	// (GET /series/lookup)
 	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
+	// The networks and streamers of one TV library's series, most series first.
+	// (GET /series/networks)
+	ListSeriesNetworks(w http.ResponseWriter, r *http.Request, params ListSeriesNetworksParams)
+	// One network with the library's series on it.
+	// (GET /series/networks/{id})
+	GetSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesNetworkParams)
+	// A page of the people credited on one TV library's series, by name.
+	// (GET /series/people)
+	ListSeriesPeople(w http.ResponseWriter, r *http.Request, params ListSeriesPeopleParams)
+	// One person with their credits in this library and, from TMDB when a key is stored, elsewhere.
+	// (GET /series/people/{id})
+	GetSeriesPerson(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPersonParams)
 	// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
 	// (GET /series/wanted)
 	ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams)
@@ -6417,6 +6561,30 @@ func (_ Unimplemented) AddSeries(w http.ResponseWriter, r *http.Request) {
 // Search the metadata sources for a series to add.
 // (GET /series/lookup)
 func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The networks and streamers of one TV library's series, most series first.
+// (GET /series/networks)
+func (_ Unimplemented) ListSeriesNetworks(w http.ResponseWriter, r *http.Request, params ListSeriesNetworksParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One network with the library's series on it.
+// (GET /series/networks/{id})
+func (_ Unimplemented) GetSeriesNetwork(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesNetworkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A page of the people credited on one TV library's series, by name.
+// (GET /series/people)
+func (_ Unimplemented) ListSeriesPeople(w http.ResponseWriter, r *http.Request, params ListSeriesPeopleParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One person with their credits in this library and, from TMDB when a key is stored, elsewhere.
+// (GET /series/people/{id})
+func (_ Unimplemented) GetSeriesPerson(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPersonParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12216,6 +12384,224 @@ func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListSeriesNetworks operation middleware
+func (siw *ServerInterfaceWrapper) ListSeriesNetworks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSeriesNetworksParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSeriesNetworks(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSeriesNetwork operation middleware
+func (siw *ServerInterfaceWrapper) GetSeriesNetwork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSeriesNetworkParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSeriesNetwork(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListSeriesPeople operation middleware
+func (siw *ServerInterfaceWrapper) ListSeriesPeople(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListSeriesPeopleParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "role" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "role", r.URL.Query(), &params.Role)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListSeriesPeople(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSeriesPerson operation middleware
+func (siw *ServerInterfaceWrapper) GetSeriesPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSeriesPersonParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSeriesPerson(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWantedEpisodes operation middleware
 func (siw *ServerInterfaceWrapper) ListWantedEpisodes(w http.ResponseWriter, r *http.Request) {
 
@@ -14842,6 +15228,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/networks", wrapper.ListSeriesNetworks)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/networks/{id}", wrapper.GetSeriesNetwork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/people", wrapper.ListSeriesPeople)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/people/{id}", wrapper.GetSeriesPerson)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/wanted", wrapper.ListWantedEpisodes)

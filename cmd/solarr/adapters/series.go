@@ -68,6 +68,16 @@ func (c SeriesCatalog) Get(ctx context.Context, categoryID, seriesID int64) (gen
 	for i, episode := range row.Episodes {
 		detail.Episodes[i] = episodeView(episode, now)
 	}
+	credits := make([]gen.SeriesCredit, len(row.Credits))
+	for i, credit := range row.Credits {
+		credits[i] = gen.SeriesCredit{PersonId: credit.PersonID, Name: credit.Name, Role: credit.Role, Order: int(credit.Order)}
+		setString(&credits[i].ImageUrl, credit.ImageURL)
+		setString(&credits[i].Character, credit.Character)
+		if credit.PartID > 0 {
+			credits[i].EpisodeId = &credit.PartID
+		}
+	}
+	detail.Credits = &credits
 	return detail, nil
 }
 

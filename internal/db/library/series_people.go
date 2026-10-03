@@ -1,0 +1,302 @@
+package library
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+)
+
+// ErrPersonNotFound reports a person with no credit in the library asked about.
+var ErrPersonNotFound = errors.New("library: person not found in this library")
+
+// TVPersonFilter narrows a TV library's people list: roles (any when empty) and the start of the name.
+type TVPersonFilter struct {
+	CategoryID int64
+	Roles      []string
+	NamePrefix string
+}
+
+// TVPersonRow is one person of a TV library with what they did there.
+type TVPersonRow struct {
+	ID          int64
+	Name        string
+	SortName    string
+	ImageURL    string
+	Monitored   bool
+	Roles       []string
+	SeriesCount int64
+	// Character is the first part they played in this library, for the card's subtitle.
+	Character string
+}
+
+// inLibrary restricts a credit alias to TV works the category holds; a work is visible by desired-item membership.
+const inLibrary = `JOIN work w ON w.id = %[1]s.work_id AND w.media_type = 'tv'
+      AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?)`
+
+func roleFilter(alias string, roles []string) (string, []any) {
+	if len(roles) == 0 {
+		return "", nil
+	}
+	arguments := make([]any, len(roles))
+	for i, role := range roles {
+		arguments[i] = role
+	}
+	return " AND " + alias + ".role IN (" + strings.TrimSuffix(strings.Repeat("?,", len(roles)), ",") + ")", arguments
+}
+
+// People lists one page of the people credited on a TV library's series, by sort name with the id as the tie-break.
+func (r SeriesReader) People(ctx context.Context, filter TVPersonFilter, after PersonCursor, pageSize int) ([]TVPersonRow, error) {
+	roleSQL, roleArgs := roleFilter("c", filter.Roles)
+	join := fmt.Sprintf(inLibrary, "c")
+	var predicates store.Predicates
+	predicates.Add("EXISTS (SELECT 1 FROM credit c "+join+" WHERE c.person_id = p.id"+roleSQL+")",
+		append([]any{filter.CategoryID}, roleArgs...)...)
+	addTVNamePrefix(&predicates, filter.NamePrefix)
+	predicates.AddIf(after.SortName != "" || after.ID != 0,
+		"(p.sort_name COLLATE NOCASE > ? OR (p.sort_name COLLATE NOCASE = ? AND p.id > ?))", after.SortName, after.SortName, after.ID)
+
+	query := `SELECT p.id, p.name, p.sort_name, COALESCE(json_extract(p.fields_json, '$.image_url'), ''), p.monitored,
+       CAST((SELECT COUNT(DISTINCT c.work_id) FROM credit c ` + join + ` WHERE c.person_id = p.id` + roleSQL + `) AS INTEGER),
+       COALESCE((SELECT GROUP_CONCAT(DISTINCT c.role) FROM credit c ` + join + ` WHERE c.person_id = p.id), ''),
+       COALESCE((SELECT c.character FROM credit c ` + join + ` WHERE c.person_id = p.id AND c.character != ''` + roleSQL + `
+                 ORDER BY c.ord LIMIT 1), '')
+FROM person p` + predicates.Where() + `
+ORDER BY p.sort_name COLLATE NOCASE, p.id
+LIMIT ?`
+	arguments := []any{filter.CategoryID}
+	arguments = append(arguments, roleArgs...)
+	arguments = append(arguments, filter.CategoryID, filter.CategoryID)
+	arguments = append(arguments, roleArgs...)
+	arguments = append(arguments, predicates.Args(pageSize)...)
+
+	rows, err := r.store.Read().QueryContext(ctx, query, arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("library: list tv people: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var people []TVPersonRow
+	for rows.Next() {
+		var row TVPersonRow
+		var roles string
+		var monitored int64
+		if err := rows.Scan(&row.ID, &row.Name, &row.SortName, &row.ImageURL, &monitored, &row.SeriesCount, &roles, &row.Character); err != nil {
+			return nil, fmt.Errorf("library: scan tv person: %w", err)
+		}
+		row.Monitored = monitored == 1
+		row.Roles = strings.Split(roles, ",")
+		slices.Sort(row.Roles)
+		people = append(people, row)
+	}
+	return people, rows.Err()
+}
+
+func addTVNamePrefix(predicates *store.Predicates, prefix string) {
+	if prefix == "" {
+		return
+	}
+	upper, bounded := prefixUpperBound(prefix)
+	if !bounded {
+		predicates.Add("p.sort_name COLLATE NOCASE >= ?", prefix)
+		return
+	}
+	predicates.Add("(p.sort_name COLLATE NOCASE >= ? AND p.sort_name COLLATE NOCASE < ?)", prefix, upper)
+}
+
+// TVPersonCredit is what a person did on one series; Episodes lists the "s03:e04" parts of an episode-scoped role.
+type TVPersonCredit struct {
+	WorkID    int64
+	Title     string
+	Year      int64
+	Role      string
+	Character string
+	Episodes  []string
+}
+
+// TVPersonDetail is one person with their credits in a library.
+type TVPersonDetail struct {
+	ID        int64
+	Name      string
+	Born      string
+	Died      string
+	Country   string
+	ImageURL  string
+	Biography string
+	Monitored bool
+	// IDs maps provider to the person's id there ("tmdb", "imdb").
+	IDs     map[string]string
+	Credits []TVPersonCredit
+}
+
+// Person answers one person's page; ErrPersonNotFound when they have no credit in the category.
+func (r SeriesReader) Person(ctx context.Context, categoryID, personID int64) (TVPersonDetail, error) {
+	queries := librarydb.New(r.store.Read())
+	person, err := queries.GetPerson(ctx, personID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return TVPersonDetail{}, ErrPersonNotFound
+	}
+	if err != nil {
+		return TVPersonDetail{}, fmt.Errorf("library: tv person: %w", err)
+	}
+	join := fmt.Sprintf(inLibrary, "c")
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT c.work_id, w.canonical_title, COALESCE(w.year, 0), c.role, c.character, COALESCE(p.media_ref, '')
+FROM credit c `+join+`
+LEFT JOIN work_part p ON p.id = c.part_id AND c.part_id != 0
+WHERE c.person_id = ?
+ORDER BY w.sort_title, w.id, c.role, c.character, p.sort_key`, categoryID, personID)
+	if err != nil {
+		return TVPersonDetail{}, fmt.Errorf("library: tv person credits: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	detail := TVPersonDetail{
+		ID: person.ID, Name: person.Name, Born: person.Born.String, Died: person.Died.String, Country: person.Country.String,
+		Monitored: person.Monitored == 1, Biography: biographyFromFields(person.FieldsJson), ImageURL: imageFromFields(person.FieldsJson),
+	}
+	for rows.Next() {
+		var credit TVPersonCredit
+		var ref string
+		if err := rows.Scan(&credit.WorkID, &credit.Title, &credit.Year, &credit.Role, &credit.Character, &ref); err != nil {
+			return TVPersonDetail{}, fmt.Errorf("library: scan tv person credit: %w", err)
+		}
+		last := len(detail.Credits) - 1
+		if last >= 0 && detail.Credits[last].WorkID == credit.WorkID && detail.Credits[last].Role == credit.Role && detail.Credits[last].Character == credit.Character {
+			if ref != "" {
+				detail.Credits[last].Episodes = append(detail.Credits[last].Episodes, ref)
+			}
+			continue
+		}
+		if ref != "" {
+			credit.Episodes = []string{ref}
+		}
+		detail.Credits = append(detail.Credits, credit)
+	}
+	if err := rows.Err(); err != nil {
+		return TVPersonDetail{}, fmt.Errorf("library: tv person credits: %w", err)
+	}
+	if len(detail.Credits) == 0 {
+		return TVPersonDetail{}, ErrPersonNotFound
+	}
+	externals, err := queries.ListPersonExternalIDs(ctx, personID)
+	if err != nil {
+		return TVPersonDetail{}, fmt.Errorf("library: tv person ids: %w", err)
+	}
+	detail.IDs = make(map[string]string, len(externals))
+	for _, external := range externals {
+		detail.IDs[external.Provider] = external.ExternalID
+	}
+	return detail, nil
+}
+
+func imageFromFields(raw sql.NullString) string {
+	if !raw.Valid {
+		return ""
+	}
+	var fields personFields
+	if json.Unmarshal([]byte(raw.String), &fields) != nil {
+		return ""
+	}
+	return fields.ImageURL
+}
+
+// TVNetworkRow is a network or streamer with how many of the library's series air on it.
+type TVNetworkRow struct {
+	ID          int64
+	Name        string
+	Country     string
+	LogoURL     string
+	SeriesCount int64
+}
+
+// Networks lists the networks of a TV library's series, most series first.
+func (r SeriesReader) Networks(ctx context.Context, categoryID int64) ([]TVNetworkRow, error) {
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT o.id, o.name, COALESCE(o.country, ''), COALESCE(json_extract(o.fields_json, '$.logo'), ''), COUNT(DISTINCT w.id)
+FROM organisation o
+JOIN work_organisation wo ON wo.organisation_id = o.id AND wo.role = 'network'
+JOIN work w ON w.id = wo.work_id AND w.media_type = 'tv'
+ AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?)
+WHERE o.kind = 'network'
+GROUP BY o.id
+ORDER BY COUNT(DISTINCT w.id) DESC, o.name COLLATE NOCASE, o.id`, categoryID)
+	if err != nil {
+		return nil, fmt.Errorf("library: tv networks: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var networks []TVNetworkRow
+	for rows.Next() {
+		var row TVNetworkRow
+		if err := rows.Scan(&row.ID, &row.Name, &row.Country, &row.LogoURL, &row.SeriesCount); err != nil {
+			return nil, fmt.Errorf("library: scan tv network: %w", err)
+		}
+		networks = append(networks, row)
+	}
+	return networks, rows.Err()
+}
+
+// NetworkSeries answers one network and the ids of the library's series on it; ErrPersonNotFound-style
+// ErrNetworkNotFound when the library has none there.
+func (r SeriesReader) NetworkSeries(ctx context.Context, categoryID, networkID int64) (TVNetworkRow, []int64, error) {
+	networks, err := r.Networks(ctx, categoryID)
+	if err != nil {
+		return TVNetworkRow{}, nil, err
+	}
+	index := slices.IndexFunc(networks, func(n TVNetworkRow) bool { return n.ID == networkID })
+	if index < 0 {
+		return TVNetworkRow{}, nil, ErrNetworkNotFound
+	}
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT w.id FROM work_organisation wo JOIN work w ON w.id = wo.work_id AND w.media_type = 'tv'
+ AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?)
+WHERE wo.organisation_id = ? AND wo.role = 'network' ORDER BY w.sort_title, w.id`, categoryID, networkID)
+	if err != nil {
+		return TVNetworkRow{}, nil, fmt.Errorf("library: network series: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return TVNetworkRow{}, nil, fmt.Errorf("library: scan network series: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return networks[index], ids, rows.Err()
+}
+
+// ErrNetworkNotFound reports a network none of the library's series air on.
+var ErrNetworkNotFound = errors.New("library: network not found in this library")
+
+// SummariesByIDs lists the given series of a category as a list shows them, in sort-title order.
+func (r SeriesReader) SummariesByIDs(ctx context.Context, categoryID int64, ids []int64, now time.Time) ([]SeriesSummary, error) {
+	queries := librarydb.New(r.store.Read())
+	var summaries []SeriesSummary
+	for _, id := range ids {
+		row, err := queries.GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: id, CategoryID: categoryID})
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return nil, fmt.Errorf("library: series %d: %w", id, err)
+		}
+		summaries = append(summaries, SeriesSummary{
+			WorkID: row.ID, Title: row.CanonicalTitle, SortTitle: row.SortTitle, Year: row.Year.Int64,
+			Description: row.Description.String, AddedAt: row.AddedAt,
+		})
+	}
+	kept := make([]int64, len(summaries))
+	for i, summary := range summaries {
+		kept[i] = summary.WorkID
+	}
+	if err := r.fill(ctx, queries, summaries, kept, now); err != nil {
+		return nil, err
+	}
+	return summaries, nil
+}

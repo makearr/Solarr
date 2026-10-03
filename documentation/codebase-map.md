@@ -23,6 +23,7 @@ internal/
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
+│               skyhook  tvmaze  tmdb  tvdb
 ├── identify/   model  parse  parsetv  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob

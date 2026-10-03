@@ -44,7 +44,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings",
 		"internal/identify/model", "internal/identify/priority", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
-		"internal/jobs/cachebudget", "internal/media/music", "internal/media/tv", "internal/moving/naming", "internal/api/apiserver/gen", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/musicbrainz",
+		"internal/jobs/cachebudget", "internal/media/music", "internal/media/tv", "internal/metadata/tmdb", "internal/moving/naming", "internal/api/apiserver/gen", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/musicbrainz",
 		"internal/moving/drainjob", "internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob",
 		"internal/platform/clock", "internal/platform/egress", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/platform/paginate",

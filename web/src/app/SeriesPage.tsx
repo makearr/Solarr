@@ -11,6 +11,7 @@ import { SeasonSearchDialog } from "./SeasonSearch";
 
 type Episode = components["schemas"]["SeriesEpisode"];
 type Season = components["schemas"]["SeriesSeason"];
+type Credit = components["schemas"]["SeriesCredit"];
 
 const STATE: Record<Episode["state"], { label: string; tone: string }> = {
   present: { label: "On disk", tone: "text-ok" },
@@ -28,6 +29,88 @@ function seasonLabel(number: number): string {
   return number === 0 ? "Specials" : `Season ${number}`;
 }
 
+function PersonLink({ credit, categoryId }: { credit: Credit; categoryId: string }) {
+  return (
+    <Link to="/library/$categoryId/people/$personId" params={{ categoryId, personId: String(credit.person_id) }} className="hover:text-accent hover:underline">
+      {credit.name}
+    </Link>
+  );
+}
+
+/** The directors, writers and guest stars of one episode, under its title. */
+function EpisodeCredits({ credits, categoryId }: { credits: Credit[]; categoryId: string }) {
+  const lines: [string, Credit[]][] = [
+    ["Directed by", credits.filter((credit) => credit.role === "director")],
+    ["Written by", credits.filter((credit) => credit.role === "writer")],
+    ["With", credits.filter((credit) => credit.role === "guest_star").slice(0, 5)],
+  ];
+  const shown = lines.filter(([, people]) => people.length > 0);
+  if (shown.length === 0) return null;
+  return (
+    <span className="mt-0.5 block text-xs text-ink-muted">
+      {shown.map(([label, people], index) => (
+        <span key={label}>
+          {index > 0 && " · "}
+          {label}{" "}
+          {people.map((credit, position) => (
+            <span key={`${credit.person_id}-${credit.character ?? ""}`}>
+              {position > 0 && ", "}
+              <PersonLink credit={credit} categoryId={categoryId} />
+              {label === "With" && credit.character ? ` (${credit.character})` : ""}
+            </span>
+          ))}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+const CREW_ORDER = ["creator", "showrunner", "executive_producer", "composer"];
+
+/** The series' people: creators and producers first, then the cast with their characters (a slider, SickGear-style). */
+function CastStrip({ credits, categoryId }: { credits: Credit[]; categoryId: string }) {
+  const seriesWide = credits.filter((credit) => credit.episode_id == null);
+  const crew = seriesWide.filter((credit) => CREW_ORDER.includes(credit.role));
+  const crewOnce = CREW_ORDER.flatMap((role) => crew.filter((credit) => credit.role === role)).filter(
+    (credit, index, all) => all.findIndex((other) => other.person_id === credit.person_id) === index,
+  );
+  const crewShown = crewOnce.slice(0, 8);
+  const cast = seriesWide.filter((credit) => credit.role === "actor").slice(0, 24);
+  if (crewShown.length === 0 && cast.length === 0) return null;
+  const tile = (credit: Credit, subtitle: string) => (
+    <Link
+      key={`${credit.person_id}-${credit.role}`}
+      to="/library/$categoryId/people/$personId"
+      params={{ categoryId, personId: String(credit.person_id) }}
+      className="flex w-24 shrink-0 flex-col items-center gap-1 text-center focus-visible:outline-2 focus-visible:outline-accent"
+    >
+      <span className="block size-20 overflow-hidden rounded-full border border-border-subtle bg-surface">
+        {credit.image_url ? (
+          <img src={credit.image_url} alt="" loading="lazy" className="size-full object-cover" referrerPolicy="no-referrer" />
+        ) : (
+          <span className="flex size-full items-center justify-center text-ink-muted">
+            <User aria-hidden className="size-8" />
+          </span>
+        )}
+      </span>
+      <span className="w-full truncate text-xs font-medium">{credit.name}</span>
+      <span className="w-full truncate text-[11px] text-ink-muted">{subtitle}</span>
+    </Link>
+  );
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold">Cast and crew</h2>
+      <div className="flex gap-3 overflow-x-auto pb-1">
+        {crewShown.map((credit) => tile(credit, credit.role.replace(/_/g, " ")))}
+        {cast.map((credit) => tile(credit, credit.character ?? ""))}
+      </div>
+      <Link to="/library/$categoryId/$level" params={{ categoryId, level: "people" }} className="w-fit text-xs text-accent hover:underline">
+        Everyone in this library →
+      </Link>
+    </section>
+  );
+}
+
 function SeasonSection({
   season,
   episodes,
@@ -38,6 +121,8 @@ function SeasonSection({
   onInteractive,
   searchNote,
   initiallyOpen,
+  episodeCredits,
+  categoryId,
 }: {
   season: Season;
   episodes: Episode[];
@@ -48,6 +133,8 @@ function SeasonSection({
   onInteractive: () => void;
   searchNote: string | undefined;
   initiallyOpen: boolean;
+  episodeCredits: Map<number, Credit[]>;
+  categoryId: string;
 }) {
   const [open, setOpen] = useState(initiallyOpen);
   const Chevron = open ? ChevronDown : ChevronRight;
@@ -113,6 +200,7 @@ function SeasonSection({
                 <td className="py-1.5">
                   <span>{episode.title ?? "TBA"}</span>
                   {episode.absolute != null && <span className="ml-2 text-xs text-ink-muted">#{episode.absolute}</span>}
+                  <EpisodeCredits credits={episodeCredits.get(episode.id) ?? []} categoryId={categoryId} />
                 </td>
                 <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">{airDate(episode)}</td>
                 <td className={`whitespace-nowrap py-1.5 pr-3 text-right text-xs ${STATE[episode.state].tone}`}>{STATE[episode.state].label}</td>
@@ -202,6 +290,11 @@ export function SeriesPage() {
   for (const episode of detail.data.episodes) bySeason.set(episode.season, [...(bySeason.get(episode.season) ?? []), episode]);
   const seasons = [...detail.data.seasons].sort((a, b) => (a.number === 0 ? 1 : b.number === 0 ? -1 : b.number - a.number));
   const newest = seasons.find((season) => season.number > 0)?.number;
+  const credits = detail.data.credits ?? [];
+  const episodeCredits = new Map<number, Credit[]>();
+  for (const credit of credits) {
+    if (credit.episode_id != null) episodeCredits.set(credit.episode_id, [...(episodeCredits.get(credit.episode_id) ?? []), credit]);
+  }
   const facts = [
     series.year,
     series.network,
@@ -262,9 +355,12 @@ export function SeriesPage() {
           </div>
         </div>
       </div>
+      <CastStrip credits={credits} categoryId={categoryId} />
       {seasons.map((season) => (
         <SeasonSection
           key={season.number}
+          episodeCredits={episodeCredits}
+          categoryId={categoryId}
           season={season}
           episodes={bySeason.get(season.number) ?? []}
           canManage={canManage}

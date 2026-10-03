@@ -82,7 +82,7 @@ type SeriesWrite struct {
 	Dates          []SeriesDateWrite
 	Rating         *SeriesRatingWrite
 	Certification  string
-	// MoreNetworks are linked beside Network, which stays the primary one.
+	// MoreNetworks are linked beside Network, which stays the primary one; one that names it adds its id and logo.
 	MoreNetworks []SeriesNetworkWrite
 	Keywords     []string
 	Credits      []SeriesCreditWrite

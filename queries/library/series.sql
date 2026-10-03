@@ -150,3 +150,7 @@ WHERE id = sqlc.arg(id);
 
 -- name: AddWorkOrganisation :exec
 INSERT OR IGNORE INTO work_organisation (work_id, organisation_id, role) VALUES (?, ?, ?);
+
+-- name: SetPersonBiography :exec
+UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.biography', sqlc.arg(biography))
+WHERE id = sqlc.arg(id) AND COALESCE(json_extract(COALESCE(fields_json, '{}'), '$.biography'), '') = '';

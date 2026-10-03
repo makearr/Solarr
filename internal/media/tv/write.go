@@ -169,9 +169,6 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 
 	write.Keywords = series.Keywords
 	for _, network := range series.Networks {
-		if network.Name == series.Network {
-			continue
-		}
 		write.MoreNetworks = append(write.MoreNetworks, library.SeriesNetworkWrite{
 			Name: network.Name, Country: network.Country, Provider: ProviderTMDB, ExternalID: strconv.FormatInt(network.TMDBID, 10), LogoURL: network.Logo,
 		})
