@@ -5743,8 +5743,11 @@ export interface components {
             air_date?: string;
             /** Format: date-time */
             air_time?: string;
+            file?: components["schemas"]["SeriesEpisodeFile"];
         };
         WantedEpisodePage: {
+            /** @description For the cutoff view */
+            judged?: boolean;
             items: components["schemas"]["WantedEpisode"][];
             next_cursor?: string;
         };
@@ -12436,6 +12439,8 @@ export interface operations {
         parameters: {
             query: {
                 category_id: number;
+                /** @description missing (default) or cutoff, the present episodes whose file is below the library's target or cutoff. */
+                view?: "missing" | "cutoff";
                 cursor?: string;
                 limit?: number;
             };

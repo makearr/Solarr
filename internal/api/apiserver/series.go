@@ -53,6 +53,9 @@ type SeriesCatalog interface {
 	SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error
 	// Wanted returns up to limit+1 missing episodes after the cursor (date, id), newest first.
 	Wanted(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.WantedEpisode, error)
+	// CutoffUnmet returns up to limit+1 present episodes whose file is below the library's target or cutoff, from the
+	// offset; judged is false when the library sets neither, so nothing can be below it.
+	CutoffUnmet(ctx context.Context, categoryID int64, offset, limit int) (episodes []gen.WantedEpisode, judged bool, err error)
 }
 
 // seriesAccess checks the caller against one library and the catalogue being wired; false means it answered.
@@ -326,6 +329,10 @@ func (s *Server) routeListWantedEpisodes(w http.ResponseWriter, r *http.Request)
 	if raw := query.Get("cursor"); raw != "" {
 		params.Cursor = &raw
 	}
+	if raw := query.Get("view"); raw != "" {
+		view := gen.ListWantedEpisodesParamsView(raw)
+		params.View = &view
+	}
 	if raw := query.Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil {
@@ -348,6 +355,21 @@ func (s *Server) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, para
 		return
 	}
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
+	if derefOr((*string)(params.View), "") == "cutoff" {
+		rows, judged, err := s.series.CutoffUnmet(r.Context(), params.CategoryId, int(cursor.ID), limit+1)
+		if err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+		page := gen.WantedEpisodePage{Items: rows, Judged: &judged}
+		if len(rows) > limit {
+			page.Items = rows[:limit]
+			next := paginate.TextCursor{Sort: "offset", ID: cursor.ID + int64(limit)}.Encode()
+			page.NextCursor = &next
+		}
+		writeJSON(w, s.logger, http.StatusOK, page)
+		return
+	}
 	rows, err := s.series.Wanted(r.Context(), params.CategoryId, cursor, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)

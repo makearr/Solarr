@@ -842,6 +842,12 @@ const (
 	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
 )
 
+// Defines values for ListWantedEpisodesParamsView.
+const (
+	ListWantedEpisodesParamsViewCutoff  ListWantedEpisodesParamsView = "cutoff"
+	ListWantedEpisodesParamsViewMissing ListWantedEpisodesParamsView = "missing"
+)
+
 // Defines values for ApplySeriesMonitoringJSONBodyOption.
 const (
 	ApplySeriesMonitoringJSONBodyOptionAll         ApplySeriesMonitoringJSONBodyOption = "all"
@@ -4036,20 +4042,26 @@ type WantedState string
 
 // WantedEpisode defines model for WantedEpisode.
 type WantedEpisode struct {
-	AirDate     *string    `json:"air_date,omitempty"`
-	AirTime     *time.Time `json:"air_time,omitempty"`
-	Number      int        `json:"number"`
-	PartId      int64      `json:"part_id"`
-	Season      int        `json:"season"`
-	SeriesId    int64      `json:"series_id"`
-	SeriesTitle string     `json:"series_title"`
-	Title       *string    `json:"title,omitempty"`
+	AirDate *string    `json:"air_date,omitempty"`
+	AirTime *time.Time `json:"air_time,omitempty"`
+
+	// File The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
+	File        *SeriesEpisodeFile `json:"file,omitempty"`
+	Number      int                `json:"number"`
+	PartId      int64              `json:"part_id"`
+	Season      int                `json:"season"`
+	SeriesId    int64              `json:"series_id"`
+	SeriesTitle string             `json:"series_title"`
+	Title       *string            `json:"title,omitempty"`
 }
 
 // WantedEpisodePage defines model for WantedEpisodePage.
 type WantedEpisodePage struct {
-	Items      []WantedEpisode `json:"items"`
-	NextCursor *string         `json:"next_cursor,omitempty"`
+	Items []WantedEpisode `json:"items"`
+
+	// Judged For the cutoff view
+	Judged     *bool   `json:"judged,omitempty"`
+	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
 // Work defines model for Work.
@@ -4681,10 +4693,16 @@ type PreviewSeriesPersonFollowParams struct {
 
 // ListWantedEpisodesParams defines parameters for ListWantedEpisodes.
 type ListWantedEpisodesParams struct {
-	CategoryId int64   `form:"category_id" json:"category_id"`
-	Cursor     *string `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit      *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// View missing (default) or cutoff, the present episodes whose file is below the library's target or cutoff.
+	View   *ListWantedEpisodesParamsView `form:"view,omitempty" json:"view,omitempty"`
+	Cursor *string                       `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int                          `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListWantedEpisodesParamsView defines parameters for ListWantedEpisodes.
+type ListWantedEpisodesParamsView string
 
 // DeleteSeriesParams defines parameters for DeleteSeries.
 type DeleteSeriesParams struct {
@@ -13658,6 +13676,14 @@ func (siw *ServerInterfaceWrapper) ListWantedEpisodes(w http.ResponseWriter, r *
 	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "view" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "view", r.URL.Query(), &params.View)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
 		return
 	}
 

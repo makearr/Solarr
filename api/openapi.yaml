@@ -5019,6 +5019,10 @@ paths:
           in: query
           required: true
           schema: { type: integer, format: int64 }
+        - name: view
+          in: query
+          description: missing (default) or cutoff, the present episodes whose file is below the library's target or cutoff.
+          schema: { type: string, enum: [missing, cutoff] }
         - name: cursor
           in: query
           schema: { type: string }
@@ -8623,11 +8627,13 @@ components:
         title: { type: string }
         air_date: { type: string }
         air_time: { type: string, format: date-time }
+        file: { $ref: "#/components/schemas/SeriesEpisodeFile" }
 
     WantedEpisodePage:
       type: object
       required: [items]
       properties:
+        judged: { type: boolean, description: For the cutoff view, false when the library sets neither a target nor a cutoff. }
         items:
           type: array
           items: { $ref: "#/components/schemas/WantedEpisode" }

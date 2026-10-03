@@ -15,19 +15,22 @@ function episodeLabel(episode: Episode): string {
   return `S${pad(episode.season)}E${pad(episode.number)}`;
 }
 
-/** Sonarr's Wanted > Missing for a TV library: monitored episodes that have aired and have no file. */
+type View = "missing" | "cutoff";
+
+/** Sonarr's Wanted for a TV library: Missing (monitored episodes that have aired and have no file) and Cutoff unmet (files below the target). */
 export function SeriesWanted() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
+  const [view, setView] = useState<View>("missing");
   const queryClient = useQueryClient();
   const [dialog, setDialog] = useState<Episode | null>(null);
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   const pages = useInfiniteQuery({
-    queryKey: ["series", categoryId, "wanted"],
+    queryKey: ["series", categoryId, "wanted", view],
     initialPageParam: "",
     queryFn: async ({ pageParam }) => {
       const { data, error } = await api.GET("/series/wanted", {
-        params: { query: { category_id: Number(categoryId), limit: 100, ...(pageParam ? { cursor: pageParam } : {}) } },
+        params: { query: { category_id: Number(categoryId), limit: 100, view, ...(pageParam ? { cursor: pageParam } : {}) } },
       });
       if (error) throw error;
       return data;
@@ -35,6 +38,7 @@ export function SeriesWanted() {
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
   const rows = (pages.data?.pages ?? []).flatMap((page) => page.items);
+  const judged = pages.data?.pages[0]?.judged !== false;
 
   const grab = useMutation({
     mutationFn: async (episode: Episode) => {
@@ -55,13 +59,39 @@ export function SeriesWanted() {
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-3 p-4">
-      <h1 className="text-base font-semibold">Wanted</h1>
+      <div className="flex flex-wrap items-center gap-2">
+        <h1 className="mr-2 text-base font-semibold">Wanted</h1>
+        {(["missing", "cutoff"] as const).map((key) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={view === key}
+            onClick={() => setView(key)}
+            className={`rounded-full border px-3 py-1 text-xs ${view === key ? "border-accent bg-accent/10 text-ink" : "border-border-subtle text-ink-muted hover:text-ink"}`}
+          >
+            {key === "missing" ? "Missing" : "Cutoff unmet"}
+          </button>
+        ))}
+      </div>
       <p className="text-xs text-ink-muted">
-        Monitored episodes that have aired and are not on disk. Search looks for the whole season, so a pack can fill several rows at once.
+        {view === "missing"
+          ? "Monitored episodes that have aired and are not on disk. Search looks for the whole season, so a pack can fill several rows at once."
+          : "Episodes on disk whose file is below the library's target or cutoff (Quality page). Interactive search picks a better release for one episode."}
       </p>
+      {view === "cutoff" && !judged && (
+        <p className="text-sm text-ink-muted">
+          This library has no target or cutoff yet, so nothing can be below it. Set one on its{" "}
+          <Link to="/library/$categoryId/config/quality" params={{ categoryId }} className="text-accent underline">
+            Quality page
+          </Link>
+          .
+        </p>
+      )}
       {pages.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {pages.error !== null && !pages.isLoading && <p className="text-sm text-danger">The list could not be read.</p>}
-      {!pages.isLoading && rows.length === 0 && pages.error === null && <p className="text-sm text-ink-muted">Nothing is missing.</p>}
+      {!pages.isLoading && rows.length === 0 && pages.error === null && (view === "missing" || judged) && (
+        <p className="text-sm text-ink-muted">{view === "missing" ? "Nothing is missing." : "Every measured file meets the target."}</p>
+      )}
       <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
         {rows.map((episode) => {
           const note = notes[`${episode.series_id}:${episode.season}`];
@@ -77,7 +107,13 @@ export function SeriesWanted() {
               <span className="w-16 tabular-nums text-ink-muted">{episodeLabel(episode)}</span>
               <span className="min-w-0 flex-1 truncate">{episode.title ?? "TBA"}</span>
               <span className="w-24 text-xs text-ink-muted">{episode.air_date ?? ""}</span>
+              {episode.file && (
+                <span className="text-xs text-ink-muted">
+                  {[episode.file.resolution, episode.file.video_codec?.toUpperCase(), episode.file.hdr?.toUpperCase()].filter(Boolean).join(" ")}
+                </span>
+              )}
               {note && <span className="text-xs text-ink-muted">{note}</span>}
+              {view === "missing" && (
               <button
                 type="button"
                 title="Search this season and send the best release"
@@ -87,6 +123,7 @@ export function SeriesWanted() {
               >
                 <Search aria-hidden className="size-4" />
               </button>
+              )}
               <button
                 type="button"
                 onClick={() => setDialog(episode)}
@@ -113,7 +150,8 @@ export function SeriesWanted() {
           categoryId={Number(categoryId)}
           seriesId={dialog.series_id}
           season={dialog.season}
-          title={`${dialog.series_title}, season ${dialog.season}`}
+          episode={view === "cutoff" ? dialog.number : undefined}
+          title={view === "cutoff" ? `${dialog.series_title} ${episodeLabel(dialog)}` : `${dialog.series_title}, season ${dialog.season}`}
           onClose={() => setDialog(null)}
         />
       )}
