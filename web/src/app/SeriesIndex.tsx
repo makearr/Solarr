@@ -1,14 +1,22 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Plus, Search, Tv } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 import { usePreference } from "@/lib/usePreference";
+import { useGridMetrics } from "@/list/useGridMetrics";
 
 type Series = components["schemas"]["SeriesSummary"];
+
+const POSTER_MIN_WIDTH = 150;
+const POSTER_GAP = 16;
+const POSTER_PADDING = 16;
+// The progress bar, two lines of caption and the gaps between them under a poster.
+const TILE_CAPTION = 70;
 
 type SortKey = "title" | "year" | "added" | "network" | "next" | "progress";
 
@@ -42,7 +50,6 @@ export function SeriesTile({ series, categoryId }: { series: Series; categoryId:
       to="/library/$categoryId/series/$seriesId"
       params={{ categoryId, seriesId: String(series.id) }}
       className="group flex flex-col gap-1.5 rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      style={{ contentVisibility: "auto", containIntrinsicSize: "auto 320px" }}
     >
       <span className="relative block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
         {series.poster_url ? (
@@ -132,6 +139,17 @@ export function SeriesIndex() {
       .sort(SORTS[sort].compare);
   }, [all, search, network, genre, profile, status, onlyMissing, onlyMonitored, sort]);
 
+  // The wall is virtualised a row of posters at a time: a library of a thousand series must not mount a thousand images.
+  const scroller = useRef<HTMLDivElement>(null);
+  const metrics = useGridMetrics(scroller, POSTER_MIN_WIDTH, POSTER_GAP, POSTER_PADDING);
+  const rowCount = Math.ceil(shown.length / metrics.columns);
+  const virtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => scroller.current,
+    estimateSize: () => metrics.cellWidth * 1.5 + TILE_CAPTION + POSTER_GAP,
+    overscan: 3,
+  });
+
   const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
   return (
     <div className="flex h-full flex-col">
@@ -219,7 +237,7 @@ export function SeriesIndex() {
           <Plus aria-hidden className="size-3.5" /> Add series
         </Link>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-4">
+      <div ref={scroller} className="min-h-0 flex-1 overflow-auto" style={{ padding: POSTER_PADDING }}>
         {pages.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
         {pages.error !== null && !pages.isLoading && <p className="text-sm text-danger">The series could not be read.</p>}
         {!pages.isLoading && all.length === 0 && pages.error === null && (
@@ -231,9 +249,17 @@ export function SeriesIndex() {
             </Link>
           </div>
         )}
-        <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))" }}>
-          {shown.map((series) => (
-            <SeriesTile key={series.id} series={series} categoryId={categoryId} />
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((row) => (
+            <div
+              key={row.key}
+              className="absolute inset-x-0 grid"
+              style={{ height: row.size, transform: `translateY(${row.start}px)`, gap: POSTER_GAP, gridTemplateColumns: `repeat(${metrics.columns}, minmax(0, 1fr))` }}
+            >
+              {shown.slice(row.index * metrics.columns, (row.index + 1) * metrics.columns).map((series) => (
+                <SeriesTile key={series.id} series={series} categoryId={categoryId} />
+              ))}
+            </div>
           ))}
         </div>
       </div>
