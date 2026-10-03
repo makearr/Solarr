@@ -5,6 +5,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/identify/quality"
+	"github.com/makearr/Solarr/internal/media/tv"
 )
 
 // CutoffUnmet lists the present episodes whose measured file is below the library's target or cutoff, in series order.
@@ -21,7 +22,7 @@ func (c SeriesCatalog) CutoffUnmet(ctx context.Context, categoryID int64, offset
 	below := make([]gen.WantedEpisode, 0, limit)
 	skipped := 0
 	for _, episode := range held {
-		facts := fileFacts(episode.File)
+		facts := tv.FileFacts(episode.File)
 		judged, ok := quality.Judge(snapshot, category, facts)
 		if !ok || judged.MeetsCutoff {
 			continue

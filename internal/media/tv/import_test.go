@@ -33,6 +33,12 @@ func (m memoryAffinity) SetPlacementAffinity(_ context.Context, _ int64, key str
 	return nil
 }
 
+type acquisitionFor struct{ itemID int64 }
+
+func (a acquisitionFor) Get(context.Context, int64) (library.Acquisition, error) {
+	return library.Acquisition{DesiredItemID: &a.itemID}, nil
+}
+
 type noAcquisition struct{}
 
 func (noAcquisition) Get(context.Context, int64) (library.Acquisition, error) {
@@ -110,6 +116,43 @@ func TestImportPlacesAFolderOfEpisodesUnderTheSeriesAndCoversThem(t *testing.T) 
 	})
 	if err != nil || again.Placements[0] != nil || again.Decisions[0].Decision == library.UnitCommit {
 		t.Errorf("a second import of the same episodes places nothing: %+v, %v", again.Decisions[0], err)
+	}
+
+	// A download grabbed for a season below its cutoff brings a second file per episode instead.
+	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), *decision.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var season1 int64
+	for _, item := range items {
+		if item.MediaRef == "s01" {
+			season1 = item.ID
+		}
+	}
+	if err := library.NewDesired(opened).SetAlbumState(t.Context(), season1, tv.ItemStateUpgradable, 2); err != nil {
+		t.Fatal(err)
+	}
+	upgrading := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: acquisitionFor{season1},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake,
+	})
+	acquisitionID := int64(5)
+	replaced, err := upgrading.ImportBatch(t.Context(), batch.Request{
+		SessionID: 2, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{79}, AcquisitionID: &acquisitionID,
+	})
+	if err != nil || replaced.Placements[0] == nil || len(replaced.Placements[0].MediaObjectIDs) != 2 {
+		t.Fatalf("an upgrade places its files beside the owned ones: %+v, %v", replaced.Decisions[0], err)
+	}
+	for _, want := range []string{
+		"/library/Example Show/Season 1/Example Show - S01E01 - Episode [upgrade].mkv",
+		"/library/Example Show/Season 1/Example Show - S01E01 - Episode.mkv",
+	} {
+		if _, err := fsys.Stat(want); err != nil {
+			t.Errorf("%s: %v", want, err)
+		}
 	}
 }
 

@@ -15,7 +15,9 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -73,6 +75,8 @@ type wanted struct {
 	absolute map[int]int
 	// runtimeMs is an episode's usual length, to turn a release's size into a bitrate; zero when nothing says.
 	runtimeMs int64
+	// owned is, for an upgrade, the file each wanted episode has now: a release must strictly beat it.
+	owned map[int]library.EpisodeFile
 }
 
 func seasonNumber(mediaRef string) (int, bool) {
@@ -99,6 +103,13 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
 	}
 	today := now.UTC().Format("2006-01-02")
+	belowCutoff, err := s.belowCutoff(ctx, item, only)
+	if err != nil {
+		return wanted{}, err
+	}
+	if belowCutoff != nil {
+		w.owned = map[int]library.EpisodeFile{}
+	}
 	var runtimeSum, runtimeCount int64
 	for _, episode := range detail.Episodes {
 		if episode.Season != season {
@@ -117,6 +128,11 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 			if episode.Number == only {
 				w.missing[episode.Number] = episode
 			}
+		case belowCutoff != nil:
+			if file, below := belowCutoff[episode.Number]; below && episode.Monitored {
+				w.missing[episode.Number] = episode
+				w.owned[episode.Number] = file
+			}
 		case episode.Monitored && !episode.Present && aired:
 			w.missing[episode.Number] = episode
 		}
@@ -128,6 +144,35 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		w.runtimeMs = detail.RuntimeMs
 	}
 	return w, nil
+}
+
+// belowCutoff is, for an UPGRADABLE season, the present episodes whose measured file misses the library's cutoff,
+// each with that file; nil for any other search.
+func (s Search) belowCutoff(ctx context.Context, item librarydb.DesiredItem, only int) (map[int]library.EpisodeFile, error) {
+	if item.State != ItemStateUpgradable || only > 0 || s.Settings == nil {
+		return nil, nil
+	}
+	snapshot := s.Settings.Snapshot()
+	category, found := snapshot.Category(item.CategoryID)
+	if !found {
+		return nil, nil
+	}
+	files, err := s.Series.SeasonFiles(ctx, item.ID)
+	if err != nil {
+		return nil, err
+	}
+	below := map[int]library.EpisodeFile{}
+	for _, file := range files {
+		if !file.Measured {
+			continue
+		}
+		if judged, ok := quality.Judge(snapshot, category, FileFacts(file.File)); ok && !judged.MeetsCutoff {
+			if _, has := below[file.Episode]; !has {
+				below[file.Episode] = file.File
+			}
+		}
+	}
+	return below, nil
 }
 
 // titles are every name a release may call the series by, cleaned for comparison.
@@ -287,6 +332,8 @@ type yardstick struct {
 	preferPropers  bool
 	delay          judge.ProtocolDelay
 	now            time.Time
+	// incumbents are the decisions the files an upgrade replaces would get; empty when the search is not an upgrade.
+	incumbents map[int]model.Decision
 }
 
 func (s Search) yardstick(ctx context.Context, item librarydb.DesiredItem, w wanted) (yardstick, error) {
@@ -297,7 +344,10 @@ func (s Search) yardstick(ctx context.Context, item librarydb.DesiredItem, w wan
 	}
 	built := yardstick{
 		wanted: w, titles: w.titles(), rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID),
-		preferPropers: true, now: s.Clock.Now(),
+		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{},
+	}
+	for number, file := range w.owned {
+		built.incumbents[number] = judge.EvaluateInOrder(rules, FileFacts(file), built.languagePolicy)
 	}
 	if category, found := snapshot.Category(item.CategoryID); found {
 		built.preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
@@ -313,13 +363,15 @@ func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Fin
 		if !ok {
 			continue
 		}
-		covered, ok := y.coverage(info)
+		numbers, ok := y.coverage(info)
 		if !ok {
 			continue
 		}
+		covered := len(numbers)
 		facts := factsFromRelease(info, raw, conn.Impl)
 		estimateBitrate(&facts, raw.SizeBytes, releaseEpisodes(info, covered, y.wanted.allCount), y.wanted.runtimeMs)
 		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
+		y.requireUpgrade(&decision, facts, numbers)
 		fraction := float64(covered) / float64(len(y.wanted.missing))
 		finds = append(finds, judge.Find{
 			Conn: conn, Raw: raw, ParseConfidence: 1, Distance: 1 - fraction, MatchConfidence: max(0.5, fraction), Decision: decision,
@@ -329,14 +381,14 @@ func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Fin
 	return finds
 }
 
-// coverage says how many of the wanted episodes the release holds; false when it is not this series, this season or
+// coverage says which of the wanted episodes the release holds; false when it is not this series, this season or
 // anything wanted.
-func (y yardstick) coverage(info parsetv.Info) (int, bool) {
+func (y yardstick) coverage(info parsetv.Info) ([]int, bool) {
 	if !y.titles[parsetv.CleanTitle(info.SeriesTitle)] && !y.titles[parsetv.CleanTitle(info.TitleWithoutYear)] {
-		return 0, false
+		return nil, false
 	}
 	if info.SeasonExtra {
-		return 0, false
+		return nil, false
 	}
 	wantedSeason := y.wanted.season
 	switch {
@@ -346,38 +398,66 @@ func (y yardstick) coverage(info parsetv.Info) (int, bool) {
 			inSeason = inSeason || season == wantedSeason
 		}
 		if !inSeason {
-			return 0, false
+			return nil, false
 		}
-		return len(y.wanted.missing), true
+		numbers := make([]int, 0, len(y.wanted.missing))
+		for number := range y.wanted.missing {
+			numbers = append(numbers, number)
+		}
+		return numbers, true
 	case len(info.EpisodeNumbers) > 0:
 		if info.SeasonNumber != wantedSeason {
-			return 0, false
+			return nil, false
 		}
-		covered := 0
+		var numbers []int
 		for _, number := range info.EpisodeNumbers {
 			if _, missing := y.wanted.missing[number]; missing {
-				covered++
+				numbers = append(numbers, number)
 			}
 		}
-		return covered, covered > 0
+		return numbers, len(numbers) > 0
 	case len(info.AbsoluteNumbers) > 0 && y.wanted.anime:
-		covered := 0
+		var numbers []int
 		for _, absolute := range info.AbsoluteNumbers {
 			if number, known := y.wanted.absolute[absolute]; known {
 				if _, missing := y.wanted.missing[number]; missing {
-					covered++
+					numbers = append(numbers, number)
 				}
 			}
 		}
-		return covered, covered > 0
+		return numbers, len(numbers) > 0
 	case info.AirDate != "":
-		for _, episode := range y.wanted.missing {
+		for number, episode := range y.wanted.missing {
 			if episode.Date == info.AirDate {
-				return 1, true
+				return []int{number}, true
 			}
 		}
 	}
-	return 0, false
+	return nil, false
+}
+
+// requireUpgrade rejects an accepted release that does not beat the file of every episode it would replace by quality
+// (Invariant 72: a tie keeps what is owned). Only what a file can show is compared: a release name states a source, a
+// group and a repack that the measured file does not, so with them it would always out-rank the file it replaces.
+func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts, numbers []int) {
+	if decision.Outcome != model.OutcomeAccept {
+		return
+	}
+	facts.File.Source, facts.File.ReleaseGroup, facts.File.ProperRepack = "", "", false
+	likeForLike := judge.EvaluateInOrder(y.rules, facts, y.languagePolicy)
+	for _, number := range numbers {
+		owned, replacing := y.incumbents[number]
+		if !replacing {
+			continue
+		}
+		if winner, _ := model.Compare(likeForLike.Quality, owned.Quality); winner >= 0 {
+			decision.Outcome = model.OutcomeReject
+			decision.Rejections = append(decision.Rejections, model.Rejection{
+				Rule: "upgrade", Field: "quality", Wanted: "better than the files you have", Got: "not better",
+			})
+			return
+		}
+	}
 }
 
 // factsFromRelease stands a release name's claims in for measured facts before download (ADR-39).

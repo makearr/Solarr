@@ -97,8 +97,9 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		Placements: make([]*library.Placement, len(request.Units)),
 	}
 	var seeded int64
+	var upgrade bool
 	if request.AcquisitionID != nil {
-		seeded = i.seedSeries(ctx, *request.AcquisitionID)
+		seeded, upgrade = i.seedSeries(ctx, *request.AcquisitionID)
 	}
 	for index, unit := range request.Units {
 		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no episode of a known series was found in it"}
@@ -121,7 +122,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			result.Decisions[index] = decision
 			continue
 		}
-		placed, err := i.placeUnit(ctx, request, unit, workID)
+		placed, err := i.placeUnit(ctx, request, unit, workID, upgrade && workID == seeded)
 		switch {
 		case errors.Is(err, errNothingToPlace):
 			decision.WorkID = &workID
@@ -147,17 +148,18 @@ func firstMedia(unit inspect.Unit) string {
 	return ""
 }
 
-// seedSeries is the series a download was grabbed for: its desired item's work.
-func (i Importer) seedSeries(ctx context.Context, acquisitionID int64) int64 {
+// seedSeries is the series a download was grabbed for: its desired item's work; upgrade says the item was below its
+// cutoff, so the download is meant to replace files it already has.
+func (i Importer) seedSeries(ctx context.Context, acquisitionID int64) (workID int64, upgrade bool) {
 	acquisition, err := i.config.Acquisitions.Get(ctx, acquisitionID)
 	if err != nil || acquisition.DesiredItemID == nil {
-		return 0
+		return 0, false
 	}
 	item, err := i.config.Desired.Get(ctx, *acquisition.DesiredItemID)
 	if err != nil {
-		return 0
+		return 0, false
 	}
-	return item.WorkID
+	return item.WorkID, item.State == ItemStateUpgradable
 }
 
 var errNothingToPlace = errors.New("tv: no file of the unit covers an episode that is wanted")
@@ -169,7 +171,7 @@ type fileEpisodes struct {
 	parts []library.ResolvedPart
 }
 
-func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64) (*library.Placement, error) {
+func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
 	now := i.config.Clock.Now()
 	detail, err := i.config.Reader.Get(ctx, request.CategoryID, workID, now)
 	if err != nil {
@@ -193,7 +195,8 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		if err != nil {
 			return nil, err
 		}
-		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] })
+		// An upgrade brings a second file for an episode; the cutoff check keeps the better one once both are measured.
+		fresh := slices.DeleteFunc(slices.Clone(parts), func(part library.ResolvedPart) bool { return present[part.MediaRef] && !upgrade })
 		if len(fresh) == 0 {
 			continue
 		}
@@ -224,6 +227,9 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 			return undo(fmt.Errorf("name %q: %w", file.media.RelPath, err))
 		}
 		sourceAbs := path.Join(request.SourcePath, file.media.RelPath)
+		if upgrade {
+			destRel = i.freeName(destRoot.Path, destRel)
+		}
 		destAbs := path.Join(destRoot.Path, destRel)
 		method, err := mover.PlaceOne(i.config.FS, sourceAbs, destAbs, file.media.SizeBytes, methods)
 		if err != nil {
@@ -262,6 +268,15 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		placement.TransferMethods = append(placement.TransferMethods, string(p.method))
 	}
 	return placement, nil
+}
+
+// freeName keeps an upgrade from landing on the file it replaces when both are named alike.
+func (i Importer) freeName(rootPath, rel string) string {
+	if _, err := i.config.FS.Stat(path.Join(rootPath, rel)); err != nil {
+		return rel
+	}
+	extension := path.Ext(rel)
+	return strings.TrimSuffix(rel, extension) + " [upgrade]" + extension
 }
 
 type placedEpisode struct {

@@ -13,7 +13,6 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
-	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/paginate"
@@ -486,17 +485,8 @@ func episodeFileView(file library.EpisodeFile, category settings.Category, haveC
 		view.VideoBitrateKbps = &kbps
 	}
 	if haveCategory && category.QualityTarget != nil && file.VideoCodec != "" {
-		meets := quality.MeetsTarget(*category.QualityTarget, fileFacts(file).File)
+		meets := quality.MeetsTarget(*category.QualityTarget, tv.FileFacts(file).File)
 		view.MeetsTarget = &meets
 	}
 	return view
-}
-
-// fileFacts is what the probe measured of an episode's file, as the facts a profile or a target judges.
-func fileFacts(file library.EpisodeFile) score.Facts {
-	return score.Facts{File: score.FileFacts{
-		Resolution: file.Resolution, VideoCodec: file.VideoCodec, HDR: file.HDR, AudioCodec: file.AudioCodec,
-		AudioChannels: file.AudioChannels, Container: file.Container, AudioLanguages: file.Languages, SubtitleLanguages: file.Subtitles,
-		FrameRate: file.FrameRate, VideoBitrate: file.VideoBitrate, AudioBitrate: file.AudioBitrate,
-	}}
 }

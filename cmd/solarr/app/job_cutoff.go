@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -20,6 +21,13 @@ func (p *process) registerCutoffJob(registry *jobs.Registry, executor *jobs.Exec
 	if err := registry.Register(music.CutoffDefinition); err != nil {
 		return err
 	}
+	if err := registry.Register(tv.CutoffDefinition); err != nil {
+		return err
+	}
+	executor.Handle(tv.CutoffJobType, tv.CutoffJob{
+		Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
+		Recycle: p.recycleSuperseded, Logger: p.logger,
+	})
 	executor.Handle(music.CutoffJobType, music.CutoffJob{
 		Desired: library.NewDesired(p.library), Settings: p.cache, Recycle: p.recycleSuperseded,
 		Clock: clock.NewSystem(), Logger: p.logger,
@@ -52,12 +60,19 @@ func (p *process) afterDownloadImported(ctx context.Context, acquisition library
 	if _, err := probe.Enqueue(ctx, p.queue); err != nil {
 		p.logger.Warn("after import: probe not queued", slog.Any("error", err))
 	}
-	payload, err := json.Marshal(music.CutoffPayload{WorkID: item.WorkID})
+	jobType := music.CutoffJobType
+	var payload []byte
+	if library.NewSeriesReader(p.library).InCategory(ctx, item.CategoryID, item.WorkID) == nil {
+		jobType = tv.CutoffJobType
+		payload, err = json.Marshal(tv.CutoffPayload{WorkID: item.WorkID})
+	} else {
+		payload, err = json.Marshal(music.CutoffPayload{WorkID: item.WorkID})
+	}
 	if err != nil {
 		return
 	}
 	if _, err := p.queue.Enqueue(ctx, jobs.Request{
-		Type: music.CutoffJobType, ActionKey: fmt.Sprintf("%s:%d", music.CutoffJobType, item.WorkID),
+		Type: jobType, ActionKey: fmt.Sprintf("%s:%d", jobType, item.WorkID),
 		Priority: jobs.PriorityLow, Payload: payload,
 	}); err != nil {
 		p.logger.Warn("after import: cutoff check not queued", slog.Any("error", err))
@@ -65,6 +80,11 @@ func (p *process) afterDownloadImported(ctx context.Context, acquisition library
 }
 
 func (p *process) enqueueCutoff(ctx context.Context) (jobs.EnqueueResult, error) {
+	if _, err := p.queue.Enqueue(ctx, jobs.Request{
+		Type: tv.CutoffJobType, ActionKey: string(tv.CutoffJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
+	}); err != nil {
+		return jobs.EnqueueResult{}, err
+	}
 	return p.queue.Enqueue(ctx, jobs.Request{
 		Type: music.CutoffJobType, ActionKey: string(music.CutoffJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
 	})
