@@ -475,8 +475,9 @@ func (q *Queries) GetItemReleaseDate(ctx context.Context, arg GetItemReleaseDate
 const listAlbumItemsForCutoff = `-- name: ListAlbumItemsForCutoff :many
 SELECT id, work_id, category_id, profile_id, state, present_count
 FROM desired_item
-WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE') AND id > ?1
-ORDER BY id
+WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE') AND desired_item.id > ?1
+  AND EXISTS (SELECT 1 FROM work w WHERE w.id = desired_item.work_id AND w.media_type = 'music')
+ORDER BY desired_item.id
 LIMIT ?2
 `
 
