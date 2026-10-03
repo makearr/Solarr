@@ -124,6 +124,8 @@ type WriteOptions struct {
 	Specials bool
 	// Now is the clock the monitor choice reads; a refresh passes its own.
 	Now time.Time
+	// NewPart, when set, decides the monitoring of each part this write creates instead of Monitor.
+	NewPart func(Episode) bool
 }
 
 // ToWrite turns a merged series into what the library stores.
@@ -181,8 +183,12 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 	}
 
 	monitoring := newMonitors(options.Monitor, options.Specials, options.Now, series.Episodes)
+	wants := monitoring.wants
+	if options.NewPart != nil {
+		wants = options.NewPart
+	}
 	for _, episode := range series.Episodes {
-		write.Parts = append(write.Parts, partWrite(episode, monitoring.wants(episode)))
+		write.Parts = append(write.Parts, partWrite(episode, wants(episode)))
 	}
 	return write
 }

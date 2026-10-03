@@ -393,3 +393,50 @@ func (r SeriesReader) Wanted(ctx context.Context, categoryID int64, after Wanted
 	}
 	return episodes, nil
 }
+
+// SeasonMonitoring answers each season item's monitored flag, by season number (specials are 0).
+func (r SeriesReader) SeasonMonitoring(ctx context.Context, workID int64) (map[int]bool, error) {
+	items, err := librarydb.New(r.store.Read()).ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: season items: %w", err)
+	}
+	monitored := make(map[int]bool, len(items))
+	for _, item := range items {
+		if item.SatisfactionKind == "SET" && item.MediaRef != "" {
+			season, _ := parseSeriesRef(item.MediaRef + ":")
+			monitored[season] = item.Monitored == 1
+		}
+	}
+	return monitored, nil
+}
+
+// RefreshCandidate is a series whose providers have not been asked lately.
+type RefreshCandidate struct {
+	WorkID     int64
+	CategoryID int64
+}
+
+// DueForRefresh lists the series last written longer ago than their status asks: those not known to have ended after
+// continuing, an ended one after endedAfter. The oldest come first.
+func (r SeriesReader) DueForRefresh(ctx context.Context, now time.Time, continuing, ended time.Duration, limit int) ([]RefreshCandidate, error) {
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT w.id, COALESCE((SELECT d.category_id FROM desired_item d WHERE d.work_id = w.id ORDER BY d.id LIMIT 1), 0)
+FROM work w
+WHERE w.media_type = 'tv'
+  AND w.updated_at < ? - CASE WHEN COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'status'
+                                             ORDER BY f.provider = '__manual__' DESC LIMIT 1), '') = 'ended' THEN ? ELSE ? END
+ORDER BY w.updated_at, w.id LIMIT ?`, now.Unix(), int64(ended.Seconds()), int64(continuing.Seconds()), limit)
+	if err != nil {
+		return nil, fmt.Errorf("library: series due for refresh: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var due []RefreshCandidate
+	for rows.Next() {
+		var candidate RefreshCandidate
+		if err := rows.Scan(&candidate.WorkID, &candidate.CategoryID); err != nil {
+			return nil, fmt.Errorf("library: scan refresh candidate: %w", err)
+		}
+		due = append(due, candidate)
+	}
+	return due, rows.Err()
+}

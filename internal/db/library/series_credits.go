@@ -56,3 +56,10 @@ func (s Series) writeCredits(ctx context.Context, at time.Time, workID int64, pa
 	}
 	return nil
 }
+
+// MarkRefreshAttempt records that a refresh was tried at the given time without changing anything else.
+func (s Series) MarkRefreshAttempt(ctx context.Context, at time.Time, workID int64) error {
+	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).UpdateWorkTimestamp(ctx, librarydb.UpdateWorkTimestampParams{UpdatedAt: at.Unix(), ID: workID})
+	})
+}

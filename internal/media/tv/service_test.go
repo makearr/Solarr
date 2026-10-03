@@ -226,3 +226,41 @@ func TestSearchAnswersCandidatesUpToTheLimit(t *testing.T) {
 		t.Errorf("candidates = %+v, %v", got, err)
 	}
 }
+
+func TestRefreshMonitorsNewEpisodesByTheirSeasonAndNewSeasonsWhenTheSeriesIsWanted(t *testing.T) {
+	sky := fixtureSkyhook()
+	service, opened := newService(t, searchSkyhook{series: sky}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorFirstSeason})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	grown := fixtureSkyhook()
+	extra := func(id int64, season, number int, date string) skyhook.Episode {
+		return skyhook.Episode{TVDBID: id, SeasonNumber: season, EpisodeNumber: number, Title: "New", AirDate: date}
+	}
+	grown.Episodes = append(grown.Episodes, extra(7, 1, 3, "2025-01-19"), extra(8, 2, 4, "2026-10-19"), extra(9, 3, 1, "2026-11-01"), extra(10, 0, 2, "2026-10-01"))
+	service.Skyhook = searchSkyhook{series: grown}
+	if _, err := service.Refresh(t.Context(), tv.RefreshRequest{WorkID: added.WorkID, CategoryID: 3, ProfileID: 1}); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := library.NewSeriesReader(opened).Get(t.Context(), 3, added.WorkID, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, episode := range detail.Episodes {
+		got[tv.MediaRef(episode.Season, episode.Number)] = episode.Monitored
+	}
+	want := map[string]bool{"s01:e03": true, "s02:e04": false, "s03:e01": true, "s00:e02": false, "s02:e01": false, "s01:e01": true}
+	for ref, monitored := range want {
+		if got[ref] != monitored {
+			t.Errorf("%s monitored = %v, want %v", ref, got[ref], monitored)
+		}
+	}
+	if len(detail.Episodes) != 10 {
+		t.Errorf("episodes = %d, want the original six and the four new ones", len(detail.Episodes))
+	}
+}

@@ -182,13 +182,11 @@ func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) 
 	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
 		return gen.AddSeriesResult{}, translateSeriesError(err)
 	}
-	ids, err := c.Reader.ProviderIDs(ctx, seriesID)
-	if err != nil {
-		return gen.AddSeriesResult{}, err
+	profile := c.DefaultProfileID
+	if category, ok := c.Categories.Category(categoryID); ok {
+		profile = c.Categories.ProfileFor(category, profile)
 	}
-	tvdb, _ := tv.ParseID(ids[tv.ProviderTVDB])
-	maze, _ := tv.ParseID(ids[tv.ProviderTVmaze])
-	result, err := c.Service.Add(ctx, tv.AddRequest{IDs: tv.IDs{TVDB: tvdb, TVmaze: maze}, CategoryID: categoryID, Monitor: tv.MonitorNone})
+	result, err := c.Service.Refresh(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile})
 	if err != nil {
 		if errors.Is(err, tv.ErrNoSource) {
 			return gen.AddSeriesResult{}, fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)

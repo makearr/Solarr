@@ -51,6 +51,7 @@ type Service struct {
 	// TMDB is nil or unconfigured until the user gives a key; TV then works on the other two.
 	TMDB    RichSource
 	Series  library.Series
+	Reader  library.SeriesReader
 	Desired library.Desired
 	Clock   clock.Clock
 	Logger  *slog.Logger
@@ -59,6 +60,11 @@ type Service struct {
 // Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
 // artwork, TVmaze air times. A failing source is skipped; only all failing is an error.
 func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
+	return s.fetch(ctx, ids, false)
+}
+
+// fetch is Fetch; recentOnly asks TMDB for the guest stars of the newest seasons only, which is all a refresh needs.
+func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, error) {
 	ids = s.completeIDs(ctx, ids)
 	var sources []Series
 	if ids.TVDB > 0 && s.Skyhook != nil {
@@ -78,7 +84,7 @@ func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
 			}
 		}
 	}
-	rich, haveRich := s.fetchTMDB(ctx, ids)
+	rich, haveRich := s.fetchTMDB(ctx, ids, recentOnly)
 	if haveRich {
 		sources = append(sources, rich)
 	}
@@ -118,7 +124,7 @@ func (s Service) completeIDs(ctx context.Context, ids IDs) IDs {
 
 // fetchTMDB asks TMDB for the series and every season's guest stars; TMDB's own id is found from TheTVDB's or IMDb's
 // when Skyhook did not carry it.
-func (s Service) fetchTMDB(ctx context.Context, ids IDs) (Series, bool) {
+func (s Service) fetchTMDB(ctx context.Context, ids IDs, recentOnly bool) (Series, bool) {
 	if s.TMDB == nil || !s.TMDB.Configured() {
 		return Series{}, false
 	}
@@ -142,9 +148,16 @@ func (s Service) fetchTMDB(ctx context.Context, ids IDs) (Series, bool) {
 		return Series{}, false
 	}
 	var seasons []tmdb.Season
+	newest := 0
+	for _, entry := range series.Seasons {
+		newest = max(newest, entry.SeasonNumber)
+	}
 	for _, entry := range series.Seasons {
 		if len(seasons) == maxCreditSeasons {
 			break
+		}
+		if recentOnly && entry.SeasonNumber < newest-1 {
+			continue
 		}
 		season, err := s.TMDB.Season(ctx, id, entry.SeasonNumber)
 		if err != nil {
@@ -264,27 +277,81 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, err
 	}
 
-	seasons, err := s.ensureSeasons(ctx, stored, series, request)
+	monitoring := newMonitors(request.Monitor, request.Specials, now, series.Episodes)
+	seasons, err := s.ensureSeasons(ctx, stored, series, monitoring.wants, request.CategoryID, request.ProfileID, request.AddedBy)
 	if err != nil {
 		return AddResult{}, err
 	}
 	return AddResult{WorkID: stored.WorkID, Created: stored.Created, Episodes: len(series.Episodes), Seasons: seasons, Series: series}, nil
 }
 
-func (s Service) ensureSeasons(ctx context.Context, stored library.SeriesResult, series Series, request AddRequest) (int, error) {
+// RefreshRequest names a series the library holds and the library it is in.
+type RefreshRequest struct {
+	WorkID     int64
+	CategoryID int64
+	ProfileID  int64
+}
+
+// Refresh re-reads a series the library holds. Monitoring is the user's: an episode that is new follows its season, a
+// season that is new is monitored when the series already has a monitored one (Sonarr's "monitor new items: all"),
+// and specials never are. Nothing existing changes and no part is removed.
+func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult, error) {
+	provider, err := s.Reader.ProviderIDs(ctx, request.WorkID)
+	if err != nil {
+		return AddResult{}, err
+	}
+	ids := IDs{IMDb: provider[ProviderIMDb]}
+	ids.TVDB, _ = ParseID(provider[ProviderTVDB])
+	ids.TVmaze, _ = ParseID(provider[ProviderTVmaze])
+	ids.TMDB, _ = ParseID(provider[ProviderTMDB])
+	series, err := s.fetch(ctx, ids, true)
+	if err != nil {
+		return AddResult{}, err
+	}
+	monitored, err := s.Reader.SeasonMonitoring(ctx, request.WorkID)
+	if err != nil {
+		return AddResult{}, err
+	}
+	seriesWanted := false
+	for season, on := range monitored {
+		seriesWanted = seriesWanted || (season > 0 && on)
+	}
+	wants := func(episode Episode) bool {
+		if episode.Season == 0 || episode.Special {
+			return false
+		}
+		if on, held := monitored[episode.Season]; held {
+			return on
+		}
+		return seriesWanted
+	}
+	now := s.Clock.Now()
+	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{NewPart: wants, Now: now}))
+	if err != nil {
+		return AddResult{}, err
+	}
+	seasons, err := s.ensureSeasons(ctx, stored, series, wants, request.CategoryID, request.ProfileID, nil)
+	if err != nil {
+		return AddResult{}, err
+	}
+	return AddResult{WorkID: stored.WorkID, Episodes: len(series.Episodes), Seasons: seasons, Series: series}, nil
+}
+
+func (s Service) ensureSeasons(
+	ctx context.Context, stored library.SeriesResult, series Series, wants func(Episode) bool, categoryID, profileID int64, addedBy *int64,
+) (int, error) {
 	monitored := map[int]bool{}
 	seen := map[int]bool{}
-	monitoring := newMonitors(request.Monitor, request.Specials, s.Clock.Now(), series.Episodes)
 	for _, episode := range series.Episodes {
 		seen[episode.Season] = true
-		if monitoring.wants(episode) {
+		if wants(episode) {
 			monitored[episode.Season] = true
 		}
 	}
 	for season := range seen {
 		_, err := s.Desired.EnsureSeasonItem(ctx, library.SeasonRequest{
 			WorkID: stored.WorkID, MediaRef: SeasonRef(season), SortKey: "s" + fmt.Sprintf("%04d", season),
-			CategoryID: request.CategoryID, ProfileID: request.ProfileID, Monitored: monitored[season], AddedBy: request.AddedBy,
+			CategoryID: categoryID, ProfileID: profileID, Monitored: monitored[season], AddedBy: addedBy,
 		})
 		if err != nil {
 			return 0, fmt.Errorf("tv: season %d: %w", season, err)
