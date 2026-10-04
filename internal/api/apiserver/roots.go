@@ -5,10 +5,14 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
+	"syscall"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 )
+
+// ErrReadOnlyFilesystem is a root whose filesystem is mounted read only: no policy to set, the mount decides.
+var ErrReadOnlyFilesystem = errors.New("apiserver: the filesystem is read only")
 
 // FilesystemRoots checks a candidate library root against a real filesystem.
 // See documentation/container-runtime.md.
@@ -43,6 +47,9 @@ func (r FilesystemRoots) Validate(path string) error {
 // not. A library root is never chowned.
 func (r FilesystemRoots) Writable(path string) error {
 	if err := r.probeWritable(path); err != nil {
+		if errors.Is(err, syscall.EROFS) {
+			return fmt.Errorf("%q is on a read-only filesystem: %w", path, ErrReadOnlyFilesystem)
+		}
 		info, statErr := r.FS.Stat(path)
 		if statErr != nil {
 			return err

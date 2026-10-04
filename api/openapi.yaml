@@ -6767,6 +6767,9 @@ components:
           description: >-
             An unmounted root counts as unavailable, never as free space
             (Invariant 20a).
+        read_only_detected:
+          type: boolean
+          description: The filesystem under this root is mounted read only, found by trying to write; the root is then read only whatever its policy says.
         writable:
           type: boolean
           description: >-

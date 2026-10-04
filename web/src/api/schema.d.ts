@@ -4240,6 +4240,8 @@ export interface components {
             label?: string;
             /** @description An unmounted root counts as unavailable, never as free space (Invariant 20a). */
             online: boolean;
+            /** @description The filesystem under this root is mounted read only, found by trying to write; the root is then read only whatever its policy says. */
+            read_only_detected?: boolean;
             /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and Solarr does not chown a library it did not create. Absent when it has not been probed. */
             writable?: boolean;
             /** @description Curated policy, not a probed fact: blocks new placement, upgrade-in-place and tag write-back, and blocks renaming unless allow_rename is also set (Invariant 69). */

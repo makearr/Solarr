@@ -293,7 +293,7 @@ function RootFolderCard({
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <Badge tone={root.online ? "ok" : "warn"}>{root.online ? "online" : "offline"}</Badge>
           {root.writable !== undefined && (
-            <Badge tone={root.writable ? "ok" : "warn"}>{root.writable ? "writable" : "not writable"}</Badge>
+            <Badge tone={root.writable ? "ok" : "warn"}>{root.writable ? "writable" : root.read_only_detected ? "read-only filesystem" : "not writable"}</Badge>
           )}
           {root.drain_state && root.drain_state !== "NONE" && <Badge tone="warn">{root.drain_state}</Badge>}
         </span>
@@ -395,12 +395,13 @@ function RootFolderCard({
         <label className="flex items-center gap-1.5 text-ink-muted">
           <input
             type="checkbox"
-            checked={readOnly}
-            disabled={busy}
+            checked={readOnly || root.read_only_detected === true}
+            disabled={busy || root.read_only_detected === true}
+            title={root.read_only_detected ? "The filesystem is mounted read only, so this is on whatever you choose here." : undefined}
             onChange={(event) => setReadOnly(event.target.checked)}
             className="size-3.5"
           />
-          read only
+          read only{root.read_only_detected ? " (detected)" : ""}
         </label>
         <label className="flex items-center gap-1.5 text-ink-muted">
           <input

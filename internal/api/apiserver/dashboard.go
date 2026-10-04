@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -44,8 +45,13 @@ func (s *Server) rootFolderViews() []gen.RootFolder {
 	for _, folder := range folders {
 		view := s.rootFolderView(folder)
 		if s.roots != nil {
-			writable := s.roots.Writable(folder.Path) == nil
+			err := s.roots.Writable(folder.Path)
+			writable := err == nil
 			view.Writable = &writable
+			if errors.Is(err, ErrReadOnlyFilesystem) {
+				detected := true
+				view.ReadOnlyDetected = &detected
+			}
 		}
 		views = append(views, view)
 	}
