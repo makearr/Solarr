@@ -45,12 +45,22 @@ func LibraryProfiles(
 		if err != nil {
 			return nil, fmt.Errorf("quality profile %d: %w", id, err)
 		}
-		if category, found := snapshot.Category(categoryID); found && category.QualityTarget != nil {
-			rules = WithTarget(rules, *category.QualityTarget)
-		}
 		profiles = append(profiles, RankedProfile{Name: profile.Name, Rules: rules})
 	}
 	return profiles, nil
+}
+
+// WithLibraryTarget makes the library's target quality lead every profile's ranking; a library without one is unchanged.
+func WithLibraryTarget(profiles []RankedProfile, snapshot *settings.Snapshot, categoryID int64) []RankedProfile {
+	category, found := snapshot.Category(categoryID)
+	if !found || category.QualityTarget == nil {
+		return profiles
+	}
+	led := make([]RankedProfile, len(profiles))
+	for index, profile := range profiles {
+		led[index] = RankedProfile{Name: profile.Name, Rules: WithTarget(profile.Rules, *category.QualityTarget)}
+	}
+	return led
 }
 
 // LanguagePolicyFor resolves the category's language profile; nil when none is assigned (language stays optional).

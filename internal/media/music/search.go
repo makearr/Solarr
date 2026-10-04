@@ -10,17 +10,16 @@ package music
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -30,7 +29,6 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parse"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ErrTrackSearchNotSupported reports a SINGLE (track-level) desired item --
@@ -39,9 +37,8 @@ import (
 // search terms; nothing has asked for that yet.
 var ErrTrackSearchNotSupported = errors.New("music: search: only album-level (SET) desired items are supported")
 
-// ErrNoQualityProfile reports a desired item whose own profile_id no longer
-// resolves -- a deleted profile a category still points items at.
-var ErrNoQualityProfile = errors.New("music: search: quality profile not found")
+// ErrNoQualityProfile reports a desired item whose profile no longer exists; the shared error, under music's name.
+var ErrNoQualityProfile = judge.ErrNoQualityProfile
 
 // maxCandidateMatchDistance is section 10.2's own acceptance gate for this
 // pass -- reused verbatim from SearchIdentifier's own DefaultSearchThresholds
@@ -58,46 +55,17 @@ var maxCandidateMatchDistance = DefaultSearchThresholds.MaxDistance
 // see Works.AlternateTitles) still only costs a handful of extra searches.
 const maxAliasSearchTerms = 5
 
-// candidateSearchResultLimit bounds one indexer's own per-tier response, the same
-// ceiling SearchIdentifier already uses for a MusicBrainz search.
+// candidateSearchResultLimit bounds one indexer's answer to one query, the ceiling SearchIdentifier uses too.
 const candidateSearchResultLimit = 20
 
-// defaultCandidateRetention is how long a found candidate stays queryable
-// before DeleteExpiredCandidates would sweep it (section 10.1's own "cached
-// until expires_at"). A placeholder until ADR-57's own retention.candidates
-// setting exists (stage 5's Downloads section, not built yet) -- carried
-// here so it needs no further change once that setting lands.
-const defaultCandidateRetention = 14 * 24 * time.Hour
+// IndexerSearcher is an indexer's search as the pipeline needs it: the shared type under music's older name.
+type IndexerSearcher = judge.Searcher
 
-// IndexerSearcher is what the candidate pipeline needs from a configured
-// indexer connection -- indexer.Client's own Search method, named
-// separately from search_identifier.go's own Searcher (a MusicBrainz
-// lookup, unrelated signature) sharing this package.
-type IndexerSearcher interface {
-	Search(ctx context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error)
-}
+// IndexerConn is one configured, enabled indexer ready to search: the shared type under music's older name.
+type IndexerConn = judge.Conn
 
-// IndexerConn is one configured, enabled indexer ready to search --
-// building the client (credentials, egress) is the caller's own job
-// (cmd/solarr/app/providers.go), the same split ArrSync's own
-// LidarrClientFactory already keeps.
-type IndexerConn struct {
-	ID int64
-	// Name is what a person calls the indexer, for naming it when it fails or is slow.
-	Name   string
-	Impl   string // "newznab" | "torznab" (ADR-43) -- decides the stored protocol and which RawItem fields apply
-	Client IndexerSearcher
-	// MusicParams is what the indexer's caps say its music search accepts; nil when unknown.
-	MusicParams []string
-	// Categories scope every search and feed read to music (D17); nil asks without a category.
-	Categories []int
-}
-
-// takesStructuredMusic reports whether an artist/album query can find anything here: an indexer
-// whose caps list only "q" answers it with nothing (NZBgeek via Prowlarr, 2026-09-29).
-func (c IndexerConn) takesStructuredMusic() bool {
-	return c.MusicParams == nil || slices.Contains(c.MusicParams, "artist")
-}
+// musicFunction is the Newznab function music searches with; an indexer's caps for it sit under this key.
+const musicFunction = "music"
 
 // IndexerSearchError records one indexer's own search failure -- best-effort
 // across every configured indexer (ADR-37's own "partial results are
@@ -175,6 +143,20 @@ func musicTerms(artist, album, year string) []searchTerms {
 	return terms
 }
 
+// queriesFor turns a tier's terms into indexer queries: a structured one is only worth sending to an indexer whose
+// caps list the artist parameter (NZBgeek through Prowlarr answers the text form only, 2026-09-29).
+func queriesFor(terms []searchTerms) []judge.Query {
+	queries := make([]judge.Query, 0, len(terms))
+	for _, term := range terms {
+		query := judge.Query{Function: musicFunction, Text: term.Query, Extra: term.Extra, Limit: candidateSearchResultLimit}
+		if term.Extra != nil {
+			query.Needs = []string{"artist"}
+		}
+		queries = append(queries, query)
+	}
+	return queries
+}
+
 // SearchItem runs the pipeline for one album-level desired item: build its
 // own identity and search tiers, fan out to every indexer at each tier in
 // turn, and stop widening at the first tier that finds at least one release
@@ -201,41 +183,41 @@ func (s Search) SearchItemWithTerms(
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
 
-	judge, err := s.judgeFor(ctx, item)
+	measure, err := s.yardstickFor(ctx, item)
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
-	tiers := buildSearchTiers(judge.artistName, judge.work, judge.aliases)
+	tiers := buildSearchTiers(measure.artistName, measure.work, measure.aliases)
 	if custom != nil {
 		tiers = [][]searchTerms{musicTerms(custom.Artist, custom.Album, "")}
 		// The typed terms are the identity now; the work's year and ids would judge them against the old name.
-		judge.albumTarget.Identity = match.Identity{Title: custom.Album, AlternateTitles: []string{judge.work.CanonicalTitle}}
-		judge.target.Identity = match.Identity{
-			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{judge.target.Title},
+		measure.albumTarget.Identity = match.Identity{Title: custom.Album, AlternateTitles: []string{measure.work.CanonicalTitle}}
+		measure.target.Identity = match.Identity{
+			Title: combinedTitle(custom.Artist, custom.Album), AlternateTitles: []string{measure.target.Title},
 		}
-		judge.wantedArtist = custom.Artist
+		measure.wantedArtist = custom.Artist
 	}
 
 	result := ItemSearchResult{}
 	for tierIndex, terms := range tiers {
-		var accepted []acceptedFind
-		answers, err := askEveryIndexer(ctx, indexers, terms, cmp.Or(s.IndexerDeadline, indexerGroupDeadline))
+		var accepted []judge.Find
+		answers, err := judge.AskEveryIndexer(ctx, indexers, queriesFor(terms), cmp.Or(s.IndexerDeadline, indexerGroupDeadline))
 		if err != nil {
 			return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 		}
 		// Merged in indexer order, so a duplicate keeps the best-priority indexer's copy.
 		for index, answer := range answers {
 			conn := indexers[index]
-			if answer.err != nil {
+			if answer.Err != nil {
 				result.IndexerErrors = append(result.IndexerErrors, IndexerSearchError{
-					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.err.Error(), TooSlow: answer.tooSlow,
+					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.Err.Error(), TooSlow: answer.TooSlow,
 				})
 			}
-			raws, err := s.withoutBlocklisted(ctx, conn.ID, answer.raws, at)
+			raws, err := s.withoutBlocklisted(ctx, conn.ID, answer.Raws, at)
 			if err != nil {
 				return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 			}
-			accepted = append(accepted, judge.evaluate(raws, conn)...)
+			accepted = append(accepted, measure.evaluate(raws, conn)...)
 		}
 		if len(accepted) == 0 {
 			continue
@@ -248,14 +230,14 @@ func (s Search) SearchItemWithTerms(
 	return result, nil
 }
 
-// judge is one album's yardstick for releases: who and what it is, and the library's quality rules.
-type judge struct {
+// yardstick is what one album's releases are measured against: who and what it is, and the library's quality rules.
+type yardstick struct {
 	work                librarydb.Work
 	aliases             []string
 	artistName          string
 	wantedArtist        string
 	target, albumTarget match.Candidate
-	rules               []rankedProfile
+	rules               []judge.RankedProfile
 	languagePolicy      *score.LanguagePolicy
 	preferPropers       bool
 	// incumbent is the worst owned file's decision when the album is below its cutoff: a release must
@@ -264,54 +246,54 @@ type judge struct {
 	// cutoffMet rejects every release, as Lidarr's "existing files meet cutoff": the album wants nothing.
 	cutoffMet bool
 	// delay is the library's delay profile: the other protocol's releases wait (D16); zero is none.
-	delay protocolDelay
+	delay judge.ProtocolDelay
 }
 
-// judgeFor builds item's yardstick from its work and its library's settings.
-func (s Search) judgeFor(ctx context.Context, item librarydb.DesiredItem) (judge, error) {
+// yardstickFor builds item's yardstick from its work and its library's settings.
+func (s Search) yardstickFor(ctx context.Context, item librarydb.DesiredItem) (yardstick, error) {
 	detail, err := s.Works.Detail(ctx, item.WorkID)
 	if err != nil {
-		return judge{}, fmt.Errorf("work detail: %w", err)
+		return yardstick{}, fmt.Errorf("work detail: %w", err)
 	}
 	aliases, err := s.Works.AlternateTitles(ctx, item.WorkID)
 	if err != nil {
-		return judge{}, fmt.Errorf("alternate titles: %w", err)
+		return yardstick{}, fmt.Errorf("alternate titles: %w", err)
 	}
 	snapshot := s.Settings.Snapshot()
-	rules, err := libraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
+	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
 	if err != nil {
-		return judge{}, err
+		return yardstick{}, err
 	}
 	preferPropers := true
 	if category, found := snapshot.Category(item.CategoryID); found {
 		preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
 	}
 	artistName := primaryArtistName(detail)
-	var delay protocolDelay
+	var delay judge.ProtocolDelay
 	if category, found := snapshot.Category(item.CategoryID); found {
-		delay = protocolDelay{
-			preferred: category.PreferredProtocol, window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, now: s.Clock.Now(),
+		delay = judge.ProtocolDelay{
+			Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: s.Clock.Now(),
 		}
 	}
 	target := targetIdentity(detail, item, artistName, aliases)
 	albumTarget := target
 	albumTarget.Title = detail.Work.CanonicalTitle
-	built := judge{
+	built := yardstick{
 		work: detail.Work, aliases: aliases, artistName: artistName, wantedArtist: artistName,
 		target: target, albumTarget: albumTarget, rules: rules,
-		languagePolicy: languagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers, delay: delay,
+		languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID), preferPropers: preferPropers, delay: delay,
 	}
 	built.cutoffMet = item.State == ItemStateComplete
 	if item.State == ItemStateUpgradable {
 		if built.incumbent, err = s.incumbentFor(ctx, item.WorkID, built); err != nil {
-			return judge{}, err
+			return yardstick{}, err
 		}
 	}
 	return built, nil
 }
 
 // incumbentFor is the worst of the album's measured files, judged by the library's own profiles.
-func (s Search) incumbentFor(ctx context.Context, workID int64, j judge) (*model.Decision, error) {
+func (s Search) incumbentFor(ctx context.Context, workID int64, j yardstick) (*model.Decision, error) {
 	files, err := s.Desired.MeasuredFiles(ctx, workID)
 	if err != nil {
 		return nil, err
@@ -321,27 +303,20 @@ func (s Search) incumbentFor(ctx context.Context, workID int64, j judge) (*model
 		if !file.Measured {
 			continue
 		}
-		decision := evaluateInOrder(j.rules, measuredFacts(file), j.languagePolicy)
-		if worst == nil || strictlyBetter(*worst, decision) {
+		decision := judge.EvaluateInOrder(j.rules, measuredFacts(file), j.languagePolicy)
+		if worst == nil || judge.StrictlyBetter(*worst, decision) {
 			worst = &decision
 		}
 	}
 	return worst, nil
 }
 
-// strictlyBetter is Invariant 72: higher by the quality tiers, or equal there and higher in score. A
-// tie keeps what is owned.
-func strictlyBetter(candidate, incumbent model.Decision) bool {
-	winner, _ := model.Compare(candidate.Quality, incumbent.Quality)
-	return winner < 0 || (winner == 0 && candidate.Score() > incumbent.Score())
-}
-
-func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind {
+func (j yardstick) evaluate(raws []indexer.RawItem, conn IndexerConn) []judge.Find {
 	finds := evaluateRawItems(raws, conn, j.target, j.albumTarget, j.wantedArtist, j.rules, j.languagePolicy, j.preferPropers)
-	j.delay.apply(finds)
+	j.delay.Apply(finds)
 	if j.cutoffMet {
 		for index := range finds {
-			decision := &finds[index].decision
+			decision := &finds[index].Decision
 			if decision.Outcome == model.OutcomeAccept {
 				decision.Outcome = model.OutcomeReject
 				decision.Rejections = append(decision.Rejections, model.Rejection{
@@ -355,8 +330,8 @@ func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind
 		return finds
 	}
 	for index := range finds {
-		decision := &finds[index].decision
-		if decision.Outcome == model.OutcomeAccept && !strictlyBetter(*decision, *j.incumbent) {
+		decision := &finds[index].Decision
+		if decision.Outcome == model.OutcomeAccept && !judge.StrictlyBetter(*decision, *j.incumbent) {
 			decision.Outcome = model.OutcomeReject
 			decision.Rejections = append(decision.Rejections, model.Rejection{
 				Rule: "upgrade", Field: "quality", Wanted: "better than the files you have", Got: "not better",
@@ -366,50 +341,15 @@ func (j judge) evaluate(raws []indexer.RawItem, conn IndexerConn) []acceptedFind
 	return finds
 }
 
-// protocolDelay is a delay profile (D16): protocol preference as a wait, never a filter. Within the window after a
-// release was posted only the preferred protocol is acted on; the other's accepted releases are held as DEFER, with
-// the time they stop waiting, and are taken normally after it.
-type protocolDelay struct {
-	preferred string
-	window    time.Duration
-	now       time.Time
-}
-
-func (d protocolDelay) apply(finds []acceptedFind) {
-	if d.preferred == "" || d.window <= 0 {
-		return
-	}
-	for index := range finds {
-		found := &finds[index]
-		if found.decision.Outcome != model.OutcomeAccept || protocolForImpl(found.conn.Impl) == d.preferred {
-			continue
-		}
-		// A release with no posting time is judged from now, so it waits the whole window rather than none.
-		posted := found.raw.PublishedAt
-		if posted.IsZero() {
-			posted = d.now
-		}
-		releasedAt := posted.Add(d.window)
-		if !d.now.Before(releasedAt) {
-			continue
-		}
-		found.decision.Outcome = model.OutcomeDefer
-		found.decision.Deferrals = append(found.decision.Deferrals, model.Deferral{
-			Reason: "protocol-delay", RetryAfter: releasedAt,
-			Detail: map[string]any{"preferred_protocol": d.preferred, "minutes": int64(d.window / time.Minute)},
-		})
-	}
-}
-
 // decide keeps one row per release, ranks them best first and records each decision against itemID.
-func (s Search) decide(ctx context.Context, itemID int64, accepted []acceptedFind, source string, at time.Time) (
+func (s Search) decide(ctx context.Context, itemID int64, accepted []judge.Find, source string, at time.Time) (
 	[]library.DecisionDetail, error,
 ) {
-	accepted = withoutCrossIndexerDuplicates(accepted)
-	sortBestFirst(accepted)
+	accepted = judge.WithoutCrossIndexerDuplicates(accepted)
+	judge.SortBestFirst(accepted)
 	decisions := make([]library.DecisionDetail, 0, len(accepted))
 	for _, found := range accepted {
-		detail, err := s.persist(ctx, itemID, found, source, at)
+		detail, err := judge.Persist(ctx, s.Candidates, itemID, found, source, at)
 		if err != nil {
 			return decisions, fmt.Errorf("music: search item %d: persist: %w", itemID, err)
 		}
@@ -430,7 +370,7 @@ func (s Search) JudgeFeed(
 	if !plan.SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
 	}
-	judge, err := s.judgeFor(ctx, item)
+	measure, err := s.yardstickFor(ctx, item)
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
 	}
@@ -438,133 +378,12 @@ func (s Search) JudgeFeed(
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
 	}
-	accepted := judge.evaluate(raws, conn)
+	accepted := measure.evaluate(raws, conn)
 	if len(accepted) == 0 {
 		return ItemSearchResult{}, nil
 	}
 	decisions, err := s.decide(ctx, itemID, accepted, "rss", at)
 	return ItemSearchResult{Decisions: decisions}, err
-}
-
-// indexerAnswer is what one indexer gave for one tier's queries, up to its first failure.
-type indexerAnswer struct {
-	raws    []indexer.RawItem
-	err     error
-	tooSlow bool
-}
-
-// askEveryIndexer runs a tier's queries against every indexer at once and waits for all of them,
-// or the group deadline (ADR-37): one slow indexer no longer delays the others' results.
-func askEveryIndexer(
-	ctx context.Context, indexers []IndexerConn, terms []searchTerms, deadline time.Duration,
-) ([]indexerAnswer, error) {
-	group, cancel := context.WithTimeout(ctx, deadline)
-	defer cancel()
-	answers := make([]indexerAnswer, len(indexers))
-	asked := parallel.Do(group, len(indexers), 0, func(ctx context.Context, index int) error {
-		answers[index] = askIndexer(ctx, indexers[index], terms)
-		return nil
-	})
-	for index, err := range asked {
-		if err != nil {
-			answers[index].err = err
-		}
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	for index := range answers {
-		if answers[index].err != nil && errors.Is(group.Err(), context.DeadlineExceeded) &&
-			errors.Is(answers[index].err, context.DeadlineExceeded) {
-			answers[index].tooSlow = true
-			answers[index].err = fmt.Errorf("no answer within %s; its releases are missing from this search", deadline)
-		}
-	}
-	return answers, nil
-}
-
-// askIndexer sends one indexer a tier's queries in turn; a failing indexer is not asked again.
-func askIndexer(ctx context.Context, conn IndexerConn, terms []searchTerms) indexerAnswer {
-	var answer indexerAnswer
-	seen := map[string]bool{}
-	for _, term := range terms {
-		if term.Extra != nil && !conn.takesStructuredMusic() {
-			continue
-		}
-		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
-			Function: "music", Query: term.Query, Extra: term.Extra, Categories: conn.Categories,
-			Limit: candidateSearchResultLimit,
-		})
-		if err != nil {
-			answer.err = err
-			return answer
-		}
-		answer.raws = append(answer.raws, unseen(raws, seen)...)
-	}
-	return answer
-}
-
-// sortBestFirst ranks releases as a grab chooses them: accepted first, then the quality tiers
-// (ADR-40), then the additive score, then the closer match.
-func sortBestFirst(finds []acceptedFind) {
-	slices.SortStableFunc(finds, func(a, b acceptedFind) int {
-		if aOK, bOK := a.decision.Outcome == model.OutcomeAccept, b.decision.Outcome == model.OutcomeAccept; aOK != bOK {
-			if aOK {
-				return -1
-			}
-			return 1
-		}
-		if winner, _ := model.Compare(a.decision.Quality, b.decision.Quality); winner != 0 {
-			return winner
-		}
-		if byScore := cmp.Compare(b.decision.Score(), a.decision.Score()); byScore != 0 {
-			return byScore
-		}
-		return cmp.Compare(a.distance.Total, b.distance.Total)
-	})
-}
-
-// duplicateSizeTolerance is how far two indexers' sizes for one release may differ (answered
-// 2026-09-24: within 1%).
-const duplicateSizeTolerance = 0.01
-
-// withoutCrossIndexerDuplicates keeps one row for a release two indexers both list: same title
-// once case and punctuation are ignored, size within 1%. Indexers are searched in priority order,
-// so the first find, the best-priority indexer's, is kept.
-func withoutCrossIndexerDuplicates(finds []acceptedFind) []acceptedFind {
-	kept := finds[:0:0]
-	for _, find := range finds {
-		duplicate := slices.ContainsFunc(kept, func(earlier acceptedFind) bool {
-			return earlier.conn.ID != find.conn.ID &&
-				cleanSearchText(strings.ToLower(earlier.raw.Title)) == cleanSearchText(strings.ToLower(find.raw.Title)) &&
-				sameSize(earlier.raw.SizeBytes, find.raw.SizeBytes)
-		})
-		if !duplicate {
-			kept = append(kept, find)
-		}
-	}
-	return kept
-}
-
-// sameSize is within duplicateSizeTolerance; an unknown size matches only another unknown one.
-func sameSize(a, b int64) bool {
-	if a <= 0 || b <= 0 {
-		return a <= 0 && b <= 0
-	}
-	larger := float64(max(a, b))
-	return (larger-float64(min(a, b)))/larger <= duplicateSizeTolerance
-}
-
-// unseen drops a release an earlier query of the same tier already returned from this indexer.
-func unseen(raws []indexer.RawItem, seen map[string]bool) []indexer.RawItem {
-	kept := raws[:0:0]
-	for _, raw := range raws {
-		if !seen[raw.GUID] {
-			seen[raw.GUID] = true
-			kept = append(kept, raw)
-		}
-	}
-	return kept
 }
 
 // withoutBlocklisted drops a release blocklisted by guid on this indexer before it is evaluated
@@ -611,16 +430,6 @@ func (s Search) BlocklistRelease(ctx context.Context, itemID, decisionID int64, 
 	return ErrDecisionNotFound
 }
 
-// acceptedFind is one raw item that cleared the match-distance gate against
-// the target identity, carrying everything persist needs.
-type acceptedFind struct {
-	conn     IndexerConn
-	raw      indexer.RawItem
-	parsed   parse.Result
-	distance match.Distance
-	decision model.Decision
-}
-
 // evaluateRawItems parses, matches and scores every raw result from one
 // indexer call, keeping only what clears maxCandidateMatchDistance -- a
 // release that plainly is not this album is noise, not evidence, and is
@@ -628,9 +437,9 @@ type acceptedFind struct {
 // items).
 func evaluateRawItems(
 	raws []indexer.RawItem, conn IndexerConn, target, albumTarget match.Candidate, wantedArtist string,
-	rules []rankedProfile, languagePolicy *score.LanguagePolicy, preferPropers bool,
-) []acceptedFind {
-	var accepted []acceptedFind
+	rules []judge.RankedProfile, languagePolicy *score.LanguagePolicy, preferPropers bool,
+) []judge.Find {
+	var accepted []judge.Find
 	for _, raw := range raws {
 		parsed := parse.Parse(raw.Title)
 		if !sameArtist(parsed.Identity.Artist, wantedArtist) || videoRelease(raw.Title) {
@@ -663,8 +472,10 @@ func evaluateRawItems(
 		}
 
 		facts := factsFromRelease(parsed, raw, conn.Impl)
-		decision := withRevision(evaluateInOrder(rules, facts, languagePolicy), facts.File.ProperRepack, preferPropers)
-		accepted = append(accepted, acceptedFind{conn: conn, raw: raw, parsed: parsed, distance: distance, decision: decision})
+		decision := judge.WithRevision(judge.EvaluateInOrder(rules, facts, languagePolicy), facts.File.ProperRepack, preferPropers)
+		accepted = append(accepted, judge.Find{
+			Conn: conn, Raw: raw, ParseConfidence: parsed.Confidence, Distance: distance.Total, Decision: decision,
+		})
 	}
 	return accepted
 }
@@ -705,63 +516,6 @@ func sameArtist(released, wanted string) bool {
 		return true
 	}
 	return match.TitleSimilarity(released, wanted) >= minArtistSimilarity
-}
-
-// persist upserts the release and records the decision against itemID,
-// exactly once per accepted find.
-func (s Search) persist(ctx context.Context, itemID int64, found acceptedFind, source string, at time.Time) (library.DecisionDetail, error) {
-	var sizeBytes *int64
-	if found.raw.SizeBytes > 0 {
-		size := found.raw.SizeBytes
-		sizeBytes = &size
-	}
-	var seeders, leechers *int64
-	if found.conn.Impl == "torznab" {
-		s, l := int64(found.raw.Seeders), int64(found.raw.Peers)
-		seeders, leechers = &s, &l
-	}
-	var publishedAt *int64
-	if !found.raw.PublishedAt.IsZero() {
-		p := found.raw.PublishedAt.Unix()
-		publishedAt = &p
-	}
-	confidence := found.parsed.Confidence
-
-	candidate, err := s.Candidates.Upsert(ctx, library.NewReleaseCandidate{
-		IndexerID: found.conn.ID, GUID: found.raw.GUID, Title: found.raw.Title,
-		SizeBytes: sizeBytes, Seeders: seeders, Leechers: leechers, PublishedAt: publishedAt,
-		Protocol: protocolForImpl(found.conn.Impl), DownloadURL: found.raw.Link,
-		ParseConfidence: &confidence, Source: source,
-		FirstSeenAt: at.Unix(), ExpiresAt: at.Add(defaultCandidateRetention).Unix(),
-	})
-	if err != nil {
-		return library.DecisionDetail{}, err
-	}
-
-	matchConfidence := 1 - found.distance.Total
-	decision, err := s.Candidates.RecordDecision(ctx, library.NewDecision{
-		CandidateID: candidate.ID, DesiredItemID: itemID, Outcome: string(found.decision.Outcome),
-		Score:           found.decision.Score(),
-		ComponentsJSON:  jsonOrEmptyArray(found.decision.Components),
-		RejectionsJSON:  jsonOrEmptyArray(found.decision.Rejections),
-		DeferralsJSON:   jsonOrEmptyArray(found.decision.Deferrals),
-		MatchConfidence: &matchConfidence, DecidedAt: at.Unix(),
-	})
-	if err != nil {
-		return library.DecisionDetail{}, err
-	}
-	return library.DecisionDetail{Decision: decision, ReleaseCandidate: candidate}, nil
-}
-
-// jsonOrEmptyArray marshals v, answering a literal "[]" for a nil slice --
-// components_json is NOT NULL, and a bare Marshal(nil) answers "null",
-// which is a valid string but not a valid array for a reader expecting one.
-func jsonOrEmptyArray(v any) string {
-	encoded, err := json.Marshal(v)
-	if err != nil || string(encoded) == "null" {
-		return "[]"
-	}
-	return string(encoded)
 }
 
 // targetIdentity builds the album's own claimed-against identity once per
@@ -829,34 +583,6 @@ func buildSearchTiers(artistName string, work librarydb.Work, aliases []string) 
 	return tiers
 }
 
-// languagePolicyFor resolves the category's own language profile, nil when
-// none is assigned -- language stays an optional axis (section 19.8).
-func languagePolicyFor(snapshot *settings.Snapshot, categoryID int64) *score.LanguagePolicy {
-	category, found := snapshot.Category(categoryID)
-	if !found || category.LanguageProfileID == nil {
-		return nil
-	}
-	profile, found := snapshot.LanguageProfile(*category.LanguageProfileID)
-	if !found {
-		return nil
-	}
-	return &score.LanguagePolicy{
-		AudioRequired: profile.AudioRequired, AudioPreferred: profile.AudioPreferred,
-		SubtitleRequired: profile.SubtitleRequired, SubtitlePreferred: profile.SubtitlePreferred,
-		PreferOriginalAudio: profile.PreferOriginalAudio, RejectDubbed: profile.RejectDubbed,
-	}
-}
-
-// protocolForImpl maps an indexer's own protocol family to candidate.protocol's
-// vocabulary (ADR-43: Newznab is usenet, Torznab is torrent -- Solarr
-// speaks no other indexer protocol yet).
-func protocolForImpl(impl string) string {
-	if impl == "torznab" {
-		return "torrent"
-	}
-	return "usenet"
-}
-
 // factsFromRelease stands a claimed release's own parse in for measured
 // facts (ADR-39) -- the same reasoning apiserver.SimulateScore's own
 // factsFromParsed already uses, extended with the release's own reported
@@ -865,7 +591,7 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 	facts := score.Facts{
 		Release: score.ReleaseFacts{
 			Title: raw.Title, ReleaseGroup: parsed.Attributes.ReleaseGroup,
-			Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: protocolForImpl(impl),
+			Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl),
 		},
 		File: score.FileFacts{
 			AudioCodec: parsed.Attributes.Format, Lossless: parsed.Attributes.Lossless,
@@ -880,98 +606,4 @@ func factsFromRelease(parsed parse.Result, raw indexer.RawItem, impl string) sco
 		facts.File.EditionTokens = []string{parsed.Attributes.Edition}
 	}
 	return facts
-}
-
-// rankedProfile is one of a library's profiles, in its priority order.
-type rankedProfile struct {
-	name  string
-	rules score.Profile
-}
-
-// libraryProfiles is the profile an album picked for itself, else the library's ordered list
-// (2026-09-24), else the item's own profile when the library has none.
-func libraryProfiles(
-	ctx context.Context, desired library.Desired, snapshot *settings.Snapshot, itemID, categoryID, itemProfileID int64,
-) ([]rankedProfile, error) {
-	ids := []int64{itemProfileID}
-	if category, found := snapshot.Category(categoryID); found && len(category.QualityProfileIDs) > 0 {
-		ids = category.QualityProfileIDs
-	}
-	override, overridden, err := desired.ProfileOverride(ctx, itemID)
-	if err != nil {
-		return nil, err
-	}
-	if overridden {
-		ids = []int64{override}
-	}
-	profiles := make([]rankedProfile, 0, len(ids))
-	for _, id := range ids {
-		profile, found := snapshot.QualityProfile(id)
-		if !found {
-			return nil, ErrNoQualityProfile
-		}
-		rules, err := score.Parse([]byte(profile.RulesJSON))
-		if err != nil {
-			return nil, fmt.Errorf("quality profile %d: %w", id, err)
-		}
-		profiles = append(profiles, rankedProfile{name: profile.Name, rules: rules})
-	}
-	return profiles, nil
-}
-
-// evaluateInOrder judges a release by the first profile it fits, so a release the first profile
-// wants outranks one only a fallback wants; failing that, by the first whose rules merely accept
-// it, ranked after every fit. A release no profile accepts is judged, and refused, by the first.
-// The profile's position is the leading tier of the quality vector (ADR-40: tiers, not weights).
-func evaluateInOrder(profiles []rankedProfile, facts score.Facts, languagePolicy *score.LanguagePolicy) model.Decision {
-	evaluate := func(rules score.Profile) model.Decision {
-		if languagePolicy != nil {
-			return score.EvaluateWithLanguage(rules, facts, nil, *languagePolicy,
-				facts.File.AudioLanguages, facts.File.SubtitleLanguages)
-		}
-		return score.Evaluate(rules, facts, nil)
-	}
-	fallback, fallbackIndex := model.Decision{}, -1
-	for index, profile := range profiles {
-		decision := evaluate(profile.rules)
-		if decision.Outcome != model.OutcomeAccept {
-			continue
-		}
-		if fits, _ := score.Fits(profile.rules, facts); fits {
-			return rankedBy(decision, index, profile.name, "fits")
-		}
-		if fallbackIndex < 0 {
-			fallback, fallbackIndex = decision, index
-		}
-	}
-	if fallbackIndex >= 0 {
-		return rankedBy(fallback, len(profiles)+fallbackIndex, profiles[fallbackIndex].name, "accepted, fits none")
-	}
-	return evaluate(profiles[0].rules)
-}
-
-// withRevision appends Sonarr's revision after the quality tiers when the library prefers propers:
-// a proper or repack beats the same quality, never a better one, and before any additive score.
-func withRevision(decision model.Decision, proper, prefer bool) model.Decision {
-	if !prefer {
-		return decision
-	}
-	tier := model.TierValue{Dimension: "revision", Rank: 1, Label: "original"}
-	if proper {
-		tier.Rank, tier.Label = 0, "proper or repack"
-	}
-	decision.Quality.Tiers = append(decision.Quality.Tiers, tier)
-	return decision
-}
-
-func rankedBy(decision model.Decision, rank int, name, how string) model.Decision {
-	tier := model.TierValue{
-		Dimension: "profile_priority", Rank: rank, Label: name, Detail: fmt.Sprintf("%s (%s)", name, how),
-	}
-	decision.Quality.Tiers = append([]model.TierValue{tier}, decision.Quality.Tiers...)
-	// Zero points: the stored breakdown says which profile wanted it without changing the score.
-	decision.Components = append(decision.Components, model.ScoreComponent{
-		Rule: "profile-priority", Label: fmt.Sprintf("Wanted by %s (%s)", name, how),
-	})
-	return decision
 }

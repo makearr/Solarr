@@ -3,6 +3,7 @@ package music
 import (
 	"testing"
 
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/score"
 )
@@ -18,15 +19,15 @@ const (
 )
 
 func TestEvaluateInOrder_TheEarliestFittingProfileRanksFirst(t *testing.T) {
-	var profiles []rankedProfile
+	var profiles []judge.RankedProfile
 	for name, raw := range map[string]string{"Space conscious": spaceConsciousRules, "Lossy 320": lossy320Rules} {
 		rules, err := score.Parse([]byte(raw))
 		if err != nil {
 			t.Fatal(err)
 		}
-		profiles = append(profiles, rankedProfile{name: name, rules: rules})
+		profiles = append(profiles, judge.RankedProfile{Name: name, Rules: rules})
 	}
-	if profiles[0].name != "Space conscious" {
+	if profiles[0].Name != "Space conscious" {
 		profiles[0], profiles[1] = profiles[1], profiles[0]
 	}
 	release := func(codec string, kbps int64) score.Facts {
@@ -43,13 +44,13 @@ func TestEvaluateInOrder_TheEarliestFittingProfileRanksFirst(t *testing.T) {
 		{"mp3 320 fits the second", release("mp3", 320), 1, "Lossy 320"},
 		{"flac fits neither, ranked after every fit", release("flac", 900), 2, "Space conscious"},
 	} {
-		decision := evaluateInOrder(profiles, tc.facts, nil)
+		decision := judge.EvaluateInOrder(profiles, tc.facts, nil)
 		lead := decision.Quality.Tiers[0]
 		if lead.Dimension != "profile_priority" || lead.Rank != tc.rank || lead.Label != tc.label {
 			t.Errorf("%s: leading tier = %+v, want rank %d by %s", tc.name, lead, tc.rank, tc.label)
 		}
-		if decision.Score() != score.Evaluate(profiles[0].rules, tc.facts, nil).Score() &&
-			decision.Score() != score.Evaluate(profiles[1].rules, tc.facts, nil).Score() {
+		if decision.Score() != score.Evaluate(profiles[0].Rules, tc.facts, nil).Score() &&
+			decision.Score() != score.Evaluate(profiles[1].Rules, tc.facts, nil).Score() {
 			t.Errorf("%s: the priority component changed the score to %v", tc.name, decision.Score())
 		}
 	}
@@ -62,12 +63,12 @@ func TestWithRevision_APreferredProperBreaksOnlyASameQualityTie(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	profiles := []rankedProfile{{name: "Lossy 320", rules: rules}}
+	profiles := []judge.RankedProfile{{Name: "Lossy 320", Rules: rules}}
 	release := func(kbps int64, proper, prefer bool) model.QualityVector {
 		facts := score.Facts{File: score.FileFacts{
 			AudioCodec: "mp3", AudioBitrate: kbps * 1000, OverallBitrate: kbps * 1000, ProperRepack: proper,
 		}}
-		return withRevision(evaluateInOrder(profiles, facts, nil), proper, prefer).Quality
+		return judge.WithRevision(judge.EvaluateInOrder(profiles, facts, nil), proper, prefer).Quality
 	}
 
 	for _, tc := range []struct {

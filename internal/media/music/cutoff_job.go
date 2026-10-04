@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
@@ -139,14 +140,14 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 	if err != nil {
 		return 0, err
 	}
-	rules, err := libraryProfiles(ctx, j.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
+	rules, err := judge.LibraryProfiles(ctx, j.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
 	if errors.Is(err, ErrNoQualityProfile) {
 		return 0, nil // a library without a usable profile has nothing to judge by
 	}
 	if err != nil {
 		return 0, err
 	}
-	language := languagePolicyFor(snapshot, item.CategoryID)
+	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
 	byTrack := map[string][]library.MeasuredFile{}
 	for _, file := range files {
 		byTrack[file.MediaRef] = append(byTrack[file.MediaRef], file)
@@ -164,8 +165,8 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 			}
 		}
 		for _, file := range track {
-			if strictlyBetter(evaluateInOrder(rules, measuredFacts(file), language),
-				evaluateInOrder(rules, measuredFacts(keeper), language)) {
+			if judge.StrictlyBetter(judge.EvaluateInOrder(rules, measuredFacts(file), language),
+				judge.EvaluateInOrder(rules, measuredFacts(keeper), language)) {
 				keeper = file
 			}
 		}

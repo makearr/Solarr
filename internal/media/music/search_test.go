@@ -754,7 +754,7 @@ func TestSearchItem_CleanedTextFindsANameWithPunctuation(t *testing.T) {
 	}}
 
 	result, err := env.search().SearchItem(t.Context(), item.ID,
-		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, MusicParams: []string{"q"}}}, env.clock.Now())
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, Params: map[string][]string{"music": {"q"}}}}, env.clock.Now())
 	if err != nil {
 		t.Fatalf("SearchItem: %v", err)
 	}
@@ -786,7 +786,7 @@ func TestSearchItem_AReissueFoundByTheGermanSpellingMatches(t *testing.T) {
 	}}
 
 	result, err := env.search().SearchItem(t.Context(), item.ID,
-		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, MusicParams: []string{"q"}}}, env.clock.Now())
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher, Params: map[string][]string{"music": {"q"}}}}, env.clock.Now())
 	if err != nil {
 		t.Fatalf("SearchItem: %v", err)
 	}

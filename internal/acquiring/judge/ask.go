@@ -1,6 +1,7 @@
 package judge
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -56,6 +57,8 @@ type Query struct {
 	Text     string
 	Extra    map[string]string
 	Needs    []string
+	// Limit bounds the indexer's answer to this query; zero takes resultLimit.
+	Limit int
 }
 
 // Answer is what one indexer gave for one tier's queries, up to its first failure.
@@ -103,7 +106,7 @@ func askIndexer(ctx context.Context, conn Conn, queries []Query) Answer {
 			continue
 		}
 		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
-			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: conn.Categories, Limit: resultLimit,
+			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: conn.Categories, Limit: cmp.Or(query.Limit, resultLimit),
 		})
 		if err != nil {
 			answer.Err = err

@@ -220,7 +220,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/acquiring/judge":    {"internal/platform/parallel", "internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/score"},
 	"internal/importing/batch":    {"internal/db/library", "internal/importing/inspect"},
 	"internal/acquiring/dispatch": {"internal/acquiring/download", "internal/db/library", "internal/identify/priority"},
-	"internal/media/music": {"internal/platform/parallel",
+	"internal/media/music": {"internal/acquiring/judge", "internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",

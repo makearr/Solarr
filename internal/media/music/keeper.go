@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
@@ -70,7 +71,7 @@ func ChooseKeeper(snapshot *settings.Snapshot, categoryID int64, files []KeeperF
 	best := candidates[0]
 	if len(profiles) > 0 {
 		for _, i := range candidates[1:] {
-			if strictlyBetter(evaluateInOrder(profiles, files[i].facts(), nil), evaluateInOrder(profiles, files[best].facts(), nil)) {
+			if judge.StrictlyBetter(judge.EvaluateInOrder(profiles, files[i].facts(), nil), judge.EvaluateInOrder(profiles, files[best].facts(), nil)) {
 				best = i
 			}
 		}
@@ -89,12 +90,12 @@ func ChooseKeeper(snapshot *settings.Snapshot, categoryID int64, files []KeeperF
 	return best, fmt.Sprintf("%s (%s)", targetNote, describeFile(files[best]))
 }
 
-func categoryRankedProfiles(snapshot *settings.Snapshot, categoryID int64) []rankedProfile {
+func categoryRankedProfiles(snapshot *settings.Snapshot, categoryID int64) []judge.RankedProfile {
 	category, found := snapshot.Category(categoryID)
 	if !found {
 		return nil
 	}
-	var profiles []rankedProfile
+	var profiles []judge.RankedProfile
 	for _, id := range category.QualityProfileIDs {
 		profile, found := snapshot.QualityProfile(id)
 		if !found {
@@ -104,7 +105,7 @@ func categoryRankedProfiles(snapshot *settings.Snapshot, categoryID int64) []ran
 		if err != nil {
 			continue
 		}
-		profiles = append(profiles, rankedProfile{name: profile.Name, rules: rules})
+		profiles = append(profiles, judge.RankedProfile{Name: profile.Name, Rules: rules})
 	}
 	return profiles
 }

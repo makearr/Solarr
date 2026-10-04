@@ -69,14 +69,19 @@ func WithoutCrossIndexerDuplicates(finds []Find) []Find {
 	return kept
 }
 
+// cleanTitle is a release title for comparing: case, punctuation and apostrophes ignored, "&" read as "and".
 func cleanTitle(title string) string {
 	var cleaned strings.Builder
-	for _, r := range strings.ToLower(title) {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+	for _, r := range strings.ReplaceAll(strings.ToLower(title), "&", " and ") {
+		switch {
+		case r == '\'' || r == '\u2019' || r == '`':
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
 			cleaned.WriteRune(r)
+		default:
+			cleaned.WriteRune(' ')
 		}
 	}
-	return cleaned.String()
+	return strings.Join(strings.Fields(cleaned.String()), " ")
 }
 
 func sameSize(a, b int64) bool {

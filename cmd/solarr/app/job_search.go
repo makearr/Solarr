@@ -39,7 +39,7 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 			ID: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, Client: client, Categories: indexer.MusicCategories(),
 		}
 		if p.indexerCaps != nil {
-			conn.MusicParams = p.indexerCaps.musicParams(ctx, indexer.ID, indexer.BaseURL, client)
+			conn.Params = map[string][]string{"music": p.indexerCaps.musicParams(ctx, indexer.ID, indexer.BaseURL, client)}
 		}
 		conns = append(conns, conn)
 	}

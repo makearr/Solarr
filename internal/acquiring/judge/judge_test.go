@@ -128,3 +128,47 @@ func TestAskSkipsQueriesAnIndexerCannotTakeAndDeduplicatesByGUID(t *testing.T) {
 		t.Errorf("a release listed by both queries is one: %+v", answers[0].Raws)
 	}
 }
+
+// limitRecorder answers nothing and remembers the limit each query asked with.
+type limitRecorder struct{ limits []int }
+
+func (r *limitRecorder) Search(_ context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
+	r.limits = append(r.limits, request.Limit)
+	return nil, nil
+}
+
+// A query asks for as many results as it names, and a query that names none for a hundred.
+func TestAskSendsEachQuerysOwnLimit(t *testing.T) {
+	recorder := &limitRecorder{}
+	queries := []judge.Query{{Function: "music", Text: "a", Limit: 20}, {Function: "tvsearch", Text: "b"}}
+	if _, err := judge.AskEveryIndexer(t.Context(), []judge.Conn{{ID: 1, Client: recorder}}, queries, time.Minute); err != nil {
+		t.Fatalf("AskEveryIndexer: %v", err)
+	}
+	if want := []int{20, 100}; len(recorder.limits) != 2 || recorder.limits[0] != want[0] || recorder.limits[1] != want[1] {
+		t.Errorf("limits asked = %v, want %v", recorder.limits, want)
+	}
+}
+
+// Two indexers' listings of one release are one row however each punctuates the name; different words stay apart.
+func TestDuplicatesAcrossIndexersIgnorePunctuationNotWords(t *testing.T) {
+	find := func(indexerID int64, title string) judge.Find {
+		return judge.Find{Conn: judge.Conn{ID: indexerID}, Raw: indexer.RawItem{Title: title, SizeBytes: 1000}}
+	}
+	kept := judge.WithoutCrossIndexerDuplicates([]judge.Find{
+		find(1, "An Artist - Salt & Stone (2020) FLAC"),
+		find(2, "An.Artist-Salt.and.Stone.2020.FLAC"),
+		find(2, "An Artist - Saltand Stone (2020) FLAC"),
+		find(2, "An Artist - Don't Stop (2020) FLAC"),
+		find(1, "An Artist - Dont Stop (2020) FLAC"),
+	})
+	var titles []string
+	for _, find := range kept {
+		titles = append(titles, find.Raw.Title)
+	}
+	want := []string{
+		"An Artist - Salt & Stone (2020) FLAC", "An Artist - Saltand Stone (2020) FLAC", "An Artist - Don't Stop (2020) FLAC",
+	}
+	if len(titles) != len(want) || titles[0] != want[0] || titles[1] != want[1] || titles[2] != want[2] {
+		t.Errorf("kept = %q\nwant %q", titles, want)
+	}
+}
