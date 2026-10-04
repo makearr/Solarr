@@ -15,7 +15,7 @@ type LanguageProfile = components["schemas"]["LanguageProfile"];
  *  for (todo 4.3, 2026-09-12). Each language list is chosen from a drop-down
  *  of languages, stored by two-letter code. Global, not per-library, same as
  *  QualityProfiles' own doc comment explains. */
-export function LanguageProfiles() {
+export function LanguageProfiles({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -40,8 +40,8 @@ export function LanguageProfiles() {
   });
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">
-      <h1 className="text-lg font-semibold">Language profiles</h1>
+    <div className={embedded ? "flex flex-col gap-3" : "mx-auto flex max-w-3xl flex-col gap-3 p-6"}>
+      {embedded ? <h2 className="text-sm font-medium">Language profiles</h2> : <h1 className="text-lg font-semibold">Language profiles</h1>}
       <p className="text-sm leading-relaxed text-ink-muted">
         A required list means at least one listed
         language must be present, evaluated from the probe, never the release name. An empty

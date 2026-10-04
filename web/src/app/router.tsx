@@ -25,7 +25,6 @@ import { LibraryFileManagement } from "./LibraryFileManagement";
 import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
 import { Library } from "./Library";
-import { LanguageProfiles } from "./LanguageProfiles";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
@@ -154,7 +153,9 @@ const routes = [
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/language",
-    component: LanguageProfiles,
+    beforeLoad: () => {
+      throw redirect({ to: "/quality-profiles" });
+    },
   }),
   createRoute({
     getParentRoute: () => rootRoute,

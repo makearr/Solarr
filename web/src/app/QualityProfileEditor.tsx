@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 
 import { api } from "@/api/client";
+import { LanguageProfiles } from "./LanguageProfiles";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import {
@@ -147,6 +148,9 @@ export function QualityProfilesPage() {
           </ul>
         </section>
       ))}
+      <section className="mt-4 flex flex-col gap-2 border-t border-border-subtle pt-4">
+        <LanguageProfiles embedded />
+      </section>
     </div>
   );
 }

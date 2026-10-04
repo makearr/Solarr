@@ -387,7 +387,6 @@ const CONFIG_SECTIONS: readonly { key: string; label: string; tier: Tier }[] = [
   { key: "file-management", label: "File management", tier: "expert" },
   { key: "import-lists", label: "Import lists", tier: "advanced" },
   { key: "quality", label: "Quality", tier: "advanced" },
-  { key: "language", label: "Language", tier: "expert" },
 ];
 
 function LibraryNode({
