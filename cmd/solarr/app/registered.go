@@ -2,9 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/dispatch"
+	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -53,7 +58,7 @@ func (p *process) musicModule() music.Module {
 		// category yet -- ensureDefaultQualityProfile seeded it at startup.
 		DefaultProfileID: p.defaultQualityProfileID,
 	})
-	return music.Module{Sweep: scan.Sweep{
+	return music.Module{Hunt: p.musicHunt, RSS: p.musicRSS(), Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -92,6 +97,66 @@ func (p *process) tvModule() tv.Module {
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
+		Hunt:  p.tvHunt,
 		Retry: retry,
 	}
+}
+
+// musicHunt searches one album the hunt chose and sends the best release.
+func (p *process) musicHunt(ctx context.Context, itemID int64) (plan.Outcome, error) {
+	indexers, err := p.indexerConns(ctx)
+	if err != nil || len(indexers) == 0 {
+		return plan.OutcomeSearched, err
+	}
+	result, err := p.musicGrab().SearchAndSend(ctx, itemID, indexers, music.GrabAutomatic, clock.NewSystem().Now())
+	switch {
+	case errors.Is(err, music.ErrTrackSearchNotSupported):
+		return plan.OutcomeNotWanted, nil
+	case err != nil:
+		return plan.OutcomeSearched, err
+	case result.AlreadyInFlight:
+		return plan.OutcomeInFlight, nil
+	}
+	if result.Sent != nil || result.Held {
+		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
+	}
+	if len(result.Refusals) > 0 {
+		p.logger.Info("hunt: releases refused", slog.Int64("item_id", itemID), slog.Any("refused", result.Refusals))
+	}
+	return plan.OutcomeSearched, nil
+}
+
+// musicRSS matches the indexers' feeds against the wanted albums.
+func (p *process) musicRSS() *music.RSSJob {
+	return music.NewRSSJob(music.RSSConfig{
+		Grab: p.musicGrab(), Indexers: p.indexerConns, WantedByArtist: library.NewHunt(p.library).WantedAlbumsByArtist,
+		Clock: clock.NewSystem(), Logger: p.logger,
+	})
+}
+
+func (p *process) enqueueRSS(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{
+		Type: music.RSSJobType, ActionKey: string(music.RSSJobType), Priority: jobs.PriorityNormal, Payload: []byte("{}"),
+	})
+}
+
+// tvHunt searches one season the hunt chose and sends the best release.
+func (p *process) tvHunt(ctx context.Context, itemID int64) (plan.Outcome, error) {
+	conns, err := p.tvIndexerConns(ctx)
+	if err != nil {
+		return plan.OutcomeSearched, err
+	}
+	result, err := p.tvGrab().SearchAndSend(ctx, itemID, conns, dispatch.GrabAutomatic, clock.NewSystem().Now())
+	switch {
+	case errors.Is(err, tv.ErrNotSearchable):
+		return plan.OutcomeNotWanted, nil
+	case err != nil:
+		return plan.OutcomeSearched, err
+	case result.AlreadyInFlight:
+		return plan.OutcomeInFlight, nil
+	}
+	if result.Sent != nil || result.Held {
+		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
+	}
+	return plan.OutcomeSearched, nil
 }

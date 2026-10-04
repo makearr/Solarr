@@ -9,7 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -123,19 +123,18 @@ func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	if err := library.NewDesired(p.library).RecordDownloadFailed(ctx, desiredItemID); err != nil {
 		p.logger.Warn("failed download not recorded on the hunt queue", slog.Int64("desired_item_id", desiredItemID), slog.Any("error", err))
 	}
-	if item, err := library.NewDesired(p.library).Get(ctx, desiredItemID); err == nil && p.isTV(item.CategoryID) {
-		_, err := p.tvHuntSearch(ctx, desiredItemID)
+	item, err := library.NewDesired(p.library).Get(ctx, desiredItemID)
+	if err != nil {
 		return err
 	}
-	indexers, err := p.indexerConns(ctx)
-	if err != nil || len(indexers) == 0 {
-		return err
+	category, found := p.cache.Snapshot().Category(item.CategoryID)
+	if !found {
+		return nil
 	}
-	result, err := p.musicGrab().SearchAndSend(ctx, desiredItemID, indexers, music.GrabAutomatic, clock.NewSystem().Now())
-	if err == nil {
-		p.logger.Info("searched again after a failed download", slog.Int64("desired_item_id", desiredItemID),
-			slog.Int("found", len(result.Search.Decisions)), slog.Bool("sent", result.Sent != nil), slog.Bool("held", result.Held),
-			slog.Int("no_room", result.NoRoom), slog.Any("refused", result.Refusals))
+	hunting, ok := media.Capability[media.Hunting](p.media, media.Key(category.MediaType))
+	if !ok {
+		return nil
 	}
+	_, err = hunting.HuntSearch(ctx, desiredItemID)
 	return err
 }

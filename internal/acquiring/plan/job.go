@@ -132,3 +132,6 @@ func (j *Job) apply(ctx context.Context, inputs []library.PlanInput, facts Facts
 	}
 	return j.config.Hunt.ApplyPlan(ctx, planned, now.Unix())
 }
+
+// SearchedOnItsOwn says which desired items the hunt searches for: a SET (an album, a season), never one of its parts.
+func SearchedOnItsOwn(satisfactionKind string) bool { return satisfactionKind == "SET" }

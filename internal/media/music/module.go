@@ -1,6 +1,9 @@
 package music
 
 import (
+	"context"
+
+	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
@@ -13,6 +16,26 @@ const MediaType media.Key = "music"
 // Module is music as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
 type Module struct {
 	Sweep scan.Sweep
+	// Hunt searches for one wanted album and sends the best release; nil leaves music unhunted.
+	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// RSS matches the indexers' feeds against the wanted albums; nil leaves the job unregistered.
+	RSS *RSSJob
+}
+
+// HuntSearch implements media.Hunting.
+func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
+	if m.Hunt == nil {
+		return plan.OutcomeNotWanted, nil
+	}
+	return m.Hunt(ctx, itemID)
+}
+
+// RegisterJobs implements media.Jobs.
+func (m Module) RegisterJobs(register media.JobRegistrar) error {
+	if m.RSS == nil {
+		return nil
+	}
+	return register(RSSDefinition, m.RSS)
 }
 
 // ScanSweep implements media.Scanning.

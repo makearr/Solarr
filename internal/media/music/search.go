@@ -22,6 +22,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -37,9 +38,6 @@ import (
 // own claimed identity (the track title, not the album's) and its own
 // search terms; nothing has asked for that yet.
 var ErrTrackSearchNotSupported = errors.New("music: search: only album-level (SET) desired items are supported")
-
-// SearchedOnItsOwn is music's answer to which desired items the planner hunts: albums, not tracks.
-func SearchedOnItsOwn(satisfactionKind string) bool { return satisfactionKind == "SET" }
 
 // ErrNoQualityProfile reports a desired item whose own profile_id no longer
 // resolves -- a deleted profile a category still points items at.
@@ -196,7 +194,7 @@ func (s Search) SearchItemWithTerms(
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
-	if !SearchedOnItsOwn(item.SatisfactionKind) {
+	if !plan.SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
 	}
 	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
@@ -429,7 +427,7 @@ func (s Search) JudgeFeed(
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
 	}
-	if !SearchedOnItsOwn(item.SatisfactionKind) {
+	if !plan.SearchedOnItsOwn(item.SatisfactionKind) {
 		return ItemSearchResult{}, ErrTrackSearchNotSupported
 	}
 	judge, err := s.judgeFor(ctx, item)

@@ -9,8 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/media/music"
-	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
 )
@@ -65,17 +64,31 @@ func (p *process) describeAcquisition(ctx context.Context, acquisition library.A
 			workID, data.CategoryID = item.WorkID, item.CategoryID
 			if work, err := library.NewWorks(p.library).Detail(ctx, workID); err == nil {
 				data.Album = work.Work.CanonicalTitle
-				if p.isTV(item.CategoryID) && item.MediaRef != "" {
-					data.Album += " " + tv.ReleaseLabel(acquisition.CandidateTitle, item.MediaRef, clock.NewSystem().Now())
+				key := media.Key(work.Work.MediaType)
+				if labelling, ok := media.Capability[media.Labelling](p.media, key); ok && item.MediaRef != "" {
+					data.Album += " " + labelling.ReleaseLabel(acquisition.CandidateTitle, item.MediaRef, clock.NewSystem().Now())
 				}
-				for _, credit := range work.Credits {
-					if credit.Role == music.CreditRoleArtist {
-						data.Artist = credit.PersonName
-						break
-					}
-				}
+				data.Artist = leadName(p.media, key, work.Credits)
 			}
 		}
 	}
 	return data, workID
+}
+
+// leadName is who a work is listed under, for a media type that has a lead role (an album's artist); empty otherwise.
+func leadName(registry *media.Registry, key media.Key, credits []library.Credit) string {
+	module, found := registry.Module(key)
+	if !found {
+		return ""
+	}
+	lead, has := module.Descriptor().LeadRole()
+	if !has {
+		return ""
+	}
+	for _, credit := range credits {
+		if credit.Role == lead {
+			return credit.PersonName
+		}
+	}
+	return ""
 }

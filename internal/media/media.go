@@ -2,8 +2,11 @@
 package media
 
 import (
+	"context"
 	"fmt"
+	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -73,6 +76,28 @@ type Naming interface {
 // Scanning is the capability of a media type whose libraries are swept on disk.
 type Scanning interface {
 	ScanSweep() scan.Sweep
+}
+
+// Hunting is the capability of a media type whose wanted items are searched for without being asked.
+type Hunting interface {
+	// HuntSearch searches for one wanted item the hunt chose and sends the best release.
+	HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error)
+}
+
+// Labelling is the capability of a media type that names what a release holds within a wanted item.
+type Labelling interface {
+	// ReleaseLabel is the part of an item a release covers, for a queue or history row: "S03E10", a season, a date.
+	ReleaseLabel(releaseTitle, itemRef string, now time.Time) string
+}
+
+// LeadRole answers the role a work of this type is listed under, and whether the type has one.
+func (d Descriptor) LeadRole() (string, bool) {
+	for _, role := range d.Roles {
+		if role.Lead {
+			return role.Key, true
+		}
+	}
+	return "", false
 }
 
 // JobRegistrar takes one job type with its handler.
