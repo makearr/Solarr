@@ -42,6 +42,10 @@ Arr, Nord, Paper) keeps it whatever the mode, and the mode picker is disabled fo
 `solarr.mode` and `solarr.scheme`; a single `solarr.theme` from before the split is read once and
 mapped to its scheme and base.
 
+The top bar carries one switch that flips light and dark (`ThemeToggle`); the mode including System and the
+colour scheme are in the user menu under Appearance. Both read and write one shared choice (`src/lib/useTheme.ts`),
+so they always agree. A scheme with a single token set disables the switch and the mode.
+
 A token set is a block of values in `src/index.css`, an entry in `THEMES`, and its place in
 `SCHEMES` and in `index.html`'s pre-paint copy of it. The Lidarr, Sonarr and Radarr schemes
 (2026-09-29) come light and dark; the light ones colour the sidebar and header differently from
