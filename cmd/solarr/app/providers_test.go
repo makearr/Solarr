@@ -8,12 +8,12 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// Every provider in the process must share one MusicBrainz budget (ADR-13):
-// separate ones let concurrent jobs exceed 1 req/s and draw 503s.
-func TestMusicBrainzBudget_IsOnePerProcess(t *testing.T) {
+// Every client in the process must share one budget (ADR-13): separate ones let concurrent jobs exceed a
+// provider's pace, which is how MusicBrainz came to answer 503.
+func TestOutbound_IsOnePerProcess(t *testing.T) {
 	p := &process{}
 
-	first, second := p.musicBrainzBudget(), p.musicBrainzBudget()
+	first, second := p.outbound(), p.outbound()
 	if first.limiter == nil || first.breaker == nil {
 		t.Fatalf("budget = %+v, want a limiter and a breaker", first)
 	}

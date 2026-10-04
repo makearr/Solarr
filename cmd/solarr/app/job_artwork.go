@@ -26,13 +26,7 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 	if err := registry.Register(music.ArtworkDefinition); err != nil {
 		return err
 	}
-	wall := clock.NewSystem()
-	guard := httpx.NewGuard(nil, nil, nil)
-	limiter := httpx.NewLimiter(wall, httpx.Config{}, nil)
-	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
-	client := httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-		Provider: musicbrainz.CoverArtName, UserAgent: httpx.UserAgent(p.build.Version),
-	})
+	client := p.providerClient(musicbrainz.CoverArtName, nil, httpx.ClientConfig{})
 
 	job := music.NewArtworkJob(music.ArtworkJobConfig{
 		Artworks:        library.NewArtworks(p.library),
@@ -42,7 +36,7 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 		HTTP:            client,
 		FS:              p.fsys,
 		ImagesDir:       filepath.Join(p.config.Paths.CacheDir, "images"),
-		Clock:           wall,
+		Clock:           clock.NewSystem(),
 		Logger:          p.logger,
 		CoverSources:    func() []string { return p.cache.Snapshot().MetadataSettings().CoverSources },
 		TheAudioDBCover: theAudioDBCover(p.theAudioDB()),

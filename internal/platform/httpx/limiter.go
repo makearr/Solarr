@@ -250,7 +250,7 @@ func (l *Limiter) budgetForLocked(provider string) *providerBudget {
 		return existing
 	}
 
-	limits := l.config.Providers[provider].resolve(l.config.Defaults)
+	limits := l.config.limitsFor(provider)
 	concurrent := limits.MaxConcurrent
 	if concurrent <= 0 {
 		concurrent = math.MaxInt16

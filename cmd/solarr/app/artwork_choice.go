@@ -16,11 +16,7 @@ import (
 
 // artworkChoices is the image picker (M1g 1.3): what each provider holds for an album or artist.
 func (p *process) artworkChoices() adapters.ArtworkChoices {
-	wall := clock.NewSystem()
-	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(wall, httpx.Config{}, nil),
-		httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-			Provider: musicbrainz.CoverArtName, UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
-		})
+	client := p.providerClient(musicbrainz.CoverArtName, nil, httpx.ClientConfig{})
 	audioDB := p.theAudioDB()
 	biographies := p.wikidataFetcher()
 	provider := p.musicBrainzProvider()
@@ -51,7 +47,7 @@ func (p *process) artworkChoices() adapters.ArtworkChoices {
 			}
 			return options, nil
 		},
-		HTTP: client, FS: p.fsys, ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"), Clock: wall,
+		HTTP: client, FS: p.fsys, ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"), Clock: clock.NewSystem(),
 	})}
 }
 

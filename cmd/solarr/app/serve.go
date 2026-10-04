@@ -105,10 +105,9 @@ type process struct {
 	// effectivePort is ADR-58's own resolution, computed once here and shown
 	// by the Network screen as "in effect" -- a port change needs a restart.
 	effectivePort int
-	// musicBrainzOnce builds musicBrainzShared once: every job's provider must
-	// draw on the same 1 req/s budget (ADR-13), see musicBrainzBudget.
-	musicBrainzOnce   sync.Once
-	musicBrainzShared musicBrainzBudget
+	// outboundOnce builds the one rate-limit registry and breaker every client draws on (ADR-13).
+	outboundOnce   sync.Once
+	outboundShared outbound
 
 	// acoustIDOnce builds acoustIDShared once, for the same reason: scan and
 	// import must share AcoustID's own 3 req/s bucket, not take one each.

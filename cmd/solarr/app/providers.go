@@ -54,79 +54,20 @@ func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
 // Wikidata or Wikipedia outage must never count against the MusicBrainz
 // breaker, and vice versa).
 func (p *process) wikidataFetcher() wikidata.Fetcher {
-	wall := clock.NewSystem()
-	guard := httpx.NewGuard(nil, nil, nil)
-	agent := httpx.UserAgent(p.build.Version)
-
-	newHostClient := func(providerName string, minInterval time.Duration) *httpx.Client {
-		limiter := httpx.NewLimiter(wall, httpx.Config{
-			Providers: map[string]httpx.Limits{providerName: {MinInterval: minInterval}},
-		}, nil)
-		breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
-		return httpx.NewClient(wall, guard, limiter, breaker, httpx.ClientConfig{
-			Provider: providerName, UserAgent: agent, Proxy: p.liveProxyPolicy(),
-		})
-	}
-
 	return wikidata.New(wikidata.Config{
-		// Wikidata's action API asks for serial requests, so it takes batches; Wikipedia's REST API allows 200/s.
-		WikidataClient:  newHostClient("wikidata", time.Second),
-		WikipediaClient: newHostClient("wikipedia", 100*time.Millisecond),
+		WikidataClient:  p.providerClient(providerWikidata, nil, httpx.ClientConfig{}),
+		WikipediaClient: p.providerClient(providerWikipedia, nil, httpx.ClientConfig{}),
 	})
-}
-
-// musicBrainzBudget is the one rate limiter and circuit breaker every
-// MusicBrainz provider in the process draws on (ADR-13).
-type musicBrainzBudget struct {
-	limiter *httpx.Limiter
-	breaker *httpx.Breaker
-}
-
-// musicBrainzBudget answers the process's single budget. Each caller of
-// musicBrainzProvider used to build its own, so scan, enrichment, import and
-// subscriptions each took a full 1 req/s; running together they exceeded it
-// and MusicBrainz answered 503 (found 2026-09-17).
-func (p *process) musicBrainzBudget() musicBrainzBudget {
-	p.musicBrainzOnce.Do(func() {
-		wall := clock.NewSystem()
-		p.musicBrainzShared = musicBrainzBudget{
-			limiter: httpx.NewLimiter(wall, httpx.Config{
-				Providers: map[string]httpx.Limits{
-					// MusicBrainz allows one request per second and means it (ADR-29).
-					musicbrainz.DirectName: {MinInterval: time.Second},
-					// DroppedNeedle's documented 10 req/s for the pool; BrainzMash publishes no quota.
-					musicbrainz.BrainzMashName: {MinInterval: 100 * time.Millisecond},
-					// The proxy is Lidarr's own service, not rate-limited by ADR-29's
-					// 1 req/s rule; kept modest anyway since it is shared infrastructure
-					// this project does not operate.
-					musicbrainz.ProxyName: {MinInterval: 250 * time.Millisecond},
-				},
-			}, nil),
-			breaker: httpx.NewBreaker(wall, httpx.BreakerConfig{}),
-		}
-	})
-	return p.musicBrainzShared
 }
 
 // acoustIDLookup answers the process's one AcoustID client: ADR-29's fingerprint
 // rung, on its own ADR-13 bucket at the 3 req/s acoustid.org publishes.
 func (p *process) acoustIDLookup() acoustid.Client {
 	p.acoustIDOnce.Do(func() {
-		wall := clock.NewSystem()
-		limiter := httpx.NewLimiter(wall, httpx.Config{
-			Providers: map[string]httpx.Limits{acoustid.Name: {MinInterval: acoustIDMinInterval}},
-		}, nil)
-		client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil), limiter,
-			httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-				Provider: acoustid.Name, UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
-			})
-		p.acoustIDShared = acoustid.New(client, "", p.acoustIDKey)
+		p.acoustIDShared = acoustid.New(p.providerClient(acoustid.Name, nil, httpx.ClientConfig{}), "", p.acoustIDKey)
 	})
 	return p.acoustIDShared
 }
-
-// acoustIDMinInterval is acoustid.org's published 3 requests per second.
-const acoustIDMinInterval = 334 * time.Millisecond
 
 // acoustIDKey opens the stored key per lookup, so entering one in the interface
 // takes effect without a restart; unreadable means the rung is off, not broken.
@@ -165,27 +106,19 @@ func (p *process) liveMetadataSourceOrder() []string {
 // tried, and in what order, is liveMetadataSourceOrder's job -- this only
 // decides what exists to choose from.
 func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbrainz.Source {
-	wall := clock.NewSystem()
-	guard := httpx.NewGuard(nil, nil, nil)
-	budget := p.musicBrainzBudget()
-	agent := httpx.UserAgent(p.build.Version)
-	newClient := func(provider string) *httpx.Client {
-		return httpx.NewClient(wall, guard, budget.limiter, budget.breaker, httpx.ClientConfig{
-			Provider: provider, UserAgent: agent, Proxy: p.liveProxyPolicy(),
-		})
-	}
 	var ordered []musicbrainz.Source
 	if sources.BrainzMashEnabled {
-		client := httpx.NewClient(wall, guard, budget.limiter, budget.breaker, httpx.ClientConfig{
-			Provider: musicbrainz.BrainzMashName, Proxy: p.liveProxyPolicy(),
+		client := p.providerClient(musicbrainz.BrainzMashName, nil, httpx.ClientConfig{
 			LiveUserAgent: func() string { return p.cache.Snapshot().MetadataSettings().BrainzMashUserAgent },
 		})
 		ordered = append(ordered, musicbrainz.NewBrainzMash(client, sources.BrainzMashBaseURL))
 	}
 	if sources.ProxyEnabled {
-		ordered = append(ordered, musicbrainz.NewProxy(newClient(musicbrainz.ProxyName), sources.ProxyBaseURL))
+		proxy := p.providerClient(musicbrainz.ProxyName, nil, httpx.ClientConfig{})
+		ordered = append(ordered, musicbrainz.NewProxy(proxy, sources.ProxyBaseURL))
 	}
-	return append(ordered, musicbrainz.NewDirect(newClient(musicbrainz.DirectName), sources.BaseURL))
+	direct := p.providerClient(musicbrainz.DirectName, nil, httpx.ClientConfig{})
+	return append(ordered, musicbrainz.NewDirect(direct, sources.BaseURL))
 }
 
 // arrClientFactory builds adapters.LidarrClientFactory: one shared rate-
@@ -206,29 +139,15 @@ func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbr
 // URL the guard exists to stop. Found needed live: a real sync against the
 // user's own Lidarr on a private address was refused outright until this.
 func (p *process) arrClientFactory() adapters.LidarrClientFactory {
-	wall := clock.NewSystem()
-	limiter := httpx.NewLimiter(wall, httpx.Config{
-		Providers: map[string]httpx.Limits{"arr": {MinInterval: 500 * time.Millisecond}},
-	}, nil)
-	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
-	agent := httpx.UserAgent(p.build.Version)
-
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
-		client := httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
-			Provider: "arr", UserAgent: agent, Proxy: p.liveProxyPolicy(), Timeout: 60 * time.Second,
-		})
+		client := p.providerClient(providerArr, connectionGuard(baseURL), httpx.ClientConfig{Timeout: 60 * time.Second})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
 	}
 }
 
 // listProwlarr reads a Prowlarr's indexer list; the guard admits Prowlarr's own host, as for an indexer.
 func (p *process) listProwlarr(ctx context.Context, baseURL, apiKey string) ([]indexer.ProwlarrIndexer, error) {
-	wall := clock.NewSystem()
-	client := httpx.NewClient(wall, connectionGuard(baseURL), httpx.NewLimiter(wall, httpx.Config{}, nil),
-		httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-			Provider: "prowlarr", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
-			Timeout: 30 * time.Second,
-		})
+	client := p.providerClient(providerProwlarr, connectionGuard(baseURL), httpx.ClientConfig{Timeout: 30 * time.Second})
 	return indexer.ListProwlarr(ctx, client, baseURL, apiKey)
 }
 
@@ -258,18 +177,9 @@ func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.Li
 // is created lazily by the limiter/breaker registries the first time an id
 // is used, so a newly added indexer needs no code change here.
 func (p *process) indexerClientFactory() adapters.IndexerClientFactory {
-	wall := clock.NewSystem()
-	limiter := httpx.NewLimiter(wall, httpx.Config{
-		Defaults: httpx.Limits{MinInterval: 500 * time.Millisecond},
-	}, nil)
-	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
-	agent := httpx.UserAgent(p.build.Version)
-
 	return func(indexerID int64, baseURL, apiKey string, egress settings.IndexerEgress) indexer.Client {
-		client := httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
-			Provider: "indexer:" + strconv.FormatInt(indexerID, 10), UserAgent: agent,
-			Proxy: p.indexerLiveProxyPolicy(egress),
-		})
+		client := p.providerClient(providerIndexerPrefix+strconv.FormatInt(indexerID, 10), connectionGuard(baseURL),
+			httpx.ClientConfig{Proxy: p.indexerLiveProxyPolicy(egress)})
 		return indexer.NewClient(client, baseURL, apiKey)
 	}
 }
@@ -279,18 +189,8 @@ func (p *process) indexerClientFactory() adapters.IndexerClientFactory {
 // downloader is polled, not fanned out to), the global egress proxy applies
 // like any other outbound client (ADR-47 is indexer-specific, not this).
 func (p *process) downloaderClientFactory() adapters.DownloaderHTTPFactory {
-	wall := clock.NewSystem()
-	limiter := httpx.NewLimiter(wall, httpx.Config{
-		Defaults: httpx.Limits{MinInterval: 200 * time.Millisecond},
-	}, nil)
-	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{})
-	agent := httpx.UserAgent(p.build.Version)
-
 	return func(downloaderID int64, baseURL string) *httpx.Client {
-		return httpx.NewClient(wall, connectionGuard(baseURL), limiter, breaker, httpx.ClientConfig{
-			Provider: "downloader:" + strconv.FormatInt(downloaderID, 10), UserAgent: agent,
-			Proxy: p.liveProxyPolicy(),
-		})
+		return p.providerClient(providerDownloaderPrefix+strconv.FormatInt(downloaderID, 10), connectionGuard(baseURL), httpx.ClientConfig{})
 	}
 }
 
@@ -309,26 +209,12 @@ func connectionGuard(baseURL string) *httpx.Guard {
 // other client belongs to a provider and is built where that provider is
 // configured (ADR-13).
 func (p *process) publicIPClient() *httpx.Client {
-	wall := clock.NewSystem()
-	// Nil means the system resolver and dialer; the SSRF check still applies.
-	guard := httpx.NewGuard(nil, nil, nil)
-	return httpx.NewClient(wall, guard, httpx.NewLimiter(wall, httpx.Config{}, nil),
-		httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-			Provider:  "public-ip",
-			UserAgent: httpx.UserAgent(p.build.Version),
-			Timeout:   10 * time.Second,
-			Proxy:     p.liveProxyPolicy(),
-		})
+	return p.providerClient(providerPublicIP, nil, httpx.ClientConfig{Timeout: 10 * time.Second})
 }
 
 // theAudioDB is TheAudioDB's client, on its own rate bucket, with the own key when one is stored.
 func (p *process) theAudioDB() theaudiodb.Client {
-	wall := clock.NewSystem()
-	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil),
-		httpx.NewLimiter(wall, httpx.Config{Defaults: httpx.Limits{MinInterval: 500 * time.Millisecond}}, nil),
-		httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-			Provider: "theaudiodb", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
-		})
+	client := p.providerClient(providerTheAudioDB, nil, httpx.ClientConfig{})
 	return theaudiodb.New(client, func() string {
 		if key, err := p.cache.TheAudioDBAPIKey(); err == nil && key != "" {
 			return key.Reveal()
@@ -364,23 +250,11 @@ func theAudioDBCover(client theaudiodb.Client) func(ctx context.Context, release
 func (p *process) tvService() tv.Service {
 	p.tvOnce.Do(func() {
 		wall := clock.NewSystem()
-		guard := httpx.NewGuard(nil, nil, nil)
-		limiter := httpx.NewLimiter(wall, httpx.Config{Providers: map[string]httpx.Limits{
-			"skyhook": {MinInterval: 100 * time.Millisecond},
-			"tvmaze":  {MinInterval: 500 * time.Millisecond},
-			"tmdb":    {MinInterval: 25 * time.Millisecond},
-			"tvdb":    {MinInterval: 50 * time.Millisecond},
-			"anilist": {MinInterval: 2 * time.Second},
-		}}, nil)
-		client := func(name string) *httpx.Client {
-			return httpx.NewClient(wall, guard, limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-				Provider: name, UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
-			})
-		}
-		p.tmdbShared = tmdb.New(client("tmdb"), p.tmdbCredential, "")
-		p.tvdbShared = tvdb.New(client("tvdb"), p.tvdbKey, nil, wall.Now)
-		p.anilistShared = anilist.New(client("anilist"))
-		p.skyhookShared, p.tvmazeShared = skyhook.New(client("skyhook"), "en"), tvmaze.New(client("tvmaze"))
+		client := func(name string) *httpx.Client { return p.providerClient(name, nil, httpx.ClientConfig{}) }
+		p.tmdbShared = tmdb.New(client(providerTMDB), p.tmdbCredential, "")
+		p.tvdbShared = tvdb.New(client(providerTVDB), p.tvdbKey, nil, wall.Now)
+		p.anilistShared = anilist.New(client(providerAniList))
+		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
 			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
@@ -494,11 +368,7 @@ func (p *process) seriesPeople() adapters.SeriesPeople {
 
 // remoteImages is the provider picture cache, on its own rate bucket so a wall of posters cannot starve the metadata calls.
 func (p *process) remoteImages() *remoteimage.Cache {
-	wall := clock.NewSystem()
-	limiter := httpx.NewLimiter(wall, httpx.Config{Providers: map[string]httpx.Limits{"images": {MinInterval: 100 * time.Millisecond}}}, nil)
-	client := httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil), limiter, httpx.NewBreaker(wall, httpx.BreakerConfig{}), httpx.ClientConfig{
-		Provider: "images", UserAgent: httpx.UserAgent(p.build.Version), Proxy: p.liveProxyPolicy(),
-	})
+	client := p.providerClient(providerImages, nil, httpx.ClientConfig{})
 	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), Hosts: remoteimage.DefaultHosts}
 }
 

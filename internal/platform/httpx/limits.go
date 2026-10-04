@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
@@ -28,6 +29,22 @@ type Config struct {
 	GlobalMaxConcurrent int
 	Defaults            Limits
 	Providers           map[string]Limits
+	// Prefixes are the limits of a family of providers named "<prefix><id>", one bucket each: "indexer:7".
+	Prefixes map[string]Limits
+}
+
+// limitsFor is a provider's own limits, else its family's (longest prefix), else none; defaults fill the gaps.
+func (c Config) limitsFor(provider string) Limits {
+	limits, named := c.Providers[provider]
+	if !named {
+		longest := -1
+		for prefix, family := range c.Prefixes {
+			if strings.HasPrefix(provider, prefix) && len(prefix) > longest {
+				limits, longest = family, len(prefix)
+			}
+		}
+	}
+	return limits.resolve(c.Defaults)
 }
 
 // backoffBase is the first pause after a failure with no Retry-After.
