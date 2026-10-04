@@ -1,0 +1,134 @@
+[
+  {
+    "group": {
+      "many": "Discs",
+      "one": "Disc"
+    },
+    "key": "music",
+    "label": "Music",
+    "lead_people": {
+      "many": "Artists",
+      "one": "Artist"
+    },
+    "organisation": {
+      "many": "Labels",
+      "one": "Label"
+    },
+    "part": {
+      "many": "Tracks",
+      "one": "Track"
+    },
+    "roles": [
+      {
+        "character": false,
+        "followable": true,
+        "key": "artist",
+        "label": "Artist",
+        "lead": true,
+        "part_scoped": false
+      }
+    ],
+    "work": {
+      "many": "Albums",
+      "one": "Album"
+    }
+  },
+  {
+    "group": {
+      "many": "Seasons",
+      "one": "Season"
+    },
+    "key": "tv",
+    "label": "TV",
+    "lead_people": {
+      "many": "Cast",
+      "one": "Cast member"
+    },
+    "organisation": {
+      "many": "Networks",
+      "one": "Network"
+    },
+    "part": {
+      "many": "Episodes",
+      "one": "Episode"
+    },
+    "roles": [
+      {
+        "character": true,
+        "followable": true,
+        "key": "actor",
+        "label": "Cast",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "creator",
+        "label": "Creator",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "showrunner",
+        "label": "Showrunner",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "executive_producer",
+        "label": "Executive producer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "producer",
+        "label": "Producer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "composer",
+        "label": "Composer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "director",
+        "label": "Director",
+        "lead": false,
+        "part_scoped": true
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "writer",
+        "label": "Writer",
+        "lead": false,
+        "part_scoped": true
+      },
+      {
+        "character": true,
+        "followable": false,
+        "key": "guest_star",
+        "label": "Guest star",
+        "lead": false,
+        "part_scoped": true
+      }
+    ],
+    "work": {
+      "many": "Series",
+      "one": "Series"
+    }
+  }
+]

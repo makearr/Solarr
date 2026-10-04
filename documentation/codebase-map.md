@@ -92,6 +92,15 @@ A category the caller cannot see is 404, never 403. One they can see but may not
 One place: `jobs.Executor`. It refuses to run a job type declared mutating when the mode is
 `observe` or `shadow`; nothing else consults the mode (ADR-20, Invariant 31).
 
+## The golden answers
+
+`cmd/solarr/app/golden_test.go` builds the real server over real databases in a temporary directory
+(`process.newServer`, nothing listening), seeds one invented album and one invented series through the
+same write paths the application uses, and compares what the list and detail endpoints answer with
+`cmd/solarr/app/testdata/golden/*.json`. A change to an answer fails the test; when the change is
+meant, re-record with `go test ./cmd/solarr/app -run Golden -update` and review the diff. Values that
+are the current time are replaced before comparing.
+
 ## Reading order for a newcomer
 
 1. `internal/platform/clock` and `internal/platform/fsx` — small, and they set the testing style.

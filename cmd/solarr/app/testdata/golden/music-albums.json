@@ -1,0 +1,16 @@
+{
+  "items": [
+    {
+      "artist_cover": true,
+      "id": 1,
+      "monitored": true,
+      "present_count": 0,
+      "required_count": 3,
+      "size_bytes": 59000000,
+      "status": "incomplete",
+      "subtitle": "Amber Lanterns",
+      "title": "Quiet Orchards",
+      "year": 2019
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "items": [
+    {
+      "born": "2011",
+      "country": "IE",
+      "id": 1,
+      "kind": "Group",
+      "monitored": false,
+      "name": "Amber Lanterns",
+      "sort_name": "Amber Lanterns"
+    },
+    {
+      "id": 6,
+      "kind": "Person",
+      "monitored": false,
+      "name": "Hal Brandt",
+      "sort_name": "Hal Brandt"
+    },
+    {
+      "id": 3,
+      "kind": "Person",
+      "monitored": false,
+      "name": "Iris Calder",
+      "sort_name": "Iris Calder"
+    },
+    {
+      "id": 2,
+      "kind": "Person",
+      "monitored": false,
+      "name": "Mara Voss",
+      "sort_name": "Mara Voss"
+    },
+    {
+      "id": 5,
+      "kind": "Person",
+      "monitored": false,
+      "name": "Odile Renn",
+      "sort_name": "Odile Renn"
+    },
+    {
+      "id": 4,
+      "kind": "Person",
+      "monitored": false,
+      "name": "Tom Aske",
+      "sort_name": "Tom Aske"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "items": [
+    {
+      "id": 1,
+      "subtitle": "Amber Lanterns -- Quiet Orchards",
+      "title": "First Light",
+      "work_id": 1,
+      "year": 2019
+    },
+    {
+      "id": 2,
+      "subtitle": "Amber Lanterns -- Quiet Orchards",
+      "title": "Low Tide",
+      "work_id": 1,
+      "year": 2019
+    },
+    {
+      "id": 3,
+      "subtitle": "Amber Lanterns -- Quiet Orchards",
+      "title": "Harbour Bells",
+      "work_id": 1,
+      "year": 2019
+    }
+  ]
+}

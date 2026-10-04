@@ -1,0 +1,18 @@
+{
+  "credits": [
+    {
+      "character": "The Harbourmaster",
+      "role": "actor",
+      "series_id": 2,
+      "series_title": "The Marble Stations",
+      "year": 2020
+    }
+  ],
+  "followable": true,
+  "id": 3,
+  "ids": {
+    "tmdb": "301"
+  },
+  "monitored": false,
+  "name": "Iris Calder"
+}

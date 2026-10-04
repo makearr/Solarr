@@ -1,0 +1,26 @@
+{
+  "aliases": [],
+  "born": "2011",
+  "country": "IE",
+  "discography": [
+    {
+      "id": 1,
+      "media_type": "music",
+      "on_disk": true,
+      "present_count": 0,
+      "primary_type": "Album",
+      "required_count": 3,
+      "sort_title": "quiet orchards",
+      "status": "incomplete",
+      "title": "Quiet Orchards",
+      "wanted_state": "MISSING",
+      "year": 2019
+    }
+  ],
+  "genres": [],
+  "id": 1,
+  "kind": "Group",
+  "monitored": false,
+  "name": "Amber Lanterns",
+  "sort_name": "Amber Lanterns"
+}

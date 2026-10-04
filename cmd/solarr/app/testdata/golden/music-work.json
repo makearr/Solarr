@@ -1,0 +1,80 @@
+{
+  "added_at": "2021-03-04T05:06:07Z",
+  "can_request": true,
+  "credits": [
+    {
+      "person_id": 1,
+      "person_name": "Amber Lanterns",
+      "role": "artist"
+    }
+  ],
+  "editions": [
+    {
+      "external_ids": [
+        {
+          "external_id": "22222222-2222-4222-8222-222222222222",
+          "provider": "musicbrainz:release"
+        }
+      ],
+      "format": "CD",
+      "id": 1,
+      "is_default": false,
+      "kind": "release",
+      "label": "Quiet Orchards",
+      "year": 2019
+    }
+  ],
+  "external_ids": [
+    {
+      "external_id": "11111111-1111-4111-8111-111111111111",
+      "provider": "musicbrainz:release-group"
+    }
+  ],
+  "genres": [],
+  "id": 1,
+  "library_ids": [
+    1
+  ],
+  "media_type": "music",
+  "on_disk": true,
+  "parts": [
+    {
+      "external_ids": [],
+      "file": null,
+      "id": 1,
+      "media_ref": "disc1:track1",
+      "monitored": true,
+      "runtime_ms": 200000,
+      "sort_key": "d0001t0001",
+      "title": "First Light",
+      "wanted": null
+    },
+    {
+      "external_ids": [],
+      "file": null,
+      "id": 2,
+      "media_ref": "disc1:track2",
+      "monitored": true,
+      "runtime_ms": 200000,
+      "sort_key": "d0001t0002",
+      "title": "Low Tide",
+      "wanted": null
+    },
+    {
+      "external_ids": [],
+      "file": null,
+      "id": 3,
+      "media_ref": "disc1:track3",
+      "monitored": true,
+      "runtime_ms": 200000,
+      "sort_key": "d0001t0003",
+      "title": "Harbour Bells",
+      "wanted": null
+    }
+  ],
+  "sort_title": "quiet orchards",
+  "title": "Quiet Orchards",
+  "updated_at": "2021-03-04T05:06:07Z",
+  "wanted": null,
+  "year": 2019
+}

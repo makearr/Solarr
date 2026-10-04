@@ -1,0 +1,54 @@
+[
+  {
+    "id": 1,
+    "levels": [
+      {
+        "default_sort": "name",
+        "entity": "person",
+        "key": "artists",
+        "label": "Artists"
+      },
+      {
+        "default_sort": "title",
+        "entity": "work",
+        "key": "albums",
+        "label": "Albums"
+      },
+      {
+        "default_sort": "artist",
+        "entity": "work_part",
+        "key": "tracks",
+        "label": "Tracks"
+      }
+    ],
+    "media_type": "music",
+    "name": "Music",
+    "permission": "manage"
+  },
+  {
+    "id": 2,
+    "levels": [
+      {
+        "default_sort": "title",
+        "entity": "work",
+        "key": "series",
+        "label": "Series"
+      },
+      {
+        "default_sort": "name",
+        "entity": "person",
+        "key": "people",
+        "label": "Cast"
+      },
+      {
+        "default_sort": "name",
+        "entity": "organisation",
+        "key": "networks",
+        "label": "Networks"
+      }
+    ],
+    "media_type": "tv",
+    "name": "Series",
+    "permission": "manage"
+  }
+]

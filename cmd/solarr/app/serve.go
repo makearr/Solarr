@@ -546,7 +546,60 @@ func (p *process) startServer(ctx context.Context) error {
 	})
 	go prober.Run(ctx)
 
-	server, err := apiserver.New(apiserver.Config{
+	server, err := p.newServer(authConfig, prober)
+	if err != nil {
+		return err
+	}
+	p.server = server
+
+	listener, err := server.Listen()
+	if err != nil {
+		return err
+	}
+
+	stopping, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	p.startBackupSchedules()
+
+	dispatcherDone := make(chan struct{})
+	go func() {
+		defer close(dispatcherDone)
+		p.dispatcher.Run(stopping)
+	}()
+
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- server.Serve(listener) }()
+
+	server.MarkReady()
+	p.logger.Info("serving",
+		slog.String("address", server.Address()),
+		slog.String("port_source", portSource),
+		slog.String("version", p.build.Version),
+		slog.String("sqlite_driver", store.DriverName()),
+		slog.String("mode", string(p.config.Mode)))
+
+	select {
+	case err := <-serverDone:
+		return err
+	case <-stopping.Done():
+	}
+
+	// Shutdown order matters (section 15.2): stop accepting first, then let the
+	// dispatcher drain, then close the databases in p.close.
+	p.logger.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		p.logger.Warn("server shutdown", slog.Any("error", err))
+	}
+	<-dispatcherDone
+	return nil
+}
+
+// newServer wires every adapter into the HTTP server without listening, so a test can drive the same server.
+func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prober) (*apiserver.Server, error) {
+	return apiserver.New(apiserver.Config{
 		Bind:    p.config.Server.Bind,
 		Port:    p.effectivePort,
 		BaseURL: p.config.Server.BaseURL,
@@ -719,54 +772,6 @@ func (p *process) startServer(ctx context.Context) error {
 		Timezone: p.timezone,
 		Egress:   adapters.Egress{Prober: prober},
 	})
-	if err != nil {
-		return err
-	}
-	p.server = server
-
-	listener, err := server.Listen()
-	if err != nil {
-		return err
-	}
-
-	stopping, stop := signal.NotifyContext(ctx, syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	p.startBackupSchedules()
-
-	dispatcherDone := make(chan struct{})
-	go func() {
-		defer close(dispatcherDone)
-		p.dispatcher.Run(stopping)
-	}()
-
-	serverDone := make(chan error, 1)
-	go func() { serverDone <- server.Serve(listener) }()
-
-	server.MarkReady()
-	p.logger.Info("serving",
-		slog.String("address", server.Address()),
-		slog.String("port_source", portSource),
-		slog.String("version", p.build.Version),
-		slog.String("sqlite_driver", store.DriverName()),
-		slog.String("mode", string(p.config.Mode)))
-
-	select {
-	case err := <-serverDone:
-		return err
-	case <-stopping.Done():
-	}
-
-	// Shutdown order matters (section 15.2): stop accepting first, then let the
-	// dispatcher drain, then close the databases in p.close.
-	p.logger.Info("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := server.Shutdown(shutdownCtx); err != nil {
-		p.logger.Warn("server shutdown", slog.Any("error", err))
-	}
-	<-dispatcherDone
-	return nil
 }
 
 // close drains and closes the databases. The write queues drain before their

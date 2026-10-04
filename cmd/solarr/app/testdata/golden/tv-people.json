@@ -1,0 +1,52 @@
+{
+  "items": [
+    {
+      "id": 6,
+      "monitored": false,
+      "name": "Hal Brandt",
+      "roles": [
+        "director"
+      ],
+      "series_count": 1
+    },
+    {
+      "character": "The Harbourmaster",
+      "id": 3,
+      "monitored": false,
+      "name": "Iris Calder",
+      "roles": [
+        "actor"
+      ],
+      "series_count": 1
+    },
+    {
+      "id": 2,
+      "monitored": false,
+      "name": "Mara Voss",
+      "roles": [
+        "creator"
+      ],
+      "series_count": 1
+    },
+    {
+      "character": "The Pilot",
+      "id": 5,
+      "monitored": false,
+      "name": "Odile Renn",
+      "roles": [
+        "guest_star"
+      ],
+      "series_count": 1
+    },
+    {
+      "character": "Finn",
+      "id": 4,
+      "monitored": false,
+      "name": "Tom Aske",
+      "roles": [
+        "actor"
+      ],
+      "series_count": 1
+    }
+  ]
+}

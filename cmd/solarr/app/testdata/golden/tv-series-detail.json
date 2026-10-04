@@ -1,0 +1,167 @@
+{
+  "air_time": "21:00 Europe/London (guess)",
+  "credits": [
+    {
+      "character": "The Harbourmaster",
+      "name": "Iris Calder",
+      "order": 0,
+      "person_id": 3,
+      "role": "actor"
+    },
+    {
+      "name": "Mara Voss",
+      "order": 0,
+      "person_id": 2,
+      "role": "creator"
+    },
+    {
+      "character": "Finn",
+      "name": "Tom Aske",
+      "order": 1,
+      "person_id": 4,
+      "role": "actor"
+    },
+    {
+      "episode_id": 4,
+      "name": "Hal Brandt",
+      "order": 0,
+      "person_id": 6,
+      "role": "director"
+    },
+    {
+      "character": "The Pilot",
+      "episode_id": 4,
+      "name": "Odile Renn",
+      "order": 0,
+      "person_id": 5,
+      "role": "guest_star"
+    }
+  ],
+  "episodes": [
+    {
+      "air_confidence": "medium",
+      "air_date": "2020-02-03",
+      "air_time": "2020-02-03T20:00:00Z",
+      "file": {
+        "media_object_id": 3,
+        "size_bytes": 900000000,
+        "subtitles": []
+      },
+      "id": 4,
+      "monitored": true,
+      "number": 1,
+      "runtime_minutes": 45,
+      "season": 1,
+      "state": "present",
+      "title": "Slack Water"
+    },
+    {
+      "air_confidence": "medium",
+      "air_date": "2020-02-10",
+      "air_time": "2020-02-10T20:00:00Z",
+      "file": {
+        "media_object_id": 4,
+        "size_bytes": 880000000,
+        "subtitles": []
+      },
+      "id": 5,
+      "monitored": true,
+      "number": 2,
+      "runtime_minutes": 45,
+      "season": 1,
+      "state": "present",
+      "title": "The Long Pier"
+    },
+    {
+      "air_confidence": "medium",
+      "air_date": "2020-02-17",
+      "air_time": "2020-02-17T20:00:00Z",
+      "id": 6,
+      "monitored": true,
+      "number": 3,
+      "runtime_minutes": 45,
+      "season": 1,
+      "state": "missing",
+      "title": "Signals"
+    },
+    {
+      "air_confidence": "medium",
+      "air_date": "2099-01-05",
+      "air_time": "2099-01-05T20:00:00Z",
+      "id": 7,
+      "monitored": true,
+      "number": 1,
+      "runtime_minutes": 45,
+      "season": 2,
+      "state": "unaired",
+      "title": "Return Crossing"
+    }
+  ],
+  "ids": {
+    "tmdb": "7001",
+    "tvdb": "9001"
+  },
+  "network_id": 1,
+  "original_country": "gb",
+  "original_language": "eng",
+  "runtime_minutes": 45,
+  "seasons": [
+    {
+      "counts": {
+        "aired_missing": 0,
+        "monitored": 3,
+        "present": 2,
+        "total": 0
+      },
+      "desired_item_id": 2,
+      "monitored": true,
+      "number": 1
+    },
+    {
+      "counts": {
+        "aired_missing": 0,
+        "monitored": 1,
+        "present": 0,
+        "total": 0
+      },
+      "desired_item_id": 3,
+      "monitored": true,
+      "number": 2
+    }
+  ],
+  "summary": {
+    "added_at": 1614834367,
+    "counts": {
+      "aired_missing": 1,
+      "monitored": 4,
+      "present": 2,
+      "total": 4
+    },
+    "genres": [
+      "Drama",
+      "Mystery"
+    ],
+    "id": 2,
+    "monitored": true,
+    "network": "Northern Channel",
+    "next_airing": "2099-01-05T20:00:00Z",
+    "overview": "A ferry town keeps its own time.",
+    "quality_profile_id": 10,
+    "season_states": [
+      {
+        "monitored": true,
+        "number": 1
+      },
+      {
+        "monitored": true,
+        "number": 2
+      }
+    ],
+    "seasons": 2,
+    "series_type": "standard",
+    "sort_title": "marble stations",
+    "status": "continuing",
+    "title": "The Marble Stations",
+    "year": 2020
+  }
+}

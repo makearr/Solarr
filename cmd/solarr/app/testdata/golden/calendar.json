@@ -1,0 +1,32 @@
+[
+  {
+    "artist": "S01E01 Slack Water",
+    "category_id": 2,
+    "on_disk": true,
+    "part_id": 4,
+    "primary_type": "Episode",
+    "release_date": "2020-02-03",
+    "title": "The Marble Stations",
+    "work_id": 2
+  },
+  {
+    "artist": "S01E02 The Long Pier",
+    "category_id": 2,
+    "on_disk": true,
+    "part_id": 5,
+    "primary_type": "Episode",
+    "release_date": "2020-02-10",
+    "title": "The Marble Stations",
+    "work_id": 2
+  },
+  {
+    "artist": "S01E03 Signals",
+    "category_id": 2,
+    "on_disk": false,
+    "part_id": 6,
+    "primary_type": "Episode",
+    "release_date": "2020-02-17",
+    "title": "The Marble Stations",
+    "work_id": 2
+  }
+]

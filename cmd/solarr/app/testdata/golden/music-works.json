@@ -1,0 +1,21 @@
+{
+  "items": [
+    {
+      "added_at": "2021-03-04T05:06:07Z",
+      "artist": "Amber Lanterns",
+      "artist_cover": true,
+      "id": 1,
+      "media_type": "music",
+      "monitored": true,
+      "present_count": 0,
+      "required_count": 3,
+      "size_bytes": 59000000,
+      "sort_title": "quiet orchards",
+      "status": "incomplete",
+      "title": "Quiet Orchards",
+      "updated_at": "2021-03-04T05:06:07Z",
+      "wanted_state": "MISSING",
+      "year": 2019
+    }
+  ]
+}
