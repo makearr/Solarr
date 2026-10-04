@@ -2343,6 +2343,44 @@ export interface paths {
         patch: operations["updateQualityProfile"];
         trace?: never;
     };
+    "/qualitytargets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every named target quality a library may aim for. */
+        get: operations["listQualityTargets"];
+        put?: never;
+        /** Add a target quality. Administrator only. */
+        post: operations["createQualityTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/qualitytargets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace a target quality; the libraries aiming for it follow. Administrator only. */
+        put: operations["updateQualityTarget"];
+        post?: never;
+        /** Remove a target quality no library aims for. Administrator only. */
+        delete: operations["deleteQualityTarget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/languageprofiles": {
         parameters: {
             query?: never;
@@ -4381,6 +4419,17 @@ export interface components {
             allow_cidrs: string[];
         };
         QualityTarget: {
+            /**
+             * Format: int64
+             * @description Absent when creating.
+             */
+            id?: number;
+            /** @description What the target is called in a library's choice. */
+            name?: string;
+            /** @description The media type it serves; fixed once made. */
+            media_type?: string;
+            /** @description The constant rate factor a file's encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care. */
+            crf?: number;
             /** @description As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target. */
             audio_codec: string;
             /** @description The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target. */
@@ -4468,7 +4517,11 @@ export interface components {
             profile_ids: number[];
             /** Format: int64 */
             cutoff_profile_id?: number;
-            target?: components["schemas"]["QualityTarget"];
+            /**
+             * Format: int64
+             * @description The target the library aims for; absent for none.
+             */
+            target_id?: number;
             /** @description Lidarr's "Upgrades Allowed". Omitted leaves it as it is. */
             upgrades_allowed?: boolean;
             /**
@@ -4501,6 +4554,8 @@ export interface components {
             /** Format: int64 */
             cutoff_profile_id?: number;
             target?: components["schemas"]["QualityTarget"];
+            /** @description Every target of the library's media type, by name. */
+            available_targets?: components["schemas"]["QualityProfileRef"][];
             /** @description Plain-language notices, e.g. a target the first profile would refuse. */
             warnings: string[];
         };
@@ -11238,6 +11293,108 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listQualityTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The targets, by media type then name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityTarget"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    createQualityTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityTarget"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityTarget"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    updateQualityTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QualityTarget"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QualityTarget"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteQualityTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listLanguageProfiles: {

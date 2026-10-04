@@ -44,6 +44,7 @@ func attributeClaimFromMeasured(m mediatool.Measured, sidecarSubtitles []string)
 	if m.VideoCodec != "" && m.Height > 0 {
 		claim.VideoCodec, claim.Resolution = videoCodecName(m.VideoCodec), resolutionOf(m.Width, m.Height)
 		claim.HDR, claim.FrameRate, claim.ScanType = m.HDR, m.FrameRate, m.ScanType
+		claim.CRF = m.CRF
 		claim.Lossless = false
 	}
 	claim.Subtitles = mergedLanguages(m.SubtitleLanguages, sidecarSubtitles)

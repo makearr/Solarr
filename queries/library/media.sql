@@ -6,21 +6,21 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               subtitles, edition_tokens, release_group, proper_repack,
                               frame_rate, scan_type, container, lossless, sample_rate,
                               image_format, colour_depth, page_count, bitrate_kbps,
-                              bitrate_mode, vbr_preset, lyrics_languages)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              bitrate_mode, vbr_preset, lyrics_languages, crf)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, frame_rate, scan_type, container,
           lossless, sample_rate, image_format, colour_depth, page_count,
-          bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages;
+          bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages, crf;
 
 -- name: GetAttributes :one
 SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, frame_rate, scan_type, container,
        lossless, sample_rate, image_format, colour_depth, page_count,
-       bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages
+       bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages, crf
 FROM media_attributes WHERE id = ?;
 
 -- Returning the row costs four times the insert itself at import scale, so this is
@@ -126,13 +126,13 @@ WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
--- Video files measured before the probe read the picture (resolution, HDR, frame rate) and the subtitle tracks.
+-- Video files measured before the probe read the picture (resolution, HDR, frame rate), the subtitle tracks and the encoder's CRF.
 -- name: ListStaleVideoProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
 WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
-  AND o.probe_json NOT LIKE '%"SubtitleLanguages"%' AND o.id > sqlc.arg(after_id)
+  AND (o.probe_json NOT LIKE '%"SubtitleLanguages"%' OR o.probe_json NOT LIKE '%"CRF"%') AND o.id > sqlc.arg(after_id)
   AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
        OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
        OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')

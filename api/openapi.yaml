@@ -3724,6 +3724,75 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
 
+  /qualitytargets:
+    get:
+      operationId: listQualityTargets
+      tags: [settings]
+      summary: Every named target quality a library may aim for.
+      responses:
+        "200":
+          description: The targets, by media type then name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/QualityTarget" }
+        "401": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createQualityTarget
+      tags: [settings]
+      summary: Add a target quality. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualityTarget" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualityTarget" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /qualitytargets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: updateQualityTarget
+      tags: [settings]
+      summary: Replace a target quality; the libraries aiming for it follow. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QualityTarget" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QualityTarget" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteQualityTarget
+      tags: [settings]
+      summary: Remove a target quality no library aims for. Administrator only.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /languageprofiles:
     get:
       operationId: listLanguageProfiles
@@ -6933,6 +7002,10 @@ components:
       type: object
       required: [audio_codec, container, tolerance_pct]
       properties:
+        id: { type: integer, format: int64, description: Absent when creating. }
+        name: { type: string, description: What the target is called in a library's choice. }
+        media_type: { type: string, description: The media type it serves; fixed once made. }
+        crf: { type: number, description: 'The constant rate factor a file''s encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care.' }
         audio_codec: { type: string, description: 'As ffprobe names it: aac, mp3, flac, opus. May be empty for a video target.' }
         container: { type: string, description: 'The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.' }
         resolution: { type: string, description: 'A video library''s target resolution, e.g. 1080p; empty when it does not care.' }
@@ -6998,7 +7071,7 @@ components:
           description: The profiles the library accepts, earlier preferred.
           items: { type: integer, format: int64 }
         cutoff_profile_id: { type: integer, format: int64 }
-        target: { $ref: "#/components/schemas/QualityTarget" }
+        target_id: { type: integer, format: int64, description: The target the library aims for; absent for none. }
         upgrades_allowed:
           type: boolean
           description: Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
@@ -7039,6 +7112,10 @@ components:
           items: { $ref: "#/components/schemas/QualityProfileRef" }
         cutoff_profile_id: { type: integer, format: int64 }
         target: { $ref: "#/components/schemas/QualityTarget" }
+        available_targets:
+          type: array
+          description: Every target of the library's media type, by name.
+          items: { $ref: "#/components/schemas/QualityProfileRef" }
         warnings:
           type: array
           description: Plain-language notices, e.g. a target the first profile would refuse.

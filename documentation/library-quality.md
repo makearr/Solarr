@@ -24,9 +24,14 @@ enough: the shipped profiles have no gates, so every release "passes" every one 
   and a zero-point `profile-priority` component records it in the stored breakdown.
 - **Cutoff** is one profile of the list. A file meets it when it meets the target, or fits a
   profile at or before the cutoff. Upgrades stop there.
-- **Target** is one exact quality: codec (ffprobe's name), file type, and a bitrate range of
-  ±`tolerance_pct` — no bitrate for a lossless codec. A file's type is its **extension**, not
-  ffprobe's container, which for m4a is the demuxer list `mov,mp4,m4a,3gp,3g2,mj2`.
+- **Target** is one named quality a library aims for. Targets are made under Quality profiles (Target qualities), several
+  per media type, and a library picks one on its own Quality page; editing a target changes every library aiming for it, and
+  one a library still aims for cannot be removed. A target names the container (one file type, chosen from a list), the
+  picture (resolution, codec, HDR, frame rate, video bitrate and **CRF**), the sound (codec, channels, bitrate, languages)
+  and subtitle languages; a part left on "any" is free, and a part the probe could not read is not held against a file.
+  **CRF** is read from the encoder settings an x264 or x265 encode writes into the file's first frame (the probe reads the first
+  512 KiB of a video file once); a file at or below the target's CRF meets it, a file that states none is not held against it.
+  Audio targets keep codec, file type and a bitrate within a tolerance.
 - **The warning** on the Quality screen fires when the target does not fit the first profile.
 
 Files the probe has not measured yet are not judged either way.

@@ -606,7 +606,7 @@ type Querier interface {
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
 	ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error)
-	// Video files measured before the probe read the picture (resolution, HDR, frame rate) and the subtitle tracks.
+	// Video files measured before the probe read the picture (resolution, HDR, frame rate), the subtitle tracks and the encoder's CRF.
 	ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)

@@ -11,9 +11,11 @@ import (
 
 type Querier interface {
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
+	ClearCategoryTarget(ctx context.Context, categoryID int64) error
 	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
 	// Invariant 41: deleting a profile in use is refused with a count of what references it.
 	CountCategoriesUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
+	CountCategoriesUsingQualityTarget(ctx context.Context, targetID int64) (int64, error)
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
 	CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error)
@@ -46,6 +48,7 @@ type Querier interface {
 	CreateLanguageProfile(ctx context.Context, arg CreateLanguageProfileParams) (LanguageProfile, error)
 	CreateNamingProfile(ctx context.Context, arg CreateNamingProfileParams) (int64, error)
 	CreateQualityProfile(ctx context.Context, arg CreateQualityProfileParams) (QualityProfile, error)
+	CreateQualityTarget(ctx context.Context, arg CreateQualityTargetParams) (int64, error)
 	CreateRootFolder(ctx context.Context, arg CreateRootFolderParams) (RootFolder, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (AppUser, error)
 	DeleteAPIKey(ctx context.Context, id int64) error
@@ -53,7 +56,6 @@ type Querier interface {
 	DeleteCalendarFeed(ctx context.Context, userID int64) error
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error
-	DeleteCategoryQualityTarget(ctx context.Context, categoryID int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
 	DeleteDownloader(ctx context.Context, id int64) error
@@ -65,6 +67,7 @@ type Querier interface {
 	DeleteNamingProfile(ctx context.Context, id int64) error
 	DeletePreference(ctx context.Context, arg DeletePreferenceParams) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
+	DeleteQualityTarget(ctx context.Context, id int64) error
 	DeleteRootFolder(ctx context.Context, id int64) error
 	DeleteUser(ctx context.Context, id int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
@@ -99,8 +102,8 @@ type Querier interface {
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
-	ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
+	ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error)
 	ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
@@ -118,6 +121,7 @@ type Querier interface {
 	ListPreferencesForUser(ctx context.Context, userID int64) ([]UserPreference, error)
 	// Quality and language profiles (ADR-40, section 19.8).
 	ListQualityProfiles(ctx context.Context) ([]QualityProfile, error)
+	ListQualityTargets(ctx context.Context) ([]QualityTarget, error)
 	ListRootFolders(ctx context.Context) ([]RootFolder, error)
 	ListUsers(ctx context.Context) ([]AppUser, error)
 	RecordDiscoveryJobRun(ctx context.Context, arg RecordDiscoveryJobRunParams) error
@@ -138,6 +142,7 @@ type Querier interface {
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	SetCategoryQualityUpgrades(ctx context.Context, arg SetCategoryQualityUpgradesParams) error
 	SetCategoryTVMonitor(ctx context.Context, arg SetCategoryTVMonitorParams) error
+	SetCategoryTarget(ctx context.Context, arg SetCategoryTargetParams) error
 	// The enable transition on its own: this is the "preview before enabling" gate, a
 	// deliberate act distinct from editing a job's policy.
 	SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error
@@ -180,9 +185,9 @@ type Querier interface {
 	UpdateLanguageProfile(ctx context.Context, arg UpdateLanguageProfileParams) error
 	UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfileParams) error
 	UpdateQualityProfile(ctx context.Context, arg UpdateQualityProfileParams) error
+	UpdateQualityTarget(ctx context.Context, arg UpdateQualityTargetParams) error
 	UpsertCalendarFeed(ctx context.Context, arg UpsertCalendarFeedParams) error
 	UpsertCategoryFileManagement(ctx context.Context, arg UpsertCategoryFileManagementParams) error
-	UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error
 }
 
 var _ Querier = (*Queries)(nil)

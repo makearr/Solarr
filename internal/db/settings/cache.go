@@ -147,7 +147,11 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category quality profiles: %w", err)
 	}
-	qualityTargets, err := c.queries.ListCategoryQualityTargets(ctx)
+	qualityTargets, err := c.queries.ListQualityTargets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list quality targets: %w", err)
+	}
+	categoryTargets, err := c.queries.ListCategoryTargets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list category quality targets: %w", err)
 	}
@@ -190,11 +194,12 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 	return newSnapshot(
 		convertUsers(users),
 		withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-			qualityLists, qualityTargets), fileManagement),
+			qualityLists, convertQualityTargets(qualityTargets), categoryTargets), fileManagement),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
 		convertQualityProfiles(qualityProfiles),
+		convertQualityTargets(qualityTargets),
 		convertedLanguageProfiles,
 		convertExclusionPatterns(exclusionPatterns),
 		policy,
@@ -211,9 +216,17 @@ func convertUsers(rows []settingsdb.AppUser) []User {
 	return users
 }
 
-// withQuality attaches each library's ordered profile list and target.
+func convertQualityTargets(rows []settingsdb.QualityTarget) []QualityTarget {
+	targets := make([]QualityTarget, len(rows))
+	for i, row := range rows {
+		targets[i] = targetFromRow(row)
+	}
+	return targets
+}
+
+// withQuality attaches each library's ordered profile list and the target it picked.
 func withQuality(
-	categories []Category, lists []settingsdb.CategoryQualityProfile, targets []settingsdb.CategoryQualityTarget,
+	categories []Category, lists []settingsdb.CategoryQualityProfile, targets []QualityTarget, picks []settingsdb.CategoryTarget,
 ) []Category {
 	index := make(map[int64]int, len(categories))
 	for i, category := range categories {
@@ -224,9 +237,14 @@ func withQuality(
 			categories[i].QualityProfileIDs = append(categories[i].QualityProfileIDs, row.QualityProfileID)
 		}
 	}
-	for _, row := range targets {
-		if i, ok := index[row.CategoryID]; ok {
-			categories[i].QualityTarget = targetFromRow(row)
+	byID := make(map[int64]QualityTarget, len(targets))
+	for _, target := range targets {
+		byID[target.ID] = target
+	}
+	for _, pick := range picks {
+		target, found := byID[pick.TargetID]
+		if i, ok := index[pick.CategoryID]; ok && found {
+			categories[i].QualityTarget = &target
 		}
 	}
 	return categories

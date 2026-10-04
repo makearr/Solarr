@@ -76,25 +76,38 @@ UPDATE category SET quality_upgrades = ? WHERE id = ?;
 -- name: SetCategoryProtocolDelay :exec
 UPDATE category SET preferred_protocol = ?, protocol_delay_minutes = ? WHERE id = ?;
 
--- name: ListCategoryQualityTargets :many
-SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
-       audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate
-FROM category_quality_target;
+-- name: ListQualityTargets :many
+SELECT id, name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+       audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf
+FROM quality_target ORDER BY media_type, name;
 
--- name: UpsertCategoryQualityTarget :exec
-INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
-  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (category_id) DO UPDATE SET
-  audio_codec = excluded.audio_codec, container = excluded.container,
-  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct,
-  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr,
-  audio_channels = excluded.audio_channels, audio_languages = excluded.audio_languages,
-  subtitle_languages = excluded.subtitle_languages, audio_bitrate_kbps = excluded.audio_bitrate_kbps,
-  video_bitrate_kbps = excluded.video_bitrate_kbps, frame_rate = excluded.frame_rate;
+-- name: CreateQualityTarget :one
+INSERT INTO quality_target (name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id;
 
--- name: DeleteCategoryQualityTarget :exec
-DELETE FROM category_quality_target WHERE category_id = ?;
+-- name: UpdateQualityTarget :exec
+UPDATE quality_target SET name = ?, audio_codec = ?, container = ?, bitrate_kbps = ?, tolerance_pct = ?, resolution = ?,
+  video_codec = ?, hdr = ?, audio_channels = ?, audio_languages = ?, subtitle_languages = ?, audio_bitrate_kbps = ?,
+  video_bitrate_kbps = ?, frame_rate = ?, crf = ?
+WHERE id = ?;
+
+-- name: DeleteQualityTarget :exec
+DELETE FROM quality_target WHERE id = ?;
+
+-- name: ListCategoryTargets :many
+SELECT category_id, target_id FROM category_target;
+
+-- name: SetCategoryTarget :exec
+INSERT INTO category_target (category_id, target_id) VALUES (?, ?)
+ON CONFLICT (category_id) DO UPDATE SET target_id = excluded.target_id;
+
+-- name: ClearCategoryTarget :exec
+DELETE FROM category_target WHERE category_id = ?;
+
+-- name: CountCategoriesUsingQualityTarget :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM category_target WHERE target_id = ?;
 
 -- name: CountCategoryListsUsingQualityProfile :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM category_quality_profile WHERE quality_profile_id = ?;

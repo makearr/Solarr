@@ -115,9 +115,12 @@ type Category struct {
 	FileManagement FileManagement
 }
 
-// QualityTarget is a library's aimed-for quality. BitrateKbps is nil for a lossless codec;
+// QualityTarget is a named quality a library aims for; a library picks one. BitrateKbps is nil for a lossless codec;
 // otherwise a file within +-TolerancePct of it meets the target.
 type QualityTarget struct {
+	ID           int64
+	Name         string
+	MediaType    string
 	AudioCodec   string
 	Container    string
 	BitrateKbps  *int64
@@ -134,6 +137,9 @@ type QualityTarget struct {
 	AudioBitrateKbps  *int64
 	VideoBitrateKbps  *int64
 	FrameRate         float64
+	// CRF is the constant rate factor a file's encoder settings state; a file that states none is not held against it,
+	// and one at or below it (the same quality or better) meets it. 0 when the target does not care.
+	CRF float64
 }
 
 // NamingProfile is one library's naming, Lidarr's shape: a template per slot the media type

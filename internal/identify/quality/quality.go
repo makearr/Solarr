@@ -92,6 +92,9 @@ func MeetsTarget(target settings.QualityTarget, file score.FileFacts) bool {
 // frameRateMargin is how far a frame rate may be from the target's: 23.976 is 24 and 29.97 is 30.
 const frameRateMargin = 0.02
 
+// crfMargin is how far above a target CRF a file may be and still meet it: a rounding of the encoder's own setting.
+const crfMargin = 0.5
+
 // defaultBitrateTolerancePct is the margin of a video target that names none; pictures vary far more than sound does.
 const defaultBitrateTolerancePct = 25
 
@@ -127,6 +130,9 @@ func meetsVideoTarget(target settings.QualityTarget, file score.FileFacts) bool 
 		tolerance = defaultBitrateTolerancePct
 	}
 	if !withinPct(target.VideoBitrateKbps, file.VideoBitrate, tolerance) || !withinPct(target.AudioBitrateKbps, file.AudioBitrate, tolerance) {
+		return false
+	}
+	if target.CRF > 0 && file.CRF > 0 && file.CRF > target.CRF+crfMargin {
 		return false
 	}
 	if target.FrameRate > 0 && file.FrameRate > 0 && math.Abs(file.FrameRate-target.FrameRate) > target.FrameRate*frameRateMargin {

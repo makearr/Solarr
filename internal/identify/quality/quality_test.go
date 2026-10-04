@@ -62,3 +62,24 @@ func TestMeetsTarget_ChannelsLanguagesBitratesFrameRateAndSeveralFileTypes(t *te
 		t.Error("a file whose languages the probe could not read was held against a language target")
 	}
 }
+
+// A file at or below the target's CRF (the same quality or better) meets it; one that states no CRF is not held against it.
+func TestMeetsTarget_CRFIsAtOrBelowAndUnknownIsFree(t *testing.T) {
+	target := settings.QualityTarget{CRF: 20}
+	cases := []struct {
+		name string
+		crf  float64
+		want bool
+	}{
+		{"better than the target", 18, true},
+		{"exactly the target", 20, true},
+		{"within the rounding margin", 20.4, true},
+		{"worse than the target", 23, false},
+		{"states none", 0, true},
+	}
+	for _, c := range cases {
+		if got := quality.MeetsTarget(target, score.FileFacts{Resolution: "1080p", VideoCodec: "h264", CRF: c.crf}); got != c.want {
+			t.Errorf("%s: MeetsTarget = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

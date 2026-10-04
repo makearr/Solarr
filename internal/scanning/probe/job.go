@@ -11,6 +11,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"path"
 	"time"
@@ -194,6 +195,7 @@ type failedFile struct {
 
 func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute string, probe mediatool.Probe) error {
 	measured := probe.Measured
+	measured.CRF = j.encoderCRF(absolute, measured)
 	claim := attributeClaimFromMeasured(measured, sidecarSubtitleLanguages(j.fs, absolute))
 	probeJSON, err := json.Marshal(measured)
 	if err != nil {
@@ -221,6 +223,22 @@ func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute 
 		OverallBitrate: measured.OverallBitrate,
 		ProbeJSON:      string(probeJSON),
 	}, mismatchJSON, j.clock.Now().Unix())
+}
+
+// encoderCRF reads the CRF an x264 or x265 encode states in its settings from the start of the file; 0 for any other
+// picture, or when the file cannot be read (the probe already succeeded, so this one fact is simply absent).
+func (j *Job) encoderCRF(absolute string, measured mediatool.Measured) float64 {
+	if measured.Height == 0 || (measured.VideoCodec != "h264" && measured.VideoCodec != "hevc") {
+		return 0
+	}
+	file, err := j.fs.Open(absolute)
+	if err != nil {
+		return 0
+	}
+	defer func() { _ = file.Close() }()
+	header := make([]byte, mediatool.EncoderHeaderBytes)
+	read, _ := io.ReadFull(file, header)
+	return mediatool.EncoderCRF(header[:read])
 }
 
 // Enqueue submits one probe sweep, deduplicated by ActionKey.

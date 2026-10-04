@@ -23,7 +23,7 @@ func (r SeriesReader) SeasonFiles(ctx context.Context, itemID int64) ([]SeasonFi
 		`SELECT f.media_ref, p.monitored, f.added_at, mo.id, mo.size_bytes, COALESCE(ma.resolution, ''), COALESCE(ma.video_codec, ''), COALESCE(ma.hdr, ''),
        COALESCE(ma.audio_codec, ''), COALESCE(ma.audio_channels, ''), COALESCE(ma.subtitles, ''),
        COALESCE(mo.video_bitrate, 0), COALESCE(mo.duration_ms, 0), COALESCE(ma.container, ''),
-       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0)
+       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0), COALESCE(ma.crf, 0)
 FROM desired_item_file f
 JOIN desired_item d ON d.id = f.desired_item_id
 JOIN work_part p ON p.work_id = d.work_id AND p.media_ref = f.media_ref
@@ -42,7 +42,7 @@ ORDER BY f.media_ref, mo.id`, itemID)
 		var monitored int64
 		if err := rows.Scan(&found.Ref, &monitored, &found.AddedAt, &found.File.MediaObjectID, &found.File.SizeBytes, &found.File.Resolution, &found.File.VideoCodec,
 			&found.File.HDR, &found.File.AudioCodec, &found.File.AudioChannels, &subtitles, &found.File.VideoBitrate, &found.File.DurationMs,
-			&found.File.Container, &languages, &found.File.FrameRate, &found.File.AudioBitrate); err != nil {
+			&found.File.Container, &languages, &found.File.FrameRate, &found.File.AudioBitrate, &found.File.CRF); err != nil {
 			return nil, fmt.Errorf("library: scan season file: %w", err)
 		}
 		found.Monitored = monitored == 1

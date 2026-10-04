@@ -3,6 +3,7 @@ package tv_test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -37,7 +38,7 @@ func upgradeSeries(t *testing.T, owned, brought string) upgradeFixture {
 		t.Fatal(err)
 	}
 	profile := profileID(t, cache, "Any")
-	if err := cache.SetCategoryQuality(t.Context(), category.ID, []int64{profile}, nil, &settings.QualityTarget{Resolution: "1080p"}); err != nil {
+	if err := cache.SetCategoryQuality(t.Context(), category.ID, []int64{profile}, nil, aimTarget(t, cache, "tv", settings.QualityTarget{Resolution: "1080p"})); err != nil {
 		t.Fatal(err)
 	}
 	if err := cache.SetCategoryQualityUpgrades(t.Context(), category.ID, true); err != nil {
@@ -230,4 +231,15 @@ func TestSearchOfAPartialSeasonWithNothingAiredMissingUpgradesItsEpisodes(t *tes
 	if outcomes["better"] != "ACCEPT" || outcomes["same"] != "REJECT" {
 		t.Errorf("outcomes = %v; want the 1080p accepted over the owned 720p and the 720p rejected", outcomes)
 	}
+}
+
+// aimTarget stores a target under a fresh name and answers its id, the way a library picks one.
+func aimTarget(t *testing.T, cache *settings.Cache, mediaType string, target settings.QualityTarget) *int64 {
+	t.Helper()
+	target.Name, target.MediaType = fmt.Sprintf("%s %d", t.Name(), time.Now().UnixNano()), mediaType
+	created, err := cache.CreateQualityTarget(t.Context(), target)
+	if err != nil {
+		t.Fatalf("CreateQualityTarget: %v", err)
+	}
+	return &created.ID
 }

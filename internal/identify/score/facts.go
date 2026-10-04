@@ -43,7 +43,9 @@ type FileFacts struct {
 	Width           int
 	Height          int
 	FrameRate       float64
-	ScanType        string // "progressive" | "interlaced"
+	// CRF is the constant rate factor the encoder states; 0 when the file states none.
+	CRF      float64
+	ScanType string // "progressive" | "interlaced"
 	// Container is ffprobe's own answer; Extension the file's name ending. Either alone stands for the container.
 	Container  string
 	Extension  string

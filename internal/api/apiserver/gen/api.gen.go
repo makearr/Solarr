@@ -2508,7 +2508,10 @@ type LibraryNaming struct {
 // LibraryQuality defines model for LibraryQuality.
 type LibraryQuality struct {
 	// Available Every profile, in the suggested order.
-	Available         []QualityProfileRef             `json:"available"`
+	Available []QualityProfileRef `json:"available"`
+
+	// AvailableTargets Every target of the library's media type, by name.
+	AvailableTargets  *[]QualityProfileRef            `json:"available_targets,omitempty"`
 	CutoffProfileId   *int64                          `json:"cutoff_profile_id,omitempty"`
 	PreferredProtocol LibraryQualityPreferredProtocol `json:"preferred_protocol"`
 
@@ -2538,8 +2541,10 @@ type LibraryQualityWrite struct {
 	ProfileIds []int64 `json:"profile_ids"`
 
 	// ProtocolDelayMinutes How long after a release was posted the other protocol waits; 0 is no delay. Omitted leaves it as it is.
-	ProtocolDelayMinutes *int64         `json:"protocol_delay_minutes,omitempty"`
-	Target               *QualityTarget `json:"target,omitempty"`
+	ProtocolDelayMinutes *int64 `json:"protocol_delay_minutes,omitempty"`
+
+	// TargetId The target the library aims for; absent for none.
+	TargetId *int64 `json:"target_id,omitempty"`
 
 	// UpgradesAllowed Lidarr's "Upgrades Allowed". Omitted leaves it as it is.
 	UpgradesAllowed *bool `json:"upgrades_allowed,omitempty"`
@@ -3100,11 +3105,23 @@ type QualityTarget struct {
 	// Container The file type: m4a, mp3, flac; mkv or mp4 for video. May be empty for a video target.
 	Container string `json:"container"`
 
+	// Crf The constant rate factor a file's encoder settings state; a file at or below it meets it, one that states none is not held against it. 0 or absent when it does not care.
+	Crf *float32 `json:"crf,omitempty"`
+
 	// FrameRate Frames a second, within 2 %; 24 meets 23.976. 0 or absent when it does not care.
 	FrameRate *float32 `json:"frame_rate,omitempty"`
 
 	// Hdr sdr, hdr10, hdr10plus, dolby-vision or hlg; empty when it does not care.
 	Hdr *string `json:"hdr,omitempty"`
+
+	// Id Absent when creating.
+	Id *int64 `json:"id,omitempty"`
+
+	// MediaType The media type it serves; fixed once made.
+	MediaType *string `json:"media_type,omitempty"`
+
+	// Name What the target is called in a library's choice.
+	Name *string `json:"name,omitempty"`
 
 	// Resolution A video library's target resolution, e.g. 1080p; empty when it does not care.
 	Resolution *string `json:"resolution,omitempty"`
@@ -5236,6 +5253,12 @@ type CreateQualityProfileJSONRequestBody = QualityProfileWrite
 // UpdateQualityProfileJSONRequestBody defines body for UpdateQualityProfile for application/json ContentType.
 type UpdateQualityProfileJSONRequestBody = QualityProfileWrite
 
+// CreateQualityTargetJSONRequestBody defines body for CreateQualityTarget for application/json ContentType.
+type CreateQualityTargetJSONRequestBody = QualityTarget
+
+// UpdateQualityTargetJSONRequestBody defines body for UpdateQualityTarget for application/json ContentType.
+type UpdateQualityTargetJSONRequestBody = QualityTarget
+
 // UpdateRecycleBinLimitsJSONRequestBody defines body for UpdateRecycleBinLimits for application/json ContentType.
 type UpdateRecycleBinLimitsJSONRequestBody = RecycleBinLimits
 
@@ -5799,6 +5822,18 @@ type ServerInterface interface {
 	// Replace a quality profile's policy. Administrator only.
 	// (PATCH /qualityprofiles/{id})
 	UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64)
+	// Every named target quality a library may aim for.
+	// (GET /qualitytargets)
+	ListQualityTargets(w http.ResponseWriter, r *http.Request)
+	// Add a target quality. Administrator only.
+	// (POST /qualitytargets)
+	CreateQualityTarget(w http.ResponseWriter, r *http.Request)
+	// Remove a target quality no library aims for. Administrator only.
+	// (DELETE /qualitytargets/{id})
+	DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a target quality; the libraries aiming for it follow. Administrator only.
+	// (PUT /qualitytargets/{id})
+	UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id int64)
 	// Downloads in flight and every enabled download client's own queue, read live.
 	// (GET /queue)
 	ListQueue(w http.ResponseWriter, r *http.Request, params ListQueueParams)
@@ -7011,6 +7046,30 @@ func (_ Unimplemented) DeleteQualityProfile(w http.ResponseWriter, r *http.Reque
 // Replace a quality profile's policy. Administrator only.
 // (PATCH /qualityprofiles/{id})
 func (_ Unimplemented) UpdateQualityProfile(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every named target quality a library may aim for.
+// (GET /qualitytargets)
+func (_ Unimplemented) ListQualityTargets(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add a target quality. Administrator only.
+// (POST /qualitytargets)
+func (_ Unimplemented) CreateQualityTarget(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove a target quality no library aims for. Administrator only.
+// (DELETE /qualitytargets/{id})
+func (_ Unimplemented) DeleteQualityTarget(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a target quality; the libraries aiming for it follow. Administrator only.
+// (PUT /qualitytargets/{id})
+func (_ Unimplemented) UpdateQualityTarget(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12408,6 +12467,116 @@ func (siw *ServerInterfaceWrapper) UpdateQualityProfile(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListQualityTargets operation middleware
+func (siw *ServerInterfaceWrapper) ListQualityTargets(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListQualityTargets(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateQualityTarget operation middleware
+func (siw *ServerInterfaceWrapper) CreateQualityTarget(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateQualityTarget(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteQualityTarget operation middleware
+func (siw *ServerInterfaceWrapper) DeleteQualityTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteQualityTarget(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateQualityTarget operation middleware
+func (siw *ServerInterfaceWrapper) UpdateQualityTarget(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateQualityTarget(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListQueue operation middleware
 func (siw *ServerInterfaceWrapper) ListQueue(w http.ResponseWriter, r *http.Request) {
 
@@ -16708,6 +16877,18 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/qualityprofiles/{id}", wrapper.UpdateQualityProfile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/qualitytargets", wrapper.ListQualityTargets)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/qualitytargets", wrapper.CreateQualityTarget)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/qualitytargets/{id}", wrapper.DeleteQualityTarget)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/qualitytargets/{id}", wrapper.UpdateQualityTarget)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/queue", wrapper.ListQueue)

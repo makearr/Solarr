@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/goccy/go-yaml"
+
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -24,6 +26,7 @@ type Document struct {
 	Categories        []CategoryEntry         `yaml:"categories,omitempty"`
 	Roots             []RootEntry             `yaml:"root_folders,omitempty"`
 	QualityProfiles   []QualityProfileEntry   `yaml:"quality_profiles,omitempty"`
+	QualityTargets    []QualityTargetEntry    `yaml:"quality_targets,omitempty"`
 	LanguageProfiles  []LanguageProfileEntry  `yaml:"language_profiles,omitempty"`
 	ExclusionPatterns []ExclusionPatternEntry `yaml:"exclusion_patterns,omitempty"`
 	// Schedules holds each task's stored overrides by task key; a task absent here runs on its defaults.
@@ -182,9 +185,9 @@ type CategoryEntry struct {
 	// read on import as a one-profile list, never written.
 	QualityProfile string `yaml:"quality_profile,omitempty"`
 	// QualityProfiles are the profiles the library accepts, by name, earlier preferred.
-	QualityProfiles []string            `yaml:"quality_profiles,omitempty"`
-	QualityCutoff   string              `yaml:"quality_cutoff,omitempty"`
-	QualityTarget   *QualityTargetEntry `yaml:"quality_target,omitempty"`
+	QualityProfiles []string          `yaml:"quality_profiles,omitempty"`
+	QualityCutoff   string            `yaml:"quality_cutoff,omitempty"`
+	QualityTarget   *QualityTargetRef `yaml:"quality_target,omitempty"`
 	// QualityUpgrades is written only when off, so documents from before it read as on.
 	QualityUpgrades *bool `yaml:"quality_upgrades,omitempty"`
 	// PreferredProtocol and ProtocolDelayMinutes are the delay profile; both are omitted at their defaults.
@@ -251,8 +254,36 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 	}
 }
 
-// QualityTargetEntry is a library's aimed-for quality.
+// QualityTargetRef is a library's choice of target: the name of one under quality_targets. A document written before
+// targets were named holds the target itself there, read on import as a target named after the library.
+type QualityTargetRef struct {
+	Name   string
+	Inline *QualityTargetEntry
+}
+
+// MarshalYAML writes the name.
+func (r QualityTargetRef) MarshalYAML() (any, error) { return r.Name, nil }
+
+// UnmarshalYAML reads a name, or a legacy inline target.
+func (r *QualityTargetRef) UnmarshalYAML(raw []byte) error {
+	var name string
+	if err := yaml.Unmarshal(raw, &name); err == nil {
+		r.Name = name
+		return nil
+	}
+	var inline QualityTargetEntry
+	if err := yaml.Unmarshal(raw, &inline); err != nil {
+		return fmt.Errorf("expected the name of a quality target: %w", err)
+	}
+	r.Inline = &inline
+	return nil
+}
+
+// QualityTargetEntry is one named target a library may aim for.
 type QualityTargetEntry struct {
+	Name string `yaml:"name,omitempty"`
+	// MediaType is omitted for music.
+	MediaType    string `yaml:"media_type,omitempty"`
 	AudioCodec   string `yaml:"audio_codec"`
 	Container    string `yaml:"container"`
 	BitrateKbps  *int64 `yaml:"bitrate_kbps,omitempty"`
@@ -267,6 +298,7 @@ type QualityTargetEntry struct {
 	AudioBitrateKbps  *int64   `yaml:"audio_bitrate_kbps,omitempty"`
 	VideoBitrateKbps  *int64   `yaml:"video_bitrate_kbps,omitempty"`
 	FrameRate         float64  `yaml:"frame_rate,omitempty"`
+	CRF               float64  `yaml:"crf,omitempty"`
 }
 
 // qualityProfileNames is the library's list, reading an older document's single profile as one.
@@ -422,6 +454,10 @@ func (c *Cache) Export() Document {
 		return document.QualityProfiles[i].Name < document.QualityProfiles[j].Name
 	})
 
+	for _, target := range snapshot.QualityTargets() {
+		document.QualityTargets = append(document.QualityTargets, target.entry())
+	}
+
 	languageNameByID := make(map[int64]string, len(snapshot.LanguageProfiles()))
 	for _, profile := range snapshot.LanguageProfiles() {
 		languageNameByID[profile.ID] = profile.Name
@@ -453,7 +489,7 @@ func (c *Cache) Export() Document {
 			entry.QualityCutoff = qualityNameByID[*category.QualityCutoffID]
 		}
 		if target := category.QualityTarget; target != nil {
-			entry.QualityTarget = target.entry()
+			entry.QualityTarget = &QualityTargetRef{Name: target.Name}
 		}
 		if !category.QualityUpgrades {
 			off := false
@@ -698,6 +734,24 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		knownQualityProfiles[profile.Name] = true
 	}
 
+	knownQualityTargets := map[string]bool{}
+	for index, target := range d.QualityTargets {
+		where := fmt.Sprintf("quality_targets[%d]", index)
+		entry := target.target()
+		if entry.MediaType == "" {
+			entry.MediaType = "music"
+		}
+		key := entry.MediaType + "\x00" + entry.Name
+		for _, problem := range validateQualityTargetNamed(&entry) {
+			problem.Path = where + "." + strings.TrimPrefix(problem.Path, "target.")
+			problems = append(problems, problem)
+		}
+		if knownQualityTargets[key] {
+			problems = append(problems, config.Problem{Path: where, Value: entry.Name, Expectation: "a quality target listed once"})
+		}
+		knownQualityTargets[key] = true
+	}
+
 	knownLanguageProfiles := make(map[string]bool, len(d.LanguageProfiles))
 	for index, profile := range d.LanguageProfiles {
 		where := fmt.Sprintf("language_profiles[%d]", index)
@@ -773,10 +827,17 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			})
 		}
 		if target := category.QualityTarget; target != nil {
-			entry := target.target()
-			for _, problem := range validateQualityTarget(&entry) {
-				problem.Path = where + ".quality_" + strings.TrimPrefix(problem.Path, "target.")
-				problems = append(problems, problem)
+			if target.Inline != nil {
+				entry := target.Inline.target()
+				for _, problem := range validateQualityTarget(&entry) {
+					problem.Path = where + ".quality_" + strings.TrimPrefix(problem.Path, "target.")
+					problems = append(problems, problem)
+				}
+			} else if !knownQualityTargets[category.MediaType+"\x00"+target.Name] {
+				problems = append(problems, config.Problem{
+					Path: where + ".quality_target", Value: target.Name,
+					Expectation: "a name also listed under quality_targets",
+				})
 			}
 		}
 		if category.LanguageProfile != "" && !knownLanguageProfiles[category.LanguageProfile] {
@@ -873,6 +934,10 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 	for _, profile := range snapshot.QualityProfiles() {
 		qualityIDByName[profile.Name] = profile.ID
 	}
+	targetIDByKey := make(map[string]int64)
+	for _, target := range snapshot.QualityTargets() {
+		targetIDByKey[target.MediaType+"\x00"+target.Name] = target.ID
+	}
 	languageIDByName := make(map[string]int64)
 	for _, profile := range snapshot.LanguageProfiles() {
 		languageIDByName[profile.Name] = profile.ID
@@ -906,6 +971,22 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				return fmt.Errorf("quality profile %q: %w", profile.Name, err)
 			}
 			qualityIDByName[profile.Name] = created.ID
+		}
+
+		for _, target := range document.QualityTargets {
+			entry := target.target()
+			if entry.MediaType == "" {
+				entry.MediaType = "music"
+			}
+			key := entry.MediaType + "\x00" + entry.Name
+			if _, exists := targetIDByKey[key]; exists {
+				continue
+			}
+			id, err := queries.CreateQualityTarget(ctx, entry.createParams())
+			if err != nil {
+				return fmt.Errorf("quality target %q: %w", entry.Name, err)
+			}
+			targetIDByKey[key] = id
 		}
 
 		for _, profile := range document.LanguageProfiles {
@@ -1009,7 +1090,22 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				}
 			}
 			if target := category.QualityTarget; target != nil {
-				if err := queries.UpsertCategoryQualityTarget(ctx, target.target().upsertParams(id)); err != nil {
+				name := target.Name
+				if target.Inline != nil {
+					legacy := target.Inline.target()
+					legacy.Name, legacy.MediaType = category.Name+" target", category.MediaType
+					name = legacy.Name
+					if _, exists := targetIDByKey[legacy.MediaType+"\x00"+name]; !exists {
+						created, err := queries.CreateQualityTarget(ctx, legacy.createParams())
+						if err != nil {
+							return fmt.Errorf("category %q quality target: %w", key, err)
+						}
+						targetIDByKey[legacy.MediaType+"\x00"+name] = created
+					}
+				}
+				if err := queries.SetCategoryTarget(ctx, settingsdb.SetCategoryTargetParams{
+					CategoryID: id, TargetID: targetIDByKey[category.MediaType+"\x00"+name],
+				}); err != nil {
 					return fmt.Errorf("category %q quality target: %w", key, err)
 				}
 			}

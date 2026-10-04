@@ -21,6 +21,7 @@ type Snapshot struct {
 	rootFolderByID       map[int64]RootFolder
 	accessByUser         map[int64]map[int64]Permission
 	qualityProfileByID   map[int64]QualityProfile
+	qualityTargets       []QualityTarget
 	languageProfileByID  map[int64]LanguageProfile
 	exclusionPatternByID map[int64]ExclusionPattern
 }
@@ -69,6 +70,19 @@ func (s *Snapshot) QualityProfiles() []QualityProfile { return s.qualityProfiles
 func (s *Snapshot) QualityProfile(id int64) (QualityProfile, bool) {
 	profile, found := s.qualityProfileByID[id]
 	return profile, found
+}
+
+// QualityTargets returns every quality target, by media type then name.
+func (s *Snapshot) QualityTargets() []QualityTarget { return s.qualityTargets }
+
+// QualityTarget looks up a quality target by id.
+func (s *Snapshot) QualityTarget(id int64) (QualityTarget, bool) {
+	for _, target := range s.qualityTargets {
+		if target.ID == id {
+			return target, true
+		}
+	}
+	return QualityTarget{}, false
 }
 
 // LanguageProfiles returns every language profile, ordered by name.
@@ -161,7 +175,7 @@ func (s *Snapshot) CategoriesForRootFolder(rootFolderID int64) []int64 {
 // keeping a reference cannot mutate a published snapshot.
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 	attachments []CategoryRoot, access map[int64]map[int64]Permission,
-	qualityProfiles []QualityProfile, languageProfiles []LanguageProfile,
+	qualityProfiles []QualityProfile, qualityTargets []QualityTarget, languageProfiles []LanguageProfile,
 	exclusionPatterns []ExclusionPattern, policy map[string]string) *Snapshot {
 	snapshot := &Snapshot{
 		policy:               policy,
@@ -170,6 +184,7 @@ func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 		rootFolders:          slices.Clone(rootFolders),
 		categoryRoot:         slices.Clone(attachments),
 		qualityProfiles:      slices.Clone(qualityProfiles),
+		qualityTargets:       slices.Clone(qualityTargets),
 		languageProfiles:     slices.Clone(languageProfiles),
 		exclusionPatterns:    slices.Clone(exclusionPatterns),
 		userByID:             make(map[int64]User, len(users)),

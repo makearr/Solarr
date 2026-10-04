@@ -93,29 +93,17 @@ type CategoryQualityProfile struct {
 	Ord              int64
 }
 
-type CategoryQualityTarget struct {
-	CategoryID        int64
-	AudioCodec        string
-	Container         string
-	BitrateKbps       sql.NullInt64
-	TolerancePct      int64
-	Resolution        string
-	VideoCodec        string
-	Hdr               string
-	AudioChannels     string
-	AudioLanguages    string
-	SubtitleLanguages string
-	AudioBitrateKbps  sql.NullInt64
-	VideoBitrateKbps  sql.NullInt64
-	FrameRate         sql.NullFloat64
-}
-
 type CategoryRootFolder struct {
 	CategoryID   int64
 	RootFolderID int64
 	Ord          int64
 	Weight       int64
 	AcceptsNew   int64
+}
+
+type CategoryTarget struct {
+	CategoryID int64
+	TargetID   int64
 }
 
 type DiscoveryJob struct {
@@ -241,6 +229,26 @@ type QualityProfile struct {
 	UpgradeJson   string
 	SuggestedRank int64
 	MediaType     string
+}
+
+type QualityTarget struct {
+	ID                int64
+	Name              string
+	MediaType         string
+	AudioCodec        string
+	Container         string
+	BitrateKbps       sql.NullInt64
+	TolerancePct      int64
+	Resolution        string
+	VideoCodec        string
+	Hdr               string
+	AudioChannels     string
+	AudioLanguages    string
+	SubtitleLanguages string
+	AudioBitrateKbps  sql.NullInt64
+	VideoBitrateKbps  sql.NullInt64
+	FrameRate         sql.NullFloat64
+	Crf               sql.NullFloat64
 }
 
 type RootFolder struct {

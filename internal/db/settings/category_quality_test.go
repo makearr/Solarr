@@ -9,6 +9,7 @@ import (
 	"github.com/goccy/go-yaml"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
@@ -43,9 +44,14 @@ func TestSetCategoryQuality_OrderCutoffAndTarget(t *testing.T) {
 	ids := shippedProfileIDs(t, cache)
 	list := []int64{ids["Lossy 320"], ids["Lossless preferred"]}
 	bitrate := int64(256)
-	target := &settings.QualityTarget{AudioCodec: "aac", Container: "m4a", BitrateKbps: &bitrate, TolerancePct: 10}
+	target, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{
+		Name: "AAC 256", MediaType: "music", AudioCodec: "aac", Container: "m4a", BitrateKbps: &bitrate, TolerancePct: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if err := cache.SetCategoryQuality(t.Context(), music.ID, list, &list[1], target); err != nil {
+	if err := cache.SetCategoryQuality(t.Context(), music.ID, list, &list[1], &target.ID); err != nil {
 		t.Fatalf("SetCategoryQuality: %v", err)
 	}
 	got, _ := cache.Snapshot().Category(music.ID)
@@ -53,7 +59,7 @@ func TestSetCategoryQuality_OrderCutoffAndTarget(t *testing.T) {
 		t.Errorf("list = %v first = %v, want %v with the first as the library's profile",
 			got.QualityProfileIDs, got.QualityProfileID, list)
 	}
-	if got.QualityCutoffID == nil || *got.QualityCutoffID != list[1] || !reflect.DeepEqual(got.QualityTarget, target) {
+	if got.QualityCutoffID == nil || *got.QualityCutoffID != list[1] || got.QualityTarget == nil || !reflect.DeepEqual(*got.QualityTarget, target) {
 		t.Errorf("cutoff = %v target = %+v", got.QualityCutoffID, got.QualityTarget)
 	}
 
@@ -72,11 +78,10 @@ func TestSetCategoryQuality_ReportsEveryProblem(t *testing.T) {
 	music := mustCategory(t, cache, "music", "Music", 10)
 	ids := shippedProfileIDs(t, cache)
 	outside := ids["Lossless preferred"]
-	zero := int64(0)
+	missing := int64(999)
 
 	err := cache.SetCategoryQuality(t.Context(), music.ID,
-		[]int64{ids["Lossy 320"], ids["Lossy 320"], 999}, &outside,
-		&settings.QualityTarget{AudioCodec: "", Container: "m4a", BitrateKbps: &zero, TolerancePct: 80})
+		[]int64{ids["Lossy 320"], ids["Lossy 320"], 999}, &outside, &missing)
 	var problems config.Problems
 	if !errors.As(err, &problems) {
 		t.Fatalf("err = %v, want config.Problems", err)
@@ -85,9 +90,50 @@ func TestSetCategoryQuality_ReportsEveryProblem(t *testing.T) {
 	for _, problem := range problems {
 		paths = append(paths, problem.Path)
 	}
-	want := []string{"profiles[1]", "profiles[2]", "cutoff", "target.audio_codec", "target.bitrate_kbps", "target.tolerance_pct"}
+	want := []string{"profiles[1]", "profiles[2]", "cutoff", "target"}
 	if !reflect.DeepEqual(paths, want) {
 		t.Errorf("problems at %v, want %v", paths, want)
+	}
+}
+
+func TestCreateQualityTarget_ReportsEveryProblemAndAMissingName(t *testing.T) {
+	cache, _ := newCache(t)
+	zero := int64(0)
+	_, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{
+		MediaType: "music", Container: "m4a", BitrateKbps: &zero, TolerancePct: 80, CRF: 70,
+	})
+	var problems config.Problems
+	if !errors.As(err, &problems) {
+		t.Fatalf("err = %v, want config.Problems", err)
+	}
+	var paths []string
+	for _, problem := range problems {
+		paths = append(paths, problem.Path)
+	}
+	want := []string{"target.name", "target.bitrate_kbps", "target.crf", "target.tolerance_pct"}
+	if !reflect.DeepEqual(paths, want) {
+		t.Errorf("problems at %v, want %v", paths, want)
+	}
+}
+
+func TestDeleteQualityTarget_RefusedWhileALibraryAimsForIt(t *testing.T) {
+	cache, _ := newCache(t)
+	music := mustCategory(t, cache, "music", "Music", 10)
+	target, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{Name: "FLAC", MediaType: "music", AudioCodec: "flac", Container: "flac"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetCategoryQuality(t.Context(), music.ID, nil, nil, &target.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.DeleteQualityTarget(t.Context(), target.ID); !errors.Is(err, settings.ErrInUse) {
+		t.Fatalf("delete in use: err = %v, want ErrInUse", err)
+	}
+	if err := cache.SetCategoryQuality(t.Context(), music.ID, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.DeleteQualityTarget(t.Context(), target.ID); err != nil {
+		t.Fatalf("delete unused: %v", err)
 	}
 }
 
@@ -110,8 +156,11 @@ func TestDocument_RoundTrips_IncludesLibraryQuality(t *testing.T) {
 	music := mustCategory(t, cache, "music", "Music", 10)
 	ids := shippedProfileIDs(t, cache)
 	list := []int64{ids["Space conscious"], ids["Lossy 320"]}
-	if err := cache.SetCategoryQuality(t.Context(), music.ID, list, &list[1],
-		&settings.QualityTarget{AudioCodec: "flac", Container: "flac", TolerancePct: 0}); err != nil {
+	flac, err := cache.CreateQualityTarget(t.Context(), settings.QualityTarget{Name: "FLAC", MediaType: "music", AudioCodec: "flac", Container: "flac"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetCategoryQuality(t.Context(), music.ID, list, &list[1], &flac.ID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -210,5 +259,39 @@ func TestSetCategoryProtocolDelay_ValidatesAndSurvivesAnExportImport(t *testing.
 	}
 	if imported.PreferredProtocol != "usenet" || imported.ProtocolDelayMinutes != 120 {
 		t.Errorf("imported %+v, want the delay profile back", imported)
+	}
+}
+
+// A document written before targets were named holds the target inside the category; it is read as a target named after the library.
+func TestDocument_ReadsALegacyInlineTargetAsANamedOne(t *testing.T) {
+	cache, _ := newCache(t)
+	source := `version: 1
+categories:
+  - media_type: music
+    name: Music
+    priority_rank: 10
+    quality_target:
+      audio_codec: flac
+      container: flac
+      tolerance_pct: 10
+`
+	var document settings.Document
+	if err := yaml.Unmarshal([]byte(source), &document); err != nil {
+		t.Fatal(err)
+	}
+	if problems := document.Validate(netip.Addr{}); len(problems) > 0 {
+		t.Fatalf("legacy document does not validate: %v", problems)
+	}
+	if err := cache.Import(t.Context(), clock.NewFakeAtEpoch(), netip.Addr{}, document); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	var found *settings.QualityTarget
+	for _, category := range cache.Snapshot().Categories() {
+		if category.Name == "Music" {
+			found = category.QualityTarget
+		}
+	}
+	if found == nil || found.Name != "Music target" || found.AudioCodec != "flac" {
+		t.Fatalf("category target = %+v, want the library's own target named Music target", found)
 	}
 }

@@ -83,6 +83,8 @@ type Measured struct {
 	HDR               string
 	ChannelLayout     string
 	SubtitleLanguages []string
+	// CRF is the constant rate factor the encoder's own settings state, read from the file's start; 0 when it states none.
+	CRF float64
 }
 
 // Probe is one file, as one invocation reported it.

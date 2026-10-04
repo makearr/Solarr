@@ -483,9 +483,9 @@ func (c *Cache) SetCategoryProtocolDelay(ctx context.Context, categoryID int64, 
 }
 
 // SetCategoryQuality saves a library's quality: the profiles it accepts in priority order, the
-// cutoff (one of them), and the target, nil for none. Every problem is reported at once.
+// cutoff (one of them), and the id of the quality target it aims for, nil for none. Every problem is reported at once.
 func (c *Cache) SetCategoryQuality(
-	ctx context.Context, categoryID int64, profileIDs []int64, cutoffID *int64, target *QualityTarget,
+	ctx context.Context, categoryID int64, profileIDs []int64, cutoffID *int64, targetID *int64,
 ) error {
 	snapshot := c.Snapshot()
 	category, found := snapshot.Category(categoryID)
@@ -513,7 +513,13 @@ func (c *Cache) SetCategoryQuality(
 		problems = append(problems, config.Problem{Path: "cutoff", Value: strconv.FormatInt(*cutoffID, 10),
 			Expectation: "one of the library's own profiles"})
 	}
-	problems = append(problems, validateQualityTarget(target)...)
+	if targetID != nil {
+		if target, found := snapshot.QualityTarget(*targetID); !found {
+			problems = append(problems, config.Problem{Path: "target", Value: strconv.FormatInt(*targetID, 10), Expectation: "an existing quality target"})
+		} else if target.MediaType != category.MediaType {
+			problems = append(problems, config.Problem{Path: "target", Value: target.Name, Expectation: "a " + category.MediaType + " quality target"})
+		}
+	}
 	if len(problems) > 0 {
 		return problems
 	}
@@ -522,11 +528,82 @@ func (c *Cache) SetCategoryQuality(
 		if err := writeQualityList(ctx, queries, categoryID, profileIDs, cutoffID); err != nil {
 			return err
 		}
-		if target == nil {
-			return queries.DeleteCategoryQualityTarget(ctx, categoryID)
+		if targetID == nil {
+			return queries.ClearCategoryTarget(ctx, categoryID)
 		}
-		return queries.UpsertCategoryQualityTarget(ctx, target.upsertParams(categoryID))
+		return queries.SetCategoryTarget(ctx, settingsdb.SetCategoryTargetParams{CategoryID: categoryID, TargetID: *targetID})
 	})
+}
+
+// CreateQualityTarget adds a named target a library may aim for; every problem is reported at once.
+func (c *Cache) CreateQualityTarget(ctx context.Context, target QualityTarget) (QualityTarget, error) {
+	if problems := c.validateTargetName(target, 0); len(problems) > 0 {
+		return QualityTarget{}, problems
+	}
+	var id int64
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		created, err := queries.CreateQualityTarget(ctx, target.createParams())
+		id = created
+		return err
+	})
+	if err != nil {
+		return QualityTarget{}, fmt.Errorf("settings: create quality target %q: %w", target.Name, err)
+	}
+	target.ID = id
+	return target, nil
+}
+
+// UpdateQualityTarget replaces a target; the libraries that picked it follow.
+func (c *Cache) UpdateQualityTarget(ctx context.Context, target QualityTarget) error {
+	existing, found := c.Snapshot().QualityTarget(target.ID)
+	if !found {
+		return fmt.Errorf("%w: quality target %d", ErrNotFound, target.ID)
+	}
+	target.MediaType = existing.MediaType
+	if problems := c.validateTargetName(target, target.ID); len(problems) > 0 {
+		return problems
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.UpdateQualityTarget(ctx, target.updateParams())
+	})
+}
+
+// DeleteQualityTarget removes a target no library uses.
+func (c *Cache) DeleteQualityTarget(ctx context.Context, id int64) error {
+	if _, found := c.Snapshot().QualityTarget(id); !found {
+		return fmt.Errorf("%w: quality target %d", ErrNotFound, id)
+	}
+	for _, category := range c.Snapshot().Categories() {
+		if category.QualityTarget != nil && category.QualityTarget.ID == id {
+			return fmt.Errorf("%w: library %s still aims for this target", ErrInUse, category.Name)
+		}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.DeleteQualityTarget(ctx, id)
+	})
+}
+
+// validateTargetName is validateQualityTargetNamed plus the name being free among the media type's targets.
+func (c *Cache) validateTargetName(target QualityTarget, selfID int64) config.Problems {
+	problems := validateQualityTargetNamed(&target)
+	for _, other := range c.Snapshot().QualityTargets() {
+		if other.ID != selfID && other.MediaType == target.MediaType && strings.EqualFold(other.Name, target.Name) {
+			problems = append(problems, config.Problem{Path: "target.name", Value: target.Name, Expectation: "a name no other " + target.MediaType + " target has"})
+		}
+	}
+	return problems
+}
+
+// validateQualityTargetNamed also asks for a name and a known media type.
+func validateQualityTargetNamed(target *QualityTarget) config.Problems {
+	var problems config.Problems
+	if strings.TrimSpace(target.Name) == "" {
+		problems = append(problems, config.Problem{Path: "target.name", Expectation: "a name"})
+	}
+	if !slices.Contains(MediaTypes, target.MediaType) {
+		problems = append(problems, config.Problem{Path: "target.media_type", Value: target.MediaType, Expectation: "one of " + strings.Join(MediaTypes, ", ")})
+	}
+	return append(problems, validateQualityTarget(target)...)
 }
 
 // maxTargetTolerancePct keeps "fuzzy" a range around the bitrate rather than any bitrate at all.
@@ -552,6 +629,9 @@ func validateQualityTarget(target *QualityTarget) config.Problems {
 		if kbps != nil && *kbps <= 0 {
 			problems = append(problems, config.Problem{Path: path, Value: strconv.FormatInt(*kbps, 10), Expectation: "a bitrate above 0, or none"})
 		}
+	}
+	if target.CRF < 0 || target.CRF > 51 {
+		problems = append(problems, config.Problem{Path: "target.crf", Value: strconv.FormatFloat(target.CRF, 'f', -1, 64), Expectation: "a CRF from 0 to 51, or none"})
 	}
 	if target.FrameRate < 0 || target.FrameRate > 240 {
 		problems = append(problems, config.Problem{Path: "target.frame_rate", Value: strconv.FormatFloat(target.FrameRate, 'f', -1, 64), Expectation: "frames a second up to 240, or none"})

@@ -10,6 +10,15 @@ import (
 	"database/sql"
 )
 
+const clearCategoryTarget = `-- name: ClearCategoryTarget :exec
+DELETE FROM category_target WHERE category_id = ?
+`
+
+func (q *Queries) ClearCategoryTarget(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, clearCategoryTarget, categoryID)
+	return err
+}
+
 const countCategoriesUsingLanguageProfile = `-- name: CountCategoriesUsingLanguageProfile :one
 SELECT count(*) FROM category WHERE language_profile_id = ?
 `
@@ -31,6 +40,17 @@ func (q *Queries) CountCategoriesUsingQualityProfile(ctx context.Context, qualit
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const countCategoriesUsingQualityTarget = `-- name: CountCategoriesUsingQualityTarget :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM category_target WHERE target_id = ?
+`
+
+func (q *Queries) CountCategoriesUsingQualityTarget(ctx context.Context, targetID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCategoriesUsingQualityTarget, targetID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const countCategoryListsUsingQualityProfile = `-- name: CountCategoryListsUsingQualityProfile :one
@@ -119,21 +139,62 @@ func (q *Queries) CreateQualityProfile(ctx context.Context, arg CreateQualityPro
 	return i, err
 }
 
+const createQualityTarget = `-- name: CreateQualityTarget :one
+INSERT INTO quality_target (name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id
+`
+
+type CreateQualityTargetParams struct {
+	Name              string
+	MediaType         string
+	AudioCodec        string
+	Container         string
+	BitrateKbps       sql.NullInt64
+	TolerancePct      int64
+	Resolution        string
+	VideoCodec        string
+	Hdr               string
+	AudioChannels     string
+	AudioLanguages    string
+	SubtitleLanguages string
+	AudioBitrateKbps  sql.NullInt64
+	VideoBitrateKbps  sql.NullInt64
+	FrameRate         sql.NullFloat64
+	Crf               sql.NullFloat64
+}
+
+func (q *Queries) CreateQualityTarget(ctx context.Context, arg CreateQualityTargetParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createQualityTarget,
+		arg.Name,
+		arg.MediaType,
+		arg.AudioCodec,
+		arg.Container,
+		arg.BitrateKbps,
+		arg.TolerancePct,
+		arg.Resolution,
+		arg.VideoCodec,
+		arg.Hdr,
+		arg.AudioChannels,
+		arg.AudioLanguages,
+		arg.SubtitleLanguages,
+		arg.AudioBitrateKbps,
+		arg.VideoBitrateKbps,
+		arg.FrameRate,
+		arg.Crf,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
 const deleteCategoryQualityProfiles = `-- name: DeleteCategoryQualityProfiles :exec
 DELETE FROM category_quality_profile WHERE category_id = ?
 `
 
 func (q *Queries) DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteCategoryQualityProfiles, categoryID)
-	return err
-}
-
-const deleteCategoryQualityTarget = `-- name: DeleteCategoryQualityTarget :exec
-DELETE FROM category_quality_target WHERE category_id = ?
-`
-
-func (q *Queries) DeleteCategoryQualityTarget(ctx context.Context, categoryID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteCategoryQualityTarget, categoryID)
 	return err
 }
 
@@ -152,6 +213,15 @@ DELETE FROM quality_profile WHERE id = ?
 
 func (q *Queries) DeleteQualityProfile(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteQualityProfile, id)
+	return err
+}
+
+const deleteQualityTarget = `-- name: DeleteQualityTarget :exec
+DELETE FROM quality_target WHERE id = ?
+`
+
+func (q *Queries) DeleteQualityTarget(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteQualityTarget, id)
 	return err
 }
 
@@ -237,37 +307,20 @@ func (q *Queries) ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQu
 	return items, nil
 }
 
-const listCategoryQualityTargets = `-- name: ListCategoryQualityTargets :many
-SELECT category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
-       audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate
-FROM category_quality_target
+const listCategoryTargets = `-- name: ListCategoryTargets :many
+SELECT category_id, target_id FROM category_target
 `
 
-func (q *Queries) ListCategoryQualityTargets(ctx context.Context) ([]CategoryQualityTarget, error) {
-	rows, err := q.db.QueryContext(ctx, listCategoryQualityTargets)
+func (q *Queries) ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryTargets)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CategoryQualityTarget{}
+	items := []CategoryTarget{}
 	for rows.Next() {
-		var i CategoryQualityTarget
-		if err := rows.Scan(
-			&i.CategoryID,
-			&i.AudioCodec,
-			&i.Container,
-			&i.BitrateKbps,
-			&i.TolerancePct,
-			&i.Resolution,
-			&i.VideoCodec,
-			&i.Hdr,
-			&i.AudioChannels,
-			&i.AudioLanguages,
-			&i.SubtitleLanguages,
-			&i.AudioBitrateKbps,
-			&i.VideoBitrateKbps,
-			&i.FrameRate,
-		); err != nil {
+		var i CategoryTarget
+		if err := rows.Scan(&i.CategoryID, &i.TargetID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -356,6 +409,53 @@ func (q *Queries) ListQualityProfiles(ctx context.Context) ([]QualityProfile, er
 	return items, nil
 }
 
+const listQualityTargets = `-- name: ListQualityTargets :many
+SELECT id, name, media_type, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
+       audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate, crf
+FROM quality_target ORDER BY media_type, name
+`
+
+func (q *Queries) ListQualityTargets(ctx context.Context) ([]QualityTarget, error) {
+	rows, err := q.db.QueryContext(ctx, listQualityTargets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []QualityTarget{}
+	for rows.Next() {
+		var i QualityTarget
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.MediaType,
+			&i.AudioCodec,
+			&i.Container,
+			&i.BitrateKbps,
+			&i.TolerancePct,
+			&i.Resolution,
+			&i.VideoCodec,
+			&i.Hdr,
+			&i.AudioChannels,
+			&i.AudioLanguages,
+			&i.SubtitleLanguages,
+			&i.AudioBitrateKbps,
+			&i.VideoBitrateKbps,
+			&i.FrameRate,
+			&i.Crf,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setCategoryLanguageProfile = `-- name: SetCategoryLanguageProfile :exec
 UPDATE category SET language_profile_id = ? WHERE id = ?
 `
@@ -427,6 +527,21 @@ func (q *Queries) SetCategoryQualityUpgrades(ctx context.Context, arg SetCategor
 	return err
 }
 
+const setCategoryTarget = `-- name: SetCategoryTarget :exec
+INSERT INTO category_target (category_id, target_id) VALUES (?, ?)
+ON CONFLICT (category_id) DO UPDATE SET target_id = excluded.target_id
+`
+
+type SetCategoryTargetParams struct {
+	CategoryID int64
+	TargetID   int64
+}
+
+func (q *Queries) SetCategoryTarget(ctx context.Context, arg SetCategoryTargetParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryTarget, arg.CategoryID, arg.TargetID)
+	return err
+}
+
 const updateLanguageProfile = `-- name: UpdateLanguageProfile :exec
 UPDATE language_profile
 SET name = ?, audio_preferred_json = ?, audio_required_json = ?, subtitle_preferred_json = ?,
@@ -480,21 +595,15 @@ func (q *Queries) UpdateQualityProfile(ctx context.Context, arg UpdateQualityPro
 	return err
 }
 
-const upsertCategoryQualityTarget = `-- name: UpsertCategoryQualityTarget :exec
-INSERT INTO category_quality_target (category_id, audio_codec, container, bitrate_kbps, tolerance_pct, resolution, video_codec, hdr,
-  audio_channels, audio_languages, subtitle_languages, audio_bitrate_kbps, video_bitrate_kbps, frame_rate)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT (category_id) DO UPDATE SET
-  audio_codec = excluded.audio_codec, container = excluded.container,
-  bitrate_kbps = excluded.bitrate_kbps, tolerance_pct = excluded.tolerance_pct,
-  resolution = excluded.resolution, video_codec = excluded.video_codec, hdr = excluded.hdr,
-  audio_channels = excluded.audio_channels, audio_languages = excluded.audio_languages,
-  subtitle_languages = excluded.subtitle_languages, audio_bitrate_kbps = excluded.audio_bitrate_kbps,
-  video_bitrate_kbps = excluded.video_bitrate_kbps, frame_rate = excluded.frame_rate
+const updateQualityTarget = `-- name: UpdateQualityTarget :exec
+UPDATE quality_target SET name = ?, audio_codec = ?, container = ?, bitrate_kbps = ?, tolerance_pct = ?, resolution = ?,
+  video_codec = ?, hdr = ?, audio_channels = ?, audio_languages = ?, subtitle_languages = ?, audio_bitrate_kbps = ?,
+  video_bitrate_kbps = ?, frame_rate = ?, crf = ?
+WHERE id = ?
 `
 
-type UpsertCategoryQualityTargetParams struct {
-	CategoryID        int64
+type UpdateQualityTargetParams struct {
+	Name              string
 	AudioCodec        string
 	Container         string
 	BitrateKbps       sql.NullInt64
@@ -508,11 +617,13 @@ type UpsertCategoryQualityTargetParams struct {
 	AudioBitrateKbps  sql.NullInt64
 	VideoBitrateKbps  sql.NullInt64
 	FrameRate         sql.NullFloat64
+	Crf               sql.NullFloat64
+	ID                int64
 }
 
-func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCategoryQualityTargetParams) error {
-	_, err := q.db.ExecContext(ctx, upsertCategoryQualityTarget,
-		arg.CategoryID,
+func (q *Queries) UpdateQualityTarget(ctx context.Context, arg UpdateQualityTargetParams) error {
+	_, err := q.db.ExecContext(ctx, updateQualityTarget,
+		arg.Name,
 		arg.AudioCodec,
 		arg.Container,
 		arg.BitrateKbps,
@@ -526,6 +637,8 @@ func (q *Queries) UpsertCategoryQualityTarget(ctx context.Context, arg UpsertCat
 		arg.AudioBitrateKbps,
 		arg.VideoBitrateKbps,
 		arg.FrameRate,
+		arg.Crf,
+		arg.ID,
 	)
 	return err
 }

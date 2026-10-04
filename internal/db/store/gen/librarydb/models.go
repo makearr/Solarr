@@ -436,6 +436,7 @@ type MediaAttribute struct {
 	BitrateMode     sql.NullString
 	VbrPreset       sql.NullString
 	LyricsLanguages sql.NullString
+	Crf             sql.NullFloat64
 }
 
 type MediaObject struct {

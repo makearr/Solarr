@@ -15,7 +15,7 @@ func TestChooseKeeper_TheCopyCloserToTheLibrarysTargetWins(t *testing.T) {
 	mp3 := music.KeeperFile{AudioCodec: "mp3", Container: "mp3", BitrateKbps: 96, Path: "B/01.mp3"}
 
 	if err := env.settings.SetCategoryQuality(t.Context(), item.CategoryID, []int64{item.ProfileID}, nil,
-		&settings.QualityTarget{AudioCodec: "flac", Container: "flac"}); err != nil {
+		aimTarget(t, env.settings, "music", settings.QualityTarget{AudioCodec: "flac", Container: "flac"})); err != nil {
 		t.Fatalf("SetCategoryQuality: %v", err)
 	}
 	keeper, reason := music.ChooseKeeper(env.settings.Snapshot(), item.CategoryID, []music.KeeperFile{mp3, flac})
@@ -25,7 +25,7 @@ func TestChooseKeeper_TheCopyCloserToTheLibrarysTargetWins(t *testing.T) {
 
 	bitrate := int64(96)
 	if err := env.settings.SetCategoryQuality(t.Context(), item.CategoryID, []int64{item.ProfileID}, nil,
-		&settings.QualityTarget{AudioCodec: "mp3", Container: "mp3", BitrateKbps: &bitrate, TolerancePct: 10}); err != nil {
+		aimTarget(t, env.settings, "music", settings.QualityTarget{AudioCodec: "mp3", Container: "mp3", BitrateKbps: &bitrate, TolerancePct: 10})); err != nil {
 		t.Fatalf("SetCategoryQuality: %v", err)
 	}
 	if keeper, _ := music.ChooseKeeper(env.settings.Snapshot(), item.CategoryID, []music.KeeperFile{flac, mp3}); keeper != 1 {

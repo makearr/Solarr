@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func TestCutoffJob_MarksAnAlbumBelowTheCutoffUpgradable(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
 	if err := env.settings.SetCategoryQuality(t.Context(), item.CategoryID, []int64{item.ProfileID}, nil,
-		&settings.QualityTarget{AudioCodec: "flac", Container: "flac", TolerancePct: 10}); err != nil {
+		aimTarget(t, env.settings, "music", settings.QualityTarget{AudioCodec: "flac", Container: "flac", TolerancePct: 10})); err != nil {
 		t.Fatalf("SetCategoryQuality: %v", err)
 	}
 	physical := library.NewPhysical(env.library)
@@ -229,7 +230,7 @@ func replacementAlbum(t *testing.T, ownedCodec, downloadedCodec string) (*search
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
 	if err := env.settings.SetCategoryQuality(t.Context(), item.CategoryID, []int64{item.ProfileID}, nil,
-		&settings.QualityTarget{AudioCodec: "flac", Container: "flac", TolerancePct: 10}); err != nil {
+		aimTarget(t, env.settings, "music", settings.QualityTarget{AudioCodec: "flac", Container: "flac", TolerancePct: 10})); err != nil {
 		t.Fatalf("SetCategoryQuality: %v", err)
 	}
 	physical := library.NewPhysical(env.library)
@@ -342,4 +343,15 @@ func TestCutoffJob_ADownloadNoBetterThanTheOwnedFileGoes(t *testing.T) {
 	if _, found := recycled[fromDownload]; !found {
 		t.Fatal("the download that was no better stayed")
 	}
+}
+
+// aimTarget stores a target under a fresh name and answers its id, the way a library picks one.
+func aimTarget(t *testing.T, cache *settings.Cache, mediaType string, target settings.QualityTarget) *int64 {
+	t.Helper()
+	target.Name, target.MediaType = fmt.Sprintf("%s %d", t.Name(), time.Now().UnixNano()), mediaType
+	created, err := cache.CreateQualityTarget(t.Context(), target)
+	if err != nil {
+		t.Fatalf("CreateQualityTarget: %v", err)
+	}
+	return &created.ID
 }

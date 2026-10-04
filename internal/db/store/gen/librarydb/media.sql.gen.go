@@ -261,7 +261,7 @@ SELECT id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
        audio_channels, bit_depth, languages, subtitles, edition_tokens,
        release_group, proper_repack, frame_rate, scan_type, container,
        lossless, sample_rate, image_format, colour_depth, page_count,
-       bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages
+       bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages, crf
 FROM media_attributes WHERE id = ?
 `
 
@@ -295,6 +295,7 @@ func (q *Queries) GetAttributes(ctx context.Context, id int64) (MediaAttribute, 
 		&i.BitrateMode,
 		&i.VbrPreset,
 		&i.LyricsLanguages,
+		&i.Crf,
 	)
 	return i, err
 }
@@ -411,14 +412,14 @@ INSERT INTO media_attributes (attr_hash, resolution, source, video_codec, hdr,
                               subtitles, edition_tokens, release_group, proper_repack,
                               frame_rate, scan_type, container, lossless, sample_rate,
                               image_format, colour_depth, page_count, bitrate_kbps,
-                              bitrate_mode, vbr_preset, lyrics_languages)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              bitrate_mode, vbr_preset, lyrics_languages, crf)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (attr_hash) DO UPDATE SET attr_hash = excluded.attr_hash
 RETURNING id, attr_hash, resolution, source, video_codec, hdr, audio_codec,
           audio_channels, bit_depth, languages, subtitles, edition_tokens,
           release_group, proper_repack, frame_rate, scan_type, container,
           lossless, sample_rate, image_format, colour_depth, page_count,
-          bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages
+          bitrate_kbps, bitrate_mode, vbr_preset, lyrics_languages, crf
 `
 
 type InternAttributesParams struct {
@@ -447,6 +448,7 @@ type InternAttributesParams struct {
 	BitrateMode     sql.NullString
 	VbrPreset       sql.NullString
 	LyricsLanguages sql.NullString
+	Crf             sql.NullFloat64
 }
 
 // Physical files. Column lists follow table order, or sqlc stops reusing models.
@@ -477,6 +479,7 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		arg.BitrateMode,
 		arg.VbrPreset,
 		arg.LyricsLanguages,
+		arg.Crf,
 	)
 	var i MediaAttribute
 	err := row.Scan(
@@ -506,6 +509,7 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 		&i.BitrateMode,
 		&i.VbrPreset,
 		&i.LyricsLanguages,
+		&i.Crf,
 	)
 	return i, err
 }
@@ -741,7 +745,7 @@ SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
 WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
-  AND o.probe_json NOT LIKE '%"SubtitleLanguages"%' AND o.id > ?1
+  AND (o.probe_json NOT LIKE '%"SubtitleLanguages"%' OR o.probe_json NOT LIKE '%"CRF"%') AND o.id > ?1
   AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
        OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
        OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')
@@ -761,7 +765,7 @@ type ListStaleVideoProbesRow struct {
 	RelPath      string
 }
 
-// Video files measured before the probe read the picture (resolution, HDR, frame rate) and the subtitle tracks.
+// Video files measured before the probe read the picture (resolution, HDR, frame rate), the subtitle tracks and the encoder's CRF.
 func (q *Queries) ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error) {
 	rows, err := q.db.QueryContext(ctx, listStaleVideoProbes, arg.AfterID, arg.PageSize)
 	if err != nil {

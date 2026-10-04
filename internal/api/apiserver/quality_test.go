@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -22,6 +23,12 @@ type qualityBody struct {
 	} `json:"available"`
 	CutoffProfileID *int64   `json:"cutoff_profile_id"`
 	Warnings        []string `json:"warnings"`
+	Target          *struct {
+		Name string `json:"name"`
+	} `json:"target"`
+	AvailableTargets []struct {
+		Name string `json:"name"`
+	} `json:"available_targets"`
 }
 
 func profileIDs(t *testing.T, cache *settings.Cache) map[string]int64 {
@@ -51,8 +58,27 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 	path := "/api/v1/categories/" + strconv.FormatInt(id, 10) + "/quality"
 	aac := `"target":{"audio_codec":"aac","container":"m4a","bitrate_kbps":256,"tolerance_pct":10}`
 
+	targetCount := 0
+	// createTarget makes a named music target from the old inline form and answers the member that picks it.
+	createTarget := func(inline string) string {
+		t.Helper()
+		targetCount++
+		body := fmt.Sprintf(`{"name":"Target %d","media_type":"music",%s}`, targetCount, strings.TrimSuffix(strings.TrimPrefix(inline, `"target":{`), `}`))
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/qualitytargets", body))
+		if recorder.Code != http.StatusCreated {
+			t.Fatalf("create target: status = %d, %s", recorder.Code, recorder.Body)
+		}
+		var created struct {
+			ID int64 `json:"id"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil {
+			t.Fatal(err)
+		}
+		return fmt.Sprintf(`"target_id":%d`, created.ID)
+	}
 	put := func(first, second, target string) qualityBody {
 		t.Helper()
+		target = createTarget(target)
 		profiles := fmt.Sprintf("%d", ids[first])
 		if second != "" {
 			profiles += fmt.Sprintf(",%d", ids[second])
@@ -109,14 +135,22 @@ func TestLibraryQuality_SaveAndWarnWhenTheTargetFitsNoProfile(t *testing.T) {
 func TestLibraryQuality_ProblemsAreA400(t *testing.T) {
 	fixture, cookies, id := adminWithLibrary(t)
 	path := "/api/v1/categories/" + strconv.FormatInt(id, 10) + "/quality"
-	recorder := fixture.do(authedPut(t, cookies, path,
-		`{"profile_ids":[999],"target":{"audio_codec":"","container":"m4a","tolerance_pct":90}}`))
+	recorder := fixture.do(authedPut(t, cookies, path, `{"profile_ids":[999],"target_id":4242}`))
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400 (%s)", recorder.Code, recorder.Body)
 	}
-	for _, want := range []string{"profiles[0]", "target.audio_codec", "target.tolerance_pct"} {
+	for _, want := range []string{"profiles[0]", "target"} {
 		if !strings.Contains(recorder.Body.String(), want) {
 			t.Errorf("the problem does not name %s: %s", want, recorder.Body)
+		}
+	}
+	bad := fixture.do(authedPost(t, cookies, "/api/v1/qualitytargets", `{"name":"x","media_type":"music","audio_codec":"","container":"m4a","tolerance_pct":90}`))
+	if bad.Code != http.StatusBadRequest {
+		t.Fatalf("bad target: status = %d, want 400 (%s)", bad.Code, bad.Body)
+	}
+	for _, want := range []string{"target.audio_codec", "target.tolerance_pct"} {
+		if !strings.Contains(bad.Body.String(), want) {
+			t.Errorf("the problem does not name %s: %s", want, bad.Body)
 		}
 	}
 }
@@ -141,7 +175,7 @@ func TestGetWork_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
 	cutoff := ids["Lossless preferred"]
 	if err := fixture.cache.SetCategoryQuality(t.Context(), library.ID,
 		[]int64{ids["Lossless preferred"], ids["Lossy 320"]}, &cutoff,
-		&settings.QualityTarget{AudioCodec: "aac", Container: "m4a", BitrateKbps: &bitrate, TolerancePct: 10}); err != nil {
+		aimTarget(t, fixture.cache, "music", settings.QualityTarget{AudioCodec: "aac", Container: "m4a", BitrateKbps: &bitrate, TolerancePct: 10})); err != nil {
 		t.Fatal(err)
 	}
 	fixture.createUser(t, "admin", settings.RoleAdmin)
@@ -191,4 +225,15 @@ func TestGetWork_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("target/cutoff per file = %v, want %v", got, want)
 	}
+}
+
+// aimTarget stores a target under a fresh name and answers its id, the way a library picks one.
+func aimTarget(t *testing.T, cache *settings.Cache, mediaType string, target settings.QualityTarget) *int64 {
+	t.Helper()
+	target.Name, target.MediaType = fmt.Sprintf("%s %d", t.Name(), time.Now().UnixNano()), mediaType
+	created, err := cache.CreateQualityTarget(t.Context(), target)
+	if err != nil {
+		t.Fatalf("CreateQualityTarget: %v", err)
+	}
+	return &created.ID
 }
