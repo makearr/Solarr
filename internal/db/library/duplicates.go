@@ -59,7 +59,10 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 	if err != nil {
 		return nil, fmt.Errorf("library: duplicate tracks: %w", err)
 	}
-	type key struct{ artist, title string }
+	type key struct {
+		artist, title string
+		partID        int64
+	}
 	byTrack := map[key][]*DuplicateCopy{}
 	titles := map[key][2]string{}
 	copyOf := map[int64]*DuplicateCopy{}
@@ -67,8 +70,11 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 		if !inRoots[row.RootFolderID] || row.DurationMs <= 0 {
 			continue
 		}
-		k := key{normaliseTrackText(row.Artist), normaliseTrackText(row.TrackTitle)}
-		if k.title == "" {
+		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle)}
+		if row.MediaType != "music" {
+			// Another episode is never a duplicate: video is told apart by the record it covers, never by a name.
+			k = key{partID: row.PartID}
+		} else if k.title == "" {
 			continue
 		}
 		path := DuplicatePath{RootFolderID: row.RootFolderID, RelPath: row.RelPath}
@@ -94,6 +100,14 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 			continue
 		}
 		slices.SortFunc(copies, func(a, b *DuplicateCopy) int { return int(a.DurationMs - b.DurationMs) })
+		if k.partID != 0 {
+			group := DuplicateGroup{Artist: titles[k][0], Title: titles[k][1]}
+			for _, one := range copies {
+				group.Copies = append(group.Copies, *one)
+			}
+			groups = append(groups, group)
+			continue
+		}
 		start := 0
 		for index := 1; index <= len(copies); index++ {
 			if index < len(copies) && copies[index].DurationMs-copies[index-1].DurationMs <= durationToleranceMs {

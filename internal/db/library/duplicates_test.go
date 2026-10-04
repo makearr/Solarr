@@ -71,3 +71,51 @@ func TestDuplicates_FindsTheSameTrackInDifferentFormatsAndLeavesDifferentOnesAlo
 		t.Errorf("copies = %v, want the flac and the 96k mp3 of Song", paths)
 	}
 }
+
+// Two episodes that share a title apart from a bracketed number and run the same length are two episodes, not a
+// duplicate; only two files on one episode record are.
+func TestDuplicates_VideoIsToldApartByEpisodeRecordNotByTitle(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "tv", "Show").ID
+	item := createDesired(t, opened, work, "SET", 10).ID
+	type file struct{ ref, title, path string }
+	files := []file{
+		{"s24e01", "Auditions (1)", "Show/S24E01.mp4"},
+		{"s24e04", "Auditions (4)", "Show/S24E04.mp4"},
+		{"s24e05", "Finale", "Show/S24E05.mkv"},
+		{"s24e05", "Finale", "Show/S24E05 (1).mkv"},
+	}
+	parts := map[string]bool{}
+	for index, f := range files {
+		if !parts[f.ref] {
+			createPart(t, opened, work, f.ref, fmt.Sprintf("%03d", index), f.title)
+			parts[f.ref] = true
+		}
+		object := createObject(t, opened, fmt.Sprintf("v%d", index), 1000+int64(index))
+		err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := librarydb.New(tx).AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: object.ID, RootFolderID: 1, RelPath: f.path, LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+			}); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE media_object SET duration_ms = 2700000 WHERE id = ?`, object.ID)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attach(t, opened, item, object.ID, "primary", f.ref)
+	}
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50)
+	if err != nil {
+		t.Fatalf("Groups: %v", err)
+	}
+	if len(groups) != 1 || len(groups[0].Copies) != 2 || groups[0].Copies[0].Paths[0].RelPath[:10] != "Show/S24E0" {
+		t.Fatalf("groups = %+v, want only the two files of S24E05", groups)
+	}
+	for _, copy := range groups[0].Copies {
+		if copy.Paths[0].RelPath != "Show/S24E05.mkv" && copy.Paths[0].RelPath != "Show/S24E05 (1).mkv" {
+			t.Errorf("unexpected copy %q", copy.Paths[0].RelPath)
+		}
+	}
+}
