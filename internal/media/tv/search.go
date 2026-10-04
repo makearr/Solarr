@@ -1,7 +1,6 @@
 package tv
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -25,29 +24,17 @@ import (
 // ErrNotSearchable reports a desired item the TV search does not handle on its own (a single episode item).
 var ErrNotSearchable = errors.New("tv: search: only season items are searched on their own")
 
-// indexerGroupDeadline bounds one tier's fan-out to every indexer (ADR-37).
-const indexerGroupDeadline = 20 * time.Second
-
 // searchTVParams are what a structured id query needs the indexer to accept.
 var (
 	idParams      = []string{"tvdbid", "season"}
 	idParamsOneEp = []string{"tvdbid", "season", "ep"}
 )
 
-// ItemSearchResult is one season item's search: which tier produced finds and every decision recorded.
-type ItemSearchResult struct {
-	TierUsed      *int
-	Decisions     []library.DecisionDetail
-	IndexerErrors []IndexerError
-}
+// ItemSearchResult is one season item's search; the shared result under TV's name.
+type ItemSearchResult = judge.Result
 
-// IndexerError is one indexer's own failure; partial results are normal (ADR-37).
-type IndexerError struct {
-	IndexerID   int64
-	IndexerName string
-	Error       string
-	TooSlow     bool
-}
+// IndexerError is one indexer's own failure; the shared type under TV's name.
+type IndexerError = judge.IndexerError
 
 // Search is the TV candidate pipeline over one season item at a time.
 type Search struct {
@@ -57,7 +44,7 @@ type Search struct {
 	Settings   *settings.Cache
 	Clock      clock.Clock
 	Blocklist  *library.BlocklistStore
-	// IndexerDeadline bounds each tier's fan-out; zero is indexerGroupDeadline.
+	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
 }
 
@@ -298,33 +285,16 @@ func (s Search) SearchEpisode(ctx context.Context, itemID int64, episode int, co
 		return ItemSearchResult{}, fmt.Errorf("tv: search item %d: %w", itemID, err)
 	}
 
-	result := ItemSearchResult{}
-	for tierIndex, queries := range w.queries() {
-		answers, err := judge.AskEveryIndexer(ctx, conns, queries, cmp.Or(s.IndexerDeadline, indexerGroupDeadline))
-		if err != nil {
-			return result, fmt.Errorf("tv: search item %d: %w", itemID, err)
-		}
-		var finds []judge.Find
-		for index, answer := range answers {
-			conn := conns[index]
-			if answer.Err != nil {
-				result.IndexerErrors = append(result.IndexerErrors, IndexerError{IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.Err.Error(), TooSlow: answer.TooSlow})
-			}
-			raws, err := s.withoutBlocklisted(ctx, conn.ID, answer.Raws, at)
-			if err != nil {
-				return result, fmt.Errorf("tv: search item %d: %w", itemID, err)
-			}
-			finds = append(finds, yardstick.evaluate(raws, conn)...)
-		}
-		if len(finds) == 0 {
-			continue
-		}
-		tier := tierIndex
-		result.TierUsed = &tier
-		result.Decisions, err = s.decide(ctx, itemID, finds, "search", at)
-		return result, err
+	result, err := s.pipeline().Search(ctx, itemID, conns, w.queries(), yardstick.evaluate, at)
+	if err != nil {
+		return result, fmt.Errorf("tv: search item %d: %w", itemID, err)
 	}
 	return result, nil
+}
+
+// pipeline is the shared search over this type's stores.
+func (s Search) pipeline() judge.Pipeline {
+	return judge.Pipeline{Candidates: s.Candidates, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
 }
 
 // yardstick judges a release against what the season wants and the library's rules.
@@ -500,37 +470,6 @@ func sourceFact(claims parsetv.Claims) string {
 		return "hdtv"
 	}
 	return claims.Source
-}
-
-func (s Search) withoutBlocklisted(ctx context.Context, indexerID int64, raws []indexer.RawItem, at time.Time) ([]indexer.RawItem, error) {
-	if s.Blocklist == nil {
-		return raws, nil
-	}
-	kept := raws[:0:0]
-	for _, raw := range raws {
-		blocked, err := s.Blocklist.IsBlocked(ctx, &indexerID, raw.GUID, "", at.Unix())
-		if err != nil {
-			return nil, err
-		}
-		if !blocked {
-			kept = append(kept, raw)
-		}
-	}
-	return kept, nil
-}
-
-func (s Search) decide(ctx context.Context, itemID int64, finds []judge.Find, source string, at time.Time) ([]library.DecisionDetail, error) {
-	finds = judge.WithoutCrossIndexerDuplicates(finds)
-	judge.SortBestFirst(finds)
-	decisions := make([]library.DecisionDetail, 0, len(finds))
-	for _, find := range finds {
-		detail, err := judge.Persist(ctx, s.Candidates, itemID, find, source, at)
-		if err != nil {
-			return decisions, fmt.Errorf("tv: search item %d: persist: %w", itemID, err)
-		}
-		decisions = append(decisions, detail)
-	}
-	return decisions, nil
 }
 
 // releaseEpisodes is how many episodes a release holds: the ones its name numbers, else the season it is a pack of.

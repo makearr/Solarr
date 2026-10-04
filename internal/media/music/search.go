@@ -8,7 +8,6 @@ package music
 // decide-and-persist only.
 
 import (
-	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -67,31 +66,11 @@ type IndexerConn = judge.Conn
 // musicFunction is the Newznab function music searches with; an indexer's caps for it sit under this key.
 const musicFunction = "music"
 
-// IndexerSearchError records one indexer's own search failure -- best-effort
-// across every configured indexer (ADR-37's own "partial results are
-// normal, not an error"), never stopping the rest.
-type IndexerSearchError struct {
-	IndexerID   int64
-	IndexerName string
-	Error       string
-	// TooSlow means the indexer had not answered when the group deadline passed (ADR-37).
-	TooSlow bool
-}
+// IndexerSearchError is one indexer's failure within a search; the shared type under music's older name.
+type IndexerSearchError = judge.IndexerError
 
-// indexerGroupDeadline bounds one tier's fan-out to every indexer (ADR-37's default), whatever
-// each indexer's own timeout.
-const indexerGroupDeadline = 20 * time.Second
-
-// ItemSearchResult is one desired item's own run: which tier (if any)
-// produced an acceptable match, every decision persisted, and any indexer
-// that failed along the way.
-type ItemSearchResult struct {
-	// TierUsed is nil when no tier found anything worth persisting -- not a
-	// failure (section 10.1: a search finding nothing is not an error).
-	TierUsed      *int
-	Decisions     []library.DecisionDetail
-	IndexerErrors []IndexerSearchError
-}
+// ItemSearchResult is one wanted album's search; the shared result under music's older name.
+type ItemSearchResult = judge.Result
 
 // Search is stage 5's own candidate pipeline over one desired item at a
 // time (todo: per-category iterates this, see SearchCategory).
@@ -103,7 +82,7 @@ type Search struct {
 	Clock      clock.Clock
 	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
 	Blocklist *library.BlocklistStore
-	// IndexerDeadline bounds each tier's fan-out; zero is indexerGroupDeadline.
+	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
 }
 
@@ -198,36 +177,20 @@ func (s Search) SearchItemWithTerms(
 		measure.wantedArtist = custom.Artist
 	}
 
-	result := ItemSearchResult{}
-	for tierIndex, terms := range tiers {
-		var accepted []judge.Find
-		answers, err := judge.AskEveryIndexer(ctx, indexers, queriesFor(terms), cmp.Or(s.IndexerDeadline, indexerGroupDeadline))
-		if err != nil {
-			return result, fmt.Errorf("music: search item %d: %w", itemID, err)
-		}
-		// Merged in indexer order, so a duplicate keeps the best-priority indexer's copy.
-		for index, answer := range answers {
-			conn := indexers[index]
-			if answer.Err != nil {
-				result.IndexerErrors = append(result.IndexerErrors, IndexerSearchError{
-					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.Err.Error(), TooSlow: answer.TooSlow,
-				})
-			}
-			raws, err := s.withoutBlocklisted(ctx, conn.ID, answer.Raws, at)
-			if err != nil {
-				return result, fmt.Errorf("music: search item %d: %w", itemID, err)
-			}
-			accepted = append(accepted, measure.evaluate(raws, conn)...)
-		}
-		if len(accepted) == 0 {
-			continue
-		}
-		tier := tierIndex
-		result.TierUsed = &tier
-		result.Decisions, err = s.decide(ctx, itemID, accepted, "search", at)
-		return result, err
+	queries := make([][]judge.Query, len(tiers))
+	for index, terms := range tiers {
+		queries[index] = queriesFor(terms)
+	}
+	result, err := s.pipeline().Search(ctx, itemID, indexers, queries, measure.evaluate, at)
+	if err != nil {
+		return result, fmt.Errorf("music: search item %d: %w", itemID, err)
 	}
 	return result, nil
+}
+
+// pipeline is the shared search over this type's stores.
+func (s Search) pipeline() judge.Pipeline {
+	return judge.Pipeline{Candidates: s.Candidates, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
 }
 
 // yardstick is what one album's releases are measured against: who and what it is, and the library's quality rules.
@@ -341,23 +304,6 @@ func (j yardstick) evaluate(raws []indexer.RawItem, conn IndexerConn) []judge.Fi
 	return finds
 }
 
-// decide keeps one row per release, ranks them best first and records each decision against itemID.
-func (s Search) decide(ctx context.Context, itemID int64, accepted []judge.Find, source string, at time.Time) (
-	[]library.DecisionDetail, error,
-) {
-	accepted = judge.WithoutCrossIndexerDuplicates(accepted)
-	judge.SortBestFirst(accepted)
-	decisions := make([]library.DecisionDetail, 0, len(accepted))
-	for _, found := range accepted {
-		detail, err := judge.Persist(ctx, s.Candidates, itemID, found, source, at)
-		if err != nil {
-			return decisions, fmt.Errorf("music: search item %d: persist: %w", itemID, err)
-		}
-		decisions = append(decisions, detail)
-	}
-	return decisions, nil
-}
-
 // JudgeFeed judges releases an RSS sync found against one wanted album, exactly as a search's
 // would be; nothing is searched, and the album's search record is left alone.
 func (s Search) JudgeFeed(
@@ -374,35 +320,11 @@ func (s Search) JudgeFeed(
 	if err != nil {
 		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
 	}
-	raws, err = s.withoutBlocklisted(ctx, conn.ID, raws, at)
+	result, err := s.pipeline().Feed(ctx, itemID, conn, raws, measure.evaluate, at)
 	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
+		return result, fmt.Errorf("music: judge feed for item %d: %w", itemID, err)
 	}
-	accepted := measure.evaluate(raws, conn)
-	if len(accepted) == 0 {
-		return ItemSearchResult{}, nil
-	}
-	decisions, err := s.decide(ctx, itemID, accepted, "rss", at)
-	return ItemSearchResult{Decisions: decisions}, err
-}
-
-// withoutBlocklisted drops a release blocklisted by guid on this indexer before it is evaluated
-// (section 10.11), so it is neither decided nor offered again.
-func (s Search) withoutBlocklisted(ctx context.Context, indexerID int64, raws []indexer.RawItem, at time.Time) ([]indexer.RawItem, error) {
-	if s.Blocklist == nil {
-		return raws, nil
-	}
-	kept := raws[:0:0]
-	for _, raw := range raws {
-		blocked, err := s.Blocklist.IsBlocked(ctx, &indexerID, raw.GUID, "", at.Unix())
-		if err != nil {
-			return nil, err
-		}
-		if !blocked {
-			kept = append(kept, raw)
-		}
-	}
-	return kept, nil
+	return result, nil
 }
 
 // BlocklistRelease blocklists the release a decision recorded against itemID, permanently and

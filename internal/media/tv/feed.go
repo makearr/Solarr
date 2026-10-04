@@ -151,16 +151,7 @@ func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, ra
 	if err != nil {
 		return ItemSearchResult{}, err
 	}
-	raws, err = s.withoutBlocklisted(ctx, conn.ID, raws, at)
-	if err != nil {
-		return ItemSearchResult{}, err
-	}
-	finds := measure.evaluate(raws, conn)
-	if len(finds) == 0 {
-		return ItemSearchResult{}, nil
-	}
-	decisions, err := s.decide(ctx, itemID, finds, "rss", at)
-	return ItemSearchResult{Decisions: decisions}, err
+	return s.pipeline().Feed(ctx, itemID, conn, raws, measure.evaluate, at)
 }
 
 // JudgeFeedAndSend is the RSS sync's grab: a feed's releases are judged against a wanted season and the best
