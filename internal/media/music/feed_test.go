@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/acquiring/rss"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -27,7 +28,7 @@ func TestRSSSync_SendsAWantedAlbumsReleaseFromTheFeed(t *testing.T) {
 		}, nil
 	}}
 	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
-	job := music.NewRSSJob(music.RSSConfig{
+	feedOf := music.Feed{
 		Grab: music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
 			{ID: 5, Protocol: "usenet", Client: sender},
 		})},
@@ -35,11 +36,15 @@ func TestRSSSync_SendsAWantedAlbumsReleaseFromTheFeed(t *testing.T) {
 			return []music.IndexerConn{{ID: 1, Name: "Feed", Impl: "newznab", Client: feed}}, nil
 		},
 		WantedByArtist: library.NewHunt(env.library).WantedAlbumsByArtist,
-		Clock:          env.clock, Logger: slog.New(slog.DiscardHandler),
+		Logger:         slog.New(slog.DiscardHandler),
+	}
+	job := rss.NewJob(rss.Config{
+		Sources: func() []rss.Source { return []rss.Source{{Name: "music", Feed: feedOf}} },
+		Clock:   env.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 
 	for range 2 {
-		if err := job.Run(t.Context(), jobs.Job{Type: music.RSSJobType}); err != nil {
+		if err := job.Run(t.Context(), jobs.Job{Type: rss.JobType}); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 	}

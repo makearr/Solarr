@@ -455,3 +455,32 @@ ORDER BY w.updated_at, w.id LIMIT ?`, now.Unix(), int64(ended.Seconds()), int64(
 	}
 	return due, rows.Err()
 }
+
+// WantedSeason is a monitored season that still wants something: an episode it lacks or one below the cutoff.
+type WantedSeason struct {
+	ID     int64
+	WorkID int64
+}
+
+// WantedSeasonItems lists the wanted seasons of the given series, in the works' order and each work's season order.
+func (r SeriesReader) WantedSeasonItems(ctx context.Context, workIDs []int64) ([]WantedSeason, error) {
+	if len(workIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := librarydb.New(r.store.Read()).SeasonItemsForWorks(ctx, workIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: wanted seasons: %w", err)
+	}
+	byWork := map[int64][]WantedSeason{}
+	for _, row := range rows {
+		if row.Monitored != 1 || (row.State != "MISSING" && row.State != "PARTIAL" && row.State != "UPGRADABLE") {
+			continue
+		}
+		byWork[row.WorkID] = append(byWork[row.WorkID], WantedSeason{ID: row.ID, WorkID: row.WorkID})
+	}
+	var wanted []WantedSeason
+	for _, workID := range workIDs {
+		wanted = append(wanted, byWork[workID]...)
+	}
+	return wanted, nil
+}

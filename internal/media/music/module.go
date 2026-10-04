@@ -22,8 +22,8 @@ type Module struct {
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
 	// Rename is what renaming a music library needs; nil leaves music without a rename.
 	Rename *RenameConfig
-	// RSS matches the indexers' feeds against the wanted albums; nil leaves the job unregistered.
-	RSS *RSSJob
+	// Feed is music's part of the RSS sync.
+	Feed
 }
 
 // HuntSearch implements media.Hunting.
@@ -40,14 +40,6 @@ func (m Module) StartRename(ctx context.Context, rootFolderID int64, onlyCategor
 		return mover.MovePlan{}, 0, nil, errors.New("music: rename is not wired")
 	}
 	return RenameStart(ctx, *m.Rename, rootFolderID, onlyCategoryID, preview)
-}
-
-// RegisterJobs implements media.Jobs.
-func (m Module) RegisterJobs(register media.JobRegistrar) error {
-	if m.RSS == nil {
-		return nil
-	}
-	return register(RSSDefinition, m.RSS)
 }
 
 // ScanSweep implements media.Scanning.

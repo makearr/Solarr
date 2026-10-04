@@ -16,6 +16,8 @@ type Module struct {
 	Sweep scan.Sweep
 	// Hunt searches for one wanted season and sends the best release; nil leaves TV unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Feed is TV's part of the RSS sync.
+	Feed
 	// Retry identifies again the files that waited for review; nil leaves the job unregistered.
 	Retry *RetryJob
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
+	"github.com/makearr/Solarr/internal/acquiring/rss"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -106,6 +107,11 @@ type Renaming interface {
 	// StartRename plans, and unless preview starts, the rename of one root's files; onlyCategoryID narrows it to
 	// one library. It answers the plan, the job started (0 for a preview) and warnings per media object.
 	StartRename(ctx context.Context, rootFolderID int64, onlyCategoryID *int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error)
+}
+
+// Feeding is the capability of a media type whose wanted items are also filled from the indexers' feeds.
+type Feeding interface {
+	rss.Feed
 }
 
 // JobRegistrar takes one job type with its handler.

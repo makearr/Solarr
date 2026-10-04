@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
+	"github.com/makearr/Solarr/internal/acquiring/rss"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -35,7 +36,28 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 		},
 		NewReleaseDays: func() int { return int(p.cache.Snapshot().PrioritySettings().NewReleaseDays) }, Clock: clock.NewSystem(), Logger: p.logger,
 	}))
+	if err := registry.Register(rss.Definition); err != nil {
+		return err
+	}
+	executor.Handle(rss.JobType, rss.NewJob(rss.Config{Sources: p.feedSources, Clock: clock.NewSystem(), Logger: p.logger}))
 	return nil
+}
+
+// feedSources lists the media types that take part in the RSS sync, in registration order.
+func (p *process) feedSources() []rss.Source {
+	var sources []rss.Source
+	for _, descriptor := range p.media.Descriptors() {
+		if feed, ok := media.Capability[media.Feeding](p.media, descriptor.Key); ok {
+			sources = append(sources, rss.Source{Name: string(descriptor.Key), Feed: feed})
+		}
+	}
+	return sources
+}
+
+func (p *process) enqueueRSS(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{
+		Type: rss.JobType, ActionKey: string(rss.JobType), Priority: jobs.PriorityNormal, Payload: []byte("{}"),
+	})
 }
 
 // planFacts reads the priority policy and every library's rank fresh for one planner pass.

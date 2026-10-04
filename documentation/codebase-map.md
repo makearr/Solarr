@@ -28,7 +28,8 @@ internal/
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob
 ├── moving/     mover  moverjob  drainjob  placement  naming
-├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  poll  plan
+├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  qbittorrent  poll  plan
+│               judge  dispatch  rss
 ├── media/      the media-type registry  +  music  tv
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```
@@ -44,7 +45,7 @@ internal/
 | `scanning` | The library sweep and the background probe that fills measured attributes |
 | `importing` | Import inspection (WALK to DECIDE) and its resumable job |
 | `moving` | The move engine, its apply job, drain orchestration, root-folder placement, path templates |
-| `acquiring` | Stage 5's protocol clients: Newznab/Torznab search and release fetch (ADR-37/43/47); `download.Client`, the download-client interface, with SABnzbd behind it (NZB uploaded by `addfile`, as Lidarr does); `poll`, the per-minute follow of every sent download to imported and cleaned (§10.9); `plan`, ADR-6's planner (desired items to `hunt_queue`) and the hunt that searches within the hourly budget. What importing and searching mean is supplied by the media type; `internal/media/music` owns the candidate pipeline |
+| `acquiring` | Stage 5's protocol clients: Newznab/Torznab search and release fetch (ADR-37/43/47); `download.Client`, the download-client interface, with SABnzbd behind it (NZB uploaded by `addfile`, as Lidarr does); `poll`, the per-minute follow of every sent download to imported and cleaned (§10.9); `plan`, ADR-6's planner (desired items to `hunt_queue`) and the hunt that searches within the hourly budget. `judge` is what every media type's search shares (asking the indexers, ranking, de-duplicating, the delay profile, recording a decision), `dispatch` sends the best decided release, and `rss` is the one RSS sync: it reads each indexer's feed and each media type with the `Feeding` capability judges it against its own wanted items. What a release is and which wanted item it covers is the media type's |
 | `media` | `internal/media` is the registry: each media type is a `Module` with a `Descriptor` (key, label, vocabulary, levels, roles) and optional capabilities such as `Naming`. Core asks the registry instead of naming a type; `cmd/solarr/app/registered.go` is the one file that lists the modules. `GET /mediatypes` serves the descriptors, and a library can only be created for a registered type. The library sweep is one job (`library.scan`): it asks the registry for the `Scanning` capability of the media type a library holds and hands that type's consumer the files; a type's own job types come through the `Jobs` capability. `registered.go` builds each module with what it needs from the process. Files that still import a module directly are listed in `internal/archtest/media_test.go`; that list only shrinks |
 
 `migrations/` holds embedded SQL, one directory per database; `queries/` holds sqlc source.

@@ -9,7 +9,6 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -64,7 +63,10 @@ func (p *process) musicModule() music.Module {
 		Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
 		MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
 	}
-	return music.Module{Hunt: p.musicHunt, RSS: p.musicRSS(), Rename: &rename, Sweep: scan.Sweep{
+	feed := music.Feed{
+		Grab: p.musicGrab(), Indexers: p.indexerConns, WantedByArtist: library.NewHunt(p.library).WantedAlbumsByArtist, Logger: p.logger,
+	}
+	return music.Module{Hunt: p.musicHunt, Feed: feed, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -103,7 +105,19 @@ func (p *process) tvModule() tv.Module {
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Hunt:  p.tvHunt,
+		Hunt: p.tvHunt,
+		Feed: tv.Feed{
+			Grab: p.tvGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.tvIndexerConns, Logger: p.logger,
+			Libraries: func() []int64 {
+				var ids []int64
+				for _, category := range p.cache.Snapshot().Categories() {
+					if category.MediaType == tv.MediaType {
+						ids = append(ids, category.ID)
+					}
+				}
+				return ids
+			},
+		},
 		Retry: retry,
 	}
 }
@@ -130,20 +144,6 @@ func (p *process) musicHunt(ctx context.Context, itemID int64) (plan.Outcome, er
 		p.logger.Info("hunt: releases refused", slog.Int64("item_id", itemID), slog.Any("refused", result.Refusals))
 	}
 	return plan.OutcomeSearched, nil
-}
-
-// musicRSS matches the indexers' feeds against the wanted albums.
-func (p *process) musicRSS() *music.RSSJob {
-	return music.NewRSSJob(music.RSSConfig{
-		Grab: p.musicGrab(), Indexers: p.indexerConns, WantedByArtist: library.NewHunt(p.library).WantedAlbumsByArtist,
-		Clock: clock.NewSystem(), Logger: p.logger,
-	})
-}
-
-func (p *process) enqueueRSS(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.queue.Enqueue(ctx, jobs.Request{
-		Type: music.RSSJobType, ActionKey: string(music.RSSJobType), Priority: jobs.PriorityNormal, Payload: []byte("{}"),
-	})
 }
 
 // tvHunt searches one season the hunt chose and sends the best release.
