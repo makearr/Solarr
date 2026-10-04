@@ -4,16 +4,12 @@ import { Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
 type MediaType = components["schemas"]["MediaType"];
 type MonitorDiscovered = components["schemas"]["CategorySettings"]["monitor_discovered"];
-
-export const MEDIA_TYPES: readonly MediaType[] = [
-  "music", "tv", "movie", "audiobook", "book", "adult", "comic", "rom",
-  "podcast", "news", "youtube",
-];
 
 /** What a library of each media type is called when its own name is left
  *  blank -- "the default library name should always be the category, for
@@ -418,6 +414,7 @@ function EditCategoryFields({
 function AddCategory({ onAdded }: { onAdded: () => void }) {
   const [name, setName] = useState("");
   const [mediaType, setMediaType] = useState<MediaType>("music");
+  const mediaTypes = useMediaTypes();
 
   const create = useMutation({
     mutationFn: async () => {
@@ -458,9 +455,9 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
           value={mediaType}
           onChange={(event) => setMediaType(event.target.value as MediaType)}
         >
-          {MEDIA_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {MEDIA_TYPE_NAME[type]}
+          {mediaTypes.map((type) => (
+            <option key={type.key} value={type.key}>
+              {type.label}
             </option>
           ))}
         </select>

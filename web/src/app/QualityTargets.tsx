@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { LanguagePicker } from "./LanguagePicker";
 
@@ -190,6 +191,7 @@ function TargetFields({ target, onChange }: { target: QualityTarget; onChange: (
 
 function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; onDone: () => void; onCancel: () => void }) {
   const [target, setTarget] = useState<QualityTarget>(initial ?? blankTarget("tv"));
+  const mediaTypes = useMediaTypes();
   const save = useMutation({
     mutationFn: async () => {
       const { error } = initial?.id
@@ -210,7 +212,7 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
           <Pick
             label="For"
             value={target.media_type}
-            options={MEDIA_TYPES.map((type): [string, string] => [type, mediaTypeName(type)])}
+            options={mediaTypes.map((type): [string, string] => [type.key, type.label])}
             onChange={(type) => setTarget({ ...blankTarget(type), name: target.name })}
             any={null}
           />

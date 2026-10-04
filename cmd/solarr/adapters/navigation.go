@@ -1,26 +1,46 @@
 package adapters
 
 import (
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/identify/model"
-	"github.com/makearr/Solarr/internal/media/music"
-	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media"
 )
 
-// Navigation satisfies apiserver.NavigationProvider by dispatching on
-// media type. Direct-wired to music.Navigation until stage 9 extracts media
-// types as plugins (§2's "direct-wired, then refactored" convention) -- a
-// second media type adds one more map entry here, not a branch in apiserver.
-type Navigation struct{}
+// MediaTypes answers apiserver's questions about media types from the registry, so apiserver names none.
+type MediaTypes struct{ Registry *media.Registry }
 
-func (Navigation) LevelsFor(mediaType string) ([]model.Level, bool) {
-	levels, ok := navigationByMediaType[mediaType]
+// LevelsFor implements apiserver.NavigationProvider.
+func (m MediaTypes) LevelsFor(mediaType string) ([]model.Level, bool) {
+	module, ok := m.Registry.Module(media.Key(mediaType))
 	if !ok {
 		return nil, false
 	}
-	return levels.Levels(), true
+	return module.Descriptor().Levels, true
 }
 
-var navigationByMediaType = map[string]model.NavigationLevels{
-	"music": music.Navigation{},
-	"tv":    tv.Navigation{},
+// Known implements apiserver.MediaTypeCatalog.
+func (m MediaTypes) Known(mediaType string) bool { return m.Registry.Known(media.Key(mediaType)) }
+
+// List implements apiserver.MediaTypeCatalog.
+func (m MediaTypes) List() []apiserver.MediaTypeInfo {
+	descriptors := m.Registry.Descriptors()
+	out := make([]apiserver.MediaTypeInfo, 0, len(descriptors))
+	for _, descriptor := range descriptors {
+		info := apiserver.MediaTypeInfo{
+			Key: string(descriptor.Key), Label: descriptor.Label,
+			Work:         apiserver.MediaTerm(descriptor.Vocabulary.Work),
+			Part:         apiserver.MediaTerm(descriptor.Vocabulary.Part),
+			Group:        apiserver.MediaTerm(descriptor.Vocabulary.Group),
+			LeadPeople:   apiserver.MediaTerm(descriptor.Vocabulary.LeadPeople),
+			Organisation: apiserver.MediaTerm(descriptor.Vocabulary.Organisation),
+		}
+		for _, role := range descriptor.Roles {
+			info.Roles = append(info.Roles, apiserver.MediaRole{
+				Key: role.Key, Label: role.Label, Lead: role.Lead, Followable: role.Followable,
+				PartScoped: role.PartScoped, Character: role.Character,
+			})
+		}
+		out = append(out, info)
+	}
+	return out
 }

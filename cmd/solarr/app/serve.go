@@ -26,6 +26,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
@@ -74,10 +75,12 @@ type process struct {
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.
 	indexerCaps *indexerCapsCache
 	cache       *settings.Cache
-	bus         *events.Bus
-	dispatcher  *jobs.Dispatcher
-	server      *apiserver.Server
-	timezone    string
+	// media is every media type compiled in; core asks it instead of naming one.
+	media      *media.Registry
+	bus        *events.Bus
+	dispatcher *jobs.Dispatcher
+	server     *apiserver.Server
+	timezone   string
 	// defaultQualityProfileID is ensureDefaultQualityProfile's fallback,
 	// used when a category has none of its own configured (todo 4.4).
 	defaultQualityProfileID int64
@@ -151,9 +154,13 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 
+	registered, err := registeredMedia()
+	if err != nil {
+		return err
+	}
 	running := &process{
 		build: build, config: loaded, fsys: fsys, logger: logger, logRing: logRing,
-		timezone: timezone, configPath: configPath,
+		timezone: timezone, configPath: configPath, media: registered,
 	}
 	defer running.close()
 
@@ -276,7 +283,7 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	cache.EnableSecrets(cipher)
-	cache.EnableNamingValidation(validateNaming)
+	cache.EnableNamingValidation(adapters.NamingValidator(p.media))
 
 	// cache/metadata.db (ADR-2) is disposable -- unlike the three above, a
 	// corrupt copy is the operator's to delete, not OpenChecked's to restore
@@ -697,7 +704,8 @@ func (p *process) startServer(ctx context.Context) error {
 			Cache: p.cache,
 		},
 		MoveJobs:       adapters.MoveJobs{MoveJobs: library.NewMoveJobs(p.library)},
-		Navigation:     adapters.Navigation{},
+		Navigation:     adapters.MediaTypes{Registry: p.media},
+		MediaTypes:     adapters.MediaTypes{Registry: p.media},
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},
 		LibraryArtists: adapters.Artists{People: library.NewPeople(p.library)},
 		RenameStarter: adapters.Rename{Config: music.RenameConfig{
@@ -706,7 +714,7 @@ func (p *process) startServer(ctx context.Context) error {
 			Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
 			MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
 		}, Settings: p.cache},
-		NamingSchemes: adapters.NamingSchemes{},
+		NamingSchemes: adapters.NamingSchemes{Registry: p.media},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   adapters.Egress{Prober: prober},
@@ -851,9 +859,4 @@ func (p *process) fileRemover() adapters.RemoveAndBlock {
 		),
 		Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
 	}
-}
-
-// validateNaming dispatches to the media types that declare a naming scheme (adapters.namingModules).
-func validateNaming(mediaType string, profile settings.NamingProfile) error {
-	return adapters.ValidateNaming(mediaType, profile)
 }

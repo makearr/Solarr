@@ -53,6 +53,10 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.refuseUnknownMediaType(w, body.MediaType) {
+		return
+	}
+
 	priorityRank := body.PriorityRank
 	if priorityRank == nil {
 		access, err := authz.FromContext(r.Context())

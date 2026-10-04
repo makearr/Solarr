@@ -29,7 +29,7 @@ internal/
 ├── importing/  inspect  importjob
 ├── moving/     mover  moverjob  drainjob  placement  naming
 ├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  poll  plan
-├── media/      music
+├── media/      the media-type registry  +  music  tv
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```
 
@@ -45,7 +45,7 @@ internal/
 | `importing` | Import inspection (WALK to DECIDE) and its resumable job |
 | `moving` | The move engine, its apply job, drain orchestration, root-folder placement, path templates |
 | `acquiring` | Stage 5's protocol clients: Newznab/Torznab search and release fetch (ADR-37/43/47); `download.Client`, the download-client interface, with SABnzbd behind it (NZB uploaded by `addfile`, as Lidarr does); `poll`, the per-minute follow of every sent download to imported and cleaned (§10.9); `plan`, ADR-6's planner (desired items to `hunt_queue`) and the hunt that searches within the hourly budget. What importing and searching mean is supplied by the media type; `internal/media/music` owns the candidate pipeline |
-| `media` | Media types. Direct-wired until stage 9 extracts them as plugins |
+| `media` | `internal/media` is the registry: each media type is a `Module` with a `Descriptor` (key, label, vocabulary, levels, roles) and optional capabilities such as `Naming`. Core asks the registry instead of naming a type; `cmd/solarr/app/registered.go` is the one file that lists the modules. `GET /mediatypes` serves the descriptors, and a library can only be created for a registered type. Files that still import a module directly are listed in `internal/archtest/media_test.go`; that list only shrinks |
 
 `migrations/` holds embedded SQL, one directory per database; `queries/` holds sqlc source.
 `internal/db/store/gen/` and `internal/api/apiserver/gen/` are generated, committed and never

@@ -302,6 +302,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		ImagesDir:             testImagesDir,
 		LibrarySize:           librarySize,
 		Navigation:            navigation,
+		MediaTypes:            fakeMediaTypes{},
 		LibraryTracks:         libraryTracks,
 		LibraryArtists:        libraryArtists,
 		Clock:                 fake,

@@ -170,6 +170,8 @@ type Config struct {
 	// without it, ListLibraries reports every library with no levels rather
 	// than failing.
 	Navigation NavigationProvider
+	// MediaTypes says which media types have a module. Optional: without it every planned type is accepted.
+	MediaTypes MediaTypeCatalog
 	// LibraryTracks lists the Tracks navigation level (ADR-54). Optional:
 	// without it, a work_part-entity level answers 503.
 	LibraryTracks LibraryTracksReader
@@ -293,6 +295,7 @@ type Server struct {
 	renameStarter           RenameStarter
 	namingSchemes           NamingSchemes
 	navigation              NavigationProvider
+	mediaTypes              MediaTypeCatalog
 	libraryTracks           LibraryTracksReader
 	libraryArtists          LibraryArtistsReader
 	downloadRoots           DownloadFolderChecker
@@ -398,6 +401,7 @@ func New(config Config) (*Server, error) {
 		renameStarter:           config.RenameStarter,
 		namingSchemes:           config.NamingSchemes,
 		navigation:              config.Navigation,
+		mediaTypes:              config.MediaTypes,
 		libraryTracks:           config.LibraryTracks,
 		libraryArtists:          config.LibraryArtists,
 		downloadRoots:           config.DownloadRoots,
@@ -586,6 +590,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/library/unidentified/{mediaObjectId}/attempts", server.routeListIdentificationAttempts)
 			secured.Get("/search", server.routeSearch)
 			secured.Post("/score/simulate", server.SimulateScore)
+			secured.Get("/mediatypes", server.ListMediaTypes)
 			secured.Get("/libraries", server.ListLibraries)
 			secured.Put("/libraries/{id}/last-level", server.routeSetLibraryLastLevel)
 			secured.Get("/libraries/{id}/import-lists", server.routeListImportLists)

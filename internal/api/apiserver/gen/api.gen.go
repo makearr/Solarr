@@ -2636,8 +2636,47 @@ type Me struct {
 // MeTier How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
 type MeTier string
 
+// MediaRole defines model for MediaRole.
+type MediaRole struct {
+	// Character Carries the name of who was played.
+	Character  bool   `json:"character"`
+	Followable bool   `json:"followable"`
+	Key        string `json:"key"`
+	Label      string `json:"label"`
+
+	// Lead The role a work is listed under.
+	Lead bool `json:"lead"`
+
+	// PartScoped Credited per part rather than per work.
+	PartScoped bool `json:"part_scoped"`
+}
+
+// MediaTerm defines model for MediaTerm.
+type MediaTerm struct {
+	Many string `json:"many"`
+
+	// One Singular; empty when the type has no such entity.
+	One string `json:"one"`
+}
+
 // MediaType Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 type MediaType string
+
+// MediaTypeInfo defines model for MediaTypeInfo.
+type MediaTypeInfo struct {
+	Group MediaTerm `json:"group"`
+
+	// Key Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
+	Key MediaType `json:"key"`
+
+	// Label Also the default name of a library of this type.
+	Label        string      `json:"label"`
+	LeadPeople   MediaTerm   `json:"lead_people"`
+	Organisation MediaTerm   `json:"organisation"`
+	Part         MediaTerm   `json:"part"`
+	Roles        []MediaRole `json:"roles"`
+	Work         MediaTerm   `json:"work"`
+}
 
 // MetadataSettings The metadata providers' own settings.
 type MetadataSettings struct {
@@ -5768,6 +5807,9 @@ type ServerInterface interface {
 	// Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 	// (PATCH /me/tier)
 	SetMyTier(w http.ResponseWriter, r *http.Request)
+	// The media types this build can manage, with what each calls its entities.
+	// (GET /mediatypes)
+	ListMediaTypes(w http.ResponseWriter, r *http.Request)
 	// Replace or clear the AcoustID application key. Administrator only. A separate endpoint from PATCH /metadata/settings, the same shape an indexer's own key uses: resealing the credential on every unrelated edit would be silent, pointless churn. An empty api_key clears it, which disables the fingerprint rung rather than failing it.
 	// (POST /metadata/acoustid/apikey)
 	SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request)
@@ -6902,6 +6944,12 @@ func (_ Unimplemented) SetMyPreference(w http.ResponseWriter, r *http.Request, k
 // Change how much of the settings surface the caller is shown (ADR-26). Self-service: any authenticated user may set their own tier, not just an administrator -- raising or lowering it never changes behaviour, only what is displayed.
 // (PATCH /me/tier)
 func (_ Unimplemented) SetMyTier(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The media types this build can manage, with what each calls its entities.
+// (GET /mediatypes)
+func (_ Unimplemented) ListMediaTypes(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11609,6 +11657,28 @@ func (siw *ServerInterfaceWrapper) SetMyTier(w http.ResponseWriter, r *http.Requ
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetMyTier(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListMediaTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListMediaTypes(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMediaTypes(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16863,6 +16933,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/me/tier", wrapper.SetMyTier)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/mediatypes", wrapper.ListMediaTypes)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/metadata/acoustid/apikey", wrapper.SetAcoustIDAPIKey)

@@ -2741,6 +2741,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/mediatypes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The media types this build can manage, with what each calls its entities.
+         * @description Only types with a module are listed, so a library can be created for exactly these. The words are what the interface shows for a work, a part and the people of a library of that type.
+         */
+        get: operations["listMediaTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/libraries": {
         parameters: {
             query?: never;
@@ -4746,6 +4766,33 @@ export interface components {
             /** @example anime */
             name: string;
             permission: components["schemas"]["Permission"];
+        };
+        MediaTerm: {
+            /** @description Singular; empty when the type has no such entity. */
+            one: string;
+            many: string;
+        };
+        MediaRole: {
+            key: string;
+            label: string;
+            /** @description The role a work is listed under. */
+            lead: boolean;
+            followable: boolean;
+            /** @description Credited per part rather than per work. */
+            part_scoped: boolean;
+            /** @description Carries the name of who was played. */
+            character: boolean;
+        };
+        MediaTypeInfo: {
+            key: components["schemas"]["MediaType"];
+            /** @description Also the default name of a library of this type. */
+            label: string;
+            work: components["schemas"]["MediaTerm"];
+            part: components["schemas"]["MediaTerm"];
+            group: components["schemas"]["MediaTerm"];
+            lead_people: components["schemas"]["MediaTerm"];
+            organisation: components["schemas"]["MediaTerm"];
+            roles: components["schemas"]["MediaRole"][];
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -11915,6 +11962,27 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listMediaTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The media types, in registration order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaTypeInfo"][];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     listLibraries: {

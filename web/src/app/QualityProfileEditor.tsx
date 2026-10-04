@@ -7,6 +7,7 @@ import { LanguageProfiles } from "./LanguageProfiles";
 import { QualityTargetsSection } from "./QualityTargets";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 import {
   buildAudioRules, buildVideoRules, containerOf, parseAudioRules, parseVideoRules, summarise, type AudioRules, type Range, type VideoRules,
 } from "@/lib/qualityRules";
@@ -16,7 +17,7 @@ import { LanguagePicker } from "./LanguagePicker";
 
 type QualityProfile = components["schemas"]["QualityProfile"];
 
-// Every media type Solarr plans (settings.MediaTypes); the audio ones have a form.
+// Every media type a stored profile may carry, for grouping; a new profile picks from the registered ones.
 const MEDIA_TYPES = ["music", "audiobook", "podcast", "tv", "movie", "youtube", "news", "book", "comic", "rom", "adult"];
 const AUDIO = new Set(["music", "audiobook", "podcast"]);
 const VIDEO = new Set(["tv"]);
@@ -172,6 +173,8 @@ function ProfileForm({
   const tier = useTier();
   const [name, setName] = useState(initial?.name ?? "");
   const [mediaType, setMediaType] = useState(initial?.media_type ?? "music");
+  // An existing profile keeps its own type even when this build has no module for it.
+  const pickable = [...new Set([...useMediaTypes().map((type): string => type.key), mediaType])];
   // A new profile starts with the sample rate target on (asked 2026-09-30); an existing one keeps its own.
   const [rules, setRules] = useState<AudioRules>(() =>
     initial ? parseAudioRules(initial.rules) : { ...parseAudioRules(""), sampleRate: SAMPLE_RATE_FALLBACK },
@@ -221,7 +224,7 @@ function ProfileForm({
             onChange={(event) => setMediaType(event.target.value)}
             className={input}
           >
-            {MEDIA_TYPES.map((type) => (
+            {pickable.map((type) => (
               <option key={type} value={type}>
                 {mediaTypeName(type)}
               </option>

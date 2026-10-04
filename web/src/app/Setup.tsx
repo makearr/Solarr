@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
-import { MEDIA_TYPES } from "./Categories";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 // The wizard connects an app to make a library from it; Prowlarr has none, so it is added under Connections.
 type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
@@ -90,6 +90,7 @@ function ConnectArr({
   const [libraryName, setLibraryName] = useState(LIBRARY_SUGGESTION.lidarr.name);
   const [libraryNameTouched, setLibraryNameTouched] = useState(false);
   const [mediaType, setMediaType] = useState<MediaType>(LIBRARY_SUGGESTION.lidarr.mediaType);
+  const mediaTypes = useMediaTypes();
   const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
   const [importRootFolders, setImportRootFolders] = useState(true);
   const [importContent, setImportContent] = useState(false);
@@ -242,9 +243,9 @@ function ConnectArr({
                 setMediaType(event.target.value as MediaType);
               }}
             >
-              {MEDIA_TYPES.map((value) => (
-                <option key={value} value={value}>
-                  {value}
+              {mediaTypes.map((type) => (
+                <option key={type.key} value={type.key}>
+                  {type.label}
                 </option>
               ))}
             </select>
@@ -374,6 +375,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   // no library attached is invisible to every import and scan afterwards.
   const [categoryId, setCategoryId] = useState<number | "new">("new");
   const [mediaType, setMediaType] = useState<MediaType>("music");
+  const mediaTypes = useMediaTypes();
   const [libraryName, setLibraryName] = useState(mediaTypeName("music"));
   const [libraryNameTouched, setLibraryNameTouched] = useState(false);
 
@@ -471,9 +473,9 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
                 value={mediaType}
                 onChange={(event) => changeMediaType(event.target.value as MediaType)}
               >
-                {MEDIA_TYPES.map((type) => (
-                  <option key={type} value={type}>
-                    {mediaTypeName(type)}
+                {mediaTypes.map((type) => (
+                  <option key={type.key} value={type.key}>
+                    {type.label}
                   </option>
                 ))}
               </select>

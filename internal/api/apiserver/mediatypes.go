@@ -1,0 +1,75 @@
+package apiserver
+
+import (
+	"net/http"
+
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+)
+
+// MediaTerm is one word of a media type's vocabulary.
+type MediaTerm struct {
+	One  string
+	Many string
+}
+
+// MediaRole is one way a person is credited in a media type.
+type MediaRole struct {
+	Key        string
+	Label      string
+	Lead       bool
+	Followable bool
+	PartScoped bool
+	Character  bool
+}
+
+// MediaTypeInfo is one media type this build can manage.
+type MediaTypeInfo struct {
+	Key          string
+	Label        string
+	Work         MediaTerm
+	Part         MediaTerm
+	Group        MediaTerm
+	LeadPeople   MediaTerm
+	Organisation MediaTerm
+	Roles        []MediaRole
+}
+
+// MediaTypeCatalog answers which media types have a module, so a handler never names one.
+type MediaTypeCatalog interface {
+	List() []MediaTypeInfo
+	Known(mediaType string) bool
+}
+
+// ListMediaTypes answers the media types a library can be created for.
+func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
+	out := []gen.MediaTypeInfo{}
+	if s.mediaTypes != nil {
+		for _, info := range s.mediaTypes.List() {
+			roles := []gen.MediaRole{}
+			for _, role := range info.Roles {
+				roles = append(roles, gen.MediaRole{
+					Key: role.Key, Label: role.Label, Lead: role.Lead, Followable: role.Followable,
+					PartScoped: role.PartScoped, Character: role.Character,
+				})
+			}
+			out = append(out, gen.MediaTypeInfo{
+				Key: gen.MediaType(info.Key), Label: info.Label, Roles: roles,
+				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
+				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
+			})
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+func termView(term MediaTerm) gen.MediaTerm { return gen.MediaTerm{One: term.One, Many: term.Many} }
+
+// refuseUnknownMediaType answers 400 for a media type no module manages; true means it was refused.
+func (s *Server) refuseUnknownMediaType(w http.ResponseWriter, mediaType string) bool {
+	if s.mediaTypes == nil || s.mediaTypes.Known(mediaType) {
+		return false
+	}
+	writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+		"The category has problems", "media_type "+mediaType+" is not available in this build. Nothing was created.")
+	return true
+}

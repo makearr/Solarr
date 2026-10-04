@@ -4367,6 +4367,25 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /mediatypes:
+    get:
+      operationId: listMediaTypes
+      tags: [library]
+      summary: The media types this build can manage, with what each calls its entities.
+      description: >-
+        Only types with a module are listed, so a library can be created for
+        exactly these. The words are what the interface shows for a work, a
+        part and the people of a library of that type.
+      responses:
+        "200":
+          description: The media types, in registration order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/MediaTypeInfo" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /libraries:
     get:
       operationId: listLibraries
@@ -7420,6 +7439,39 @@ components:
         media_type: { $ref: "#/components/schemas/MediaType" }
         name: { type: string, example: "anime" }
         permission: { $ref: "#/components/schemas/Permission" }
+
+    MediaTerm:
+      type: object
+      required: [one, many]
+      properties:
+        one: { type: string, description: Singular; empty when the type has no such entity. }
+        many: { type: string }
+
+    MediaRole:
+      type: object
+      required: [key, label, lead, followable, part_scoped, character]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        lead: { type: boolean, description: The role a work is listed under. }
+        followable: { type: boolean }
+        part_scoped: { type: boolean, description: Credited per part rather than per work. }
+        character: { type: boolean, description: Carries the name of who was played. }
+
+    MediaTypeInfo:
+      type: object
+      required: [key, label, work, part, group, lead_people, organisation, roles]
+      properties:
+        key: { $ref: "#/components/schemas/MediaType" }
+        label: { type: string, description: Also the default name of a library of this type. }
+        work: { $ref: "#/components/schemas/MediaTerm" }
+        part: { $ref: "#/components/schemas/MediaTerm" }
+        group: { $ref: "#/components/schemas/MediaTerm" }
+        lead_people: { $ref: "#/components/schemas/MediaTerm" }
+        organisation: { $ref: "#/components/schemas/MediaTerm" }
+        roles:
+          type: array
+          items: { $ref: "#/components/schemas/MediaRole" }
 
     MediaType:
       type: string

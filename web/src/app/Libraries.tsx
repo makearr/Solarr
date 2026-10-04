@@ -6,8 +6,9 @@ import { Plus } from "lucide-react";
 import { api } from "@/api/client";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
-import { MEDIA_TYPES, MEDIA_TYPE_NAME } from "./Categories";
+import { MEDIA_TYPE_NAME } from "./Categories";
 import { defaultLevelKey } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];
@@ -98,6 +99,7 @@ function AddLibrary() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [mediaType, setMediaType] = useState<MediaType>("music");
+  const mediaTypes = useMediaTypes();
 
   const create = useMutation({
     mutationFn: async () => {
@@ -138,9 +140,9 @@ function AddLibrary() {
           value={mediaType}
           onChange={(event) => setMediaType(event.target.value as MediaType)}
         >
-          {MEDIA_TYPES.map((type) => (
-            <option key={type} value={type}>
-              {MEDIA_TYPE_NAME[type]}
+          {mediaTypes.map((type) => (
+            <option key={type.key} value={type.key}>
+              {type.label}
             </option>
           ))}
         </select>

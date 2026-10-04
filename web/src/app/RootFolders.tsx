@@ -5,7 +5,8 @@ import { HardDrive, Pencil, Plus, X } from "lucide-react";
 import { api } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
-import { EditCategoryForm, MEDIA_TYPES } from "./Categories";
+import { EditCategoryForm } from "./Categories";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 import { MoveJobList, RootMoveControls } from "./Moves";
 
 type RootFolder = components["schemas"]["RootFolder"];
@@ -555,6 +556,7 @@ function AddRootFolder({
   const [newLibraryName, setNewLibraryName] = useState(mediaTypeName("music"));
   const [newLibraryNameTouched, setNewLibraryNameTouched] = useState(false);
   const [newLibraryMediaType, setNewLibraryMediaType] = useState<MediaType>("music");
+  const mediaTypes = useMediaTypes();
 
   // categories arrives asynchronously (its own useQuery, one render behind
   // this form's first paint); once it does, default to the first real
@@ -676,9 +678,9 @@ function AddRootFolder({
                 if (!newLibraryNameTouched) setNewLibraryName(mediaTypeName(value));
               }}
             >
-              {MEDIA_TYPES.map((type) => (
-                <option key={type} value={type}>
-                  {mediaTypeName(type)}
+              {mediaTypes.map((type) => (
+                <option key={type.key} value={type.key}>
+                  {type.label}
                 </option>
               ))}
             </select>
