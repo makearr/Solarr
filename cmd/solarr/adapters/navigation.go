@@ -2,8 +2,10 @@ package adapters
 
 import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 // MediaTypes answers apiserver's questions about media types from the registry, so apiserver names none.
@@ -43,4 +45,24 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		out = append(out, info)
 	}
 	return out
+}
+
+// MediaSweeps answers scan.Sweeps: the sweep of the media type a category holds.
+type MediaSweeps struct {
+	Registry *media.Registry
+	Cache    *settings.Cache
+}
+
+// SweepFor implements scan.Sweeps; a type that declares no consumer is not scanned.
+func (m MediaSweeps) SweepFor(categoryID int64) (scan.Sweep, bool) {
+	category, found := m.Cache.Snapshot().Category(categoryID)
+	if !found {
+		return scan.Sweep{}, false
+	}
+	module, ok := media.Capability[media.Scanning](m.Registry, media.Key(category.MediaType))
+	if !ok {
+		return scan.Sweep{}, false
+	}
+	sweep := module.ScanSweep()
+	return sweep, sweep.Consumer != nil
 }

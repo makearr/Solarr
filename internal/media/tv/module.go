@@ -4,10 +4,26 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
-// Module is TV as the media registry sees it.
-type Module struct{}
+// Module is TV as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
+type Module struct {
+	Sweep scan.Sweep
+	// Retry identifies again the files that waited for review; nil leaves the job unregistered.
+	Retry *RetryJob
+}
+
+// ScanSweep implements media.Scanning.
+func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
+
+// RegisterJobs implements media.Jobs.
+func (m Module) RegisterJobs(register media.JobRegistrar) error {
+	if m.Retry == nil {
+		return nil
+	}
+	return register(RetryDefinition, m.Retry)
+}
 
 // Descriptor implements media.Module.
 func (Module) Descriptor() media.Descriptor {

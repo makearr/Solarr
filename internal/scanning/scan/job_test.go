@@ -191,8 +191,8 @@ func (f *jobFixture) job(t *testing.T, include func(string) bool) *scan.Job {
 	t.Helper()
 	return scan.NewJob(scan.Config{
 		FS: f.fsys, Scans: library.NewScans(f.store), Roots: f.roots,
-		Tool: f.tool, Consumer: f.recorder, Physical: library.NewPhysical(f.store),
-		Clock: f.clock, Logger: slog.New(slog.DiscardHandler), Include: include,
+		Tool: f.tool, Sweeps: scan.Always{Consumer: f.recorder, Include: include}, Physical: library.NewPhysical(f.store),
+		Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
 
@@ -302,9 +302,9 @@ func TestJob_TellsOnSweptAfterASweep(t *testing.T) {
 	told := 0
 	handler := scan.NewJob(scan.Config{
 		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
-		Tool: fixture.tool, Consumer: fixture.recorder, Physical: library.NewPhysical(fixture.store),
-		Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler), Include: scan.IsAudio,
-		OnSwept: func(context.Context) { told++ },
+		Tool: fixture.tool, Physical: library.NewPhysical(fixture.store),
+		Sweeps: scan.Always{Consumer: fixture.recorder, Include: scan.IsAudio, OnSwept: func(context.Context) { told++ }},
+		Clock:  fixture.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 
 	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
@@ -586,5 +586,50 @@ func TestJob_RescansOnlyTheNamedDirectoriesAndRecordsNoProgress(t *testing.T) {
 	}
 	if progress := fixture.progress(t); progress != (library.ScanProgress{RootFolderID: 1}) {
 		t.Errorf("progress = %+v, want none recorded by a scoped rescan", progress)
+	}
+}
+
+// byCategory answers a sweep only for the categories it lists.
+type byCategory map[int64]scan.Sweep
+
+func (b byCategory) SweepFor(categoryID int64) (scan.Sweep, bool) {
+	sweep, found := b[categoryID]
+	return sweep, found
+}
+
+// A library's media type decides who is handed its files; a second type's consumer must see none of them.
+func TestJob_HandsTheFilesToTheSweepOfTheCategory(t *testing.T) {
+	fixture := newJobFixture(t, "A Folder/01.flac")
+	other := &recorder{}
+	handler := scan.NewJob(scan.Config{
+		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
+		Tool: fixture.tool, Physical: library.NewPhysical(fixture.store),
+		Sweeps: byCategory{7: {Consumer: fixture.recorder}, 8: {Consumer: other}},
+		Clock:  fixture.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, CategoryID: 7, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := [2]int{fixture.recorder.batches, other.batches}; got != [2]int{1, 0} {
+		t.Errorf("batches handed to (category 7, category 8) = %v, want [1 0]", got)
+	}
+}
+
+// A category whose media type has no module cannot be scanned, and retrying will not change that.
+func TestJob_RefusesACategoryNoMediaTypeScans(t *testing.T) {
+	fixture := newJobFixture(t, "A Folder/01.flac")
+	handler := scan.NewJob(scan.Config{
+		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
+		Tool: fixture.tool, Physical: library.NewPhysical(fixture.store), Sweeps: byCategory{},
+		Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+
+	err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, CategoryID: 9, Full: true})
+	if jobs.Classify(err) != jobs.ClassTerminal {
+		t.Fatalf("Run = %v, want a terminal error", err)
+	}
+	if fixture.recorder.batches != 0 {
+		t.Errorf("consumer was handed %d batches, want none", fixture.recorder.batches)
 	}
 }

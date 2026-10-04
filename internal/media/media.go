@@ -6,7 +6,9 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 // Key names a media type and equals category.media_type.
@@ -66,6 +68,19 @@ type Naming interface {
 	DefaultNamingProfile() settings.NamingProfile
 	ValidateNaming(profile settings.NamingProfile) error
 	NamingExamples(profile settings.NamingProfile) []NamingExample
+}
+
+// Scanning is the capability of a media type whose libraries are swept on disk.
+type Scanning interface {
+	ScanSweep() scan.Sweep
+}
+
+// JobRegistrar takes one job type with its handler.
+type JobRegistrar func(definition jobs.Definition, handler jobs.Handler) error
+
+// Jobs is the capability of a media type that brings job types of its own.
+type Jobs interface {
+	RegisterJobs(register JobRegistrar) error
 }
 
 // Registry holds the media types compiled into the binary, in registration order.

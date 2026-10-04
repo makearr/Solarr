@@ -4,13 +4,19 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 // MediaType is music's key: category.media_type and work.media_type carry it.
 const MediaType media.Key = "music"
 
-// Module is music as the media registry sees it.
-type Module struct{}
+// Module is music as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
+type Module struct {
+	Sweep scan.Sweep
+}
+
+// ScanSweep implements media.Scanning.
+func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
 
 // Descriptor implements media.Module.
 func (Module) Descriptor() media.Descriptor {

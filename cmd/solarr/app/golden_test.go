@@ -26,6 +26,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/egress"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // updateGolden rewrites testdata/golden from what the server answers now: go test ./cmd/solarr/app -run Golden -update.
@@ -63,14 +64,10 @@ func newGoldenServer(t *testing.T) goldenServer {
 	loaded.Security.AuthMode = config.AuthNone
 	loaded.Network.PublicIPCheck.Enabled = false
 
-	registered, err := registeredMedia()
-	if err != nil {
-		t.Fatalf("registeredMedia: %v", err)
-	}
 	ring := logbuffer.NewRing(slog.DiscardHandler, 16)
 	running := &process{
 		build: Build{Version: "golden"}, config: loaded, fsys: fsx.NewOS(), logger: slog.New(ring), logRing: ring,
-		timezone: "UTC", configPath: filepath.Join(root, "config.yml"), media: registered,
+		timezone: "UTC", configPath: filepath.Join(root, "config.yml"), tool: mediatool.New(nil, 0),
 	}
 	t.Cleanup(running.close)
 
@@ -79,6 +76,9 @@ func newGoldenServer(t *testing.T) goldenServer {
 	}
 	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
 		t.Fatalf("ensureDefaultQualityProfile: %v", err)
+	}
+	if err := running.registerMedia(); err != nil {
+		t.Fatalf("registerMedia: %v", err)
 	}
 	if err := running.startJobs(ctx); err != nil {
 		t.Fatalf("startJobs: %v", err)

@@ -42,7 +42,7 @@ var allowedInternalImports = map[string][]string{
 	"cmd/solarr/adapters": {
 		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
-		"internal/media", "internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
+		"internal/media", "internal/scanning/scan", "internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/media/music", "internal/media/tv", "internal/metadata/tmdb", "internal/moving/naming", "internal/api/apiserver/gen", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/musicbrainz",
 		"internal/moving/drainjob", "internal/moving/linker", "internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob",
@@ -316,7 +316,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/anilist": {"internal/platform/httpx"},
 	// The TV module (stage 8): provider records merged into series, written through db/library.
 	// The media-type registry: what core asks instead of naming a type (ADR-23).
-	"internal/media":    {"internal/db/settings", "internal/identify/model", "internal/moving/naming"},
+	"internal/media":    {"internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
 	"internal/media/tv": {"internal/media", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// Sonarr's TheTVDB proxy (T4): the preferred TV source, never required.
 	"internal/metadata/skyhook": {"internal/platform/httpx"},

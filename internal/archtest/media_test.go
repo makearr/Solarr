@@ -46,7 +46,6 @@ var directWiredMediaFiles = []string{
 	"cmd/solarr/app/job_mover.go",
 	"cmd/solarr/app/job_plan.go",
 	"cmd/solarr/app/job_poll.go",
-	"cmd/solarr/app/job_scan.go",
 	"cmd/solarr/app/job_search.go",
 	"cmd/solarr/app/job_subscription.go",
 	"cmd/solarr/app/job_tagwriteback.go",

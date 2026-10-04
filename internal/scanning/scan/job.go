@@ -29,15 +29,6 @@ var Definition = jobs.Definition{
 	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
 }
 
-// TVJobType is the registered type of a TV library scan: the same sweep with the TV module's consumer.
-const TVJobType = jobs.Type("library.scan.tv")
-
-// TVDefinition declares the TV scan, bulk work like the music one.
-var TVDefinition = jobs.Definition{
-	Name: "Scanning the TV library",
-	Type: TVJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
-}
-
 // Payload is what a scan job carries.
 type Payload struct {
 	RootFolderID int64 `json:"root_folder_id"`
@@ -95,39 +86,50 @@ type SweepOutcome struct {
 	EmptyDirectories []string
 }
 
+// Sweep is what a media type brings to the sweep of its libraries (ADR-23).
+type Sweep struct {
+	Consumer Consumer
+	// Include decides which files are worth probing. Nil takes everything.
+	Include func(relPath string) bool
+	// Housekeeping is optional.
+	Housekeeping Housekeeping
+	// OnSwept is optional: told after every sweep of a root, so derived counts catch up at once.
+	OnSwept func(context.Context)
+}
+
+// Sweeps answers the sweep of the media type a category holds; false when no media type scans it.
+type Sweeps interface {
+	SweepFor(categoryID int64) (Sweep, bool)
+}
+
+// Always is the Sweeps of a process with a single sweep, whatever the category.
+type Always Sweep
+
+// SweepFor implements Sweeps.
+func (a Always) SweepFor(int64) (Sweep, bool) { return Sweep(a), true }
+
 // Job sweeps one root folder per run: the first job handler in the codebase.
 type Job struct {
 	sweeper  Sweeper
 	scans    library.Scans
 	roots    Roots
 	tool     mediatool.Tool
-	consumer Consumer
+	sweeps   Sweeps
 	physical library.Physical
 	clock    clock.Clock
 	logger   *slog.Logger
-	// housekeeping is optional.
-	housekeeping Housekeeping
-	onSwept      func(context.Context)
-
-	// include decides which files are worth probing. Nil takes everything.
-	include func(relPath string) bool
 }
 
-// Config is what a Job needs. Every field is required except Include and Logger.
+// Config is what a Job needs. Every field is required except Logger.
 type Config struct {
 	FS       fsx.FS
 	Scans    library.Scans
 	Roots    Roots
 	Tool     mediatool.Tool
-	Consumer Consumer
+	Sweeps   Sweeps
 	Physical library.Physical
 	Clock    clock.Clock
 	Logger   *slog.Logger
-	Include  func(relPath string) bool
-	// Housekeeping is optional.
-	Housekeeping Housekeeping
-	// OnSwept is optional: told after every sweep of a root, so derived counts catch up at once.
-	OnSwept func(context.Context)
 }
 
 // NewJob builds the handler.
@@ -141,14 +143,10 @@ func NewJob(config Config) *Job {
 		scans:    config.Scans,
 		roots:    config.Roots,
 		tool:     config.Tool,
-		consumer: config.Consumer,
+		sweeps:   config.Sweeps,
 		physical: config.Physical,
 		clock:    config.Clock,
 		logger:   logger,
-		include:  config.Include,
-
-		housekeeping: config.Housekeeping,
-		onSwept:      config.OnSwept,
 	}
 }
 
@@ -174,8 +172,15 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			fmt.Errorf("root folder %d (%s) is offline", root.ID, root.Path))
 	}
 
+	sweep, found := j.sweeps.SweepFor(payload.CategoryID)
+	if !found {
+		// A library whose media type has no module will not gain one on a retry.
+		return jobs.Terminalf("scan.media_type", string(job.Type),
+			fmt.Errorf("no media type scans category %d", payload.CategoryID))
+	}
+
 	if len(payload.Directories) > 0 {
-		return j.rescanDirectories(ctx, root, payload, job.Progress)
+		return j.rescanDirectories(ctx, root, sweep, payload, job.Progress)
 	}
 
 	progress, err := j.scans.Progress(ctx, root.ID)
@@ -193,7 +198,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	flow := pipeline{
 		observe: func(ctx context.Context, batch Batch) error {
-			if err := j.observe(ctx, root, payload.CategoryID, batch); err != nil {
+			if err := j.observe(ctx, root, sweep.Consumer, payload.CategoryID, batch); err != nil {
 				return err
 			}
 			job.Progress.Add(int64(len(batch.Files)))
@@ -202,7 +207,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		advance: func(ctx context.Context, directory string) error { return j.scans.Advance(ctx, root.ID, directory) },
 	}
 	result, err := j.sweeper.Sweep(ctx, root.Path, state,
-		Options{Full: payload.Full, Include: j.include}, flow.submit)
+		Options{Full: payload.Full, Include: sweep.Include}, flow.submit)
 	if waited := flow.wait(ctx); err == nil {
 		err = waited
 	}
@@ -236,13 +241,13 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		j.markMissing(ctx, root, result.State.SweptThrough)
 		outcome.MissingSince = result.State.SweptThrough
 	}
-	if j.housekeeping != nil {
-		if err := j.housekeeping.AfterSweep(ctx, root, payload.CategoryID, outcome); err != nil {
+	if sweep.Housekeeping != nil {
+		if err := sweep.Housekeeping.AfterSweep(ctx, root, payload.CategoryID, outcome); err != nil {
 			j.logger.Warn("scan housekeeping failed", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
 		}
 	}
-	if j.onSwept != nil {
-		j.onSwept(ctx)
+	if sweep.OnSwept != nil {
+		sweep.OnSwept(ctx)
 	}
 	return nil
 }
@@ -251,7 +256,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 // no scan progress: it did not walk the root, so it is no evidence about the
 // rest of it, and marks nothing missing.
 func (j *Job) rescanDirectories(
-	ctx context.Context, root settings.RootFolder, payload Payload, progress *jobs.Progress,
+	ctx context.Context, root settings.RootFolder, sweep Sweep, payload Payload, progress *jobs.Progress,
 ) error {
 	files := 0
 	progress.SetTotal(int64(len(payload.Directories)))
@@ -260,14 +265,14 @@ func (j *Job) rescanDirectories(
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("scan.context", string(JobType), err)
 		}
-		batch, err := j.sweeper.ReadDirectory(root.Path, directory, j.include)
+		batch, err := j.sweeper.ReadDirectory(root.Path, directory, sweep.Include)
 		if err != nil {
 			return err
 		}
 		if len(batch.Files) == 0 {
 			continue
 		}
-		if err := j.observe(ctx, root, payload.CategoryID, batch); err != nil {
+		if err := j.observe(ctx, root, sweep.Consumer, payload.CategoryID, batch); err != nil {
 			return err
 		}
 		files += len(batch.Files)
@@ -294,7 +299,7 @@ func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptTh
 }
 
 // observe probes one batch in a single mediatool call and hands it to the consumer.
-func (j *Job) observe(ctx context.Context, root settings.RootFolder, categoryID int64, batch Batch) error {
+func (j *Job) observe(ctx context.Context, root settings.RootFolder, consumer Consumer, categoryID int64, batch Batch) error {
 	paths := make([]string, len(batch.Files))
 	for index, file := range batch.Files {
 		paths[index] = path.Join(root.Path, file.RelPath)
@@ -326,7 +331,7 @@ func (j *Job) observe(ctx context.Context, root settings.RootFolder, categoryID 
 			slog.Int("unreadable", unreadable), slog.Int("of", len(batch.Files)))
 	}
 
-	return j.consumer.Observe(ctx, root, categoryID, observed)
+	return consumer.Observe(ctx, root, categoryID, observed)
 }
 
 // AudioExtensions are the containers stage 3 reads. It is an Include function rather
@@ -363,20 +368,6 @@ func EnqueueDirectories(
 	return queue.Enqueue(ctx, jobs.Request{
 		Type:      JobType,
 		ActionKey: fmt.Sprintf("%s:directories:%x", ActionKeyFor(rootFolderID), digest[:8]),
-		Priority:  jobs.PriorityLow,
-		Payload:   payload,
-	})
-}
-
-// EnqueueTV submits a TV scan of one root, deduplicated per root like Enqueue.
-func EnqueueTV(ctx context.Context, queue *jobs.Queue, rootFolderID, categoryID int64, full bool) (jobs.EnqueueResult, error) {
-	payload, err := json.Marshal(Payload{RootFolderID: rootFolderID, CategoryID: categoryID, Full: full})
-	if err != nil {
-		return jobs.EnqueueResult{}, fmt.Errorf("scan: encode payload: %w", err)
-	}
-	return queue.Enqueue(ctx, jobs.Request{
-		Type:      TVJobType,
-		ActionKey: fmt.Sprintf("%s:%d", TVJobType, rootFolderID),
 		Priority:  jobs.PriorityLow,
 		Payload:   payload,
 	})

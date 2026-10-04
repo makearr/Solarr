@@ -8,105 +8,50 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/media/music"
-	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
-// registerScanJob wires the first job handler in the codebase into the registry and
-// the executor: the library sweep, its music consumer, and the tools it probes files
-// with. The registry entry is required before Enqueue will accept the type at all
-// (Queue.Enqueue looks the definition up to route it).
+// registerScanJob wires the library sweep: one job for every media type, which hands each library's files to the
+// sweep its own type declares. The registry entry is required before Enqueue will accept the type at all.
 func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(scan.Definition); err != nil {
 		return err
 	}
-	tool := mediatool.New(nil, 0)
-	reportToolReadiness(ctx, tool, p.logger)
-	physical := library.NewPhysical(p.library)
-	provider := p.musicBrainzProvider()
-	desired := library.NewDesired(p.library)
-	people := library.NewPeople(p.library)
-	attempts := library.NewAttempts(p.library)
-	consumer := music.NewConsumer(music.ConsumerConfig{
-		FS:           p.fsys,
-		Physical:     physical,
-		Identity:     library.NewIdentity(p.library),
-		Unidentified: library.NewUnidentified(p.library),
-		Attempts:     &attempts,
-		Search:       provider,
-		Albums:       provider,
-		Fingerprints: tool,
-		AcoustID:     p.acoustIDLookup(),
-		Tracks:       provider,
-		Clock:        clock.NewSystem(),
-		Logger:       p.logger,
-		// One identification threshold for scan and import (2026-09-24).
-		Threshold:  func() float64 { return p.cache.Snapshot().ImportAutoCommitConfidence() },
-		Desired:    &desired,
-		People:     &people,
-		Categories: adapters.Categories{Cache: p.cache},
-		// The user's own default when they haven't configured one for the
-		// category yet -- ensureDefaultQualityProfile seeded it at startup.
-		DefaultProfileID: p.defaultQualityProfileID,
-	})
-	job := scan.NewJob(scan.Config{
+	reportToolReadiness(ctx, p.tool, p.logger)
+	executor.Handle(scan.JobType, scan.NewJob(scan.Config{
 		FS:       p.fsys,
 		Scans:    library.NewScans(p.library),
 		Roots:    adapters.Roots{Cache: p.cache},
-		Tool:     tool,
-		Consumer: consumer,
-		Physical: physical,
+		Tool:     p.tool,
+		Sweeps:   adapters.MediaSweeps{Registry: p.media, Cache: p.cache},
+		Physical: library.NewPhysical(p.library),
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
-		Include:  scan.IsAudio,
-		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
-			FS: p.fsys, Categories: adapters.Categories{Cache: p.cache}, Roots: adapters.DrainRoots{Cache: p.cache},
-			Affinity: p.cache, Desired: &desired, Subscriptions: library.NewSubscriptions(p.library),
-			People: library.NewPeople(p.library), GroupID: lookupGroupID,
-		}),
-		// Enrichment follows at once, not at the next hourly run: a new library had no tracklists,
-		// photos or Wanted for up to an hour (found 2026-09-28).
-		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enqueueEnrichment(ctx) },
-	})
-	executor.Handle(scan.JobType, job)
-	return p.registerTVScanJob(registry, executor, tool, physical)
+	}))
+	return p.registerMediaJobs(registry, executor)
 }
 
-// registerTVScanJob wires the TV sweep: the same job with the TV module's consumer and video files.
-func (p *process) registerTVScanJob(registry *jobs.Registry, executor *jobs.Executor, tool mediatool.Tool, physical library.Physical) error {
-	if err := registry.Register(scan.TVDefinition); err != nil {
-		return err
+// registerMediaJobs registers the job types each media type brings of its own.
+func (p *process) registerMediaJobs(registry *jobs.Registry, executor *jobs.Executor) error {
+	register := func(definition jobs.Definition, handler jobs.Handler) error {
+		if err := registry.Register(definition); err != nil {
+			return err
+		}
+		executor.Handle(definition.Type, handler)
+		return nil
 	}
-	consumer := tv.NewConsumer(tv.ConsumerConfig{
-		FS: p.fsys, Physical: physical, Unidentified: library.NewUnidentified(p.library), Service: p.tvService(),
-		Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-	})
-	if err := registry.Register(tv.RetryDefinition); err != nil {
-		return err
+	for _, descriptor := range p.media.Descriptors() {
+		module, ok := media.Capability[media.Jobs](p.media, descriptor.Key)
+		if !ok {
+			continue
+		}
+		if err := module.RegisterJobs(register); err != nil {
+			return err
+		}
 	}
-	executor.Handle(tv.RetryJobType, tv.NewRetryJob(tv.RetryConfig{
-		Unidentified: library.NewUnidentified(p.library), Consumer: consumer, FS: p.fsys, Logger: p.logger,
-		Libraries: func() []tv.RetryLibrary {
-			snapshot := p.cache.Snapshot()
-			var libraries []tv.RetryLibrary
-			for _, category := range snapshot.Categories() {
-				if category.MediaType == tv.MediaType {
-					libraries = append(libraries, tv.RetryLibrary{CategoryID: category.ID, Roots: snapshot.RootFoldersForCategory(category.ID)})
-				}
-			}
-			return libraries
-		},
-	}))
-	job := scan.NewJob(scan.Config{
-		FS: p.fsys, Scans: library.NewScans(p.library), Roots: adapters.Roots{Cache: p.cache}, Tool: tool, Consumer: consumer,
-		Physical: physical, Clock: clock.NewSystem(), Logger: p.logger, Include: tv.IsVideo,
-		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
-	})
-	executor.Handle(scan.TVJobType, job)
 	return nil
 }
 
@@ -123,7 +68,7 @@ func reportToolReadiness(ctx context.Context, tool mediatool.Tool, logger *slog.
 }
 
 // enqueueLibraryScans submits an incremental sweep for every online root
-// folder attached to a music category. An incremental sweep of a root that
+// folder attached to a library whose media type is scanned. An incremental sweep of a root that
 // has never been swept reads everything regardless, so this is also what
 // makes a freshly attached root browsable. Registered as a task with
 // internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
@@ -143,7 +88,7 @@ func (p *process) enqueueFullLibraryScans(ctx context.Context) (jobs.EnqueueResu
 	return p.enqueueScans(ctx, true)
 }
 
-// enqueueScans fans out to several jobs, one per online music root, unlike
+// enqueueScans fans out to several jobs, one per online root, unlike
 // every other task in this file -- the aggregate EnqueueResult reports
 // Duplicate only when every attempted root was already active, and joins
 // every root's own error (each still logged individually below) rather than
@@ -154,7 +99,7 @@ func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResu
 	var errs []error
 	attempted, duplicates := 0, 0
 	for _, category := range snapshot.Categories() {
-		if category.MediaType != "music" && category.MediaType != "tv" {
+		if _, scanned := media.Capability[media.Scanning](p.media, media.Key(category.MediaType)); !scanned {
 			continue
 		}
 		for _, root := range snapshot.RootFoldersForCategory(category.ID) {
@@ -162,11 +107,7 @@ func (p *process) enqueueScans(ctx context.Context, full bool) (jobs.EnqueueResu
 				continue
 			}
 			attempted++
-			enqueue := scan.Enqueue
-			if category.MediaType == "tv" {
-				enqueue = scan.EnqueueTV
-			}
-			result, err := enqueue(ctx, p.queue, root.ID, category.ID, full)
+			result, err := scan.Enqueue(ctx, p.queue, root.ID, category.ID, full)
 			if err != nil {
 				p.logger.Warn("enqueue library scan",
 					slog.Int64("root_folder_id", root.ID), slog.Bool("full", full), slog.Any("error", err))

@@ -42,6 +42,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 	"github.com/makearr/Solarr/migrations"
@@ -75,6 +76,8 @@ type process struct {
 	// indexerCaps is what each indexer's music search accepts, fetched once a day.
 	indexerCaps *indexerCapsCache
 	cache       *settings.Cache
+	// tool runs the external media tools (ADR-30); one for the process.
+	tool mediatool.Tool
 	// media is every media type compiled in; core asks it instead of naming one.
 	media      *media.Registry
 	bus        *events.Bus
@@ -154,13 +157,9 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 
-	registered, err := registeredMedia()
-	if err != nil {
-		return err
-	}
 	running := &process{
 		build: build, config: loaded, fsys: fsys, logger: logger, logRing: logRing,
-		timezone: timezone, configPath: configPath, media: registered,
+		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
 	}
 	defer running.close()
 
@@ -168,6 +167,9 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
+		return err
+	}
+	if err := running.registerMedia(); err != nil {
 		return err
 	}
 	if abandoned, err := library.NewArrImports(running.library).AbandonRunning(ctx, clock.NewSystem().Now().Unix()); err != nil {
@@ -283,7 +285,6 @@ func (p *process) openDatabases(ctx context.Context) error {
 		return err
 	}
 	cache.EnableSecrets(cipher)
-	cache.EnableNamingValidation(adapters.NamingValidator(p.media))
 
 	// cache/metadata.db (ADR-2) is disposable -- unlike the three above, a
 	// corrupt copy is the operator's to delete, not OpenChecked's to restore
