@@ -75,17 +75,22 @@ export const SETTINGS: Section = {
 
 export const GLOBAL_SECTIONS: readonly Section[] = [ACTIVITY, STORAGE, CONNECTIONS, SETTINGS];
 
-/** A library's three entries after its own levels: what it lacks, its files, its configuration. */
+/** A library's four entries after its own levels: what it lacks, what happened and how it stands, its files, its
+ *  configuration. */
 export function librarySections(categoryId: string): readonly Section[] {
   const base = `/library/${categoryId}`;
   return [
     {
       key: `library:${categoryId}:wanted`,
       label: "Wanted",
+      tabs: [{ label: "Wanted", path: `${base}/wanted`, tier: "normal" }],
+    },
+    {
+      key: `library:${categoryId}:insights`,
+      label: "Insights",
       tabs: [
-        { label: "Wanted", path: `${base}/wanted`, tier: "normal" },
-        { label: "Activity", path: `${base}/activity`, tier: "advanced" },
         { label: "Statistics", path: `${base}/statistics`, tier: "normal" },
+        { label: "Activity", path: `${base}/activity`, tier: "advanced" },
       ],
     },
     {

@@ -5,7 +5,9 @@ import { entryTab, isAt, librarySections, pageTier, sectionAt, SETTINGS, STORAGE
 const labels = (tabs: readonly { label: string }[]) => tabs.map((tab) => tab.label);
 
 test("a tab the viewer may not open is absent", () => {
-  const [, files, settings] = librarySections("7");
+  const [, insights, files, settings] = librarySections("7");
+  expect(labels(visibleTabs(insights!, { tier: "normal", administrator: false }))).toEqual(["Statistics"]);
+  expect(labels(visibleTabs(insights!, { tier: "advanced", administrator: false }))).toEqual(["Statistics", "Activity"]);
   expect(labels(visibleTabs(files!, { tier: "normal", administrator: false }))).toEqual(["Unidentified"]);
   expect(labels(visibleTabs(files!, { tier: "advanced", administrator: false }))).toEqual(["Unidentified", "Duplicates"]);
   expect(labels(visibleTabs(files!, { tier: "expert", administrator: true }))).toEqual([
@@ -21,6 +23,7 @@ test("the page decides its section, and a library's unidentified files belong to
   expect(sectionAt({ path: "/quality-profiles" }, undefined)?.key).toBe("settings");
   expect(sectionAt({ path: "/library/7/config/naming" }, "7")?.key).toBe("library:7:settings");
   expect(sectionAt({ path: "/library/7/duplicates" }, "7")?.key).toBe("library:7:files");
+  expect(sectionAt({ path: "/library/7/activity" }, "7")?.key).toBe("library:7:insights");
   expect(sectionAt({ path: "/unidentified", categoryId: "7" }, "7")?.key).toBe("library:7:files");
   expect(sectionAt({ path: "/unidentified" }, undefined)?.key).toBe("storage");
   expect(sectionAt({ path: "/library/7/albums" }, "7")).toBeUndefined();

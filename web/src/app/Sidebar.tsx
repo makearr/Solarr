@@ -303,7 +303,7 @@ function LibraryNode({
               </Link>
             </li>
           ))}
-          {/* After its own levels every library has the same three entries, each with tabs (2026-10-04). */}
+          {/* After its own levels every library has the same four entries, each with tabs (2026-10-04). */}
           {librarySections(categoryId).map((section) => {
             const tab = entryTab(section, { tier, administrator });
             if (!tab) return null;
