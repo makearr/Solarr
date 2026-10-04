@@ -2,15 +2,12 @@ package tv
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
-	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // Grab is Sonarr's automatic search: search one season, then send its best accepted release to a download client.
@@ -54,61 +51,32 @@ func (g Grab) SearchEpisodeAndSend(ctx context.Context, itemID int64, episode in
 	return g.sendBest(ctx, itemID, found, origin, at)
 }
 
+// sendBest sends found's best accepted release, or holds it when origin may wait; the search persists best first.
 func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult, origin dispatch.GrabOrigin, at time.Time) (GrabResult, error) {
-	headroom, gated, err := g.headroom(ctx, itemID, origin)
+	room, err := g.headroom(ctx, itemID, origin)
 	if err != nil {
 		return GrabResult{Search: found}, fmt.Errorf("tv: grab item %d: %w", itemID, err)
 	}
-	refused, noRoom := 0, 0
-	var refusals []string
-	for _, detail := range found.Decisions {
-		if detail.Decision.Outcome != string(model.OutcomeAccept) {
-			continue
-		}
-		if size := detail.ReleaseCandidate.SizeBytes; gated && size != nil && *size > headroom {
-			noRoom++
-			continue
-		}
-		if held, err := g.Dispatch.HoldIfFull(ctx, itemID, detail, origin, at); err != nil {
-			return GrabResult{Search: found}, fmt.Errorf("tv: grab item %d: %w", itemID, err)
-		} else if held {
-			return GrabResult{Search: found, Held: true}, nil
-		}
-		sent, err := g.Dispatch.Send(ctx, itemID, detail.Decision.ID, at)
-		switch {
-		case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
-			return GrabResult{Search: found, AlreadyInFlight: true}, nil
-		case errors.Is(err, dispatch.ErrNoDownloaderForProtocol):
-			continue
-		case errors.Is(err, download.ErrRefused), errors.Is(err, dispatch.ErrContentBlocklisted):
-			refused++
-			refusals = append(refusals, detail.ReleaseCandidate.Title+": "+err.Error())
-			continue
-		case err != nil:
-			return GrabResult{Search: found, Refused: refused, Refusals: refusals}, fmt.Errorf("tv: grab item %d: %w", itemID, err)
-		}
-		return GrabResult{Search: found, Sent: &sent, Refused: refused, NoRoom: noRoom, Refusals: refusals}, nil
+	best, err := g.Dispatch.SendBest(ctx, itemID, found.Decisions, room, origin, at)
+	result := GrabResult{
+		Search: found, Sent: best.Sent, AlreadyInFlight: best.AlreadyInFlight, Held: best.Held,
+		Refused: best.Refused, NoRoom: best.NoRoom, Refusals: best.Refusals,
 	}
-	return GrabResult{Search: found, Refused: refused, NoRoom: noRoom, Refusals: refusals}, nil
+	if err != nil {
+		return result, fmt.Errorf("tv: grab item %d: %w", itemID, err)
+	}
+	return result, nil
 }
 
-// headroom is how much an automatic grab may bring in (ADR-12: free space is a hard precondition); a person's own
-// grab is never gated.
-func (g Grab) headroom(ctx context.Context, itemID int64, origin dispatch.GrabOrigin) (int64, bool, error) {
+// headroom is how much an automatic grab for itemID may bring in; a person's own grab is never gated.
+func (g Grab) headroom(ctx context.Context, itemID int64, origin dispatch.GrabOrigin) (dispatch.Headroom, error) {
 	if origin == dispatch.GrabUser || g.Search.Settings == nil {
-		return 0, false, nil
+		return dispatch.Headroom{}, nil
 	}
 	item, err := g.Search.Desired.Get(ctx, itemID)
 	if err != nil {
-		return 0, false, err
+		return dispatch.Headroom{}, err
 	}
-	bytes, gated := g.Search.Settings.Snapshot().AcquisitionHeadroom(item.CategoryID)
-	if !gated {
-		return 0, false, nil
-	}
-	inFlight, err := g.Dispatch.Acquisitions.InFlightBytes(ctx, item.CategoryID)
-	if err != nil {
-		return 0, false, err
-	}
-	return bytes - inFlight, true, nil
+	free, measured := g.Search.Settings.Snapshot().AcquisitionHeadroom(item.CategoryID)
+	return g.Dispatch.HeadroomFor(ctx, item.CategoryID, origin, free, measured)
 }
