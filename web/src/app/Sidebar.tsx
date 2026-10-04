@@ -495,17 +495,19 @@ function LibraryNode({
             </Link>
           </li>
 
+          {isTierVisible(tier, "expert") && (
+            <li>
+              <Link
+                to="/library/$categoryId/packs"
+                params={{ categoryId }}
+                className={sectionLinkClass(isActive && activePath === `/library/${library.id}/packs`, false)}
+              >
+                <span className="truncate">Packs</span>
+              </Link>
+            </li>
+          )}
           {isTierVisible(tier, "advanced") && (
             <>
-              <li>
-                <Link
-                  to="/library/$categoryId/packs"
-                  params={{ categoryId }}
-                  className={sectionLinkClass(isActive && activePath === `/library/${library.id}/packs`, false)}
-                >
-                  <span className="truncate">Packs</span>
-                </Link>
-              </li>
               <li>
                 <Link
                   to="/library/$categoryId/duplicates"

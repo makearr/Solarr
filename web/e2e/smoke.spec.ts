@@ -67,7 +67,7 @@ test("the default tier shows the whole library tree", async ({ page }) => {
   for (const entry of ["Artists", "Albums", "Tracks", "Wanted", "Unidentified"]) {
     await expect(nav.getByRole("link", { name: entry, exact: true })).toBeVisible();
   }
-  // Advanced: Packs by decision D4, Import by the 2026-09-25 review, so their absence is the assertion.
+  // Packs: expert only, backend kept (2026-10-04); Import advanced, Import by the 2026-09-25 review, so their absence is the assertion.
   for (const entry of ["Packs", "Import"]) {
     await expect(nav.getByRole("link", { name: entry, exact: true })).toBeHidden();
   }
