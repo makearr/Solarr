@@ -142,7 +142,6 @@ func (j CutoffJob) settle(ctx context.Context, snapshot *settings.Snapshot, item
 	if err != nil {
 		return 0, err
 	}
-	rules = judge.WithLibraryTarget(rules, snapshot, item.CategoryID)
 	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
 	recycled := 0
 	for _, episode := range byEpisode {

@@ -346,7 +346,6 @@ func (s Search) yardstick(ctx context.Context, item librarydb.DesiredItem, w wan
 	if err != nil {
 		return yardstick{}, err
 	}
-	rules = judge.WithLibraryTarget(rules, snapshot, item.CategoryID)
 	built := yardstick{
 		wanted: w, titles: w.titles(), rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID),
 		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{},

@@ -31,8 +31,31 @@ func TestWithTarget_TheTargetsResolutionAndCodecLeadTheRanking(t *testing.T) {
 	if len(rules.Tiers["resolution"]) != 3 || rules.Compare[0] != "resolution" {
 		t.Error("the profile's own rules were changed")
 	}
-	if same := judge.WithTarget(rules, settings.QualityTarget{AudioCodec: "aac", Container: "m4a"}); !slices.Equal(same.Compare, rules.Compare) {
-		t.Errorf("an audio target changed the comparison: %v", same.Compare)
+}
+
+// An audio library's target leads its ranking too (2026-10-04): the codec it names is the best one, and the bitrate
+// nearest to it wins among equals. A video target's audio codec is left to the profile.
+func TestWithTarget_AnAudioTargetsCodecAndBitrateLeadTheRanking(t *testing.T) {
+	rules := score.Profile{
+		Compare: []string{"audio_codec", "score"},
+		Tiers:   map[string][][]string{"audio_codec": {{"flac"}, {"mp3", "aac"}}},
+	}
+	bitrate := int64(256)
+	got := judge.WithTarget(rules, settings.QualityTarget{AudioCodec: "aac", Container: "m4a", BitrateKbps: &bitrate})
+	if !slices.Equal(got.Compare, []string{"audio_codec", "overall_bitrate_distance", "score"}) {
+		t.Errorf("compare = %v, want the codec, then the distance from the target bitrate", got.Compare)
+	}
+	want := [][]string{{"aac"}, {"flac"}, {"mp3"}}
+	if tiers := got.Tiers["audio_codec"]; len(tiers) != 3 || !slices.Equal(tiers[0], want[0]) || !slices.Equal(tiers[1], want[1]) || !slices.Equal(tiers[2], want[2]) {
+		t.Errorf("audio codec tiers = %v, want %v", got.Tiers["audio_codec"], want)
+	}
+	if ideal := got.Targets["overall_bitrate"]; len(ideal) != 1 || ideal[0].Ideal != "256kbps" {
+		t.Errorf("overall bitrate target = %+v, want 256kbps", ideal)
+	}
+
+	video := judge.WithTarget(rules, settings.QualityTarget{Resolution: "1080p", AudioCodec: "aac"})
+	if tiers := video.Tiers["audio_codec"]; !slices.Equal(tiers[0], []string{"flac"}) {
+		t.Errorf("a video target reordered the audio codecs: %v", tiers)
 	}
 }
 

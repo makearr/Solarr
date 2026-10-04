@@ -19,12 +19,16 @@ func kbps(value *int64) string {
 	return strconv.FormatInt(*value, 10) + "kbps"
 }
 
-// WithTarget makes a video library's target the first thing releases are ranked by: the resolution, video codec and
-// HDR the target names each become the best tier of their dimension, and those dimensions lead the comparison. The
-// profile's own gates stay: a target never lets through what the profile refuses.
+// WithTarget makes a library's target the first thing releases are ranked by: what the target names (resolution,
+// video codec and HDR for video; the audio codec for an audio library) becomes the best tier of its dimension, and
+// those dimensions lead the comparison. The profile's own gates stay: a target never lets through what it refuses.
 func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profile {
 	named := []struct{ dimension, value string }{
 		{"resolution", target.Resolution}, {"video_codec", target.VideoCodec}, {"hdr", target.HDR}, {"audio_channels", target.AudioChannels},
+	}
+	audio := !target.IsVideo()
+	if audio {
+		named = append(named, struct{ dimension, value string }{"audio_codec", target.AudioCodec})
 	}
 	tiers := make(map[string][][]string, len(rules.Tiers)+len(named))
 	for dimension, groups := range rules.Tiers {
@@ -58,6 +62,8 @@ func WithTarget(rules score.Profile, target settings.QualityTarget) score.Profil
 		{"video_bitrate", kbps(target.VideoBitrateKbps), target.VideoBitrateKbps != nil},
 		{"audio_bitrate", kbps(target.AudioBitrateKbps), target.AudioBitrateKbps != nil},
 		{"frame_rate", strconv.FormatFloat(target.FrameRate, 'f', -1, 64), target.FrameRate > 0},
+		// An audio library's one bitrate is the whole file's, which is also what a release name claims.
+		{"overall_bitrate", kbps(target.BitrateKbps), audio && target.BitrateKbps != nil},
 	} {
 		if !entry.set {
 			continue
