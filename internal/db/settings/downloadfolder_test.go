@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/config"
 )
 
 func TestCreateDownloadFolder_RoundTrips(t *testing.T) {
@@ -108,5 +109,33 @@ func TestGetDownloadFolder_MissingIDAnswersNoRows(t *testing.T) {
 
 	if _, err := cache.GetDownloadFolder(t.Context(), 999); err == nil {
 		t.Fatal("err = nil, want an error for an unknown id")
+	}
+}
+
+// A watched folder's downloads are imported into the library it names, so watching without one is refused, on
+// creating and on changing a folder alike; nothing is guessed.
+func TestDownloadFolder_WatchingNeedsALibrary(t *testing.T) {
+	cache, _ := newCache(t)
+	library, err := cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+
+	_, err = cache.CreateDownloadFolder(t.Context(), settings.DownloadFolderRequest{Path: "/downloads/a", Readable: true, Watch: true})
+	var problems config.Problems
+	if !errors.As(err, &problems) || len(problems) != 1 || problems[0].Path != "category_id" {
+		t.Fatalf("creating a watched folder without a library = %v, want one problem on category_id", err)
+	}
+
+	unwatched, err := cache.CreateDownloadFolder(t.Context(), settings.DownloadFolderRequest{Path: "/downloads/b", Readable: true})
+	if err != nil {
+		t.Fatalf("CreateDownloadFolder: %v", err)
+	}
+	if _, err := cache.UpdateDownloadFolder(t.Context(), unwatched.ID, settings.DownloadFolderUpdate{Watch: true}); !errors.As(err, &problems) {
+		t.Errorf("watching an existing folder without a library = %v, want it refused", err)
+	}
+	watched, err := cache.UpdateDownloadFolder(t.Context(), unwatched.ID, settings.DownloadFolderUpdate{Watch: true, CategoryID: &library.ID})
+	if err != nil || !watched.Watch || watched.CategoryID == nil || *watched.CategoryID != library.ID {
+		t.Errorf("watching with a library = %+v, %v, want it watched for library %d", watched, err, library.ID)
 	}
 }

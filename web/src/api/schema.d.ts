@@ -8299,10 +8299,10 @@ export interface operations {
                     label?: string;
                     /**
                      * Format: int64
-                     * @description The library hint; absent means any library.
+                     * @description The library what lands in the folder is imported into; a watched folder must name one.
                      */
                     category_id?: number;
-                    /** @default true */
+                    /** @description Absent means watched when a library is named, and not watched otherwise. */
                     watch?: boolean;
                     /** @description This folder's own transfer order; absent means the Import screen's. */
                     transfer_ladder?: string[];

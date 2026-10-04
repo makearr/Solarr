@@ -911,8 +911,10 @@ paths:
                 category_id:
                   type: integer
                   format: int64
-                  description: The library hint; absent means any library.
-                watch: { type: boolean, default: true }
+                  description: The library what lands in the folder is imported into; a watched folder must name one.
+                watch:
+                  type: boolean
+                  description: Absent means watched when a library is named, and not watched otherwise.
                 transfer_ladder:
                   type: array
                   description: This folder's own transfer order; absent means the Import screen's.

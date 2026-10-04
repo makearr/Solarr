@@ -57,7 +57,16 @@ func validateDownloadFolder(request DownloadFolderRequest) config.Problems {
 	if request.TransferLadder != nil {
 		problems = append(problems, validateImportTransferLadder(request.TransferLadder)...)
 	}
-	return problems
+	return append(problems, validateWatchedFolder(request.Watch, request.CategoryID)...)
+}
+
+// validateWatchedFolder refuses watching a folder that names no library: what lands in it is imported into the
+// library it names, and guessing one could file a download in the wrong place.
+func validateWatchedFolder(watch bool, categoryID *int64) config.Problems {
+	if !watch || categoryID != nil {
+		return nil
+	}
+	return config.Problems{{Path: "category_id", Expectation: "a library: a watched folder imports into the one it names"}}
 }
 
 // encodeLadder stores nil as NULL, meaning the Import screen's order.
@@ -141,6 +150,9 @@ func (c *Cache) UpdateDownloadFolder(ctx context.Context, id int64, update Downl
 		if problems := validateImportTransferLadder(update.TransferLadder); len(problems) > 0 {
 			return DownloadFolder{}, problems
 		}
+	}
+	if problems := validateWatchedFolder(update.Watch, update.CategoryID); len(problems) > 0 {
+		return DownloadFolder{}, problems
 	}
 	if _, err := c.GetDownloadFolder(ctx, id); err != nil {
 		return DownloadFolder{}, err

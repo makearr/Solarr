@@ -50,8 +50,8 @@ export function DownloadFolders() {
         <h1 className="text-lg font-semibold">Download folders</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
           Folders your download clients write to. A watched folder is checked every five minutes:
-          anything in it that has not changed for ten minutes is imported once, and shows up under
-          Import like any other import. Solarr only reads here, unless an import method lets it Move.
+          anything in it that has not changed for ten minutes is imported once into the library the folder
+          names, and shows up under Import like any other import. A folder must name a library to be watched. Solarr only reads here, unless an import method lets it Move.
         </p>
       </header>
 
@@ -180,7 +180,8 @@ function DownloadFolderCard({
           <input
             type="checkbox"
             checked={folder.watch}
-            disabled={update.isPending}
+            disabled={update.isPending || (folder.category_id == null && !folder.watch)}
+            title={folder.category_id == null ? "Choose the library this folder's downloads go into first" : undefined}
             onChange={(event) => update.mutate({ watch: event.target.checked })}
           />
           Watch for imports
@@ -191,11 +192,14 @@ function DownloadFolderCard({
             value={folder.category_id ?? ""}
             disabled={update.isPending}
             onChange={(event) =>
-              update.mutate({ category_id: event.target.value === "" ? undefined : Number(event.target.value) })
+              // Without a library nothing says where a download belongs, so watching stops with it.
+              update.mutate(
+                event.target.value === "" ? { category_id: undefined, watch: false } : { category_id: Number(event.target.value) },
+              )
             }
             className={inputStyle}
           >
-            <option value="">All libraries</option>
+            <option value="">No library</option>
             {libraries.map((library) => (
               <option key={library.id} value={library.id}>
                 {library.name}
@@ -203,6 +207,10 @@ function DownloadFolderCard({
             ))}
           </select>
         </label>
+        {folder.watch && folder.category_id == null && (
+          <span className="text-warn">Nothing is imported from this folder until it names a library.</span>
+        )}
+        {update.isError && <span className="text-danger">The change was refused.</span>}
         <label className="flex items-center gap-1.5">
           <input
             type="checkbox"

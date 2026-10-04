@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/downloadwatch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
@@ -19,7 +18,6 @@ func (p *process) registerDownloadWatchJob(registry *jobs.Registry, executor *jo
 	}
 	executor.Handle(downloadwatch.JobType, downloadwatch.NewJob(downloadwatch.Config{
 		Folders: p.cache, FS: p.fsys, Sessions: library.NewImportSessions(p.library),
-		Libraries: adapters.Categories{Cache: p.cache},
 		Enqueue: func(ctx context.Context, payload importjob.Payload) error {
 			_, err := importjob.Enqueue(ctx, p.queue, payload)
 			return err

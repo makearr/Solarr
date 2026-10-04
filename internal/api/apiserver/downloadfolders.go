@@ -76,7 +76,11 @@ func (s *Server) AddDownloadFolder(w http.ResponseWriter, r *http.Request) {
 
 	request := settings.DownloadFolderRequest{
 		Path: body.Path, Readable: readable, ReadableReason: reason, CategoryID: body.CategoryId,
-		Watch: body.Watch == nil || *body.Watch,
+	}
+	// Watched unless said otherwise, when the folder names the library its downloads go into; never without one.
+	request.Watch = body.CategoryId != nil
+	if body.Watch != nil {
+		request.Watch = *body.Watch
 	}
 	if body.Label != nil {
 		request.Label = *body.Label

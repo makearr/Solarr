@@ -4431,14 +4431,16 @@ type SetDownloaderCredentialsJSONBody struct {
 
 // AddDownloadFolderJSONBody defines parameters for AddDownloadFolder.
 type AddDownloadFolderJSONBody struct {
-	// CategoryId The library hint; absent means any library.
+	// CategoryId The library what lands in the folder is imported into; a watched folder must name one.
 	CategoryId *int64  `json:"category_id,omitempty"`
 	Label      *string `json:"label,omitempty"`
 	Path       string  `json:"path"`
 
 	// TransferLadder This folder's own transfer order; absent means the Import screen's.
 	TransferLadder *[]string `json:"transfer_ladder,omitempty"`
-	Watch          *bool     `json:"watch,omitempty"`
+
+	// Watch Absent means watched when a library is named, and not watched otherwise.
+	Watch *bool `json:"watch,omitempty"`
 }
 
 // UpdateDownloadFolderJSONBody defines parameters for UpdateDownloadFolder.

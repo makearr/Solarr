@@ -44,22 +44,15 @@ type Sessions interface {
 	HasSessionFor(ctx context.Context, sourcePath string) (bool, error)
 }
 
-// Libraries resolves "any library" to one: import places into a library, and music is the
-// only media type import handles today.
-type Libraries interface {
-	CategoryForMediaType(mediaType string) (settings.Category, bool)
-}
-
 // Config is what a Job needs; every field is required.
 type Config struct {
-	Folders   Folders
-	FS        fsx.FS
-	Sessions  Sessions
-	Libraries Libraries
-	Enqueue   func(ctx context.Context, payload importjob.Payload) error
-	Clock     clock.Clock
-	Settle    time.Duration
-	Logger    *slog.Logger
+	Folders  Folders
+	FS       fsx.FS
+	Sessions Sessions
+	Enqueue  func(ctx context.Context, payload importjob.Payload) error
+	Clock    clock.Clock
+	Settle   time.Duration
+	Logger   *slog.Logger
 }
 
 // Job is one pass.
@@ -97,13 +90,10 @@ func (j *Job) watchOne(ctx context.Context, folder settings.DownloadFolder) erro
 	if err != nil {
 		return err
 	}
+	// Only a folder kept from before a library was required can lack one; it waits until a person gives it one.
 	categoryID := folder.CategoryID
 	if categoryID == nil {
-		category, found := j.config.Libraries.CategoryForMediaType("music")
-		if !found {
-			return fmt.Errorf("no library to import %s into", folder.Path)
-		}
-		categoryID = &category.ID
+		return fmt.Errorf("%s names no library; choose one under Storage, Download folders", folder.Path)
 	}
 	settledBefore := j.config.Clock.Now().Add(-j.config.Settle)
 	for _, entry := range entries {

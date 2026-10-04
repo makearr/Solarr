@@ -27,12 +27,6 @@ func (s sessions) HasSessionFor(_ context.Context, source string) (bool, error) 
 	return s[source], nil
 }
 
-type libraries struct{}
-
-func (libraries) CategoryForMediaType(string) (settings.Category, bool) {
-	return settings.Category{ID: 7}, true
-}
-
 func write(t *testing.T, fsys *fsx.Mem, file string) {
 	t.Helper()
 	if err := fsys.MkdirAll(path.Dir(file), 0o755); err != nil {
@@ -54,21 +48,23 @@ func TestRun_ImportsEachSettledEntryOnce(t *testing.T) {
 	write(t, fsys, "/downloads/Settled Album/01.flac")
 	write(t, fsys, "/downloads/Imported Before/01.flac")
 	write(t, fsys, "/other/Hinted Album/01.flac")
+	write(t, fsys, "/nowhere/An Album/01.flac")
 	fake.Advance(15 * time.Minute)
 	write(t, fsys, "/downloads/Still Writing/01.flac")
 	write(t, fsys, "/downloads/.incomplete/part.flac")
 	write(t, fsys, "/unwatched/Album/01.flac")
 	fake.Advance(time.Minute)
 
-	hint := int64(3)
+	first, hint := int64(7), int64(3)
 	var enqueued []importjob.Payload
 	job := downloadwatch.NewJob(downloadwatch.Config{
 		Folders: folders{
-			{Path: "/downloads", Watch: true, Readable: true},
+			{Path: "/downloads", Watch: true, Readable: true, CategoryID: &first},
 			{Path: "/other", Watch: true, Readable: true, CategoryID: &hint, TransferLadder: []string{"copy"}},
+			{Path: "/nowhere", Watch: true, Readable: true},
 			{Path: "/unwatched", Watch: false, Readable: true},
 		},
-		FS: fsys, Sessions: sessions{"/downloads/Imported Before": true}, Libraries: libraries{},
+		FS: fsys, Sessions: sessions{"/downloads/Imported Before": true},
 		Enqueue: func(_ context.Context, payload importjob.Payload) error {
 			enqueued = append(enqueued, payload)
 			return nil
@@ -80,9 +76,10 @@ func TestRun_ImportsEachSettledEntryOnce(t *testing.T) {
 	}
 
 	sort.Slice(enqueued, func(i, j int) bool { return enqueued[i].SourcePath < enqueued[j].SourcePath })
-	anyLibrary, hinted := int64(7), hint
+	// The folder that names no library is left alone rather than imported into a guessed one.
+	named, hinted := int64(7), hint
 	want := []importjob.Payload{
-		{SourcePath: "/downloads/Settled Album", Origin: "watched", CategoryID: &anyLibrary},
+		{SourcePath: "/downloads/Settled Album", Origin: "watched", CategoryID: &named},
 		{SourcePath: "/other/Hinted Album", Origin: "watched", CategoryID: &hinted, TransferLadder: []string{"copy"}},
 	}
 	if !reflect.DeepEqual(enqueued, want) {
