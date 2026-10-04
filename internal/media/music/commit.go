@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"path"
-	"strconv"
 	"strings"
 	"time"
 
@@ -595,24 +594,7 @@ func (c Committer) permissions(fileManagement settings.FileManagement) (mover.Pe
 
 // PermissionsFor turns a library's settings into modes and a group id, -1 when no group is set.
 func PermissionsFor(fileManagement settings.FileManagement, groupID GroupID) (mover.Permissions, error) {
-	permissions := mover.Permissions{FolderMode: fileManagement.FolderMode(), FileMode: fileManagement.FileMode(), GID: -1}
-	group := fileManagement.ChownGroup
-	if group == "" {
-		return permissions, nil
-	}
-	if gid, err := strconv.Atoi(group); err == nil {
-		permissions.GID = gid
-		return permissions, nil
-	}
-	if groupID == nil {
-		return permissions, fmt.Errorf("group %q cannot be looked up here", group)
-	}
-	gid, err := groupID(group)
-	if err != nil {
-		return permissions, fmt.Errorf("group %q: %w", group, err)
-	}
-	permissions.GID = gid
-	return permissions, nil
+	return mover.PermissionsOf(fileManagement.FolderMode(), fileManagement.FileMode(), fileManagement.ChownGroup, groupID)
 }
 
 // parseReleaseDate reads a tag's 1997, 1997-06 or 1997-06-16 as midnight UTC on that day.

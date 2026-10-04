@@ -9,7 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/moving/mover"
 )
@@ -78,24 +78,37 @@ func movePlanResult(plan mover.MovePlan, accepted bool, moveJobID int64) apiserv
 	return view
 }
 
-// Rename satisfies apiserver.RenameStarter over
-// internal/media/music.RenameStart.
+// Rename satisfies apiserver.RenameStarter over the media types that can rename.
 type Rename struct {
-	Config music.RenameConfig
+	Registry *media.Registry
 	// Settings answers which roots a library uses.
 	Settings *settings.Cache
+}
+
+// renaming is the rename of a library's media type; a type without one is refused, never renamed by another's formats.
+func (a Rename) renaming(categoryID int64) (media.Renaming, error) {
+	category, found := a.Settings.Snapshot().Category(categoryID)
+	if !found {
+		return nil, fmt.Errorf("%w: category %d", settings.ErrNotFound, categoryID)
+	}
+	renaming, ok := media.Capability[media.Renaming](a.Registry, media.Key(category.MediaType))
+	if !ok {
+		return nil, errRenameNotBuilt(category.MediaType)
+	}
+	return renaming, nil
 }
 
 // StartLibraryRename renames the library's works on each of its roots.
 func (a Rename) StartLibraryRename(
 	ctx context.Context, categoryID int64, preview bool,
 ) ([]apiserver.RootRename, error) {
-	if category, found := a.Settings.Snapshot().Category(categoryID); found && category.MediaType != "music" {
-		return nil, errRenameNotBuilt(category.MediaType)
+	renaming, err := a.renaming(categoryID)
+	if err != nil {
+		return nil, err
 	}
 	var renames []apiserver.RootRename
 	for _, root := range a.Settings.Snapshot().RootFoldersForCategory(categoryID) {
-		plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, root.ID, &categoryID, preview)
+		plan, jobID, warnings, err := renaming.StartRename(ctx, root.ID, &categoryID, preview)
 		if err != nil {
 			return nil, err
 		}
@@ -115,15 +128,21 @@ func errRenameNotBuilt(mediaType string) error {
 }
 
 func (a Rename) StartRename(ctx context.Context, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
+	var renaming media.Renaming
 	for _, attachment := range a.Settings.Snapshot().CategoryRoots() {
 		if attachment.RootFolderID != rootFolderID {
 			continue
 		}
-		if category, found := a.Settings.Snapshot().Category(attachment.CategoryID); found && category.MediaType != "music" {
-			return apiserver.DrainPlanResult{}, errRenameNotBuilt(category.MediaType)
+		found, err := a.renaming(attachment.CategoryID)
+		if err != nil {
+			return apiserver.DrainPlanResult{}, err
 		}
+		renaming = found
 	}
-	plan, jobID, warnings, err := music.RenameStart(ctx, a.Config, rootFolderID, nil, preview)
+	if renaming == nil {
+		return apiserver.DrainPlanResult{}, fmt.Errorf("%w: root folder %d belongs to no library", settings.ErrNotFound, rootFolderID)
+	}
+	plan, jobID, warnings, err := renaming.StartRename(ctx, rootFolderID, nil, preview)
 	if err != nil {
 		return apiserver.DrainPlanResult{}, err
 	}

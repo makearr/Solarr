@@ -169,9 +169,6 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
 		return err
 	}
-	if err := running.registerMedia(); err != nil {
-		return err
-	}
 	if abandoned, err := library.NewArrImports(running.library).AbandonRunning(ctx, clock.NewSystem().Now().Unix()); err != nil {
 		return err
 	} else if abandoned > 0 {
@@ -405,6 +402,10 @@ func (p *process) startJobs(ctx context.Context) error {
 
 	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
 	p.indexerCaps = newIndexerCapsCache(wall)
+	// After the queue and the bus exist, which a module's wiring captures; before any job that asks the registry.
+	if err := p.registerMedia(); err != nil {
+		return err
+	}
 	executor := jobs.NewExecutor(queue, wall, jobs.ExecutorConfig{
 		Owner:   owner,
 		Mode:    jobs.Mode(p.config.Mode),
@@ -762,13 +763,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		MediaTypes:     adapters.MediaTypes{Registry: p.media},
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},
 		LibraryArtists: adapters.Artists{People: library.NewPeople(p.library)},
-		RenameStarter: adapters.Rename{Config: music.RenameConfig{
-			Categories: adapters.Categories{Cache: p.cache},
-			Roots:      adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
-			Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
-			MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
-		}, Settings: p.cache},
-		NamingSchemes: adapters.NamingSchemes{Registry: p.media},
+		RenameStarter:  adapters.Rename{Registry: p.media, Settings: p.cache},
+		NamingSchemes:  adapters.NamingSchemes{Registry: p.media},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   adapters.Egress{Prober: prober},

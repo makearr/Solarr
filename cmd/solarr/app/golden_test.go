@@ -77,9 +77,6 @@ func newGoldenServer(t *testing.T) goldenServer {
 	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
 		t.Fatalf("ensureDefaultQualityProfile: %v", err)
 	}
-	if err := running.registerMedia(); err != nil {
-		t.Fatalf("registerMedia: %v", err)
-	}
 	if err := running.startJobs(ctx); err != nil {
 		t.Fatalf("startJobs: %v", err)
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -42,4 +43,26 @@ func applyTo(fsys fsx.FS, target string, mode fs.FileMode, gid int) error {
 		return fmt.Errorf("mover: set mode of %q: %w", target, err)
 	}
 	return nil
+}
+
+// PermissionsOf turns a library's modes and group setting into Permissions. The group is a number or a name
+// lookupGroup resolves; an empty group leaves the group alone.
+func PermissionsOf(folderMode, fileMode fs.FileMode, group string, lookupGroup func(name string) (int, error)) (Permissions, error) {
+	permissions := Permissions{FolderMode: folderMode, FileMode: fileMode, GID: -1}
+	if group == "" {
+		return permissions, nil
+	}
+	if gid, err := strconv.Atoi(group); err == nil {
+		permissions.GID = gid
+		return permissions, nil
+	}
+	if lookupGroup == nil {
+		return permissions, fmt.Errorf("group %q cannot be looked up here", group)
+	}
+	gid, err := lookupGroup(group)
+	if err != nil {
+		return permissions, fmt.Errorf("group %q: %w", group, err)
+	}
+	permissions.GID = gid
+	return permissions, nil
 }

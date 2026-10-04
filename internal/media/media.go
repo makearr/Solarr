@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
@@ -98,6 +99,13 @@ func (d Descriptor) LeadRole() (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Renaming is the capability of a media type that can rename a library's files to its naming formats.
+type Renaming interface {
+	// StartRename plans, and unless preview starts, the rename of one root's files; onlyCategoryID narrows it to
+	// one library. It answers the plan, the job started (0 for a preview) and warnings per media object.
+	StartRename(ctx context.Context, rootFolderID int64, onlyCategoryID *int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error)
 }
 
 // JobRegistrar takes one job type with its handler.

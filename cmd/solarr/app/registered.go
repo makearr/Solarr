@@ -58,7 +58,13 @@ func (p *process) musicModule() music.Module {
 		// category yet -- ensureDefaultQualityProfile seeded it at startup.
 		DefaultProfileID: p.defaultQualityProfileID,
 	})
-	return music.Module{Hunt: p.musicHunt, RSS: p.musicRSS(), Sweep: scan.Sweep{
+	rename := music.RenameConfig{
+		Categories: adapters.Categories{Cache: p.cache},
+		Roots:      adapters.DrainRoots{Cache: p.cache}, Files: physical,
+		Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
+		MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
+	}
+	return music.Module{Hunt: p.musicHunt, RSS: p.musicRSS(), Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{

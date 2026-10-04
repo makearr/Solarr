@@ -2,10 +2,12 @@ package music
 
 import (
 	"context"
+	"errors"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
@@ -18,6 +20,8 @@ type Module struct {
 	Sweep scan.Sweep
 	// Hunt searches for one wanted album and sends the best release; nil leaves music unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Rename is what renaming a music library needs; nil leaves music without a rename.
+	Rename *RenameConfig
 	// RSS matches the indexers' feeds against the wanted albums; nil leaves the job unregistered.
 	RSS *RSSJob
 }
@@ -28,6 +32,14 @@ func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, err
 		return plan.OutcomeNotWanted, nil
 	}
 	return m.Hunt(ctx, itemID)
+}
+
+// StartRename implements media.Renaming.
+func (m Module) StartRename(ctx context.Context, rootFolderID int64, onlyCategoryID *int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error) {
+	if m.Rename == nil {
+		return mover.MovePlan{}, 0, nil, errors.New("music: rename is not wired")
+	}
+	return RenameStart(ctx, *m.Rename, rootFolderID, onlyCategoryID, preview)
 }
 
 // RegisterJobs implements media.Jobs.

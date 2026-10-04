@@ -2,7 +2,11 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -119,5 +123,31 @@ func TestLeadName_IsTheCreditOfTheTypesLeadRole(t *testing.T) {
 	}
 	if want := [3]string{"An Author", "", ""}; got != want {
 		t.Errorf("leadName (lead role, no lead role, unknown type) = %q, want %q", got, want)
+	}
+}
+
+// post sends one JSON POST as the open-access administrator and answers the status and body.
+func (g goldenServer) post(t *testing.T, target, body string) (int, string) {
+	t.Helper()
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1"+target, strings.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	g.handler.ServeHTTP(recorder, request)
+	return recorder.Code, recorder.Body.String()
+}
+
+// A library is renamed by its own media type's formats; one whose type cannot rename is refused, never renamed by
+// another type's.
+func TestRenameLibrary_AsksTheLibrarysMediaType(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+
+	status, body := server.post(t, fmt.Sprintf("/categories/%d/rename", ids.music), `{"preview":true}`)
+	if status != http.StatusOK {
+		t.Errorf("rename preview of the music library = %d, body = %s, want 200", status, body)
+	}
+	status, body = server.post(t, fmt.Sprintf("/categories/%d/rename", ids.tv), `{"preview":true}`)
+	if status != http.StatusConflict || !strings.Contains(body, "renaming a tv library is not built yet") {
+		t.Errorf("rename preview of the TV library = %d, body = %s, want 409 naming the reason", status, body)
 	}
 }

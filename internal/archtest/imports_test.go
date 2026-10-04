@@ -316,7 +316,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/anilist": {"internal/platform/httpx"},
 	// The TV module (stage 8): provider records merged into series, written through db/library.
 	// The media-type registry: what core asks instead of naming a type (ADR-23).
-	"internal/media":    {"internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
+	"internal/media":    {"internal/moving/mover", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
 	"internal/media/tv": {"internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// Sonarr's TheTVDB proxy (T4): the preferred TV source, never required.
 	"internal/metadata/skyhook": {"internal/platform/httpx"},

@@ -4,7 +4,6 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/moverjob"
@@ -39,6 +38,7 @@ func (p *process) libraryPermissions(categoryID int64) (mover.Permissions, bool,
 	if !found || !category.FileManagement.SetPermissions {
 		return mover.Permissions{}, false, nil
 	}
-	permissions, err := music.PermissionsFor(category.FileManagement, lookupGroupID)
+	management := category.FileManagement
+	permissions, err := mover.PermissionsOf(management.FolderMode(), management.FileMode(), management.ChownGroup, lookupGroupID)
 	return permissions, err == nil, err
 }
