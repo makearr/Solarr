@@ -9,7 +9,8 @@ import type { components } from "@/api/schema";
 
 import { ArtistCoverMark, Poster } from "./Poster";
 import { SearchBox } from "./SearchBox";
-import { defaultLevelKey, pageTier } from "./Sidebar";
+import { pageTier } from "./sections";
+import { defaultLevelKey } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];
 

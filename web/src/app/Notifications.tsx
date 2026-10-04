@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
-import { pageTier } from "./Sidebar";
+import { pageTier } from "./sections";
 
 const SEEN_KEY = "solarr.notifications.seen";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;

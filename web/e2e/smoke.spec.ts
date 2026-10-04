@@ -64,12 +64,18 @@ test("the default tier shows the whole library tree", async ({ page }) => {
   const nav = page.getByRole("navigation");
   await nav.getByText("Music", { exact: true }).first().click();
 
-  for (const entry of ["Artists", "Albums", "Tracks", "Wanted", "Unidentified"]) {
+  // After its levels a library has Wanted, Files and Settings; their pages are tabs (2026-10-04). Settings holds
+  // nothing a normal user sees, so it is absent.
+  for (const entry of ["Artists", "Albums", "Tracks", "Wanted", "Files"]) {
     await expect(nav.getByRole("link", { name: entry, exact: true })).toBeVisible();
   }
-  // Packs: expert only, backend kept (2026-10-04); Import advanced, Import by the 2026-09-25 review, so their absence is the assertion.
+  await expect(nav.getByRole("link", { name: "Settings", exact: true })).toHaveCount(1);
+
+  // Unidentified is what Files opens on at the default tier; Packs is expert only and Import advanced.
+  await nav.getByRole("link", { name: "Files", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /unidentified/i }).first()).toBeVisible();
   for (const entry of ["Packs", "Import"]) {
-    await expect(nav.getByRole("link", { name: entry, exact: true })).toBeHidden();
+    await expect(page.getByRole("link", { name: entry, exact: true })).toBeHidden();
   }
 });
 

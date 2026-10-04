@@ -65,6 +65,14 @@ library's job is shown only to those who can see that library.
 
 ## The navigation tree (ADR-54)
 
+**One sidebar entry per section, its pages as tabs** (2026-10-04; the sidebar listed every page before). After
+its own levels every library has the same three entries: Wanted (Wanted, Activity, Statistics), Files
+(Unidentified, Import, Duplicates, Packs) and Settings (Quality, Naming, File management, Import lists). Activity,
+Storage, Connections and Settings are single entries too. `src/app/sections.ts` declares each section and its tabs
+with the tier and role that may see them; `SectionTabs` draws the tabs above whatever page the address names, so a
+page does not know it is a tab and every address stayed what it was. A tab the viewer may not open is absent, and a
+section's entry returns to the tab last opened there.
+
 The sidebar reads `GET /libraries`: each category the caller may see, with the entity levels
 its media type declares (`NavigationLevels`, an ADR-23 extension point — core renders the
 declaration and never learns what an album is) and each level's count from the `counter` table.

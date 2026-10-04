@@ -2,20 +2,11 @@ import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-rout
 import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
-  Bell,
   ChevronDown,
   ChevronRight,
-  Download,
-  Gauge,
   HardDrive,
-  HelpCircle,
-  History as HistoryIcon,
   LayoutDashboard,
-  ListChecks,
   Library as LibraryIcon,
-  Radar,
-  ScanSearch,
-  Trash2,
   Settings,
   Share2,
   type LucideIcon,
@@ -26,75 +17,23 @@ import { api } from "@/api/client";
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useOpenSections } from "@/lib/useOpenSections";
-import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator";
-import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
+import { useIsAdministrator } from "@/lib/useAdministrator";
+import { useTier, type Tier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { Logo } from "./Logo";
+import {
+  ACTIVITY, CONNECTIONS, entryTab, isAt, librarySections, SETTINGS, STORAGE, visibleTabs, type Place, type Section,
+} from "./sections";
 
 type LibraryEntry = components["schemas"]["Library"];
 
-// People stopped being a top-level section 2026-09-09 (ADR-54's reversal):
-// a person now surfaces under their own library (Music -> Artists), and
-// global search still spans every category.
-const SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
-  // Normal: "what is coming out" is an ordinary thing to want, not an
-  // operational screen.
-  { to: "/calendar", label: "Calendar", icon: CalendarDays, tier: "normal" },
-  { to: "/unidentified", label: "Unidentified", icon: HelpCircle, tier: "advanced" },
-  // Shared by every library of a media type, so a main entry of its own (2026-09-25).
-  { to: "/quality-profiles", label: "Quality profiles", icon: Gauge, tier: "advanced" },
-];
-
-// Lidarr's Activity: what happened to downloads at normal, the job queue behind them advanced.
-const ACTIVITY_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
-  { to: "/activity/queue", label: "Queue", icon: Download, tier: "normal" },
-  { to: "/activity/history", label: "History", icon: HistoryIcon, tier: "normal" },
-  { to: "/activity/notifications", label: "Notifications", icon: Bell, tier: "normal" },
-  { to: "/activity/jobs", label: "Jobs", icon: ListChecks, tier: "advanced" },
-];
-
-// The whole section is advanced and Move & drain expert (2026-09-19):
-// nothing here is needed to run a library, and a move is irreversible work.
-const STORAGE_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier?: Tier }[] = [
-  { to: "/storage/roots", label: "Root folders", icon: HardDrive },
-  { to: "/storage/downloads", label: "Download folders", icon: Download },
-  { to: "/storage/import", label: "Import", icon: ScanSearch },
-  { to: "/storage/recycle-bin", label: "Recycle bin", icon: Trash2 },
-];
-
-const CONNECTIONS_SECTIONS: readonly { to: string; label: string; icon: LucideIcon; tier: Tier }[] = [
-  { to: "/connections/indexers", label: "Indexers", icon: Radar, tier: "advanced" },
-  { to: "/connections/downloaders", label: "Download clients", icon: Download, tier: "advanced" },
-  // *Arr import moved here from Settings -> General on the 2026-09-19 review, expert as asked.
-  { to: "/connections/arr", label: "Arr", icon: Share2, tier: "expert" },
-];
-
-/** The tier at which the sidebar shows the page at `path`; "normal" for a page it does not list. */
-export function pageTier(path: string): Tier {
-  const entry = [...SECTIONS, ...ACTIVITY_SECTIONS, ...CONNECTIONS_SECTIONS].find((section) => section.to === path);
-  if (entry) return entry.tier;
-  const storage = STORAGE_SECTIONS.find((section) => section.to === path);
-  if (storage) return storage.tier ?? "advanced";
-  return SETTINGS_SECTIONS.find((section) => section.to === path)?.tier ?? "normal";
-}
-
-// tier is the whole section's own floor (ADR-26): a page mixing tiers always shows and hides
-// its own advanced parts, but Cache's entire content is expert-only.
-const SETTINGS_SECTIONS: readonly { to: string; label: string; tier?: Tier }[] = [
-  { to: "/settings/libraries", label: "Libraries" },
-  { to: "/settings/tags", label: "Tags" },
-  // An entry whose page shows nothing at a tier is hidden at that tier (2026-09-25).
-  { to: "/settings/blocklists", label: "Blocklists", tier: "expert" },
-  { to: "/settings/network", label: "Network", tier: "advanced" },
-  { to: "/settings/metadata", label: "Metadata", tier: "normal" },
-  { to: "/settings/user", label: "User" },
-  { to: "/settings/scheduler", label: "Scheduler" },
-  { to: "/settings/logs", label: "Logs", tier: "advanced" },
-  // Normal: whether your data is safe is not an advanced question. Cache is
-  // expert because it is tuning; this is not.
-  { to: "/settings/backups", label: "Backups" },
-  { to: "/settings/cache", label: "Cache", tier: "expert" },
+// One entry per section; its pages are tabs above the page (sections.ts, 2026-10-04).
+const GLOBAL_ENTRIES: readonly { section: Section; icon: LucideIcon }[] = [
+  { section: ACTIVITY, icon: Activity },
+  { section: STORAGE, icon: HardDrive },
+  { section: CONNECTIONS, icon: Share2 },
+  { section: SETTINGS, icon: Settings },
 ];
 
 /** Libraries sharing a media type are grouped once there is more than one of
@@ -145,14 +84,12 @@ export function Sidebar() {
   });
 
   const groups = groupByMediaType(libraries.data ?? []);
+  const viewer = { tier, administrator };
+  const place = { path, categoryId: search.category_id };
 
   // Which branches the current route sits inside, so they open themselves.
   const activeKeys: string[] = [];
   if (path.startsWith("/library") || routeParams.categoryId) activeKeys.push("library");
-  if (path.startsWith("/storage")) activeKeys.push("storage");
-  if (path.startsWith("/connections")) activeKeys.push("connections");
-  if (path.startsWith("/activity")) activeKeys.push("activity");
-  if (path.startsWith("/settings")) activeKeys.push("settings");
   if (routeParams.categoryId) activeKeys.push(`library:${routeParams.categoryId}`);
   if (path === "/unidentified" && search.category_id) activeKeys.push(`library:${search.category_id}`);
 
@@ -171,9 +108,7 @@ export function Sidebar() {
             administrator={administrator}
             isActive={routeParams.categoryId === String(library.id)}
             activeLevel={routeParams.level}
-            activeSection={routeParams.section}
-            activePath={path}
-            activeUnidentifiedCategoryId={path === "/unidentified" ? search.category_id : undefined}
+            place={place}
             isOpen={sections.isOpen(`library:${library.id}`)}
             onToggle={() => sections.toggle(`library:${library.id}`)}
           />
@@ -216,101 +151,28 @@ export function Sidebar() {
         {libraryTree}
       </CollapsibleSection>
 
-      {administrator && isTierVisible(tier, "advanced") && (
-        <CollapsibleSection
-          label="Storage"
-          icon={HardDrive}
-          to="/storage/roots"
-          collapsed={collapsed}
-          active={path.startsWith("/storage")}
-          isOpen={sections.isOpen("storage")}
-          onToggle={() => sections.toggle("storage")}
-        >
-          {STORAGE_SECTIONS.filter((entry) => isTierVisible(tier, entry.tier ?? "advanced")).map(
-            ({ to, label, icon: Icon }) => (
-              <li key={to}>
-                <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
-                  <Icon aria-hidden className="size-4 shrink-0" />
-                  {label}
-                </Link>
-              </li>
-            ),
-          )}
-        </CollapsibleSection>
-      )}
-
-      {administrator && isTierVisible(tier, "advanced") && (
-      <CollapsibleSection
-        label="Connections"
-        icon={Share2}
-        to="/connections/indexers"
-        collapsed={collapsed}
-        active={path.startsWith("/connections")}
-        isOpen={sections.isOpen("connections")}
-        onToggle={() => sections.toggle("connections")}
-      >
-        {CONNECTIONS_SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
-          <li key={to}>
-            <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
-              <Icon aria-hidden className="size-4 shrink-0" />
-              {label}
-            </Link>
-          </li>
-        ))}
-      </CollapsibleSection>
-      )}
-
-      <CollapsibleSection
-        label="Activity"
-        icon={Activity}
-        to="/activity/queue"
-        collapsed={collapsed}
-        active={path.startsWith("/activity")}
-        isOpen={sections.isOpen("activity")}
-        onToggle={() => sections.toggle("activity")}
-      >
-        {ACTIVITY_SECTIONS.filter((section) => isTierVisible(tier, section.tier)).map(({ to, label, icon: Icon }) => (
-          <li key={to}>
-            <Link to={to} className={sectionLinkClass(path.startsWith(to), false)}>
-              <Icon aria-hidden className="size-4 shrink-0" />
-              {label}
-            </Link>
-          </li>
-        ))}
-      </CollapsibleSection>
-
       <ul className="flex flex-col gap-0.5 px-2 pt-3">
-        {SECTIONS.filter(
-          (section) => isTierVisible(tier, section.tier) && (administrator || !isAdministratorPath(section.to)),
-        ).map(({ to, label, icon: Icon }) => (
-          <li key={to}>
-            <Link to={to} title={collapsed ? label : undefined} className={sectionLinkClass(path.startsWith(to), collapsed)}>
-              <Icon aria-hidden className="size-4 shrink-0" />
-              {!collapsed && label}
-            </Link>
-          </li>
-        ))}
+        <li>
+          <Link to="/calendar" title={collapsed ? "Calendar" : undefined} className={sectionLinkClass(path.startsWith("/calendar"), collapsed)}>
+            <CalendarDays aria-hidden className="size-4 shrink-0" />
+            {!collapsed && "Calendar"}
+          </Link>
+        </li>
+        {GLOBAL_ENTRIES.map(({ section, icon: Icon }) => {
+          const tab = entryTab(section, viewer);
+          if (!tab) return null;
+          const active = visibleTabs(section, viewer).some((entry) => isAt(entry, place)) && !routeParams.categoryId
+            && !(path === "/unidentified" && search.category_id);
+          return (
+            <li key={section.key}>
+              <Link to={tab.path} title={collapsed ? section.label : undefined} className={sectionLinkClass(active, collapsed)}>
+                <Icon aria-hidden className="size-4 shrink-0" />
+                {!collapsed && section.label}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
-
-      <CollapsibleSection
-        label="Settings"
-        icon={Settings}
-        to={administrator ? "/settings/libraries" : "/settings/user"}
-        collapsed={collapsed}
-        active={path.startsWith("/settings")}
-        isOpen={sections.isOpen("settings")}
-        onToggle={() => sections.toggle("settings")}
-      >
-        {SETTINGS_SECTIONS.filter(
-          (section) => isTierVisible(tier, section.tier ?? "normal") && (administrator || !isAdministratorPath(section.to)),
-        ).map(({ to, label }) => (
-          <li key={to}>
-            <Link to={to} className={sectionLinkClass(path === to, false)}>
-              <span className="truncate">{label}</span>
-            </Link>
-          </li>
-        ))}
-      </CollapsibleSection>
     </nav>
   );
 }
@@ -380,15 +242,6 @@ function ExpandToggle({ label, isOpen, onToggle }: { label: string; isOpen: bool
   );
 }
 
-// Sibling to the entity levels, not one of them (ADR-54's own tree sketch):
-// generic per-library config, each with the tier that may see it.
-const CONFIG_SECTIONS: readonly { key: string; label: string; tier: Tier }[] = [
-  { key: "naming", label: "Naming", tier: "advanced" },
-  { key: "file-management", label: "File management", tier: "expert" },
-  { key: "import-lists", label: "Import lists", tier: "advanced" },
-  { key: "quality", label: "Quality", tier: "advanced" },
-];
-
 function LibraryNode({
   library,
   collapsed,
@@ -396,9 +249,7 @@ function LibraryNode({
   administrator,
   isActive,
   activeLevel,
-  activeSection,
-  activePath,
-  activeUnidentifiedCategoryId,
+  place,
   isOpen,
   onToggle,
 }: {
@@ -408,9 +259,7 @@ function LibraryNode({
   administrator: boolean;
   isActive: boolean;
   activeLevel: string | undefined;
-  activeSection: string | undefined;
-  activePath: string;
-  activeUnidentifiedCategoryId: string | undefined;
+  place: Place;
   isOpen: boolean;
   onToggle: () => void;
 }) {
@@ -454,107 +303,19 @@ function LibraryNode({
               </Link>
             </li>
           ))}
-          <li>
-            <Link
-              to="/library/$categoryId/wanted"
-              params={{ categoryId }}
-              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/wanted`, false)}
-            >
-              <span className="truncate">Wanted</span>
-            </Link>
-          </li>
-          <li>
-            <Link
-              to="/library/$categoryId/statistics"
-              params={{ categoryId }}
-              className={sectionLinkClass(isActive && activePath === `/library/${library.id}/statistics`, false)}
-            >
-              <span className="truncate">Statistics</span>
-            </Link>
-          </li>
-
-          {/* Advanced and an administrator's (2026-09-25 review). */}
-          {administrator && isTierVisible(tier, "advanced") && (
-            <li>
-              <Link
-                to="/library/$categoryId/import"
-                params={{ categoryId }}
-                className={sectionLinkClass(isActive && activePath === `/library/${library.id}/import`, false)}
-              >
-                <span className="truncate">Import</span>
-              </Link>
-            </li>
-          )}
-          <li>
-            <Link
-              to="/unidentified"
-              search={{ category_id: categoryId }}
-              className={sectionLinkClass(activeUnidentifiedCategoryId === categoryId, false)}
-            >
-              <span className="truncate">Unidentified</span>
-            </Link>
-          </li>
-
-          {isTierVisible(tier, "expert") && (
-            <li>
-              <Link
-                to="/library/$categoryId/packs"
-                params={{ categoryId }}
-                className={sectionLinkClass(isActive && activePath === `/library/${library.id}/packs`, false)}
-              >
-                <span className="truncate">Packs</span>
-              </Link>
-            </li>
-          )}
-          {isTierVisible(tier, "advanced") && (
-            <>
-              <li>
-                <Link
-                  to="/library/$categoryId/duplicates"
-                  params={{ categoryId }}
-                  className={sectionLinkClass(isActive && activePath === `/library/${library.id}/duplicates`, false)}
-                >
-                  <span className="truncate">Duplicates</span>
-                </Link>
-              </li>
-              <li>
-                <Link
-                  to="/library/$categoryId/activity"
-                  params={{ categoryId }}
-                  className={sectionLinkClass(isActive && activePath === `/library/${library.id}/activity`, false)}
-                >
-                  <span className="truncate">Activity</span>
-                </Link>
-              </li>
-            </>
-          )}
-
-          {CONFIG_SECTIONS.filter((section) => administrator && isTierVisible(tier, section.tier)).map((section) =>
-            section.key === "import-lists" ? (
+          {/* After its own levels every library has the same three entries, each with tabs (2026-10-04). */}
+          {librarySections(categoryId).map((section) => {
+            const tab = entryTab(section, { tier, administrator });
+            if (!tab) return null;
+            const active = visibleTabs(section, { tier, administrator }).some((entry) => isAt(entry, place));
+            return (
               <li key={section.key}>
-                <Link
-                  to="/library/$categoryId/config/import-lists"
-                  params={{ categoryId }}
-                  className={sectionLinkClass(
-                    isActive && activePath === `/library/${library.id}/config/import-lists`,
-                    false,
-                  )}
-                >
+                <Link to={tab.path} search={tab.search} className={sectionLinkClass(active, false)}>
                   <span className="truncate">{section.label}</span>
                 </Link>
               </li>
-            ) : (
-              <li key={section.key}>
-                <Link
-                  to="/library/$categoryId/config/$section"
-                  params={{ categoryId, section: section.key }}
-                  className={sectionLinkClass(isActive && activeSection === section.key, false)}
-                >
-                  <span className="truncate">{section.label}</span>
-                </Link>
-              </li>
-            ),
-          )}
+            );
+          })}
         </ul>
       )}
     </li>

@@ -6,6 +6,7 @@ import { NotificationBell } from "./Notifications";
 import { SearchBox } from "./SearchBox";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
+import { SectionTabs } from "./SectionTabs";
 import { ThemeToggle } from "./ThemeToggle";
 import { UserMenu } from "./UserMenu";
 
@@ -28,6 +29,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <UserMenu />
           </header>
           <main className="min-h-0 flex-1 overflow-y-auto">
+            <SectionTabs />
             <AdministratorGate>{children}</AdministratorGate>
           </main>
         </div>
