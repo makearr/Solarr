@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // Searcher is what a search needs from a configured indexer connection.
@@ -74,11 +74,15 @@ func AskEveryIndexer(ctx context.Context, conns []Conn, queries []Query, deadlin
 	group, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	answers := make([]Answer, len(conns))
-	var wait sync.WaitGroup
-	for index, conn := range conns {
-		wait.Go(func() { answers[index] = askIndexer(group, conn, queries) })
+	asked := parallel.Do(group, len(conns), 0, func(ctx context.Context, index int) error {
+		answers[index] = askIndexer(ctx, conns[index], queries)
+		return nil
+	})
+	for index, err := range asked {
+		if err != nil {
+			answers[index].Err = err
+		}
 	}
-	wait.Wait()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

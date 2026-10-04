@@ -14,9 +14,9 @@ import (
 	"io"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // maxResponseBytes bounds one lookup. A Wikipedia summary extract is a few
@@ -191,29 +191,28 @@ func (f Fetcher) Biographies(ctx context.Context, qids []string) (map[string]Bio
 		}
 	}
 
-	extracts := make(chan [2]string, len(titles))
-	slots := make(chan struct{}, summaryWorkers)
-	var wait sync.WaitGroup
-	for qid, title := range titles {
-		slots <- struct{}{}
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
-			defer func() { <-slots }()
-			var summary summaryResponse
-			// A Wikipedia hiccup keeps the description, which is still a real answer.
-			if err := getJSON(ctx, f.wikipediaClient,
-				"https://en.wikipedia.org/api/rest_v1/page/summary/"+pathEscape(title), &summary); err == nil {
-				extracts <- [2]string{qid, summary.Extract}
-			}
-		}()
+	titled := make([]string, 0, len(titles))
+	for qid := range titles {
+		titled = append(titled, qid)
 	}
-	wait.Wait()
-	close(extracts)
-	for extract := range extracts {
-		biography := biographies[extract[0]]
-		biography.Extract = extract[1]
-		biographies[extract[0]] = biography
+	found := make([]string, len(titled))
+	// A Wikipedia hiccup keeps the description, which is still a real answer, so a failed summary is left out.
+	failed := parallel.Do(ctx, len(titled), summaryWorkers, func(ctx context.Context, index int) error {
+		var summary summaryResponse
+		err := getJSON(ctx, f.wikipediaClient,
+			"https://en.wikipedia.org/api/rest_v1/page/summary/"+pathEscape(titles[titled[index]]), &summary)
+		if err == nil {
+			found[index] = summary.Extract
+		}
+		return err
+	})
+	for index, qid := range titled {
+		if failed[index] != nil {
+			continue
+		}
+		biography := biographies[qid]
+		biography.Extract = found[index]
+		biographies[qid] = biography
 	}
 	return biographies, nil
 }

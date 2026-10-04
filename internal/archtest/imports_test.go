@@ -217,10 +217,10 @@ var allowedInternalImports = map[string][]string{
 	// but never store or librarydb directly, which stays library's alone to touch.
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
-	"internal/acquiring/judge":    {"internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/score"},
+	"internal/acquiring/judge":    {"internal/platform/parallel", "internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/score"},
 	"internal/importing/batch":    {"internal/db/library", "internal/importing/inspect"},
 	"internal/acquiring/dispatch": {"internal/acquiring/download", "internal/db/library", "internal/identify/priority"},
-	"internal/media/music": {
+	"internal/media/music": {"internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
@@ -256,7 +256,7 @@ var allowedInternalImports = map[string][]string{
 	// Decide), internal/media/music for the music Identifier implementations and
 	// the inspect.Unit-to-FileRef adapters -- the same shape internal/scanning/scan's
 	// own job has for its Consumer, generalised to import's own pipeline.
-	"internal/importing/importjob": {"internal/importing/batch",
+	"internal/importing/importjob": {"internal/platform/parallel", "internal/importing/batch",
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/unpack", "internal/platform/archive", "internal/importing/pack",
 		"internal/jobs", "internal/db/library", "internal/platform/mediatool", "internal/identify/model",
 		"internal/media/music", "internal/platform/events",
@@ -308,7 +308,7 @@ var allowedInternalImports = map[string][]string{
 	// already extracts one) to a biography. No cache of its own -- see the
 	// package doc comment.
 	"internal/metadata/theaudiodb": {"internal/platform/httpx"},
-	"internal/metadata/wikidata":   {"internal/platform/httpx"},
+	"internal/metadata/wikidata":   {"internal/platform/parallel", "internal/platform/httpx"},
 	// Stage 8's keyless TV source (T4): a client over httpx, nothing else.
 	"internal/metadata/tvmaze":  {"internal/platform/httpx"},
 	"internal/metadata/tmdb":    {"internal/platform/httpx"},
@@ -316,8 +316,10 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/anilist": {"internal/platform/httpx"},
 	// The TV module (stage 8): provider records merged into series, written through db/library.
 	// The media-type registry: what core asks instead of naming a type (ADR-23).
-	"internal/media":    {"internal/moving/mover", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
-	"internal/media/tv": {"internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
+	// Bounded fan-out with panic recovery; no dependencies.
+	"internal/platform/parallel": {},
+	"internal/media":             {"internal/moving/mover", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
+	"internal/media/tv":          {"internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// Sonarr's TheTVDB proxy (T4): the preferred TV source, never required.
 	"internal/metadata/skyhook": {"internal/platform/httpx"},
 	// Generated by oapi-codegen from api/openapi.yaml (ADR-31).

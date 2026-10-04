@@ -8,10 +8,10 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 const (
@@ -111,16 +111,15 @@ func fetchGroups(
 	ctx context.Context, lookup AlbumLookup, priority musicbrainz.Priority, groups []recalled,
 ) []fetchedGroup {
 	fetched := make([]fetchedGroup, len(groups))
-	slots := make(chan struct{}, albumFetchConcurrency)
-	var running sync.WaitGroup
-	for i, group := range groups {
-		running.Go(func() {
-			slots <- struct{}{}
-			defer func() { <-slots }()
-			fetched[i] = fetchGroup(ctx, lookup, priority, group)
-		})
+	looked := parallel.Do(ctx, len(groups), albumFetchConcurrency, func(ctx context.Context, index int) error {
+		fetched[index] = fetchGroup(ctx, lookup, priority, groups[index])
+		return nil
+	})
+	for index, err := range looked {
+		if err != nil {
+			fetched[index] = fetchedGroup{group: groups[index], err: err}
+		}
 	}
-	running.Wait()
 	return fetched
 }
 

@@ -17,7 +17,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
@@ -31,6 +30,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parse"
 	"github.com/makearr/Solarr/internal/identify/score"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ErrTrackSearchNotSupported reports a SINGLE (track-level) desired item --
@@ -461,11 +461,15 @@ func askEveryIndexer(
 	group, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	answers := make([]indexerAnswer, len(indexers))
-	var wait sync.WaitGroup
-	for index, conn := range indexers {
-		wait.Go(func() { answers[index] = askIndexer(group, conn, terms) })
+	asked := parallel.Do(group, len(indexers), 0, func(ctx context.Context, index int) error {
+		answers[index] = askIndexer(ctx, indexers[index], terms)
+		return nil
+	})
+	for index, err := range asked {
+		if err != nil {
+			answers[index].err = err
+		}
 	}
-	wait.Wait()
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

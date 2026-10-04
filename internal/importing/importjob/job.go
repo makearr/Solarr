@@ -20,7 +20,6 @@ import (
 	"log/slog"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -36,6 +35,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // JobType is the registered type of an import inspection run.
@@ -577,18 +577,16 @@ func identifyCluster(
 	decisions := make([]library.UnitDecision, len(batch))
 	results := make([]model.ChainResult, len(batch))
 	placements := make([]*music.AlbumPlacement, len(batch))
-	slots := make(chan struct{}, identifyParallelism)
-	var running sync.WaitGroup
-	for i, unit := range batch {
-		running.Add(1)
-		slots <- struct{}{}
-		go func(i int, unit inspect.Unit) {
-			defer running.Done()
-			defer func() { <-slots }()
-			decisions[i], results[i], placements[i] = identifyUnit(ctx, ids[i], unit, identifiers, cfg, refine)
-		}(i, unit)
+	identified := parallel.Do(ctx, len(batch), identifyParallelism, func(ctx context.Context, i int) error {
+		decisions[i], results[i], placements[i] = identifyUnit(ctx, ids[i], batch[i], identifiers, cfg, refine)
+		return nil
+	})
+	for i, err := range identified {
+		if err != nil {
+			// One bad unit does not fail the batch, a panicking one included.
+			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: string(model.DecisionFailed)}
+		}
 	}
-	running.Wait()
 	return decisions, results, placements
 }
 

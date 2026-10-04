@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -20,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ArtworkJobType is the registered type of the background cover art sweep.
@@ -248,19 +248,9 @@ func (j *ArtworkJob) sweep(
 			break
 		}
 
-		outcomes := make([]error, len(batch))
-		slots := make(chan struct{}, artworkWorkers)
-		var wait sync.WaitGroup
-		for index, candidate := range batch {
-			slots <- struct{}{}
-			wait.Add(1)
-			go func() {
-				defer wait.Done()
-				defer func() { <-slots }()
-				outcomes[index] = j.processOne(ctx, candidate, lookup)
-			}()
-		}
-		wait.Wait()
+		outcomes := parallel.Do(ctx, len(batch), artworkWorkers, func(ctx context.Context, index int) error {
+			return j.processOne(ctx, batch[index], lookup)
+		})
 		progress.Add(int64(len(batch)))
 		for index, candidate := range batch {
 			total++

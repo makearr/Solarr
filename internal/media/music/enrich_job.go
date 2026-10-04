@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -22,6 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // maxPersonImageBytes mirrors ArtworkJob's own maxImageBytes -- a person's
@@ -665,26 +665,23 @@ func (j *EnrichJob) placeholderAlbum(ctx context.Context, edition library.Placeh
 // rate-limit bucket still paces them. Answers keep the order of albums.
 func (j *EnrichJob) lookupAlbums(ctx context.Context, albums []albumKey) []albumAnswer {
 	answers := make([]albumAnswer, len(albums))
-	slots := make(chan struct{}, enrichLookupWorkers)
-	var wait sync.WaitGroup
-	for index, album := range albums {
+	looked := parallel.Do(ctx, len(albums), enrichLookupWorkers, func(ctx context.Context, index int) error {
+		album := albums[index]
 		if album.err != nil {
-			answers[index].err = album.err
-			continue
+			return album.err
 		}
-		slots <- struct{}{}
-		wait.Add(1)
-		go func() {
-			defer wait.Done()
-			defer func() { <-slots }()
-			rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, album.release)
-			if err != nil {
-				err = fmt.Errorf("musicbrainz: %w", err)
-			}
-			answers[index] = albumAnswer{rg: rg, release: release, err: err}
-		}()
+		rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, album.release)
+		if err != nil {
+			err = fmt.Errorf("musicbrainz: %w", err)
+		}
+		answers[index] = albumAnswer{rg: rg, release: release, err: err}
+		return nil
+	})
+	for index, err := range looked {
+		if err != nil {
+			answers[index].err = err
+		}
 	}
-	wait.Wait()
 	j.describeAlbums(ctx, answers)
 	return answers
 }

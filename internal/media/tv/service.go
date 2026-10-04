@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"regexp"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -17,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ErrNoSource means neither provider could say anything about the series.
@@ -116,21 +116,28 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 		rich, anime, maze Series
 		haveRich, haveAni bool
 		haveMaze          bool
-		asking            sync.WaitGroup
 	)
-	asking.Add(3)
-	go func() { defer asking.Done(); rich, haveRich = s.fetchTMDB(ctx, ids, recentOnly) }()
-	go func() { defer asking.Done(); anime, haveAni = s.fetchAniList(ctx, ids) }()
-	go func() {
-		defer asking.Done()
-		if s.TVmaze == nil {
-			return
+	asked := parallel.Do(ctx, 3, 0, func(ctx context.Context, source int) error {
+		switch source {
+		case 0:
+			rich, haveRich = s.fetchTMDB(ctx, ids, recentOnly)
+		case 1:
+			anime, haveAni = s.fetchAniList(ctx, ids)
+		case 2:
+			if s.TVmaze == nil {
+				return nil
+			}
+			if show, found := s.findShow(ctx, ids); found {
+				maze, haveMaze = s.fromShow(ctx, show), true
+			}
 		}
-		if show, found := s.findShow(ctx, ids); found {
-			maze, haveMaze = s.fromShow(ctx, show), true
+		return nil
+	})
+	for source, err := range asked {
+		if err != nil {
+			s.warn([]string{"tmdb", "anilist", "tvmaze"}[source], ids.TVDB, err)
 		}
-	}()
-	asking.Wait()
+	}
 	if haveRich {
 		sources = append(sources, rich)
 		bySource[settings.TVSourceTMDB] = rich
@@ -255,23 +262,19 @@ const seasonWorkers = 4
 // skipped.
 func (s Service) fetchSeasons(ctx context.Context, id int64, numbers []int) []tmdb.Season {
 	answers := make([]*tmdb.Season, len(numbers))
-	var wg sync.WaitGroup
-	gate := make(chan struct{}, seasonWorkers)
-	for index, number := range numbers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			gate <- struct{}{}
-			defer func() { <-gate }()
-			season, err := s.TMDB.Season(ctx, id, number)
-			if err != nil {
-				s.warn("tmdb season", id, err)
-				return
-			}
-			answers[index] = &season
-		}()
+	asked := parallel.Do(ctx, len(numbers), seasonWorkers, func(ctx context.Context, index int) error {
+		season, err := s.TMDB.Season(ctx, id, numbers[index])
+		if err != nil {
+			return err
+		}
+		answers[index] = &season
+		return nil
+	})
+	for _, err := range asked {
+		if err != nil {
+			s.warn("tmdb season", id, err)
+		}
 	}
-	wg.Wait()
 	var seasons []tmdb.Season
 	for _, answer := range answers {
 		if answer != nil {

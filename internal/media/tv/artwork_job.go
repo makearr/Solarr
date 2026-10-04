@@ -3,10 +3,10 @@ package tv
 import (
 	"context"
 	"log/slog"
-	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // ArtworkJobType is the registered type of the sweep that keeps a library's pictures at hand.
@@ -77,34 +77,22 @@ func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
 	if len(missing) > artworkPerRun {
 		missing = missing[:artworkPerRun]
 	}
-	var (
-		wait         sync.WaitGroup
-		lock         sync.Mutex
-		fetched, bad int
-		queue        = make(chan string)
-	)
-	for range artworkWorkers {
-		wait.Go(func() {
-			for address := range queue {
-				_, err := j.config.Cache.Ensure(ctx, address)
-				lock.Lock()
-				if err != nil {
-					bad++
-				} else {
-					fetched++
-				}
-				lock.Unlock()
-			}
-		})
-	}
-	for _, address := range missing {
-		if ctx.Err() != nil {
-			break
+	fetched, bad := 0, 0
+	outcomes := parallel.Do(ctx, len(missing), artworkWorkers, func(ctx context.Context, index int) error {
+		if err := ctx.Err(); err != nil {
+			return err
 		}
-		queue <- address
+		_, err := j.config.Cache.Ensure(ctx, missing[index])
+		return err
+	})
+	for _, err := range outcomes {
+		switch {
+		case err == nil:
+			fetched++
+		case ctx.Err() == nil:
+			bad++
+		}
 	}
-	close(queue)
-	wait.Wait()
 	j.logger.Info("series pictures fetched", slog.Int("fetched", fetched), slog.Int("failed", bad), slog.Int("still_missing", total-fetched-bad))
 	return ctx.Err()
 }
