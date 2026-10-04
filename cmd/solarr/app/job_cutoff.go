@@ -7,32 +7,45 @@ import (
 	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/media/music"
-	"github.com/makearr/Solarr/internal/media/tv"
-	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/media"
 )
 
-// registerCutoffJob wires M1d's cutoff check: albums whose files fall short of the cutoff become UPGRADABLE.
+// registerCutoffJob wires the cutoff check: one job in which every media type checks its own items.
 func (p *process) registerCutoffJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(music.CutoffDefinition); err != nil {
+	if err := registry.Register(cutoff.Definition); err != nil {
 		return err
 	}
-	if err := registry.Register(tv.CutoffDefinition); err != nil {
-		return err
-	}
-	executor.Handle(tv.CutoffJobType, tv.CutoffJob{
-		Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
-		Recycle: p.recycleSuperseded, Logger: p.logger,
-	})
-	executor.Handle(music.CutoffJobType, music.CutoffJob{
-		Desired: library.NewDesired(p.library), Settings: p.cache, Recycle: p.recycleSuperseded,
-		Clock: clock.NewSystem(), Logger: p.logger,
-	})
+	executor.Handle(cutoff.JobType, cutoff.NewJob(cutoff.Config{
+		Desired: library.NewDesired(p.library), Settings: p.cache, Sources: p.cutoffSources, Logger: p.logger,
+	}))
 	return nil
+}
+
+// cutoffSources lists the media types whose items are checked: the one a library holds, or every type for zero.
+func (p *process) cutoffSources(categoryID int64) []cutoff.Source {
+	var only media.Key
+	if categoryID != 0 {
+		category, found := p.cache.Snapshot().Category(categoryID)
+		if !found {
+			return nil
+		}
+		only = media.Key(category.MediaType)
+	}
+	var sources []cutoff.Source
+	for _, descriptor := range p.media.Descriptors() {
+		if only != "" && descriptor.Key != only {
+			continue
+		}
+		if check, ok := media.Capability[media.Upgrading](p.media, descriptor.Key); ok {
+			sources = append(sources, cutoff.Source{Name: string(descriptor.Key), Check: check})
+		}
+	}
+	return sources
 }
 
 // recycleSuperseded moves a file an upgrade replaced, or a download that measured no better, to the
@@ -60,19 +73,12 @@ func (p *process) afterDownloadImported(ctx context.Context, acquisition library
 	if _, err := probe.Enqueue(ctx, p.queue); err != nil {
 		p.logger.Warn("after import: probe not queued", slog.Any("error", err))
 	}
-	jobType := music.CutoffJobType
-	var payload []byte
-	if library.NewSeriesReader(p.library).InCategory(ctx, item.CategoryID, item.WorkID) == nil {
-		jobType = tv.CutoffJobType
-		payload, err = json.Marshal(tv.CutoffPayload{WorkID: item.WorkID})
-	} else {
-		payload, err = json.Marshal(music.CutoffPayload{WorkID: item.WorkID})
-	}
+	payload, err := json.Marshal(cutoff.Payload{WorkID: item.WorkID, CategoryID: item.CategoryID})
 	if err != nil {
 		return
 	}
 	if _, err := p.queue.Enqueue(ctx, jobs.Request{
-		Type: jobType, ActionKey: fmt.Sprintf("%s:%d", jobType, item.WorkID),
+		Type: cutoff.JobType, ActionKey: fmt.Sprintf("%s:%d", cutoff.JobType, item.WorkID),
 		Priority: jobs.PriorityLow, Payload: payload,
 	}); err != nil {
 		p.logger.Warn("after import: cutoff check not queued", slog.Any("error", err))
@@ -80,12 +86,7 @@ func (p *process) afterDownloadImported(ctx context.Context, acquisition library
 }
 
 func (p *process) enqueueCutoff(ctx context.Context) (jobs.EnqueueResult, error) {
-	if _, err := p.queue.Enqueue(ctx, jobs.Request{
-		Type: tv.CutoffJobType, ActionKey: string(tv.CutoffJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
-	}); err != nil {
-		return jobs.EnqueueResult{}, err
-	}
 	return p.queue.Enqueue(ctx, jobs.Request{
-		Type: music.CutoffJobType, ActionKey: string(music.CutoffJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
+		Type: cutoff.JobType, ActionKey: string(cutoff.JobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
 	})
 }

@@ -24,6 +24,8 @@ type Module struct {
 	Rename *RenameConfig
 	// Feed is music's part of the RSS sync.
 	Feed
+	// CutoffJob is music's part of the cutoff check.
+	CutoffJob
 }
 
 // HuntSearch implements media.Hunting.

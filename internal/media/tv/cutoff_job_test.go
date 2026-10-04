@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -126,8 +127,7 @@ func (f upgradeFixture) job(recycled map[int64]bool) tv.CutoffJob {
 
 func (f upgradeFixture) run(t *testing.T, recycled map[int64]bool) string {
 	t.Helper()
-	payload, _ := json.Marshal(tv.CutoffPayload{WorkID: f.workID})
-	if err := f.job(recycled).Run(t.Context(), jobs.Job{Type: tv.CutoffJobType, Payload: payload}); err != nil {
+	if err := runCutoff(t, library.NewDesired(f.opened), f.cache, f.job(recycled), f.workID); err != nil {
 		t.Fatal(err)
 	}
 	item, err := library.NewDesired(f.opened).Get(t.Context(), f.season1)
@@ -242,4 +242,18 @@ func aimTarget(t *testing.T, cache *settings.Cache, mediaType string, target set
 		t.Fatalf("CreateQualityTarget: %v", err)
 	}
 	return &created.ID
+}
+
+// runCutoff runs the shared cutoff job with check as its only media type, for every item or the one work named.
+func runCutoff(t *testing.T, desired library.Desired, cache *settings.Cache, check cutoff.Check, workID int64) error {
+	t.Helper()
+	payload, err := json.Marshal(cutoff.Payload{WorkID: workID})
+	if err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	job := cutoff.NewJob(cutoff.Config{
+		Desired: desired, Settings: cache, Logger: slog.New(slog.DiscardHandler),
+		Sources: func(int64) []cutoff.Source { return []cutoff.Source{{Name: "test", Check: check}} },
+	})
+	return job.Run(t.Context(), jobs.Job{Type: cutoff.JobType, Payload: payload})
 }

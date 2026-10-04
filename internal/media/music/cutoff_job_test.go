@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -56,7 +57,7 @@ func TestCutoffJob_MarksAnAlbumBelowTheCutoffUpgradable(t *testing.T) {
 	}
 	stateAfterRun := func() string {
 		t.Helper()
-		if err := job.Run(t.Context(), jobs.Job{Type: music.CutoffJobType}); err != nil {
+		if err := runCutoff(t, desired, env.settings, job, 0); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 		got, err := desired.Get(t.Context(), item.ID)
@@ -123,7 +124,7 @@ func TestCutoffJob_AnAlbumsOwnProfileDecidesWhetherItIsUpgradable(t *testing.T) 
 	job := music.CutoffJob{Desired: desired, Settings: env.settings, Logger: slog.New(slog.DiscardHandler)}
 	stateAfterRun := func() string {
 		t.Helper()
-		if err := job.Run(t.Context(), jobs.Job{Type: music.CutoffJobType}); err != nil {
+		if err := runCutoff(t, desired, env.settings, job, 0); err != nil {
 			t.Fatalf("Run: %v", err)
 		}
 		got, err := desired.Get(t.Context(), item.ID)
@@ -311,8 +312,7 @@ func runReplacement(t *testing.T, env *searchTestEnv, item librarydb.DesiredItem
 			return desired.DetachAndRecompute(ctx, item.ID, item.WorkID, object, []string{"primary"})
 		},
 	}
-	payload, _ := json.Marshal(music.CutoffPayload{WorkID: item.WorkID})
-	if err := job.Run(t.Context(), jobs.Job{Type: music.CutoffJobType, Payload: payload}); err != nil {
+	if err := runCutoff(t, desired, env.settings, job, item.WorkID); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	return recycled
@@ -354,4 +354,18 @@ func aimTarget(t *testing.T, cache *settings.Cache, mediaType string, target set
 		t.Fatalf("CreateQualityTarget: %v", err)
 	}
 	return &created.ID
+}
+
+// runCutoff runs the shared cutoff job with check as its only media type, for every item or the one work named.
+func runCutoff(t *testing.T, desired library.Desired, cache *settings.Cache, check cutoff.Check, workID int64) error {
+	t.Helper()
+	payload, err := json.Marshal(cutoff.Payload{WorkID: workID})
+	if err != nil {
+		t.Fatalf("payload: %v", err)
+	}
+	job := cutoff.NewJob(cutoff.Config{
+		Desired: desired, Settings: cache, Logger: slog.New(slog.DiscardHandler),
+		Sources: func(int64) []cutoff.Source { return []cutoff.Source{{Name: "test", Check: check}} },
+	})
+	return job.Run(t.Context(), jobs.Job{Type: cutoff.JobType, Payload: payload})
 }

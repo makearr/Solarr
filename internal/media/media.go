@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/acquiring/rss"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -112,6 +113,11 @@ type Renaming interface {
 // Feeding is the capability of a media type whose wanted items are also filled from the indexers' feeds.
 type Feeding interface {
 	rss.Feed
+}
+
+// Upgrading is the capability of a media type whose owned files are checked against their library's cutoff.
+type Upgrading interface {
+	cutoff.Check
 }
 
 // JobRegistrar takes one job type with its handler.

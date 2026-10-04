@@ -66,7 +66,11 @@ func (p *process) musicModule() music.Module {
 	feed := music.Feed{
 		Grab: p.musicGrab(), Indexers: p.indexerConns, WantedByArtist: library.NewHunt(p.library).WantedAlbumsByArtist, Logger: p.logger,
 	}
-	return music.Module{Hunt: p.musicHunt, Feed: feed, Rename: &rename, Sweep: scan.Sweep{
+	check := music.CutoffJob{
+		Desired: library.NewDesired(p.library), Settings: p.cache, Recycle: p.recycleSuperseded,
+		Clock: clock.NewSystem(), Logger: p.logger,
+	}
+	return music.Module{Hunt: p.musicHunt, Feed: feed, CutoffJob: check, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -117,6 +121,10 @@ func (p *process) tvModule() tv.Module {
 				}
 				return ids
 			},
+		},
+		CutoffJob: tv.CutoffJob{
+			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
+			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
 		Retry: retry,
 	}

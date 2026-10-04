@@ -2,31 +2,18 @@ package music
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
-	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
-
-// CutoffJobType is Lidarr's Cutoff Unmet, computed: every album with all its tracks is judged against
-// its library's cutoff and marked UPGRADABLE when a file falls short (M1d).
-const CutoffJobType = jobs.Type("music.cutoff_check")
-
-// CutoffDefinition runs one check at a time; the next scheduled run is its retry.
-var CutoffDefinition = jobs.Definition{
-	Name: "Checking albums against the quality cutoff", Type: CutoffJobType, Pool: jobs.PoolFiles,
-	Mutating: true, MaxAttempts: 1,
-}
-
-const cutoffPageSize = 200
 
 // CutoffJob marks albums UPGRADABLE or COMPLETE by what the probe measured of their files, first
 // settling a track a download brought a second file for: the better file stays (M1d's replacement).
@@ -40,72 +27,27 @@ type CutoffJob struct {
 	Logger  *slog.Logger
 }
 
-// CutoffPayload limits a run to one album, the one a download was just imported into; empty is every album.
-type CutoffPayload struct {
-	WorkID int64 `json:"work_id,omitempty"`
+// CheckCutoff implements cutoff.Check: an album with all its tracks is settled and judged; one with gaps is left.
+func (j CutoffJob) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (cutoff.Outcome, error) {
+	if item.State != ItemStateComplete && item.State != ItemStateUpgradable {
+		return cutoff.Outcome{}, nil
+	}
+	settled, err := j.replaceSuperseded(ctx, snapshot, item)
+	if err != nil {
+		return cutoff.Outcome{}, err
+	}
+	state, decided, err := j.stateFor(ctx, snapshot, item)
+	if err != nil {
+		return cutoff.Outcome{}, err
+	}
+	// A recycle recomputed the item, so the judgment is written whatever the state read before.
+	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided, Rewrite: settled > 0}, nil
 }
 
-// Run walks every monitored complete album once. An album with a file not yet measured is left as it is.
-func (j CutoffJob) Run(ctx context.Context, job jobs.Job) error {
-	var payload CutoffPayload
-	if len(job.Payload) > 0 {
-		if err := json.Unmarshal(job.Payload, &payload); err != nil {
-			return jobs.Terminalf("cutoff.payload", string(CutoffJobType), err)
-		}
-	}
-	snapshot := j.Settings.Snapshot()
-	var afterID int64
-	var checked, upgradable, changed, replaced int
-	for {
-		items, err := j.page(ctx, payload.WorkID, afterID)
-		if err != nil {
-			return err
-		}
-		for _, item := range items {
-			afterID = item.ID
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			settled, err := j.replaceSuperseded(ctx, snapshot, item)
-			if err != nil {
-				return err
-			}
-			replaced += settled
-			if settled > 0 {
-				item.State = "" // the recycle recomputed it; write whatever the judgment says
-			}
-			state, decided, err := j.stateFor(ctx, snapshot, item)
-			if err != nil {
-				return err
-			}
-			job.Progress.Add(1)
-			if !decided {
-				continue
-			}
-			checked++
-			if state == string(ItemStateUpgradable) {
-				upgradable++
-			}
-			if state != item.State {
-				if err := j.Desired.SetAlbumState(ctx, item.ID, state, item.PresentCount); err != nil {
-					return err
-				}
-				changed++
-			}
-		}
-		if len(items) < cutoffPageSize || payload.WorkID != 0 {
-			break
-		}
-	}
-	j.logger().Info("cutoff check finished", slog.Int("albums", checked), slog.Int("cutoff_unmet", upgradable),
-		slog.Int("changed", changed), slog.Int("files_replaced", replaced))
-	return nil
-}
-
-// page is one page of albums to check, or the one album a payload names.
-func (j CutoffJob) page(ctx context.Context, workID, afterID int64) ([]library.CutoffItem, error) {
+// CutoffPage implements cutoff.Check: a page of albums to check, or the one album workID names.
+func (j CutoffJob) CutoffPage(ctx context.Context, workID, afterID, limit int64) ([]library.CutoffItem, error) {
 	if workID == 0 {
-		return j.Desired.CutoffPage(ctx, afterID, cutoffPageSize)
+		return j.Desired.CutoffPage(ctx, afterID, limit)
 	}
 	items, err := j.Desired.AlbumItemsForWork(ctx, workID)
 	if err != nil {
@@ -312,11 +254,4 @@ func measuredFacts(file library.MeasuredFile) score.Facts {
 		AudioBitrate: file.BitrateKbps * 1000, OverallBitrate: file.BitrateKbps * 1000,
 		AudioLanguages: file.AudioLanguages, LyricsLanguages: file.LyricsLanguages,
 	}}
-}
-
-func (j CutoffJob) logger() *slog.Logger {
-	if j.Logger == nil {
-		return slog.Default()
-	}
-	return j.Logger
 }

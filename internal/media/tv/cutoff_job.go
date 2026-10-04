@@ -2,41 +2,23 @@ package tv
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
-	"github.com/makearr/Solarr/internal/jobs"
 )
-
-// CutoffJobType is Sonarr's Cutoff Unmet, computed: every monitored season is judged against its library's target or
-// cutoff and marked UPGRADABLE when an episode file falls short.
-const CutoffJobType = jobs.Type("tv.cutoff_check")
-
-// CutoffDefinition runs one check at a time; the next scheduled run is its retry.
-var CutoffDefinition = jobs.Definition{
-	Name: "Checking seasons against the quality cutoff", Type: CutoffJobType, Pool: jobs.PoolFiles,
-	Mutating: true, MaxAttempts: 1,
-}
-
-const cutoffPageSize = 200
 
 // Item states the check moves a season between.
 const (
 	ItemStateUpgradable = "UPGRADABLE"
 	ItemStateComplete   = "COMPLETE"
 )
-
-// CutoffPayload limits a run to one series, the one a download was just imported into; empty is every series.
-type CutoffPayload struct {
-	WorkID int64 `json:"work_id,omitempty"`
-}
 
 // CutoffJob settles an episode a download brought a second file for (the strictly better file stays, a tie keeps the
 // owned one), then marks each season UPGRADABLE or COMPLETE by what the probe measured.
@@ -50,64 +32,44 @@ type CutoffJob struct {
 	Logger  *slog.Logger
 }
 
-// Run walks every monitored season once; a season with a file not yet measured keeps its state.
-func (j CutoffJob) Run(ctx context.Context, job jobs.Job) error {
-	var payload CutoffPayload
-	if len(job.Payload) > 0 {
-		if err := json.Unmarshal(job.Payload, &payload); err != nil {
-			return jobs.Terminalf("cutoff.payload", string(CutoffJobType), err)
-		}
+// CutoffPage implements cutoff.Check: a page of monitored seasons, or every season of the one series workID names.
+func (j CutoffJob) CutoffPage(ctx context.Context, workID, afterID, limit int64) ([]library.CutoffItem, error) {
+	if workID == 0 {
+		return j.Desired.TVCutoffPage(ctx, afterID, limit)
 	}
-	snapshot := j.Settings.Snapshot()
-	var afterID int64
-	var checked, upgradable, changed, replaced int
+	var ofWork []library.CutoffItem
 	for {
-		items, err := j.Desired.TVCutoffPage(ctx, afterID, cutoffPageSize)
+		page, err := j.Desired.TVCutoffPage(ctx, afterID, limit)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		for _, item := range items {
+		for _, item := range page {
 			afterID = item.ID
-			if err := ctx.Err(); err != nil {
-				return err
-			}
-			if payload.WorkID != 0 && item.WorkID != payload.WorkID {
-				continue
-			}
-			settled, err := j.settle(ctx, snapshot, item)
-			if err != nil {
-				return err
-			}
-			replaced += settled
-			if item.State == "PARTIAL" {
-				continue // a season with gaps is not marked; only a second file in it is settled
-			}
-			state, decided, err := j.stateFor(ctx, snapshot, item)
-			if err != nil {
-				return err
-			}
-			job.Progress.Add(1)
-			if !decided {
-				continue
-			}
-			checked++
-			if state == ItemStateUpgradable {
-				upgradable++
-			}
-			if state != item.State {
-				if err := j.Desired.SetAlbumState(ctx, item.ID, state, item.PresentCount); err != nil {
-					return err
-				}
-				changed++
+			if item.WorkID == workID {
+				ofWork = append(ofWork, item)
 			}
 		}
-		if len(items) < cutoffPageSize {
-			break
+		if int64(len(page)) < limit {
+			return ofWork, nil
 		}
 	}
-	j.logger().Info("tv cutoff check finished", slog.Int("seasons", checked), slog.Int("cutoff_unmet", upgradable),
-		slog.Int("changed", changed), slog.Int("files_replaced", replaced))
-	return nil
+}
+
+// CheckCutoff implements cutoff.Check: a second file in a season is settled whatever its state; a season with gaps is
+// not marked.
+func (j CutoffJob) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (cutoff.Outcome, error) {
+	settled, err := j.settle(ctx, snapshot, item)
+	if err != nil {
+		return cutoff.Outcome{}, err
+	}
+	if item.State == "PARTIAL" {
+		return cutoff.Outcome{Replaced: settled}, nil
+	}
+	state, decided, err := j.stateFor(ctx, snapshot, item)
+	if err != nil {
+		return cutoff.Outcome{}, err
+	}
+	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided}, nil
 }
 
 // settle keeps, per episode a download brought a second file for, the strictly better measured file and recycles the
@@ -225,13 +187,6 @@ func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, it
 		}
 	}
 	return ItemStateComplete, true, nil
-}
-
-func (j CutoffJob) logger() *slog.Logger {
-	if j.Logger == nil {
-		return slog.Default()
-	}
-	return j.Logger
 }
 
 // FileFacts is what the probe measured of an episode's file, as the facts a profile or a target judges.

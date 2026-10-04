@@ -18,6 +18,8 @@ type Module struct {
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
 	// Feed is TV's part of the RSS sync.
 	Feed
+	// CutoffJob is TV's part of the cutoff check.
+	CutoffJob
 	// Retry identifies again the files that waited for review; nil leaves the job unregistered.
 	Retry *RetryJob
 }
