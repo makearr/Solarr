@@ -134,6 +134,7 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Backup | daily 01:00 | A rotation backup of `library.db` and `jobs.db` |
 | Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
+| Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision and no held download refers to it. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |
 
 **Maintenance holds the writer exclusively** (`store.Maintain`), so every write to that database
 waits until it finishes; the others keep working. A failed integrity check stops that database's

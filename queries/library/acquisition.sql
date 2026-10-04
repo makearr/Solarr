@@ -272,3 +272,27 @@ FROM acquisition a
 JOIN desired_item di ON di.id = a.desired_item_id
 LEFT JOIN candidate c ON c.id = a.candidate_id
 WHERE di.category_id = ? AND a.state IN ('QUEUED', 'DOWNLOADING', 'COMPLETED', 'IMPORTING');
+
+-- Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
+
+-- Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
+-- name: ListDecisionsToRetire :many
+SELECT cd.id, cd.desired_item_id, cd.outcome, cd.score, cd.rejections_json, cd.decided_at
+FROM candidate_decision AS cd
+WHERE cd.id IN (SELECT oldest.id FROM candidate_decision AS oldest ORDER BY oldest.id LIMIT sqlc.arg(page_size))
+  AND cd.decided_at < sqlc.arg(decided_before)
+ORDER BY cd.id;
+
+-- name: DeleteDecisionsByID :execrows
+DELETE FROM candidate_decision WHERE id IN (SELECT value FROM json_each(sqlc.arg(ids)));
+
+-- A held release (ready_queue) keeps its candidate however old.
+-- name: DeleteUnreferencedExpiredCandidates :execrows
+DELETE FROM candidate WHERE id IN (
+  SELECT expired.id FROM candidate AS expired
+  WHERE expired.expires_at <= sqlc.arg(now)
+    AND NOT EXISTS (SELECT 1 FROM candidate_decision d WHERE d.candidate_id = expired.id)
+    AND NOT EXISTS (SELECT 1 FROM ready_queue r WHERE r.candidate_id = expired.id)
+  ORDER BY expired.expires_at
+  LIMIT sqlc.arg(page_size)
+);

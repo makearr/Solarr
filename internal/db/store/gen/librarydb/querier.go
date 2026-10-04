@@ -207,6 +207,7 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
+	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
 	// CommitUnit itself created (import_unit.edition_created), and only after
@@ -236,6 +237,8 @@ type Querier interface {
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
+	// A held release (ready_queue) keeps its candidate however old.
+	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
 	// The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
 	DeleteUserTag(ctx context.Context, id int64) (int64, error)
 	DeleteWork(ctx context.Context, id int64) error
@@ -468,6 +471,9 @@ type Querier interface {
 	// The interactive search view's own listing (F16): a decision means nothing
 	// without the release it was decided about.
 	ListDecisionsForItemWithCandidate(ctx context.Context, arg ListDecisionsForItemWithCandidateParams) ([]ListDecisionsForItemWithCandidateRow, error)
+	// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
+	// Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
+	ListDecisionsToRetire(ctx context.Context, arg ListDecisionsToRetireParams) ([]ListDecisionsToRetireRow, error)
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
 	ListDesiredItemsForFile(ctx context.Context, mediaObjectID int64) ([]DesiredItemFile, error)
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)

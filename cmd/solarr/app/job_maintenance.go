@@ -20,13 +20,39 @@ const (
 	backupJobType              = jobs.Type("database.backup")
 	backupCleanupJobType       = jobs.Type("database.backup_cleanup")
 	recycleBinCleanupJobType   = jobs.Type("library.recycle_bin_cleanup")
+	decisionRetentionJobType   = jobs.Type("library.decision_retention")
 )
+
+// decisionRetentionPages bounds one run, so a first pass over an old backlog is spread over several nights.
+const decisionRetentionPages = 250
 
 var maintenanceDefinitions = []jobs.Definition{
 	{Type: databaseMaintenanceJobType, Name: "Maintaining the databases", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
 	{Type: backupJobType, Name: "Backing up", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3},
 	{Type: backupCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
+	{Type: decisionRetentionJobType, Name: "Cleaning old search results", Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
+}
+
+// decisionRetentionJob ages search decisions past retention.decisions_full into the daily rollup and deletes the
+// expired releases nothing refers to any more (section 5.7); without it both tables only grow.
+type decisionRetentionJob struct {
+	candidates library.Candidates
+	keepFull   time.Duration
+	clock      clock.Clock
+	logger     *slog.Logger
+}
+
+func (j decisionRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
+	now := j.clock.Now()
+	retired, err := j.candidates.Retire(ctx, now, now.Add(-j.keepFull), decisionRetentionPages)
+	if err != nil {
+		return err
+	}
+	if retired.Decisions > 0 || retired.Candidates > 0 {
+		j.logger.Info("old search results cleaned", slog.Int64("decisions", retired.Decisions), slog.Int64("releases", retired.Candidates))
+	}
+	return nil
 }
 
 // recycleBinCleanupJob purges recycle bin entries past the retention their library gave them
@@ -152,6 +178,10 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 	executor.Handle(recycleBinCleanupJobType, recycleBinCleanupJob{
 		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), cache: p.cache, logger: p.logger,
 	})
+	executor.Handle(decisionRetentionJobType, decisionRetentionJob{
+		candidates: library.NewCandidates(p.library), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
+		clock: clock.NewSystem(), logger: p.logger,
+	})
 	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{
 		stores: backedUp, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
@@ -179,6 +209,10 @@ func (p *process) enqueueBackup(ctx context.Context) (jobs.EnqueueResult, error)
 
 func (p *process) enqueueRecycleBinCleanup(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueMaintenanceJob(ctx, recycleBinCleanupJobType)
+}
+
+func (p *process) enqueueDecisionRetention(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueMaintenanceJob(ctx, decisionRetentionJobType)
 }
 
 func (p *process) enqueueBackupCleanup(ctx context.Context) (jobs.EnqueueResult, error) {

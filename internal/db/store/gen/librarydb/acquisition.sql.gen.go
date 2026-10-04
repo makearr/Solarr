@@ -174,6 +174,18 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 	return i, err
 }
 
+const deleteDecisionsByID = `-- name: DeleteDecisionsByID :execrows
+DELETE FROM candidate_decision WHERE id IN (SELECT value FROM json_each(?1))
+`
+
+func (q *Queries) DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteDecisionsByID, ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const deleteExpiredCandidates = `-- name: DeleteExpiredCandidates :exec
 DELETE FROM candidate WHERE expires_at <= ?
 `
@@ -191,6 +203,31 @@ DELETE FROM recycle_bin WHERE id = ?
 func (q *Queries) DeleteRecycleBinEntry(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteRecycleBinEntry, id)
 	return err
+}
+
+const deleteUnreferencedExpiredCandidates = `-- name: DeleteUnreferencedExpiredCandidates :execrows
+DELETE FROM candidate WHERE id IN (
+  SELECT expired.id FROM candidate AS expired
+  WHERE expired.expires_at <= ?1
+    AND NOT EXISTS (SELECT 1 FROM candidate_decision d WHERE d.candidate_id = expired.id)
+    AND NOT EXISTS (SELECT 1 FROM ready_queue r WHERE r.candidate_id = expired.id)
+  ORDER BY expired.expires_at
+  LIMIT ?2
+)
+`
+
+type DeleteUnreferencedExpiredCandidatesParams struct {
+	Now      int64
+	PageSize int64
+}
+
+// A held release (ready_queue) keeps its candidate however old.
+func (q *Queries) DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteUnreferencedExpiredCandidates, arg.Now, arg.PageSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const getAcquisition = `-- name: GetAcquisition :one
@@ -814,6 +851,61 @@ func (q *Queries) ListDecisionsForItemWithCandidate(ctx context.Context, arg Lis
 			&i.Source,
 			&i.FirstSeenAt,
 			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDecisionsToRetire = `-- name: ListDecisionsToRetire :many
+
+SELECT cd.id, cd.desired_item_id, cd.outcome, cd.score, cd.rejections_json, cd.decided_at
+FROM candidate_decision AS cd
+WHERE cd.id IN (SELECT oldest.id FROM candidate_decision AS oldest ORDER BY oldest.id LIMIT ?1)
+  AND cd.decided_at < ?2
+ORDER BY cd.id
+`
+
+type ListDecisionsToRetireParams struct {
+	PageSize      int64
+	DecidedBefore int64
+}
+
+type ListDecisionsToRetireRow struct {
+	ID             int64
+	DesiredItemID  int64
+	Outcome        string
+	Score          float64
+	RejectionsJson sql.NullString
+	DecidedAt      int64
+}
+
+// Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
+// Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
+func (q *Queries) ListDecisionsToRetire(ctx context.Context, arg ListDecisionsToRetireParams) ([]ListDecisionsToRetireRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDecisionsToRetire, arg.PageSize, arg.DecidedBefore)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDecisionsToRetireRow{}
+	for rows.Next() {
+		var i ListDecisionsToRetireRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DesiredItemID,
+			&i.Outcome,
+			&i.Score,
+			&i.RejectionsJson,
+			&i.DecidedAt,
 		); err != nil {
 			return nil, err
 		}
