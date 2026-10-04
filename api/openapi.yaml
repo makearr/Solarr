@@ -6958,16 +6958,17 @@ components:
         total_bytes: { type: integer, format: int64 }
         entries:
           type: array
-          items:
-            type: object
-            required: [id, original_path, reason, size_bytes, recycled_at, expires_at]
-            properties:
-              id: { type: integer, format: int64 }
-              original_path: { type: string }
-              reason: { type: string, description: "replaced, rejected_worse, junk, user_delete or failed_import." }
-              size_bytes: { type: integer, format: int64 }
-              recycled_at: { type: integer, format: int64, description: Unix seconds. }
-              expires_at: { type: integer, format: int64, description: Unix seconds. }
+          items: { $ref: "#/components/schemas/RecycleBinEntry" }
+    RecycleBinEntry:
+      type: object
+      required: [id, original_path, reason, size_bytes, recycled_at, expires_at]
+      properties:
+        id: { type: integer, format: int64 }
+        original_path: { type: string }
+        reason: { type: string, description: "replaced, rejected_worse, junk, user_delete or failed_import." }
+        size_bytes: { type: integer, format: int64 }
+        recycled_at: { type: integer, format: int64, description: Unix seconds. }
+        expires_at: { type: integer, format: int64, description: Unix seconds. }
     RecycleBinEmptied:
       type: object
       required: [removed, freed_bytes, failed]

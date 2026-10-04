@@ -83,17 +83,12 @@ func (s *Server) ListRecycleBinEntries(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
-	out := gen.RecycleBinContents{TotalEntries: totalEntries, TotalBytes: totalBytes, Entries: make([]struct {
-		ExpiresAt    int64  `json:"expires_at"`
-		Id           int64  `json:"id"`
-		OriginalPath string `json:"original_path"`
-		Reason       string `json:"reason"`
-		RecycledAt   int64  `json:"recycled_at"`
-		SizeBytes    int64  `json:"size_bytes"`
-	}, len(entries))}
+	out := gen.RecycleBinContents{TotalEntries: totalEntries, TotalBytes: totalBytes, Entries: make([]gen.RecycleBinEntry, len(entries))}
 	for i, entry := range entries {
-		out.Entries[i].ExpiresAt, out.Entries[i].Id, out.Entries[i].OriginalPath = entry.ExpiresAt, entry.ID, entry.OriginalPath
-		out.Entries[i].Reason, out.Entries[i].RecycledAt, out.Entries[i].SizeBytes = entry.Reason, entry.RecycledAt, entry.SizeBytes
+		out.Entries[i] = gen.RecycleBinEntry{
+			Id: entry.ID, OriginalPath: entry.OriginalPath, Reason: entry.Reason, SizeBytes: entry.SizeBytes,
+			RecycledAt: entry.RecycledAt, ExpiresAt: entry.ExpiresAt,
+		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
 }

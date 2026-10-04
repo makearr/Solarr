@@ -3180,21 +3180,9 @@ type ReadyStatusStatus string
 
 // RecycleBinContents defines model for RecycleBinContents.
 type RecycleBinContents struct {
-	Entries []struct {
-		// ExpiresAt Unix seconds.
-		ExpiresAt    int64  `json:"expires_at"`
-		Id           int64  `json:"id"`
-		OriginalPath string `json:"original_path"`
-
-		// Reason replaced, rejected_worse, junk, user_delete or failed_import.
-		Reason string `json:"reason"`
-
-		// RecycledAt Unix seconds.
-		RecycledAt int64 `json:"recycled_at"`
-		SizeBytes  int64 `json:"size_bytes"`
-	} `json:"entries"`
-	TotalBytes   int64 `json:"total_bytes"`
-	TotalEntries int64 `json:"total_entries"`
+	Entries      []RecycleBinEntry `json:"entries"`
+	TotalBytes   int64             `json:"total_bytes"`
+	TotalEntries int64             `json:"total_entries"`
 }
 
 // RecycleBinEmptied defines model for RecycleBinEmptied.
@@ -3202,6 +3190,21 @@ type RecycleBinEmptied struct {
 	Failed     int64 `json:"failed"`
 	FreedBytes int64 `json:"freed_bytes"`
 	Removed    int64 `json:"removed"`
+}
+
+// RecycleBinEntry defines model for RecycleBinEntry.
+type RecycleBinEntry struct {
+	// ExpiresAt Unix seconds.
+	ExpiresAt    int64  `json:"expires_at"`
+	Id           int64  `json:"id"`
+	OriginalPath string `json:"original_path"`
+
+	// Reason replaced, rejected_worse, junk, user_delete or failed_import.
+	Reason string `json:"reason"`
+
+	// RecycledAt Unix seconds.
+	RecycledAt int64 `json:"recycled_at"`
+	SizeBytes  int64 `json:"size_bytes"`
 }
 
 // RecycleBinLimits defines model for RecycleBinLimits.

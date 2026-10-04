@@ -4422,25 +4422,26 @@ export interface components {
             total_entries: number;
             /** Format: int64 */
             total_bytes: number;
-            entries: {
-                /** Format: int64 */
-                id: number;
-                original_path: string;
-                /** @description replaced, rejected_worse, junk, user_delete or failed_import. */
-                reason: string;
-                /** Format: int64 */
-                size_bytes: number;
-                /**
-                 * Format: int64
-                 * @description Unix seconds.
-                 */
-                recycled_at: number;
-                /**
-                 * Format: int64
-                 * @description Unix seconds.
-                 */
-                expires_at: number;
-            }[];
+            entries: components["schemas"]["RecycleBinEntry"][];
+        };
+        RecycleBinEntry: {
+            /** Format: int64 */
+            id: number;
+            original_path: string;
+            /** @description replaced, rejected_worse, junk, user_delete or failed_import. */
+            reason: string;
+            /** Format: int64 */
+            size_bytes: number;
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            recycled_at: number;
+            /**
+             * Format: int64
+             * @description Unix seconds.
+             */
+            expires_at: number;
         };
         RecycleBinEmptied: {
             /** Format: int64 */
