@@ -599,6 +599,19 @@ func TestSetWorkMonitored_SearchesAtOnceWhenAsked(t *testing.T) {
 	}
 }
 
+// A custom filter rides along too, or "select all matching" under it would act on every album of the library.
+func TestBulkSetWorkMonitored_ForwardsTheCustomFilter(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	where := `[{"field":"year","op":"gt","value":"2000"}]`
+	body, _ := json.Marshal(map[string]any{"category_id": 1, "where": where, "monitored": false, "preview": true})
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor", string(body))); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.worksMonitor.lastBulkSelection.Where; got != where {
+		t.Errorf("selection where = %q, want %q", got, where)
+	}
+}
+
 // A bulk action under the list's own filters must reach the selection, or "select all matching" under Fresh
 // would act on every album of the library.
 func TestBulkSetWorkMonitored_ForwardsTheListFilters(t *testing.T) {

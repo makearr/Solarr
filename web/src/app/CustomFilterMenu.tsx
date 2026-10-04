@@ -29,10 +29,13 @@ export function CustomFilterMenu({ fields, storageKey, where, onChange }: Props)
   const [editing, setEditing] = useState<SavedFilter | "new" | null>(null);
   const active = parseWhere(where);
   const current = saved.find((filter) => toWhere(filter.conditions) === where);
-  const label = where === "" ? "Filter" : (current?.name ?? "Custom filter");
+  const label = where === "" ? "Filter" : current?.name || "Custom filter";
 
   const save = (filter: SavedFilter, apply: boolean) => {
-    setSaved(saved.some((entry) => entry.id === filter.id) ? saved.map((entry) => (entry.id === filter.id ? filter : entry)) : [...saved, filter]);
+    // A filter without a name is applied but never kept.
+    if (filter.name !== "") {
+      setSaved(saved.some((entry) => entry.id === filter.id) ? saved.map((entry) => (entry.id === filter.id ? filter : entry)) : [...saved, filter]);
+    }
     if (apply) onChange(toWhere(filter.conditions));
   };
 
@@ -40,8 +43,7 @@ export function CustomFilterMenu({ fields, storageKey, where, onChange }: Props)
     <>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger
-          aria-label="Filter"
-          className={`flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${where === "" ? "border-border-subtle text-ink-muted hover:text-ink" : "border-accent text-ink"}`}
+          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${where === "" ? "border-border-subtle text-ink-muted hover:text-ink" : "border-accent text-ink"}`}
         >
           <Filter aria-hidden className="size-3.5" />
           {label}

@@ -127,6 +127,8 @@ type WorkDetailRow struct {
 type BulkSelection struct {
 	RootFolderIDs, CategoryIDs, IDs, ExcludedIDs []int64
 	Fresh, Wanted, CutoffUnmet                   bool
+	// Where is the list's custom filter as the JSON it carried; malformed answers ErrInvalidChoice.
+	Where string
 }
 
 // WorksMonitor toggles monitored state at the album and part level (section
@@ -481,6 +483,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
+		Where: derefOr(body.Where, ""),
 	}
 	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), selection, body.Monitored, derefOr(body.Preview, false))
 	if err != nil {

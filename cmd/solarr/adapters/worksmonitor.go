@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // WorksMonitor satisfies apiserver.WorksMonitor over library.Desired,
@@ -194,8 +195,13 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 		return matched, nil
 	}
 
+	where, err := listfilter.Parse(selection.Where, library.WorkFields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
 	filter := library.WorkFilter{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
+		Where: where,
 	}
 	if selection.Fresh {
 		filter.FreshSince, filter.FreshRSSSince = a.Fresh.Cutoffs(a.Clock)

@@ -5016,6 +5016,9 @@ type ListWorksParams struct {
 
 	// CutoffUnmet Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
 	CutoffUnmet *bool `form:"cutoff_unmet,omitempty" json:"cutoff_unmet,omitempty"`
+
+	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
+	Where *string `form:"where,omitempty" json:"where,omitempty"`
 }
 
 // ListWorksParamsSort defines parameters for ListWorks.
@@ -5039,6 +5042,7 @@ type BulkEditWorksJSONBody struct {
 	} `json:"profile,omitempty"`
 	RemoveTags *[]string `json:"remove_tags,omitempty"`
 	Wanted     *bool     `json:"wanted,omitempty"`
+	Where      *string   `json:"where,omitempty"`
 }
 
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
@@ -5059,6 +5063,9 @@ type BulkSetWorkMonitoredJSONBody struct {
 
 	// Wanted The list's Wanted filter.
 	Wanted *bool `json:"wanted,omitempty"`
+
+	// Where The list's custom filter (the JSON the list carried)
+	Where *string `json:"where,omitempty"`
 }
 
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.
@@ -15650,6 +15657,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "cutoff_unmet", r.URL.Query(), &params.CutoffUnmet)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cutoff_unmet", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "where" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "where", Err: err})
 		return
 	}
 

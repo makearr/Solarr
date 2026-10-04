@@ -156,6 +156,64 @@ test("a scan fills the artist wall with photos and the album wall with covers", 
   await page.screenshot({ path: "/e2e-out/albums-wall.png" });
 });
 
+// 2026-10-04: the bin shows what it holds and can be emptied by hand.
+test("the recycle bin lists its contents and offers to empty it", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/storage/recycle-bin");
+  await expect(page.getByRole("heading", { name: "Recycle bin" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Empty recycle bin" })).toBeVisible();
+  await page.screenshot({ path: "/e2e-out/recycle-bin.png" });
+});
+
+// 2026-10-04: target qualities are named and shared, and language profiles sit beneath them.
+test("a target quality can be made under quality profiles, and language profiles are there too", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/quality-profiles");
+  await expect(page.getByRole("heading", { name: "Target qualities" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Language profiles" })).toBeVisible();
+
+  await page.getByRole("button", { name: "New target" }).click();
+  await page.getByLabel("Name").first().fill("E2E 1080p");
+  await page.getByLabel("For").selectOption("tv");
+  for (const group of ["Container", "Video", "Audio"]) {
+    await expect(page.getByText(group, { exact: true }).first()).toBeVisible();
+  }
+  await page.screenshot({ path: "/e2e-out/target-form.png" });
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("E2E 1080p")).toBeVisible();
+  await page.getByRole("button", { name: "Remove target E2E 1080p" }).click();
+  await expect(page.getByText("E2E 1080p")).toBeHidden();
+});
+
+// 2026-10-04: Sonarr's custom filter, on the music library's Albums level.
+test("a custom filter can be built on the Albums level", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/library/1/albums");
+  await page.getByRole("button", { name: "Filter" }).click();
+  await page.getByRole("menuitem", { name: "Custom filter…" }).click();
+  await page.getByLabel("Field", { exact: true }).selectOption("year");
+  await page.getByLabel("Condition", { exact: true }).selectOption("gt");
+  await page.getByLabel("Value", { exact: true }).fill("1900");
+  await page.getByRole("button", { name: "Apply" }).click();
+  await expect(page).toHaveURL(/where=/);
+  await expect(page.getByRole("button", { name: "Custom filter" })).toBeVisible();
+  await page.screenshot({ path: "/e2e-out/albums-filter.png" });
+
+  // Named, a filter is kept in the menu and applies again from there.
+  await page.getByRole("button", { name: "Custom filter" }).click();
+  await page.getByRole("menuitem", { name: "Save this filter…" }).click();
+  await page.getByLabel("Name", { exact: true }).fill("Newer albums");
+  await page.getByRole("button", { name: "Save and apply" }).click();
+  await expect(page.getByRole("button", { name: "Newer albums" })).toBeVisible();
+  await page.getByRole("button", { name: "Newer albums" }).click();
+  await page.getByRole("menuitem", { name: "Everything" }).click();
+  await expect(page).not.toHaveURL(/where=/);
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Newer albums" }).click();
+  await expect(page).toHaveURL(/where=/);
+  await page.screenshot({ path: "/e2e-out/albums-saved-filter.png" });
+});
+
 /** The Albums count the tree shows, read from the API the tree reads: the page itself only refreshes it on navigation. */
 async function albumCount(page: Page): Promise<number> {
   const response = await page.request.get("/api/v1/libraries");

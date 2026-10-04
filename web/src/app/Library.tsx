@@ -16,6 +16,8 @@ import type { SelectionRequest } from "@/list/selection";
 import type { components, paths } from "@/api/schema";
 import { albumStatusLabel } from "@/lib/albumStatus";
 import { CoverArt } from "./CoverArt";
+import { CustomFilterMenu } from "./CustomFilterMenu";
+import { LEVEL_FILTER_FIELDS } from "./filterFields";
 import { BulkEditDialog } from "./EditAlbum";
 import {
   DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
@@ -49,6 +51,7 @@ function selectionBody(request: SelectionRequest) {
     category_id: categoryId ? Number(categoryId) : undefined,
     excluded_ids: request.excluded,
     fresh: request.filters.fresh === "1" ? true : undefined,
+    where: request.filters.where || undefined,
   };
 }
 
@@ -217,7 +220,7 @@ function buildColumns(visible: ReadonlySet<OptionalColumn>): Column<Work>[] {
 // "fresh" is the one real URL filter this list has (todo 4.20, ADR-55): a
 // shipped preset, not a generic filter-building UI -- see next.md's own
 // scope note on why this list has no media-type/year/language filters yet.
-const FILTER_KEYS: readonly string[] = ["fresh"];
+const FILTER_KEYS: readonly string[] = ["fresh", "where"];
 
 export function Library() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
@@ -281,6 +284,7 @@ export function Library() {
               limit: 100,
               category_id: query.filters.category_id ? Number(query.filters.category_id) : undefined,
               fresh: query.filters.fresh === "1" ? true : undefined,
+              where: query.filters.where || undefined,
               sort,
               dir: query.direction === "desc" ? "desc" : undefined,
             },
@@ -369,6 +373,12 @@ export function Library() {
           >
             Fresh
           </button>
+          <CustomFilterMenu
+            fields={LEVEL_FILTER_FIELDS.albums!}
+            storageKey={`${categoryId ?? ""}.albums`}
+            where={routeView.query.filters.where ?? ""}
+            onChange={(where) => routeView.setQuery({ ...routeView.query, filters: { ...routeView.query.filters, where } })}
+          />
           {!list.selectionIsEmpty && (
             <>
               <span className="text-ink-muted">

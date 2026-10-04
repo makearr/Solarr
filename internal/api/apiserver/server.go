@@ -930,6 +930,9 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		}
 		params.CutoffUnmet = &cutoffUnmet
 	}
+	if raw := query.Get("where"); raw != "" {
+		params.Where = &raw
+	}
 
 	s.ListWorks(w, r, params)
 }

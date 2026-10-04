@@ -1945,6 +1945,12 @@ paths:
             Only works whose monitored album has every track but a file below the library's cutoff
             (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
           schema: { type: boolean, default: false }
+        - name: where
+          in: query
+          description: >-
+            A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag
+            (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
+          schema: { type: string }
       responses:
         "200":
           description: One page.
@@ -2990,6 +2996,7 @@ paths:
                   type: array
                   items: { type: integer, format: int64 }
                 fresh: { type: boolean, default: false, description: The list's Fresh filter, when "select all matching" was made under it. }
+                where: { type: string, description: The list's custom filter (the JSON the list carried), when "select all matching" was made under it. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
                 cutoff_unmet: { type: boolean, default: false, description: The list's Cutoff Unmet filter. }
                 monitored: { type: boolean }
@@ -3029,6 +3036,7 @@ paths:
                   type: array
                   items: { type: integer, format: int64 }
                 fresh: { type: boolean, default: false }
+                where: { type: string }
                 wanted: { type: boolean, default: false }
                 cutoff_unmet: { type: boolean, default: false }
                 preview: { type: boolean, default: false }

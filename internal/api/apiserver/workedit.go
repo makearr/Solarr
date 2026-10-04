@@ -185,6 +185,7 @@ func (s *Server) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
+		Where: derefOr(body.Where, ""),
 	}
 	change := BulkEditChange{Monitored: body.Monitored, AddTags: derefOr(body.AddTags, nil), RemoveTags: derefOr(body.RemoveTags, nil)}
 	if body.Profile != nil {

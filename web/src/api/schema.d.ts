@@ -9399,6 +9399,8 @@ export interface operations {
                 wanted?: boolean;
                 /** @description Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL. */
                 cutoff_unmet?: boolean;
+                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
+                where?: string;
             };
             header?: never;
             path?: never;
@@ -10524,6 +10526,8 @@ export interface operations {
                      * @default false
                      */
                     fresh?: boolean;
+                    /** @description The list's custom filter (the JSON the list carried) */
+                    where?: string;
                     /**
                      * @description The list's Wanted filter.
                      * @default false
@@ -10571,6 +10575,7 @@ export interface operations {
                     excluded_ids?: number[];
                     /** @default false */
                     fresh?: boolean;
+                    where?: string;
                     /** @default false */
                     wanted?: boolean;
                     /** @default false */

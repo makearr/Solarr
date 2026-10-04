@@ -168,6 +168,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
+			Where: derefOr(params.Where, ""),
 		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {
