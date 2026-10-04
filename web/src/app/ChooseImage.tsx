@@ -6,12 +6,20 @@ import { useState } from "react";
 import { api } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 
+import { remoteImage } from "@/lib/remoteImage";
+
 import { bumpArtwork } from "./artworkVersion";
 
-type Subject = "works" | "people";
+type Subject = "works" | "people" | "series";
+
+/** A series is read and written inside a library, and its posters are provider pictures shown through the image cache. */
+interface SeriesScope {
+  categoryId: number;
+  onChosen: () => void;
+}
 
 /** Browse the pictures the providers hold for an album or artist and keep one (M1g 1.3). */
-export function ChooseImage({ subject, id, title }: { subject: Subject; id: number; title: string }) {
+export function ChooseImage({ subject, id, title, series }: { subject: Subject; id: number; title: string; series?: SeriesScope }) {
   const [open, setOpen] = useState(false);
   if (!useIsAdministrator()) return null;
   return (
@@ -23,7 +31,7 @@ export function ChooseImage({ subject, id, title }: { subject: Subject; id: numb
       >
         Choose image
       </button>
-      {open && <ImagePicker subject={subject} id={id} title={title} onClose={() => setOpen(false)} />}
+      {open && <ImagePicker subject={subject} id={id} title={title} series={series} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -32,11 +40,13 @@ function ImagePicker({
   subject,
   id,
   title,
+  series,
   onClose,
 }: {
   subject: Subject;
   id: number;
   title: string;
+  series?: SeriesScope;
   onClose: () => void;
 }) {
   const options = useQuery({
@@ -44,9 +54,11 @@ function ImagePicker({
     queryFn: async () => {
       const path = { params: { path: { id } } };
       const { data, error } =
-        subject === "works"
-          ? await api.GET("/works/{id}/artwork/options", path)
-          : await api.GET("/people/{id}/artwork/options", path);
+        subject === "series"
+          ? await api.GET("/series/{id}/posters", { params: { path: { id }, query: { category_id: series?.categoryId ?? 0 } } })
+          : subject === "works"
+            ? await api.GET("/works/{id}/artwork/options", path)
+            : await api.GET("/people/{id}/artwork/options", path);
       if (error) throw error;
       return data;
     },
@@ -57,13 +69,16 @@ function ImagePicker({
     mutationFn: async (url: string) => {
       const request = { params: { path: { id } }, body: { url } };
       const { error } =
-        subject === "works"
-          ? await api.PUT("/works/{id}/artwork", request)
-          : await api.PUT("/people/{id}/artwork", request);
+        subject === "series"
+          ? await api.PUT("/series/{id}/poster", { params: { path: { id }, query: { category_id: series?.categoryId ?? 0 } }, body: { url } })
+          : subject === "works"
+            ? await api.PUT("/works/{id}/artwork", request)
+            : await api.PUT("/people/{id}/artwork", request);
       if (error) throw error;
     },
     onSuccess: () => {
-      bumpArtwork(subject, id);
+      if (subject === "series") series?.onChosen();
+      else bumpArtwork(subject, id);
       onClose();
     },
   });
@@ -108,11 +123,11 @@ function ImagePicker({
                              hover:border-accent disabled:opacity-50"
                 >
                   <img
-                    src={option.thumb_url}
+                    src={subject === "series" ? remoteImage(option.thumb_url, "small") : option.thumb_url}
                     alt={option.label}
                     loading="lazy"
                     referrerPolicy="no-referrer"
-                    className="aspect-square w-full rounded object-cover"
+                    className={`w-full rounded object-cover ${subject === "series" ? "aspect-[2/3]" : "aspect-square"}`}
                   />
                   <span className="text-xs">{option.label}</span>
                   <span className="text-xs text-ink-muted">{option.source}</span>

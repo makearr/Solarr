@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 
+import { ChooseImage } from "./ChooseImage";
 import { formatBytes } from "./Queue";
 import { SeasonSearchDialog } from "./SeasonSearch";
 import { remoteImage } from "@/lib/remoteImage";
@@ -30,6 +31,7 @@ function EpisodeFileChips({ file }: { file: EpisodeFile }) {
     file.video_codec?.toUpperCase(),
     file.hdr && file.hdr !== "" ? file.hdr.toUpperCase() : undefined,
     file.audio_codec ? `${file.audio_codec.toUpperCase()}${file.audio_channels ? ` ${file.audio_channels}` : ""}` : undefined,
+    file.audio_languages && file.audio_languages.length > 0 ? `audio: ${file.audio_languages.filter((l) => l !== "und").join(", ") || "unknown"}` : undefined,
     formatBytes(file.size_bytes),
     file.subtitles.length > 0 ? subtitleChip(file.subtitles) : undefined,
   ].filter(Boolean);
@@ -263,7 +265,43 @@ function EpisodeCredits({ credits, categoryId }: { credits: Credit[]; categoryId
   );
 }
 
-const CREW_ORDER = ["creator", "showrunner", "executive_producer", "composer"];
+/** Who made and who is in the series, one line under its overview: showrunner, creator, director and the first-billed cast. */
+function SeriesPeopleLine({ credits, categoryId }: { credits: Credit[]; categoryId: string }) {
+  const seriesWide = credits.filter((credit) => credit.episode_id == null);
+  const lines: [string, Credit[]][] = [
+    ["Showrunner", seriesWide.filter((credit) => credit.role === "showrunner")],
+    ["Created by", seriesWide.filter((credit) => credit.role === "creator")],
+    ["Directed by", seriesWide.filter((credit) => credit.role === "director")],
+    ["Starring", seriesWide.filter((credit) => credit.role === "actor").slice(0, 6)],
+  ];
+  const shown = lines
+    .map(([label, people]): [string, Credit[]] => [label, people.filter((credit, index) => people.findIndex((other) => other.person_id === credit.person_id) === index)])
+    .filter(([, people]) => people.length > 0);
+  if (shown.length === 0) return null;
+  return (
+    <div className="flex max-w-3xl flex-col gap-0.5 text-xs text-ink-muted">
+      {shown.map(([label, people]) => (
+        <p key={label}>
+          <span className="font-medium text-ink">{label}</span>{" "}
+          {people.map((credit, index) => (
+            <span key={credit.person_id}>
+              {index > 0 && ", "}
+              <Link
+                to="/library/$categoryId/people/$personId"
+                params={{ categoryId, personId: String(credit.person_id) }}
+                className="hover:text-accent hover:underline"
+              >
+                {credit.name}
+              </Link>
+            </span>
+          ))}
+        </p>
+      ))}
+    </div>
+  );
+}
+
+const CREW_ORDER = ["creator", "showrunner", "director", "executive_producer", "composer"];
 
 /** The series' people: creators and producers first, then the cast with their characters (a slider, SickGear-style). */
 function CastStrip({ credits, categoryId }: { credits: Credit[]; categoryId: string }) {
@@ -303,7 +341,7 @@ function CastStrip({ credits, categoryId }: { credits: Credit[]; categoryId: str
         {cast.map((credit) => tile(credit, credit.character ?? ""))}
       </div>
       <Link to="/library/$categoryId/$level" params={{ categoryId, level: "people" }} className="w-fit text-xs text-accent hover:underline">
-        Everyone in this library →
+        All cast in this library →
       </Link>
     </section>
   );
@@ -558,14 +596,17 @@ export function SeriesPage() {
         ← Series
       </Link>
       <div className="flex gap-4">
-        <div className="h-60 w-40 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-surface">
-          {series.poster_url ? (
-            <img src={remoteImage(series.poster_url, "small")} alt="" className="size-full object-cover" />
-          ) : (
-            <span className="flex size-full items-center justify-center text-ink-muted">
-              <Tv aria-hidden className="size-10" />
-            </span>
-          )}
+        <div className="flex shrink-0 flex-col items-center gap-2">
+          <div className="h-60 w-40 overflow-hidden rounded-lg border border-border-subtle bg-surface">
+            {series.poster_url ? (
+              <img src={remoteImage(series.poster_url, "small")} alt="" className="size-full object-cover" />
+            ) : (
+              <span className="flex size-full items-center justify-center text-ink-muted">
+                <Tv aria-hidden className="size-10" />
+              </span>
+            )}
+          </div>
+          {canManage && <ChooseImage subject="series" id={Number(seriesId)} title={series.title} series={{ categoryId: Number(categoryId), onChosen: changed }} />}
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           {detail.data.logo_url ? (
@@ -593,6 +634,7 @@ export function SeriesPage() {
             {series.counts.aired_missing > 0 && <span className="text-danger"> · {series.counts.aired_missing} aired and missing</span>}
           </p>
           {series.overview && <p className="max-w-3xl text-sm text-ink-muted">{series.overview}</p>}
+          <SeriesPeopleLine credits={credits} categoryId={categoryId} />
           <div className="mt-auto flex flex-wrap items-center gap-3 text-xs">
             {canManage && (
               <button

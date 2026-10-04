@@ -319,6 +319,53 @@ func (c SeriesCatalog) SetType(ctx context.Context, categoryID, seriesID int64, 
 	return c.Service.Series.SetManualField(ctx, c.Clock.Now(), seriesID, "series_type", value)
 }
 
+// PosterOptions lists the posters the providers hold for a series, the thumbnail being the poster itself.
+func (c SeriesCatalog) PosterOptions(ctx context.Context, categoryID, seriesID int64) ([]apiserver.ImageOptionRow, error) {
+	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
+		return nil, translateSeriesError(err)
+	}
+	images, err := c.Reader.Images(ctx, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	var options []apiserver.ImageOptionRow
+	for _, image := range images {
+		if image.Kind == "poster" {
+			options = append(options, apiserver.ImageOptionRow{URL: image.URL, ThumbURL: image.URL, Source: image.Source, Label: "Poster"})
+		}
+	}
+	return options, nil
+}
+
+// SetPoster puts the chosen poster first among the series' pictures as the user's own, keeping the other pictures.
+func (c SeriesCatalog) SetPoster(ctx context.Context, categoryID, seriesID int64, url string) error {
+	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
+		return translateSeriesError(err)
+	}
+	images, err := c.Reader.Images(ctx, seriesID)
+	if err != nil {
+		return err
+	}
+	chosen := []tv.Image{}
+	rest := []tv.Image{}
+	for _, image := range images {
+		entry := tv.Image{Kind: image.Kind, URL: image.URL, Source: image.Source}
+		if image.Kind == "poster" && image.URL == url {
+			chosen = append(chosen, entry)
+		} else {
+			rest = append(rest, entry)
+		}
+	}
+	if len(chosen) == 0 {
+		return apiserver.ErrImageNotOffered
+	}
+	value, err := json.Marshal(append(chosen, rest...))
+	if err != nil {
+		return err
+	}
+	return c.Service.Series.SetManualField(ctx, c.Clock.Now(), seriesID, "images", string(value))
+}
+
 // SetProfile gives the series a quality profile of its own, or the library's when nil.
 func (c SeriesCatalog) SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error {
 	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
@@ -473,6 +520,9 @@ func episodeFileView(file library.EpisodeFile, category settings.Category, haveC
 	view := &gen.SeriesEpisodeFile{MediaObjectId: file.MediaObjectID, SizeBytes: file.SizeBytes, Subtitles: file.Subtitles}
 	if view.Subtitles == nil {
 		view.Subtitles = []string{}
+	}
+	if len(file.Languages) > 0 {
+		view.AudioLanguages = &file.Languages
 	}
 	setString(&view.Resolution, file.Resolution)
 	setString(&view.VideoCodec, file.VideoCodec)

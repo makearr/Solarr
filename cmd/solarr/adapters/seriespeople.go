@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -128,7 +129,7 @@ func (c SeriesPeople) Person(ctx context.Context, categoryID, personID, userID i
 		view.OtherWorks = &views
 	}
 	if haveRemote {
-		elsewhere := c.elsewhere(ctx, detail, remote)
+		elsewhere := c.elsewhere(ctx, categoryID, detail, remote)
 		view.Elsewhere = &elsewhere
 	}
 	return view, nil
@@ -179,16 +180,27 @@ func (c SeriesPeople) keep(ctx context.Context, detail *library.TVPersonDetail, 
 	return survivor
 }
 
-// elsewhere lists TMDB's titles for the person that the library does not hold, newest first.
-func (c SeriesPeople) elsewhere(ctx context.Context, detail library.TVPersonDetail, remote tmdb.Person) []gen.SeriesPersonElsewhere {
-	held := map[int64]bool{}
+// elsewhere lists TMDB's titles for the person, newest first, each marked with the library's series when the library
+// already holds it (by TMDB id, else by title and first-aired year): a person is known for series the library has
+// even where their credit in it is missing.
+func (c SeriesPeople) elsewhere(ctx context.Context, categoryID int64, detail library.TVPersonDetail, remote tmdb.Person) []gen.SeriesPersonElsewhere {
+	held, err := c.Reader.HeldTMDB(ctx, categoryID)
+	if err != nil {
+		held = map[int64]int64{}
+	}
 	for _, credit := range detail.Credits {
 		ids, err := c.Reader.ProviderIDs(ctx, credit.WorkID)
 		if err != nil {
 			continue
 		}
 		if id, ok := tv.ParseID(ids[tv.ProviderTMDB]); ok {
-			held[id] = true
+			held[id] = credit.WorkID
+		}
+	}
+	byTitle := map[string][]library.SeriesTitle{}
+	if titles, err := c.Reader.Titles(ctx, categoryID); err == nil {
+		for _, one := range titles {
+			byTitle[titleKey(one.Title)] = append(byTitle[titleKey(one.Title)], one)
 		}
 	}
 	type key struct {
@@ -199,7 +211,7 @@ func (c SeriesPeople) elsewhere(ctx context.Context, detail library.TVPersonDeta
 	var titles []gen.SeriesPersonElsewhere
 	add := func(credit tmdb.Credit, role string) {
 		kind := credit.MediaType
-		if (kind != "tv" && kind != "movie") || seen[key{kind, credit.ID}] || (kind == "tv" && held[credit.ID]) {
+		if (kind != "tv" && kind != "movie") || seen[key{kind, credit.ID}] {
 			return
 		}
 		seen[key{kind, credit.ID}] = true
@@ -215,6 +227,19 @@ func (c SeriesPeople) elsewhere(ctx context.Context, detail library.TVPersonDeta
 		}
 		setString(&entry.Role, role)
 		setString(&entry.PosterUrl, tmdb.ImageURL(credit.PosterPath))
+		if kind == "tv" {
+			if workID, ok := held[credit.ID]; ok {
+				entry.LibrarySeriesId = &workID
+			} else {
+				for _, one := range byTitle[titleKey(title)] {
+					if one.Year == 0 || entry.Year == nil || abs64(one.Year-*entry.Year) <= 1 {
+						workID := one.WorkID
+						entry.LibrarySeriesId = &workID
+						break
+					}
+				}
+			}
+		}
 		titles = append(titles, entry)
 	}
 	for _, credit := range remote.CombinedCredits.Cast {
@@ -406,4 +431,22 @@ func translatePeopleError(err error) error {
 		return fmt.Errorf("%w: %w", apiserver.ErrSeriesNotFound, err)
 	}
 	return err
+}
+
+// titleKey folds a title to its letters and digits, so "JEHES" and "Fubar!" are one.
+func titleKey(title string) string {
+	var out strings.Builder
+	for _, r := range strings.ToLower(title) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+func abs64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
 }

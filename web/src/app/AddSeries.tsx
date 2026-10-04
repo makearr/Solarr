@@ -38,7 +38,7 @@ async function searchEachMonitoredSeason(seriesId: number, categoryId: number) {
 }
 
 /** Sonarr's add dialog for one found series: where it goes is the library, what is wanted is the Monitor choice. */
-function AddPanel({ candidate, categoryId, onDone }: { candidate: Candidate; categoryId: string; onDone: () => void }) {
+export function AddPanel({ candidate, categoryId, onDone }: { candidate: Candidate; categoryId: string; onDone: () => void }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [monitor, setMonitor] = usePreference<NonNullable<Monitor>>("series.add.monitor", "all");

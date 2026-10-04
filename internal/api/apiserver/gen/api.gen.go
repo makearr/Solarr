@@ -3562,9 +3562,12 @@ type SeriesEpisodeState string
 type SeriesEpisodeFile struct {
 	AudioChannels *string `json:"audio_channels,omitempty"`
 	AudioCodec    *string `json:"audio_codec,omitempty"`
-	Container     *string `json:"container,omitempty"`
-	Hdr           *string `json:"hdr,omitempty"`
-	MediaObjectId int64   `json:"media_object_id"`
+
+	// AudioLanguages Language codes of the audio tracks the probe read; absent when none were.
+	AudioLanguages *[]string `json:"audio_languages,omitempty"`
+	Container      *string   `json:"container,omitempty"`
+	Hdr            *string   `json:"hdr,omitempty"`
+	MediaObjectId  int64     `json:"media_object_id"`
 
 	// MeetsTarget Absent when the library has no target or the file is not measured yet.
 	MeetsTarget *bool   `json:"meets_target,omitempty"`
@@ -3724,8 +3727,10 @@ type SeriesPersonDetail struct {
 
 // SeriesPersonElsewhere defines model for SeriesPersonElsewhere.
 type SeriesPersonElsewhere struct {
-	MediaType SeriesPersonElsewhereMediaType `json:"media_type"`
-	PosterUrl *string                        `json:"poster_url,omitempty"`
+	// LibrarySeriesId The series when this library already holds it.
+	LibrarySeriesId *int64                         `json:"library_series_id,omitempty"`
+	MediaType       SeriesPersonElsewhereMediaType `json:"media_type"`
+	PosterUrl       *string                        `json:"poster_url,omitempty"`
 
 	// Role The character played
 	Role   *string `json:"role,omitempty"`
@@ -4794,6 +4799,16 @@ type ApplySeriesMonitoringParams struct {
 // ApplySeriesMonitoringJSONBodyOption defines parameters for ApplySeriesMonitoring.
 type ApplySeriesMonitoringJSONBodyOption string
 
+// SetSeriesPosterParams defines parameters for SetSeriesPoster.
+type SetSeriesPosterParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// GetSeriesPostersParams defines parameters for GetSeriesPosters.
+type GetSeriesPostersParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // SetSeriesQualityJSONBody defines parameters for SetSeriesQuality.
 type SetSeriesQualityJSONBody struct {
 	// QualityProfileId A TV quality profile; null or absent returns the series to the library's.
@@ -5256,6 +5271,9 @@ type SetEpisodeMonitoredJSONRequestBody SetEpisodeMonitoredJSONBody
 
 // ApplySeriesMonitoringJSONRequestBody defines body for ApplySeriesMonitoring for application/json ContentType.
 type ApplySeriesMonitoringJSONRequestBody ApplySeriesMonitoringJSONBody
+
+// SetSeriesPosterJSONRequestBody defines body for SetSeriesPoster for application/json ContentType.
+type SetSeriesPosterJSONRequestBody = ImagePick
 
 // SetSeriesQualityJSONRequestBody defines body for SetSeriesQuality for application/json ContentType.
 type SetSeriesQualityJSONRequestBody SetSeriesQualityJSONBody
@@ -5901,6 +5919,12 @@ type ServerInterface interface {
 	// Re-apply one of Sonarr's monitor choices to a series the library holds.
 	// (PUT /series/{id}/monitoring)
 	ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params ApplySeriesMonitoringParams)
+	// Make one of the offered posters this series' own; it is kept over later refreshes.
+	// (PUT /series/{id}/poster)
+	SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams)
+	// The posters the providers hold for a series, to pick one from.
+	// (GET /series/{id}/posters)
+	GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPostersParams)
 	// Give the series a quality profile of its own, or return it to the library's.
 	// (PUT /series/{id}/quality)
 	SetSeriesQuality(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesQualityParams)
@@ -7230,6 +7254,18 @@ func (_ Unimplemented) SetEpisodeMonitored(w http.ResponseWriter, r *http.Reques
 // Re-apply one of Sonarr's monitor choices to a series the library holds.
 // (PUT /series/{id}/monitoring)
 func (_ Unimplemented) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params ApplySeriesMonitoringParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Make one of the offered posters this series' own; it is kept over later refreshes.
+// (PUT /series/{id}/poster)
+func (_ Unimplemented) SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The posters the providers hold for a series, to pick one from.
+// (GET /series/{id}/posters)
+func (_ Unimplemented) GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPostersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14052,6 +14088,108 @@ func (siw *ServerInterfaceWrapper) ApplySeriesMonitoring(w http.ResponseWriter, 
 	handler.ServeHTTP(w, r)
 }
 
+// SetSeriesPoster operation middleware
+func (siw *ServerInterfaceWrapper) SetSeriesPoster(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SetSeriesPosterParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetSeriesPoster(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSeriesPosters operation middleware
+func (siw *ServerInterfaceWrapper) GetSeriesPosters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSeriesPostersParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSeriesPosters(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetSeriesQuality operation middleware
 func (siw *ServerInterfaceWrapper) SetSeriesQuality(w http.ResponseWriter, r *http.Request) {
 
@@ -16690,6 +16828,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/monitoring", wrapper.ApplySeriesMonitoring)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/series/{id}/poster", wrapper.SetSeriesPoster)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/series/{id}/posters", wrapper.GetSeriesPosters)
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/quality", wrapper.SetSeriesQuality)

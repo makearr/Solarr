@@ -3428,6 +3428,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/series/{id}/posters": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The posters the providers hold for a series, to pick one from. */
+        get: operations["getSeriesPosters"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/series/{id}/poster": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Make one of the offered posters this series' own; it is kept over later refreshes. */
+        put: operations["setSeriesPoster"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/series/{id}/quality": {
         parameters: {
             query: {
@@ -5602,6 +5644,8 @@ export interface components {
             audio_channels?: string;
             container?: string;
             video_bitrate_kbps?: number;
+            /** @description Language codes of the audio tracks the probe read; absent when none were. */
+            audio_languages?: string[];
             /** @description Language codes of embedded and sidecar subtitles; und when a file names none. */
             subtitles: string[];
             /** @description Absent when the library has no target or the file is not measured yet. */
@@ -5724,6 +5768,11 @@ export interface components {
             /** @description The character played */
             role?: string;
             poster_url?: string;
+            /**
+             * Format: int64
+             * @description The series when this library already holds it.
+             */
+            library_series_id?: number;
         };
         SeriesPersonDetail: {
             /** Format: int64 */
@@ -13097,6 +13146,62 @@ export interface operations {
         };
         responses: {
             /** @description Set. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getSeriesPosters: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The options, possibly none. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageOptions"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setSeriesPoster: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImagePick"];
+            };
+        };
+        responses: {
+            /** @description The poster was replaced. */
             204: {
                 headers: {
                     [name: string]: unknown;

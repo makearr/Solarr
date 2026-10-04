@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { CoverArt } from "./CoverArt";
+import { AddPanel } from "./AddSeries";
 import { FollowPanel } from "./FollowPanel";
 import { roleLabel } from "./TVPeople";
 import { remoteImage } from "@/lib/remoteImage";
@@ -53,19 +54,67 @@ function CreditTile({ credit, categoryId }: { credit: Credit; categoryId: string
   );
 }
 
-function ElsewhereTile({ title }: { title: Elsewhere }) {
-  const href = `https://www.themoviedb.org/${title.media_type}/${title.tmdb_id}`;
-  return (
-    <a href={href} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
+/** A title TMDB knows the person for: in the library it opens the series, a series not held is added to Solarr from here. */
+function ElsewhereTile({ title, categoryId }: { title: Elsewhere; categoryId: string }) {
+  const [adding, setAdding] = useState(false);
+  const caption = (
+    <>
       <Poster url={title.poster_url} kind={title.media_type} />
       <span className="truncate text-sm font-medium">
         {title.title}
         {title.year ? <span className="font-normal text-ink-muted"> ({title.year})</span> : null}
       </span>
       <span className="truncate text-xs text-ink-muted">{title.role}</span>
-    </a>
+    </>
+  );
+  if (title.library_series_id) {
+    return (
+      <Link
+        to="/library/$categoryId/series/$seriesId"
+        params={{ categoryId, seriesId: String(title.library_series_id) }}
+        className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        {caption}
+        <span className="text-xs text-ok">In your library</span>
+      </Link>
+    );
+  }
+  if (title.media_type === "movie") {
+    return (
+      <a
+        href={`https://www.themoviedb.org/movie/${title.tmdb_id}`}
+        target="_blank"
+        rel="noreferrer"
+        className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent"
+      >
+        {caption}
+        <span className="text-xs text-ink-muted">Movies arrive with the Movies library</span>
+      </a>
+    );
+  }
+  return (
+    <div className="flex flex-col gap-1">
+      {caption}
+      <button
+        type="button"
+        aria-expanded={adding}
+        onClick={() => setAdding(!adding)}
+        className="w-fit rounded-md border border-border-subtle px-2 py-0.5 text-xs text-accent hover:border-accent"
+      >
+        Add to Solarr
+      </button>
+      {adding && (
+        <AddPanel
+          candidate={{ provider: "tmdb", external_id: String(title.tmdb_id), title: title.title }}
+          categoryId={categoryId}
+          onDone={() => setAdding(false)}
+        />
+      )}
+    </div>
   );
 }
+
+const MEDIA_TYPE_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", music: "Music" };
 
 /** One person of a TV library: who they are, what they did in these series, and what else they are known for. */
 export function TVPerson() {
@@ -99,7 +148,7 @@ export function TVPerson() {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 p-4">
       <Link to="/library/$categoryId/$level" params={{ categoryId, level: "people" }} className="text-xs text-ink-muted hover:text-ink">
-        ← People
+        ← Cast
       </Link>
       <div className="flex gap-4">
         <span className="block size-40 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface">
@@ -176,35 +225,51 @@ export function TVPerson() {
               Open full profile
             </Link>
           </div>
-          <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
-            {data.other_works.map((work) => (
-              <li key={`${work.work_id}-${work.role}`}>
-                <Link
-                  to="/works/$id"
-                  params={{ id: String(work.work_id) }}
-                  className="flex items-center gap-2 rounded-lg border border-border-subtle bg-surface p-2 text-sm hover:border-accent"
-                >
-                  <Disc3 aria-hidden className="size-4 shrink-0 text-ink-muted" />
-                  <span className="min-w-0 flex-1 truncate">
-                    {work.title}
-                    {work.year ? <span className="text-ink-muted"> ({work.year})</span> : null}
-                  </span>
-                  <span className="text-xs text-ink-muted">{roleLabel(work.role)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {[...new Set(data.other_works.map((work) => work.media_type))].map((type) => (
+            <div key={type} className="flex flex-col gap-1.5">
+              <h3 className="text-xs font-medium text-ink-muted">{MEDIA_TYPE_LABEL[type] ?? type}</h3>
+              <ul className="grid grid-cols-[repeat(auto-fill,minmax(14rem,1fr))] gap-2">
+                {(data.other_works ?? [])
+                  .filter((work) => work.media_type === type)
+                  .map((work) => (
+                    <li key={`${work.work_id}-${work.role}`}>
+                      <Link
+                        to="/works/$id"
+                        params={{ id: String(work.work_id) }}
+                        className="flex items-center gap-2 rounded-lg border border-border-subtle bg-surface p-2 text-sm hover:border-accent"
+                      >
+                        <Disc3 aria-hidden className="size-4 shrink-0 text-ink-muted" />
+                        <span className="min-w-0 flex-1 truncate">
+                          {work.title}
+                          {work.year ? <span className="text-ink-muted"> ({work.year})</span> : null}
+                        </span>
+                        <span className="text-xs text-ink-muted">{roleLabel(work.role)}</span>
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          ))}
         </section>
       )}
 
       {data.elsewhere && data.elsewhere.length > 0 && (
-        <section className="flex flex-col gap-3">
+        <section className="flex flex-col gap-4">
           <h2 className="text-sm font-semibold">Also known for</h2>
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
-            {data.elsewhere.map((title) => (
-              <ElsewhereTile key={`${title.media_type}-${title.tmdb_id}`} title={title} />
-            ))}
-          </div>
+          {(["tv", "movie"] as const).map((type) => {
+            const titles = (data.elsewhere ?? []).filter((title) => title.media_type === type);
+            if (titles.length === 0) return null;
+            return (
+              <div key={type} className="flex flex-col gap-2">
+                <h3 className="text-xs font-medium text-ink-muted">{MEDIA_TYPE_LABEL[type]}</h3>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
+                  {titles.map((title) => (
+                    <ElsewhereTile key={`${title.media_type}-${title.tmdb_id}`} title={title} categoryId={categoryId} />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
         </section>
       )}
     </div>

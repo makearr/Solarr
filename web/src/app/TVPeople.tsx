@@ -103,7 +103,7 @@ export function TVPeople() {
   return (
     <div ref={frameRef} className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
-        <h2 className="mr-2 text-sm font-medium">People</h2>
+        <h2 className="mr-2 text-sm font-medium">Cast</h2>
         {GROUPS.map((entry) => (
           <button
             key={entry.label}
@@ -125,7 +125,7 @@ export function TVPeople() {
               onChange={(event) => setFilter("monitored", event.target.value)}
               className="rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink"
             >
-              <option value="">All people</option>
+              <option value="">Everyone</option>
               <option value="true">Followed</option>
               <option value="false">Not followed</option>
             </select>
@@ -136,7 +136,7 @@ export function TVPeople() {
               value={typed}
               onChange={(event) => setTyped(event.target.value)}
               placeholder="Name starts with…"
-              aria-label="Filter people by name"
+              aria-label="Filter cast by name"
               className="w-40 bg-transparent text-ink outline-none"
             />
           </label>

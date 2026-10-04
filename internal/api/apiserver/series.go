@@ -51,6 +51,10 @@ type SeriesCatalog interface {
 	SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error
 	// SetProfile gives the series a quality profile of its own, or the library's when nil.
 	SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error
+	// PosterOptions lists the posters the providers hold for a series.
+	PosterOptions(ctx context.Context, categoryID, seriesID int64) ([]ImageOptionRow, error)
+	// SetPoster makes one of the offered posters the series' own; ErrImageNotOffered for any other address.
+	SetPoster(ctx context.Context, categoryID, seriesID int64, url string) error
 	// Wanted returns up to limit+1 missing episodes after the cursor (date, id), newest first.
 	Wanted(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.WantedEpisode, error)
 	// CutoffUnmet returns up to limit+1 present episodes whose file is below the library's target or cutoff, from the
@@ -547,4 +551,58 @@ func (s *Server) setSeriesType(w http.ResponseWriter, r *http.Request, id, categ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) routeGetSeriesPosters(w http.ResponseWriter, r *http.Request) {
+	id, category, ok := s.seriesPath(w, r)
+	if !ok {
+		return
+	}
+	s.getSeriesPosters(w, r, id, category)
+}
+
+// GetSeriesPosters satisfies the generated interface; routeGetSeriesPosters is what is mounted.
+func (s *Server) GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params gen.GetSeriesPostersParams) {
+	s.getSeriesPosters(w, r, id, params.CategoryId)
+}
+
+func (s *Server) getSeriesPosters(w http.ResponseWriter, r *http.Request, id, categoryID int64) {
+	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionRead); !ok {
+		return
+	}
+	options, err := s.series.PosterOptions(r.Context(), categoryID, id)
+	if errors.Is(err, ErrSeriesNotFound) {
+		writeError(w, s.logger, err)
+		return
+	}
+	s.writeImageOptions(w, options, err)
+}
+
+func (s *Server) routeSetSeriesPoster(w http.ResponseWriter, r *http.Request) {
+	id, category, ok := s.seriesPath(w, r)
+	if !ok {
+		return
+	}
+	s.setSeriesPoster(w, r, id, category)
+}
+
+// SetSeriesPoster satisfies the generated interface; routeSetSeriesPoster is what is mounted.
+func (s *Server) SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params gen.SetSeriesPosterParams) {
+	s.setSeriesPoster(w, r, id, params.CategoryId)
+}
+
+func (s *Server) setSeriesPoster(w http.ResponseWriter, r *http.Request, id, categoryID int64) {
+	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
+		return
+	}
+	url, ok := s.decodeImagePick(w, r)
+	if !ok {
+		return
+	}
+	err := s.series.SetPoster(r.Context(), categoryID, id, url)
+	if errors.Is(err, ErrSeriesNotFound) {
+		writeError(w, s.logger, err)
+		return
+	}
+	s.writeImagePicked(w, err)
 }

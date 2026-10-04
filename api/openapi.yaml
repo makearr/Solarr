@@ -5521,6 +5521,55 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /series/{id}/posters:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getSeriesPosters
+      tags: [series]
+      summary: The posters the providers hold for a series, to pick one from.
+      responses:
+        "200":
+          description: The options, possibly none.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageOptions" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /series/{id}/poster:
+    parameters:
+      - name: category_id
+        in: query
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: setSeriesPoster
+      tags: [series]
+      summary: Make one of the offered posters this series' own; it is kept over later refreshes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImagePick" }
+      responses:
+        "204": { description: The poster was replaced. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /series/{id}/quality:
     parameters:
       - name: category_id
@@ -8433,6 +8482,7 @@ components:
         audio_channels: { type: string }
         container: { type: string }
         video_bitrate_kbps: { type: integer }
+        audio_languages: { type: array, items: { type: string }, description: Language codes of the audio tracks the probe read; absent when none were. }
         subtitles: { type: array, items: { type: string }, description: Language codes of embedded and sidecar subtitles; und when a file names none. }
         meets_target: { type: boolean, description: Absent when the library has no target or the file is not measured yet. }
 
@@ -8565,6 +8615,7 @@ components:
         year: { type: integer, format: int64 }
         role: { type: string, description: The character played, or the crew job. }
         poster_url: { type: string }
+        library_series_id: { type: integer, format: int64, description: The series when this library already holds it. }
 
     SeriesPersonDetail:
       type: object
