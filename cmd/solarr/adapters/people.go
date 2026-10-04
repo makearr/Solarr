@@ -51,7 +51,10 @@ func (a People) ListPeople(
 	ctx context.Context, filter apiserver.PersonFilter, cursor apiserver.PersonCursor, pageSize int,
 ) ([]apiserver.PersonRow, error) {
 	rows, err := a.People.ListPeople(ctx,
-		library.PersonFilter{Monitored: filter.Monitored, NamePrefix: filter.NamePrefix},
+		library.PersonFilter{
+			Monitored: filter.Monitored, NamePrefix: filter.NamePrefix,
+			Visible: &library.Visibility{RootFolderIDs: filter.Visible.RootFolderIDs, CategoryIDs: filter.Visible.CategoryIDs},
+		},
 		library.PersonCursor{SortName: cursor.SortName, ID: cursor.ID}, pageSize)
 	if err != nil {
 		return nil, err
@@ -83,8 +86,8 @@ func (a People) ListPeople(
 	return views, nil
 }
 
-func (a People) GetPersonDetail(ctx context.Context, id int64) (apiserver.PersonDetailRow, error) {
-	detail, err := a.People.Detail(ctx, id)
+func (a People) GetPersonDetail(ctx context.Context, id int64, visible apiserver.PersonVisibility) (apiserver.PersonDetailRow, error) {
+	detail, err := a.People.DetailVisible(ctx, id, &library.Visibility{RootFolderIDs: visible.RootFolderIDs, CategoryIDs: visible.CategoryIDs})
 	if err != nil {
 		return apiserver.PersonDetailRow{}, err
 	}

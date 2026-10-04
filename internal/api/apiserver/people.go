@@ -36,6 +36,15 @@ type PersonRow struct {
 type PersonFilter struct {
 	Monitored  *bool
 	NamePrefix string
+	// Visible is who is asking; a person no library they may see knows of is left out.
+	Visible PersonVisibility
+}
+
+// PersonVisibility is the libraries the caller may see and their root folders: what decides which people exist for
+// them and which of a person's works they are shown.
+type PersonVisibility struct {
+	RootFolderIDs []int64
+	CategoryIDs   []int64
 }
 
 // PersonCursor is a position in the people list.
@@ -123,8 +132,9 @@ type PersonDetailRow struct {
 // by the caller, same reasoning as WorksReader's own doc comment.
 type PeopleReader interface {
 	ListPeople(ctx context.Context, filter PersonFilter, cursor PersonCursor, pageSize int) ([]PersonRow, error)
-	// GetPersonDetail answers a missing id with an error wrapping sql.ErrNoRows.
-	GetPersonDetail(ctx context.Context, id int64) (PersonDetailRow, error)
+	// GetPersonDetail answers a missing id, and a person the viewer may not know of, with an error wrapping
+	// sql.ErrNoRows; the works it lists are those of the libraries the viewer may see.
+	GetPersonDetail(ctx context.Context, id int64, visible PersonVisibility) (PersonDetailRow, error)
 }
 
 // PeopleSubscriber subscribes the calling user to a person (ADR-32).
@@ -212,10 +222,8 @@ func (s *Server) routeListPeople(w http.ResponseWriter, r *http.Request) {
 	s.ListPeople(w, r, params)
 }
 
-// ListPeople answers a page of people. Unlike works, not category-scoped: a
-// person legitimately spans several media types and categories at once
-// (ADR-32), so there is no single visibility boundary to apply the way
-// ADR-27 applies to one work.
+// ListPeople answers a page of people. A person spans libraries (ADR-32), so the boundary is not one category: a
+// person is listed when a library the caller may see credits or follows them, and not otherwise (2026-10-04).
 func (s *Server) ListPeople(w http.ResponseWriter, r *http.Request, params gen.ListPeopleParams) {
 	if s.people == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -230,8 +238,12 @@ func (s *Server) ListPeople(w http.ResponseWriter, r *http.Request, params gen.L
 	}
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
 
+	visible, ok := s.personVisibility(w, r)
+	if !ok {
+		return
+	}
 	rows, err := s.people.ListPeople(r.Context(),
-		PersonFilter{Monitored: params.Monitored, NamePrefix: derefOr(params.Q, "")},
+		PersonFilter{Monitored: params.Monitored, NamePrefix: derefOr(params.Q, ""), Visible: visible},
 		PersonCursor{SortName: cursor.Sort, ID: cursor.ID}, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -287,7 +299,11 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 
-	detail, err := s.people.GetPersonDetail(r.Context(), id)
+	visible, ok := s.personVisibility(w, r)
+	if !ok {
+		return
+	}
+	detail, err := s.people.GetPersonDetail(r.Context(), id, visible)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
 		return
@@ -494,4 +510,15 @@ func (s *Server) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// personVisibility is what the caller may see of people; false means the answer was already written.
+func (s *Server) personVisibility(w http.ResponseWriter, r *http.Request) (PersonVisibility, bool) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return PersonVisibility{}, false
+	}
+	rootFolderIDs, categoryIDs := s.visibleAt(access, settings.PermissionRead)
+	return PersonVisibility{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs}, true
 }

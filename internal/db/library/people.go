@@ -461,6 +461,69 @@ func (p People) Detail(ctx context.Context, id int64) (PersonDetail, error) {
 	}, nil
 }
 
+// DetailVisible is Detail as one viewer may see it: the person exists only when a library they may see credits or
+// follows them (else sql.ErrNoRows, the same answer as a missing id), and the discography holds only works of
+// those libraries. A nil visible is Detail.
+func (p People) DetailVisible(ctx context.Context, id int64, visible *Visibility) (PersonDetail, error) {
+	if visible == nil {
+		return p.Detail(ctx, id)
+	}
+	clause, arguments := visiblePersonClause("person.id", *visible)
+	var seen int
+	err := p.store.Read().QueryRowContext(ctx, "SELECT COUNT(*) FROM person WHERE person.id = ? AND "+clause,
+		append([]any{id}, arguments...)...).Scan(&seen)
+	if err != nil {
+		return PersonDetail{}, fmt.Errorf("library: person detail: visibility: %w", err)
+	}
+	if seen == 0 {
+		return PersonDetail{}, fmt.Errorf("library: person detail: %w", sql.ErrNoRows)
+	}
+
+	detail, err := p.Detail(ctx, id)
+	if err != nil {
+		return PersonDetail{}, err
+	}
+	workIDs, err := p.visibleWorkIDs(ctx, id, *visible)
+	if err != nil {
+		return PersonDetail{}, err
+	}
+	kept := detail.Discography[:0:0]
+	for _, row := range detail.Discography {
+		if workIDs[row.ID] {
+			kept = append(kept, row)
+		}
+	}
+	detail.Discography = kept
+	return detail, nil
+}
+
+// visibleWorkIDs is the works crediting the person that the viewer may see.
+func (p People) visibleWorkIDs(ctx context.Context, personID int64, visible Visibility) (map[int64]bool, error) {
+	roots, categories := visible.RootFolderIDs, visible.CategoryIDs
+	if roots == nil {
+		roots = []int64{}
+	}
+	if categories == nil {
+		categories = []int64{}
+	}
+	fragment, arguments, _ := visibilityFragment("c.work_id", roots, categories)
+	rows, err := p.store.Read().QueryContext(ctx,
+		"SELECT DISTINCT c.work_id FROM credit c WHERE c.person_id = ? AND "+fragment, append([]any{personID}, arguments...)...)
+	if err != nil {
+		return nil, fmt.Errorf("library: person detail: visible works: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	ids := map[int64]bool{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("library: person detail: visible works: %w", err)
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
+}
+
 // SubscriptionRequest is what a caller supplies to subscribe to a person
 // (ADR-32): media types x roles, optionally the whole back catalogue.
 type SubscriptionRequest struct {

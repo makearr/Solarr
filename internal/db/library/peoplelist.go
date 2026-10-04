@@ -59,6 +59,47 @@ type PersonFilter struct {
 	Descending bool
 	// Where are the conditions of a custom filter, all of which must hold.
 	Where []listfilter.Condition
+	// Visible restricts to people the viewer may know of; nil is everyone, for a caller that has no viewer.
+	Visible *Visibility
+}
+
+// Visibility is what a viewer may see: the libraries they hold read access in, and those libraries' root folders.
+// Empty, non-nil slices see nothing.
+type Visibility struct {
+	RootFolderIDs []int64
+	CategoryIDs   []int64
+}
+
+// addVisiblePerson keeps a person who is credited on a work the viewer may see, or whom a visible library follows.
+// A person known only through hidden libraries does not exist for this viewer (ADR-27: hidden is 404, never 403).
+func addVisiblePerson(predicates *store.Predicates, visible *Visibility) {
+	if visible == nil {
+		return
+	}
+	clause, arguments := visiblePersonClause("person.id", *visible)
+	predicates.Add(clause, arguments...)
+}
+
+// visiblePersonClause is addVisiblePerson's condition over any expression naming the person.
+func visiblePersonClause(personIDExpr string, visible Visibility) (string, []any) {
+	roots, categories := visible.RootFolderIDs, visible.CategoryIDs
+	if roots == nil {
+		roots = []int64{}
+	}
+	if categories == nil {
+		categories = []int64{}
+	}
+	fragment, arguments, _ := visibilityFragment("c.work_id", roots, categories)
+	clause := "EXISTS (SELECT 1 FROM credit c WHERE c.person_id = " + personIDExpr + " AND " + fragment + ")"
+	if len(categories) > 0 {
+		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(categories)), ",")
+		clause = "(" + clause + " OR EXISTS (SELECT 1 FROM subscription s WHERE s.subject_type = 'person'" +
+			" AND s.subject_id = " + personIDExpr + " AND s.enabled = 1 AND s.category_id IN (" + placeholders + ")))"
+		for _, id := range categories {
+			arguments = append(arguments, id)
+		}
+	}
+	return clause, arguments
 }
 
 // PersonCursor is a position in the people list: sort name, plus the id to
@@ -81,6 +122,7 @@ func composePeopleList(filter PersonFilter, after PersonCursor, pageSize int) (s
 	}
 	addNamePrefix(&predicates, filter.NamePrefix)
 	addArtistCredit(&predicates, filter.Role, filter.RootFolderIDs, filter.CategoryIDs)
+	addVisiblePerson(&predicates, filter.Visible)
 	addArtistConditions(&predicates, filter.Where)
 	operator, direction := ">", ""
 	if filter.Descending {

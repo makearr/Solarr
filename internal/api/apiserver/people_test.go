@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"net/http"
+	"reflect"
 	"slices"
 	"testing"
 
@@ -21,6 +22,8 @@ type fakePeopleReader struct {
 	lastFilter apiserver.PersonFilter
 	lastCursor apiserver.PersonCursor
 	lastID     int64
+	// lastVisible is what the detail read was told the caller may see.
+	lastVisible apiserver.PersonVisibility
 }
 
 func (f *fakePeopleReader) ListPeople(
@@ -34,8 +37,8 @@ func (f *fakePeopleReader) ListPeople(
 	return f.rows, nil
 }
 
-func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64) (apiserver.PersonDetailRow, error) {
-	f.lastID = id
+func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64, visible apiserver.PersonVisibility) (apiserver.PersonDetailRow, error) {
+	f.lastID, f.lastVisible = id, visible
 	if f.detailErr != nil {
 		return apiserver.PersonDetailRow{}, f.detailErr
 	}
@@ -540,5 +543,40 @@ func TestSearchPersonMissing_SearchesOnlyTheLibrariesTheCallerMayRequestIn(t *te
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/search", ""))
 	if recorder.Code != http.StatusAccepted || !slices.Equal(fixture.artistActions.searchedCategories, []int64{music.ID}) {
 		t.Errorf("request: status %d, searched %v; want 202 in library %d", recorder.Code, fixture.artistActions.searchedCategories, music.ID)
+	}
+}
+
+// The people list and a person's page are read as the caller: only the libraries they may see decide who exists
+// for them, and a person the reader does not find for them is a 404.
+func TestPeople_AreReadAsTheCallerMaySeeThem(t *testing.T) {
+	fixture := newWorksFixture(t)
+	shown, err := fixture.cache.CreateCategory(t.Context(), "music", "Shown", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	if _, err := fixture.cache.CreateCategory(t.Context(), "tv", "Hidden", 20); err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, shown.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	cookies := fixture.signIn(t, "listener")
+
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/people")); recorder.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	want := apiserver.PersonVisibility{RootFolderIDs: []int64{}, CategoryIDs: []int64{shown.ID}}
+	if got := fixture.people.lastFilter.Visible; !reflect.DeepEqual(got, want) {
+		t.Errorf("the list was read as %+v, want %+v", got, want)
+	}
+
+	fixture.people.detailErr = sql.ErrNoRows
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/9"))
+	if recorder.Code != http.StatusNotFound {
+		t.Errorf("a person the caller may not know of: status = %d, want 404", recorder.Code)
+	}
+	if got := fixture.people.lastVisible; !reflect.DeepEqual(got, want) {
+		t.Errorf("the person was read as %+v, want %+v", got, want)
 	}
 }
