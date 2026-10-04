@@ -283,19 +283,6 @@ function ScheduleRow({
           enabled
         </label>
 
-        {schedule.startup_offered && (
-          <label className="flex items-center gap-1.5">
-            <input
-              type="checkbox"
-              checked={schedule.run_at_startup}
-              disabled={busy}
-              onChange={onToggleStartup}
-              className="size-3.5"
-            />
-            run at startup
-          </label>
-        )}
-
         <span className="ml-auto">
           {schedule.last_run_at
             ? `last ran ${new Date(schedule.last_run_at).toLocaleString()}` +
@@ -306,6 +293,20 @@ function ScheduleRow({
       </div>
 
       <div className="flex flex-col gap-1.5 text-xs text-ink-muted">
+        {schedule.run_at_startup && (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="rounded-md border border-border-subtle bg-canvas px-2 py-0.5 text-ink">At startup</span>
+            <button
+              type="button"
+              aria-label="Remove schedule at startup"
+              disabled={busy}
+              onClick={onToggleStartup}
+              className="rounded p-0.5 text-ink-muted hover:text-danger disabled:opacity-50"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </span>
+        )}
         {triggers.map((trigger, index) => (
           <span key={index} className="flex flex-wrap items-center gap-1.5">
             <TriggerEditor
@@ -337,6 +338,19 @@ function ScheduleRow({
             <Plus aria-hidden className="size-3.5" />
             Add a time
           </button>
+          {!schedule.run_at_startup && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={onToggleStartup}
+              title="Also run once whenever Solarr starts. Database maintenance and backups wait a few minutes and are skipped when they ran recently."
+              className="flex w-fit items-center gap-1 rounded-md border border-border-subtle px-2 py-0.5
+                         hover:text-ink disabled:opacity-50"
+            >
+              <Plus aria-hidden className="size-3.5" />
+              Add at startup
+            </button>
+          )}
           {dirty && (
             <>
               <button

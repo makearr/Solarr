@@ -104,11 +104,6 @@ func (s *Server) UpdateSchedule(w http.ResponseWriter, r *http.Request, key stri
 		return
 	}
 
-	if body.RunAtStartup != nil && task.Startup == jobs.StartupNotOffered {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "this task does not run at startup")
-		return
-	}
 	if body.Cadences != nil {
 		if err := s.scheduler.SetCadences(r.Context(), key, *body.Cadences); err != nil {
 			var problems config.Problems
@@ -197,7 +192,6 @@ func (s *Server) scheduleView(ctx context.Context, task jobs.Task) (gen.Schedule
 		return gen.Schedule{}, err
 	}
 
-	offered := task.Startup != jobs.StartupNotOffered
 	view := gen.Schedule{
 		Key: task.Key, Name: task.Name, Tier: gen.ScheduleTier(task.Tier),
 		Category:       gen.ScheduleCategory(task.Category),
@@ -205,8 +199,7 @@ func (s *Server) scheduleView(ctx context.Context, task jobs.Task) (gen.Schedule
 		Cadences:       s.scheduler.EffectiveCadences(task.Key, task.DefaultCadence),
 		Enabled:        s.scheduler.Enabled(task.Key),
 		SupportsFull:   task.RunFull != nil,
-		StartupOffered: offered,
-		RunAtStartup:   offered && s.scheduler.RunAtStartup(task.Key, task.Startup == jobs.StartupOn),
+		RunAtStartup:   s.scheduler.RunAtStartup(task.Key, task.Startup == jobs.StartupOn),
 		LastDurationMs: state.LastDurationMs, LastRunAt: state.LastRunAt, NextRunAt: state.NextRunAt,
 	}
 	if state.LastOutcome != "" {

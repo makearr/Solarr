@@ -3474,11 +3474,8 @@ type Schedule struct {
 	Name        string               `json:"name"`
 	NextRunAt   *time.Time           `json:"next_run_at,omitempty"`
 
-	// RunAtStartup Whether it runs once when Solarr starts; always false when not offered.
+	// RunAtStartup Whether it runs once when Solarr starts. A heavy task (database maintenance, backup) waits a few minutes and is skipped when it last ran within its own interval.
 	RunAtStartup bool `json:"run_at_startup"`
-
-	// StartupOffered Whether running once at startup makes sense for this task.
-	StartupOffered bool `json:"startup_offered"`
 
 	// SupportsFull Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md).
 	SupportsFull bool `json:"supports_full"`

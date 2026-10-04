@@ -130,18 +130,40 @@ func (r *TaskRunner) RunNowFull(ctx context.Context) error {
 	return nil
 }
 
-// Startup fires the task once if it runs at startup and is enabled. It returns once the fire is
-// recorded, so callers can start tasks in the order they depend on each other.
+// Startup fires the task once at process start when it is enabled and set to. A heavy task (StartupDelay) waits
+// first and is skipped when it last ran within its own shortest interval; call it on its own goroutine then.
 func (r *TaskRunner) Startup(ctx context.Context) {
-	if r.task.Startup == StartupNotOffered || !r.source.Enabled(r.task.Key) {
+	if !r.source.Enabled(r.task.Key) || !r.source.RunAtStartup(r.task.Key, r.task.Startup == StartupOn) {
 		return
 	}
-	if !r.source.RunAtStartup(r.task.Key, r.task.Startup == StartupOn) {
-		return
+	if r.task.StartupDelay > 0 {
+		if r.ranWithinItsInterval(ctx) {
+			r.logger.Info("startup run skipped: the task ran within its own interval", slog.String("task", r.task.Key))
+			return
+		}
+		if err := r.clock.Sleep(ctx, r.task.StartupDelay); err != nil {
+			return
+		}
 	}
 	if err := r.runOnce(ctx, r.task.Enqueue); err != nil {
 		r.logger.Debug("startup run skipped", slog.String("task", r.task.Key), slog.Any("error", err))
 	}
+}
+
+// ranWithinItsInterval reports whether the last run is younger than the gap between the schedule's next two firings.
+func (r *TaskRunner) ranWithinItsInterval(ctx context.Context) bool {
+	state, found, err := r.states.Get(ctx, r.task.Key)
+	if err != nil || !found || state.LastRunAt == nil {
+		return false
+	}
+	now := r.clock.Now()
+	schedule := r.resolveSchedule()
+	first := schedule.Next(now)
+	second := schedule.Next(first)
+	if first.IsZero() || second.IsZero() {
+		return false
+	}
+	return now.Sub(*state.LastRunAt) < second.Sub(first)
 }
 
 // resolveSchedule parses the task's live cadences, dropping any now unparseable -- write-time

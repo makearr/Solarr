@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -161,10 +162,12 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "database_maintenance", Name: "Database maintenance", DefaultCadence: databaseMaintenanceCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueDatabaseMaintenance,
+		StartupDelay: heavyStartupDelay,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "backup", Name: "Backup", DefaultCadence: backupScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryMaintenance, Enqueue: p.enqueueBackup,
+		StartupDelay: heavyStartupDelay,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "recycle_bin_cleanup", Name: "Clean recycling bin", DefaultCadence: recycleBinCleanupScheduleCron,
@@ -181,6 +184,9 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	return registry
 }
 
+// heavyStartupDelay lets the process settle before a startup run of database maintenance or a backup.
+const heavyStartupDelay = 5 * time.Minute
+
 // startSchedulers builds one TaskRunner per registered task and drives each
 // on its own goroutine, the same per-task isolation the old flat Scheduler
 // loop already had: one misbehaving task (an invalid override, refused at
@@ -196,7 +202,11 @@ func (p *process) startSchedulers(ctx context.Context) {
 	for _, task := range p.taskRegistry.InRegistrationOrder() {
 		runner := jobs.NewTaskRunner(task, source, p.scheduleStates, wall, p.logger)
 		p.taskRunners[task.Key] = runner
-		runner.Startup(ctx)
+		if task.StartupDelay > 0 {
+			go runner.Startup(ctx)
+		} else {
+			runner.Startup(ctx)
+		}
 		go runner.Run(ctx)
 	}
 	p.logger.Info("schedulers started", slog.Int("tasks", len(p.taskRunners)))

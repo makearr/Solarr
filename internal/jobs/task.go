@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"sync"
+	"time"
 )
 
 // Task is one periodic action, registered once in Go (ADR-59). Every
@@ -44,8 +45,11 @@ type Task struct {
 	EnqueueManual func(context.Context) (EnqueueResult, error)
 	// Category groups the task on the scheduler screen.
 	Category TaskCategory
-	// Startup says whether "run at startup" is offered, and its default.
+	// Startup is whether the task fires once when the process starts, unless the user says otherwise.
 	Startup Startup
+	// StartupDelay marks a heavy task: its startup run waits this long, and is skipped when the task last ran
+	// within its own shortest interval, so a restart does not repeat a weekly job.
+	StartupDelay time.Duration
 }
 
 // TaskCategory groups tasks on the scheduler screen.
@@ -60,15 +64,13 @@ const (
 	CategoryMaintenance TaskCategory = "maintenance"
 )
 
-// Startup is whether a task may fire once when the process starts.
+// Startup is a task's default for firing once when the process starts; every task offers the choice.
 type Startup string
 
 const (
-	// StartupNotOffered is a task for which running at startup makes no sense, such as a backup.
-	StartupNotOffered Startup = ""
 	// StartupOn runs at startup unless the user switches it off.
 	StartupOn Startup = "on"
-	// StartupOff is offered but off unless the user switches it on.
+	// StartupOff does not unless the user switches it on; the zero value means the same.
 	StartupOff Startup = "off"
 )
 

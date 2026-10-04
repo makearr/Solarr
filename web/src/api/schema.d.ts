@@ -4355,9 +4355,7 @@ export interface components {
             /** @description Effective cadences -- a stored override if one exists, [default_cadence] otherwise. */
             cadences: string[];
             enabled: boolean;
-            /** @description Whether running once at startup makes sense for this task. */
-            startup_offered: boolean;
-            /** @description Whether it runs once when Solarr starts; always false when not offered. */
+            /** @description Whether it runs once when Solarr starts. A heavy task (database maintenance, backup) waits a few minutes and is skipped when it last ran within its own interval. */
             run_at_startup: boolean;
             /** @description Whether POST /schedules/{key}/run?full=true does something different from an ordinary run for this task -- library scan's full rescan is the only one today (private/questions.md). */
             supports_full: boolean;

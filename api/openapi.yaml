@@ -6904,7 +6904,7 @@ components:
     Schedule:
       type: object
       description: One registered periodic task (ADR-59), its effective settings and run-state.
-      required: [key, name, tier, category, default_cadence, cadences, enabled, supports_full, startup_offered, run_at_startup]
+      required: [key, name, tier, category, default_cadence, cadences, enabled, supports_full, run_at_startup]
       properties:
         key: { type: string }
         name: { type: string }
@@ -6922,12 +6922,11 @@ components:
           items: { type: string }
           description: Effective cadences -- a stored override if one exists, [default_cadence] otherwise.
         enabled: { type: boolean }
-        startup_offered:
-          type: boolean
-          description: Whether running once at startup makes sense for this task.
         run_at_startup:
           type: boolean
-          description: Whether it runs once when Solarr starts; always false when not offered.
+          description: >-
+            Whether it runs once when Solarr starts. A heavy task (database maintenance, backup) waits a few minutes
+            and is skipped when it last ran within its own interval.
         supports_full:
           type: boolean
           description: >-

@@ -136,6 +136,10 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 | Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision and no held download refers to it. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |
 
+Every task can also be set to run **at startup** (Settings -> Scheduler, "Add at startup"). Database maintenance and
+backup are heavy: their startup run waits five minutes and is skipped when the task last ran within its own
+interval, so a restart two days after the weekly maintenance does not repeat it.
+
 **Maintenance holds the writer exclusively** (`store.Maintain`), so every write to that database
 waits until it finishes; the others keep working. A failed integrity check stops that database's
 pass before `VACUUM`, which would otherwise rebuild it from whatever it could still read.

@@ -412,12 +412,12 @@ func TestTaskRunner_FiresAtTheEarliestOfSeveralCadences(t *testing.T) {
 	<-done
 }
 
-// Startup fires only a task that offers it, has it on, and is enabled.
-func TestTaskRunner_StartupFiresOnlyWhenOfferedOnAndEnabled(t *testing.T) {
+// Startup fires a task that has it on, by default or by the user's choice, and is enabled.
+func TestTaskRunner_StartupFiresOnlyWhenOnAndEnabled(t *testing.T) {
 	states, fake := newScheduleStates(t)
 	source := newFakeScheduleSource()
 	source.startup["switched_on"] = true
-	source.startup["not_offered"] = true
+	source.startup["zero_value_switched_on"] = true
 	source.disabled["disabled"] = true
 
 	var fired []string
@@ -425,7 +425,8 @@ func TestTaskRunner_StartupFiresOnlyWhenOfferedOnAndEnabled(t *testing.T) {
 		{Key: "default_on", Startup: jobs.StartupOn},
 		{Key: "default_off", Startup: jobs.StartupOff},
 		{Key: "switched_on", Startup: jobs.StartupOff},
-		{Key: "not_offered", Startup: jobs.StartupNotOffered},
+		{Key: "zero_value"},
+		{Key: "zero_value_switched_on"},
 		{Key: "disabled", Startup: jobs.StartupOn},
 	} {
 		task.DefaultCadence = "0 0 1 1 *"
@@ -435,7 +436,7 @@ func TestTaskRunner_StartupFiresOnlyWhenOfferedOnAndEnabled(t *testing.T) {
 		}
 		jobs.NewTaskRunner(task, source, states, fake, quietLogger()).Startup(t.Context())
 	}
-	if want := []string{"default_on", "switched_on"}; !reflect.DeepEqual(fired, want) {
+	if want := []string{"default_on", "switched_on", "zero_value_switched_on"}; !reflect.DeepEqual(fired, want) {
 		t.Errorf("fired %v, want %v", fired, want)
 	}
 }
@@ -464,5 +465,57 @@ func TestTaskRunner_RunNowFiresEnqueueManualAndStartupDoesNot(t *testing.T) {
 	}
 	if want := []string{"scheduled", "manual"}; !slices.Equal(fired, want) {
 		t.Errorf("fired %v, want %v", fired, want)
+	}
+}
+
+// A heavy task's startup run waits out its delay, and is skipped altogether when the task ran within its own interval:
+// a restart two days after the weekly maintenance must not repeat it.
+func TestTaskRunner_HeavyStartupWaitsAndIsSkippedAfterARecentRun(t *testing.T) {
+	cases := []struct {
+		name    string
+		lastRan time.Duration // how long before now the task last ran; zero is never
+		want    int
+	}{
+		{"never ran", 0, 1},
+		{"ran two days ago, weekly", 48 * time.Hour, 0},
+		{"ran eight days ago, weekly", 8 * 24 * time.Hour, 1},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			states, fake := newScheduleStates(t)
+			source := newFakeScheduleSource()
+			fired := 0
+			task := jobs.Task{
+				Key: "maintenance", DefaultCadence: "0 4 * * 0", Startup: jobs.StartupOn, StartupDelay: 5 * time.Minute,
+				Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+					fired++
+					return jobs.EnqueueResult{}, nil
+				},
+			}
+			if test.lastRan > 0 {
+				ranAt := fake.Now().Add(-test.lastRan)
+				if err := states.RecordRun(t.Context(), task.Key, ranAt, time.Second, "enqueued", "", fake.Now()); err != nil {
+					t.Fatalf("RecordRun: %v", err)
+				}
+			}
+			runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				runner.Startup(t.Context())
+			}()
+			if test.want == 1 {
+				fake.BlockUntilWaiters(1)
+				if fired != 0 {
+					t.Fatal("fired before the startup delay had passed")
+				}
+				fake.Advance(5 * time.Minute)
+			}
+			<-done
+			if fired != test.want {
+				t.Errorf("fired %d times, want %d", fired, test.want)
+			}
+		})
 	}
 }

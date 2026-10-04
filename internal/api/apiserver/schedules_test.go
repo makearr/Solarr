@@ -105,7 +105,6 @@ type scheduleBody struct {
 	SupportsFull   bool     `json:"supports_full"`
 	LastOutcome    string   `json:"last_outcome"`
 	Category       string   `json:"category"`
-	StartupOffered bool     `json:"startup_offered"`
 	RunAtStartup   bool     `json:"run_at_startup"`
 }
 
@@ -340,8 +339,8 @@ func TestRunSchedule_MapsNoFullModeTo400(t *testing.T) {
 	}
 }
 
-// Run at startup is set only where offered, and reported off where it is not.
-func TestUpdateSchedule_RunAtStartupOnlyWhereOffered(t *testing.T) {
+// Every task can be set to run at startup: one that does by default can be switched off, one that does not, on.
+func TestUpdateSchedule_RunAtStartupCanBeSetOnEveryTask(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.scheduler.tasks = []jobs.Task{
 		{Key: "scan", DefaultCadence: "*/30 * * * *", Category: jobs.CategoryLibrary, Startup: jobs.StartupOn},
@@ -350,19 +349,22 @@ func TestUpdateSchedule_RunAtStartupOnlyWhereOffered(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/scan", `{"run_at_startup":false}`))
-	var updated scheduleBody
-	if err := json.Unmarshal(recorder.Body.Bytes(), &updated); err != nil {
-		t.Fatalf("unmarshal: %v (%s)", err, recorder.Body)
+	updated := map[string]scheduleBody{}
+	for key, body := range map[string]string{"scan": `{"run_at_startup":false}`, "backup": `{"run_at_startup":true}`} {
+		recorder := fixture.do(authedPatch(t, cookies, "/api/v1/schedules/"+key, body))
+		var answered scheduleBody
+		if err := json.Unmarshal(recorder.Body.Bytes(), &answered); err != nil {
+			t.Fatalf("unmarshal: %v (%s)", err, recorder.Body)
+		}
+		updated[key] = answered
 	}
-	want := scheduleBody{Key: "scan", DefaultCadence: "*/30 * * * *", Cadences: []string{"*/30 * * * *"},
-		Enabled: true, Category: "library", StartupOffered: true, RunAtStartup: false}
+	want := map[string]scheduleBody{
+		"scan": {Key: "scan", DefaultCadence: "*/30 * * * *", Cadences: []string{"*/30 * * * *"},
+			Enabled: true, Category: "library", RunAtStartup: false},
+		"backup": {Key: "backup", DefaultCadence: "0 1 * * *", Cadences: []string{"0 1 * * *"},
+			Enabled: true, Category: "maintenance", RunAtStartup: true},
+	}
 	if !reflect.DeepEqual(updated, want) {
 		t.Errorf("updated = %+v\nwant      %+v", updated, want)
-	}
-
-	recorder = fixture.do(authedPatch(t, cookies, "/api/v1/schedules/backup", `{"run_at_startup":true}`))
-	if recorder.Code != http.StatusBadRequest {
-		t.Errorf("run_at_startup on a task that does not offer it: status %d, want 400", recorder.Code)
 	}
 }
