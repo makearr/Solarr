@@ -26,7 +26,7 @@ const JobType = jobs.Type("library.scan")
 // must never sit in front of anything a user is waiting on.
 var Definition = jobs.Definition{
 	Name: "Scanning the library",
-	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: JobType, Pool: jobs.PoolScan, Mutating: true, MaxAttempts: 3,
 }
 
 // Payload is what a scan job carries.

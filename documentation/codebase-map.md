@@ -92,6 +92,26 @@ A category the caller cannot see is 404, never 403. One they can see but may not
 One place: `jobs.Executor`. It refuses to run a job type declared mutating when the mode is
 `observe` or `shadow`; nothing else consults the mode (ADR-20, Invariant 31).
 
+## Job pools
+
+A job type runs in one pool, and each pool has its own workers, so one kind of work waits only for its own kind
+(`internal/jobs/job.go`, sizes in `cmd/solarr/app/serve.go`):
+
+| Pool | Workers | Runs |
+|---|---|---|
+| `search` | `workers.search` (4) | planner, hunt |
+| `acquire` | `workers.acquire` (2) | download poll, download-folder watch |
+| `import` | 1, fixed (ADR-3) | imports |
+| `metadata` | `workers.metadata` (4) | enrichment, refresh, artwork, follows |
+| `scan` | 2 | library sweeps, one job per root |
+| `files` | 2 | attribute probe, cutoff checks, tag write-back |
+| `move` | 1 | moves, renames, linking |
+| `housekeeping` | 2 | counters, statistics, capacity, cache, recycle bin and retention sweeps |
+| `maintenance` | 1 | database maintenance, backups |
+
+Every job still writes through its database's single writer, so more workers add disk and provider load, never
+concurrent writes. A job type whose pool has no workers would be queued and never run; a test fails on that.
+
 ## The golden answers
 
 `cmd/solarr/app/golden_test.go` builds the real server over real databases in a temporary directory

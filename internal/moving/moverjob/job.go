@@ -31,7 +31,7 @@ const JobType = jobs.Type("move.apply")
 // already gives.
 var Definition = jobs.Definition{
 	Name: "Moving files",
-	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: JobType, Pool: jobs.PoolMove, Mutating: true, MaxAttempts: 3,
 }
 
 // ActionKeyFor deduplicates concurrent submissions of the same move job.

@@ -366,6 +366,17 @@ var (
 	metadataProfile = databaseProfile{name: "metadata", readPoolSize: 1, cacheSizeKB: 2048, inCacheDir: true}
 )
 
+// Worker counts of the pools config.yml does not size. Every job still writes through its database's one writer
+// (ADR-3), so these bound disk and provider load, not database contention.
+const (
+	// scanWorkers sweeps two roots at once; a root is never swept twice (the scan's action key).
+	scanWorkers = 2
+	// fileWorkers lets the probe, a cutoff check and tag write-back run beside each other.
+	fileWorkers = 2
+	// housekeepingWorkers keeps a slow statistics pass from holding back the counters.
+	housekeepingWorkers = 2
+)
+
 func (p *process) storeConfig(profile databaseProfile) store.Config {
 	cacheSizeKB := profile.cacheSizeKB
 	if cacheSizeKB == 0 {
@@ -489,6 +500,10 @@ func (p *process) startJobs(ctx context.Context) error {
 			{Pool: jobs.PoolAcquire, Capacity: p.config.Workers.Acquire},
 			{Pool: jobs.PoolMetadata, Capacity: p.config.Workers.Metadata},
 			{Pool: jobs.PoolImport, Capacity: jobs.ImportCapacity},
+			{Pool: jobs.PoolScan, Capacity: scanWorkers},
+			{Pool: jobs.PoolFiles, Capacity: fileWorkers},
+			{Pool: jobs.PoolMove, Capacity: 1},
+			{Pool: jobs.PoolHousekeeping, Capacity: housekeepingWorkers},
 			{Pool: jobs.PoolMaintenance, Capacity: 1},
 		},
 		Logger: p.logger,

@@ -21,7 +21,7 @@ const CutoffJobType = jobs.Type("tv.cutoff_check")
 
 // CutoffDefinition runs one check at a time; the next scheduled run is its retry.
 var CutoffDefinition = jobs.Definition{
-	Name: "Checking seasons against the quality cutoff", Type: CutoffJobType, Pool: jobs.PoolMaintenance,
+	Name: "Checking seasons against the quality cutoff", Type: CutoffJobType, Pool: jobs.PoolFiles,
 	Mutating: true, MaxAttempts: 1,
 }
 

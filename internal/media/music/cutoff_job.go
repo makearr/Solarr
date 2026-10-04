@@ -22,7 +22,7 @@ const CutoffJobType = jobs.Type("music.cutoff_check")
 
 // CutoffDefinition runs one check at a time; the next scheduled run is its retry.
 var CutoffDefinition = jobs.Definition{
-	Name: "Checking albums against the quality cutoff", Type: CutoffJobType, Pool: jobs.PoolMaintenance,
+	Name: "Checking albums against the quality cutoff", Type: CutoffJobType, Pool: jobs.PoolFiles,
 	Mutating: true, MaxAttempts: 1,
 }
 

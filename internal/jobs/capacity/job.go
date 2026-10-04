@@ -27,7 +27,7 @@ const ActionKey = "settings.capacity"
 // Definition declares how the sweep behaves: background, low priority,
 // retried on transient failure.
 var Definition = jobs.Definition{
-	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: JobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
 // probeFileName mirrors internal/api/apiserver's own write-probe convention

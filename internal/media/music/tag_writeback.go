@@ -30,7 +30,7 @@ const TagWritebackActionKey = "music.tag_writeback"
 // TagWritebackDefinition runs in maintenance: it rewrites files, and nothing waits on it.
 var TagWritebackDefinition = jobs.Definition{
 	Name: "Writing tags into files",
-	Type: TagWritebackJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 1,
+	Type: TagWritebackJobType, Pool: jobs.PoolFiles, Mutating: true, MaxAttempts: 1,
 }
 
 // tagWritebackPage is one read of candidates and one helper batch; tagWritebackPerRun paces the

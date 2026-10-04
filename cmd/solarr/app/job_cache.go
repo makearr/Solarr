@@ -23,7 +23,7 @@ const cacheJobType = jobs.Type("settings.cache_maintenance")
 const cacheActionKey = "settings.cache_maintenance"
 
 var cacheJobDefinition = jobs.Definition{
-	Type: cacheJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: cacheJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
 // cacheJob applies ADR-60's budget (max_age unconditionally, then budget-

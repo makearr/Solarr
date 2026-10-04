@@ -20,7 +20,7 @@ const categoryCountsJobType = jobs.Type("library.reconcile_category_counts")
 const categoryCountsActionKey = "library.reconcile_category_counts"
 
 var categoryCountsDefinition = jobs.Definition{
-	Type: categoryCountsJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: categoryCountsJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
 // categoryCountsJob recomputes every category's "works"/"files" counters

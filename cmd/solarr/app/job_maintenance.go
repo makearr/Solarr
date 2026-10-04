@@ -29,9 +29,9 @@ const decisionRetentionPages = 250
 var maintenanceDefinitions = []jobs.Definition{
 	{Type: databaseMaintenanceJobType, Name: "Maintaining the databases", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
 	{Type: backupJobType, Name: "Backing up", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 3},
-	{Type: backupCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
-	{Type: recycleBinCleanupJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
-	{Type: decisionRetentionJobType, Name: "Cleaning old search results", Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3},
+	{Type: backupCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
+	{Type: recycleBinCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
+	{Type: decisionRetentionJobType, Name: "Cleaning old search results", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 }
 
 // decisionRetentionJob ages search decisions past retention.decisions_full into the daily rollup and deletes the

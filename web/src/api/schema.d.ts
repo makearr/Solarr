@@ -4910,7 +4910,7 @@ export interface components {
         /** @enum {string} */
         JobState: "PENDING" | "PENDING_RETRY" | "LEASED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED";
         /** @enum {string} */
-        JobPool: "search" | "acquire" | "import" | "metadata" | "maintenance";
+        JobPool: "search" | "acquire" | "import" | "metadata" | "scan" | "files" | "move" | "housekeeping" | "maintenance";
         /** @description The job's payload is deliberately absent. It can carry paths and provider identifiers, and a listing is not the place to hand that out. */
         Job: {
             /** Format: int64 */

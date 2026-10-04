@@ -22,7 +22,7 @@ const JobType = jobs.Type("link.identical")
 // Definition declares bulk work in maintenance, never in front of anything interactive.
 var Definition = jobs.Definition{
 	Name: "Linking identical files",
-	Type: JobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 1,
+	Type: JobType, Pool: jobs.PoolMove, Mutating: true, MaxAttempts: 1,
 }
 
 // ActionKeyFor deduplicates concurrent runs over one library.

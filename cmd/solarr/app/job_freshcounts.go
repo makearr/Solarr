@@ -18,7 +18,7 @@ const freshCountsJobType = jobs.Type("library.reconcile_fresh_counts")
 const freshCountsActionKey = "library.reconcile_fresh_counts"
 
 var freshCountsDefinition = jobs.Definition{
-	Type: freshCountsJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 3,
+	Type: freshCountsJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3,
 }
 
 // freshCountsJob recomputes ADR-55's dashboard "new arrivals" figure

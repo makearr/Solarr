@@ -15,7 +15,7 @@ const statisticsJobType = jobs.Type("library.statistics")
 
 var statisticsDefinition = jobs.Definition{
 	Name: "Computing statistics",
-	Type: statisticsJobType, Pool: jobs.PoolMaintenance, Mutating: true, MaxAttempts: 2,
+	Type: statisticsJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 2,
 }
 
 func (p *process) registerStatisticsJob(registry *jobs.Registry, executor *jobs.Executor) error {

@@ -38,10 +38,19 @@ type Pool string
 
 // The pools of architecture section 3.
 const (
-	PoolSearch      Pool = "search"
-	PoolAcquire     Pool = "acquire"
-	PoolImport      Pool = "import"
-	PoolMetadata    Pool = "metadata"
+	PoolSearch   Pool = "search"
+	PoolAcquire  Pool = "acquire"
+	PoolImport   Pool = "import"
+	PoolMetadata Pool = "metadata"
+	// PoolScan sweeps library roots; one job per root, so two disks are read at the same time.
+	PoolScan Pool = "scan"
+	// PoolFiles reads and judges files already in the library: the attribute probe, the cutoff checks, tag write-back.
+	PoolFiles Pool = "files"
+	// PoolMove moves and links library files; one at a time, so two moves never fight over a path.
+	PoolMove Pool = "move"
+	// PoolHousekeeping is short bookkeeping: counters, statistics, capacity, cache and retention sweeps.
+	PoolHousekeeping Pool = "housekeeping"
+	// PoolMaintenance is database maintenance and backups, which hold a database's writer; one at a time.
 	PoolMaintenance Pool = "maintenance"
 )
 

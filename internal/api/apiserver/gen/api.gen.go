@@ -307,11 +307,15 @@ const (
 
 // Defines values for JobPool.
 const (
-	JobPoolAcquire     JobPool = "acquire"
-	JobPoolImport      JobPool = "import"
-	JobPoolMaintenance JobPool = "maintenance"
-	JobPoolMetadata    JobPool = "metadata"
-	JobPoolSearch      JobPool = "search"
+	JobPoolAcquire      JobPool = "acquire"
+	JobPoolFiles        JobPool = "files"
+	JobPoolHousekeeping JobPool = "housekeeping"
+	JobPoolImport       JobPool = "import"
+	JobPoolMaintenance  JobPool = "maintenance"
+	JobPoolMetadata     JobPool = "metadata"
+	JobPoolMove         JobPool = "move"
+	JobPoolScan         JobPool = "scan"
+	JobPoolSearch       JobPool = "search"
 )
 
 // Defines values for JobState.
