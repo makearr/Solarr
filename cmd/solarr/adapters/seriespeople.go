@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -42,9 +43,20 @@ type SeriesPeople struct {
 }
 
 // People maps a page of the people credited in a TV library.
-func (c SeriesPeople) People(ctx context.Context, categoryID int64, roles []string, prefix string, monitored *bool, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error) {
-	rows, err := c.Reader.People(ctx, library.TVPersonFilter{CategoryID: categoryID, Roles: roles, NamePrefix: prefix, Monitored: monitored},
-		library.PersonCursor{SortName: after.Sort, ID: after.ID}, limit)
+func (c SeriesPeople) People(ctx context.Context, query apiserver.SeriesPeopleQuery, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error) {
+	where, err := listfilter.Parse(query.Where, library.TVPersonFields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
+	cursor := library.TVPeopleCursor{SortName: after.Sort, ID: after.ID, Set: after.Sort != "" || after.ID != 0}
+	if query.Sort == "series" {
+		cursor.SortName = ""
+		cursor.Count, _ = strconv.ParseInt(after.Sort, 10, 64)
+	}
+	rows, err := c.Reader.People(ctx, library.TVPersonFilter{
+		CategoryID: query.CategoryID, Roles: query.Roles, NamePrefix: query.Prefix, Monitored: query.Monitored,
+		Sort: query.Sort, Desc: query.Desc, Where: where,
+	}, cursor, limit)
 	if err != nil {
 		return nil, err
 	}

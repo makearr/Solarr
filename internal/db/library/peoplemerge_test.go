@@ -137,3 +137,26 @@ func TestLinkWikidata_TheSameQIDMergesTheTwoAndTheMusicArtistSurvives(t *testing
 		t.Errorf("wikidata Q42 -> %d, %v, %v; want %d", id, found, err, artist)
 	}
 }
+
+// "'Weird Al' Yankovic" (TMDB) and "Weird Al Yankovic" (MusicBrainz) differ only in punctuation: the bridge asks about
+// the pair, and a different name stays out.
+func TestBridgeCandidates_NamesThatDifferOnlyInPunctuationMeet(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	resolvePersonNamed(t, people, "artist-1", "Weird Al Yankovic")
+	actor, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "tmdb", ExternalID: "7", Person: library.PersonIdentity{Name: "'Weird Al' Yankovic"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+		Provider: "tmdb", ExternalID: "8", Person: library.PersonIdentity{Name: "Someone Else"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	candidates, err := people.BridgeCandidates(t.Context(), 10)
+	if err != nil || len(candidates) != 1 || candidates[0].PersonID != actor || candidates[0].TMDBID != "7" {
+		t.Fatalf("candidates = %+v, err = %v, want only the actor", candidates, err)
+	}
+}

@@ -21,11 +21,13 @@ import {
   DEFAULT_POSTER_OPTIONS, IndexViewToggle, OVERVIEW_ROW_HEIGHT, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight,
   type IndexView, type PosterOptions,
 } from "./IndexViews";
+import { CustomFilterMenu } from "./CustomFilterMenu";
 import { Poster } from "./Poster";
+import { parseWhere, passes, type FilterField } from "@/list/customFilter";
 
 type Series = components["schemas"]["SeriesSummary"];
 
-const FILTER_KEYS: readonly string[] = ["q", "status", "network", "genre", "profile", "monitored", "missing"];
+const FILTER_KEYS: readonly string[] = ["q", "status", "network", "genre", "profile", "monitored", "missing", "where"];
 const POSTER_RATIO = 1.5;
 
 type SortKey = "title" | "year" | "added" | "network" | "next" | "progress";
@@ -72,9 +74,41 @@ function loadAll(queryClient: QueryClient, categoryId: string): Promise<Series[]
   return queryClient.fetchQuery({ queryKey: ["series", categoryId, "all"], staleTime: 15_000, queryFn: () => fetchAll(categoryId) });
 }
 
+/** What a person can build a custom filter from; each reads one value (or several, for genres) of a series. */
+const SERIES_FILTER_FIELDS: readonly FilterField[] = [
+  { key: "title", label: "Title", kind: "text" },
+  { key: "year", label: "Year", kind: "number" },
+  { key: "network", label: "Network", kind: "text" },
+  { key: "genre", label: "Genre", kind: "text" },
+  { key: "status", label: "Status", kind: "enum", choices: [["continuing", "Continuing"], ["ended", "Ended"]] },
+  { key: "monitored", label: "Monitored", kind: "bool" },
+  { key: "present", label: "Episodes on disk", kind: "number" },
+  { key: "missing", label: "Aired and missing episodes", kind: "number" },
+  { key: "seasons", label: "Seasons", kind: "number" },
+  { key: "days_since_added", label: "Days since added", kind: "number" },
+];
+
+function seriesValues(series: Series, field: string): (string | number | boolean | undefined)[] {
+  switch (field) {
+    case "title": return [series.title];
+    case "year": return [series.year];
+    case "network": return [series.network];
+    case "genre": return series.genres ?? [];
+    case "status": return [series.status];
+    case "monitored": return [series.monitored];
+    case "present": return [series.counts.present];
+    case "missing": return [series.counts.aired_missing];
+    case "seasons": return [(series.season_states ?? []).filter((season) => season.number > 0).length];
+    case "days_since_added": return [Math.floor((Date.now() / 1000 - series.added_at) / 86400)];
+    default: return [];
+  }
+}
+
 function matching(all: Series[], filters: Readonly<Record<string, string>>): Series[] {
   const needle = (filters.q ?? "").trim().toLowerCase();
+  const conditions = parseWhere(filters.where);
   return all
+    .filter((series) => passes(conditions, SERIES_FILTER_FIELDS, (field) => seriesValues(series, field)))
     .filter((series) => needle === "" || series.title.toLowerCase().includes(needle))
     .filter((series) => !filters.network || series.network === filters.network)
     .filter((series) => !filters.genre || (series.genres ?? []).includes(filters.genre))
@@ -352,6 +386,7 @@ export function SeriesIndex() {
           <label className="flex items-center gap-1 text-ink-muted">
             <input type="checkbox" checked={filters.missing === "1"} onChange={(event) => setFilter("missing", event.target.checked ? "1" : "")} /> Missing episodes
           </label>
+          <CustomFilterMenu fields={SERIES_FILTER_FIELDS} storageKey={`series.${categoryId}`} where={filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
           <label className="flex items-center gap-1 text-ink-muted">
             Sort
             <select

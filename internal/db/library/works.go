@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // workColumns is the sqlc model's field order, which the scan below depends on
@@ -112,6 +113,8 @@ type WorkFilter struct {
 	// CutoffUnmetOnly restricts to works whose monitored album falls short of its cutoff (M1d, Lidarr's
 	// Wanted -> Cutoff Unmet).
 	CutoffUnmetOnly bool
+	// Where are the conditions of a custom filter, all of which must hold.
+	Where []listfilter.Condition
 }
 
 // WorkCursor is a position in the list: the id always breaks ties, since without it a
@@ -187,6 +190,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
 	addPrefix(&predicates, filter.TitlePrefix)
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
+	addWorkConditions(&predicates, filter.Where)
 	predicates.AddIf(filter.FreshSince != "",
 		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+
 			" OR EXISTS (SELECT 1 FROM candidate_decision fcd JOIN candidate fc ON fc.id = fcd.candidate_id"+

@@ -4452,6 +4452,13 @@ paths:
           in: query
           description: At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
           schema: { type: boolean }
+        - name: where
+          in: query
+          description: >-
+            A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist,
+            genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country
+            (text); albums_wanted, albums_complete (number); monitored (bool). Other levels ignore it.
+          schema: { type: string }
       responses:
         "200":
           description: One page.
@@ -5159,6 +5166,18 @@ paths:
           in: query
           description: Only monitored (true) or only unmonitored (false) people; absent means both.
           schema: { type: boolean }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [name, series], default: name }
+        - name: dir
+          in: query
+          schema: { type: string, enum: [asc, desc], default: asc }
+        - name: where
+          in: query
+          description: >-
+            A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name (text),
+            series (number), monitored and photo (bool), role (one of the roles).
+          schema: { type: string }
         - name: cursor
           in: query
           schema: { type: string }

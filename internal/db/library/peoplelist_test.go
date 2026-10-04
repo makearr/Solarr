@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 func resolvePersonNamed(t *testing.T, people library.People, externalID, name string) int64 {
@@ -388,5 +389,22 @@ func TestListPeople_DescendingPagesZToA(t *testing.T) {
 	}
 	if want := []string{"Vutu Doci", "Katupoken", "AVEX"}; !slices.Equal(got, want) {
 		t.Errorf("order = %q, want %q", got, want)
+	}
+}
+
+// Every field the Artists custom filter offers is valid SQL, and a condition narrows the list.
+func TestPeopleList_CustomFilterConditions(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	for field, spec := range library.ArtistFields {
+		value := map[listfilter.Kind]string{listfilter.Text: "x", listfilter.Number: "1", listfilter.Bool: "true", listfilter.Enum: "x"}[spec.Kind]
+		op := map[listfilter.Kind]string{listfilter.Text: "contains", listfilter.Number: "ge", listfilter.Bool: "is", listfilter.Enum: "is"}[spec.Kind]
+		conditions, err := listfilter.Parse(`[{"field":"`+field+`","op":"`+op+`","value":"`+value+`"}]`, library.ArtistFields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := people.ListPeople(t.Context(), library.PersonFilter{Where: conditions}, library.PersonCursor{}, 10); err != nil {
+			t.Errorf("field %s: %v", field, err)
+		}
 	}
 }

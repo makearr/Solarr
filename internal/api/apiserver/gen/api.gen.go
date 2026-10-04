@@ -842,6 +842,18 @@ const (
 	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
 )
 
+// Defines values for ListSeriesPeopleParamsSort.
+const (
+	ListSeriesPeopleParamsSortName   ListSeriesPeopleParamsSort = "name"
+	ListSeriesPeopleParamsSortSeries ListSeriesPeopleParamsSort = "series"
+)
+
+// Defines values for ListSeriesPeopleParamsDir.
+const (
+	ListSeriesPeopleParamsDirAsc  ListSeriesPeopleParamsDir = "asc"
+	ListSeriesPeopleParamsDirDesc ListSeriesPeopleParamsDir = "desc"
+)
+
 // Defines values for ListWantedEpisodesParamsView.
 const (
 	ListWantedEpisodesParamsViewCutoff  ListWantedEpisodesParamsView = "cutoff"
@@ -4489,6 +4501,9 @@ type ListLibraryLevelParams struct {
 
 	// Monitored At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
 	Monitored *bool `form:"monitored,omitempty" json:"monitored,omitempty"`
+
+	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country (text); albums_wanted, albums_complete (number); monitored (bool). Other levels ignore it.
+	Where *string `form:"where,omitempty" json:"where,omitempty"`
 }
 
 // ListLibraryLevelParamsSort defines parameters for ListLibraryLevel.
@@ -4739,10 +4754,21 @@ type ListSeriesPeopleParams struct {
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 
 	// Monitored Only monitored (true) or only unmonitored (false) people; absent means both.
-	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
-	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Monitored *bool                       `form:"monitored,omitempty" json:"monitored,omitempty"`
+	Sort      *ListSeriesPeopleParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir       *ListSeriesPeopleParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+
+	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name (text), series (number), monitored and photo (bool), role (one of the roles).
+	Where  *string `form:"where,omitempty" json:"where,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
+
+// ListSeriesPeopleParamsSort defines parameters for ListSeriesPeople.
+type ListSeriesPeopleParamsSort string
+
+// ListSeriesPeopleParamsDir defines parameters for ListSeriesPeople.
+type ListSeriesPeopleParamsDir string
 
 // GetSeriesPersonParams defines parameters for GetSeriesPerson.
 type GetSeriesPersonParams struct {
@@ -11149,6 +11175,14 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "where" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "where", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraryLevel(w, r, id, level, params)
 	}))
@@ -13733,6 +13767,30 @@ func (siw *ServerInterfaceWrapper) ListSeriesPeople(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "monitored", r.URL.Query(), &params.Monitored)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "monitored", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sort", r.URL.Query(), &params.Sort)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "dir" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "where" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "where", Err: err})
 		return
 	}
 

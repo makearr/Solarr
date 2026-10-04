@@ -1,18 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "@tanstack/react-router";
-import { Search } from "lucide-react";
+import { Link, useParams } from "@tanstack/react-router";
+import { Search, User } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { remoteImage } from "@/lib/remoteImage";
 import { usePreference } from "@/lib/usePreference";
+import type { FilterField } from "@/list/customFilter";
+import { ListTable, type Column } from "@/list/ListTable";
 import { PosterGrid } from "@/list/PosterGrid";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { useLibraryList } from "@/list/useLibraryList";
 import type { ViewState } from "@/list/useRouteView";
 import { useRouteView } from "@/list/useRouteView";
 
-import { DEFAULT_POSTER_OPTIONS, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight, type PosterOptions } from "./IndexViews";
+import {
+  DEFAULT_POSTER_OPTIONS, IndexViewToggle, OVERVIEW_ROW_HEIGHT, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight,
+  type IndexView, type PosterOptions,
+} from "./IndexViews";
+import { CustomFilterMenu } from "./CustomFilterMenu";
 import { Poster } from "./Poster";
 
 type Person = components["schemas"]["SeriesPerson"];
@@ -47,7 +53,18 @@ export function roleLabel(role: string): string {
   return ROLE_LABEL[role] ?? role;
 }
 
-const FILTER_KEYS: readonly string[] = ["role", "monitored", "q"];
+const FILTER_KEYS: readonly string[] = ["role", "monitored", "q", "where"];
+
+const PERSON_FILTER_FIELDS: readonly FilterField[] = [
+  { key: "name", label: "Name", kind: "text" },
+  { key: "role", label: "Role", kind: "enum", choices: Object.entries(ROLE_LABEL) },
+  { key: "series", label: "Series in this library", kind: "number" },
+  { key: "monitored", label: "Followed", kind: "bool" },
+  { key: "photo", label: "Has a photo", kind: "bool" },
+];
+
+type SortKey = "name" | "series";
+const SORT_LABEL: Record<SortKey, string> = { name: "Name", series: "Series in this library" };
 
 /** A TV library's People level: who is in these series, by role, as the same wall of faces the music Artists level is. */
 export function TVPeople() {
@@ -56,6 +73,10 @@ export function TVPeople() {
   const view = useMemo<ViewState>(() => baseView, [baseView]);
   const role = view.query.filters.role ?? GROUPS[0].roles;
   const keyOf = (roles: string) => (roles === "" ? "all" : roles);
+  const [storedMode, setMode] = usePreference<IndexView>(`people.view.${categoryId}`, "poster");
+  const mode: IndexView = storedMode === "list" || storedMode === "overview" ? storedMode : "poster";
+  const sort: SortKey = view.query.sort === "series" ? "series" : "name";
+  const direction = view.query.direction;
   const [storedOptions, setOptions] = usePreference<PosterOptions>("posters.options", DEFAULT_POSTER_OPTIONS);
   const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
@@ -73,8 +94,8 @@ export function TVPeople() {
     {
       name: `series-people-${categoryId}`,
       idOf: (person) => person.id,
-      rowHeight: posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
-      itemsPerRow: metrics.columns,
+      rowHeight: mode === "poster" ? posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth) : mode === "overview" ? OVERVIEW_ROW_HEIGHT / 1.6 : 44,
+      itemsPerRow: mode === "poster" ? metrics.columns : 1,
       fetchPage: async ({ cursor, query, signal }) => {
         const filters = query.filters;
         const { data, error } = await api.GET("/series/people", {
@@ -84,6 +105,9 @@ export function TVPeople() {
               role: (filters.role ?? GROUPS[0].roles) === "all" ? undefined : (filters.role ?? GROUPS[0].roles) || undefined,
               q: filters.q || undefined,
               monitored: filters.monitored ? filters.monitored === "true" : undefined,
+              sort: query.sort === "series" ? "series" : "name",
+              dir: query.direction,
+              where: filters.where || undefined,
               cursor,
               limit: 100,
             },
@@ -99,6 +123,23 @@ export function TVPeople() {
 
   const setFilter = (key: string, value: string) => view.setQuery({ ...view.query, filters: { ...view.query.filters, [key]: value } });
   const monitored = view.query.filters.monitored ?? "";
+  const columns: readonly Column<Person>[] = [
+    {
+      key: "name", header: "Name", sortable: true, width: "minmax(12rem,2fr)",
+      render: (person) => (
+        <Link to="/library/$categoryId/people/$personId" params={{ categoryId, personId: String(person.id) }} className="flex items-center gap-2 hover:underline" onClick={(event) => event.stopPropagation()}>
+          <span className="block size-7 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface">
+            {person.image_url ? <img src={remoteImage(person.image_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" /> : <User aria-hidden className="m-1 size-5 text-ink-muted" />}
+          </span>
+          {person.name}
+        </Link>
+      ),
+    },
+    { key: "roles", header: "Roles", width: "minmax(8rem,1.5fr)", render: (person) => person.roles.map(roleLabel).join(", ") },
+    { key: "character", header: "As", width: "minmax(8rem,1.5fr)", render: (person) => person.character ?? "" },
+    { key: "series", header: "Series", sortable: true, width: "6rem", render: (person) => person.series_count },
+    { key: "followed", header: "Followed", width: "6rem", render: (person) => (person.monitored ? "Yes" : "") },
+  ];
 
   return (
     <div ref={frameRef} className="flex h-full flex-col">
@@ -140,7 +181,32 @@ export function TVPeople() {
               className="w-40 bg-transparent text-ink outline-none"
             />
           </label>
-          <PosterOptionsMenu options={options} onChange={setOptions} />
+          <CustomFilterMenu fields={PERSON_FILTER_FIELDS} storageKey={`cast.${categoryId}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
+          <label className="flex items-center gap-1 text-ink-muted">
+            Sort
+            <select
+              value={sort}
+              onChange={(event) => view.setQuery({ ...view.query, sort: event.target.value, direction: event.target.value === "series" ? "desc" : "asc" })}
+              className="rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink"
+            >
+              {(Object.keys(SORT_LABEL) as SortKey[]).map((key) => (
+                <option key={key} value={key}>
+                  {SORT_LABEL[key]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            aria-label={direction === "asc" ? "Ascending: turn round" : "Descending: turn round"}
+            title="Turn the order round"
+            onClick={() => view.setQuery({ ...view.query, sort, direction: direction === "asc" ? "desc" : "asc" })}
+            className="rounded-md border border-border-subtle px-1.5 py-1 text-ink-muted hover:text-ink"
+          >
+            {direction === "asc" ? "▲" : "▼"}
+          </button>
+          <IndexViewToggle view={mode} onChange={setMode} />
+          {mode === "poster" && <PosterOptionsMenu options={options} onChange={setOptions} />}
         </div>
       </div>
       <div className="min-h-0 flex-1">
@@ -155,7 +221,32 @@ export function TVPeople() {
                 : "Nobody is credited here yet. Cast, crew and guest stars come from TMDB: store your TMDB key under Settings → Metadata, then refresh a series."}
           </p>
         )}
-        {list.items.length > 0 && (
+        {list.items.length > 0 && mode === "list" && <ListTable list={list} columns={columns} idOf={(person) => person.id} />}
+        {list.items.length > 0 && mode === "overview" && (
+          <div ref={list.scrollRef} className="h-full overflow-auto">
+            <div style={{ height: list.totalSize, position: "relative" }}>
+              {list.virtualItems.map((virtual) => {
+                const person = list.items[virtual.index];
+                if (!person) return null;
+                return (
+                  <div key={person.id} className="absolute inset-x-0 px-4" style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}>
+                    <Link to="/library/$categoryId/people/$personId" params={{ categoryId, personId: String(person.id) }} className="flex h-full items-center gap-4 border-b border-border-subtle hover:bg-surface">
+                      <span className="block size-16 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface">
+                        {person.image_url ? <img src={remoteImage(person.image_url, "small")} alt="" loading="lazy" className="size-full object-cover" /> : <User aria-hidden className="m-4 size-8 text-ink-muted" />}
+                      </span>
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="truncate text-base font-medium">{person.name}</span>
+                        <span className="truncate text-sm text-ink-muted">{person.roles.map(roleLabel).join(", ")}{person.character ? ` · as ${person.character}` : ""}</span>
+                        <span className="text-xs text-ink-muted">{person.series_count} series{person.monitored ? " · followed" : ""}</span>
+                      </span>
+                    </Link>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        {list.items.length > 0 && mode === "poster" && (
           <PosterGrid
             list={list}
             idOf={(person) => person.id}

@@ -253,6 +253,8 @@ type ArtistsFilter struct {
 	Descending    bool
 	// Monitored narrows to monitored (true) or unmonitored (false) artists; nil is both.
 	Monitored *bool
+	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
+	Where string
 }
 
 // ArtistsCursor is a position in the Artists level, ordered by sort name.
@@ -366,6 +368,9 @@ func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 		monitored := raw == "true"
 		params.Monitored = &monitored
 	}
+	if raw := query.Get("where"); raw != "" {
+		params.Where = &raw
+	}
 	s.ListLibraryLevel(w, r, id, level, params)
 }
 
@@ -415,11 +420,11 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 
 	switch found.Entity {
 	case model.LevelEntityWork:
-		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction)
+		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction, derefOr(params.Where, ""))
 	case model.LevelEntityWorkPart:
 		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending)
 	case model.LevelEntityPerson:
-		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending, params.Monitored)
+		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending, params.Monitored, derefOr(params.Where, ""))
 	default:
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "this level has no reader wired up yet")
@@ -448,7 +453,7 @@ func (s *Server) findLevel(mediaType, key string) (model.Level, bool) {
 // list implementation.
 func (s *Server) listLibraryLevelWorks(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64,
-	cursor levelCursor, limit int, sort WorkSort, direction SortDirection,
+	cursor levelCursor, limit int, sort WorkSort, direction SortDirection, where string,
 ) {
 	if s.works == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -458,7 +463,7 @@ func (s *Server) listLibraryLevelWorks(
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
-			Sort: sort, Direction: direction,
+			Sort: sort, Direction: direction, Where: where,
 		},
 		levelWorksCursor(sort, cursor), limit+1)
 	if err != nil {
@@ -534,7 +539,7 @@ func (s *Server) listLibraryLevelTracks(
 // LibraryArtistsReader.
 func (s *Server) listLibraryLevelArtists(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
-	descending bool, monitored *bool,
+	descending bool, monitored *bool, where string,
 ) {
 	if s.libraryArtists == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -542,7 +547,7 @@ func (s *Server) listLibraryLevelArtists(
 		return
 	}
 	rows, err := s.libraryArtists.ListLibraryArtists(r.Context(),
-		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending, Monitored: monitored},
+		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending, Monitored: monitored, Where: where},
 		ArtistsCursor{SortName: cursor.field(0), ID: cursor.id}, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)

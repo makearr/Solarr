@@ -70,6 +70,8 @@ type WorksFilter struct {
 	Wanted bool
 	// CutoffUnmet restricts to albums whose files fall short of the library's cutoff (M1d).
 	CutoffUnmet bool
+	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
+	Where string
 }
 
 // WorksCursor is a position in the list. Only the field matching the active

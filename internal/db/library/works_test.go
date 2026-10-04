@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 func TestListWorks_FiltersNarrowToWhatWasAsked(t *testing.T) {
@@ -841,6 +842,45 @@ func TestListWorks_ProfileAndTagSortsWalkEveryAlbumInOrder(t *testing.T) {
 	} {
 		if got := walk(check.sort, check.direction); !slices.Equal(got, check.want) {
 			t.Errorf("sort %q %q = %v, want %v", check.sort, check.direction, got, check.want)
+		}
+	}
+}
+
+// A custom filter narrows the Albums list by what the conditions name, and every field the list offers is valid SQL.
+func TestWorksList_CustomFilterConditions(t *testing.T) {
+	opened, _ := newLibrary(t)
+	createWorkWithYear(t, opened, "Alpha", 1999)
+	createWorkWithYear(t, opened, "Beta", 2005)
+	createWorkWithYear(t, opened, "Gamma", 2012)
+	works := library.NewWorks(opened)
+	titles := func(raw string) []string {
+		t.Helper()
+		conditions, err := listfilter.Parse(raw, library.WorkFields)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := works.List(t.Context(), library.WorkFilter{Where: conditions}, library.WorkCursor{}, 50)
+		if err != nil {
+			t.Fatalf("List %s: %v", raw, err)
+		}
+		var out []string
+		for _, row := range rows {
+			out = append(out, row.CanonicalTitle)
+		}
+		return out
+	}
+	if got := titles(`[{"field":"year","op":"gt","value":"2000"},{"field":"title","op":"not_contains","value":"gam"}]`); len(got) != 1 || got[0] != "Beta" {
+		t.Errorf("year > 2000 and title not containing gam = %v, want Beta", got)
+	}
+	if got := titles(`[{"field":"title","op":"starts_with","value":"al"}]`); len(got) != 1 || got[0] != "Alpha" {
+		t.Errorf("starts with al = %v", got)
+	}
+	for field, spec := range library.WorkFields {
+		value := map[listfilter.Kind]string{listfilter.Text: "x", listfilter.Number: "1", listfilter.Bool: "true", listfilter.Enum: "MISSING"}[spec.Kind]
+		op := map[listfilter.Kind]string{listfilter.Text: "contains", listfilter.Number: "ge", listfilter.Bool: "is", listfilter.Enum: "is"}[spec.Kind]
+		titles(`[{"field":"` + field + `","op":"` + op + `","value":"` + value + `"}]`)
+		if spec.Kind == listfilter.Text {
+			titles(`[{"field":"` + field + `","op":"not_contains","value":"x"}]`)
 		}
 	}
 }

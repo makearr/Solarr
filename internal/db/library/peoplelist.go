@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // personColumns is the sqlc model's field order, which the scan below depends
@@ -56,6 +57,8 @@ type PersonFilter struct {
 	CategoryIDs   []int64
 	// Descending lists Z to A: a table header clicked twice (2026-09-25).
 	Descending bool
+	// Where are the conditions of a custom filter, all of which must hold.
+	Where []listfilter.Condition
 }
 
 // PersonCursor is a position in the people list: sort name, plus the id to
@@ -78,6 +81,7 @@ func composePeopleList(filter PersonFilter, after PersonCursor, pageSize int) (s
 	}
 	addNamePrefix(&predicates, filter.NamePrefix)
 	addArtistCredit(&predicates, filter.Role, filter.RootFolderIDs, filter.CategoryIDs)
+	addArtistConditions(&predicates, filter.Where)
 	operator, direction := ">", ""
 	if filter.Descending {
 		operator, direction = "<", " DESC"

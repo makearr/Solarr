@@ -2,9 +2,11 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // artistCreditRole is the one credit role the Artists navigation level
@@ -19,9 +21,13 @@ type Artists struct{ People library.People }
 func (a Artists) ListLibraryArtists(
 	ctx context.Context, filter apiserver.ArtistsFilter, cursor apiserver.ArtistsCursor, pageSize int,
 ) ([]apiserver.ArtistRow, error) {
+	where, err := listfilter.Parse(filter.Where, library.ArtistFields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
 	rows, err := a.People.ListPeople(ctx,
 		library.PersonFilter{
-			Role: artistCreditRole, RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs,
+			Where: where, Role: artistCreditRole, RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs,
 			Descending: filter.Descending, Monitored: filter.Monitored,
 		},
 		library.PersonCursor{SortName: cursor.SortName, ID: cursor.ID}, pageSize)

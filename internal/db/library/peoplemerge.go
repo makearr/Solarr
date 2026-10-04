@@ -266,27 +266,65 @@ type BridgeCandidate struct {
 	TMDBID   string
 }
 
+// bridgeName folds a name to its letters and digits, so "'Weird Al' Yankovic" and "Weird Al Yankovic" meet; a name
+// alone still never merges anyone, the Wikidata item does.
+func bridgeName(name string) string {
+	var out strings.Builder
+	for _, r := range strings.ToLower(name) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			out.WriteRune(r)
+		}
+	}
+	return out.String()
+}
+
+// artistNames is the folded name of every music artist, with whether the artist already has a Wikidata item.
+func (p People) artistNames(ctx context.Context) (map[string]bool, error) {
+	rows, err := p.store.Read().QueryContext(ctx,
+		`SELECT m.name, EXISTS (SELECT 1 FROM person_external_id mw WHERE mw.person_id = m.id AND mw.provider = ?)
+FROM person m JOIN person_external_id me ON me.person_id = m.id AND me.provider = ?`, ProviderWikidata, musicbrainzArtistProvider)
+	if err != nil {
+		return nil, fmt.Errorf("library: artist names: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	names := map[string]bool{}
+	for rows.Next() {
+		var name string
+		var hasWikidata bool
+		if err := rows.Scan(&name, &hasWikidata); err != nil {
+			return nil, fmt.Errorf("library: scan artist name: %w", err)
+		}
+		key := bridgeName(name)
+		names[key] = names[key] || hasWikidata
+	}
+	return names, rows.Err()
+}
+
 // BridgeCandidates lists up to limit such people that have no Wikidata item recorded or ruled out yet.
 func (p People) BridgeCandidates(ctx context.Context, limit int) ([]BridgeCandidate, error) {
+	artists, err := p.artistNames(ctx)
+	if err != nil || len(artists) == 0 {
+		return nil, err
+	}
 	rows, err := p.store.Read().QueryContext(ctx,
-		`SELECT DISTINCT x.person_id, x.external_id
-FROM person m
-JOIN person_external_id me ON me.person_id = m.id AND me.provider = ?
-JOIN person t ON t.sort_name = m.sort_name AND t.id <> m.id
-JOIN person_external_id x ON x.person_id = t.id AND x.provider = 'tmdb'
-WHERE NOT EXISTS (SELECT 1 FROM person_external_id w WHERE w.person_id = t.id AND w.provider IN (?, ?))
-ORDER BY x.person_id LIMIT ?`, musicbrainzArtistProvider, ProviderWikidata, providerWikidataNone, limit)
+		`SELECT t.id, t.name, x.external_id
+FROM person t JOIN person_external_id x ON x.person_id = t.id AND x.provider = 'tmdb'
+WHERE NOT EXISTS (SELECT 1 FROM person_external_id w WHERE w.person_id = t.id AND w.provider IN (?, ?, ?))
+ORDER BY t.id`, ProviderWikidata, providerWikidataNone, musicbrainzArtistProvider)
 	if err != nil {
 		return nil, fmt.Errorf("library: bridge candidates: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	var candidates []BridgeCandidate
-	for rows.Next() {
+	for rows.Next() && len(candidates) < limit {
 		var candidate BridgeCandidate
-		if err := rows.Scan(&candidate.PersonID, &candidate.TMDBID); err != nil {
+		var name string
+		if err := rows.Scan(&candidate.PersonID, &name, &candidate.TMDBID); err != nil {
 			return nil, fmt.Errorf("library: scan bridge candidate: %w", err)
 		}
-		candidates = append(candidates, candidate)
+		if _, isArtistName := artists[bridgeName(name)]; isArtistName {
+			candidates = append(candidates, candidate)
+		}
 	}
 	return candidates, rows.Err()
 }
@@ -303,27 +341,31 @@ func (p People) RuleOutWikidata(ctx context.Context, personID int64, tmdbID stri
 // BridgeLinked lists TV people whose Wikidata item is known but who still stand apart from the music artist of their
 // name: the ones a Wikidata look-up of the item may yet join. Answers person id to item, up to limit.
 func (p People) BridgeLinked(ctx context.Context, limit int) (map[int64]string, error) {
+	artists, err := p.artistNames(ctx)
+	if err != nil || len(artists) == 0 {
+		return nil, err
+	}
 	rows, err := p.store.Read().QueryContext(ctx,
-		`SELECT DISTINCT t.id, w.external_id
-FROM person m
-JOIN person_external_id me ON me.person_id = m.id AND me.provider = ?
-JOIN person t ON t.sort_name = m.sort_name AND t.id <> m.id
-JOIN person_external_id x ON x.person_id = t.id AND x.provider = 'tmdb'
+		`SELECT t.id, t.name, w.external_id
+FROM person t JOIN person_external_id x ON x.person_id = t.id AND x.provider = 'tmdb'
 JOIN person_external_id w ON w.person_id = t.id AND w.provider = ?
-WHERE NOT EXISTS (SELECT 1 FROM person_external_id mw WHERE mw.person_id = m.id AND mw.provider = ?)
-ORDER BY t.id LIMIT ?`, musicbrainzArtistProvider, ProviderWikidata, ProviderWikidata, limit)
+WHERE NOT EXISTS (SELECT 1 FROM person_external_id me WHERE me.person_id = t.id AND me.provider = ?)
+ORDER BY t.id`, ProviderWikidata, musicbrainzArtistProvider)
 	if err != nil {
 		return nil, fmt.Errorf("library: bridge linked: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	linked := map[int64]string{}
-	for rows.Next() {
+	for rows.Next() && len(linked) < limit {
 		var id int64
-		var qid string
-		if err := rows.Scan(&id, &qid); err != nil {
+		var name, qid string
+		if err := rows.Scan(&id, &name, &qid); err != nil {
 			return nil, fmt.Errorf("library: scan bridge linked: %w", err)
 		}
-		linked[id] = qid
+		// An artist that already has an item is merged by it, not by a name.
+		if hasWikidata, isArtistName := artists[bridgeName(name)]; isArtistName && !hasWikidata {
+			linked[id] = qid
+		}
 	}
 	return linked, rows.Err()
 }

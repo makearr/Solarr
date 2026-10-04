@@ -2,12 +2,14 @@ package adapters
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/priority"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // Works satisfies apiserver.WorksReader over library.Works. Clock resolves
@@ -27,8 +29,13 @@ func (a Works) ListWorks(
 	if filter.Fresh {
 		freshSince, freshRSSSince = a.Fresh.Cutoffs(a.Clock)
 	}
+	where, err := listfilter.Parse(filter.Where, library.WorkFields)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
+			Where:           where,
 			RootFolderIDs:   filter.RootFolderIDs,
 			CategoryIDs:     filter.CategoryIDs,
 			Sort:            library.WorkSort(filter.Sort),

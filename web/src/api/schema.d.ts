@@ -11971,6 +11971,8 @@ export interface operations {
                 dir?: "asc" | "desc";
                 /** @description At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it. */
                 monitored?: boolean;
+                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country (text); albums_wanted, albums_complete (number); monitored (bool). Other levels ignore it. */
+                where?: string;
             };
             header?: never;
             path: {
@@ -12813,6 +12815,10 @@ export interface operations {
                 q?: string;
                 /** @description Only monitored (true) or only unmonitored (false) people; absent means both. */
                 monitored?: boolean;
+                sort?: "name" | "series";
+                dir?: "asc" | "desc";
+                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name (text), series (number), monitored and photo (bool), role (one of the roles). */
+                where?: string;
                 cursor?: string;
                 limit?: number;
             };

@@ -18,8 +18,8 @@ import (
 
 // SeriesPeopleCatalog is the TV people and network screens' data, scoped to one library the caller was checked for.
 type SeriesPeopleCatalog interface {
-	// People returns up to limit+1 people after the cursor, by name.
-	People(ctx context.Context, categoryID int64, roles []string, prefix string, monitored *bool, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error)
+	// People returns up to limit+1 people after the cursor; a malformed custom filter answers ErrInvalidChoice.
+	People(ctx context.Context, query SeriesPeopleQuery, after paginate.TextCursor, limit int) ([]gen.SeriesPerson, error)
 	Person(ctx context.Context, categoryID, personID, userID int64) (gen.SeriesPersonDetail, error)
 	Networks(ctx context.Context, categoryID int64) ([]gen.SeriesNetwork, error)
 	Network(ctx context.Context, categoryID, networkID, userID int64) (gen.SeriesNetworkDetail, error)
@@ -28,6 +28,19 @@ type SeriesPeopleCatalog interface {
 	Unfollow(ctx context.Context, userID int64, subject string, subjectID int64) error
 	// PreviewFollow says what a follow would add now, changing nothing.
 	PreviewFollow(ctx context.Context, categoryID int64, subject string, subjectID int64, roles []string, backCatalogue bool) (gen.SeriesFollowPreview, error)
+}
+
+// SeriesPeopleQuery is one page request of the cast list.
+type SeriesPeopleQuery struct {
+	CategoryID int64
+	Roles      []string
+	Prefix     string
+	Monitored  *bool
+	// Sort is "name" or "series"; Desc turns it round.
+	Sort string
+	Desc bool
+	// Where is the custom filter as the JSON the request carried.
+	Where string
 }
 
 // ErrFollowUnavailable means the subject cannot be followed (no TMDB id to follow by, or it is followed for another
@@ -67,7 +80,7 @@ func (s *Server) routeListSeriesPeople(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params := gen.ListSeriesPeopleParams{CategoryId: categoryID}
-	for name, target := range map[string]**string{"role": &params.Role, "q": &params.Q, "cursor": &params.Cursor} {
+	for name, target := range map[string]**string{"role": &params.Role, "q": &params.Q, "cursor": &params.Cursor, "where": &params.Where} {
 		if raw := query.Get(name); raw != "" {
 			*target = &raw
 		}
@@ -83,6 +96,14 @@ func (s *Server) routeListSeriesPeople(w http.ResponseWriter, r *http.Request) {
 	if raw := query.Get("monitored"); raw == "true" || raw == "false" {
 		monitored := raw == "true"
 		params.Monitored = &monitored
+	}
+	if raw := query.Get("sort"); raw != "" {
+		sort := gen.ListSeriesPeopleParamsSort(raw)
+		params.Sort = &sort
+	}
+	if raw := query.Get("dir"); raw != "" {
+		dir := gen.ListSeriesPeopleParamsDir(raw)
+		params.Dir = &dir
 	}
 	s.ListSeriesPeople(w, r, params)
 }
@@ -104,7 +125,11 @@ func (s *Server) ListSeriesPeople(w http.ResponseWriter, r *http.Request, params
 		}
 	}
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
-	rows, err := s.seriesPeople.People(r.Context(), params.CategoryId, roles, strings.TrimSpace(derefOr(params.Q, "")), params.Monitored, cursor, limit+1)
+	sort := string(derefOr(params.Sort, "name"))
+	rows, err := s.seriesPeople.People(r.Context(), SeriesPeopleQuery{
+		CategoryID: params.CategoryId, Roles: roles, Prefix: strings.TrimSpace(derefOr(params.Q, "")), Monitored: params.Monitored,
+		Sort: sort, Desc: derefOr(params.Dir, "asc") == "desc", Where: derefOr(params.Where, ""),
+	}, cursor, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -113,7 +138,11 @@ func (s *Server) ListSeriesPeople(w http.ResponseWriter, r *http.Request, params
 	if len(rows) > limit {
 		page.Items = rows[:limit]
 		last := page.Items[len(page.Items)-1]
-		next := paginate.TextCursor{Sort: strings.ToLower(last.Name), ID: last.Id}.Encode()
+		position := strings.ToLower(last.Name)
+		if sort == "series" {
+			position = strconv.FormatInt(last.SeriesCount, 10)
+		}
+		next := paginate.TextCursor{Sort: position, ID: last.Id}.Encode()
 		page.NextCursor = &next
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)

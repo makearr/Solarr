@@ -41,7 +41,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	"cmd/solarr/adapters": {
 		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
-		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings",
+		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
 		"internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/media/music", "internal/media/tv", "internal/metadata/tmdb", "internal/moving/naming", "internal/api/apiserver/gen", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/musicbrainz",
@@ -56,7 +56,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
 		"internal/platform/privilege", "internal/identify/score", "internal/db/settings", "internal/platform/secrets",
-		"internal/identify/quality",
+		"internal/identify/quality", "internal/platform/listfilter",
 	},
 	"internal/platform/clock": {},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
@@ -101,6 +101,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/db/library": {
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
 		"internal/identify/model", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/librarydb",
+		"internal/platform/listfilter",
 	},
 	// ADR-29's fingerprint rung (D12). Talks to acoustid.org and nothing else:
 	// it identifies, and the caller resolves what it names through the ordered
@@ -231,7 +232,8 @@ var allowedInternalImports = map[string][]string{
 		"internal/identify/parse", "internal/identify/score", "internal/scanning/scan", "internal/db/settings",
 		"internal/metadata/wikidata", "internal/identify/quality",
 	},
-	"internal/platform/paginate": {},
+	"internal/platform/paginate":   {},
+	"internal/platform/listfilter": {},
 	// The section 10.4 sweep: a walk over the filesystem seam and nothing else.
 	// What it finds is persisted by the caller, so it touches no database.
 	// The sweep itself walks only the fsx seam; the job handler beside it composes

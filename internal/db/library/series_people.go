@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // ErrPersonNotFound reports a person with no credit in the library asked about.
@@ -24,6 +25,31 @@ type TVPersonFilter struct {
 	NamePrefix string
 	// Monitored narrows to monitored (true) or unmonitored (false) people; nil is both.
 	Monitored *bool
+	// Sort is "name" (the default) or "series" (series credited); Desc turns either round.
+	Sort string
+	Desc bool
+	// Where are the conditions of a custom filter, all of which must hold.
+	Where []listfilter.Condition
+}
+
+// TVPeopleCursor is a position in the people list: the sort value (the sort name, or the series count) and the id.
+type TVPeopleCursor struct {
+	SortName string
+	Count    int64
+	ID       int64
+	// Set is false for the first page.
+	Set bool
+}
+
+// TVPersonFields are the fields a custom filter of the cast list may name.
+var TVPersonFields = map[string]listfilter.Field{
+	"name":      {Kind: listfilter.Text},
+	"series":    {Kind: listfilter.Number},
+	"monitored": {Kind: listfilter.Bool},
+	"photo":     {Kind: listfilter.Bool},
+	"role": {Kind: listfilter.Enum, Choices: []string{
+		"actor", "guest_star", "creator", "showrunner", "director", "writer", "executive_producer", "producer", "composer",
+	}},
 }
 
 // TVPersonRow is one person of a TV library with what they did there.
@@ -55,9 +81,11 @@ func roleFilter(alias string, roles []string) (string, []any) {
 }
 
 // People lists one page of the people credited on a TV library's series, by sort name with the id as the tie-break.
-func (r SeriesReader) People(ctx context.Context, filter TVPersonFilter, after PersonCursor, pageSize int) ([]TVPersonRow, error) {
+func (r SeriesReader) People(ctx context.Context, filter TVPersonFilter, after TVPeopleCursor, pageSize int) ([]TVPersonRow, error) {
 	roleSQL, roleArgs := roleFilter("c", filter.Roles)
 	join := fmt.Sprintf(inLibrary, "c")
+	countExpression := "(SELECT COUNT(DISTINCT c.work_id) FROM credit c " + join + " WHERE c.person_id = p.id" + roleSQL + ")"
+	countArgs := append([]any{filter.CategoryID}, roleArgs...)
 	var predicates store.Predicates
 	predicates.Add("EXISTS (SELECT 1 FROM credit c "+join+" WHERE c.person_id = p.id"+roleSQL+")",
 		append([]any{filter.CategoryID}, roleArgs...)...)
@@ -65,16 +93,37 @@ func (r SeriesReader) People(ctx context.Context, filter TVPersonFilter, after P
 	if filter.Monitored != nil {
 		predicates.Add("p.monitored = ?", boolInt(*filter.Monitored))
 	}
-	predicates.AddIf(after.SortName != "" || after.ID != 0,
-		"(p.sort_name COLLATE NOCASE > ? OR (p.sort_name COLLATE NOCASE = ? AND p.id > ?))", after.SortName, after.SortName, after.ID)
+	for _, condition := range filter.Where {
+		fragment, arguments := r.personCondition(condition, filter.CategoryID, join, countExpression, countArgs)
+		predicates.Add(fragment, arguments...)
+	}
+	var order string
+	direction, compare := "", ">"
+	if filter.Desc {
+		direction, compare = " DESC", "<"
+	}
+	switch filter.Sort {
+	case "series":
+		order = "series_count" + direction + ", p.id" + direction
+		if after.Set {
+			predicates.Add("("+countExpression+" "+compare+" ? OR ("+countExpression+" = ? AND p.id "+compare+" ?))",
+				append(append(append(slices.Clone(countArgs), after.Count), countArgs...), after.Count, after.ID)...)
+		}
+	default:
+		order = "p.sort_name COLLATE NOCASE" + direction + ", p.id" + direction
+		if after.Set {
+			predicates.Add("(p.sort_name COLLATE NOCASE "+compare+" ? OR (p.sort_name COLLATE NOCASE = ? AND p.id "+compare+" ?))",
+				after.SortName, after.SortName, after.ID)
+		}
+	}
 
 	query := `SELECT p.id, p.name, p.sort_name, COALESCE(json_extract(p.fields_json, '$.image_url'), ''), p.monitored,
-       CAST((SELECT COUNT(DISTINCT c.work_id) FROM credit c ` + join + ` WHERE c.person_id = p.id` + roleSQL + `) AS INTEGER),
+       CAST(` + countExpression + ` AS INTEGER) AS series_count,
        COALESCE((SELECT GROUP_CONCAT(DISTINCT c.role) FROM credit c ` + join + ` WHERE c.person_id = p.id), ''),
        COALESCE((SELECT c.character FROM credit c ` + join + ` WHERE c.person_id = p.id AND c.character != ''` + roleSQL + `
                  ORDER BY c.ord LIMIT 1), '')
 FROM person p` + predicates.Where() + `
-ORDER BY p.sort_name COLLATE NOCASE, p.id
+ORDER BY ` + order + `
 LIMIT ?`
 	arguments := []any{filter.CategoryID}
 	arguments = append(arguments, roleArgs...)
@@ -101,6 +150,27 @@ LIMIT ?`
 		people = append(people, row)
 	}
 	return people, rows.Err()
+}
+
+// personCondition is one custom-filter condition as a predicate over a person p and the credits of the library.
+func (r SeriesReader) personCondition(condition listfilter.Condition, categoryID int64, join, countExpression string, countArgs []any) (string, []any) {
+	switch condition.Field {
+	case "name":
+		return condition.SQL(listfilter.Text, "p.name")
+	case "monitored":
+		return condition.SQL(listfilter.Bool, "p.monitored = 1")
+	case "photo":
+		return condition.SQL(listfilter.Bool, "COALESCE(json_extract(p.fields_json, '$.image_url'), '') <> ''")
+	case "series":
+		fragment, arguments := condition.SQL(listfilter.Number, countExpression)
+		return fragment, append(slices.Clone(countArgs), arguments...)
+	default:
+		holds := "EXISTS (SELECT 1 FROM credit c " + join + " WHERE c.person_id = p.id AND c.role = ?)"
+		if condition.Op == "is_not" {
+			holds = "NOT " + holds
+		}
+		return holds, []any{categoryID, condition.Value}
+	}
 }
 
 func addTVNamePrefix(predicates *store.Predicates, prefix string) {
