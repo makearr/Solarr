@@ -337,3 +337,30 @@ func TestRecycleBinPut_RemovesTheFoldersItEmptied(t *testing.T) {
 		}
 	}
 }
+
+func TestRecycleBinEmpty_RemovesEveryEntryAndListShowsThemNewestFirst(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	fsys := fsx.NewMem(fake)
+	q := library.NewRecycleBin(opened, fsys, fake)
+	for _, name := range []string{"a.flac", "b.flac", "c.flac"} {
+		putTestFile(t, fsys, "/media/root/"+name, []byte("bytes"))
+		if _, err := q.Put(t.Context(), library.PutRequest{
+			RootPath: "/media/root", OriginalPath: "/media/root/" + name, Reason: library.ReasonJunk, Retain: 168 * time.Hour,
+		}); err != nil {
+			t.Fatalf("Put: %v", err)
+		}
+		fake.Advance(time.Minute)
+	}
+	entries, total, bytes, err := q.List(t.Context())
+	if err != nil || len(entries) != 3 || total != 3 || bytes != 15 || entries[0].OriginalPath != "/media/root/c.flac" {
+		t.Fatalf("List = %+v, %d, %d, %v", entries, total, bytes, err)
+	}
+	result, err := q.Empty(t.Context())
+	if err != nil || result.Purged != 3 || result.BytesFreed != 15 || len(result.Errors) != 0 {
+		t.Fatalf("Empty = %+v, %v", result, err)
+	}
+	if entries, total, _, _ = q.List(t.Context()); len(entries) != 0 || total != 0 {
+		t.Errorf("after Empty: %+v, %d", entries, total)
+	}
+}

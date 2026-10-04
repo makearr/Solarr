@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 
 import { inputStyle } from "./LibraryNaming";
+import { formatBytes } from "./Queue";
 
 const GB = 1024 * 1024 * 1024;
 
@@ -26,6 +27,23 @@ export function RecycleBin() {
     setMaxGB(Math.round(limits.data.max_bytes / GB));
     setPercent(limits.data.max_percent_of_root);
   }, [limits.data]);
+
+  const contents = useQuery({
+    queryKey: ["recycleBinEntries"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/recyclebin/entries");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const empty = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/recyclebin/empty");
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["recycleBinEntries"] }),
+  });
 
   const save = useMutation({
     mutationFn: async () => {
@@ -72,6 +90,48 @@ export function RecycleBin() {
         {save.isError && <span className="text-xs text-danger">That was not saved -- the limits have a problem.</span>}
         {save.isSuccess && !dirty && <span className="text-xs text-ink-muted">Saved; the next cleanup applies it.</span>}
       </div>
+      <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4 text-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="font-medium">
+            In the bin{contents.data ? `: ${contents.data.total_entries} files, ${formatBytes(contents.data.total_bytes)}` : ""}
+          </h2>
+          <button
+            type="button"
+            disabled={!contents.data?.total_entries || empty.isPending}
+            onClick={() => {
+              if (window.confirm("Remove everything in the recycle bin for good? This cannot be undone.")) empty.mutate();
+            }}
+            className="ml-auto rounded-md border border-danger px-3 py-1 text-xs text-danger disabled:opacity-50"
+          >
+            {empty.isPending ? "Emptying…" : "Empty recycle bin"}
+          </button>
+        </div>
+        {empty.isError && <p className="text-xs text-danger">The bin could not be emptied (administrators only).</p>}
+        {empty.data && (
+          <p className="text-xs text-ink-muted">
+            Removed {empty.data.removed} files, {formatBytes(empty.data.freed_bytes)}
+            {empty.data.failed > 0 ? `; ${empty.data.failed} could not be removed` : ""}.
+          </p>
+        )}
+        {contents.data && contents.data.entries.length === 0 && <p className="text-xs text-ink-muted">The recycle bin is empty.</p>}
+        {contents.data && contents.data.entries.length > 0 && (
+          <ul className="flex flex-col divide-y divide-border-subtle text-xs">
+            {contents.data.entries.map((entry) => (
+              <li key={entry.id} className="flex flex-wrap items-baseline gap-x-3 py-1.5">
+                <span className="min-w-0 flex-1 break-all" title={entry.original_path}>{entry.original_path}</span>
+                <span className="text-ink-muted">{entry.reason.replace("_", " ")}</span>
+                <span className="w-20 text-right tabular-nums">{formatBytes(entry.size_bytes)}</span>
+                <span className="w-44 text-right text-ink-muted">
+                  removed for good {new Date(entry.expires_at * 1000).toLocaleDateString()}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        {contents.data && contents.data.total_entries > contents.data.entries.length && (
+          <p className="text-xs text-ink-muted">Showing the newest {contents.data.entries.length}.</p>
+        )}
+      </section>
     </div>
   );
 }

@@ -1256,6 +1256,35 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /recyclebin/entries:
+    get:
+      operationId: listRecycleBinEntries
+      tags: [settings]
+      summary: What the recycle bins hold now, newest first.
+      responses:
+        "200":
+          description: The entries (at most 500) and the totals.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecycleBinContents" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /recyclebin/empty:
+    post:
+      operationId: emptyRecycleBin
+      tags: [settings]
+      summary: Remove everything in the recycle bins for good. Administrator only.
+      responses:
+        "200":
+          description: What was removed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RecycleBinEmptied" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /cache/clear:
     post:
       operationId: clearCache
@@ -6872,6 +6901,31 @@ components:
           description: Absent for a lossless codec.
         tolerance_pct: { type: integer, format: int64, minimum: 0, maximum: 50 }
 
+    RecycleBinContents:
+      type: object
+      required: [total_entries, total_bytes, entries]
+      properties:
+        total_entries: { type: integer, format: int64 }
+        total_bytes: { type: integer, format: int64 }
+        entries:
+          type: array
+          items:
+            type: object
+            required: [id, original_path, reason, size_bytes, recycled_at, expires_at]
+            properties:
+              id: { type: integer, format: int64 }
+              original_path: { type: string }
+              reason: { type: string, description: "replaced, rejected_worse, junk, user_delete or failed_import." }
+              size_bytes: { type: integer, format: int64 }
+              recycled_at: { type: integer, format: int64, description: Unix seconds. }
+              expires_at: { type: integer, format: int64, description: Unix seconds. }
+    RecycleBinEmptied:
+      type: object
+      required: [removed, freed_bytes, failed]
+      properties:
+        removed: { type: integer, format: int64 }
+        freed_bytes: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
     RecycleBinLimits:
       type: object
       required: [max_bytes, max_percent_of_root]

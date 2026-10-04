@@ -134,6 +134,7 @@ type Querier interface {
 	CountPrimaryFiles(ctx context.Context, desiredItemID int64) (int64, error)
 	// A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
+	CountRecycleBin(ctx context.Context) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
 	CountSeriesExclusion(ctx context.Context, arg CountSeriesExclusionParams) (int64, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
@@ -402,6 +403,7 @@ type Querier interface {
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
 	// The per-root counterpart, for the max_percent_of_root guard.
 	ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg ListActiveRecycleBinByRootOldestFirstParams) ([]RecycleBin, error)
+	ListActiveRecycleBinNewestFirst(ctx context.Context, limit int64) ([]RecycleBin, error)
 	// Oldest-first eviction order for the max_bytes guard -- distinct from
 	// ListExpiredRecycleBin, which is age-of-expiry, not age-of-entry.
 	ListActiveRecycleBinOldestFirst(ctx context.Context, limit int64) ([]RecycleBin, error)

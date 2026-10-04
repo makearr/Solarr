@@ -114,6 +114,8 @@ type Config struct {
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
 	Duplicates DuplicateReader
+	// RecycleBinContents lists and empties the recycle bins. Optional: nil answers 503.
+	RecycleBinContents RecycleBinContents
 	// DuplicateResolver keeps one copy of a track and links or recycles the others. Optional: nil answers 503.
 	DuplicateResolver DuplicateResolver
 	// Links previews and queues the linking of a library's identical copies. Optional: nil answers 503.
@@ -273,6 +275,7 @@ type Server struct {
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
 	duplicates              DuplicateReader
+	recycleContents         RecycleBinContents
 	duplicateResolver       DuplicateResolver
 	links                   LinkManager
 	incompleteDiscographies IncompleteDiscographies
@@ -377,6 +380,7 @@ func New(config Config) (*Server, error) {
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
 		duplicates:              config.Duplicates,
+		recycleContents:         config.RecycleBinContents,
 		duplicateResolver:       config.DuplicateResolver,
 		links:                   config.Links,
 		incompleteDiscographies: config.IncompleteDiscographies,
@@ -661,6 +665,8 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/cache", server.UpdateCacheBudget)
 			secured.Get("/recyclebin", server.GetRecycleBinLimits)
 			secured.Patch("/recyclebin", server.UpdateRecycleBinLimits)
+			secured.Get("/recyclebin/entries", server.ListRecycleBinEntries)
+			secured.Post("/recyclebin/empty", server.EmptyRecycleBin)
 			secured.Get("/priority", server.GetPrioritySettings)
 			secured.Patch("/priority", server.UpdatePrioritySettings)
 			secured.Get("/metadata/settings", server.GetMetadataSettings)

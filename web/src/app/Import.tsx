@@ -705,11 +705,11 @@ function InspectForm() {
           <Switch label="Preview first" checked={preview} onChange={setPreview} />
         </SettingRow>
         <SettingRow
-          label="Add unrecognised albums"
-          help="A folder no metadata source recognises still becomes an album, named by its own tags or folder and marked unverified. Identify it later from the review below."
+          label="Add unrecognised folders"
+          help="A folder no metadata source recognises (an album in a music library, a series or movie elsewhere) is still added, named by its own tags or folder name and marked unverified. Identify it later from the review below."
           disabled={preview}
         >
-          <Switch label="Add unrecognised albums" checked={addUnverified && !preview} disabled={preview} onChange={setAddUnverified} />
+          <Switch label="Add unrecognised folders" checked={addUnverified && !preview} disabled={preview} onChange={setAddUnverified} />
         </SettingRow>
         <SettingRow
           label="Add as a root instead of moving"

@@ -817,6 +817,40 @@ export interface paths {
         patch: operations["updateRecycleBinLimits"];
         trace?: never;
     };
+    "/recyclebin/entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What the recycle bins hold now, newest first. */
+        get: operations["listRecycleBinEntries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/recyclebin/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Remove everything in the recycle bins for good. Administrator only. */
+        post: operations["emptyRecycleBin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cache/clear": {
         parameters: {
             query?: never;
@@ -4340,6 +4374,39 @@ export interface components {
             bitrate_kbps?: number;
             /** Format: int64 */
             tolerance_pct: number;
+        };
+        RecycleBinContents: {
+            /** Format: int64 */
+            total_entries: number;
+            /** Format: int64 */
+            total_bytes: number;
+            entries: {
+                /** Format: int64 */
+                id: number;
+                original_path: string;
+                /** @description replaced, rejected_worse, junk, user_delete or failed_import. */
+                reason: string;
+                /** Format: int64 */
+                size_bytes: number;
+                /**
+                 * Format: int64
+                 * @description Unix seconds.
+                 */
+                recycled_at: number;
+                /**
+                 * Format: int64
+                 * @description Unix seconds.
+                 */
+                expires_at: number;
+            }[];
+        };
+        RecycleBinEmptied: {
+            /** Format: int64 */
+            removed: number;
+            /** Format: int64 */
+            freed_bytes: number;
+            /** Format: int64 */
+            failed: number;
         };
         RecycleBinLimits: {
             /**
@@ -8476,6 +8543,51 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    listRecycleBinEntries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entries (at most 500) and the totals. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecycleBinContents"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    emptyRecycleBin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description What was removed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecycleBinEmptied"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     clearCache: {

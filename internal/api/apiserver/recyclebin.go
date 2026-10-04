@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -51,4 +52,65 @@ func (s *Server) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) 
 
 func recycleBinLimitsView(limits settings.RecycleBinLimits) gen.RecycleBinLimits {
 	return gen.RecycleBinLimits{MaxBytes: limits.MaxBytes, MaxPercentOfRoot: limits.MaxPercentOfRoot}
+}
+
+// RecycleBinEntryRow is one recycled file.
+type RecycleBinEntryRow struct {
+	ID                    int64
+	OriginalPath, Reason  string
+	SizeBytes             int64
+	RecycledAt, ExpiresAt int64
+}
+
+// RecycleBinContents lists the recycle bins and empties them.
+type RecycleBinContents interface {
+	List(ctx context.Context) (entries []RecycleBinEntryRow, totalEntries, totalBytes int64, err error)
+	Empty(ctx context.Context) (removed, freedBytes, failed int64, err error)
+}
+
+// ListRecycleBinEntries answers what the recycle bins hold, newest first.
+func (s *Server) ListRecycleBinEntries(w http.ResponseWriter, r *http.Request) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.recycleContents == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the recycle bin is not available")
+		return
+	}
+	entries, totalEntries, totalBytes, err := s.recycleContents.List(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	out := gen.RecycleBinContents{TotalEntries: totalEntries, TotalBytes: totalBytes, Entries: make([]struct {
+		ExpiresAt    int64  `json:"expires_at"`
+		Id           int64  `json:"id"`
+		OriginalPath string `json:"original_path"`
+		Reason       string `json:"reason"`
+		RecycledAt   int64  `json:"recycled_at"`
+		SizeBytes    int64  `json:"size_bytes"`
+	}, len(entries))}
+	for i, entry := range entries {
+		out.Entries[i].ExpiresAt, out.Entries[i].Id, out.Entries[i].OriginalPath = entry.ExpiresAt, entry.ID, entry.OriginalPath
+		out.Entries[i].Reason, out.Entries[i].RecycledAt, out.Entries[i].SizeBytes = entry.Reason, entry.RecycledAt, entry.SizeBytes
+	}
+	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+// EmptyRecycleBin removes everything in the recycle bins for good. Administrator only.
+func (s *Server) EmptyRecycleBin(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.recycleContents == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the recycle bin is not available")
+		return
+	}
+	removed, freed, failed, err := s.recycleContents.Empty(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.RecycleBinEmptied{Removed: removed, FreedBytes: freed, Failed: failed})
 }

@@ -3178,6 +3178,32 @@ type ReadyStatus struct {
 // ReadyStatusStatus defines model for ReadyStatus.Status.
 type ReadyStatusStatus string
 
+// RecycleBinContents defines model for RecycleBinContents.
+type RecycleBinContents struct {
+	Entries []struct {
+		// ExpiresAt Unix seconds.
+		ExpiresAt    int64  `json:"expires_at"`
+		Id           int64  `json:"id"`
+		OriginalPath string `json:"original_path"`
+
+		// Reason replaced, rejected_worse, junk, user_delete or failed_import.
+		Reason string `json:"reason"`
+
+		// RecycledAt Unix seconds.
+		RecycledAt int64 `json:"recycled_at"`
+		SizeBytes  int64 `json:"size_bytes"`
+	} `json:"entries"`
+	TotalBytes   int64 `json:"total_bytes"`
+	TotalEntries int64 `json:"total_entries"`
+}
+
+// RecycleBinEmptied defines model for RecycleBinEmptied.
+type RecycleBinEmptied struct {
+	Failed     int64 `json:"failed"`
+	FreedBytes int64 `json:"freed_bytes"`
+	Removed    int64 `json:"removed"`
+}
+
 // RecycleBinLimits defines model for RecycleBinLimits.
 type RecycleBinLimits struct {
 	// MaxBytes All recycle bins together, in bytes; the oldest entries go first. 0 is no limit.
@@ -5770,6 +5796,12 @@ type ServerInterface interface {
 	// Change the recycle bin's space bound. Administrator only.
 	// (PATCH /recyclebin)
 	UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request)
+	// Remove everything in the recycle bins for good. Administrator only.
+	// (POST /recyclebin/empty)
+	EmptyRecycleBin(w http.ResponseWriter, r *http.Request)
+	// What the recycle bins hold now, newest first.
+	// (GET /recyclebin/entries)
+	ListRecycleBinEntries(w http.ResponseWriter, r *http.Request)
 	// The configured library roots.
 	// (GET /rootfolders)
 	ListRootFolders(w http.ResponseWriter, r *http.Request)
@@ -6988,6 +7020,18 @@ func (_ Unimplemented) GetRecycleBinLimits(w http.ResponseWriter, r *http.Reques
 // Change the recycle bin's space bound. Administrator only.
 // (PATCH /recyclebin)
 func (_ Unimplemented) UpdateRecycleBinLimits(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Remove everything in the recycle bins for good. Administrator only.
+// (POST /recyclebin/empty)
+func (_ Unimplemented) EmptyRecycleBin(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What the recycle bins hold now, newest first.
+// (GET /recyclebin/entries)
+func (_ Unimplemented) ListRecycleBinEntries(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12504,6 +12548,50 @@ func (siw *ServerInterfaceWrapper) UpdateRecycleBinLimits(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// EmptyRecycleBin operation middleware
+func (siw *ServerInterfaceWrapper) EmptyRecycleBin(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EmptyRecycleBin(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListRecycleBinEntries operation middleware
+func (siw *ServerInterfaceWrapper) ListRecycleBinEntries(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListRecycleBinEntries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListRootFolders operation middleware
 func (siw *ServerInterfaceWrapper) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 
@@ -16497,6 +16585,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/recyclebin", wrapper.UpdateRecycleBinLimits)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/recyclebin/empty", wrapper.EmptyRecycleBin)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/recyclebin/entries", wrapper.ListRecycleBinEntries)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/rootfolders", wrapper.ListRootFolders)

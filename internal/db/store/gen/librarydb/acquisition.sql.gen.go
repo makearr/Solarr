@@ -75,6 +75,17 @@ func (q *Queries) CountQueuedOnDownloader(ctx context.Context, downloaderID int6
 	return column_1, err
 }
 
+const countRecycleBin = `-- name: CountRecycleBin :one
+SELECT CAST(COUNT(*) AS INTEGER) AS held FROM recycle_bin WHERE restored_at IS NULL
+`
+
+func (q *Queries) CountRecycleBin(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countRecycleBin)
+	var held int64
+	err := row.Scan(&held)
+	return held, err
+}
+
 const createAcquisition = `-- name: CreateAcquisition :one
 INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,
                          candidate_title, search_terms, downloader_id,
@@ -514,6 +525,48 @@ type ListActiveRecycleBinByRootOldestFirstParams struct {
 // The per-root counterpart, for the max_percent_of_root guard.
 func (q *Queries) ListActiveRecycleBinByRootOldestFirst(ctx context.Context, arg ListActiveRecycleBinByRootOldestFirstParams) ([]RecycleBin, error) {
 	rows, err := q.db.QueryContext(ctx, listActiveRecycleBinByRootOldestFirst, arg.RootFolderID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RecycleBin{}
+	for rows.Next() {
+		var i RecycleBin
+		if err := rows.Scan(
+			&i.ID,
+			&i.OriginalPath,
+			&i.RecycledPath,
+			&i.RootFolderID,
+			&i.MediaObjectID,
+			&i.AcquisitionID,
+			&i.Reason,
+			&i.SizeBytes,
+			&i.RecycledAt,
+			&i.ExpiresAt,
+			&i.RestoredAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveRecycleBinNewestFirst = `-- name: ListActiveRecycleBinNewestFirst :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
+WHERE restored_at IS NULL ORDER BY recycled_at DESC, id DESC LIMIT ?
+`
+
+func (q *Queries) ListActiveRecycleBinNewestFirst(ctx context.Context, limit int64) ([]RecycleBin, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveRecycleBinNewestFirst, limit)
 	if err != nil {
 		return nil, err
 	}

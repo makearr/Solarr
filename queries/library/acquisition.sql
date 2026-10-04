@@ -225,6 +225,15 @@ SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
 FROM recycle_bin
 WHERE restored_at IS NULL ORDER BY recycled_at LIMIT ?;
 
+-- name: CountRecycleBin :one
+SELECT CAST(COUNT(*) AS INTEGER) AS held FROM recycle_bin WHERE restored_at IS NULL;
+
+-- name: ListActiveRecycleBinNewestFirst :many
+SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
+       acquisition_id, reason, size_bytes, recycled_at, expires_at, restored_at
+FROM recycle_bin
+WHERE restored_at IS NULL ORDER BY recycled_at DESC, id DESC LIMIT ?;
+
 -- The per-root counterpart, for the max_percent_of_root guard.
 -- name: ListActiveRecycleBinByRootOldestFirst :many
 SELECT id, original_path, recycled_path, root_folder_id, media_object_id,
