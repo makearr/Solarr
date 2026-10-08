@@ -377,12 +377,15 @@ const KIND_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", albu
 
 /** What the providers know the person for beyond the library, asked once per media type the person appears in. */
 function KnownForSection({ personId, categoryId }: { personId: number; categoryId: number }) {
+  const queryClient = useQueryClient();
   const known = useQuery({
     queryKey: ["known-for", personId, categoryId],
     retry: false,
     queryFn: async () => {
       const { data, error } = await api.GET("/people/{id}/known-for", { params: { path: { id: personId }, query: { category: categoryId } } });
       if (error) throw error;
+      // Asking the provider fills in a biography and dates the page did not have yet.
+      void queryClient.invalidateQueries({ queryKey: ["person", personId] });
       return data;
     },
   });
