@@ -3211,78 +3211,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/series/people": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A page of the people credited on one TV library's series, by name. */
-        get: operations["listSeriesPeople"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/people/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** One person with their credits in this library and, from TMDB when a key is stored, elsewhere. */
-        get: operations["getSeriesPerson"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/networks": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The networks and streamers of one TV library's series, most series first. */
-        get: operations["listSeriesNetworks"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/networks/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** One network with the library's series on it. */
-        get: operations["getSeriesNetwork"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/series/exclusions": {
         parameters: {
             query?: never;
@@ -3684,6 +3612,28 @@ export interface paths {
         put?: never;
         /** What following the organisation into one library would add right now, without following. */
         post: operations["previewOrganisationFollow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}/known-for": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * What the providers know a person for, newest first, each marked with the library's work when it holds it.
+         * @description Asked of the library's media type live (TMDB for TV, with a key); empty for a type whose providers say nothing more. It may also fill in the person's dates and biography.
+         */
+        get: operations["listPersonKnownFor"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4166,16 +4116,6 @@ export interface components {
              * @example Europe/Fefobo
              */
             timezone?: string;
-        };
-        PreviewReleaseGroup: {
-            mbid: string;
-            title: string;
-            /** @description MusicBrainz's own vocabulary (Album, EP, Single, ...). */
-            primary_type?: string;
-            /** @description A partial date (YYYY, YYYY-MM or YYYY-MM-DD), MusicBrainz's own convention, verbatim. */
-            first_release_date?: string;
-            /** @description MusicBrainz's own vocabulary (Compilation, Live, Remix, ...) -- what a filter matches against. */
-            secondary_types: string[];
         };
         LegalText: {
             /** @description Verbatim file content -- rendered as-is, never reformatted. */
@@ -5794,74 +5734,6 @@ export interface components {
              */
             created_at: number;
         };
-        SeriesPerson: {
-            /** Format: int64 */
-            id: number;
-            name: string;
-            image_url?: string;
-            /** @description Every role the person has in this library. */
-            roles: string[];
-            /**
-             * Format: int64
-             * @description Series of this library the person is credited on in the asked-for roles.
-             */
-            series_count: number;
-            /** @description The first part they played here. */
-            character?: string;
-            monitored: boolean;
-        };
-        SeriesPeoplePage: {
-            items: components["schemas"]["SeriesPerson"][];
-            next_cursor?: string;
-        };
-        SeriesPersonCredit: {
-            /** Format: int64 */
-            series_id: number;
-            series_title: string;
-            /** Format: int64 */
-            year?: number;
-            poster_url?: string;
-            role: string;
-            character?: string;
-            /** @description Episodes of an episode-scoped role, as S01E02. */
-            episodes?: string[];
-        };
-        SeriesPersonElsewhere: {
-            /** Format: int64 */
-            tmdb_id: number;
-            /** @enum {string} */
-            media_type: "tv" | "movie";
-            title: string;
-            /** Format: int64 */
-            year?: number;
-            /** @description The character played */
-            role?: string;
-            poster_url?: string;
-            /**
-             * Format: int64
-             * @description The series when this library already holds it.
-             */
-            library_series_id?: number;
-        };
-        SeriesPersonDetail: {
-            /** Format: int64 */
-            id: number;
-            name: string;
-            image_url?: string;
-            biography?: string;
-            born?: string;
-            died?: string;
-            birthplace?: string;
-            monitored: boolean;
-            ids: {
-                [key: string]: string;
-            };
-            credits: components["schemas"]["SeriesPersonCredit"][];
-            /** @description Titles TMDB lists for the person that this library does not hold; absent without a TMDB key. */
-            elsewhere?: components["schemas"]["SeriesPersonElsewhere"][];
-            /** @description What the same person did in other media (the albums of a musician who also acts), found through the Wikidata bridge. */
-            other_works?: components["schemas"]["SeriesPersonOtherWork"][];
-        };
         DuplicateResolution: {
             /** @description Copies now linked to the kept one. */
             linked: number;
@@ -5871,28 +5743,6 @@ export interface components {
             freed_bytes: number;
             /** @description One line each for what was left alone and why. */
             problems: string[];
-        };
-        SeriesPersonOtherWork: {
-            /** Format: int64 */
-            work_id: number;
-            media_type: string;
-            title: string;
-            /** Format: int64 */
-            year?: number;
-            role: string;
-        };
-        SeriesNetwork: {
-            /** Format: int64 */
-            id: number;
-            name: string;
-            country?: string;
-            logo_url?: string;
-            /** Format: int64 */
-            series_count: number;
-        };
-        SeriesNetworkDetail: {
-            network: components["schemas"]["SeriesNetwork"];
-            series: components["schemas"]["SeriesSummary"][];
         };
         SeriesCredit: {
             /** Format: int64 */
@@ -6011,6 +5861,8 @@ export interface components {
              * @description How many it needs, absent when nothing has counted them yet.
              */
             required_count?: number;
+            /** @description A provider's poster, for a work with no cover of its own. */
+            poster_url?: string;
             /**
              * @description The colour this album carries wherever it is listed -- green complete, red incomplete, purple downloading, yellow not released yet. Unreleased outranks everything: an album that is not out is not missing.
              * @enum {string}
@@ -6119,6 +5971,26 @@ export interface components {
             held: number;
             /** @description The most one run adds; 0 is no limit. */
             limit: number;
+        };
+        KnownFor: {
+            provider: string;
+            external_id: string;
+            /**
+             * @description The provider's word for the work.
+             * @example tv
+             */
+            kind: string;
+            title: string;
+            /** Format: int64 */
+            year?: number;
+            poster_url?: string;
+            /** @description The character played or the job done. */
+            role?: string;
+            /**
+             * Format: int64
+             * @description The library's work
+             */
+            work_id?: number;
         };
         /** @description A label, network, studio or publisher with what it did in the libraries listed. */
         OrganisationEntry: {
@@ -12965,122 +12837,6 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
-    listSeriesPeople: {
-        parameters: {
-            query: {
-                category_id: number;
-                /** @description Comma-separated roles (actor, guest_star, creator, showrunner, director, writer, executive_producer, producer, composer); any when absent. */
-                role?: string;
-                /** @description Matches the start of the name. */
-                q?: string;
-                /** @description Only monitored (true) or only unmonitored (false) people; absent means both. */
-                monitored?: boolean;
-                sort?: "name" | "series";
-                dir?: "asc" | "desc";
-                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name (text), series (number), monitored and photo (bool), role (one of the roles). */
-                where?: string;
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One page. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesPeoplePage"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    getSeriesPerson: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The person. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesPersonDetail"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    listSeriesNetworks: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The networks. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesNetwork"][];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    getSeriesNetwork: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The network. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesNetworkDetail"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
     listSeriesExclusions: {
         parameters: {
             query?: never;
@@ -13833,6 +13589,34 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    listPersonKnownFor: {
+        parameters: {
+            query: {
+                category: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The titles. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnownFor"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
         };
     };

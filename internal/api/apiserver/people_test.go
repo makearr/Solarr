@@ -49,6 +49,11 @@ func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64, visible 
 	return f.detail, f.credits, nil
 }
 
+func (f *fakePeopleReader) KnownFor(_ context.Context, id, _ int64, visible []int64) ([]gen.KnownFor, error) {
+	f.lastID, f.lastVisible = id, visible
+	return []gen.KnownFor{}, f.detailErr
+}
+
 // fakePeopleSubscriber records what Remove was called with.
 type fakePeopleSubscriber struct {
 	err            error

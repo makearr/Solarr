@@ -352,15 +352,6 @@ func (p *process) tvProviders() adapters.TVProviders {
 	}}
 }
 
-// seriesPeople is the TV people and network screens' data source.
-func (p *process) seriesPeople() adapters.SeriesPeople {
-	p.tvService()
-	return adapters.SeriesPeople{
-		Reader: library.NewSeriesReader(p.library), Persons: library.NewPeople(p.library),
-		TMDB: p.tmdbShared, Clock: clock.NewSystem(),
-	}
-}
-
 // remoteImages is the provider picture cache, on its own rate bucket so a wall of posters cannot starve the metadata calls.
 func (p *process) remoteImages() *remoteimage.Cache {
 	client := p.providerClient(providerImages, nil, httpx.ClientConfig{})

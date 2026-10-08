@@ -159,7 +159,7 @@ func (g goldenServer) seedLibraries(t *testing.T) goldenLibraries {
 	out.album, out.artist = g.seedAlbum(ctx, t, out)
 	out.series = g.seedSeries(ctx, t, out)
 
-	people := g.get(t, fmt.Sprintf("/series/people?category_id=%d&role=actor", out.tv))
+	people := g.get(t, fmt.Sprintf("/people?category=%d&role=actor", out.tv))
 	var cast struct {
 		Items []struct {
 			ID int64 `json:"id"`
@@ -170,14 +170,16 @@ func (g goldenServer) seedLibraries(t *testing.T) goldenLibraries {
 	}
 	out.actor = cast.Items[0].ID
 
-	var networks []struct {
-		ID int64 `json:"id"`
+	var networks struct {
+		Items []struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
 	}
-	listed := g.get(t, fmt.Sprintf("/series/networks?category_id=%d", out.tv))
-	if err := json.Unmarshal(listed, &networks); err != nil || len(networks) == 0 {
+	listed := g.get(t, fmt.Sprintf("/organisations?category=%d", out.tv))
+	if err := json.Unmarshal(listed, &networks); err != nil || len(networks.Items) == 0 {
 		t.Fatalf("seeded series has no network: %v, body = %s", err, listed)
 	}
-	out.network = networks[0].ID
+	out.network = networks.Items[0].ID
 	return out
 }
 
@@ -434,10 +436,6 @@ func TestGolden_ReadAnswersOfBothLibrariesStayTheSame(t *testing.T) {
 		{"tv-series", fmt.Sprintf("/series?category_id=%d", ids.tv)},
 		{"tv-series-detail", fmt.Sprintf("/series/%d?category_id=%d", ids.series, ids.tv)},
 		{"tv-wanted-missing", fmt.Sprintf("/series/wanted?category_id=%d", ids.tv)},
-		{"tv-people", fmt.Sprintf("/series/people?category_id=%d", ids.tv)},
-		{"tv-person", fmt.Sprintf("/series/people/%d?category_id=%d", ids.actor, ids.tv)},
-		{"tv-networks", fmt.Sprintf("/series/networks?category_id=%d", ids.tv)},
-		{"tv-network", fmt.Sprintf("/series/networks/%d?category_id=%d", ids.network, ids.tv)},
 		{"calendar", "/calendar?from=2020-01-01&to=2020-12-31"},
 	}
 

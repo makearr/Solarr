@@ -140,6 +140,7 @@ func (p *process) tvModule() tv.Module {
 			Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
 			Clock: clock.NewSystem(),
 		},
+		Profiling: tv.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared},
 	}
 }
 

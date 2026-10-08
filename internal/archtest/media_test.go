@@ -29,7 +29,6 @@ var directWiredMediaFiles = []string{
 	"cmd/solarr/adapters/seasonsearch.go",
 	"cmd/solarr/adapters/series_cutoff.go",
 	"cmd/solarr/adapters/series.go",
-	"cmd/solarr/adapters/seriespeople.go",
 	"cmd/solarr/adapters/unidentified.go",
 	"cmd/solarr/adapters/unidentified_tv.go",
 	"cmd/solarr/adapters/worksmonitor.go",

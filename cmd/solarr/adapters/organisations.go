@@ -13,7 +13,10 @@ import (
 )
 
 // Organisations satisfies apiserver.OrganisationsReader over library.Organisations.
-type Organisations struct{ Organisations library.Organisations }
+type Organisations struct {
+	Organisations library.Organisations
+	Works         library.Works
+}
 
 // ListOrganisations maps one page of the one organisations list.
 func (a Organisations) ListOrganisations(ctx context.Context, query apiserver.PeopleQuery, after paginate.TextCursor, limit int) ([]gen.OrganisationEntry, error) {
@@ -69,9 +72,18 @@ func (a Organisations) GetOrganisation(ctx context.Context, id int64, visible []
 	}
 	setString(&view.Country, profile.Country)
 	setString(&view.LogoUrl, profile.LogoURL)
+	ids := make([]int64, len(credits))
+	for i, credit := range credits {
+		ids[i] = credit.ID
+	}
+	posters, err := a.Works.Posters(ctx, ids)
+	if err != nil {
+		return gen.OrganisationDetail{}, nil, err
+	}
 	rows := make([]apiserver.PersonCreditRow, len(credits))
 	for i, credit := range credits {
 		rows[i] = apiserver.PersonCreditRow{CategoryID: credit.CategoryID, Role: credit.Role, Work: personWorkRow(credit.DiscographyRow)}
+		rows[i].Work.PosterURL = posters[credit.ID]
 	}
 	return view, rows, nil
 }

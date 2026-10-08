@@ -156,6 +156,17 @@ test("a scan fills the artist wall with photos and the album wall with covers", 
   await expect.poll(async () => loadedImages(page), { timeout: 6 * 60_000, intervals: [5_000] }).toBeGreaterThan(2);
   await page.screenshot({ path: "/e2e-out/artists-wall.png" });
 
+  // One person page for every library: the artist's own section lists the discography by release type.
+  await page.locator('a[href^="/library/1/people/"]').first().click();
+  await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  await expect(page.getByText(/^(Albums|EPs|Singles|Not yet classified) \(\d+\)$/).first()).toBeVisible();
+  await page.screenshot({ path: "/e2e-out/artist-page.png", fullPage: true });
+
+  // The global People list holds the same people, from every library the viewer may read.
+  await page.goto("/people");
+  await expect.poll(async () => loadedImages(page), { timeout: 60_000, intervals: [3_000] }).toBeGreaterThan(2);
+  await page.screenshot({ path: "/e2e-out/people.png" });
+
   await page.goto("/library/1/albums");
   await expect.poll(async () => loadedImages(page), { timeout: 6 * 60_000, intervals: [5_000] }).toBeGreaterThan(2);
   await page.screenshot({ path: "/e2e-out/albums-wall.png" });

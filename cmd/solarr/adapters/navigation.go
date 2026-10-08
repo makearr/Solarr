@@ -26,6 +26,19 @@ func (m MediaTypes) LevelsFor(mediaType string) ([]model.Level, bool) {
 // Known implements apiserver.MediaTypeCatalog.
 func (m MediaTypes) Known(mediaType string) bool { return m.Registry.Known(media.Key(mediaType)) }
 
+// ProfilingIn answers the media type of a library as a profiling one, when it is.
+func (m MediaTypes) ProfilingIn(categories interface {
+	Category(id int64) (settings.Category, bool)
+}) func(categoryID int64) (media.Profiling, bool) {
+	return func(categoryID int64) (media.Profiling, bool) {
+		category, ok := categories.Category(categoryID)
+		if !ok {
+			return nil, false
+		}
+		return media.Capability[media.Profiling](m.Registry, media.Key(category.MediaType))
+	}
+}
+
 // RoleKeys lists every credit role a registered media type declares, once each.
 func (m MediaTypes) RoleKeys() []string {
 	var keys []string

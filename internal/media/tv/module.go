@@ -24,6 +24,8 @@ type Module struct {
 	Retry *RetryJob
 	// Following is TV's part of a follow.
 	Following
+	// Profiling is TV's part of a person's page.
+	Profiling
 }
 
 // ScanSweep implements media.Scanning.

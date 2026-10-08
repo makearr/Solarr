@@ -46,9 +46,11 @@ basis), part-level collection members and per-work release filters are the gener
 
 Credits are `person` rows keyed by `tmdb:<id>` and `credit` rows on the work (cast, creator, crew roles) or on the episode
 (`part_id`: guest star, director, writer); the person's photo URL lives in `fields_json`, the biography fills in when the
-person page is first opened. Networks are `organisation` rows (`kind` network, logo in `fields_json`) linked by
-`work_organisation`; keywords are `work_classification` rows. A refresh adds and updates credits and never removes one.
-The People and Networks levels read these through `library.SeriesReader` (`/series/people`, `/series/networks`).
+person page asks TMDB what the person is known for (`tv.Profiling`, `GET /people/{id}/known-for`). Networks are
+`organisation` rows (`kind` network, logo in `fields_json`) linked by `work_organisation`; keywords are
+`work_classification` rows. A refresh adds and updates credits and never removes one. The Cast and Networks levels are
+the one people and organisations list of every media type (`GET /people`, `GET /organisations`, `person_library` and
+`organisation_library` in `database-layout.md`), and a person or network has one page (`/people/{id}`, `/organisations/{id}`).
 
 ## Monitoring a held series (`Service.ApplyMonitor`, Season pass)
 
@@ -77,8 +79,8 @@ The Wikidata QID is a `person_external_id` (provider `wikidata`, unique): linkin
 with the music-artist person surviving (`mergeArtist`, the loser's name becomes an alias; a follow held by both keeps the
 survivor's). The QID comes from MusicBrainz (stored by artist refresh and backfill) and from TMDB's `external_ids.wikidata_id`
 (stored when a person page opens and by the daily `people.bridge` sweep, which only asks about TMDB people whose `sort_name`
-equals a music artist's, 60 a run; `wikidata:none` records an answer of "no item"). A TV person page lists `OtherWorks`: non-TV
-works the same person is credited on. Merging on name alone is deliberately not done. The sweep also asks Wikidata (`MusicBrainzArtists`, property P434) which music artist an item is, so an actor is merged into the artist the library already holds even before that artist's own refresh recorded an item; measured on the real library: 42 people merged at once (a singer in a series' guest cast is one person in both libraries).
+equals a music artist's, 60 a run; `wikidata:none` records an answer of "no item"). The one person page then shows their
+works in every library the viewer may read. Merging on name alone is deliberately not done. The sweep also asks Wikidata (`MusicBrainzArtists`, property P434) which music artist an item is, so an actor is merged into the artist the library already holds even before that artist's own refresh recorded an item; measured on the real library: 42 people merged at once (a singer in a series' guest cast is one person in both libraries).
 
 ## Following people and networks (`internal/media/tv/follow.go`)
 

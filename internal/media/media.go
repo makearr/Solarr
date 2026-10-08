@@ -184,6 +184,28 @@ type FollowSearching interface {
 	SearchFollowed(ctx context.Context, follow Follow) error
 }
 
+// KnownFor is one work a provider credits a person with, and the library's own work for it when it holds one.
+type KnownFor struct {
+	Provider   string
+	ExternalID string
+	// Kind is the provider's word for the work: "tv", "movie", "album".
+	Kind      string
+	Title     string
+	Year      int64
+	PosterURL string
+	// Role is the character played or the job done.
+	Role string
+	// WorkID is the library's work, 0 when the library does not hold it.
+	WorkID int64
+}
+
+// Profiling is the capability of a media type whose providers know more of a person than its libraries hold.
+type Profiling interface {
+	// KnownFor lists the person's works at the providers, newest first, held ones marked for the library; it may keep
+	// what the providers add to the person (dates, biography, the Wikidata bridge).
+	KnownFor(ctx context.Context, personID, categoryID int64) ([]KnownFor, error)
+}
+
 // JobRegistrar takes one job type with its handler.
 type JobRegistrar func(definition jobs.Definition, handler jobs.Handler) error
 

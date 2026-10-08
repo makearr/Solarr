@@ -708,7 +708,6 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
-		SeriesPeople:      p.seriesPeople(),
 		RemoteImages:      p.remoteImages(),
 		UnidentifiedTV:    p.unidentifiedTV(),
 		LibraryHealth: adapters.LibraryHealth{
@@ -734,11 +733,14 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
 			Statistics: library.NewStatistics(p.library), People: library.NewPeople(p.library),
 		},
-		FS:            p.fsys,
-		ImagesDir:     filepath.Join(p.config.Paths.CacheDir, "images"),
-		ConfigPath:    p.configPath,
-		People:        adapters.People{People: library.NewPeople(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys},
-		Organisations: adapters.Organisations{Organisations: library.NewOrganisations(p.library)},
+		FS:         p.fsys,
+		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
+		ConfigPath: p.configPath,
+		People: adapters.People{
+			People: library.NewPeople(p.library), Works: library.NewWorks(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys,
+			Profiling: adapters.MediaTypes{Registry: p.media}.ProfilingIn(adapters.Categories{Cache: p.cache}),
+		},
+		Organisations: adapters.Organisations{Organisations: library.NewOrganisations(p.library), Works: library.NewWorks(p.library)},
 		Series:        p.seriesCatalog(),
 		Seasons:       p.seasonSearch(),
 		ArtistActions: adapters.ArtistActions{

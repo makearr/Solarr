@@ -11,6 +11,7 @@ import {
   Share2,
   type LucideIcon,
   CalendarDays,
+  UsersRound,
 } from "lucide-react";
 
 import { api } from "@/api/client";
@@ -156,6 +157,16 @@ export function Sidebar() {
           <Link to="/calendar" title={collapsed ? "Calendar" : undefined} className={sectionLinkClass(path.startsWith("/calendar"), collapsed)}>
             <CalendarDays aria-hidden className="size-4 shrink-0" />
             {!collapsed && "Calendar"}
+          </Link>
+        </li>
+        <li>
+          <Link
+            to="/people"
+            title={collapsed ? "People" : undefined}
+            className={sectionLinkClass(path === "/people" || (path.startsWith("/people/") && !routeParams.categoryId), collapsed)}
+          >
+            <UsersRound aria-hidden className="size-4 shrink-0" />
+            {!collapsed && "People"}
           </Link>
         </li>
         {GLOBAL_ENTRIES.map(({ section, icon: Icon }) => {

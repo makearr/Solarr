@@ -44,6 +44,8 @@ type PersonWorkRow struct {
 	SortTitle   string
 	Year        *int64
 	PrimaryType *string
+	// PosterURL is a provider's poster, for a work with no cover of its own.
+	PosterURL string
 	// WantedState is nil when nothing has ever wanted this work -- Work's
 	// own wanted_state doc comment.
 	WantedState *string
@@ -112,6 +114,8 @@ type PeopleReader interface {
 	ListPeople(ctx context.Context, query PeopleQuery, after paginate.TextCursor, limit int) ([]gen.PersonEntry, error)
 	// GetPersonDetail answers a person no library in visible knows of with ErrPersonNotFound; credits are visible's only.
 	GetPersonDetail(ctx context.Context, id int64, visible []int64) (gen.PersonDetail, []PersonCreditRow, error)
+	// KnownFor asks one library's media type what its providers know the person for; ErrPersonNotFound as above.
+	KnownFor(ctx context.Context, id, categoryID int64, visible []int64) ([]gen.KnownFor, error)
 }
 
 // PersonRemover removes an artist the caller no longer wants (revision 7.3).
@@ -260,6 +264,51 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	writeJSON(w, s.logger, http.StatusOK, detail)
 }
 
+// ListPersonKnownFor answers what one library's providers know a person for.
+func (s *Server) ListPersonKnownFor(w http.ResponseWriter, r *http.Request, id int64, params gen.ListPersonKnownForParams) {
+	if s.people == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "people are not available")
+		return
+	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if _, err := access.Category(params.Category, settings.PermissionRead); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	visible, ok := s.personVisibility(w, r)
+	if !ok {
+		return
+	}
+	titles, err := s.people.KnownFor(r.Context(), id, params.Category, visible)
+	if errors.Is(err, ErrPersonNotFound) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
+		return
+	}
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "Provider unavailable", "the providers could not be asked")
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, titles)
+}
+
+func (s *Server) routeListPersonKnownFor(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a person id must be a number")
+		return
+	}
+	category, err := strconv.ParseInt(r.URL.Query().Get("category"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category must be a number")
+		return
+	}
+	s.ListPersonKnownFor(w, r, id, gen.ListPersonKnownForParams{Category: category})
+}
+
 // creditViews maps credits with each work's status colour as of now.
 func creditViews(credits []PersonCreditRow, now time.Time) []gen.WorkCredit {
 	views := make([]gen.WorkCredit, len(credits))
@@ -286,6 +335,9 @@ func personWorkView(row PersonWorkRow, now time.Time) gen.PersonWork {
 	if row.WantedState != nil {
 		state := gen.PersonWorkWantedState(*row.WantedState)
 		view.WantedState = &state
+	}
+	if row.PosterURL != "" {
+		view.PosterUrl = &row.PosterURL
 	}
 	return view
 }

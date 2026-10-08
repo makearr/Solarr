@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -153,4 +154,34 @@ ORDER BY d.category_id, c.role, work.year, work.sort_title, work.id, c.character
 		credits = append(credits, credit)
 	}
 	return credits, rows.Err()
+}
+
+// workImage is one picture a provider holds for a work, as the "images" field stores them.
+type workImage struct {
+	Kind string `json:"kind"`
+	URL  string `json:"url"`
+}
+
+// Posters answers each work's poster from its stored provider pictures, the user's own choice first; a work with
+// none is left out.
+func (w Works) Posters(ctx context.Context, workIDs []int64) (map[int64]string, error) {
+	queries := librarydb.New(w.store.Read())
+	posters := make(map[int64]string, len(workIDs))
+	for _, id := range unique(workIDs) {
+		fields, err := queries.ListWorkFields(ctx, id)
+		if err != nil {
+			return nil, fmt.Errorf("library: pictures of work %d: %w", id, err)
+		}
+		var images []workImage
+		if json.Unmarshal([]byte(mergeFields(fields)["images"]), &images) != nil {
+			continue
+		}
+		for _, image := range images {
+			if image.Kind == "poster" {
+				posters[id] = image.URL
+				break
+			}
+		}
+	}
+	return posters, nil
 }

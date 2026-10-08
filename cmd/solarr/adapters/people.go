@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -25,6 +26,9 @@ import (
 // never touch MusicBrainz directly.
 type People struct {
 	People library.People
+	Works  library.Works
+	// Profiling answers the media type of a library as a profiling one, when it is.
+	Profiling func(categoryID int64) (media.Profiling, bool)
 	// Roles answers every credit role the media types declare, for a custom filter's role choices.
 	Roles         func() []string
 	Subscriptions library.Subscriptions
@@ -127,14 +131,54 @@ func (a People) GetPersonDetail(ctx context.Context, id int64, visible []int64) 
 	setString(&view.Died, profile.Died)
 	setString(&view.ImageUrl, profile.ImageURL)
 	setString(&view.Biography, profile.Biography)
+	ids := make([]int64, len(credits))
+	for i, credit := range credits {
+		ids[i] = credit.ID
+	}
+	posters, err := a.Works.Posters(ctx, ids)
+	if err != nil {
+		return gen.PersonDetail{}, nil, err
+	}
 	rows := make([]apiserver.PersonCreditRow, len(credits))
 	for i, credit := range credits {
 		rows[i] = apiserver.PersonCreditRow{
 			CategoryID: credit.CategoryID, Role: credit.Role, Character: credit.Character, Parts: credit.Parts,
 			Work: personWorkRow(credit.DiscographyRow),
 		}
+		rows[i].Work.PosterURL = posters[credit.ID]
 	}
 	return view, rows, nil
+}
+
+// KnownFor maps what the library's media type knows the person for.
+func (a People) KnownFor(ctx context.Context, id, categoryID int64, visible []int64) ([]gen.KnownFor, error) {
+	if _, err := a.People.Get(ctx, id, visible); errors.Is(err, library.ErrPersonNotFound) {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrPersonNotFound, err)
+	} else if err != nil {
+		return nil, err
+	}
+	views := []gen.KnownFor{}
+	profiling, ok := a.Profiling(categoryID)
+	if !ok {
+		return views, nil
+	}
+	titles, err := profiling.KnownFor(ctx, id, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	for _, title := range titles {
+		view := gen.KnownFor{Provider: title.Provider, ExternalId: title.ExternalID, Kind: title.Kind, Title: title.Title}
+		if title.Year > 0 {
+			view.Year = &title.Year
+		}
+		if title.WorkID > 0 {
+			view.WorkId = &title.WorkID
+		}
+		setString(&view.PosterUrl, title.PosterURL)
+		setString(&view.Role, title.Role)
+		views = append(views, view)
+	}
+	return views, nil
 }
 
 // personWorkRow maps a credited work with the facts its status colour is decided from.

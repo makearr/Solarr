@@ -230,8 +230,6 @@ type Config struct {
 	RemoteImages RemoteImages
 	// UnidentifiedTV resolves queued files of TV libraries. Optional: without it a TV provider is refused.
 	UnidentifiedTV TVUnidentifiedResolver
-	// SeriesPeople feeds the TV people and network screens. Optional: nil answers 503.
-	SeriesPeople SeriesPeopleCatalog
 	// TVProviders reports and tests the TV metadata providers; without it those endpoints answer 503.
 	TVProviders TVProviders
 }
@@ -315,7 +313,6 @@ type Server struct {
 	prowlarr                ProwlarrLister
 	downloaderTester        DownloaderTester
 	tvProviders             TVProviders
-	seriesPeople            SeriesPeopleCatalog
 	remoteImages            RemoteImages
 	unidentifiedTV          TVUnidentifiedResolver
 	candidateSearcher       CandidateSearcher
@@ -423,7 +420,6 @@ func New(config Config) (*Server, error) {
 		downloaderTester:        config.DownloaderTester,
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
-		seriesPeople:            config.SeriesPeople,
 		remoteImages:            config.RemoteImages,
 		unidentifiedTV:          config.UnidentifiedTV,
 		effectivePort:           config.Port,
@@ -533,10 +529,6 @@ func New(config Config) (*Server, error) {
 			secured.Get("/series/exclusions", server.ListSeriesExclusions)
 			secured.Delete("/series/exclusions", server.routeRemoveSeriesExclusion)
 			secured.Delete("/series/{id}", server.routeDeleteSeries)
-			secured.Get("/series/people", server.routeListSeriesPeople)
-			secured.Get("/series/people/{id}", server.routeGetSeriesPerson)
-			secured.Get("/series/networks", server.routeListSeriesNetworks)
-			secured.Get("/series/networks/{id}", server.routeGetSeriesNetwork)
 			secured.Get("/series/{id}", server.routeGetSeries)
 			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)
 			secured.Put("/series/{id}/monitoring", server.routeApplySeriesMonitoring)
@@ -609,6 +601,7 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)
 			secured.Get("/people", server.routeListPeople)
 			server.mountFollows(secured)
+			secured.Get("/people/{id}/known-for", server.routeListPersonKnownFor)
 			secured.Get("/organisations", server.routeListOrganisations)
 			secured.Get("/organisations/{id}", server.routeGetOrganisation)
 			secured.Get("/people/{id}", server.routeGetPerson)

@@ -34,15 +34,13 @@ import { SeasonPass } from "./SeasonPass";
 import { SeriesIndex } from "./SeriesIndex";
 import { SeriesPage } from "./SeriesPage";
 import { SeriesWanted } from "./SeriesWanted";
-import { TVNetwork, TVNetworks } from "./TVNetworks";
-import { TVPeople } from "./TVPeople";
-import { TVPerson } from "./TVPerson";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
 import { Duplicates } from "./Duplicates";
 import { Packs } from "./Packs";
-import { People } from "./People";
-import { PersonDetail } from "./PersonDetail";
+import { OrganisationIndex, OrganisationPage } from "./OrganisationIndex";
+import { PeopleIndex } from "./PeopleIndex";
+import { PersonPage } from "./PersonPage";
 import { QualityProfilesPage } from "./QualityProfileEditor";
 import { QualityProfiles } from "./QualityProfiles";
 import { RecycleBin } from "./RecycleBin";
@@ -85,14 +83,15 @@ function WantedForLibrary() {
   return library?.media_type === "tv" ? <SeriesWanted /> : <Wanted />;
 }
 
-/** A level key is the media type's own: TV's Series screen, everything else the shared level list. */
+/** A level of people or organisations is one list for every media type; works are still per type (R1.6). */
 function LevelForLibrary() {
   const { categoryId, level } = useParams({ strict: false }) as { categoryId: string; level: string };
   const library = useLibrary(categoryId);
+  const entity = library?.levels.find((entry) => entry.key === level)?.entity;
+  if (entity === "person") return <PeopleIndex />;
+  if (entity === "organisation") return <OrganisationIndex />;
   if (library?.media_type === "tv") {
     if (level === "series") return <SeriesIndex />;
-    if (level === "people") return <TVPeople />;
-    if (level === "networks") return <TVNetworks />;
     if (level === "seasonpass") return <SeasonPass />;
   }
   return <LibraryLevelList />;
@@ -197,12 +196,14 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/series/$seriesId", component: SeriesPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/people/$personId", component: TVPerson }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/networks/$networkId", component: TVNetwork }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/people/$personId", component: PersonPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/organisations/$organisationId", component: OrganisationPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/networks/$networkId", component: OrganisationPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/organisations/$id", component: OrganisationPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LevelForLibrary }),
   createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/people", component: People }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonDetail }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/people", component: PeopleIndex }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified/$mediaObjectId", component: UnidentifiedReview }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/health", component: LibraryHealth }),

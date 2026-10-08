@@ -5173,128 +5173,6 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
-  /series/people:
-    get:
-      operationId: listSeriesPeople
-      tags: [series]
-      summary: A page of the people credited on one TV library's series, by name.
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-        - name: role
-          in: query
-          description: Comma-separated roles (actor, guest_star, creator, showrunner, director, writer, executive_producer, producer, composer); any when absent.
-          schema: { type: string }
-        - name: q
-          in: query
-          description: Matches the start of the name.
-          schema: { type: string }
-        - name: monitored
-          in: query
-          description: Only monitored (true) or only unmonitored (false) people; absent means both.
-          schema: { type: boolean }
-        - name: sort
-          in: query
-          schema: { type: string, enum: [name, series], default: name }
-        - name: dir
-          in: query
-          schema: { type: string, enum: [asc, desc], default: asc }
-        - name: where
-          in: query
-          description: >-
-            A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name (text),
-            series (number), monitored and photo (bool), role (one of the roles).
-          schema: { type: string }
-        - name: cursor
-          in: query
-          schema: { type: string }
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 200, default: 60 }
-      responses:
-        "200":
-          description: One page.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SeriesPeoplePage" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
-  /series/people/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    get:
-      operationId: getSeriesPerson
-      tags: [series]
-      summary: One person with their credits in this library and, from TMDB when a key is stored, elsewhere.
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-      responses:
-        "200":
-          description: The person.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SeriesPersonDetail" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
-  /series/networks:
-    get:
-      operationId: listSeriesNetworks
-      tags: [series]
-      summary: The networks and streamers of one TV library's series, most series first.
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-      responses:
-        "200":
-          description: The networks.
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/SeriesNetwork" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
-  /series/networks/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    get:
-      operationId: getSeriesNetwork
-      tags: [series]
-      summary: One network with the library's series on it.
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-      responses:
-        "200":
-          description: The network.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/SeriesNetworkDetail" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
   /series/exclusions:
     get:
       operationId: listSeriesExclusions
@@ -5953,6 +5831,37 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
         "409": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}/known-for:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listPersonKnownFor
+      tags: [people]
+      summary: What the providers know a person for, newest first, each marked with the library's work when it holds it.
+      description: >-
+        Asked of the library's media type live (TMDB for TV, with a key); empty for a type whose providers say nothing
+        more. It may also fill in the person's dates and biography.
+      parameters:
+        - name: category
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: The titles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/KnownFor" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
   /organisations:
@@ -8688,84 +8597,6 @@ components:
         external_id: { type: string }
         created_at: { type: integer, format: int64, description: Unix seconds. }
 
-    SeriesPerson:
-      type: object
-      required: [id, name, roles, series_count, monitored]
-      properties:
-        id: { type: integer, format: int64 }
-        name: { type: string }
-        image_url: { type: string }
-        roles:
-          type: array
-          items: { type: string }
-          description: Every role the person has in this library.
-        series_count: { type: integer, format: int64, description: Series of this library the person is credited on in the asked-for roles. }
-        character: { type: string, description: The first part they played here. }
-        monitored: { type: boolean }
-
-    SeriesPeoplePage:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/SeriesPerson" }
-        next_cursor: { type: string }
-
-    SeriesPersonCredit:
-      type: object
-      required: [series_id, series_title, role]
-      properties:
-        series_id: { type: integer, format: int64 }
-        series_title: { type: string }
-        year: { type: integer, format: int64 }
-        poster_url: { type: string }
-        role: { type: string }
-        character: { type: string }
-        episodes:
-          type: array
-          items: { type: string }
-          description: Episodes of an episode-scoped role, as S01E02.
-
-    SeriesPersonElsewhere:
-      type: object
-      required: [tmdb_id, media_type, title]
-      properties:
-        tmdb_id: { type: integer, format: int64 }
-        media_type: { type: string, enum: [tv, movie] }
-        title: { type: string }
-        year: { type: integer, format: int64 }
-        role: { type: string, description: The character played, or the crew job. }
-        poster_url: { type: string }
-        library_series_id: { type: integer, format: int64, description: The series when this library already holds it. }
-
-    SeriesPersonDetail:
-      type: object
-      required: [id, name, monitored, ids, credits]
-      properties:
-        id: { type: integer, format: int64 }
-        name: { type: string }
-        image_url: { type: string }
-        biography: { type: string }
-        born: { type: string }
-        died: { type: string }
-        birthplace: { type: string }
-        monitored: { type: boolean }
-        ids:
-          type: object
-          additionalProperties: { type: string }
-        credits:
-          type: array
-          items: { $ref: "#/components/schemas/SeriesPersonCredit" }
-        elsewhere:
-          type: array
-          description: Titles TMDB lists for the person that this library does not hold; absent without a TMDB key.
-          items: { $ref: "#/components/schemas/SeriesPersonElsewhere" }
-        other_works:
-          type: array
-          description: What the same person did in other media (the albums of a musician who also acts), found through the Wikidata bridge.
-          items: { $ref: "#/components/schemas/SeriesPersonOtherWork" }
-
     DuplicateResolution:
       type: object
       required: [linked, recycled, freed_bytes, problems]
@@ -8777,35 +8608,6 @@ components:
           type: array
           description: One line each for what was left alone and why.
           items: { type: string }
-
-    SeriesPersonOtherWork:
-      type: object
-      required: [work_id, media_type, title, role]
-      properties:
-        work_id: { type: integer, format: int64 }
-        media_type: { type: string }
-        title: { type: string }
-        year: { type: integer, format: int64 }
-        role: { type: string }
-
-    SeriesNetwork:
-      type: object
-      required: [id, name, series_count]
-      properties:
-        id: { type: integer, format: int64 }
-        name: { type: string }
-        country: { type: string }
-        logo_url: { type: string }
-        series_count: { type: integer, format: int64 }
-
-    SeriesNetworkDetail:
-      type: object
-      required: [network, series]
-      properties:
-        network: { $ref: "#/components/schemas/SeriesNetwork" }
-        series:
-          type: array
-          items: { $ref: "#/components/schemas/SeriesSummary" }
 
     SeriesCredit:
       type: object
@@ -8927,6 +8729,7 @@ components:
           type: integer
           format: int64
           description: How many it needs, absent when nothing has counted them yet.
+        poster_url: { type: string, description: "A provider's poster, for a work with no cover of its own." }
         status:
           type: string
           enum: [complete, incomplete, downloading, unreleased, unverified]
@@ -9056,6 +8859,19 @@ components:
         more: { type: integer, description: Beyond the limit, added by later runs. }
         held: { type: integer, description: Already in the library, or excluded. }
         limit: { type: integer, description: The most one run adds; 0 is no limit. }
+
+    KnownFor:
+      type: object
+      required: [provider, external_id, kind, title]
+      properties:
+        provider: { type: string }
+        external_id: { type: string }
+        kind: { type: string, example: "tv", description: The provider's word for the work. }
+        title: { type: string }
+        year: { type: integer, format: int64 }
+        poster_url: { type: string }
+        role: { type: string, description: The character played or the job done. }
+        work_id: { type: integer, format: int64, description: The library's work, when it holds it. }
 
     OrganisationEntry:
       type: object
