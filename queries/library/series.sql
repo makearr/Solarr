@@ -157,19 +157,6 @@ INSERT OR IGNORE INTO work_organisation (work_id, organisation_id, role) VALUES 
 UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.biography', sqlc.arg(biography))
 WHERE id = sqlc.arg(id) AND COALESCE(json_extract(COALESCE(fields_json, '{}'), '$.biography'), '') = '';
 
--- name: AddSeriesExclusion :exec
-INSERT INTO series_exclusion (provider, external_id, title, created_at) VALUES (?, ?, ?, ?)
-ON CONFLICT (provider, external_id) DO UPDATE SET title = excluded.title;
-
--- name: DeleteSeriesExclusion :exec
-DELETE FROM series_exclusion WHERE provider = ? AND external_id = ?;
-
--- name: ListSeriesExclusions :many
-SELECT provider, external_id, title, created_at FROM series_exclusion ORDER BY title COLLATE NOCASE, provider, external_id;
-
--- name: CountSeriesExclusion :one
-SELECT CAST(COUNT(*) AS INTEGER) AS excluded FROM series_exclusion WHERE provider = ? AND external_id = ?;
-
 -- Every media object that belongs to a series: attached to an episode or linked to the work.
 -- name: ListSeriesMediaObjects :many
 SELECT wf.media_object_id FROM work_file wf WHERE wf.work_id = sqlc.arg(work_id)

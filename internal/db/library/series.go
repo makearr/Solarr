@@ -302,6 +302,10 @@ func writeSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID 
 	if write.Network == "" {
 		return nil
 	}
+	before, err := queries.ListOrganisationsOfWork(ctx, workID)
+	if err != nil {
+		return fmt.Errorf("library: networks before: %w", err)
+	}
 	if err := writeSeriesPrimaryNetwork(ctx, queries, workID, write); err != nil {
 		return err
 	}
@@ -310,7 +314,11 @@ func writeSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID 
 			return err
 		}
 	}
-	return nil
+	after, err := queries.ListOrganisationsOfWork(ctx, workID)
+	if err != nil {
+		return fmt.Errorf("library: networks after: %w", err)
+	}
+	return refreshOrganisations(ctx, queries, append(before, after...))
 }
 
 // linkSeriesNetwork finds the network by its provider id, else by name, creates it when new, and links it to the work.

@@ -3695,7 +3695,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A page of people (ADR-32) -- first-class monitorable entities, not just credits. */
+        /** A page of people of one library, or of every library the caller may read (ADR-32). */
         get: operations["listPeople"];
         put?: never;
         post?: never;
@@ -3715,8 +3715,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * A person's full detail, including their discography.
-         * @description Coverage (held vs missing vs upgradable, architecture.md's own sketch) is not included -- it reuses Satisfaction, which needs desired_item populated for music, not yet true. discography lists every work credited to them, any role.
+         * One person, with what they did in each library the caller may read.
+         * @description 404 when no library the caller may read credits or follows them (ADR-27: hidden is not found).
          */
         get: operations["getPerson"];
         put?: never;
@@ -6036,7 +6036,7 @@ export interface components {
             seasons: number;
         };
         PersonPage: {
-            items: components["schemas"]["Person"][];
+            items: components["schemas"]["PersonEntry"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
         };
@@ -6077,13 +6077,66 @@ export interface components {
              */
             status: "complete" | "incomplete" | "downloading" | "unreleased" | "unverified";
         };
+        PersonEntry: components["schemas"]["Person"] & {
+            /** @description A provider's photo, when one is known. */
+            image_url?: string;
+            /** @description Their roles in the libraries listed. */
+            roles: string[];
+            /**
+             * Format: int64
+             * @description How many works there credit them.
+             */
+            works: number;
+            /** @description The year of their newest work there. */
+            latest?: number;
+            /** @description The first part they played there. */
+            character?: string;
+            /**
+             * Format: int64
+             * @description Their monitored works there.
+             */
+            wanted: number;
+            /**
+             * Format: int64
+             * @description Of those
+             */
+            complete: number;
+            downloading: boolean;
+            /** Format: int64 */
+            added_at?: number;
+        };
+        /** @description A person's place in one library the caller may read. */
+        PersonLibrary: {
+            /** Format: int64 */
+            category_id: number;
+            role: string;
+            /** Format: int64 */
+            works: number;
+        };
+        /** @description One thing a person did on one work of one library; parts lists the parts of a part-scoped role. */
+        PersonCredit: {
+            /** Format: int64 */
+            category_id: number;
+            role: string;
+            character?: string;
+            parts?: string[];
+            work: components["schemas"]["PersonWork"];
+        };
         PersonDetail: components["schemas"]["Person"] & {
-            /** @description A Wikidata-sourced extract, when available (ADR-8). */
+            /** @description From the providers, when one has it (ADR-8). */
             biography?: string;
+            /** @description A provider's photo, when one is known. */
+            image_url?: string;
             aliases: string[];
-            /** @description The union of every genre tagged on any work in discography -- a person carries no genre of their own (ADR-32's own fields are biographical). */
+            /** @description Every genre tagged on any of their works; a person carries none of their own (ADR-32). */
             genres: string[];
-            discography: components["schemas"]["PersonWork"][];
+            /** @description Provider to the person's id there. */
+            ids: {
+                [key: string]: string;
+            };
+            /** @description Only libraries the caller may read; nothing reveals another. */
+            libraries: components["schemas"]["PersonLibrary"][];
+            credits: components["schemas"]["PersonCredit"][];
         };
         /** @description One provider's id for a work, edition or part. */
         ExternalID: {
@@ -13700,6 +13753,14 @@ export interface operations {
     listPeople: {
         parameters: {
             query?: {
+                /** @description One library; absent is every library the caller may read. */
+                category?: number;
+                /** @description Comma-separated credit roles, as the media types declare them; any when absent. */
+                role?: string;
+                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name and country (text), monitored and photo (bool), works, wanted and complete (number), role (one of the roles). */
+                where?: string;
+                sort?: "name" | "works" | "latest" | "added";
+                dir?: "asc" | "desc";
                 /** @description From `next_cursor` of the previous page. Absent on the first page. */
                 cursor?: string;
                 limit?: number;

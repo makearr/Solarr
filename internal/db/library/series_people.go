@@ -16,7 +16,7 @@ import (
 )
 
 // ErrPersonNotFound reports a person with no credit in the library asked about.
-var ErrPersonNotFound = errors.New("library: person not found in this library")
+var ErrPersonNotFound = errors.New("library: person not found")
 
 // TVPersonFilter narrows a TV library's people list: roles (any when empty) and the start of the name.
 type TVPersonFilter struct {

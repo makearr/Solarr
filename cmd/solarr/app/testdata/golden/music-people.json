@@ -1,48 +1,105 @@
 {
   "items": [
     {
+      "added_at": 1614834367,
       "born": "2011",
+      "complete": 0,
       "country": "IE",
+      "downloading": false,
       "id": 1,
       "kind": "Group",
+      "latest": 2019,
       "monitored": false,
       "name": "Amber Lanterns",
-      "sort_name": "Amber Lanterns"
+      "roles": [
+        "artist"
+      ],
+      "sort_name": "Amber Lanterns",
+      "wanted": 1,
+      "works": 1
     },
     {
+      "added_at": 1614834367,
+      "complete": 0,
+      "downloading": false,
       "id": 6,
       "kind": "Person",
+      "latest": 2020,
       "monitored": false,
       "name": "Hal Brandt",
-      "sort_name": "Hal Brandt"
+      "roles": [
+        "director"
+      ],
+      "sort_name": "Hal Brandt",
+      "wanted": 1,
+      "works": 1
     },
     {
+      "added_at": 1614834367,
+      "character": "The Harbourmaster",
+      "complete": 0,
+      "downloading": false,
       "id": 3,
       "kind": "Person",
+      "latest": 2020,
       "monitored": false,
       "name": "Iris Calder",
-      "sort_name": "Iris Calder"
+      "roles": [
+        "actor"
+      ],
+      "sort_name": "Iris Calder",
+      "wanted": 1,
+      "works": 1
     },
     {
+      "added_at": 1614834367,
+      "complete": 0,
+      "downloading": false,
       "id": 2,
       "kind": "Person",
+      "latest": 2020,
       "monitored": false,
       "name": "Mara Voss",
-      "sort_name": "Mara Voss"
+      "roles": [
+        "creator"
+      ],
+      "sort_name": "Mara Voss",
+      "wanted": 1,
+      "works": 1
     },
     {
+      "added_at": 1614834367,
+      "character": "The Pilot",
+      "complete": 0,
+      "downloading": false,
       "id": 5,
       "kind": "Person",
+      "latest": 2020,
       "monitored": false,
       "name": "Odile Renn",
-      "sort_name": "Odile Renn"
+      "roles": [
+        "guest_star"
+      ],
+      "sort_name": "Odile Renn",
+      "wanted": 1,
+      "works": 1
     },
     {
+      "added_at": 1614834367,
+      "character": "Finn",
+      "complete": 0,
+      "downloading": false,
       "id": 4,
       "kind": "Person",
+      "latest": 2020,
       "monitored": false,
       "name": "Tom Aske",
-      "sort_name": "Tom Aske"
+      "roles": [
+        "actor"
+      ],
+      "sort_name": "Tom Aske",
+      "wanted": 1,
+      "works": 1
     }
   ]
 }

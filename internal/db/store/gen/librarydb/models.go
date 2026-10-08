@@ -512,6 +512,14 @@ type OrganisationExternalID struct {
 	OrganisationID int64
 }
 
+type OrganisationLibrary struct {
+	OrganisationID int64
+	CategoryID     int64
+	Role           string
+	Works          int64
+	Latest         sql.NullInt64
+}
+
 type Pack struct {
 	ID            int64
 	Kind          string
@@ -560,6 +568,14 @@ type PersonExternalID struct {
 	Provider   string
 	ExternalID string
 	PersonID   int64
+}
+
+type PersonLibrary struct {
+	PersonID   int64
+	CategoryID int64
+	Role       string
+	Works      int64
+	Latest     sql.NullInt64
 }
 
 type PersonRefresh struct {
@@ -623,13 +639,6 @@ type ScanState struct {
 	FinishedAt      sql.NullInt64
 	FilesFound      int64
 	DirectoriesRead int64
-}
-
-type SeriesExclusion struct {
-	Provider   string
-	ExternalID string
-	Title      string
-	CreatedAt  int64
 }
 
 type StatRollup struct {
@@ -738,6 +747,14 @@ type WorkDate struct {
 	Region string
 	Date   string
 	Source string
+}
+
+type WorkExclusion struct {
+	MediaType  string
+	Provider   string
+	ExternalID string
+	Title      string
+	CreatedAt  int64
 }
 
 type WorkExternalID struct {

@@ -62,7 +62,7 @@ planner. `PUT /series/{id}/quality` gives every season of a series its own quali
 ## Deleting, series type, pictures
 
 `DELETE /series/{id}` removes a series with its episodes, credits and desired items; `delete_files` sends its files to the recycle
-bin (never deleted directly) and `exclude` writes every id the series carries to `series_exclusion`, so the scan (files left
+bin (never deleted directly) and `exclude` writes every id the series carries to `work_exclusion` (generic over media types), so the scan (files left
 alone, not queued), a follow and an import list leave it out; adding it by hand lifts the exclusion. **Series type** (`series_type`
 field) is detected on every add and refresh (anime: Japanese and listed by AniList, AniDB or MyAnimeList; daily: a talk, news, soap
 or game show) and the user's own choice (`__manual__`) wins; naming reads it, and an anime season is also searched by absolute

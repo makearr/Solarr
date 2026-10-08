@@ -833,6 +833,20 @@ const (
 	ListMoveJobsParamsStateRUNNING ListMoveJobsParamsState = "RUNNING"
 )
 
+// Defines values for ListPeopleParamsSort.
+const (
+	ListPeopleParamsSortAdded  ListPeopleParamsSort = "added"
+	ListPeopleParamsSortLatest ListPeopleParamsSort = "latest"
+	ListPeopleParamsSortName   ListPeopleParamsSort = "name"
+	ListPeopleParamsSortWorks  ListPeopleParamsSort = "works"
+)
+
+// Defines values for ListPeopleParamsDir.
+const (
+	ListPeopleParamsDirAsc  ListPeopleParamsDir = "asc"
+	ListPeopleParamsDirDesc ListPeopleParamsDir = "desc"
+)
+
 // Defines values for GetPersonArtworkParamsSize.
 const (
 	GetPersonArtworkParamsSizeFull  GetPersonArtworkParamsSize = "full"
@@ -2971,31 +2985,95 @@ type Person struct {
 	SortName       string  `json:"sort_name"`
 }
 
+// PersonCredit One thing a person did on one work of one library; parts lists the parts of a part-scoped role.
+type PersonCredit struct {
+	CategoryId int64     `json:"category_id"`
+	Character  *string   `json:"character,omitempty"`
+	Parts      *[]string `json:"parts,omitempty"`
+	Role       string    `json:"role"`
+
+	// Work One work in a person's discography, plus the artist page's own "available / missing / requested" signal (Lidarr-like discography).
+	Work PersonWork `json:"work"`
+}
+
 // PersonDetail defines model for PersonDetail.
 type PersonDetail struct {
 	Aliases []string `json:"aliases"`
 
-	// Biography A Wikidata-sourced extract, when available (ADR-8).
-	Biography      *string      `json:"biography,omitempty"`
-	Born           *string      `json:"born,omitempty"`
-	Country        *string      `json:"country,omitempty"`
-	Died           *string      `json:"died,omitempty"`
-	Disambiguation *string      `json:"disambiguation,omitempty"`
-	Discography    []PersonWork `json:"discography"`
-	Gender         *string      `json:"gender,omitempty"`
+	// Biography From the providers, when one has it (ADR-8).
+	Biography      *string        `json:"biography,omitempty"`
+	Born           *string        `json:"born,omitempty"`
+	Country        *string        `json:"country,omitempty"`
+	Credits        []PersonCredit `json:"credits"`
+	Died           *string        `json:"died,omitempty"`
+	Disambiguation *string        `json:"disambiguation,omitempty"`
+	Gender         *string        `json:"gender,omitempty"`
 
-	// Genres The union of every genre tagged on any work in discography -- a person carries no genre of their own (ADR-32's own fields are biographical).
-	Genres    []string `json:"genres"`
-	Id        int64    `json:"id"`
-	Kind      *string  `json:"kind,omitempty"`
-	Monitored bool     `json:"monitored"`
-	Name      string   `json:"name"`
-	SortName  string   `json:"sort_name"`
+	// Genres Every genre tagged on any of their works; a person carries none of their own (ADR-32).
+	Genres []string `json:"genres"`
+	Id     int64    `json:"id"`
+
+	// Ids Provider to the person's id there.
+	Ids map[string]string `json:"ids"`
+
+	// ImageUrl A provider's photo, when one is known.
+	ImageUrl *string `json:"image_url,omitempty"`
+	Kind     *string `json:"kind,omitempty"`
+
+	// Libraries Only libraries the caller may read; nothing reveals another.
+	Libraries []PersonLibrary `json:"libraries"`
+	Monitored bool            `json:"monitored"`
+	Name      string          `json:"name"`
+	SortName  string          `json:"sort_name"`
+}
+
+// PersonEntry defines model for PersonEntry.
+type PersonEntry struct {
+	AddedAt *int64  `json:"added_at,omitempty"`
+	Born    *string `json:"born,omitempty"`
+
+	// Character The first part they played there.
+	Character *string `json:"character,omitempty"`
+
+	// Complete Of those
+	Complete       int64   `json:"complete"`
+	Country        *string `json:"country,omitempty"`
+	Died           *string `json:"died,omitempty"`
+	Disambiguation *string `json:"disambiguation,omitempty"`
+	Downloading    bool    `json:"downloading"`
+	Gender         *string `json:"gender,omitempty"`
+	Id             int64   `json:"id"`
+
+	// ImageUrl A provider's photo, when one is known.
+	ImageUrl *string `json:"image_url,omitempty"`
+	Kind     *string `json:"kind,omitempty"`
+
+	// Latest The year of their newest work there.
+	Latest    *int   `json:"latest,omitempty"`
+	Monitored bool   `json:"monitored"`
+	Name      string `json:"name"`
+
+	// Roles Their roles in the libraries listed.
+	Roles    []string `json:"roles"`
+	SortName string   `json:"sort_name"`
+
+	// Wanted Their monitored works there.
+	Wanted int64 `json:"wanted"`
+
+	// Works How many works there credit them.
+	Works int64 `json:"works"`
+}
+
+// PersonLibrary A person's place in one library the caller may read.
+type PersonLibrary struct {
+	CategoryId int64  `json:"category_id"`
+	Role       string `json:"role"`
+	Works      int64  `json:"works"`
 }
 
 // PersonPage defines model for PersonPage.
 type PersonPage struct {
-	Items []Person `json:"items"`
+	Items []PersonEntry `json:"items"`
 
 	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
 	NextCursor *string `json:"next_cursor,omitempty"`
@@ -4642,6 +4720,17 @@ type ListPacksParams struct {
 
 // ListPeopleParams defines parameters for ListPeople.
 type ListPeopleParams struct {
+	// Category One library; absent is every library the caller may read.
+	Category *int64 `form:"category,omitempty" json:"category,omitempty"`
+
+	// Role Comma-separated credit roles, as the media types declare them; any when absent.
+	Role *string `form:"role,omitempty" json:"role,omitempty"`
+
+	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name and country (text), monitored and photo (bool), works, wanted and complete (number), role (one of the roles).
+	Where *string               `form:"where,omitempty" json:"where,omitempty"`
+	Sort  *ListPeopleParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir   *ListPeopleParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+
 	// Cursor From `next_cursor` of the previous page. Absent on the first page.
 	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
@@ -4650,6 +4739,12 @@ type ListPeopleParams struct {
 	// Q Matches the start of the sort name.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
+
+// ListPeopleParamsSort defines parameters for ListPeople.
+type ListPeopleParamsSort string
+
+// ListPeopleParamsDir defines parameters for ListPeople.
+type ListPeopleParamsDir string
 
 // GetPersonArtworkParams defines parameters for GetPersonArtwork.
 type GetPersonArtworkParams struct {
@@ -5852,10 +5947,10 @@ type ServerInterface interface {
 	// One pack and its own members, in the order they were recorded.
 	// (GET /packs/{id})
 	GetPack(w http.ResponseWriter, r *http.Request, id int64)
-	// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
+	// A page of people of one library, or of every library the caller may read (ADR-32).
 	// (GET /people)
 	ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams)
-	// A person's full detail, including their discography.
+	// One person, with what they did in each library the caller may read.
 	// (GET /people/{id})
 	GetPerson(w http.ResponseWriter, r *http.Request, id int64)
 	// A person's cached Wikidata image, if one was found.
@@ -7034,13 +7129,13 @@ func (_ Unimplemented) GetPack(w http.ResponseWriter, r *http.Request, id int64)
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// A page of people (ADR-32) -- first-class monitorable entities, not just credits.
+// A page of people of one library, or of every library the caller may read (ADR-32).
 // (GET /people)
 func (_ Unimplemented) ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// A person's full detail, including their discography.
+// One person, with what they did in each library the caller may read.
 // (GET /people/{id})
 func (_ Unimplemented) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -12045,6 +12140,46 @@ func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Req
 
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListPeopleParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "category", r.URL.Query(), &params.Category)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "role" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "role", r.URL.Query(), &params.Role)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "where" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "where", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sort", r.URL.Query(), &params.Sort)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "dir" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
 
 	// ------------- Optional query parameter "cursor" -------------
 

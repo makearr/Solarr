@@ -11,28 +11,6 @@ import (
 	"strings"
 )
 
-const addSeriesExclusion = `-- name: AddSeriesExclusion :exec
-INSERT INTO series_exclusion (provider, external_id, title, created_at) VALUES (?, ?, ?, ?)
-ON CONFLICT (provider, external_id) DO UPDATE SET title = excluded.title
-`
-
-type AddSeriesExclusionParams struct {
-	Provider   string
-	ExternalID string
-	Title      string
-	CreatedAt  int64
-}
-
-func (q *Queries) AddSeriesExclusion(ctx context.Context, arg AddSeriesExclusionParams) error {
-	_, err := q.db.ExecContext(ctx, addSeriesExclusion,
-		arg.Provider,
-		arg.ExternalID,
-		arg.Title,
-		arg.CreatedAt,
-	)
-	return err
-}
-
 const addWorkOrganisation = `-- name: AddWorkOrganisation :exec
 INSERT OR IGNORE INTO work_organisation (work_id, organisation_id, role) VALUES (?, ?, ?)
 `
@@ -60,22 +38,6 @@ type ClearWorkOrganisationRoleParams struct {
 func (q *Queries) ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error {
 	_, err := q.db.ExecContext(ctx, clearWorkOrganisationRole, arg.WorkID, arg.Role)
 	return err
-}
-
-const countSeriesExclusion = `-- name: CountSeriesExclusion :one
-SELECT CAST(COUNT(*) AS INTEGER) AS excluded FROM series_exclusion WHERE provider = ? AND external_id = ?
-`
-
-type CountSeriesExclusionParams struct {
-	Provider   string
-	ExternalID string
-}
-
-func (q *Queries) CountSeriesExclusion(ctx context.Context, arg CountSeriesExclusionParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countSeriesExclusion, arg.Provider, arg.ExternalID)
-	var excluded int64
-	err := row.Scan(&excluded)
-	return excluded, err
 }
 
 const countWorkFieldManual = `-- name: CountWorkFieldManual :one
@@ -124,20 +86,6 @@ func (q *Queries) CoveredPartRefs(ctx context.Context, workID int64) ([]string, 
 		return nil, err
 	}
 	return items, nil
-}
-
-const deleteSeriesExclusion = `-- name: DeleteSeriesExclusion :exec
-DELETE FROM series_exclusion WHERE provider = ? AND external_id = ?
-`
-
-type DeleteSeriesExclusionParams struct {
-	Provider   string
-	ExternalID string
-}
-
-func (q *Queries) DeleteSeriesExclusion(ctx context.Context, arg DeleteSeriesExclusionParams) error {
-	_, err := q.db.ExecContext(ctx, deleteSeriesExclusion, arg.Provider, arg.ExternalID)
-	return err
 }
 
 const deleteWorkFieldByProvider = `-- name: DeleteWorkFieldByProvider :exec
@@ -318,38 +266,6 @@ func (q *Queries) ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersF
 	for rows.Next() {
 		var i ListAltNumbersForWorkRow
 		if err := rows.Scan(&i.PartID, &i.AltRef); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listSeriesExclusions = `-- name: ListSeriesExclusions :many
-SELECT provider, external_id, title, created_at FROM series_exclusion ORDER BY title COLLATE NOCASE, provider, external_id
-`
-
-func (q *Queries) ListSeriesExclusions(ctx context.Context) ([]SeriesExclusion, error) {
-	rows, err := q.db.QueryContext(ctx, listSeriesExclusions)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SeriesExclusion{}
-	for rows.Next() {
-		var i SeriesExclusion
-		if err := rows.Scan(
-			&i.Provider,
-			&i.ExternalID,
-			&i.Title,
-			&i.CreatedAt,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -336,7 +336,7 @@ func (g goldenServer) seedSeries(ctx context.Context, t *testing.T, libraries go
 	opened := g.process.library
 	series := library.NewSeries(opened)
 	service := tv.Service{
-		Skyhook: goldenSkyhook{}, TVmaze: goldenTVmaze{}, TMDB: goldenTMDB{}, Series: series, Reader: library.NewSeriesReader(opened),
+		Skyhook: goldenSkyhook{}, TVmaze: goldenTVmaze{}, TMDB: goldenTMDB{}, Series: series, Exclusions: library.NewExclusions(opened), Reader: library.NewSeriesReader(opened),
 		Desired: library.NewDesired(opened), Clock: clock.NewFake(goldenSeededAt),
 	}
 	added, err := service.Add(ctx, tv.AddRequest{

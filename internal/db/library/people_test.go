@@ -195,9 +195,9 @@ func TestPersonDetail_GenresAreTheUnionOfDiscographyTags(t *testing.T) {
 		t.Fatalf("AssignGenres (second): %v", err)
 	}
 
-	detail, err := people.Detail(t.Context(), person.ID)
+	detail, err := people.Get(t.Context(), person.ID, nil)
 	if err != nil {
-		t.Fatalf("Detail: %v", err)
+		t.Fatalf("Get: %v", err)
 	}
 	want := []string{"Alternative Rock", "Art Rock"}
 	if !reflect.DeepEqual(detail.Genres, want) {

@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -18,39 +20,20 @@ import (
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
-// PersonRow is one person as the library reports it.
-type PersonRow struct {
-	ID             int64
-	Name           string
-	SortName       string
-	Disambiguation *string
-	Kind           *string
-	Gender         *string
-	Country        *string
-	Born           *string
-	Died           *string
-	Monitored      bool
-}
+// ErrPersonNotFound reports a person no library the caller may read knows of: 404, never 403 (ADR-27).
+var ErrPersonNotFound = errors.New("apiserver: person not found")
 
-// PersonFilter narrows a ListPeople call. A zero field is not a filter.
-type PersonFilter struct {
-	Monitored  *bool
-	NamePrefix string
-	// Visible is who is asking; a person no library they may see knows of is left out.
-	Visible PersonVisibility
-}
-
-// PersonVisibility is the libraries the caller may see and their root folders: what decides which people exist for
-// them and which of a person's works they are shown.
-type PersonVisibility struct {
-	RootFolderIDs []int64
-	CategoryIDs   []int64
-}
-
-// PersonCursor is a position in the people list.
-type PersonCursor struct {
-	SortName string
-	ID       int64
+// PeopleQuery narrows ListPeople: Visible are the libraries the caller may read, which nothing widens.
+type PeopleQuery struct {
+	Visible   []int64
+	Category  int64
+	Roles     []string
+	Monitored *bool
+	Prefix    string
+	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
+	Where string
+	Sort  string
+	Desc  bool
 }
 
 // PersonWorkRow is one work in a person's discography, plus the artist
@@ -116,25 +99,21 @@ func albumStatus(row PersonWorkRow, now time.Time) AlbumStatus {
 	}
 }
 
-// PersonDetailRow is a person's full detail. Coverage (held vs missing vs
-// upgradable) is not included -- see the OpenAPI description for why.
-type PersonDetailRow struct {
-	PersonRow
-	Biography *string
-	Aliases   []string
-	// Genres is the union of every genre tagged on any work in Discography
-	// -- Person carries no genre of its own (ADR-32's fields are biographical).
-	Genres      []string
-	Discography []PersonWorkRow
+// PersonCreditRow is one credit of a person, its work as every list shows works.
+type PersonCreditRow struct {
+	CategoryID int64
+	Role       string
+	Character  string
+	Parts      []string
+	Work       PersonWorkRow
 }
 
-// PeopleReader lists and reads people (ADR-32). Defined here and implemented
-// by the caller, same reasoning as WorksReader's own doc comment.
+// PeopleReader lists and reads people of every media type (ADR-32). Defined here and implemented by the caller.
 type PeopleReader interface {
-	ListPeople(ctx context.Context, filter PersonFilter, cursor PersonCursor, pageSize int) ([]PersonRow, error)
-	// GetPersonDetail answers a missing id, and a person the viewer may not know of, with an error wrapping
-	// sql.ErrNoRows; the works it lists are those of the libraries the viewer may see.
-	GetPersonDetail(ctx context.Context, id int64, visible PersonVisibility) (PersonDetailRow, error)
+	// ListPeople answers one page; the cursor's Sort is the sort value of the last row.
+	ListPeople(ctx context.Context, query PeopleQuery, after paginate.TextCursor, limit int) ([]gen.PersonEntry, error)
+	// GetPersonDetail answers a person no library in visible knows of with ErrPersonNotFound; credits are visible's only.
+	GetPersonDetail(ctx context.Context, id int64, visible []int64) (gen.PersonDetail, []PersonCreditRow, error)
 }
 
 // PeopleSubscriber subscribes the calling user to a person (ADR-32).
@@ -189,19 +168,22 @@ type SubscriptionPreviewer interface {
 // since it's a real, recoverable precondition rather than a missing person).
 var ErrNoArtistID = errors.New("apiserver: person has no musicbrainz artist id yet")
 
-// routeListPeople parses the query string, mirroring routeListWorks.
+// routeListPeople parses the query string into the generated parameters.
 func (s *Server) routeListPeople(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var params gen.ListPeopleParams
-
-	if raw := query.Get("cursor"); raw != "" {
-		params.Cursor = &raw
+	if raw := query.Get("category"); raw != "" {
+		category, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category must be a number")
+			return
+		}
+		params.Category = &category
 	}
 	if raw := query.Get("limit"); raw != "" {
 		limit, err := strconv.Atoi(raw)
 		if err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "limit must be a number")
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "limit must be a number")
 			return
 		}
 		params.Limit = &limit
@@ -209,74 +191,84 @@ func (s *Server) routeListPeople(w http.ResponseWriter, r *http.Request) {
 	if raw := query.Get("monitored"); raw != "" {
 		monitored, err := strconv.ParseBool(raw)
 		if err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "monitored must be true or false")
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "monitored must be true or false")
 			return
 		}
 		params.Monitored = &monitored
 	}
-	if raw := query.Get("q"); raw != "" {
-		params.Q = &raw
+	for name, target := range map[string]**string{"cursor": &params.Cursor, "q": &params.Q, "role": &params.Role, "where": &params.Where} {
+		if raw := query.Get(name); raw != "" {
+			*target = &raw
+		}
 	}
-
+	if raw := query.Get("sort"); raw != "" {
+		sort := gen.ListPeopleParamsSort(raw)
+		params.Sort = &sort
+	}
+	if raw := query.Get("dir"); raw != "" {
+		dir := gen.ListPeopleParamsDir(raw)
+		params.Dir = &dir
+	}
 	s.ListPeople(w, r, params)
 }
 
-// ListPeople answers a page of people. A person spans libraries (ADR-32), so the boundary is not one category: a
-// person is listed when a library the caller may see credits or follows them, and not otherwise (2026-10-04).
+// ListPeople answers a page of people of one library, or of every library the caller may read. A person is listed
+// when a library the caller may read credits or follows them, and not otherwise (2026-10-04).
 func (s *Server) ListPeople(w http.ResponseWriter, r *http.Request, params gen.ListPeopleParams) {
 	if s.people == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
-			"Unavailable", "people are not available")
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "people are not available")
 		return
 	}
-
 	cursor, err := paginate.DecodeText(derefOr(params.Cursor, ""))
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 		return
 	}
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
-
 	visible, ok := s.personVisibility(w, r)
 	if !ok {
 		return
 	}
-	rows, err := s.people.ListPeople(r.Context(),
-		PersonFilter{Monitored: params.Monitored, NamePrefix: derefOr(params.Q, ""), Visible: visible},
-		PersonCursor{SortName: cursor.Sort, ID: cursor.ID}, limit+1)
+	query := PeopleQuery{
+		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, Prefix: derefOr(params.Q, ""),
+		Where: derefOr(params.Where, ""), Sort: string(derefOr(params.Sort, gen.ListPeopleParamsSortName)),
+		Desc: derefOr(params.Dir, gen.ListPeopleParamsDirAsc) == gen.ListPeopleParamsDirDesc,
+	}
+	for _, role := range strings.Split(derefOr(params.Role, ""), ",") {
+		if role = strings.TrimSpace(role); role != "" {
+			query.Roles = append(query.Roles, role)
+		}
+	}
+	if query.Category != 0 && !slices.Contains(visible, query.Category) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
+		return
+	}
+	rows, err := s.people.ListPeople(r.Context(), query, cursor, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildPersonPage(rows, limit))
-}
-
-func buildPersonPage(rows []PersonRow, limit int) gen.PersonPage {
-	items := rows
-	var nextCursor string
+	page := gen.PersonPage{Items: rows}
 	if len(rows) > limit {
-		items = rows[:limit]
-		last := items[len(items)-1]
-		nextCursor = paginate.TextCursor{Sort: last.SortName, ID: last.ID}.Encode()
+		page.Items = rows[:limit]
+		last := page.Items[limit-1]
+		next := paginate.TextCursor{Sort: personSortValue(last, query.Sort), ID: last.Id}.Encode()
+		page.NextCursor = &next
 	}
-
-	views := make([]gen.Person, len(items))
-	for index, row := range items {
-		views[index] = buildPersonView(row)
-	}
-	page := gen.PersonPage{Items: views}
-	if nextCursor != "" {
-		page.NextCursor = &nextCursor
-	}
-	return page
+	writeJSON(w, s.logger, http.StatusOK, page)
 }
 
-func buildPersonView(row PersonRow) gen.Person {
-	return gen.Person{
-		Id: row.ID, Name: row.Name, SortName: row.SortName,
-		Disambiguation: row.Disambiguation, Kind: row.Kind, Gender: row.Gender,
-		Country: row.Country, Born: row.Born, Died: row.Died, Monitored: row.Monitored,
+// personSortValue is the value a page of people is ordered by, as its cursor carries it.
+func personSortValue(entry gen.PersonEntry, sort string) string {
+	switch sort {
+	case string(gen.ListPeopleParamsSortWorks):
+		return strconv.FormatInt(entry.Works, 10)
+	case string(gen.ListPeopleParamsSortLatest):
+		return strconv.Itoa(derefOr(entry.Latest, 0))
+	case string(gen.ListPeopleParamsSortAdded):
+		return strconv.FormatInt(derefOr(entry.AddedAt, 0), 10)
+	default:
+		return entry.SortName
 	}
 }
 
@@ -291,20 +283,19 @@ func (s *Server) routeGetPerson(w http.ResponseWriter, r *http.Request) {
 	s.GetPerson(w, r, id)
 }
 
-// GetPerson answers one person's full detail.
+// GetPerson answers one person with their credits in every library the caller may read.
 func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 	if s.people == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "people are not available")
 		return
 	}
-
 	visible, ok := s.personVisibility(w, r)
 	if !ok {
 		return
 	}
-	detail, err := s.people.GetPersonDetail(r.Context(), id, visible)
-	if errors.Is(err, sql.ErrNoRows) {
+	detail, credits, err := s.people.GetPersonDetail(r.Context(), id, visible)
+	if errors.Is(err, ErrPersonNotFound) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
 		return
 	}
@@ -312,29 +303,33 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildPersonDetailView(detail, s.wall.Now()))
+	now := s.wall.Now()
+	detail.Credits = make([]gen.PersonCredit, len(credits))
+	for index, credit := range credits {
+		view := gen.PersonCredit{CategoryId: credit.CategoryID, Role: credit.Role, Work: personWorkView(credit.Work, now)}
+		if credit.Character != "" {
+			view.Character = &credit.Character
+		}
+		if len(credit.Parts) > 0 {
+			view.Parts = &credit.Parts
+		}
+		detail.Credits[index] = view
+	}
+	writeJSON(w, s.logger, http.StatusOK, detail)
 }
 
-func buildPersonDetailView(detail PersonDetailRow, now time.Time) gen.PersonDetail {
-	discography := make([]gen.PersonWork, len(detail.Discography))
-	for index, row := range detail.Discography {
-		discography[index] = gen.PersonWork{
-			Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
-			Year: yearOf(row.Year), PrimaryType: row.PrimaryType, OnDisk: row.OnDisk,
-			PresentCount: row.PresentCount, RequiredCount: row.RequiredCount,
-			Status: gen.PersonWorkStatus(albumStatus(row, now)),
-		}
-		if row.WantedState != nil {
-			state := gen.PersonWorkWantedState(*row.WantedState)
-			discography[index].WantedState = &state
-		}
+func personWorkView(row PersonWorkRow, now time.Time) gen.PersonWork {
+	view := gen.PersonWork{
+		Id: row.ID, MediaType: row.MediaType, Title: row.Title, SortTitle: row.SortTitle,
+		Year: yearOf(row.Year), PrimaryType: row.PrimaryType, OnDisk: row.OnDisk,
+		PresentCount: row.PresentCount, RequiredCount: row.RequiredCount,
+		Status: gen.PersonWorkStatus(albumStatus(row, now)),
 	}
-	return gen.PersonDetail{
-		Id: detail.ID, Name: detail.Name, SortName: detail.SortName,
-		Disambiguation: detail.Disambiguation, Kind: detail.Kind, Gender: detail.Gender,
-		Country: detail.Country, Born: detail.Born, Died: detail.Died, Monitored: detail.Monitored,
-		Biography: detail.Biography, Aliases: detail.Aliases, Genres: detail.Genres, Discography: discography,
+	if row.WantedState != nil {
+		state := gen.PersonWorkWantedState(*row.WantedState)
+		view.WantedState = &state
 	}
+	return view
 }
 
 // routeSubscribePerson parses the id path parameter, mirroring routeGetWork.
@@ -512,13 +507,16 @@ func (s *Server) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) 
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// personVisibility is what the caller may see of people; false means the answer was already written.
-func (s *Server) personVisibility(w http.ResponseWriter, r *http.Request) (PersonVisibility, bool) {
+// personVisibility is the libraries the caller may read; false means the answer was already written.
+func (s *Server) personVisibility(w http.ResponseWriter, r *http.Request) ([]int64, bool) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
-		return PersonVisibility{}, false
+		return nil, false
 	}
-	rootFolderIDs, categoryIDs := s.visibleAt(access, settings.PermissionRead)
-	return PersonVisibility{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs}, true
+	_, categoryIDs := s.visibleAt(access, settings.PermissionRead)
+	if categoryIDs == nil {
+		categoryIDs = []int64{}
+	}
+	return categoryIDs, true
 }

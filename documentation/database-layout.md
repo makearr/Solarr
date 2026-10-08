@@ -51,6 +51,14 @@ People, credits, tags, collections, counters and reputation are **library data, 
 is written on every state transition — neither survives the "fully cached in memory" property
 that makes `settings.db` what it is.
 
+`person_library` and `organisation_library` say which libraries a person or organisation appears in, by role
+(role `''` is any role, each work counted once): the one People list of every media type reads them, and so
+does the rule that decides whether a viewer may see someone. A work belongs to a library through its
+`desired_item` rows. Both are rewritten for the people concerned in the same transaction as the change that
+moves them: a credit, a work's first wanted item in a library, a work's removal, a merge, a network link
+(`internal/db/library/peoplerollup.go`). A library set to add discovered albums as `none` therefore lists
+no artist for files it does not want.
+
 ## Interned attributes against per-file measurements
 
 `media_attributes` is interned: one row per distinct combination, referenced by many files.

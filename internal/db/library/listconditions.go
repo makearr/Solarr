@@ -19,15 +19,6 @@ var WorkFields = map[string]listfilter.Field{
 	"verified":  {Kind: listfilter.Bool},
 }
 
-// ArtistFields are the fields a custom filter of the Artists list may name.
-var ArtistFields = map[string]listfilter.Field{
-	"name":            {Kind: listfilter.Text},
-	"country":         {Kind: listfilter.Text},
-	"monitored":       {Kind: listfilter.Bool},
-	"albums_wanted":   {Kind: listfilter.Number},
-	"albums_complete": {Kind: listfilter.Number},
-}
-
 // existsText is a text condition over the rows of a subquery: "has a genre containing", and for the negative
 // operators "has no genre containing", which is what a person means by "does not contain".
 func existsText(condition listfilter.Condition, from, column string) (string, []any) {
@@ -85,31 +76,6 @@ func addWorkConditions(predicates *store.Predicates, conditions []listfilter.Con
 			fragment, arguments = condition.SQL(listfilter.Bool, "EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id)")
 		case "verified":
 			fragment, arguments = condition.SQL(listfilter.Bool, "NOT "+unverifiedColumn)
-		default:
-			continue
-		}
-		predicates.Add(fragment, arguments...)
-	}
-}
-
-// addArtistConditions adds every condition of an Artists custom filter as a predicate over person.
-func addArtistConditions(predicates *store.Predicates, conditions []listfilter.Condition) {
-	wanted := "(SELECT COUNT(*) FROM credit c JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1" +
-		" AND di.satisfaction_kind = 'SET' WHERE c.person_id = person.id"
-	for _, condition := range conditions {
-		var fragment string
-		var arguments []any
-		switch condition.Field {
-		case "name":
-			fragment, arguments = condition.SQL(listfilter.Text, "person.name")
-		case "country":
-			fragment, arguments = condition.SQL(listfilter.Text, "COALESCE(person.country, '')")
-		case "monitored":
-			fragment, arguments = condition.SQL(listfilter.Bool, "person.monitored = 1")
-		case "albums_wanted":
-			fragment, arguments = condition.SQL(listfilter.Number, wanted+")")
-		case "albums_complete":
-			fragment, arguments = condition.SQL(listfilter.Number, wanted+" AND di.state IN ('COMPLETE', 'UPGRADABLE'))")
 		default:
 			continue
 		}

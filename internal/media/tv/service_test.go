@@ -79,7 +79,7 @@ func newService(t *testing.T, sky tv.SeriesSource, maze fakeTVmaze) (tv.Service,
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
 	return tv.Service{
-		Skyhook: sky, TVmaze: maze, Series: library.NewSeries(opened), Desired: library.NewDesired(opened), Clock: fake,
+		Skyhook: sky, TVmaze: maze, Series: library.NewSeries(opened), Exclusions: library.NewExclusions(opened), Desired: library.NewDesired(opened), Clock: fake,
 	}, opened
 }
 

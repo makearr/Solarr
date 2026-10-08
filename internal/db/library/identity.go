@@ -182,7 +182,15 @@ func (i Identity) ResolveWorksDetailed(ctx context.Context, at time.Time, links 
 // import_unit.work_id carries no cascade of its own.
 func (i Identity) DeleteWork(ctx context.Context, workID int64) error {
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).DeleteWork(ctx, workID)
+		queries := librarydb.New(tx)
+		members, err := membersOfWork(ctx, queries, workID)
+		if err != nil {
+			return err
+		}
+		if err := queries.DeleteWork(ctx, workID); err != nil {
+			return err
+		}
+		return members.refresh(ctx, queries)
 	})
 	if err != nil {
 		return fmt.Errorf("library: delete work %d: %w", workID, err)
@@ -543,6 +551,10 @@ func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjec
 
 // deleteFilelessWork removes a work and everything pointing at it; the caller has checked it has no files.
 func deleteFilelessWork(ctx context.Context, queries *librarydb.Queries, workID int64) error {
+	members, err := membersOfWork(ctx, queries, workID)
+	if err != nil {
+		return err
+	}
 	if err := queries.DetachAcquisitionsForWork(ctx, workID); err != nil {
 		return fmt.Errorf("detach acquisitions: %w", err)
 	}
@@ -558,7 +570,7 @@ func deleteFilelessWork(ctx context.Context, queries *librarydb.Queries, workID 
 	if err := queries.DeleteWork(ctx, workID); err != nil {
 		return fmt.Errorf("delete work: %w", err)
 	}
-	return nil
+	return members.refresh(ctx, queries)
 }
 
 // RemoveWorkResult is what removing an album actually did.
@@ -592,6 +604,10 @@ func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResul
 		if err != nil {
 			return fmt.Errorf("count files: %w", err)
 		}
+		members, err := membersOfWork(ctx, queries, workID)
+		if err != nil {
+			return err
+		}
 		// Without this, removing any album that was ever downloaded failed on acquisition's FK.
 		if err := queries.DetachAcquisitionsForWork(ctx, workID); err != nil {
 			return fmt.Errorf("detach acquisitions: %w", err)
@@ -601,7 +617,7 @@ func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResul
 		}
 		result.FilesKept = files
 		if files > 0 {
-			return nil
+			return members.refresh(ctx, queries)
 		}
 		if err := queries.DetachImportUnitsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {
 			return fmt.Errorf("detach import units: %w", err)
@@ -613,7 +629,7 @@ func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResul
 			return fmt.Errorf("delete work: %w", err)
 		}
 		result.WorkDeleted = true
-		return nil
+		return members.refresh(ctx, queries)
 	})
 	if err != nil {
 		return RemoveWorkResult{}, fmt.Errorf("library: remove work %d: %w", workID, err)

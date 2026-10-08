@@ -179,6 +179,7 @@ func mergeArtist(ctx context.Context, queries *librarydb.Queries, merge ArtistMe
 		func() error { return queries.DeletePersonSubscriptions(ctx, loser) },
 		func() error { return queries.DeletePersonArtwork(ctx, loser) },
 		func() error { return queries.DeletePerson(ctx, loser) },
+		func() error { return refreshPeople(ctx, queries, []int64{winner}) },
 	}
 	for _, step := range steps {
 		if err := step(); err != nil {

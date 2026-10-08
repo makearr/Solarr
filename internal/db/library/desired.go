@@ -61,7 +61,7 @@ func (d Desired) EnsureAlbumItem(ctx context.Context, request AlbumRequest) (lib
 				return nil
 			}
 		}
-		created, err := queries.CreateDesiredItem(ctx, librarydb.CreateDesiredItemParams{
+		created, err := createDesiredItem(ctx, queries, librarydb.CreateDesiredItemParams{
 			WorkID: request.WorkID, EditionID: nullInt64(request.EditionID),
 			MediaRef: "", MediaSortKey: "",
 			CategoryID: request.CategoryID, ProfileID: request.ProfileID,
@@ -122,7 +122,7 @@ func (d Desired) EnsureTrackItem(ctx context.Context, request TrackRequest) (lib
 			}
 		}
 
-		created, err := queries.CreateDesiredItem(ctx, librarydb.CreateDesiredItemParams{
+		created, err := createDesiredItem(ctx, queries, librarydb.CreateDesiredItemParams{
 			WorkID: request.WorkID, EditionID: sql.NullInt64{},
 			MediaRef: request.MediaRef, MediaSortKey: part.SortKey,
 			CategoryID: request.CategoryID, ProfileID: request.ProfileID,

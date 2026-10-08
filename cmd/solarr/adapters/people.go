@@ -3,15 +3,20 @@ package adapters
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // People satisfies apiserver.PeopleReader, apiserver.PeopleSubscriber and
@@ -19,7 +24,9 @@ import (
 // needed for Preview (todo 4.4) -- ListPeople/GetPersonDetail/Subscribe
 // never touch MusicBrainz directly.
 type People struct {
-	People        library.People
+	People library.People
+	// Roles answers every credit role the media types declare, for a custom filter's role choices.
+	Roles         func() []string
 	Subscriptions library.Subscriptions
 	Provider      musicbrainz.Provider
 	Categories    Categories
@@ -32,7 +39,7 @@ type People struct {
 // who no longer exists. Files are never touched: a work belongs to the
 // library, not to the person credited on it.
 func (a People) Remove(ctx context.Context, personID, userID int64) error {
-	if _, err := a.People.Detail(ctx, personID); err != nil {
+	if _, err := a.People.Person(ctx, personID); err != nil {
 		return err
 	}
 	subscriptionID, found, err := a.Subscriptions.Find(ctx, "person", personID, userID)
@@ -47,117 +54,122 @@ func (a People) Remove(ctx context.Context, personID, userID int64) error {
 	return a.People.Delete(ctx, personID)
 }
 
-func (a People) ListPeople(
-	ctx context.Context, filter apiserver.PersonFilter, cursor apiserver.PersonCursor, pageSize int,
-) ([]apiserver.PersonRow, error) {
-	rows, err := a.People.ListPeople(ctx,
-		library.PersonFilter{
-			Monitored: filter.Monitored, NamePrefix: filter.NamePrefix,
-			Visible: &library.Visibility{RootFolderIDs: filter.Visible.RootFolderIDs, CategoryIDs: filter.Visible.CategoryIDs},
-		},
-		library.PersonCursor{SortName: cursor.SortName, ID: cursor.ID}, pageSize)
+// ListPeople maps one page of the one people list.
+func (a People) ListPeople(ctx context.Context, query apiserver.PeopleQuery, after paginate.TextCursor, limit int) ([]gen.PersonEntry, error) {
+	where, err := listfilter.Parse(query.Where, library.PersonFields(a.Roles()))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
+	cursor := library.PeopleCursor{ID: after.ID, Set: after.Sort != "" || after.ID != 0}
+	if query.Sort == library.PeopleByName || query.Sort == "" {
+		cursor.Name = after.Sort
+	} else {
+		cursor.Value, _ = strconv.ParseInt(after.Sort, 10, 64)
+	}
+	rows, err := a.People.List(ctx, library.PeopleFilter{
+		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored,
+		NamePrefix: query.Prefix, Where: where, Sort: query.Sort, Desc: query.Desc,
+	}, cursor, limit)
 	if err != nil {
 		return nil, err
 	}
-
-	views := make([]apiserver.PersonRow, len(rows))
-	for index, row := range rows {
-		view := apiserver.PersonRow{ID: row.ID, Name: row.Name, SortName: row.SortName, Monitored: row.Monitored != 0}
-		if row.Disambiguation.Valid {
-			view.Disambiguation = &row.Disambiguation.String
+	views := make([]gen.PersonEntry, len(rows))
+	for i, row := range rows {
+		view := gen.PersonEntry{
+			Id: row.ID, Name: row.Name, SortName: row.SortName, Monitored: row.Monitored, Roles: row.Roles,
+			Works: row.Works, Wanted: row.Wanted, Complete: row.Complete, Downloading: row.Downloading, AddedAt: &row.AddedAt,
 		}
-		if row.Kind.Valid {
-			view.Kind = &row.Kind.String
+		if view.Roles == nil {
+			view.Roles = []string{}
 		}
-		if row.Gender.Valid {
-			view.Gender = &row.Gender.String
+		if row.Latest > 0 {
+			latest := int(row.Latest)
+			view.Latest = &latest
 		}
-		if row.Country.Valid {
-			view.Country = &row.Country.String
-		}
-		if row.Born.Valid {
-			view.Born = &row.Born.String
-		}
-		if row.Died.Valid {
-			view.Died = &row.Died.String
-		}
-		views[index] = view
+		setString(&view.Disambiguation, row.Disambiguation)
+		setString(&view.Kind, row.Kind)
+		setString(&view.Country, row.Country)
+		setString(&view.Born, row.Born)
+		setString(&view.Died, row.Died)
+		setString(&view.ImageUrl, row.ImageURL)
+		setString(&view.Character, row.Character)
+		views[i] = view
 	}
 	return views, nil
 }
 
-func (a People) GetPersonDetail(ctx context.Context, id int64, visible apiserver.PersonVisibility) (apiserver.PersonDetailRow, error) {
-	detail, err := a.People.DetailVisible(ctx, id, &library.Visibility{RootFolderIDs: visible.RootFolderIDs, CategoryIDs: visible.CategoryIDs})
+// GetPersonDetail maps one person and their credits in the libraries visible holds.
+func (a People) GetPersonDetail(ctx context.Context, id int64, visible []int64) (gen.PersonDetail, []apiserver.PersonCreditRow, error) {
+	profile, err := a.People.Get(ctx, id, visible)
+	if errors.Is(err, library.ErrPersonNotFound) {
+		return gen.PersonDetail{}, nil, fmt.Errorf("%w: %w", apiserver.ErrPersonNotFound, err)
+	}
 	if err != nil {
-		return apiserver.PersonDetailRow{}, err
+		return gen.PersonDetail{}, nil, err
 	}
+	credits, err := a.People.Credits(ctx, id, visible)
+	if err != nil {
+		return gen.PersonDetail{}, nil, err
+	}
+	view := gen.PersonDetail{
+		Id: profile.ID, Name: profile.Name, SortName: profile.SortName, Monitored: profile.Monitored,
+		Aliases: nonNil(profile.Aliases), Genres: nonNil(profile.Genres), Ids: profile.IDs,
+		Libraries: make([]gen.PersonLibrary, len(profile.Libraries)),
+	}
+	for i, place := range profile.Libraries {
+		view.Libraries[i] = gen.PersonLibrary{CategoryId: place.CategoryID, Role: place.Role, Works: place.Works}
+	}
+	setString(&view.Disambiguation, profile.Disambiguation)
+	setString(&view.Kind, profile.Kind)
+	setString(&view.Gender, profile.Gender)
+	setString(&view.Country, profile.Country)
+	setString(&view.Born, profile.Born)
+	setString(&view.Died, profile.Died)
+	setString(&view.ImageUrl, profile.ImageURL)
+	setString(&view.Biography, profile.Biography)
+	rows := make([]apiserver.PersonCreditRow, len(credits))
+	for i, credit := range credits {
+		rows[i] = apiserver.PersonCreditRow{
+			CategoryID: credit.CategoryID, Role: credit.Role, Character: credit.Character, Parts: credit.Parts,
+			Work: personWorkRow(credit.DiscographyRow),
+		}
+	}
+	return view, rows, nil
+}
 
-	discography := make([]apiserver.PersonWorkRow, len(detail.Discography))
-	for index, work := range detail.Discography {
-		row := apiserver.PersonWorkRow{
-			ID: work.ID, MediaType: work.MediaType, Title: work.CanonicalTitle, SortTitle: work.SortTitle,
-			OnDisk: work.OnDiskCount > 0,
-		}
-		if work.Year.Valid {
-			row.Year = &work.Year.Int64
-		}
-		if work.PrimaryType.Valid {
-			row.PrimaryType = &work.PrimaryType.String
-		}
-		if work.WantedState.Valid {
-			row.WantedState = &work.WantedState.String
-		}
-		if work.PresentCount.Valid {
-			row.PresentCount = &work.PresentCount.Int64
-		}
-		if work.RequiredCount.Valid {
-			row.RequiredCount = &work.RequiredCount.Int64
-		}
-		if work.AvailableFrom.Valid {
-			at := time.Unix(work.AvailableFrom.Int64, 0).UTC()
-			row.AvailableFrom = &at
-		}
-		row.Downloading = work.Downloading
-		row.Unverified = work.Unverified
-		discography[index] = row
+// personWorkRow maps a credited work with the facts its status colour is decided from.
+func personWorkRow(work library.DiscographyRow) apiserver.PersonWorkRow {
+	row := apiserver.PersonWorkRow{
+		ID: work.ID, MediaType: work.MediaType, Title: work.CanonicalTitle, SortTitle: work.SortTitle,
+		OnDisk: work.OnDiskCount > 0, Downloading: work.Downloading, Unverified: work.Unverified,
 	}
+	if work.Year.Valid {
+		row.Year = &work.Year.Int64
+	}
+	if work.PrimaryType.Valid {
+		row.PrimaryType = &work.PrimaryType.String
+	}
+	if work.WantedState.Valid {
+		row.WantedState = &work.WantedState.String
+	}
+	if work.PresentCount.Valid {
+		row.PresentCount = &work.PresentCount.Int64
+	}
+	if work.RequiredCount.Valid {
+		row.RequiredCount = &work.RequiredCount.Int64
+	}
+	if work.AvailableFrom.Valid {
+		at := time.Unix(work.AvailableFrom.Int64, 0).UTC()
+		row.AvailableFrom = &at
+	}
+	return row
+}
 
-	person := detail.Person
-	view := apiserver.PersonDetailRow{
-		PersonRow: apiserver.PersonRow{
-			ID: person.ID, Name: person.Name, SortName: person.SortName, Monitored: person.Monitored != 0,
-		},
-		Genres: detail.Genres, Discography: discography,
+func nonNil(values []string) []string {
+	if values == nil {
+		return []string{}
 	}
-	if person.Disambiguation.Valid {
-		view.Disambiguation = &person.Disambiguation.String
-	}
-	if person.Kind.Valid {
-		view.Kind = &person.Kind.String
-	}
-	if person.Gender.Valid {
-		view.Gender = &person.Gender.String
-	}
-	if person.Country.Valid {
-		view.Country = &person.Country.String
-	}
-	if person.Born.Valid {
-		view.Born = &person.Born.String
-	}
-	if person.Died.Valid {
-		view.Died = &person.Died.String
-	}
-	if detail.Biography != "" {
-		view.Biography = &detail.Biography
-	}
-	// Unconditional, unlike the optional fields above: aliases is a required
-	// array in the OpenAPI schema, so it must serialize as [] rather than
-	// null for a person with none -- a guarded assignment here left the Go
-	// zero value (a nil slice) in place, which encodes as JSON null and
-	// crashed the web UI's own person.aliases.length (live-verified
-	// 2026-09-12: "The 1987" has none, PersonDetail.tsx threw a TypeError).
-	view.Aliases = detail.Aliases
-	return view, nil
+	return values
 }
 
 func (a People) Subscribe(

@@ -57,7 +57,7 @@ func newFollowFixture(t *testing.T, source tv.FollowSource) followFixture {
 	asked := map[int64]bool{}
 	service := tv.Service{
 		Skyhook: fixedSkyhook{skyhookShow()}, TMDB: askedTMDB{fakeTMDB{series: sampleTMDB(), seasons: []tmdb.Season{sampleTMDBSeason()}}, &asked},
-		Series: library.NewSeries(opened), Desired: library.NewDesired(opened), Clock: fake,
+		Series: library.NewSeries(opened), Exclusions: library.NewExclusions(opened), Desired: library.NewDesired(opened), Clock: fake,
 	}
 	people := library.NewPeople(opened)
 	person, err := people.ResolvePerson(t.Context(), addNow, library.PersonLink{Provider: "tmdb", ExternalID: "11", Person: library.PersonIdentity{Name: "A Person"}})

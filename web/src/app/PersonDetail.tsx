@@ -171,8 +171,11 @@ export function PersonDetail() {
   // arriving at a person through one library (Music -> Artists) must not
   // hide their credits in another. Not yet a link into a per-media-type
   // browse view -- there is no such surface to link into today.
-  const mediaTypes = [...new Set(person.discography.map((work) => work.media_type))];
-  const groups = groupDiscography(person.discography);
+  const discography = person.credits
+    .map((credit) => credit.work)
+    .filter((work, index, all) => all.findIndex((other) => other.id === work.id) === index);
+  const mediaTypes = [...new Set(discography.map((work) => work.media_type))];
+  const groups = groupDiscography(discography);
 
   return (
     <div className="h-full overflow-y-auto">

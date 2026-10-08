@@ -247,7 +247,7 @@ func (c SeriesCatalog) Delete(ctx context.Context, categoryID, seriesID int64, d
 		for name, id := range provider {
 			ids = append(ids, library.ExternalIDWrite{Provider: name, ExternalID: id})
 		}
-		if err := c.Service.Series.Exclude(ctx, c.Clock.Now(), summaries[0].Title, ids); err != nil {
+		if err := c.Service.Exclusions.Exclude(ctx, c.Clock.Now(), tv.MediaType, summaries[0].Title, ids); err != nil {
 			return err
 		}
 	}
@@ -256,7 +256,7 @@ func (c SeriesCatalog) Delete(ctx context.Context, categoryID, seriesID int64, d
 
 // Exclusions lists the deleted series that are not added again, one entry per series.
 func (c SeriesCatalog) Exclusions(ctx context.Context) ([]gen.SeriesExclusion, error) {
-	rows, err := c.Service.Series.Exclusions(ctx)
+	rows, err := c.Service.Exclusions.List(ctx, tv.MediaType)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +277,7 @@ func (c SeriesCatalog) Exclusions(ctx context.Context) ([]gen.SeriesExclusion, e
 
 // RemoveExclusion allows the series the id belongs to again, by every id it was excluded by.
 func (c SeriesCatalog) RemoveExclusion(ctx context.Context, provider, externalID string) error {
-	rows, err := c.Service.Series.Exclusions(ctx)
+	rows, err := c.Service.Exclusions.List(ctx, tv.MediaType)
 	if err != nil {
 		return err
 	}
@@ -291,7 +291,7 @@ func (c SeriesCatalog) RemoveExclusion(ctx context.Context, provider, externalID
 			}
 		}
 	}
-	return c.Service.Series.Unexclude(ctx, ids)
+	return c.Service.Exclusions.Unexclude(ctx, ids)
 }
 
 // ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.

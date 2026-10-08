@@ -9,6 +9,7 @@ import (
 func TestADeletedSeriesIsGoneWithItsPartsAndCanBeExcluded(t *testing.T) {
 	opened, _ := newLibrary(t)
 	series := library.NewSeries(opened)
+	exclusions := library.NewExclusions(opened)
 	result, err := series.Upsert(t.Context(), seriesAt, creditedSeries())
 	if err != nil {
 		t.Fatal(err)
@@ -17,10 +18,10 @@ func TestADeletedSeriesIsGoneWithItsPartsAndCanBeExcluded(t *testing.T) {
 		t.Fatal(err)
 	}
 	ids := []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "1234"}, {Provider: "tvmaze", ExternalID: "42"}}
-	if excluded, err := series.Excluded(t.Context(), ids); err != nil || excluded {
+	if excluded, err := exclusions.Excluded(t.Context(), ids); err != nil || excluded {
 		t.Fatalf("excluded before = %v, err = %v", excluded, err)
 	}
-	if err := series.Exclude(t.Context(), seriesAt, "Example Show", ids); err != nil {
+	if err := exclusions.Exclude(t.Context(), seriesAt, "tv", "Example Show", ids); err != nil {
 		t.Fatal(err)
 	}
 	if err := series.DeleteSeries(t.Context(), result.WorkID); err != nil {
@@ -34,17 +35,17 @@ func TestADeletedSeriesIsGoneWithItsPartsAndCanBeExcluded(t *testing.T) {
 	if err := row.Scan(&works, &parts, &items); err != nil || works != 0 || parts != 0 || items != 0 {
 		t.Errorf("works = %d, parts = %d, items = %d, err = %v; want nothing left", works, parts, items, err)
 	}
-	if excluded, _ := series.Excluded(t.Context(), []library.ExternalIDWrite{{Provider: "tvmaze", ExternalID: "42"}}); !excluded {
+	if excluded, _ := exclusions.Excluded(t.Context(), []library.ExternalIDWrite{{Provider: "tvmaze", ExternalID: "42"}}); !excluded {
 		t.Error("the series is excluded by any one of its ids")
 	}
-	list, err := series.Exclusions(t.Context())
+	list, err := exclusions.List(t.Context(), "tv")
 	if err != nil || len(list) != 2 || list[0].Title != "Example Show" {
 		t.Errorf("exclusions = %+v, err = %v", list, err)
 	}
-	if err := series.Unexclude(t.Context(), ids); err != nil {
+	if err := exclusions.Unexclude(t.Context(), ids); err != nil {
 		t.Fatal(err)
 	}
-	if excluded, _ := series.Excluded(t.Context(), ids); excluded {
+	if excluded, _ := exclusions.Excluded(t.Context(), ids); excluded {
 		t.Error("still excluded after unexclude")
 	}
 }

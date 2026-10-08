@@ -736,7 +736,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		FS:         p.fsys,
 		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),
 		ConfigPath: p.configPath,
-		People:     adapters.People{People: library.NewPeople(p.library)},
+		People:     adapters.People{People: library.NewPeople(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys},
 		Series:     p.seriesCatalog(),
 		Seasons:    p.seasonSearch(),
 		ArtistActions: adapters.ArtistActions{

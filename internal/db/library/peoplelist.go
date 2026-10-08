@@ -3,210 +3,319 @@ package library
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
-	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
-// personColumns is the sqlc model's field order, which the scan below depends
-// on (documentation/sql-and-sqlc.md), same discipline as workColumns.
-const personColumns = `id, name, sort_name, disambiguation, kind, gender, country,
-       born, died, fields_json, monitored, added_at`
-
-// personCoverageColumns are the counts the availability bar under an
-// artist's picture is drawn from (2026-09-19): how many of the albums
-// credited to them are wanted, how many of those are complete, and whether
-// anything of theirs is downloading right now. Albums only: a track's own SINGLE item is not an
-// album. Correlated subqueries for workStateColumn's reason -- a join would multiply the row.
-const personCoverageColumns = `CAST((SELECT COUNT(*) FROM credit c
-      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1 AND di.satisfaction_kind = 'SET'
-      WHERE c.person_id = person.id) AS INTEGER) AS albums_wanted,
-   CAST((SELECT COUNT(*) FROM credit c
-      JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1 AND di.satisfaction_kind = 'SET'
-      WHERE c.person_id = person.id AND di.state IN ('COMPLETE', 'UPGRADABLE')) AS INTEGER) AS albums_complete,
-   EXISTS (SELECT 1 FROM credit c
-      JOIN desired_item di ON di.work_id = c.work_id
-      JOIN acquisition a ON a.desired_item_id = di.id
-      WHERE c.person_id = person.id
-        AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')) AS downloading`
-
-// PersonListRow is one person plus that coverage.
-type PersonListRow struct {
-	librarydb.Person
-	AlbumsWanted   int64
-	AlbumsComplete int64
-	Downloading    bool
+// PersonFields are the fields a custom filter of a people list may name, role among the given ones.
+func PersonFields(roles []string) map[string]listfilter.Field {
+	return map[string]listfilter.Field{
+		"name":      {Kind: listfilter.Text},
+		"country":   {Kind: listfilter.Text},
+		"monitored": {Kind: listfilter.Bool},
+		"photo":     {Kind: listfilter.Bool},
+		"works":     {Kind: listfilter.Number},
+		"wanted":    {Kind: listfilter.Number},
+		"complete":  {Kind: listfilter.Number},
+		"role":      {Kind: listfilter.Enum, Choices: roles},
+	}
 }
 
-// PersonFilter is what the people list can narrow on. A zero field is not a
-// filter (WorkFilter's own convention).
-type PersonFilter struct {
-	Monitored *bool
-	// NamePrefix matches the start of the sort name, same range-scan reasoning
-	// as WorkFilter.TitlePrefix.
+// People sort keys.
+const (
+	PeopleByName   = "name"
+	PeopleByWorks  = "works"
+	PeopleByLatest = "latest"
+	PeopleByAdded  = "added"
+)
+
+// PeopleFilter is what the one people list narrows on, for every media type and for all libraries at once.
+type PeopleFilter struct {
+	// Visible are the libraries the viewer may read; nil is everyone, for a caller with no viewer.
+	Visible []int64
+	// Category narrows to one library; 0 is every visible one.
+	Category int64
+	// Roles narrow to people credited in any of them; empty is any role.
+	Roles      []string
+	Monitored  *bool
 	NamePrefix string
-	// Role restricts to persons credited with exactly this role on a work
-	// visible via RootFolderIDs/CategoryIDs (ADR-54's Artists level: role
-	// "artist"). Empty means unfiltered -- the existing /people list's own
-	// shape, kept working unchanged; the two visibility fields are then
-	// ignored too.
-	Role          string
-	RootFolderIDs []int64
-	CategoryIDs   []int64
-	// Descending lists Z to A: a table header clicked twice (2026-09-25).
-	Descending bool
-	// Where are the conditions of a custom filter, all of which must hold.
-	Where []listfilter.Condition
-	// Visible restricts to people the viewer may know of; nil is everyone, for a caller that has no viewer.
-	Visible *Visibility
+	Where      []listfilter.Condition
+	Sort       string
+	Desc       bool
 }
 
-// Visibility is what a viewer may see: the libraries they hold read access in, and those libraries' root folders.
-// Empty, non-nil slices see nothing.
-type Visibility struct {
-	RootFolderIDs []int64
-	CategoryIDs   []int64
+// PeopleCursor is a position in the list: the sort value (the name, or a number) and the id that breaks ties.
+type PeopleCursor struct {
+	Name  string
+	Value int64
+	ID    int64
+	// Set is false for the first page.
+	Set bool
 }
 
-// addVisiblePerson keeps a person who is credited on a work the viewer may see, or whom a visible library follows.
-// A person known only through hidden libraries does not exist for this viewer (ADR-27: hidden is 404, never 403).
-func addVisiblePerson(predicates *store.Predicates, visible *Visibility) {
-	if visible == nil {
-		return
-	}
-	clause, arguments := visiblePersonClause("person.id", *visible)
-	predicates.Add(clause, arguments...)
+// PersonEntry is one person of the list with what they did in the libraries it covers.
+type PersonEntry struct {
+	ID             int64
+	Name           string
+	SortName       string
+	Disambiguation string
+	Kind           string
+	Country        string
+	Born           string
+	Died           string
+	ImageURL       string
+	Monitored      bool
+	AddedAt        int64
+	Roles          []string
+	Works          int64
+	Latest         int64
+	// Character is the first part they played there, for a card's subtitle.
+	Character string
+	// Wanted and Complete count their monitored works there and the complete ones; Downloading is one in flight.
+	Wanted      int64
+	Complete    int64
+	Downloading bool
 }
 
-// visiblePersonClause is addVisiblePerson's condition over any expression naming the person.
-func visiblePersonClause(personIDExpr string, visible Visibility) (string, []any) {
-	roots, categories := visible.RootFolderIDs, visible.CategoryIDs
-	if roots == nil {
-		roots = []int64{}
+// sqlPart is a fragment of SQL with its positional arguments.
+type sqlPart struct {
+	sql  string
+	args []any
+}
+
+// peopleScope is the libraries a people list covers: the visible ones, narrowed to one when asked; nil is every one.
+func peopleScope(filter PeopleFilter) []int64 {
+	if filter.Category == 0 {
+		return filter.Visible
 	}
-	if categories == nil {
-		categories = []int64{}
+	if filter.Visible != nil && !slices.Contains(filter.Visible, filter.Category) {
+		return []int64{}
 	}
-	fragment, arguments, _ := visibilityFragment("c.work_id", roots, categories)
-	clause := "EXISTS (SELECT 1 FROM credit c WHERE c.person_id = " + personIDExpr + " AND " + fragment + ")"
-	if len(categories) > 0 {
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(categories)), ",")
-		clause = "(" + clause + " OR EXISTS (SELECT 1 FROM subscription s WHERE s.subject_type = 'person'" +
-			" AND s.subject_id = " + personIDExpr + " AND s.enabled = 1 AND s.category_id IN (" + placeholders + ")))"
-		for _, id := range categories {
-			arguments = append(arguments, id)
+	return []int64{filter.Category}
+}
+
+// inScope renders "column IN (scope)", nothing for every library, and a false condition for none.
+func inScope(column string, scope []int64) sqlPart {
+	fragment, arguments, applies := membershipFragment(column+" IN (%s)", scope)
+	if !applies {
+		return sqlPart{sql: "1 = 1"}
+	}
+	return sqlPart{sql: fragment, args: arguments}
+}
+
+func placeholders(values []string) (string, []any) {
+	arguments := make([]any, len(values))
+	for i, value := range values {
+		arguments[i] = value
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", len(values)), ","), arguments
+}
+
+// rollupRoles narrows person_library rows to the asked roles, or to the any-role row.
+func rollupRoles(alias string, roles []string) sqlPart {
+	if len(roles) == 0 {
+		return sqlPart{sql: alias + ".role = ''"}
+	}
+	marks, arguments := placeholders(roles)
+	return sqlPart{sql: alias + ".role IN (" + marks + ")", args: arguments}
+}
+
+// peopleQuery holds the expressions every part of the list is built from.
+type peopleQuery struct {
+	scope  []int64
+	roles  []string
+	member sqlPart
+	works  sqlPart
+	latest sqlPart
+}
+
+func newPeopleQuery(filter PeopleFilter) peopleQuery {
+	scope := peopleScope(filter)
+	category := inScope("pl.category_id", scope)
+	roles := rollupRoles("pl", filter.Roles)
+	member := sqlPart{
+		sql:  "EXISTS (SELECT 1 FROM person_library pl WHERE pl.person_id = p.id AND " + roles.sql + " AND " + category.sql + ")",
+		args: append(slices.Clone(roles.args), category.args...),
+	}
+	// Someone followed into a library belongs there before any work credits them.
+	followed := inScope("s.category_id", scope)
+	member.sql = "(" + member.sql + " OR (p.monitored = 1 AND EXISTS (SELECT 1 FROM subscription s WHERE s.subject_type = 'person'" +
+		" AND s.subject_id = p.id AND s.enabled = 1 AND " + followed.sql + ")))"
+	member.args = append(member.args, followed.args...)
+	rows := " FROM person_library pl WHERE pl.person_id = p.id AND " + roles.sql + " AND " + category.sql
+	rowArgs := append(slices.Clone(roles.args), category.args...)
+	query := peopleQuery{
+		scope: scope, roles: filter.Roles, member: member,
+		works:  sqlPart{sql: "CAST(COALESCE((SELECT SUM(pl.works)" + rows + "), 0) AS INTEGER)", args: rowArgs},
+		latest: sqlPart{sql: "CAST(COALESCE((SELECT MAX(pl.latest)" + rows + "), 0) AS INTEGER)", args: rowArgs},
+	}
+	if len(filter.Roles) > 1 {
+		// A person in two of the asked roles on one work counts it once.
+		marks, roleArgs := placeholders(filter.Roles)
+		wanted := inScope("d.category_id", scope)
+		query.works = sqlPart{
+			sql: "CAST((SELECT COUNT(DISTINCT c.work_id) FROM credit c WHERE c.person_id = p.id AND c.role IN (" + marks + ")" +
+				" AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = c.work_id AND " + wanted.sql + ")) AS INTEGER)",
+			args: append(roleArgs, wanted.args...),
 		}
 	}
-	return clause, arguments
+	return query
 }
 
-// PersonCursor is a position in the people list: sort name, plus the id to
-// break ties (WorkCursor's own reasoning).
-type PersonCursor struct {
-	SortName string
-	ID       int64
+// coverage counts the person's wanted works in scope and the complete ones, from their monitored SET items.
+func (q peopleQuery) coverage(complete bool) sqlPart {
+	scope := inScope("di.category_id", q.scope)
+	state := ""
+	if complete {
+		state = " AND di.state IN ('COMPLETE', 'UPGRADABLE')"
+	}
+	return sqlPart{
+		sql: "CAST((SELECT COUNT(DISTINCT di.work_id) FROM credit c JOIN desired_item di ON di.work_id = c.work_id AND di.monitored = 1" +
+			" AND di.satisfaction_kind = 'SET' AND " + scope.sql + " WHERE c.person_id = p.id" + state + ") AS INTEGER)",
+		args: scope.args,
+	}
 }
 
-// composePeopleList mirrors composeList (works.go): assembled rather than
-// static SQL, so an optional predicate does not cost the sort_name index.
-func composePeopleList(filter PersonFilter, after PersonCursor, pageSize int) (string, []any) {
+func (q peopleQuery) inScopeCredit(alias string) sqlPart {
+	scope := inScope("d.category_id", q.scope)
+	return sqlPart{sql: "EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = " + alias + ".work_id AND " + scope.sql + ")", args: scope.args}
+}
+
+// condition is one custom-filter condition as a predicate over the person p.
+func (q peopleQuery) condition(condition listfilter.Condition) sqlPart {
+	switch condition.Field {
+	case "name":
+		fragment, arguments := condition.SQL(listfilter.Text, "p.name")
+		return sqlPart{fragment, arguments}
+	case "country":
+		fragment, arguments := condition.SQL(listfilter.Text, "COALESCE(p.country, '')")
+		return sqlPart{fragment, arguments}
+	case "monitored":
+		fragment, arguments := condition.SQL(listfilter.Bool, "p.monitored = 1")
+		return sqlPart{fragment, arguments}
+	case "photo":
+		fragment, arguments := condition.SQL(listfilter.Bool,
+			"(COALESCE(json_extract(p.fields_json, '$.image_url'), '') <> '' OR EXISTS (SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id))")
+		return sqlPart{fragment, arguments}
+	case "works", "wanted", "complete":
+		expression := q.works
+		if condition.Field != "works" {
+			expression = q.coverage(condition.Field == "complete")
+		}
+		fragment, arguments := condition.SQL(listfilter.Number, expression.sql)
+		return sqlPart{fragment, append(slices.Clone(expression.args), arguments...)}
+	default:
+		scope := inScope("pl.category_id", q.scope)
+		holds := "EXISTS (SELECT 1 FROM person_library pl WHERE pl.person_id = p.id AND pl.role = ? AND " + scope.sql + ")"
+		if condition.Op == "is_not" {
+			holds = "NOT " + holds
+		}
+		return sqlPart{holds, append([]any{condition.Value}, scope.args...)}
+	}
+}
+
+// composePeople assembles one page: driven by person's own sort-name index, each row checked against the rollup.
+func composePeople(filter PeopleFilter, after PeopleCursor, pageSize int) (string, []any) {
+	query := newPeopleQuery(filter)
 	var predicates store.Predicates
+	predicates.AddIf(filter.Visible != nil || filter.Category != 0 || len(filter.Roles) > 0, query.member.sql, query.member.args...)
 	if filter.Monitored != nil {
-		monitored := int64(0)
-		if *filter.Monitored {
-			monitored = 1
-		}
-		predicates.Add("monitored = ?", monitored)
+		predicates.Add("p.monitored = ?", boolInt(*filter.Monitored))
 	}
-	addNamePrefix(&predicates, filter.NamePrefix)
-	addArtistCredit(&predicates, filter.Role, filter.RootFolderIDs, filter.CategoryIDs)
-	addVisiblePerson(&predicates, filter.Visible)
-	addArtistConditions(&predicates, filter.Where)
-	operator, direction := ">", ""
-	if filter.Descending {
-		operator, direction = "<", " DESC"
-	}
-	predicates.AddIf(after.SortName != "" || after.ID != 0,
-		"(sort_name COLLATE NOCASE "+operator+" ? OR (sort_name COLLATE NOCASE = ? AND id "+operator+" ?))",
-		after.SortName, after.SortName, after.ID)
-
-	query := "SELECT " + personColumns + ",\n       " + personCoverageColumns +
-		"\nFROM person" + predicates.Where() +
-		"\nORDER BY sort_name COLLATE NOCASE" + direction + ", id" + direction + "\nLIMIT ?"
-	return query, predicates.Args(pageSize)
-}
-
-// addArtistCredit restricts to persons credited role on a work visible via
-// root folder or category (ADR-27), for ADR-54's Artists level. A correlated
-// EXISTS, the same reasoning addVisibility's own doc comment gives: SQLite
-// must be able to drive the outer scan from person's own sort_name index
-// (person_sort) without a subquery derailing that (see notes.md).
-func addArtistCredit(predicates *store.Predicates, role string, rootFolderIDs, categoryIDs []int64) {
-	if role == "" {
-		return
-	}
-	clause := "EXISTS (SELECT 1 FROM credit c JOIN work w ON w.id = c.work_id" +
-		" WHERE c.person_id = person.id AND c.role = ?"
-	arguments := []any{role}
-	if fragment, visibilityArgs, applies := visibilityFragment("w.id", rootFolderIDs, categoryIDs); applies {
-		clause += " AND " + fragment
-		arguments = append(arguments, visibilityArgs...)
-	}
-	clause += ")"
-	// A person monitored in one of these libraries belongs here before any work credits them.
-	if len(categoryIDs) > 0 {
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(categoryIDs)), ",")
-		clause = "(" + clause + " OR (person.monitored = 1 AND EXISTS (SELECT 1 FROM subscription s" +
-			" WHERE s.subject_type = 'person' AND s.subject_id = person.id AND s.enabled = 1" +
-			" AND s.category_id IN (" + placeholders + "))))"
-		for _, id := range categoryIDs {
-			arguments = append(arguments, id)
+	if filter.NamePrefix != "" {
+		upper, bounded := prefixUpperBound(filter.NamePrefix)
+		if bounded {
+			predicates.Add("(p.sort_name COLLATE NOCASE >= ? AND p.sort_name COLLATE NOCASE < ?)", filter.NamePrefix, upper)
+		} else {
+			predicates.Add("p.sort_name COLLATE NOCASE >= ?", filter.NamePrefix)
 		}
 	}
-	predicates.Add(clause, arguments...)
+	for _, condition := range filter.Where {
+		part := query.condition(condition)
+		predicates.Add(part.sql, part.args...)
+	}
+
+	direction, compare := "", ">"
+	if filter.Desc {
+		direction, compare = " DESC", "<"
+	}
+	var key sqlPart
+	switch filter.Sort {
+	case PeopleByWorks:
+		key = query.works
+	case PeopleByLatest:
+		key = query.latest
+	case PeopleByAdded:
+		key = sqlPart{sql: "p.added_at"}
+	default:
+		key = sqlPart{sql: "p.sort_name COLLATE NOCASE"}
+	}
+	order := key.sql + direction + ", p.id" + direction
+	if after.Set {
+		var value any = after.Value
+		if key.sql == "p.sort_name COLLATE NOCASE" {
+			value = after.Name
+		}
+		predicates.Add("("+key.sql+" "+compare+" ? OR ("+key.sql+" = ? AND p.id "+compare+" ?))",
+			append(append(append(append(slices.Clone(key.args), value), key.args...), value), after.ID)...)
+	}
+
+	roleScope := inScope("pl.category_id", query.scope)
+	character := query.inScopeCredit("c")
+	wanted, complete := query.coverage(false), query.coverage(true)
+	downloadScope := inScope("di.category_id", query.scope)
+	columns := []sqlPart{
+		{sql: "p.id, p.name, p.sort_name, COALESCE(p.disambiguation, ''), COALESCE(p.kind, ''), COALESCE(p.country, ''), " +
+			"COALESCE(p.born, ''), COALESCE(p.died, ''), COALESCE(json_extract(p.fields_json, '$.image_url'), ''), p.monitored, p.added_at"},
+		{sql: "COALESCE((SELECT GROUP_CONCAT(DISTINCT pl.role) FROM person_library pl WHERE pl.person_id = p.id AND pl.role <> '' AND " +
+			roleScope.sql + "), '')", args: roleScope.args},
+		query.works,
+		query.latest,
+		{sql: "COALESCE((SELECT c.character FROM credit c WHERE c.person_id = p.id AND c.character <> '' AND " + character.sql +
+			" ORDER BY c.ord LIMIT 1), '')", args: character.args},
+		wanted,
+		complete,
+		{sql: "EXISTS (SELECT 1 FROM credit c JOIN desired_item di ON di.work_id = c.work_id AND " + downloadScope.sql +
+			" JOIN acquisition a ON a.desired_item_id = di.id WHERE c.person_id = p.id" +
+			" AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED'))", args: downloadScope.args},
+	}
+	var selectList []string
+	var arguments []any
+	for _, column := range columns {
+		selectList = append(selectList, column.sql)
+		arguments = append(arguments, column.args...)
+	}
+	sql := "SELECT " + strings.Join(selectList, ",\n       ") + "\nFROM person p" + predicates.Where() +
+		"\nORDER BY " + order + "\nLIMIT ?"
+	return sql, append(arguments, predicates.Args(pageSize)...)
 }
 
-// addNamePrefix is addPrefix (works.go), over sort_name instead of sort_title
-// -- kept separate rather than shared since the two filter different tables
-// and a generic version would need to thread the column name through anyway.
-func addNamePrefix(predicates *store.Predicates, prefix string) {
-	if prefix == "" {
-		return
-	}
-	upper, bounded := prefixUpperBound(prefix)
-	if !bounded {
-		predicates.Add("sort_name COLLATE NOCASE >= ?", prefix)
-		return
-	}
-	predicates.Add("(sort_name COLLATE NOCASE >= ? AND sort_name COLLATE NOCASE < ?)", prefix, upper)
-}
-
-// ListPeople returns one page of the people list. Filtering by media type
-// (named in architecture.md's own GET /people sketch) needs a join this pass
-// does not build -- real scope of its own, left for when a caller actually
-// needs it (generalise from evidence, not anticipation).
-func (p People) ListPeople(ctx context.Context, filter PersonFilter, after PersonCursor, pageSize int) ([]PersonListRow, error) {
-	query, arguments := composePeopleList(filter, after, pageSize)
-
+// List answers one page of people: of one library, or of every library the viewer may see.
+func (p People) List(ctx context.Context, filter PeopleFilter, after PeopleCursor, pageSize int) ([]PersonEntry, error) {
+	query, arguments := composePeople(filter, after, pageSize)
 	rows, err := p.store.Read().QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return nil, fmt.Errorf("library: list people: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-
-	var people []PersonListRow
+	var people []PersonEntry
 	for rows.Next() {
-		var row PersonListRow
-		person := &row.Person
-		if err := rows.Scan(&person.ID, &person.Name, &person.SortName, &person.Disambiguation,
-			&person.Kind, &person.Gender, &person.Country, &person.Born, &person.Died,
-			&person.FieldsJson, &person.Monitored, &person.AddedAt,
-			&row.AlbumsWanted, &row.AlbumsComplete, &row.Downloading); err != nil {
+		var entry PersonEntry
+		var monitored int64
+		var roles string
+		if err := rows.Scan(&entry.ID, &entry.Name, &entry.SortName, &entry.Disambiguation, &entry.Kind, &entry.Country, &entry.Born, &entry.Died, &entry.ImageURL, &monitored, &entry.AddedAt,
+			&roles, &entry.Works, &entry.Latest, &entry.Character, &entry.Wanted, &entry.Complete, &entry.Downloading); err != nil {
 			return nil, fmt.Errorf("library: scan person: %w", err)
 		}
-		people = append(people, row)
+		entry.Monitored = monitored == 1
+		if roles != "" {
+			entry.Roles = strings.Split(roles, ",")
+			slices.Sort(entry.Roles)
+		}
+		people = append(people, entry)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("library: list people: %w", err)
@@ -214,10 +323,23 @@ func (p People) ListPeople(ctx context.Context, filter PersonFilter, after Perso
 	return people, nil
 }
 
-// ExplainPeopleList returns SQLite's plan for the query ListPeople would run
-// (Works.ExplainList's own reasoning: a test can assert the plan reaches an
-// index instead of only that it returns the right rows).
-func (p People) ExplainPeopleList(ctx context.Context, filter PersonFilter, after PersonCursor, pageSize int) (string, error) {
-	query, arguments := composePeopleList(filter, after, pageSize)
+// ExplainList answers SQLite's plan for the query List would run, so a test can assert it reaches an index.
+func (p People) ExplainList(ctx context.Context, filter PeopleFilter, after PeopleCursor, pageSize int) (string, error) {
+	query, arguments := composePeople(filter, after, pageSize)
 	return p.store.ExplainQueryPlan(ctx, query, arguments...)
+}
+
+// visiblePerson is the rule a person exists by for a viewer: a library they may read credits or follows them.
+func visiblePerson(personIDExpr string, visible []int64) sqlPart {
+	if visible == nil {
+		return sqlPart{sql: "1 = 1"}
+	}
+	member := inScope("pl.category_id", visible)
+	followed := inScope("s.category_id", visible)
+	return sqlPart{
+		sql: "(EXISTS (SELECT 1 FROM person_library pl WHERE pl.person_id = " + personIDExpr + " AND " + member.sql + ")" +
+			" OR EXISTS (SELECT 1 FROM subscription s WHERE s.subject_type = 'person' AND s.subject_id = " + personIDExpr +
+			" AND s.enabled = 1 AND " + followed.sql + "))",
+		args: append(slices.Clone(member.args), followed.args...),
+	}
 }

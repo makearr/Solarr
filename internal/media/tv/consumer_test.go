@@ -64,7 +64,7 @@ func newConsumerIn(t *testing.T, sky tv.SeriesSource, policy scanCategories) (tv
 	if err := fsys.MkdirAll(scanRoot, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	service := tv.Service{Skyhook: sky, TVmaze: fakeTVmaze{err: tvmaze.ErrNotFound}, Series: library.NewSeries(opened), Desired: library.NewDesired(opened), Clock: fake}
+	service := tv.Service{Skyhook: sky, TVmaze: fakeTVmaze{err: tvmaze.ErrNotFound}, Series: library.NewSeries(opened), Exclusions: library.NewExclusions(opened), Desired: library.NewDesired(opened), Clock: fake}
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Unidentified: library.NewUnidentified(opened), Service: service,
 		Reader: library.NewSeriesReader(opened), Clock: fake, DefaultProfileID: 1, Categories: policy,
@@ -151,7 +151,7 @@ func TestScanMonitorsWhatTheLibraryAsksFor(t *testing.T) {
 
 func TestAnExcludedSeriesIsNeitherAddedNorQueued(t *testing.T) {
 	consumer, opened, fsys := newConsumer(t, searchSkyhook{series: fixtureSkyhook()})
-	if err := library.NewSeries(opened).Exclude(t.Context(), addNow, "Example Show", []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "1234"}}); err != nil {
+	if err := library.NewExclusions(opened).Exclude(t.Context(), addNow, "tv", "Example Show", []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "1234"}}); err != nil {
 		t.Fatal(err)
 	}
 	batch := []scan.Observed{writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv")}

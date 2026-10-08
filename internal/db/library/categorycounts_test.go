@@ -303,8 +303,8 @@ func TestArtists_AMonitoredArtistBelongsToTheirLibraryAtOnce(t *testing.T) {
 	}
 
 	for categoryID, want := range map[int64]int{1: 1, 2: 0} {
-		page, err := people.ListPeople(t.Context(),
-			library.PersonFilter{Role: "artist", CategoryIDs: []int64{categoryID}}, library.PersonCursor{}, 10)
+		page, err := people.List(t.Context(),
+			library.PeopleFilter{Roles: []string{"artist"}, Category: categoryID}, library.PeopleCursor{}, 10)
 		if err != nil {
 			t.Fatal(err)
 		}

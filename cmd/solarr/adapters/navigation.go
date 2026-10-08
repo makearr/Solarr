@@ -1,6 +1,8 @@
 package adapters
 
 import (
+	"slices"
+
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -22,6 +24,19 @@ func (m MediaTypes) LevelsFor(mediaType string) ([]model.Level, bool) {
 
 // Known implements apiserver.MediaTypeCatalog.
 func (m MediaTypes) Known(mediaType string) bool { return m.Registry.Known(media.Key(mediaType)) }
+
+// RoleKeys lists every credit role a registered media type declares, once each.
+func (m MediaTypes) RoleKeys() []string {
+	var keys []string
+	for _, descriptor := range m.Registry.Descriptors() {
+		for _, role := range descriptor.Roles {
+			if !slices.Contains(keys, role.Key) {
+				keys = append(keys, role.Key)
+			}
+		}
+	}
+	return keys
+}
 
 // List implements apiserver.MediaTypeCatalog.
 func (m MediaTypes) List() []apiserver.MediaTypeInfo {

@@ -32,7 +32,7 @@ func TestListPeople_OrdersBySortNameThenID(t *testing.T) {
 	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
 	resolvePersonNamed(t, people, "artist-3", "AVEX")
 
-	got, err := people.ListPeople(t.Context(), library.PersonFilter{}, library.PersonCursor{}, 50)
+	got, err := people.List(t.Context(), library.PeopleFilter{}, library.PeopleCursor{}, 50)
 	if err != nil {
 		t.Fatalf("ListPeople: %v", err)
 	}
@@ -57,9 +57,9 @@ func TestListPeople_OrderIgnoresCase(t *testing.T) {
 
 	for _, descending := range []bool{false, true} {
 		var got []string
-		var after library.PersonCursor
+		var after library.PeopleCursor
 		for {
-			page, err := people.ListPeople(t.Context(), library.PersonFilter{Descending: descending}, after, 2)
+			page, err := people.List(t.Context(), library.PeopleFilter{Desc: descending}, after, 2)
 			if err != nil {
 				t.Fatalf("ListPeople: %v", err)
 			}
@@ -70,7 +70,7 @@ func TestListPeople_OrderIgnoresCase(t *testing.T) {
 				got = append(got, person.SortName)
 			}
 			last := page[len(page)-1]
-			after = library.PersonCursor{SortName: last.SortName, ID: last.ID}
+			after = library.PeopleCursor{Name: last.SortName, ID: last.ID, Set: true}
 		}
 		want := []string{"avex", "bokaru", "BOKARU", "Ubra", "Vutu Doci"}
 		if descending {
@@ -82,50 +82,35 @@ func TestListPeople_OrderIgnoresCase(t *testing.T) {
 	}
 }
 
-// ADR-54's Artists level: only persons credited role="artist" on a work
-// visible to the category appear, and a person credited only in a role that
-// isn't "artist" (a producer, say) never does.
-func TestListPeople_RoleAndVisibilityFilterNarrowsToArtistsInTheCategory(t *testing.T) {
+// ADR-54's Artists level: only persons credited role="artist" on a work the
+// library wants appear, and a person credited only in another role (a
+// producer, say) never does.
+func TestListPeople_RoleAndLibraryNarrowToArtistsOfTheLibrary(t *testing.T) {
 	opened, _ := newLibrary(t)
-	identity := library.NewIdentity(opened)
 	people := library.NewPeople(opened)
-
-	visibleWork, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
-		Provider: "test", ExternalID: "a", Confidence: 1,
-		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "A", SortTitle: "a"}, RootFolderID: 1,
-	}})
-	if err != nil {
-		t.Fatalf("ResolveWorks (visible): %v", err)
-	}
-	otherRootWork, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
-		Provider: "test", ExternalID: "b", Confidence: 1,
-		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "B", SortTitle: "b"}, RootFolderID: 2,
-	}})
-	if err != nil {
-		t.Fatalf("ResolveWorks (other root): %v", err)
-	}
+	inLibrary := createWork(t, opened, "music", "A")
+	elsewhere := createWork(t, opened, "music", "B")
+	createDesiredInCategory(t, opened, inLibrary.ID, 1)
+	createDesiredInCategory(t, opened, elsewhere.ID, 2)
 
 	artistInCategory := resolvePersonNamed(t, people, "artist-in", "In Category")
 	artistElsewhere := resolvePersonNamed(t, people, "artist-out", "Out Of Category")
 	producerOnly := resolvePersonNamed(t, people, "producer-only", "Producer Only")
-
-	if err := people.AddCredit(t.Context(), visibleWork[0], artistInCategory, "artist", 0); err != nil {
-		t.Fatalf("AddCredit (in category): %v", err)
-	}
-	if err := people.AddCredit(t.Context(), otherRootWork[0], artistElsewhere, "artist", 0); err != nil {
-		t.Fatalf("AddCredit (other root): %v", err)
-	}
-	if err := people.AddCredit(t.Context(), visibleWork[0], producerOnly, "producer", 0); err != nil {
-		t.Fatalf("AddCredit (producer): %v", err)
+	for _, credit := range []struct {
+		work, person int64
+		role         string
+	}{{inLibrary.ID, artistInCategory, "artist"}, {elsewhere.ID, artistElsewhere, "artist"}, {inLibrary.ID, producerOnly, "producer"}} {
+		if err := people.AddCredit(t.Context(), credit.work, credit.person, credit.role, 0); err != nil {
+			t.Fatalf("AddCredit: %v", err)
+		}
 	}
 
-	got, err := people.ListPeople(t.Context(),
-		library.PersonFilter{Role: "artist", RootFolderIDs: []int64{1}}, library.PersonCursor{}, 50)
+	got, err := people.List(t.Context(), library.PeopleFilter{Roles: []string{"artist"}, Category: 1}, library.PeopleCursor{}, 50)
 	if err != nil {
-		t.Fatalf("ListPeople: %v", err)
+		t.Fatalf("List: %v", err)
 	}
-	if len(got) != 1 || got[0].ID != artistInCategory {
-		t.Errorf("ListPeople = %+v, want exactly the one artist credited in the visible root", got)
+	if len(got) != 1 || got[0].ID != artistInCategory || got[0].Works != 1 || !slices.Equal(got[0].Roles, []string{"artist"}) {
+		t.Errorf("List = %+v, want exactly the one artist of library 1, with one work", got)
 	}
 }
 
@@ -138,10 +123,10 @@ func TestListPeople_ArtistFilterPlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 
-	plan, err := people.ExplainPeopleList(t.Context(),
-		library.PersonFilter{Role: "artist", RootFolderIDs: []int64{1}}, library.PersonCursor{}, 50)
+	plan, err := people.ExplainList(t.Context(),
+		library.PeopleFilter{Roles: []string{"artist"}, Category: 1, Visible: []int64{1, 2}}, library.PeopleCursor{}, 50)
 	if err != nil {
-		t.Fatalf("ExplainPeopleList: %v", err)
+		t.Fatalf("ExplainList: %v", err)
 	}
 	if !strings.Contains(plan, "person_sort") {
 		t.Errorf("plan does not reach person_sort:\n%s", plan)
@@ -162,7 +147,7 @@ func TestListPeople_MonitoredFilterNarrows(t *testing.T) {
 	}
 
 	monitored := true
-	got, err := people.ListPeople(t.Context(), library.PersonFilter{Monitored: &monitored}, library.PersonCursor{}, 50)
+	got, err := people.List(t.Context(), library.PeopleFilter{Monitored: &monitored}, library.PeopleCursor{}, 50)
 	if err != nil {
 		t.Fatalf("ListPeople: %v", err)
 	}
@@ -178,7 +163,7 @@ func TestListPeople_NamePrefixNarrows(t *testing.T) {
 	resolvePersonNamed(t, people, "artist-1", "Katupoken")
 	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
 
-	got, err := people.ListPeople(t.Context(), library.PersonFilter{NamePrefix: "Kat"}, library.PersonCursor{}, 50)
+	got, err := people.List(t.Context(), library.PeopleFilter{NamePrefix: "Kat"}, library.PeopleCursor{}, 50)
 	if err != nil {
 		t.Fatalf("ListPeople: %v", err)
 	}
@@ -187,7 +172,7 @@ func TestListPeople_NamePrefixNarrows(t *testing.T) {
 	}
 }
 
-func TestPeopleDetail_IncludesAliasesBiographyAndDiscography(t *testing.T) {
+func TestPeopleGet_IncludesAliasesBiographyAndLibraries(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)
 	people := library.NewPeople(opened)
@@ -205,25 +190,27 @@ func TestPeopleDetail_IncludesAliasesBiographyAndDiscography(t *testing.T) {
 		})
 	})
 	workID := newWorkForCredits(t, identity, queries, "rg-detail-1")
+	createDesiredInCategory(t, opened, workID, 3)
 	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
-	detail, err := people.Detail(t.Context(), personID)
+	profile, err := people.Get(t.Context(), personID, []int64{3})
 	if err != nil {
-		t.Fatalf("Detail: %v", err)
+		t.Fatalf("Get: %v", err)
 	}
-	if detail.Person.Name != "Nick Cave" {
-		t.Errorf("Person.Name = %q, want Nick Cave", detail.Person.Name)
+	if profile.Name != "Nick Cave" || profile.Biography != "Australian musician." || profile.IDs["musicbrainz:artist"] != "artist-1" {
+		t.Errorf("profile = %+v, want the name, the decoded biography and the artist id", profile)
 	}
-	if detail.Biography != "Australian musician." {
-		t.Errorf("Biography = %q, want the decoded biography", detail.Biography)
+	if !slices.Equal(profile.Aliases, []string{"Nick Cave and the Bad Seeds"}) {
+		t.Errorf("Aliases = %+v, want the one alias", profile.Aliases)
 	}
-	if len(detail.Aliases) != 1 || detail.Aliases[0] != "Nick Cave and the Bad Seeds" {
-		t.Errorf("Aliases = %+v, want the one alias", detail.Aliases)
+	if want := []library.PersonLibrary{{CategoryID: 3, Role: "artist", Works: 1}}; !slices.Equal(profile.Libraries, want) {
+		t.Errorf("Libraries = %+v, want %+v", profile.Libraries, want)
 	}
-	if len(detail.Discography) != 1 || detail.Discography[0].ID != workID {
-		t.Errorf("Discography = %+v, want the one credited work", detail.Discography)
+	credits, err := people.Credits(t.Context(), personID, []int64{3})
+	if err != nil || len(credits) != 1 || credits[0].ID != workID || credits[0].CategoryID != 3 || credits[0].Role != "artist" {
+		t.Errorf("Credits = %+v, %v; want the one credited work in library 3", credits, err)
 	}
 }
 
@@ -375,9 +362,9 @@ func TestListPeople_DescendingPagesZToA(t *testing.T) {
 	resolvePersonNamed(t, people, "artist-3", "AVEX")
 
 	var got []string
-	var after library.PersonCursor
+	var after library.PeopleCursor
 	for {
-		page, err := people.ListPeople(t.Context(), library.PersonFilter{Descending: true}, after, 1)
+		page, err := people.List(t.Context(), library.PeopleFilter{Desc: true}, after, 1)
 		if err != nil {
 			t.Fatalf("ListPeople: %v", err)
 		}
@@ -385,25 +372,26 @@ func TestListPeople_DescendingPagesZToA(t *testing.T) {
 			break
 		}
 		got = append(got, page[0].SortName)
-		after = library.PersonCursor{SortName: page[0].SortName, ID: page[0].ID}
+		after = library.PeopleCursor{Name: page[0].SortName, ID: page[0].ID, Set: true}
 	}
 	if want := []string{"Vutu Doci", "Katupoken", "AVEX"}; !slices.Equal(got, want) {
 		t.Errorf("order = %q, want %q", got, want)
 	}
 }
 
-// Every field the Artists custom filter offers is valid SQL, and a condition narrows the list.
+// Every field a people custom filter offers is valid SQL, and a condition narrows the list.
 func TestPeopleList_CustomFilterConditions(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	for field, spec := range library.ArtistFields {
-		value := map[listfilter.Kind]string{listfilter.Text: "x", listfilter.Number: "1", listfilter.Bool: "true", listfilter.Enum: "x"}[spec.Kind]
+	fields := library.PersonFields([]string{"artist"})
+	for field, spec := range fields {
+		value := map[listfilter.Kind]string{listfilter.Text: "x", listfilter.Number: "1", listfilter.Bool: "true", listfilter.Enum: "artist"}[spec.Kind]
 		op := map[listfilter.Kind]string{listfilter.Text: "contains", listfilter.Number: "ge", listfilter.Bool: "is", listfilter.Enum: "is"}[spec.Kind]
-		conditions, err := listfilter.Parse(`[{"field":"`+field+`","op":"`+op+`","value":"`+value+`"}]`, library.ArtistFields)
+		conditions, err := listfilter.Parse(`[{"field":"`+field+`","op":"`+op+`","value":"`+value+`"}]`, fields)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := people.ListPeople(t.Context(), library.PersonFilter{Where: conditions}, library.PersonCursor{}, 10); err != nil {
+		if _, err := people.List(t.Context(), library.PeopleFilter{Where: conditions, Category: 1}, library.PeopleCursor{}, 10); err != nil {
 			t.Errorf("field %s: %v", field, err)
 		}
 	}

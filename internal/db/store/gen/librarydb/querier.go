@@ -21,11 +21,11 @@ type Querier interface {
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
 	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
-	AddSeriesExclusion(ctx context.Context, arg AddSeriesExclusionParams) error
 	// The closure is materialised, so inserting a tag inserts its ancestry too.
 	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
 	AddTagSelfClosure(ctx context.Context, arg AddTagSelfClosureParams) error
+	AddWorkExclusion(ctx context.Context, arg AddWorkExclusionParams) error
 	AddWorkOrganisation(ctx context.Context, arg AddWorkOrganisationParams) error
 	AddWorkPartTitle(ctx context.Context, arg AddWorkPartTitleParams) (WorkPartTitle, error)
 	AddWorkTitle(ctx context.Context, arg AddWorkTitleParams) (WorkTitle, error)
@@ -68,6 +68,8 @@ type Querier interface {
 	// must be cleared before that work can be deleted, not only the unit that
 	// created it).
 	ClearImportUnitPlacement(ctx context.Context, id int64) error
+	ClearOrganisationLibrary(ctx context.Context, organisationIds []int64) error
+	ClearPersonLibrary(ctx context.Context, personIds []int64) error
 	// A provider refresh removes only what that provider assigned, never a user's
 	// own curation (ADR-33).
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
@@ -95,6 +97,7 @@ type Querier interface {
 	CountDesiredItemsByCategory(ctx context.Context) ([]CountDesiredItemsByCategoryRow, error)
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error)
+	CountDesiredItemsInCategory(ctx context.Context, arg CountDesiredItemsInCategoryParams) (int64, error)
 	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 	// work_date of kind on or after the cutoff. Distinct since a work can carry
 	// more than one region's own date row for the same kind.
@@ -136,13 +139,13 @@ type Querier interface {
 	CountQueuedOnDownloader(ctx context.Context, downloaderID int64) (int64, error)
 	CountRecycleBin(ctx context.Context) (int64, error)
 	CountRollupOutcomes(ctx context.Context, since int64) ([]CountRollupOutcomesRow, error)
-	CountSeriesExclusion(ctx context.Context, arg CountSeriesExclusionParams) (int64, error)
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
+	CountWorkExclusion(ctx context.Context, arg CountWorkExclusionParams) (int64, error)
 	CountWorkFieldManual(ctx context.Context, arg CountWorkFieldManualParams) (int64, error)
 	// How many files the library actually holds for one work. Removing an album
 	// deletes the work row only when this is zero: with files on disk the work
@@ -230,7 +233,6 @@ type Querier interface {
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
-	DeleteSeriesExclusion(ctx context.Context, arg DeleteSeriesExclusionParams) error
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
@@ -242,6 +244,7 @@ type Querier interface {
 	// The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
 	DeleteUserTag(ctx context.Context, id int64) (int64, error)
 	DeleteWork(ctx context.Context, id int64) error
+	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
@@ -269,6 +272,9 @@ type Querier interface {
 	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
+	FillOrganisationLibrary(ctx context.Context, organisationIds []int64) error
+	// One pass yields a row per role and the any-role row: sqlc expands a slice only once per query.
+	FillPersonLibrary(ctx context.Context, personIds []int64) error
 	// The import gate's own check (section 10.3 step 3, ADR-53): exact hashes
 	// only, oshash first since it is the stronger identifier when both exist.
 	// Perceptual columns (chromaprint/phash) are matched separately once
@@ -546,6 +552,7 @@ type Querier interface {
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
 	ListOrganisationsForWork(ctx context.Context, workID int64) ([]WorkOrganisation, error)
+	ListOrganisationsOfWork(ctx context.Context, workID int64) ([]int64, error)
 	ListPackItems(ctx context.Context, packID int64) ([]PackItem, error)
 	// Cursor-paginated by id ascending, the same plain cursor /blocked and
 	// import_unit's own page already use -- pack counts stay small today (one
@@ -579,6 +586,7 @@ type Querier interface {
 	// appeared (found 2026-09-13). 'musicbrainz:artist' must match
 	// internal/media/music.ProviderArtist.
 	ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNeedingArtworkParams) ([]ListPeopleNeedingArtworkRow, error)
+	ListPeopleOfWork(ctx context.Context, workID int64) ([]int64, error)
 	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
 	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
 	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
@@ -600,7 +608,6 @@ type Querier interface {
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
-	ListSeriesExclusions(ctx context.Context) ([]SeriesExclusion, error)
 	// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
 	// ordered by sort title with the id as the tie-break.
 	ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error)
@@ -663,6 +670,7 @@ type Querier interface {
 	ListWantedEpisodes(ctx context.Context, arg ListWantedEpisodesParams) ([]ListWantedEpisodesRow, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
+	ListWorkExclusions(ctx context.Context, mediaType string) ([]WorkExclusion, error)
 	ListWorkExternalIDs(ctx context.Context, workID int64) ([]WorkExternalID, error)
 	ListWorkFields(ctx context.Context, workID int64) ([]WorkField, error)
 	// Where each named work's files live, every path of every one. The directories

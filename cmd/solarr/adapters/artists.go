@@ -21,16 +21,16 @@ type Artists struct{ People library.People }
 func (a Artists) ListLibraryArtists(
 	ctx context.Context, filter apiserver.ArtistsFilter, cursor apiserver.ArtistsCursor, pageSize int,
 ) ([]apiserver.ArtistRow, error) {
-	where, err := listfilter.Parse(filter.Where, library.ArtistFields)
+	where, err := listfilter.Parse(filter.Where, library.PersonFields([]string{artistCreditRole}))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
 	}
-	rows, err := a.People.ListPeople(ctx,
-		library.PersonFilter{
-			Where: where, Role: artistCreditRole, RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs,
-			Descending: filter.Descending, Monitored: filter.Monitored,
+	rows, err := a.People.List(ctx,
+		library.PeopleFilter{
+			Visible: filter.CategoryIDs, Roles: []string{artistCreditRole}, Monitored: filter.Monitored, Where: where,
+			Desc: filter.Descending,
 		},
-		library.PersonCursor{SortName: cursor.SortName, ID: cursor.ID}, pageSize)
+		library.PeopleCursor{Name: cursor.SortName, ID: cursor.ID, Set: cursor.SortName != "" || cursor.ID != 0}, pageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (a Artists) ListLibraryArtists(
 	for index, row := range rows {
 		views[index] = apiserver.ArtistRow{
 			ID: row.ID, Name: row.Name, SortName: row.SortName,
-			AlbumsWanted: row.AlbumsWanted, AlbumsComplete: row.AlbumsComplete,
+			AlbumsWanted: row.Wanted, AlbumsComplete: row.Complete,
 			Downloading: row.Downloading,
 		}
 	}

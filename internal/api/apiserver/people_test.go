@@ -10,26 +10,29 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // fakePeopleReader mirrors fakeWorksReader: records the arguments it was
 // called with and answers canned rows, without a real library.db.
 type fakePeopleReader struct {
-	rows       []apiserver.PersonRow
-	detail     apiserver.PersonDetailRow
+	rows       []gen.PersonEntry
+	detail     gen.PersonDetail
+	credits    []apiserver.PersonCreditRow
 	detailErr  error
-	lastFilter apiserver.PersonFilter
-	lastCursor apiserver.PersonCursor
+	lastQuery  apiserver.PeopleQuery
+	lastCursor paginate.TextCursor
 	lastID     int64
 	// lastVisible is what the detail read was told the caller may see.
-	lastVisible apiserver.PersonVisibility
+	lastVisible []int64
 }
 
 func (f *fakePeopleReader) ListPeople(
-	_ context.Context, filter apiserver.PersonFilter, cursor apiserver.PersonCursor, pageSize int,
-) ([]apiserver.PersonRow, error) {
-	f.lastFilter = filter
+	_ context.Context, query apiserver.PeopleQuery, cursor paginate.TextCursor, pageSize int,
+) ([]gen.PersonEntry, error) {
+	f.lastQuery = query
 	f.lastCursor = cursor
 	if len(f.rows) > pageSize {
 		return f.rows[:pageSize], nil
@@ -37,12 +40,12 @@ func (f *fakePeopleReader) ListPeople(
 	return f.rows, nil
 }
 
-func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64, visible apiserver.PersonVisibility) (apiserver.PersonDetailRow, error) {
+func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64, visible []int64) (gen.PersonDetail, []apiserver.PersonCreditRow, error) {
 	f.lastID, f.lastVisible = id, visible
 	if f.detailErr != nil {
-		return apiserver.PersonDetailRow{}, f.detailErr
+		return gen.PersonDetail{}, nil, f.detailErr
 	}
-	return f.detail, nil
+	return f.detail, f.credits, nil
 }
 
 // fakePeopleSubscriber records the arguments Subscribe was called with.
@@ -106,9 +109,9 @@ func TestListPeople_ResponseShapeAndCursor(t *testing.T) {
 	cookies := fixture.signIn(t, "admin")
 
 	disambiguation := "band"
-	fixture.people.rows = []apiserver.PersonRow{
-		{ID: 1, Name: "Katupoken", SortName: "Katupoken", Disambiguation: &disambiguation, Monitored: true},
-		{ID: 2, Name: "Vutu Doci", SortName: "Bush, Vutu"},
+	fixture.people.rows = []gen.PersonEntry{
+		{Id: 1, Name: "Katupoken", SortName: "Katupoken", Disambiguation: &disambiguation, Monitored: true, Roles: []string{"artist"}, Works: 3},
+		{Id: 2, Name: "Vutu Doci", SortName: "Bush, Vutu", Roles: []string{"artist"}},
 	}
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people?limit=1"))
@@ -147,16 +150,14 @@ func TestListPeople_MonitoredAndQueryParamsReachTheFilter(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people?monitored=true&q=Rad"))
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people?monitored=true&q=Rad&role=actor,%20director&sort=works&dir=desc"))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
 	}
-
-	if fixture.people.lastFilter.Monitored == nil || !*fixture.people.lastFilter.Monitored {
-		t.Errorf("Monitored = %v, want true", fixture.people.lastFilter.Monitored)
-	}
-	if fixture.people.lastFilter.NamePrefix != "Rad" {
-		t.Errorf("NamePrefix = %q, want Rad", fixture.people.lastFilter.NamePrefix)
+	query := fixture.people.lastQuery
+	if query.Monitored == nil || !*query.Monitored || query.Prefix != "Rad" || !slices.Equal(query.Roles, []string{"actor", "director"}) ||
+		query.Sort != "works" || !query.Desc {
+		t.Errorf("query = %+v, want monitored, prefix Rad, the two roles, by works descending", query)
 	}
 }
 
@@ -168,16 +169,15 @@ func TestGetPerson_ResponseShape(t *testing.T) {
 	biography := "English singer-songwriter."
 	primaryType := "Album"
 	wantedState := "PARTIAL"
-	fixture.people.detail = apiserver.PersonDetailRow{
-		PersonRow: apiserver.PersonRow{ID: 7, Name: "Vutu Doci", SortName: "Bush, Vutu"},
-		Biography: &biography,
-		Aliases:   []string{"Cathy"},
-		Genres:    []string{"Art Pop"},
-		Discography: []apiserver.PersonWorkRow{{
-			ID: 41, MediaType: "music", Title: "Cotevo of Love", SortTitle: "cotevo of love",
-			PrimaryType: &primaryType, WantedState: &wantedState, OnDisk: true,
-		}},
+	fixture.people.detail = gen.PersonDetail{
+		Id: 7, Name: "Vutu Doci", SortName: "Bush, Vutu", Biography: &biography,
+		Aliases: []string{"Cathy"}, Genres: []string{"Art Pop"}, Ids: map[string]string{},
+		Libraries: []gen.PersonLibrary{{CategoryId: 3, Role: "artist", Works: 1}},
 	}
+	fixture.people.credits = []apiserver.PersonCreditRow{{CategoryID: 3, Role: "artist", Work: apiserver.PersonWorkRow{
+		ID: 41, MediaType: "music", Title: "Cotevo of Love", SortTitle: "cotevo of love",
+		PrimaryType: &primaryType, WantedState: &wantedState, OnDisk: true,
+	}}}
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7"))
 	if recorder.Code != http.StatusOK {
@@ -188,17 +188,22 @@ func TestGetPerson_ResponseShape(t *testing.T) {
 	}
 
 	var body struct {
-		Name        string   `json:"name"`
-		Biography   *string  `json:"biography"`
-		Aliases     []string `json:"aliases"`
-		Genres      []string `json:"genres"`
-		Discography []struct {
-			ID          int64   `json:"id"`
-			Title       string  `json:"title"`
-			PrimaryType *string `json:"primary_type"`
-			WantedState *string `json:"wanted_state"`
-			OnDisk      bool    `json:"on_disk"`
-		} `json:"discography"`
+		Name      string   `json:"name"`
+		Biography *string  `json:"biography"`
+		Aliases   []string `json:"aliases"`
+		Genres    []string `json:"genres"`
+		Credits   []struct {
+			CategoryID int64  `json:"category_id"`
+			Role       string `json:"role"`
+			Work       struct {
+				ID          int64   `json:"id"`
+				Title       string  `json:"title"`
+				PrimaryType *string `json:"primary_type"`
+				WantedState *string `json:"wanted_state"`
+				OnDisk      bool    `json:"on_disk"`
+				Status      string  `json:"status"`
+			} `json:"work"`
+		} `json:"credits"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -215,10 +220,10 @@ func TestGetPerson_ResponseShape(t *testing.T) {
 	if len(body.Genres) != 1 || body.Genres[0] != "Art Pop" {
 		t.Errorf("Genres = %+v, want [Art Pop]", body.Genres)
 	}
-	if len(body.Discography) != 1 || body.Discography[0].Title != "Cotevo of Love" {
-		t.Fatalf("Discography = %+v, want [Cotevo of Love]", body.Discography)
+	if len(body.Credits) != 1 || body.Credits[0].Work.Title != "Cotevo of Love" || body.Credits[0].CategoryID != 3 {
+		t.Fatalf("Credits = %+v, want [Cotevo of Love] in library 3", body.Credits)
 	}
-	work := body.Discography[0]
+	work := body.Credits[0].Work
 	if work.PrimaryType == nil || *work.PrimaryType != "Album" {
 		t.Errorf("PrimaryType = %v, want Album", work.PrimaryType)
 	}
@@ -235,7 +240,7 @@ func TestGetPerson_MissingPersonAnswers404(t *testing.T) {
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	fixture.people.detailErr = sql.ErrNoRows
+	fixture.people.detailErr = apiserver.ErrPersonNotFound
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/404"))
 	if recorder.Code != http.StatusNotFound {
@@ -566,12 +571,12 @@ func TestPeople_AreReadAsTheCallerMaySeeThem(t *testing.T) {
 	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/people")); recorder.Code != http.StatusOK {
 		t.Fatalf("list status = %d, body = %s", recorder.Code, recorder.Body)
 	}
-	want := apiserver.PersonVisibility{RootFolderIDs: []int64{}, CategoryIDs: []int64{shown.ID}}
-	if got := fixture.people.lastFilter.Visible; !reflect.DeepEqual(got, want) {
+	want := []int64{shown.ID}
+	if got := fixture.people.lastQuery.Visible; !reflect.DeepEqual(got, want) {
 		t.Errorf("the list was read as %+v, want %+v", got, want)
 	}
 
-	fixture.people.detailErr = sql.ErrNoRows
+	fixture.people.detailErr = apiserver.ErrPersonNotFound
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/9"))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("a person the caller may not know of: status = %d, want 404", recorder.Code)

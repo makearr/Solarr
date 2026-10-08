@@ -72,10 +72,12 @@ type Service struct {
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
 	Series   library.Series
-	Reader   library.SeriesReader
-	Desired  library.Desired
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	// Exclusions are the works the user removed and asked not to see again.
+	Exclusions library.Exclusions
+	Reader     library.SeriesReader
+	Desired    library.Desired
+	Clock      clock.Clock
+	Logger     *slog.Logger
 }
 
 // Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
@@ -549,7 +551,7 @@ func (s Service) ensureSeasons(
 
 // IsExcluded reports whether the user deleted this series and asked not to see it again.
 func (s Service) IsExcluded(ctx context.Context, ids IDs) bool {
-	excluded, err := s.Series.Excluded(ctx, idWrites(ids))
+	excluded, err := s.Exclusions.Excluded(ctx, idWrites(ids))
 	if err != nil {
 		s.warn("exclusion check", ids.TVDB, err)
 		return false

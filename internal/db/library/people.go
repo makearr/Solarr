@@ -209,6 +209,9 @@ func (p People) AddCredit(ctx context.Context, workID, personID int64, role stri
 		}); err != nil {
 			return err
 		}
+		if err := refreshPeople(ctx, queries, []int64{personID}); err != nil {
+			return err
+		}
 		if role != creditRoleArtist || ord != 0 {
 			return nil
 		}
@@ -387,22 +390,6 @@ ORDER BY work.year, work.sort_title, work.id`
 	return discography, nil
 }
 
-// PersonDetail is a person's own fields, every alias they are known by, their
-// biography (decoded back out of fields_json), the genres tagged anywhere in
-// their discography (Person carries no genre of its own, ADR-32's own fields
-// are biographical), and their discography -- every work credited to them,
-// any role (architecture.md's own GET /people/{id} sketch: "incl. coverage
-// per media type"). Coverage itself (held vs missing vs upgradable) reuses
-// Satisfaction over desired_item, populated for music since todo 4.4 -- not
-// wired into this endpoint yet, so this pass answers the discography half only.
-type PersonDetail struct {
-	Person      librarydb.Person
-	Aliases     []string
-	Biography   string
-	Genres      []string
-	Discography []DiscographyRow
-}
-
 // RecordRefresh remembers when an artist's metadata was last refreshed.
 func (p People) RecordRefresh(ctx context.Context, personID, at int64) error {
 	return p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -428,100 +415,6 @@ func (p People) Person(ctx context.Context, id int64) (librarydb.Person, error) 
 		return librarydb.Person{}, fmt.Errorf("library: person %d: %w", id, err)
 	}
 	return person, nil
-}
-
-// Detail composes one person's full detail. A missing id surfaces
-// sql.ErrNoRows through GetPerson, wrapped: callers use errors.Is to detect it.
-func (p People) Detail(ctx context.Context, id int64) (PersonDetail, error) {
-	queries := librarydb.New(p.store.Read())
-
-	person, err := queries.GetPerson(ctx, id)
-	if err != nil {
-		return PersonDetail{}, fmt.Errorf("library: person detail: get person: %w", err)
-	}
-
-	aliases, err := queries.ListAliasesForPerson(ctx, id)
-	if err != nil {
-		return PersonDetail{}, fmt.Errorf("library: person detail: aliases: %w", err)
-	}
-
-	genres, err := queries.ListGenresForPersonDiscography(ctx, id)
-	if err != nil {
-		return PersonDetail{}, fmt.Errorf("library: person detail: genres: %w", err)
-	}
-
-	discography, err := p.Discography(ctx, id, "")
-	if err != nil {
-		return PersonDetail{}, fmt.Errorf("library: person detail: discography: %w", err)
-	}
-
-	return PersonDetail{
-		Person: person, Aliases: aliases, Biography: biographyFromFields(person.FieldsJson),
-		Genres: genres, Discography: discography,
-	}, nil
-}
-
-// DetailVisible is Detail as one viewer may see it: the person exists only when a library they may see credits or
-// follows them (else sql.ErrNoRows, the same answer as a missing id), and the discography holds only works of
-// those libraries. A nil visible is Detail.
-func (p People) DetailVisible(ctx context.Context, id int64, visible *Visibility) (PersonDetail, error) {
-	if visible == nil {
-		return p.Detail(ctx, id)
-	}
-	clause, arguments := visiblePersonClause("person.id", *visible)
-	var seen int
-	err := p.store.Read().QueryRowContext(ctx, "SELECT COUNT(*) FROM person WHERE person.id = ? AND "+clause,
-		append([]any{id}, arguments...)...).Scan(&seen)
-	if err != nil {
-		return PersonDetail{}, fmt.Errorf("library: person detail: visibility: %w", err)
-	}
-	if seen == 0 {
-		return PersonDetail{}, fmt.Errorf("library: person detail: %w", sql.ErrNoRows)
-	}
-
-	detail, err := p.Detail(ctx, id)
-	if err != nil {
-		return PersonDetail{}, err
-	}
-	workIDs, err := p.visibleWorkIDs(ctx, id, *visible)
-	if err != nil {
-		return PersonDetail{}, err
-	}
-	kept := detail.Discography[:0:0]
-	for _, row := range detail.Discography {
-		if workIDs[row.ID] {
-			kept = append(kept, row)
-		}
-	}
-	detail.Discography = kept
-	return detail, nil
-}
-
-// visibleWorkIDs is the works crediting the person that the viewer may see.
-func (p People) visibleWorkIDs(ctx context.Context, personID int64, visible Visibility) (map[int64]bool, error) {
-	roots, categories := visible.RootFolderIDs, visible.CategoryIDs
-	if roots == nil {
-		roots = []int64{}
-	}
-	if categories == nil {
-		categories = []int64{}
-	}
-	fragment, arguments, _ := visibilityFragment("c.work_id", roots, categories)
-	rows, err := p.store.Read().QueryContext(ctx,
-		"SELECT DISTINCT c.work_id FROM credit c WHERE c.person_id = ? AND "+fragment, append([]any{personID}, arguments...)...)
-	if err != nil {
-		return nil, fmt.Errorf("library: person detail: visible works: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	ids := map[int64]bool{}
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("library: person detail: visible works: %w", err)
-		}
-		ids[id] = true
-	}
-	return ids, rows.Err()
 }
 
 // SubscriptionRequest is what a caller supplies to subscribe to a person

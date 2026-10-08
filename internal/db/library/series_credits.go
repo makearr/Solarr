@@ -20,6 +20,7 @@ func (s Series) writeCredits(ctx context.Context, at time.Time, workID int64, pa
 		chunk := credits[start:min(start+seriesCreditChunk, len(credits))]
 		err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 			queries := librarydb.New(tx)
+			var credited []int64
 			for _, credit := range chunk {
 				partID := int64(0)
 				if credit.PartRef != "" {
@@ -47,8 +48,9 @@ func (s Series) writeCredits(ctx context.Context, at time.Time, workID int64, pa
 				}); err != nil {
 					return fmt.Errorf("credit: %w", err)
 				}
+				credited = append(credited, personID)
 			}
-			return nil
+			return refreshPeople(ctx, queries, credited)
 		})
 		if err != nil {
 			return fmt.Errorf("library: write series credits: %w", err)

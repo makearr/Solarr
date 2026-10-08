@@ -43,7 +43,7 @@ func (d Desired) EnsureSeasonItem(ctx context.Context, request SeasonRequest) (l
 				return recomputeAlbumTx(ctx, queries, item.ID, request.WorkID)
 			}
 		}
-		created, err := queries.CreateDesiredItem(ctx, librarydb.CreateDesiredItemParams{
+		created, err := createDesiredItem(ctx, queries, librarydb.CreateDesiredItemParams{
 			WorkID: request.WorkID, MediaRef: request.MediaRef, MediaSortKey: request.SortKey,
 			CategoryID: request.CategoryID, ProfileID: request.ProfileID, Monitored: boolToInt(request.Monitored),
 			SatisfactionKind: "SET", PresentCount: 0, State: "MISSING", Dirty: 1, AddedBy: nullInt64(request.AddedBy),

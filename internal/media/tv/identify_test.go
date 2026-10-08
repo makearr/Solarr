@@ -29,7 +29,7 @@ func TestAPersonPlacesAQueuedFileByChoosingTheSeriesAndTheEpisodeTheNameDoesNotS
 	}
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
-	service := tv.Service{Skyhook: searchSkyhook{series: fixtureSkyhook()}, TVmaze: fakeTVmaze{err: tvmaze.ErrNotFound}, Series: library.NewSeries(opened), Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened), Clock: fake}
+	service := tv.Service{Skyhook: searchSkyhook{series: fixtureSkyhook()}, TVmaze: fakeTVmaze{err: tvmaze.ErrNotFound}, Series: library.NewSeries(opened), Exclusions: library.NewExclusions(opened), Reader: library.NewSeriesReader(opened), Desired: library.NewDesired(opened), Clock: fake}
 	identifier := tv.Identifier{Service: service, Unidentified: queue, Clock: fake, DefaultProfileID: 1, Categories: categories{}}
 
 	if _, err := identifier.Resolve(t.Context(), 3, rows[0], tv.IDs{TVDB: 1234}, 0, nil); !errors.Is(err, tv.ErrNoEpisodes) {
