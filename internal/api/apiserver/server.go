@@ -106,9 +106,10 @@ type Config struct {
 	Series SeriesCatalog
 	// Seasons searches and downloads TV seasons. Optional: nil answers 503.
 	Seasons SeasonAcquirer
-	// PeopleSubscriber subscribes a caller to a person. Optional: without it,
-	// SubscribePerson answers 503.
-	PeopleSubscriber PeopleSubscriber
+	// PersonRemover removes an artist. Optional: nil answers 503.
+	PersonRemover PersonRemover
+	// Follower follows people and organisations into libraries. Optional: nil answers 503.
+	Follower Follower
 	// IncompleteDiscographies feeds Discover's library-derived suggestions. Optional: nil answers 503.
 	IncompleteDiscographies IncompleteDiscographies
 
@@ -132,10 +133,6 @@ type Config struct {
 	AlbumRefresher AlbumRefresher
 	// ArrConnections reads a connection's indexers and download clients. Optional: nil answers 503.
 	ArrConnections ArrConnections
-	// SubscriptionPreviewer answers an artist's discography, unfiltered, for
-	// the subscribe screen's filter preview (todo 4.4). Optional: without
-	// it, PreviewSubscription answers 503.
-	SubscriptionPreviewer SubscriptionPreviewer
 	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
 	// without it, ListBlockedContent/RemoveBlockedContent answer 503.
 	BlockedContent BlockedContentLister
@@ -275,7 +272,8 @@ type Server struct {
 	organisations           OrganisationsReader
 	series                  SeriesCatalog
 	seasons                 SeasonAcquirer
-	peopleSubscriber        PeopleSubscriber
+	personRemover           PersonRemover
+	follower                Follower
 	artistActions           ArtistActions
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
@@ -286,7 +284,6 @@ type Server struct {
 	incompleteDiscographies IncompleteDiscographies
 	albumRefresher          AlbumRefresher
 	arrConnections          ArrConnections
-	subscriptionPreviewer   SubscriptionPreviewer
 	blockedContent          BlockedContentLister
 	packs                   PackLister
 	removeAndBlocker        RemoveAndBlocker
@@ -382,7 +379,8 @@ func New(config Config) (*Server, error) {
 		organisations:           config.Organisations,
 		series:                  config.Series,
 		seasons:                 config.Seasons,
-		peopleSubscriber:        config.PeopleSubscriber,
+		personRemover:           config.PersonRemover,
+		follower:                config.Follower,
 		artistActions:           config.ArtistActions,
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
@@ -393,7 +391,6 @@ func New(config Config) (*Server, error) {
 		incompleteDiscographies: config.IncompleteDiscographies,
 		albumRefresher:          config.AlbumRefresher,
 		arrConnections:          config.ArrConnections,
-		subscriptionPreviewer:   config.SubscriptionPreviewer,
 		blockedContent:          config.BlockedContent,
 		packs:                   config.Packs,
 		removeAndBlocker:        config.RemoveAndBlocker,
@@ -538,12 +535,6 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/series/{id}", server.routeDeleteSeries)
 			secured.Get("/series/people", server.routeListSeriesPeople)
 			secured.Get("/series/people/{id}", server.routeGetSeriesPerson)
-			secured.Put("/series/people/{id}/follow", server.routeFollowSeriesPerson)
-			secured.Delete("/series/people/{id}/follow", server.routeUnfollowSeriesPerson)
-			secured.Get("/series/people/{id}/follow/preview", server.routePreviewSeriesPersonFollow)
-			secured.Get("/series/networks/{id}/follow/preview", server.routePreviewSeriesNetworkFollow)
-			secured.Put("/series/networks/{id}/follow", server.routeFollowSeriesNetwork)
-			secured.Delete("/series/networks/{id}/follow", server.routeUnfollowSeriesNetwork)
 			secured.Get("/series/networks", server.routeListSeriesNetworks)
 			secured.Get("/series/networks/{id}", server.routeGetSeriesNetwork)
 			secured.Get("/series/{id}", server.routeGetSeries)
@@ -617,18 +608,17 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)
 			secured.Get("/people", server.routeListPeople)
+			server.mountFollows(secured)
 			secured.Get("/organisations", server.routeListOrganisations)
 			secured.Get("/organisations/{id}", server.routeGetOrganisation)
 			secured.Get("/people/{id}", server.routeGetPerson)
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
 			secured.Put("/people/{id}/artwork", server.routeChoosePersonArtwork)
 			secured.Get("/people/{id}/artwork/options", server.routeGetPersonArtworkOptions)
-			secured.Post("/people/{id}/subscribe", server.routeSubscribePerson)
 			secured.Post("/people/{id}/remove", server.routeRemovePerson)
 			secured.Post("/people/{id}/search", server.routeSearchPersonMissing)
 			secured.Post("/people/{id}/monitor-all", server.routeMonitorPersonAll)
 			secured.Post("/people/{id}/refresh", server.routeRefreshPerson)
-			secured.Get("/people/{id}/subscription-preview", server.routePreviewSubscription)
 			secured.Get("/exclusions", server.ListExclusionPatterns)
 			secured.Post("/exclusions", server.CreateExclusionPattern)
 			secured.Patch("/exclusions/{id}", server.routeUpdateExclusionPattern)

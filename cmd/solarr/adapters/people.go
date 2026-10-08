@@ -42,13 +42,13 @@ func (a People) Remove(ctx context.Context, personID, userID int64) error {
 	if _, err := a.People.Person(ctx, personID); err != nil {
 		return err
 	}
-	subscriptionID, found, err := a.Subscriptions.Find(ctx, "person", personID, userID)
+	follows, err := a.Subscriptions.FollowsOf(ctx, library.Subject{Type: "person", ID: personID}, userID)
 	if err != nil {
-		return fmt.Errorf("adapters: find subscription for person %d: %w", personID, err)
+		return fmt.Errorf("adapters: follows of person %d: %w", personID, err)
 	}
-	if found {
-		if err := a.Subscriptions.Delete(ctx, subscriptionID); err != nil {
-			return fmt.Errorf("adapters: delete subscription %d: %w", subscriptionID, err)
+	for _, followed := range follows {
+		if err := a.Subscriptions.Delete(ctx, followed.ID); err != nil {
+			return fmt.Errorf("adapters: delete follow %d: %w", followed.ID, err)
 		}
 	}
 	return a.People.Delete(ctx, personID)
@@ -172,40 +172,6 @@ func nonNil(values []string) []string {
 	return values
 }
 
-func (a People) Subscribe(
-	ctx context.Context, personID, userID, categoryID int64, mediaTypes, roles []string,
-	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
-) error {
-	// Absent primary types mean the library's own setting, resolved here and
-	// stored on the subscription: the artist keeps what was chosen when they
-	// were added, even if the library's default moves later.
-	category, haveCategory := a.Categories.Category(categoryID)
-	if includePrimaryTypes == nil && haveCategory {
-		types := category.MonitorReleaseTypes
-		includePrimaryTypes = &types
-	}
-
-	var filtersJSON string
-	if includePrimaryTypes != nil || excludeSecondaryTypes != nil {
-		encoded, err := json.Marshal(music.SubscriptionFilters{
-			IncludePrimaryTypes: includePrimaryTypes, ExcludeSecondaryTypes: excludeSecondaryTypes,
-		})
-		if err != nil {
-			return fmt.Errorf("adapters: encode subscription filters: %w", err)
-		}
-		filtersJSON = string(encoded)
-	}
-	request := library.SubscriptionRequest{
-		MediaTypes: mediaTypes, Roles: roles, MonitorBackCatalogue: monitorBackCatalogue,
-		FiltersJSON: filtersJSON,
-	}
-	if haveCategory {
-		request.CategoryID = category.ID
-	}
-	_, err := a.People.Subscribe(ctx, a.Clock.Now(), personID, userID, request)
-	return err
-}
-
 // monitorFiltersFor encodes a library's own release-type default onto a
 // subscription, so what an artist brings in is fixed when they are added
 // rather than moving with the library's setting afterwards.
@@ -216,36 +182,4 @@ func monitorFiltersFor(category settings.Category) (string, error) {
 		return "", fmt.Errorf("adapters: encode subscription filters: %w", err)
 	}
 	return string(encoded), nil
-}
-
-// Preview answers an artist's discography unfiltered (todo 4.4), the same
-// external-id lookup and provider call music.SubscriptionExpandJob's own
-// expandOne makes -- apiserver.ErrNoArtistID mirrors that job's "person has
-// no external id yet" error, mapped to a client-facing 409 here since a
-// background sweep just retries next run, but a screen has to say something
-// now.
-func (a People) Preview(ctx context.Context, personID int64) (apiserver.SubscriptionPreviewRow, error) {
-	artistMBID, ok, err := a.People.ExternalIDFor(ctx, personID, music.ProviderArtist)
-	if err != nil {
-		return apiserver.SubscriptionPreviewRow{}, err
-	}
-	if !ok {
-		return apiserver.SubscriptionPreviewRow{}, apiserver.ErrNoArtistID
-	}
-
-	groups, err := a.Provider.ArtistReleaseGroups(ctx, musicbrainz.PriorityInteractive, artistMBID)
-	if err != nil {
-		return apiserver.SubscriptionPreviewRow{}, fmt.Errorf("musicbrainz: %w", err)
-	}
-
-	rows := make([]apiserver.PreviewReleaseGroupRow, len(groups))
-	for index, group := range groups {
-		rows[index] = apiserver.PreviewReleaseGroupRow{
-			MBID: group.MBID, Title: group.Title, PrimaryType: group.PrimaryType,
-			FirstReleaseDate: group.FirstReleaseDate, SecondaryTypes: group.SecondaryTypes,
-		}
-	}
-	return apiserver.SubscriptionPreviewRow{
-		ReleaseGroups: rows, DefaultExcludedSecondaryTypes: music.DefaultExcludedSecondaryTypes,
-	}, nil
 }

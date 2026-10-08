@@ -98,6 +98,7 @@ type Querier interface {
 	// The truth the reconciliation job compares a counter against.
 	CountDesiredItemsByState(ctx context.Context, categoryID int64) ([]CountDesiredItemsByStateRow, error)
 	CountDesiredItemsInCategory(ctx context.Context, arg CountDesiredItemsInCategoryParams) (int64, error)
+	CountEnabledSubscriptionsForSubject(ctx context.Context, arg CountEnabledSubscriptionsForSubjectParams) (int64, error)
 	// The dashboard's fresh-works count (ADR-55, todo 4.20): every work with a
 	// work_date of kind on or after the cutoff. Distinct since a work can carry
 	// more than one region's own date row for the same kind.
@@ -354,11 +355,7 @@ type Querier interface {
 	// stops reusing models.
 	GetScanState(ctx context.Context, rootFolderID int64) (ScanState, error)
 	GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error)
-	// Subscribe's own idempotency check (Invariant 80): the UNIQUE(subject_type,
-	// subject_id, user_id) constraint means a second Subscribe call for the same
-	// person and user must look before it inserts, not rely on the constraint to
-	// refuse -- "user_id IS ?" matches SQLite's own NULL semantics for a global
-	// (no per-user) subscription.
+	// One follow per subject, user and library; "IS" matches NULL as the constraint's own NULLs do not.
 	GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
 	// One entry, for the manual resolve action -- confirming a candidate needs the
@@ -625,6 +622,7 @@ type Querier interface {
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
+	ListSubscriptionsForSubject(ctx context.Context, arg ListSubscriptionsForSubjectParams) ([]Subscription, error)
 	ListTagNames(ctx context.Context) ([]ListTagNamesRow, error)
 	ListTagNamesForSubjectBySource(ctx context.Context, arg ListTagNamesForSubjectBySourceParams) ([]ListTagNamesForSubjectBySourceRow, error)
 	// Identified files under the given roots with everything their tags could take and the digest

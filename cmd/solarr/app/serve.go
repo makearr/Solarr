@@ -45,6 +45,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/service/follow"
 	"github.com/makearr/Solarr/migrations"
 )
 
@@ -470,7 +471,7 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerTVArtworkJob(registry, executor); err != nil {
 		return err
 	}
-	if err := p.registerSubscriptionExpandJob(registry, executor); err != nil {
+	if err := p.registerFollowJob(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerImportJob(registry, executor); err != nil {
@@ -676,7 +677,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				}
 			},
 			ExpandArtist: func(ctx context.Context, subscriptionID int64, search bool) {
-				if _, err := music.EnqueueExpandSubscription(ctx, p.queue, subscriptionID, search); err != nil {
+				if _, err := follow.Enqueue(ctx, p.queue, subscriptionID, search); err != nil {
 					p.logger.Warn("add artist's albums", slog.Any("error", err))
 				}
 			},
@@ -744,12 +745,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},
 		AlbumRefresher: adapters.AlbumRefresher{Works: library.NewWorks(p.library), Queue: p.queue},
-		PeopleSubscriber: adapters.People{Subscriptions: library.NewSubscriptions(p.library),
-			People: library.NewPeople(p.library), Categories: adapters.Categories{Cache: p.cache},
-			Clock: clock.NewSystem(),
-		},
-		SubscriptionPreviewer: adapters.People{
-			People: library.NewPeople(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
+		PersonRemover:  adapters.People{Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library)},
+		Follower: adapters.Follow{
+			Service: p.followService(), People: library.NewPeople(p.library), Organisations: library.NewOrganisations(p.library),
 		},
 		Links:            adapters.Links{Config: p.linkConfig(), Queue: p.queue},
 		BlockedContent:   adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},

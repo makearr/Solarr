@@ -338,8 +338,8 @@ func TestPersonExternalIDResolves(t *testing.T) {
 	}
 }
 
-// One subscription per subject per user, or a double-click follows a person twice.
-func TestSubscriptionsAreUniquePerSubjectAndUser(t *testing.T) {
+// One subscription per subject, user and library, or a double-click follows a person twice.
+func TestSubscriptionsAreUniquePerSubjectUserAndLibrary(t *testing.T) {
 	opened, _ := newLibrary(t)
 	person := createPerson(t, opened, "Nick Cave")
 
@@ -349,7 +349,7 @@ func TestSubscriptionsAreUniquePerSubjectAndUser(t *testing.T) {
 				q := librarydb.New(opened.Read()).WithTx(tx)
 				_, err := q.CreateSubscription(ctx, librarydb.CreateSubscriptionParams{
 					SubjectType: "person", SubjectID: person.ID,
-					MediaTypesJson: `["music"]`, Enabled: 1,
+					MediaTypesJson: `["music"]`, Enabled: 1, CategoryID: sql.NullInt64{Int64: 3, Valid: true},
 					UserID: sql.NullInt64{Int64: 1, Valid: true}, CreatedAt: 1,
 				})
 				return err

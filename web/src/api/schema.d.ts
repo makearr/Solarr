@@ -3247,84 +3247,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/series/people/{id}/follow": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Follow a person by role; their new series are added to the library automatically through TMDB. */
-        put: operations["followSeriesPerson"];
-        post?: never;
-        /** Stop following a person. Series already added stay. */
-        delete: operations["unfollowSeriesPerson"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/people/{id}/follow/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** What following a person would add right now, without following. */
-        get: operations["previewSeriesPersonFollow"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/networks/{id}/follow/preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** What following a network would add right now, without following. */
-        get: operations["previewSeriesNetworkFollow"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/networks/{id}/follow": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Follow a network; the new series it airs are added to the library automatically through TMDB. */
-        put: operations["followSeriesNetwork"];
-        post?: never;
-        /** Stop following a network. Series already added stay. */
-        delete: operations["unfollowSeriesNetwork"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/series/networks": {
         parameters: {
             query?: never;
@@ -3688,6 +3610,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/people/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The caller's follows of this person, one per library. */
+        get: operations["listPersonFollows"];
+        /** Follow the person into one library, or change the follow there; what it admits is added automatically. */
+        put: operations["followPerson"];
+        post?: never;
+        /** Stop following in one library. What was added stays. */
+        delete: operations["unfollowPerson"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/people/{id}/follow/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What following the person into one library would add right now, without following. */
+        post: operations["previewPersonFollow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisations/{id}/follow": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The caller's follows of this organisation, one per library. */
+        get: operations["listOrganisationFollows"];
+        /** Follow the organisation into one library, or change the follow there; what it admits is added automatically. */
+        put: operations["followOrganisation"];
+        post?: never;
+        /** Stop following in one library. What was added stays. */
+        delete: operations["unfollowOrganisation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisations/{id}/follow/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What following the organisation into one library would add right now, without following. */
+        post: operations["previewOrganisationFollow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/organisations": {
         parameters: {
             query?: never;
@@ -3822,28 +3824,6 @@ export interface paths {
         get: operations["getPersonArtworkOptions"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/people/{id}/subscribe": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Subscribe to a person (ADR-32) -- media types x roles x filters.
-         * @description Marks the person monitored (ADR-32: "adding a performer monitors their scenes regardless of studio"). Back-catalogue is an explicit choice, never implied.
-         */
-        post: operations["subscribePerson"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4106,28 +4086,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/people/{id}/subscription-preview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /**
-         * Every release group in the artist's discography, unfiltered, so the subscribe screen can show what a filter choice would admit or exclude before saving (todo 4.4, ADR-38's preview-before-enable shape).
-         * @description The same MusicBrainz call SubscriptionExpandJob itself makes (provider.ArtistReleaseGroups, cache-first per ADR-29 -- this is not a second network round trip once an artist has been browsed once). Returns every release group unfiltered; the client applies SubscriptionFilters.Admits's own substring-match rule locally against whichever exclusions the user is currently trying, so toggling a checkbox costs no round trip. The real admission decision at expand time still runs server-side against the saved filters -- this is preview-only.
-         */
-        get: operations["previewSubscription"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/events": {
         parameters: {
             query?: never;
@@ -4208,11 +4166,6 @@ export interface components {
              * @example Europe/Fefobo
              */
             timezone?: string;
-        };
-        SubscriptionPreview: {
-            release_groups: components["schemas"]["PreviewReleaseGroup"][];
-            /** @description music.DefaultExcludedSecondaryTypes, so the client can pre-check the same boxes a subscription with no filter override would get. */
-            default_excluded_secondary_types: string[];
         };
         PreviewReleaseGroup: {
             mbid: string;
@@ -4827,6 +4780,8 @@ export interface components {
             lead_people: components["schemas"]["MediaTerm"];
             organisation: components["schemas"]["MediaTerm"];
             roles: components["schemas"]["MediaRole"][];
+            /** @description The settings a follow of a person or organisation offers in this type's libraries. */
+            follow_options: components["schemas"]["FollowOption"][];
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -5828,31 +5783,6 @@ export interface components {
             /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
             credits?: components["schemas"]["SeriesCredit"][];
         };
-        SeriesFollowRequest: {
-            /**
-             * Format: int64
-             * @description The library new series are added to.
-             */
-            category_id: number;
-            /** @description A person's roles that count (actor, creator, showrunner, director, writer, executive_producer, producer, composer); any when empty. Ignored for a network. */
-            roles?: string[];
-            /**
-             * @description The add dialog's monitor choice for every series the follow adds.
-             * @default future
-             * @enum {string}
-             */
-            monitor: "all" | "future" | "missing" | "existing" | "recent" | "pilot" | "first_season" | "last_season" | "none";
-            /**
-             * @description Also add older series
-             * @default false
-             */
-            back_catalogue: boolean;
-        };
-        SeriesFollow: {
-            roles: string[];
-            monitor: string;
-            back_catalogue: boolean;
-        };
         SeriesExclusion: {
             title: string;
             /** @description One id the series was excluded by; removing it allows the series again. */
@@ -5931,10 +5861,6 @@ export interface components {
             elsewhere?: components["schemas"]["SeriesPersonElsewhere"][];
             /** @description What the same person did in other media (the albums of a musician who also acts), found through the Wikidata bridge. */
             other_works?: components["schemas"]["SeriesPersonOtherWork"][];
-            /** @description The caller's follow of this person, absent when there is none. */
-            follow?: components["schemas"]["SeriesFollow"];
-            /** @description Whether the person has a TMDB id */
-            followable?: boolean;
         };
         DuplicateResolution: {
             /** @description Copies now linked to the kept one. */
@@ -5945,24 +5871,6 @@ export interface components {
             freed_bytes: number;
             /** @description One line each for what was left alone and why. */
             problems: string[];
-        };
-        SeriesFollowPreview: {
-            would_add: components["schemas"]["SeriesFollowCandidate"][];
-            /** @description Further candidates beyond the per-run limit */
-            more: number;
-            /** @description Candidates the library already holds or has excluded. */
-            held: number;
-            /** @description The most one run adds. */
-            limit: number;
-        };
-        SeriesFollowCandidate: {
-            /** Format: int64 */
-            tmdb_id: number;
-            title: string;
-            /** Format: int64 */
-            year?: number;
-            poster_url?: string;
-            role?: string;
         };
         SeriesPersonOtherWork: {
             /** Format: int64 */
@@ -5985,10 +5893,6 @@ export interface components {
         SeriesNetworkDetail: {
             network: components["schemas"]["SeriesNetwork"];
             series: components["schemas"]["SeriesSummary"][];
-            /** @description The caller's follow of this network, absent when there is none. */
-            follow?: components["schemas"]["SeriesFollow"];
-            /** @description Whether the network has a TMDB id */
-            followable?: boolean;
         };
         SeriesCredit: {
             /** Format: int64 */
@@ -6157,6 +6061,64 @@ export interface components {
             character?: string;
             parts?: string[];
             work: components["schemas"]["PersonWork"];
+        };
+        FollowOption: {
+            key: string;
+            label: string;
+            /** @description Takes a list of choices; otherwise exactly one. */
+            many: boolean;
+            choices: {
+                key: string;
+                label: string;
+            }[];
+            default: string[];
+        };
+        /** @description A follow of a person or organisation into one library. */
+        FollowRequest: {
+            /** Format: int64 */
+            category_id: number;
+            /** @description A person's roles that count; empty or absent is any role. */
+            roles?: string[];
+            /** @description The media type's follow options by key; a missing key takes its default. */
+            options?: {
+                [key: string]: string[];
+            };
+            /** @description Also add older works */
+            back_catalogue?: boolean;
+            /** @description Search for what the follow adds as soon as it is added. */
+            search?: boolean;
+        };
+        /** @description The caller's follow of a person or organisation in one library. */
+        Follow: {
+            /** Format: int64 */
+            id: number;
+            /** Format: int64 */
+            category_id: number;
+            roles: string[];
+            options: {
+                [key: string]: string[];
+            };
+            back_catalogue: boolean;
+            /** Format: int64 */
+            created_at: number;
+        };
+        FollowCandidate: {
+            provider: string;
+            external_id: string;
+            title: string;
+            /** Format: int64 */
+            year?: number;
+            poster_url?: string;
+            role?: string;
+        };
+        FollowPreview: {
+            would_add: components["schemas"]["FollowCandidate"][];
+            /** @description Beyond the limit */
+            more: number;
+            /** @description Already in the library */
+            held: number;
+            /** @description The most one run adds; 0 is no limit. */
+            limit: number;
         };
         /** @description A label, network, studio or publisher with what it did in the libraries listed. */
         OrganisationEntry: {
@@ -13067,180 +13029,6 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
-    followSeriesPerson: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SeriesFollowRequest"];
-            };
-        };
-        responses: {
-            /** @description The follow as stored. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesFollow"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-        };
-    };
-    unfollowSeriesPerson: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Unfollowed. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-        };
-    };
-    previewSeriesPersonFollow: {
-        parameters: {
-            query: {
-                category_id: number;
-                /** @description Comma-separated roles; absent means any role. */
-                roles?: string;
-                back_catalogue?: boolean;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The series the next run would add. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesFollowPreview"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-        };
-    };
-    previewSeriesNetworkFollow: {
-        parameters: {
-            query: {
-                category_id: number;
-                back_catalogue?: boolean;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The series the next run would add. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesFollowPreview"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-        };
-    };
-    followSeriesNetwork: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["SeriesFollowRequest"];
-            };
-        };
-        responses: {
-            /** @description The follow as stored. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesFollow"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
-        };
-    };
-    unfollowSeriesNetwork: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Unfollowed. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-        };
-    };
     listSeriesNetworks: {
         parameters: {
             query: {
@@ -13822,6 +13610,232 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
+    listPersonFollows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The follows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Follow"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    followPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowRequest"];
+            };
+        };
+        responses: {
+            /** @description The follow as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Follow"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    unfollowPerson: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unfollowed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewPersonFollow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
+    listOrganisationFollows: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The follows. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Follow"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    followOrganisation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowRequest"];
+            };
+        };
+        responses: {
+            /** @description The follow as stored. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Follow"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    unfollowOrganisation: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unfollowed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewOrganisationFollow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
+        };
+    };
     listOrganisations: {
         parameters: {
             query?: {
@@ -14049,46 +14063,6 @@ export interface operations {
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
-        };
-    };
-    subscribePerson: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @example [
-                     *       "music"
-                     *     ] */
-                    media_types: string[];
-                    /** @description Empty or absent means any role. */
-                    roles?: string[];
-                    /** @default false */
-                    monitor_back_catalogue?: boolean;
-                    /** @description Which release-group types this artist brings in -- Album, EP and Single by default. Absent means the library's own setting; naming them here is the per-artist override (2026-09-19). */
-                    include_primary_types?: string[];
-                    /** @description Overrides music.DefaultExcludedSecondaryTypes (compilation, live, remix, dj-mix, mixtape) when present -- an empty array means "exclude nothing", a real choice, distinct from absent (todo 4.4). Music-specific for now (internal/media/music.SubscriptionFilters); opaque to every other media type, per ADR-23. */
-                    exclude_secondary_types?: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Subscribed. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
         };
     };
     listBlocklist: {
@@ -14424,31 +14398,6 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-        };
-    };
-    previewSubscription: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The artist's discography and the default exclusion list. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubscriptionPreview"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            409: components["responses"]["Problem"];
         };
     };
     streamEvents: {

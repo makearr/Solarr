@@ -435,6 +435,15 @@ func (d Desired) TrackClaimsForWork(ctx context.Context, workID int64) ([]TrackC
 	return claims, nil
 }
 
+// WantedIn reports whether a library has any wanted item of the work, monitored or not.
+func (d Desired) WantedIn(ctx context.Context, workID, categoryID int64) (bool, error) {
+	items, err := librarydb.New(d.store.Read()).CountDesiredItemsInCategory(ctx, librarydb.CountDesiredItemsInCategoryParams{WorkID: workID, CategoryID: categoryID})
+	if err != nil {
+		return false, fmt.Errorf("library: items of work %d in library %d: %w", workID, categoryID, err)
+	}
+	return items > 0, nil
+}
+
 // AlbumItemsForWork answers the album-level (SET) items of a work, one per category that wants it.
 func (d Desired) AlbumItemsForWork(ctx context.Context, workID int64) ([]librarydb.DesiredItem, error) {
 	items, err := librarydb.New(d.store.Read()).ListDesiredItemsForWork(ctx, workID)

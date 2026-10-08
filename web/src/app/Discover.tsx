@@ -243,9 +243,9 @@ function IncompleteDiscographies({ categoryId }: { categoryId: number }) {
   });
   const follow = useMutation({
     mutationFn: async (personId: number) => {
-      const { error } = await api.POST("/people/{id}/subscribe", {
+      const { error } = await api.PUT("/people/{id}/follow", {
         params: { path: { id: personId } },
-        body: { media_types: ["music"] },
+        body: { category_id: categoryId, search: true },
       });
       if (error) throw error;
     },

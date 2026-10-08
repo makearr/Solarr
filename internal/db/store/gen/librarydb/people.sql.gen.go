@@ -214,6 +214,22 @@ func (q *Queries) ClearProviderTagAssignments(ctx context.Context, arg ClearProv
 	return err
 }
 
+const countEnabledSubscriptionsForSubject = `-- name: CountEnabledSubscriptionsForSubject :one
+SELECT CAST(COUNT(*) AS INTEGER) AS follows FROM subscription WHERE subject_type = ? AND subject_id = ? AND enabled = 1
+`
+
+type CountEnabledSubscriptionsForSubjectParams struct {
+	SubjectType string
+	SubjectID   int64
+}
+
+func (q *Queries) CountEnabledSubscriptionsForSubject(ctx context.Context, arg CountEnabledSubscriptionsForSubjectParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countEnabledSubscriptionsForSubject, arg.SubjectType, arg.SubjectID)
+	var follows int64
+	err := row.Scan(&follows)
+	return follows, err
+}
+
 const countWorksCreditedTo = `-- name: CountWorksCreditedTo :one
 
 SELECT CAST(COUNT(DISTINCT c.work_id) AS INTEGER) AS total
@@ -636,22 +652,25 @@ func (q *Queries) GetPersonByExternalID(ctx context.Context, arg GetPersonByExte
 const getSubscriptionForSubject = `-- name: GetSubscriptionForSubject :one
 SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
        profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at
-FROM subscription WHERE subject_type = ? AND subject_id = ? AND user_id IS ?
+FROM subscription WHERE subject_type = ? AND subject_id = ? AND user_id IS ? AND category_id IS ?
+ORDER BY id LIMIT 1
 `
 
 type GetSubscriptionForSubjectParams struct {
 	SubjectType string
 	SubjectID   int64
 	UserID      sql.NullInt64
+	CategoryID  sql.NullInt64
 }
 
-// Subscribe's own idempotency check (Invariant 80): the UNIQUE(subject_type,
-// subject_id, user_id) constraint means a second Subscribe call for the same
-// person and user must look before it inserts, not rely on the constraint to
-// refuse -- "user_id IS ?" matches SQLite's own NULL semantics for a global
-// (no per-user) subscription.
+// One follow per subject, user and library; "IS" matches NULL as the constraint's own NULLs do not.
 func (q *Queries) GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error) {
-	row := q.db.QueryRowContext(ctx, getSubscriptionForSubject, arg.SubjectType, arg.SubjectID, arg.UserID)
+	row := q.db.QueryRowContext(ctx, getSubscriptionForSubject,
+		arg.SubjectType,
+		arg.SubjectID,
+		arg.UserID,
+		arg.CategoryID,
+	)
 	var i Subscription
 	err := row.Scan(
 		&i.ID,
@@ -1269,6 +1288,55 @@ func (q *Queries) ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsFo
 	for rows.Next() {
 		var i ListSubjectsForTagTreeRow
 		if err := rows.Scan(&i.SubjectType, &i.SubjectID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSubscriptionsForSubject = `-- name: ListSubscriptionsForSubject :many
+SELECT id, subject_type, subject_id, media_types_json, roles_json, category_id,
+       profile_id, filters_json, monitor_back_catalogue, enabled, user_id, created_at
+FROM subscription WHERE subject_type = ? AND subject_id = ? AND user_id IS ?
+ORDER BY category_id, id
+`
+
+type ListSubscriptionsForSubjectParams struct {
+	SubjectType string
+	SubjectID   int64
+	UserID      sql.NullInt64
+}
+
+func (q *Queries) ListSubscriptionsForSubject(ctx context.Context, arg ListSubscriptionsForSubjectParams) ([]Subscription, error) {
+	rows, err := q.db.QueryContext(ctx, listSubscriptionsForSubject, arg.SubjectType, arg.SubjectID, arg.UserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Subscription{}
+	for rows.Next() {
+		var i Subscription
+		if err := rows.Scan(
+			&i.ID,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.MediaTypesJson,
+			&i.RolesJson,
+			&i.CategoryID,
+			&i.ProfileID,
+			&i.FiltersJson,
+			&i.MonitorBackCatalogue,
+			&i.Enabled,
+			&i.UserID,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

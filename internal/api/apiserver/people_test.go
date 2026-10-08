@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"reflect"
 	"slices"
@@ -48,19 +49,9 @@ func (f *fakePeopleReader) GetPersonDetail(_ context.Context, id int64, visible 
 	return f.detail, f.credits, nil
 }
 
-// fakePeopleSubscriber records the arguments Subscribe was called with.
+// fakePeopleSubscriber records what Remove was called with.
 type fakePeopleSubscriber struct {
-	err                    error
-	called                 bool
-	lastPersonID           int64
-	lastUserID             int64
-	lastCategoryID         int64
-	lastMediaTypes         []string
-	lastRoles              []string
-	lastMonitorBack        bool
-	lastIncludePrimaries   *[]string
-	lastExcludeSecondaries *[]string
-
+	err            error
 	removeCalled   bool
 	removePersonID int64
 	removeUserID   int64
@@ -72,35 +63,44 @@ func (f *fakePeopleSubscriber) Remove(_ context.Context, personID, userID int64)
 	return f.err
 }
 
-func (f *fakePeopleSubscriber) Subscribe(
-	_ context.Context, personID, userID, categoryID int64, mediaTypes, roles []string,
-	monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
-) error {
-	f.called = true
-	f.lastCategoryID = categoryID
-	f.lastIncludePrimaries = includePrimaryTypes
-	f.lastPersonID = personID
-	f.lastUserID = userID
-	f.lastMediaTypes = mediaTypes
-	f.lastRoles = roles
-	f.lastMonitorBack = monitorBackCatalogue
-	f.lastExcludeSecondaries = excludeSecondaryTypes
+// fakeFollower records the last follow call.
+type fakeFollower struct {
+	err         error
+	called      string
+	subject     string
+	subjectID   int64
+	userID      int64
+	visible     []int64
+	request     gen.FollowRequest
+	categoryID  int64
+	previewWith gen.FollowPreview
+}
+
+func (f *fakeFollower) record(call, subject string, id, user int64, visible []int64) {
+	f.called, f.subject, f.subjectID, f.userID, f.visible = call, subject, id, user, visible
+}
+
+func (f *fakeFollower) Follows(_ context.Context, subject string, id, user int64, visible []int64) ([]gen.Follow, error) {
+	f.record("follows", subject, id, user, visible)
+	return []gen.Follow{}, f.err
+}
+
+func (f *fakeFollower) Follow(_ context.Context, subject string, id, user int64, visible []int64, request gen.FollowRequest) (gen.Follow, error) {
+	f.record("follow", subject, id, user, visible)
+	f.request = request
+	return gen.Follow{Id: 1, CategoryId: request.CategoryId, Roles: []string{}, Options: map[string][]string{}}, f.err
+}
+
+func (f *fakeFollower) Unfollow(_ context.Context, subject string, id, user, categoryID int64, visible []int64) error {
+	f.record("unfollow", subject, id, user, visible)
+	f.categoryID = categoryID
 	return f.err
 }
 
-// fakeSubscriptionPreviewer records the id Preview was called with.
-type fakeSubscriptionPreviewer struct {
-	row    apiserver.SubscriptionPreviewRow
-	err    error
-	lastID int64
-}
-
-func (f *fakeSubscriptionPreviewer) Preview(_ context.Context, personID int64) (apiserver.SubscriptionPreviewRow, error) {
-	f.lastID = personID
-	if f.err != nil {
-		return apiserver.SubscriptionPreviewRow{}, f.err
-	}
-	return f.row, nil
+func (f *fakeFollower) Preview(_ context.Context, subject string, id int64, visible []int64, request gen.FollowRequest) (gen.FollowPreview, error) {
+	f.record("preview", subject, id, 0, visible)
+	f.request = request
+	return f.previewWith, f.err
 }
 
 func TestListPeople_ResponseShapeAndCursor(t *testing.T) {
@@ -271,183 +271,54 @@ func requestingListener(t *testing.T, permission settings.Permission) (worksFixt
 	return fixture, user, fixture.signIn(t, "listener")
 }
 
-// Subscribing makes an artist's albums wanted: it needs request, and the albums go to that library.
-func TestSubscribePerson_NeedsRequestInALibraryOfTheMediaType(t *testing.T) {
+// A follow adds works to a library: it needs request there, and reaches the follower as the caller.
+func TestFollowPerson_NeedsRequestInTheLibrary(t *testing.T) {
 	fixture, _, cookies := requestingListener(t, settings.PermissionRead)
-	body := `{"media_types":["music"],"roles":["artist"]}`
-	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", body)); recorder.Code != http.StatusForbidden ||
-		fixture.subscriber.called {
-		t.Errorf("read only: status %d, subscribed %v; want 403 and nothing subscribed", recorder.Code, fixture.subscriber.called)
-	}
-
-	fixture, _, cookies = requestingListener(t, settings.PermissionRequest)
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", body))
 	music := fixture.cache.Snapshot().Categories()[0]
-	if recorder.Code != http.StatusNoContent || fixture.subscriber.lastCategoryID != music.ID {
-		t.Errorf("request: status %d, library %d; want 204 into library %d", recorder.Code, fixture.subscriber.lastCategoryID, music.ID)
+	body := fmt.Sprintf(`{"category_id":%d,"roles":["artist"],"options":{"include_primary_types":["Album"]},"back_catalogue":true}`, music.ID)
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/people/7/follow", body)); recorder.Code != http.StatusForbidden || fixture.follower.called != "" {
+		t.Errorf("read only: status %d, called %q; want 403 and nothing followed", recorder.Code, fixture.follower.called)
 	}
-}
 
-func TestSubscribePerson_ReachesTheSubscriberWithTheCallersUserID(t *testing.T) {
 	fixture, user, cookies := requestingListener(t, settings.PermissionRequest)
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
-		`{"media_types":["music"],"roles":["artist"],"monitor_back_catalogue":true}`))
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
-	}
-	if !fixture.subscriber.called {
-		t.Fatal("Subscribe was not called")
-	}
-	if fixture.subscriber.lastPersonID != 7 {
-		t.Errorf("personID = %d, want 7", fixture.subscriber.lastPersonID)
-	}
-	if fixture.subscriber.lastUserID != user.ID {
-		t.Errorf("userID = %d, want the signed-in user's id %d", fixture.subscriber.lastUserID, user.ID)
-	}
-	if len(fixture.subscriber.lastMediaTypes) != 1 || fixture.subscriber.lastMediaTypes[0] != "music" {
-		t.Errorf("MediaTypes = %+v, want [music]", fixture.subscriber.lastMediaTypes)
-	}
-	if len(fixture.subscriber.lastRoles) != 1 || fixture.subscriber.lastRoles[0] != "artist" {
-		t.Errorf("Roles = %+v, want [artist]", fixture.subscriber.lastRoles)
-	}
-	if !fixture.subscriber.lastMonitorBack {
-		t.Error("MonitorBackCatalogue = false, want true")
+	music = fixture.cache.Snapshot().Categories()[0]
+	body = fmt.Sprintf(`{"category_id":%d,"roles":["artist"],"options":{"include_primary_types":["Album"]},"back_catalogue":true}`, music.ID)
+	recorder := fixture.do(authedPut(t, cookies, "/api/v1/people/7/follow", body))
+	follower := fixture.follower
+	if recorder.Code != http.StatusOK || follower.called != "follow" || follower.subject != apiserver.SubjectPerson || follower.subjectID != 7 ||
+		follower.userID != user.ID || !slices.Equal(follower.visible, []int64{music.ID}) || follower.request.CategoryId != music.ID ||
+		!slices.Equal((*follower.request.Options)["include_primary_types"], []string{"Album"}) {
+		t.Errorf("request: status %d (%s), follower %+v; want 200 as the caller into library %d", recorder.Code, recorder.Body, follower, music.ID)
 	}
 }
 
-func TestSubscribePerson_EmptyMediaTypesAnswers400(t *testing.T) {
-	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":[]}`))
-	if recorder.Code != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400 for empty media_types", recorder.Code)
-	}
-	if fixture.subscriber.called {
-		t.Error("Subscribe was called despite the invalid body")
-	}
-}
-
-func TestSubscribePerson_MissingPersonAnswers404(t *testing.T) {
-	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
-
-	fixture.subscriber.err = sql.ErrNoRows
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/404/subscribe", `{"media_types":["music"]}`))
-	if recorder.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404 when the subscriber reports the person missing", recorder.Code)
+func TestFollow_AnswersByWhatTheFollowerReports(t *testing.T) {
+	for _, tc := range []struct {
+		err  error
+		want int
+	}{
+		{apiserver.ErrPersonNotFound, http.StatusNotFound},
+		{apiserver.ErrOrganisationNotFound, http.StatusNotFound},
+		{apiserver.ErrNotFollowable, http.StatusBadRequest},
+		{apiserver.ErrFollowSourceMissing, http.StatusConflict},
+	} {
+		fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
+		music := fixture.cache.Snapshot().Categories()[0]
+		fixture.follower.err = tc.err
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/organisations/3/follow/preview", fmt.Sprintf(`{"category_id":%d}`, music.ID)))
+		if recorder.Code != tc.want || fixture.follower.subject != apiserver.SubjectOrganisation {
+			t.Errorf("%v: status %d, subject %q; want %d", tc.err, recorder.Code, fixture.follower.subject, tc.want)
+		}
 	}
 }
 
-// Absent exclude_secondary_types must reach the subscriber as a nil pointer
-// (todo 4.4: "use the media type's own default"), not an empty slice --
-// music.SubscriptionFilters treats the two very differently.
-func TestSubscribePerson_AbsentExcludeSecondaryTypesReachesTheSubscriberAsNil(t *testing.T) {
-	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":["music"]}`))
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
-	}
-	if fixture.subscriber.lastExcludeSecondaries != nil {
-		t.Errorf("lastExcludeSecondaries = %v, want nil for an absent field", *fixture.subscriber.lastExcludeSecondaries)
-	}
-}
-
-// An explicit empty list ("exclude nothing") must reach the subscriber as a
-// non-nil pointer to an empty slice, distinct from the absent case above.
-func TestSubscribePerson_ExplicitEmptyExcludeSecondaryTypesReachesTheSubscriberAsEmptySlice(t *testing.T) {
-	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
-		`{"media_types":["music"],"exclude_secondary_types":[]}`))
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
-	}
-	if fixture.subscriber.lastExcludeSecondaries == nil {
-		t.Fatal("lastExcludeSecondaries = nil, want a non-nil pointer to an empty slice")
-	}
-	if len(*fixture.subscriber.lastExcludeSecondaries) != 0 {
-		t.Errorf("lastExcludeSecondaries = %v, want empty", *fixture.subscriber.lastExcludeSecondaries)
-	}
-}
-
-func TestSubscribePerson_ExcludeSecondaryTypesWithValuesReachesTheSubscriber(t *testing.T) {
-	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/7/subscribe",
-		`{"media_types":["music"],"exclude_secondary_types":["live","remix"]}`))
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
-	}
-	if fixture.subscriber.lastExcludeSecondaries == nil {
-		t.Fatal("lastExcludeSecondaries = nil, want [live remix]")
-	}
-	if got := *fixture.subscriber.lastExcludeSecondaries; len(got) != 2 || got[0] != "live" || got[1] != "remix" {
-		t.Errorf("lastExcludeSecondaries = %v, want [live remix]", got)
-	}
-}
-
-func TestPreviewSubscription_ReturnsTheDiscographyAndDefaults(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
-
-	fixture.subscriptionPreview.row = apiserver.SubscriptionPreviewRow{
-		ReleaseGroups: []apiserver.PreviewReleaseGroupRow{
-			{MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album", SecondaryTypes: nil},
-			{MBID: "rg-2", Title: "Live at Glastonbury", PrimaryType: "Album", SecondaryTypes: []string{"Live"}},
-		},
-		DefaultExcludedSecondaryTypes: []string{"compilation", "live", "remix", "dj-mix", "mixtape"},
-	}
-
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7/subscription-preview"))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
-	}
-	if fixture.subscriptionPreview.lastID != 7 {
-		t.Errorf("lastID = %d, want 7", fixture.subscriptionPreview.lastID)
-	}
-
-	var body struct {
-		ReleaseGroups []struct {
-			MBID  string `json:"mbid"`
-			Title string `json:"title"`
-		} `json:"release_groups"`
-		DefaultExcludedSecondaryTypes []string `json:"default_excluded_secondary_types"`
-	}
-	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if len(body.ReleaseGroups) != 2 || body.ReleaseGroups[1].Title != "Live at Glastonbury" {
-		t.Errorf("release_groups = %+v, want the fake's canned rows round-tripped", body.ReleaseGroups)
-	}
-	if len(body.DefaultExcludedSecondaryTypes) != 5 {
-		t.Errorf("default_excluded_secondary_types = %v, want 5 entries", body.DefaultExcludedSecondaryTypes)
-	}
-}
-
-func TestPreviewSubscription_NoArtistIDAnswers409(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
-	fixture.subscriptionPreview.err = apiserver.ErrNoArtistID
-
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/7/subscription-preview"))
-	if recorder.Code != http.StatusConflict {
-		t.Errorf("status = %d, want 409 when the person has no MusicBrainz artist id yet", recorder.Code)
-	}
-}
-
-func TestPreviewSubscription_MissingPersonAnswers404(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
-	cookies := fixture.signIn(t, "listener")
-	fixture.subscriptionPreview.err = sql.ErrNoRows
-
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/people/404/subscription-preview"))
-	if recorder.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", recorder.Code)
+func TestUnfollowPerson_NamesTheLibrary(t *testing.T) {
+	fixture, user, cookies := requestingListener(t, settings.PermissionRequest)
+	music := fixture.cache.Snapshot().Categories()[0]
+	recorder := fixture.do(authedDelete(t, cookies, fmt.Sprintf("/api/v1/people/7/follow?category_id=%d", music.ID)))
+	if recorder.Code != http.StatusNoContent || fixture.follower.called != "unfollow" || fixture.follower.categoryID != music.ID ||
+		fixture.follower.userID != user.ID {
+		t.Errorf("status %d, follower %+v; want 204 for library %d as the caller", recorder.Code, fixture.follower, music.ID)
 	}
 }
 
@@ -496,32 +367,6 @@ func TestRemovePerson_MissingPersonIsNotFound(t *testing.T) {
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/people/999/remove", ""))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 (%s)", recorder.Code, recorder.Body)
-	}
-}
-
-// The per-artist override the user asked for (2026-09-19): naming types on
-// the request reaches the subscriber, and naming none leaves it to resolve
-// the library's own setting.
-func TestSubscribePerson_CarriesThePrimaryTypeOverride(t *testing.T) {
-	fixture, _, cookies := requestingListener(t, settings.PermissionRequest)
-
-	request := authedPost(t, cookies, "/api/v1/people/7/subscribe",
-		`{"media_types":["music"],"include_primary_types":["Album"]}`)
-	if recorder := fixture.do(request); recorder.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
-	}
-	got := fixture.subscriber.lastIncludePrimaries
-	if got == nil || len(*got) != 1 || (*got)[0] != "Album" {
-		t.Errorf("lastIncludePrimaries = %v, want [Album]", got)
-	}
-
-	request = authedPost(t, cookies, "/api/v1/people/7/subscribe", `{"media_types":["music"]}`)
-	if recorder := fixture.do(request); recorder.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
-	}
-	if fixture.subscriber.lastIncludePrimaries != nil {
-		t.Errorf("lastIncludePrimaries = %v, want nil so the library's own setting is used",
-			*fixture.subscriber.lastIncludePrimaries)
 	}
 }
 

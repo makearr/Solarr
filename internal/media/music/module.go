@@ -26,6 +26,8 @@ type Module struct {
 	Feed
 	// CutoffJob is music's part of the cutoff check.
 	CutoffJob
+	// Following is music's part of a follow.
+	Following
 }
 
 // HuntSearch implements media.Hunting.
@@ -63,6 +65,7 @@ func (Module) Descriptor() media.Descriptor {
 		Roles: []media.Role{
 			{Key: "artist", Label: "Artist", Lead: true, Followable: true},
 		},
+		FollowOptions: followOptions,
 	}
 }
 

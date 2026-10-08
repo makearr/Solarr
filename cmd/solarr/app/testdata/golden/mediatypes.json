@@ -1,5 +1,89 @@
 [
   {
+    "follow_options": [
+      {
+        "choices": [
+          {
+            "key": "Album",
+            "label": "Albums"
+          },
+          {
+            "key": "EP",
+            "label": "EPs"
+          },
+          {
+            "key": "Single",
+            "label": "Singles"
+          },
+          {
+            "key": "Broadcast",
+            "label": "Broadcasts"
+          },
+          {
+            "key": "Other",
+            "label": "Other"
+          }
+        ],
+        "default": [
+          "Album",
+          "EP",
+          "Single"
+        ],
+        "key": "include_primary_types",
+        "label": "Release types",
+        "many": true
+      },
+      {
+        "choices": [
+          {
+            "key": "compilation",
+            "label": "Compilations"
+          },
+          {
+            "key": "live",
+            "label": "Live"
+          },
+          {
+            "key": "remix",
+            "label": "Remixes"
+          },
+          {
+            "key": "dj-mix",
+            "label": "DJ mixes"
+          },
+          {
+            "key": "mixtape",
+            "label": "Mixtapes"
+          },
+          {
+            "key": "soundtrack",
+            "label": "Soundtracks"
+          },
+          {
+            "key": "demo",
+            "label": "Demos"
+          },
+          {
+            "key": "spokenword",
+            "label": "Spoken word"
+          },
+          {
+            "key": "interview",
+            "label": "Interviews"
+          }
+        ],
+        "default": [
+          "compilation",
+          "live",
+          "remix",
+          "dj-mix",
+          "mixtape"
+        ],
+        "key": "exclude_secondary_types",
+        "label": "Leave out",
+        "many": true
+      }
+    ],
     "group": {
       "many": "Discs",
       "one": "Disc"
@@ -34,6 +118,46 @@
     }
   },
   {
+    "follow_options": [
+      {
+        "choices": [
+          {
+            "key": "future",
+            "label": "Future episodes"
+          },
+          {
+            "key": "all",
+            "label": "All episodes"
+          },
+          {
+            "key": "missing",
+            "label": "Missing episodes"
+          },
+          {
+            "key": "first_season",
+            "label": "First season"
+          },
+          {
+            "key": "last_season",
+            "label": "Latest season"
+          },
+          {
+            "key": "pilot",
+            "label": "Pilot"
+          },
+          {
+            "key": "none",
+            "label": "None"
+          }
+        ],
+        "default": [
+          "future"
+        ],
+        "key": "monitor",
+        "label": "Monitor",
+        "many": false
+      }
+    ],
     "group": {
       "many": "Seasons",
       "one": "Season"

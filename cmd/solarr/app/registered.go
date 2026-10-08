@@ -70,7 +70,15 @@ func (p *process) musicModule() music.Module {
 		Desired: library.NewDesired(p.library), Settings: p.cache, Recycle: p.recycleSuperseded,
 		Clock: clock.NewSystem(), Logger: p.logger,
 	}
-	return music.Module{Hunt: p.musicHunt, Feed: feed, CutoffJob: check, Rename: &rename, Sweep: scan.Sweep{
+	following := music.Following{
+		People: people, Identity: library.NewIdentity(p.library), Desired: &desired, Categories: adapters.Categories{Cache: p.cache},
+		Discography: provider, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
+		Search: func(ctx context.Context, categoryID, personID int64) error {
+			_, err := music.EnqueueSearchArtist(ctx, p.queue, categoryID, personID)
+			return err
+		},
+	}
+	return music.Module{Hunt: p.musicHunt, Feed: feed, CutoffJob: check, Following: following, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -127,6 +135,11 @@ func (p *process) tvModule() tv.Module {
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
 		Retry: retry,
+		Following: tv.Following{
+			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,
+			Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+			Clock: clock.NewSystem(),
+		},
 	}
 }
 

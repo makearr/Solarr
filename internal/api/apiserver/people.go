@@ -3,9 +3,7 @@ package apiserver
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -116,57 +114,12 @@ type PeopleReader interface {
 	GetPersonDetail(ctx context.Context, id int64, visible []int64) (gen.PersonDetail, []PersonCreditRow, error)
 }
 
-// PeopleSubscriber subscribes the calling user to a person (ADR-32).
-type PeopleSubscriber interface {
-	// Subscribe answers a missing person id with an error wrapping
-	// sql.ErrNoRows. Both type lists are nil for "use the default" -- the
-	// library's own for primary types, the media type's for secondary ones
-	// -- and non-nil (however short, including empty) for an explicit
-	// per-artist override, which todo 4.4's filter preview needs.
-	Subscribe(
-		ctx context.Context, personID, userID, categoryID int64, mediaTypes, roles []string,
-		monitorBackCatalogue bool, includePrimaryTypes, excludeSecondaryTypes *[]string,
-	) error
-	// Remove unsubscribes, unmonitors and deletes the person. It never
-	// touches files: removing an artist means no longer following them.
-	// A missing person answers an error wrapping sql.ErrNoRows.
+// PersonRemover removes an artist the caller no longer wants (revision 7.3).
+type PersonRemover interface {
+	// Remove unfollows and deletes the person, never their files. A missing person answers an error wrapping
+	// sql.ErrNoRows.
 	Remove(ctx context.Context, personID, userID int64) error
 }
-
-// PreviewReleaseGroupRow is one release group in an artist's discography,
-// unfiltered -- what the subscribe screen lets a user weigh a filter choice
-// against before saving (todo 4.4).
-type PreviewReleaseGroupRow struct {
-	MBID             string
-	Title            string
-	PrimaryType      string
-	FirstReleaseDate string
-	SecondaryTypes   []string
-}
-
-// SubscriptionPreviewRow is an artist's full discography plus the default
-// exclusion list, so the client can pre-check the same boxes a subscription
-// with no filter override would get.
-type SubscriptionPreviewRow struct {
-	ReleaseGroups                 []PreviewReleaseGroupRow
-	DefaultExcludedSecondaryTypes []string
-}
-
-// SubscriptionPreviewer answers what an artist's discography looks like
-// before a subscription filter is saved (ADR-38's preview-before-enable
-// shape, todo 4.4).
-type SubscriptionPreviewer interface {
-	// Preview answers a missing person id with an error wrapping
-	// sql.ErrNoRows, and a person with no MusicBrainz artist id yet with
-	// ErrNoArtistID.
-	Preview(ctx context.Context, personID int64) (SubscriptionPreviewRow, error)
-}
-
-// ErrNoArtistID reports a person with no MusicBrainz artist external id yet
-// -- there is no discography to browse until one exists (the same gap
-// SubscriptionExpandJob's own expandOne already reports, mapped to 409 here
-// since it's a real, recoverable precondition rather than a missing person).
-var ErrNoArtistID = errors.New("apiserver: person has no musicbrainz artist id yet")
 
 // routeListPeople parses the query string into the generated parameters.
 func (s *Server) routeListPeople(w http.ResponseWriter, r *http.Request) {
@@ -337,143 +290,6 @@ func personWorkView(row PersonWorkRow, now time.Time) gen.PersonWork {
 	return view
 }
 
-// routeSubscribePerson parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routeSubscribePerson(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a person id must be a number")
-		return
-	}
-	s.SubscribePerson(w, r, id)
-}
-
-// SubscribePerson subscribes the calling user to a person (ADR-32) and marks
-// them monitored. The request body is decoded here, not by a generated
-// wrapper (ADR-31: chi-server generates the interface only, routing and body
-// decoding stay hand-written, same as Login/ImportSettings).
-func (s *Server) SubscribePerson(w http.ResponseWriter, r *http.Request, id int64) {
-	access, err := authz.FromContext(r.Context())
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-
-	var body gen.SubscribePersonJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
-		return
-	}
-	if len(body.MediaTypes) == 0 {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "media_types must name at least one media type")
-		return
-	}
-	if s.peopleSubscriber == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
-			"Unavailable", "subscriptions are not available")
-		return
-	}
-
-	// The artist's albums become wanted in the first library of the media type the caller may
-	// request in; none is 403, as searching there would be (2026-09-28).
-	mediaType := "music"
-	for _, named := range body.MediaTypes {
-		if named != "" {
-			mediaType = named
-			break
-		}
-	}
-	var categoryID int64
-	for _, category := range access.Categories(settings.PermissionRequest) {
-		if category.MediaType == mediaType {
-			categoryID = category.ID
-			break
-		}
-	}
-	if categoryID == 0 {
-		writeError(w, s.logger, fmt.Errorf("%w: no %s library allows requests", authz.ErrInsufficientPermission, mediaType))
-		return
-	}
-
-	roles := derefOr(body.Roles, nil)
-	err = s.peopleSubscriber.Subscribe(r.Context(), id, access.UserID(), categoryID,
-		body.MediaTypes, roles, derefOr(body.MonitorBackCatalogue, false),
-		body.IncludePrimaryTypes, body.ExcludeSecondaryTypes)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
-		return
-	}
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// routePreviewSubscription parses the id path parameter, mirroring routeGetWork.
-func (s *Server) routePreviewSubscription(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a person id must be a number")
-		return
-	}
-	s.PreviewSubscription(w, r, id)
-}
-
-// PreviewSubscription answers an artist's full discography, unfiltered, so
-// the subscribe screen can show what a filter choice would admit or exclude
-// before saving (todo 4.4, ADR-38's preview-before-enable shape).
-func (s *Server) PreviewSubscription(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	if s.subscriptionPreviewer == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
-			"Unavailable", "subscription preview is not available")
-		return
-	}
-
-	preview, err := s.subscriptionPreviewer.Preview(r.Context(), id)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
-		return
-	}
-	if errors.Is(err, ErrNoArtistID) {
-		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
-			"No artist id yet", "this person has no MusicBrainz artist id to browse a discography for")
-		return
-	}
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	writeJSON(w, s.logger, http.StatusOK, buildSubscriptionPreviewView(preview))
-}
-
-func buildSubscriptionPreviewView(row SubscriptionPreviewRow) gen.SubscriptionPreview {
-	groups := make([]gen.PreviewReleaseGroup, len(row.ReleaseGroups))
-	for index, group := range row.ReleaseGroups {
-		groups[index] = gen.PreviewReleaseGroup{
-			Mbid: group.MBID, Title: group.Title, SecondaryTypes: group.SecondaryTypes,
-		}
-		if group.PrimaryType != "" {
-			primaryType := group.PrimaryType
-			groups[index].PrimaryType = &primaryType
-		}
-		if group.FirstReleaseDate != "" {
-			date := group.FirstReleaseDate
-			groups[index].FirstReleaseDate = &date
-		}
-	}
-	return gen.SubscriptionPreview{
-		ReleaseGroups: groups, DefaultExcludedSecondaryTypes: row.DefaultExcludedSecondaryTypes,
-	}
-}
-
 func (s *Server) routeRemovePerson(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -496,12 +312,12 @@ func (s *Server) RemovePerson(w http.ResponseWriter, r *http.Request, id int64) 
 		writeError(w, s.logger, err)
 		return
 	}
-	if s.peopleSubscriber == nil {
+	if s.personRemover == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "people are not available")
 		return
 	}
-	if err := s.peopleSubscriber.Remove(r.Context(), id, access.UserID()); err != nil {
+	if err := s.personRemover.Remove(r.Context(), id, access.UserID()); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
 			return

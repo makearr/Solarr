@@ -4,6 +4,7 @@ import (
 	"slices"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
@@ -50,6 +51,16 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 			Group:        apiserver.MediaTerm(descriptor.Vocabulary.Group),
 			LeadPeople:   apiserver.MediaTerm(descriptor.Vocabulary.LeadPeople),
 			Organisation: apiserver.MediaTerm(descriptor.Vocabulary.Organisation),
+		}
+		for _, option := range descriptor.FollowOptions {
+			view := gen.FollowOption{Key: option.Key, Label: option.Label, Many: option.Many, Default: option.Default}
+			for _, choice := range option.Choices {
+				view.Choices = append(view.Choices, struct {
+					Key   string `json:"key"`
+					Label string `json:"label"`
+				}{Key: choice.Key, Label: choice.Label})
+			}
+			info.FollowOptions = append(info.FollowOptions, view)
 		}
 		for _, role := range descriptor.Roles {
 			info.Roles = append(info.Roles, apiserver.MediaRole{

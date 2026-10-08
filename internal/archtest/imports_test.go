@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/acquiring/cutoff", "internal/acquiring/rss",
+	"cmd/solarr/app": {"internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -40,7 +40,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {
-		"internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
+		"internal/service/follow", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
 		"internal/media", "internal/scanning/scan", "internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
@@ -322,6 +322,7 @@ var allowedInternalImports = map[string][]string{
 	// The media-type registry: what core asks instead of naming a type (ADR-23).
 	// Bounded fan-out with panic recovery; no dependencies.
 	"internal/platform/parallel": {},
+	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
 	"internal/media":             {"internal/acquiring/cutoff", "internal/acquiring/rss", "internal/moving/mover", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
 	"internal/media/tv":          {"internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// Sonarr's TheTVDB proxy (T4): the preferred TV source, never required.

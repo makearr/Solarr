@@ -3,6 +3,7 @@ package media
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -48,6 +49,22 @@ type Role struct {
 	Character bool
 }
 
+// Choice is one value a follow option may take.
+type Choice struct {
+	Key   string
+	Label string
+}
+
+// FollowOption is one setting of a follow the media type declares, stored under Key in the follow's filters.
+type FollowOption struct {
+	Key   string
+	Label string
+	// Many options take a list of choices, the others exactly one.
+	Many    bool
+	Choices []Choice
+	Default []string
+}
+
 // Descriptor is everything about a media type that is data: sent to the web interface as it is.
 type Descriptor struct {
 	Key        Key
@@ -55,6 +72,8 @@ type Descriptor struct {
 	Vocabulary Vocabulary
 	Levels     []model.Level
 	Roles      []Role
+	// FollowOptions are the settings a follow of a person or organisation offers in this type's libraries.
+	FollowOptions []FollowOption
 }
 
 // Module is one media type. Its behaviour is in the capability interfaces it also implements.
@@ -118,6 +137,51 @@ type Feeding interface {
 // Upgrading is the capability of a media type whose owned files are checked against their library's cutoff.
 type Upgrading interface {
 	cutoff.Check
+}
+
+// Follow is one follow of a person or organisation in a library of this media type, as a module reads it.
+type Follow struct {
+	SubjectType string
+	SubjectID   int64
+	CategoryID  int64
+	// Roles limits a person's follow to these roles; empty is any.
+	Roles         []string
+	FiltersJSON   string
+	BackCatalogue bool
+	// CreatedAt is when the follow was made, Unix seconds: what counts as new for it.
+	CreatedAt int64
+}
+
+// FollowCandidate is one work a follow would add, as the providers know it.
+type FollowCandidate struct {
+	// Provider and ExternalID name the work at the provider, which is also what an exclusion is kept by.
+	Provider   string
+	ExternalID string
+	Title      string
+	Year       int64
+	PosterURL  string
+	// Role is what the person did on it; empty for an organisation.
+	Role string
+	// Held is set when the library already has the work, monitored or not.
+	Held bool
+}
+
+// Following is the capability of a media type whose works can be added by following a person or organisation.
+type Following interface {
+	// FollowCandidates lists the subject's works the follow admits, newest first, with what the library holds marked.
+	FollowCandidates(ctx context.Context, follow Follow) ([]FollowCandidate, error)
+	// AddFollowed adds one candidate to the follow's library. Additive only: a held work is left as it is (Invariant 71).
+	AddFollowed(ctx context.Context, follow Follow, candidate FollowCandidate) error
+	// FollowLimit bounds what one run adds for one follow; 0 is no bound.
+	FollowLimit(backCatalogue bool) int
+}
+
+// ErrNoFollowSource reports a follow whose provider is not set up yet: no key stored, or no id to follow by.
+var ErrNoFollowSource = errors.New("media: the provider a follow needs is not available")
+
+// FollowSearching is the capability of a following media type that can search for what a follow just added.
+type FollowSearching interface {
+	SearchFollowed(ctx context.Context, follow Follow) error
 }
 
 // JobRegistrar takes one job type with its handler.

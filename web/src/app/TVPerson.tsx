@@ -170,14 +170,7 @@ export function TVPerson() {
           ) : (
             <p className="text-sm text-ink-muted">No biography yet. It comes from TMDB once a key is stored under Settings → Metadata.</p>
           )}
-          <FollowPanel
-            kind="person"
-            subjectId={data.id}
-            categoryId={categoryId}
-            follow={data.follow}
-            followable={data.followable}
-            suggestedRoles={[...new Set(data.credits.map((credit) => credit.role).filter((role) => role !== "guest_star"))]}
-          />
+          <FollowPanel subject="person" subjectId={data.id} libraryIds={[Number(categoryId)]} />
           <div className="mt-auto flex gap-3 text-xs">
             {links.map(([label, , href]) =>
               href ? (

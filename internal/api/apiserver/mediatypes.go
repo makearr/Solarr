@@ -32,6 +32,8 @@ type MediaTypeInfo struct {
 	LeadPeople   MediaTerm
 	Organisation MediaTerm
 	Roles        []MediaRole
+	// FollowOptions are what a follow offers in this type's libraries, as the generated shape carries them.
+	FollowOptions []gen.FollowOption
 }
 
 // MediaTypeCatalog answers which media types have a module, so a handler never names one.
@@ -56,10 +58,18 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				Key: gen.MediaType(info.Key), Label: info.Label, Roles: roles,
 				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
+				FollowOptions: nonNilOptions(info.FollowOptions),
 			})
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+func nonNilOptions(options []gen.FollowOption) []gen.FollowOption {
+	if options == nil {
+		return []gen.FollowOption{}
+	}
+	return options
 }
 
 func termView(term MediaTerm) gen.MediaTerm { return gen.MediaTerm{One: term.One, Many: term.Many} }

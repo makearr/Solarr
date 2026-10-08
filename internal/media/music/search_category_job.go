@@ -97,7 +97,7 @@ type IndexerSource func(ctx context.Context) ([]IndexerConn, error)
 // album-level item in one category. Track-level items in the same category
 // (ErrTrackSearchNotSupported) are skipped, not failed -- this pass's own
 // scope, not a defect in the item. One item failing does not stop the rest,
-// the same per-item isolation SubscriptionExpandJob's own Run already uses.
+// the same per-item isolation the follow sweep uses.
 type SearchCategoryJob struct {
 	grab     Grab
 	indexers IndexerSource
@@ -127,7 +127,7 @@ func NewSearchCategoryJob(config SearchCategoryConfig) *SearchCategoryJob {
 // Run walks every monitored MISSING/PARTIAL item in the category once,
 // searching each in turn. Results are visible per work through
 // Candidates.ListDecisionsForItem -- this run itself reports only a summary
-// to the log, the same level of detail SubscriptionExpandJob's own Run logs.
+// to the log, the same level of detail the follow sweep logs.
 func (j *SearchCategoryJob) Run(ctx context.Context, job jobs.Job) error {
 	var payload SearchCategoryPayload
 	if err := json.Unmarshal(job.Payload, &payload); err != nil {

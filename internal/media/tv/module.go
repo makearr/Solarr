@@ -22,6 +22,8 @@ type Module struct {
 	CutoffJob
 	// Retry identifies again the files that waited for review; nil leaves the job unregistered.
 	Retry *RetryJob
+	// Following is TV's part of a follow.
+	Following
 }
 
 // ScanSweep implements media.Scanning.
@@ -72,6 +74,7 @@ func (Module) Descriptor() media.Descriptor {
 			{Key: "writer", Label: "Writer", Followable: true, PartScoped: true},
 			{Key: "guest_star", Label: "Guest star", PartScoped: true, Character: true},
 		},
+		FollowOptions: followOptions,
 	}
 }
 

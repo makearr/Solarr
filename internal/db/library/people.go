@@ -450,56 +450,23 @@ type SubscriptionRequest struct {
 func (p People) Subscribe(
 	ctx context.Context, at time.Time, personID, userID int64, request SubscriptionRequest,
 ) (int64, error) {
-	mediaTypesJSON, err := json.Marshal(request.MediaTypes)
-	if err != nil {
-		return 0, fmt.Errorf("library: subscribe: encode media types: %w", err)
+	mediaType := ""
+	if len(request.MediaTypes) > 0 {
+		mediaType = request.MediaTypes[0]
 	}
-	var rolesJSON sql.NullString
-	if len(request.Roles) > 0 {
-		encoded, err := json.Marshal(request.Roles)
-		if err != nil {
-			return 0, fmt.Errorf("library: subscribe: encode roles: %w", err)
-		}
-		rolesJSON = sql.NullString{String: string(encoded), Valid: true}
-	}
-	subscriptionUserID := sql.NullInt64{Int64: userID, Valid: userID != 0}
-
 	var subscriptionID int64
-	err = p.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+	err := p.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		// subscription.subject_id is a polymorphic reference with no FK to
-		// enforce it (person, organisation and tag all share the column) --
-		// without this check, subscribing to a nonexistent person would
-		// silently succeed rather than reporting sql.ErrNoRows.
+		// subject_id has no FK (person, organisation and tag share it), so a missing person is checked here.
 		if _, err := queries.GetPerson(ctx, personID); err != nil {
 			return err
 		}
-		if existing, err := queries.GetSubscriptionForSubject(ctx, librarydb.GetSubscriptionForSubjectParams{
-			SubjectType: "person", SubjectID: personID, UserID: subscriptionUserID,
-		}); err == nil {
-			subscriptionID = existing.ID
-			return nil
-		} else if !errors.Is(err, sql.ErrNoRows) {
-			return fmt.Errorf("look up existing subscription: %w", err)
-		}
-
-		monitorBackCatalogue := int64(0)
-		if request.MonitorBackCatalogue {
-			monitorBackCatalogue = 1
-		}
-		subscription, err := queries.CreateSubscription(ctx, librarydb.CreateSubscriptionParams{
-			SubjectType: "person", SubjectID: personID,
-			CategoryID:     sql.NullInt64{Int64: request.CategoryID, Valid: request.CategoryID != 0},
-			MediaTypesJson: string(mediaTypesJSON), RolesJson: rolesJSON,
-			FiltersJson:          sql.NullString{String: request.FiltersJSON, Valid: request.FiltersJSON != ""},
-			MonitorBackCatalogue: monitorBackCatalogue, Enabled: 1,
-			UserID: subscriptionUserID, CreatedAt: at.Unix(),
-		})
-		if err != nil {
-			return fmt.Errorf("create subscription: %w", err)
-		}
-		subscriptionID = subscription.ID
-		return queries.SetPersonMonitored(ctx, librarydb.SetPersonMonitoredParams{Monitored: 1, ID: personID})
+		followed, err := upsertFollow(ctx, queries, at, Subject{Type: "person", ID: personID}, userID, FollowRequest{
+			CategoryID: request.CategoryID, MediaType: mediaType, Roles: request.Roles, FiltersJSON: request.FiltersJSON,
+			BackCatalogue: request.MonitorBackCatalogue,
+		}, false)
+		subscriptionID = followed.ID
+		return err
 	})
 	if err != nil {
 		return 0, fmt.Errorf("library: subscribe person %d: %w", personID, err)

@@ -106,7 +106,7 @@ export function TVNetwork() {
   if (detail.isLoading) return <p className="p-4 text-sm text-ink-muted">Loading…</p>;
   if (detail.isError || !detail.data) return <p className="p-4 text-sm text-danger">This network could not be found.</p>;
 
-  const { network, series, follow, followable } = detail.data;
+  const { network, series } = detail.data;
   return (
     <div className="flex flex-col gap-4 p-4">
       <Link to="/library/$categoryId/$level" params={{ categoryId, level: "networks" }} className="text-xs text-ink-muted hover:text-ink">
@@ -121,7 +121,7 @@ export function TVNetwork() {
           </p>
         </div>
       </div>
-      <FollowPanel kind="network" subjectId={network.id} categoryId={categoryId} follow={follow} followable={followable} />
+      <FollowPanel subject="organisation" subjectId={network.id} libraryIds={[Number(categoryId)]} />
       <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-4">
         {series.map((entry) => (
           <SeriesPosterTile key={entry.id} series={entry} categoryId={categoryId} />

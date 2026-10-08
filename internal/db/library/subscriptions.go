@@ -75,9 +75,10 @@ func subscriptionFrom(row librarydb.Subscription) Subscription {
 // People.Subscribe's own idempotent return value cannot answer on its own,
 // needed by a caller that must record which is which (todo 4.13's
 // ArrImportRevert).
-func (s Subscriptions) Find(ctx context.Context, subjectType string, subjectID, userID int64) (int64, bool, error) {
+func (s Subscriptions) Find(ctx context.Context, subjectType string, subjectID, userID, categoryID int64) (int64, bool, error) {
 	row, err := librarydb.New(s.store.Read()).GetSubscriptionForSubject(ctx, librarydb.GetSubscriptionForSubjectParams{
 		SubjectType: subjectType, SubjectID: subjectID, UserID: sql.NullInt64{Int64: userID, Valid: userID != 0},
+		CategoryID: sql.NullInt64{Int64: categoryID, Valid: categoryID != 0},
 	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil

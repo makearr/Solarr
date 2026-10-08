@@ -80,9 +80,9 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueBridge,
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "subscription_expand", Name: "Subscription expand", DefaultCadence: subscriptionExpandScheduleCron,
+		Key: "subscription_expand", Name: "Add the works of followed people", DefaultCadence: subscriptionExpandScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
-		Enqueue: p.enqueueSubscriptionExpand,
+		Enqueue: p.enqueueFollowSweep,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "artwork", Name: "Cover art sweep", DefaultCadence: artworkScheduleCron,

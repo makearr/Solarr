@@ -133,9 +133,10 @@ The TV **Statistics** page breaks the library down by resolution, codec, HDR and
 the 20 biggest series and the 20 with most episodes missing. The probe reads video files in the background (a first pass over a large
 library takes hours); the figures fill in as it goes.
 
-**Follow** (on a person's or a network's page, with your TMDB key) adds their new series for you: a person by the roles you
-tick (acting, directing, writing, ...), a network for everything new it airs. At most five series per follow are added each
-time it runs, with the monitor choice you set; older series only if you ask for the back catalogue. The task **Refresh
+**Follow** (on a person's or a network's page) adds their new works to a library for you, one follow per library: an
+artist's albums of the release types you tick, an actor's or director's new series by the roles you tick (with your
+TMDB key), a network's new series. A TV follow adds at most five series each time it runs, with the monitor choice you
+set; older works come only if you ask for the back catalogue. The task **Refresh
 series** (Settings → Scheduler) re-reads running series twice a day so new episodes and seasons arrive by themselves.
 Before you follow, the panel lists the series it would add right now (and how many already are in your library), so nothing
 arrives unseen.

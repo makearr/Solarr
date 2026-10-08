@@ -80,14 +80,17 @@ survivor's). The QID comes from MusicBrainz (stored by artist refresh and backfi
 equals a music artist's, 60 a run; `wikidata:none` records an answer of "no item"). A TV person page lists `OtherWorks`: non-TV
 works the same person is credited on. Merging on name alone is deliberately not done. The sweep also asks Wikidata (`MusicBrainzArtists`, property P434) which music artist an item is, so an actor is merged into the artist the library already holds even before that artist's own refresh recorded an item; measured on the real library: 42 people merged at once (a singer in a series' guest cast is one person in both libraries).
 
-## Following people and networks (`internal/media/tv/follow_job.go`)
+## Following people and networks (`internal/media/tv/follow.go`)
 
-A person (by role) or a network can be followed from its page: a `subscription` row (media type `tv`, roles, the library it adds
-to, `filters_json` `{"monitor": ...}`, back-catalogue flag). The registered task "Subscription expand" also enqueues
-`tv.follow_expand` (the follow panel's preview, `GET /series/{people,networks}/{id}/follow/preview`, runs the same candidate code through `FollowJob.Preview`), which asks TMDB per follow: a person's combined credits (tv only, the followed roles, first aired since the
-follow was made less 30 days, or a regular role with 3+ episodes for a back-catalogue follow) or `/discover/tv` for a network. Each
-show not yet held is added with the follow's monitor choice, **at most 5 per follow per run** (25 for a back catalogue). Additive
-only, and a show whose TMDB id has no TheTVDB id is skipped (no episode list). Making or changing a follow enqueues its own run.
+Following is one model for every media type (`internal/service/follow`): a `subscription` row per subject, user and
+library (migration 0065), with roles, the media type's options in `filters_json` and a back-catalogue flag. The sweep
+`follow.expand` (task "Add the works of followed people") asks each follow's media type for candidates
+(`media.Following`), skips what the library holds or excluded (`work_exclusion`), and adds up to the type's limit; the
+preview (`POST /people/{id}/follow/preview`, `/organisations/{id}/follow/preview`) runs the same candidates. TV's
+candidates come from TMDB: a person's combined credits (tv only, the followed roles, first aired since the follow was
+made less 30 days, or a regular role with 3+ episodes for a back-catalogue follow) or `/discover/tv` for a network. Each
+show is added with the follow's `monitor` option, **at most 5 per follow per run** (25 for a back catalogue). A show
+whose TMDB id has no TheTVDB id is skipped (no episode list). Making or changing a follow enqueues its own run.
 
 A scan's monitoring of series it finds is the library's `tv_monitor` (`category.tv_monitor`): `existing` (default; only the episodes
 on disk), `all` (Sonarr's adoption: hunts every gap) or `none` (nothing, also not the episodes found).
