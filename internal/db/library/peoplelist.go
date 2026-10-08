@@ -290,7 +290,7 @@ func composePeople(filter PeopleFilter, after PeopleCursor, pageSize int) (strin
 	}
 	sql := "SELECT " + strings.Join(selectList, ",\n       ") + "\nFROM person p" + predicates.Where() +
 		"\nORDER BY " + order + "\nLIMIT ?"
-	return sql, append(arguments, predicates.Args(pageSize)...)
+	return sql, append(arguments, predicates.Args(append(slices.Clone(key.args), pageSize)...)...)
 }
 
 // List answers one page of people: of one library, or of every library the viewer may see.

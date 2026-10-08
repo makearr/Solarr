@@ -1,0 +1,17 @@
+{
+  "items": [
+    {
+      "country": "gb",
+      "id": 1,
+      "kind": "network",
+      "latest": 2020,
+      "monitored": false,
+      "name": "Northern Channel",
+      "roles": [
+        "network"
+      ],
+      "sort_name": "northern channel",
+      "works": 1
+    }
+  ]
+}

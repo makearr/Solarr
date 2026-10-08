@@ -303,19 +303,24 @@ func (s *Server) GetPerson(w http.ResponseWriter, r *http.Request, id int64) {
 		writeError(w, s.logger, err)
 		return
 	}
-	now := s.wall.Now()
-	detail.Credits = make([]gen.PersonCredit, len(credits))
+	detail.Credits = creditViews(credits, s.wall.Now())
+	writeJSON(w, s.logger, http.StatusOK, detail)
+}
+
+// creditViews maps credits with each work's status colour as of now.
+func creditViews(credits []PersonCreditRow, now time.Time) []gen.WorkCredit {
+	views := make([]gen.WorkCredit, len(credits))
 	for index, credit := range credits {
-		view := gen.PersonCredit{CategoryId: credit.CategoryID, Role: credit.Role, Work: personWorkView(credit.Work, now)}
+		view := gen.WorkCredit{CategoryId: credit.CategoryID, Role: credit.Role, Work: personWorkView(credit.Work, now)}
 		if credit.Character != "" {
 			view.Character = &credit.Character
 		}
 		if len(credit.Parts) > 0 {
 			view.Parts = &credit.Parts
 		}
-		detail.Credits[index] = view
+		views[index] = view
 	}
-	writeJSON(w, s.logger, http.StatusOK, detail)
+	return views
 }
 
 func personWorkView(row PersonWorkRow, now time.Time) gen.PersonWork {

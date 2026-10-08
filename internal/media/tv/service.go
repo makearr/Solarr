@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
@@ -537,7 +539,8 @@ func (s Service) ensureSeasons(
 			monitored[episode.Season] = true
 		}
 	}
-	for season := range seen {
+	// In season order, so the items' ids, and whatever picks the first item, do not depend on map order.
+	for _, season := range slices.Sorted(maps.Keys(seen)) {
 		_, err := s.Desired.EnsureSeasonItem(ctx, library.SeasonRequest{
 			WorkID: stored.WorkID, MediaRef: SeasonRef(season), SortKey: "s" + fmt.Sprintf("%04d", season),
 			CategoryID: categoryID, ProfileID: profileID, Monitored: monitored[season], AddedBy: addedBy,

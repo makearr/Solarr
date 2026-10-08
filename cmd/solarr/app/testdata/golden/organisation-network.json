@@ -1,0 +1,36 @@
+{
+  "country": "gb",
+  "credits": [
+    {
+      "category_id": 2,
+      "role": "network",
+      "work": {
+        "id": 2,
+        "media_type": "tv",
+        "on_disk": true,
+        "present_count": 2,
+        "required_count": 3,
+        "sort_title": "marble stations",
+        "status": "incomplete",
+        "title": "The Marble Stations",
+        "wanted_state": "PARTIAL",
+        "year": 2020
+      }
+    }
+  ],
+  "id": 1,
+  "ids": {
+    "tmdb": "501"
+  },
+  "kind": "network",
+  "libraries": [
+    {
+      "category_id": 2,
+      "role": "network",
+      "works": 1
+    }
+  ],
+  "monitored": false,
+  "name": "Northern Channel",
+  "sort_name": "northern channel"
+}

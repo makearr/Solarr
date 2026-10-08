@@ -1,0 +1,38 @@
+{
+  "aliases": [],
+  "credits": [
+    {
+      "category_id": 2,
+      "character": "The Harbourmaster",
+      "role": "actor",
+      "work": {
+        "id": 2,
+        "media_type": "tv",
+        "on_disk": true,
+        "present_count": 2,
+        "required_count": 3,
+        "sort_title": "marble stations",
+        "status": "incomplete",
+        "title": "The Marble Stations",
+        "wanted_state": "PARTIAL",
+        "year": 2020
+      }
+    }
+  ],
+  "genres": [],
+  "id": 3,
+  "ids": {
+    "tmdb": "301"
+  },
+  "kind": "Person",
+  "libraries": [
+    {
+      "category_id": 2,
+      "role": "actor",
+      "works": 1
+    }
+  ],
+  "monitored": false,
+  "name": "Iris Calder",
+  "sort_name": "Iris Calder"
+}

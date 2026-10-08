@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -393,6 +394,48 @@ func TestPeopleList_CustomFilterConditions(t *testing.T) {
 		}
 		if _, err := people.List(t.Context(), library.PeopleFilter{Where: conditions, Category: 1}, library.PeopleCursor{}, 10); err != nil {
 			t.Errorf("field %s: %v", field, err)
+		}
+	}
+}
+
+// Sorting by works pages through everyone once, most works first, the id breaking ties.
+func TestListPeople_SortByWorksPagesMostFirst(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	counts := map[string]int{"One": 1, "Three": 3, "Two": 2, "Also Two": 2}
+	for name, works := range counts {
+		person := resolvePersonNamed(t, people, "a-"+name, name)
+		for i := range works {
+			work := createWork(t, opened, "music", fmt.Sprintf("%s %d", name, i))
+			createDesiredInCategory(t, opened, work.ID, 1)
+			if err := people.AddCredit(t.Context(), work.ID, person, "artist", 0); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, sort := range []string{library.PeopleByWorks, library.PeopleByLatest} {
+		var got []int64
+		var after library.PeopleCursor
+		for {
+			page, err := people.List(t.Context(), library.PeopleFilter{Category: 1, Visible: []int64{1}, Sort: sort, Desc: true}, after, 1)
+			if err != nil {
+				t.Fatalf("%s: %v", sort, err)
+			}
+			if len(page) == 0 {
+				break
+			}
+			value := page[0].Works
+			if sort == library.PeopleByLatest {
+				value = page[0].Latest
+			}
+			got = append(got, page[0].Works)
+			after = library.PeopleCursor{Value: value, ID: page[0].ID, Set: true}
+		}
+		if sort == library.PeopleByWorks && !slices.Equal(got, []int64{3, 2, 2, 1}) {
+			t.Errorf("by works = %v, want 3, 2, 2, 1", got)
+		}
+		if len(got) != 4 {
+			t.Errorf("%s pages %d people, want 4", sort, len(got))
 		}
 	}
 }

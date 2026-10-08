@@ -100,6 +100,8 @@ type Config struct {
 	// People lists and reads people (ADR-32). Optional: without it, the people
 	// endpoints answer 503.
 	People PeopleReader
+	// Organisations lists and reads labels, networks, studios and publishers. Optional: nil answers 503.
+	Organisations OrganisationsReader
 	// Series feeds the TV screens. Optional: nil answers 503.
 	Series SeriesCatalog
 	// Seasons searches and downloads TV seasons. Optional: nil answers 503.
@@ -270,6 +272,7 @@ type Server struct {
 	imagesDir               string
 	configPath              string
 	people                  PeopleReader
+	organisations           OrganisationsReader
 	series                  SeriesCatalog
 	seasons                 SeasonAcquirer
 	peopleSubscriber        PeopleSubscriber
@@ -376,6 +379,7 @@ func New(config Config) (*Server, error) {
 		imagesDir:               config.ImagesDir,
 		configPath:              config.ConfigPath,
 		people:                  config.People,
+		organisations:           config.Organisations,
 		series:                  config.Series,
 		seasons:                 config.Seasons,
 		peopleSubscriber:        config.PeopleSubscriber,
@@ -613,6 +617,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)
 			secured.Get("/people", server.routeListPeople)
+			secured.Get("/organisations", server.routeListOrganisations)
+			secured.Get("/organisations/{id}", server.routeGetOrganisation)
 			secured.Get("/people/{id}", server.routeGetPerson)
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
 			secured.Put("/people/{id}/artwork", server.routeChoosePersonArtwork)

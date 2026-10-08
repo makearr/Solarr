@@ -3688,6 +3688,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/organisations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A page of the labels, networks, studios and publishers of one library, or of every library the caller may read. */
+        get: operations["listOrganisations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/organisations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One organisation, with its works in each library the caller may read. */
+        get: operations["getOrganisation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/people": {
         parameters: {
             query?: never;
@@ -6113,14 +6149,50 @@ export interface components {
             /** Format: int64 */
             works: number;
         };
-        /** @description One thing a person did on one work of one library; parts lists the parts of a part-scoped role. */
-        PersonCredit: {
+        /** @description One thing a person or organisation did on one work of one library; parts lists the parts of a part-scoped role. */
+        WorkCredit: {
             /** Format: int64 */
             category_id: number;
             role: string;
             character?: string;
             parts?: string[];
             work: components["schemas"]["PersonWork"];
+        };
+        /** @description A label, network, studio or publisher with what it did in the libraries listed. */
+        OrganisationEntry: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            sort_name: string;
+            /** @example network */
+            kind: string;
+            country?: string;
+            logo_url?: string;
+            monitored: boolean;
+            roles: string[];
+            /** Format: int64 */
+            works: number;
+            latest?: number;
+        };
+        OrganisationPage: {
+            items: components["schemas"]["OrganisationEntry"][];
+            next_cursor?: string;
+        };
+        OrganisationDetail: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            sort_name: string;
+            kind: string;
+            country?: string;
+            logo_url?: string;
+            monitored: boolean;
+            ids: {
+                [key: string]: string;
+            };
+            /** @description Only libraries the caller may read. */
+            libraries: components["schemas"]["PersonLibrary"][];
+            credits: components["schemas"]["WorkCredit"][];
         };
         PersonDetail: components["schemas"]["Person"] & {
             /** @description From the providers, when one has it (ADR-8). */
@@ -6136,7 +6208,7 @@ export interface components {
             };
             /** @description Only libraries the caller may read; nothing reveals another. */
             libraries: components["schemas"]["PersonLibrary"][];
-            credits: components["schemas"]["PersonCredit"][];
+            credits: components["schemas"]["WorkCredit"][];
         };
         /** @description One provider's id for a work, edition or part. */
         ExternalID: {
@@ -13747,6 +13819,65 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listOrganisations: {
+        parameters: {
+            query?: {
+                category?: number;
+                /** @description Comma-separated roles (network, label, studio, publisher); any when absent. */
+                role?: string;
+                monitored?: boolean;
+                /** @description Matches the start of the name. */
+                q?: string;
+                sort?: "name" | "works" | "latest";
+                dir?: "asc" | "desc";
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getOrganisation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The organisation. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganisationDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

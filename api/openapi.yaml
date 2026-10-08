@@ -5933,6 +5933,68 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /organisations:
+    get:
+      operationId: listOrganisations
+      tags: [people]
+      summary: A page of the labels, networks, studios and publishers of one library, or of every library the caller may read.
+      parameters:
+        - name: category
+          in: query
+          schema: { type: integer, format: int64 }
+        - name: role
+          in: query
+          description: Comma-separated roles (network, label, studio, publisher); any when absent.
+          schema: { type: string }
+        - name: monitored
+          in: query
+          schema: { type: boolean }
+        - name: q
+          in: query
+          description: Matches the start of the name.
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [name, works, latest], default: name }
+        - name: dir
+          in: query
+          schema: { type: string, enum: [asc, desc], default: asc }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganisationPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /organisations/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getOrganisation
+      tags: [people]
+      summary: One organisation, with its works in each library the caller may read.
+      responses:
+        "200":
+          description: The organisation.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganisationDetail" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /people:
     get:
       operationId: listPeople
@@ -9049,9 +9111,11 @@ components:
         role: { type: string }
         works: { type: integer, format: int64 }
 
-    PersonCredit:
+    WorkCredit:
       type: object
-      description: One thing a person did on one work of one library; parts lists the parts of a part-scoped role.
+      description: >-
+        One thing a person or organisation did on one work of one library; parts lists the parts of a
+        part-scoped role.
       required: [category_id, role, work]
       properties:
         category_id: { type: integer, format: int64 }
@@ -9061,6 +9125,55 @@ components:
           type: array
           items: { type: string }
         work: { $ref: "#/components/schemas/PersonWork" }
+
+    OrganisationEntry:
+      type: object
+      description: A label, network, studio or publisher with what it did in the libraries listed.
+      required: [id, name, sort_name, kind, monitored, roles, works]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        sort_name: { type: string }
+        kind: { type: string, example: "network" }
+        country: { type: string }
+        logo_url: { type: string }
+        monitored: { type: boolean }
+        roles:
+          type: array
+          items: { type: string }
+        works: { type: integer, format: int64 }
+        latest: { type: integer }
+
+    OrganisationPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/OrganisationEntry" }
+        next_cursor: { type: string }
+
+    OrganisationDetail:
+      type: object
+      required: [id, name, sort_name, kind, monitored, ids, libraries, credits]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        sort_name: { type: string }
+        kind: { type: string }
+        country: { type: string }
+        logo_url: { type: string }
+        monitored: { type: boolean }
+        ids:
+          type: object
+          additionalProperties: { type: string }
+        libraries:
+          type: array
+          items: { $ref: "#/components/schemas/PersonLibrary" }
+          description: Only libraries the caller may read.
+        credits:
+          type: array
+          items: { $ref: "#/components/schemas/WorkCredit" }
 
     PersonDetail:
       allOf:
@@ -9089,7 +9202,7 @@ components:
               description: Only libraries the caller may read; nothing reveals another.
             credits:
               type: array
-              items: { $ref: "#/components/schemas/PersonCredit" }
+              items: { $ref: "#/components/schemas/WorkCredit" }
 
     ExternalID:
       type: object

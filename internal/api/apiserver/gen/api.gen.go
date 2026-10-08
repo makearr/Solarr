@@ -833,6 +833,19 @@ const (
 	ListMoveJobsParamsStateRUNNING ListMoveJobsParamsState = "RUNNING"
 )
 
+// Defines values for ListOrganisationsParamsSort.
+const (
+	ListOrganisationsParamsSortLatest ListOrganisationsParamsSort = "latest"
+	ListOrganisationsParamsSortName   ListOrganisationsParamsSort = "name"
+	ListOrganisationsParamsSortWorks  ListOrganisationsParamsSort = "works"
+)
+
+// Defines values for ListOrganisationsParamsDir.
+const (
+	ListOrganisationsParamsDirAsc  ListOrganisationsParamsDir = "asc"
+	ListOrganisationsParamsDirDesc ListOrganisationsParamsDir = "desc"
+)
+
 // Defines values for ListPeopleParamsSort.
 const (
 	ListPeopleParamsSortAdded  ListPeopleParamsSort = "added"
@@ -2864,6 +2877,42 @@ type NetworkSettingsUpdate struct {
 	ProxyUrl          *string  `json:"proxy_url,omitempty"`
 }
 
+// OrganisationDetail defines model for OrganisationDetail.
+type OrganisationDetail struct {
+	Country *string           `json:"country,omitempty"`
+	Credits []WorkCredit      `json:"credits"`
+	Id      int64             `json:"id"`
+	Ids     map[string]string `json:"ids"`
+	Kind    string            `json:"kind"`
+
+	// Libraries Only libraries the caller may read.
+	Libraries []PersonLibrary `json:"libraries"`
+	LogoUrl   *string         `json:"logo_url,omitempty"`
+	Monitored bool            `json:"monitored"`
+	Name      string          `json:"name"`
+	SortName  string          `json:"sort_name"`
+}
+
+// OrganisationEntry A label, network, studio or publisher with what it did in the libraries listed.
+type OrganisationEntry struct {
+	Country   *string  `json:"country,omitempty"`
+	Id        int64    `json:"id"`
+	Kind      string   `json:"kind"`
+	Latest    *int     `json:"latest,omitempty"`
+	LogoUrl   *string  `json:"logo_url,omitempty"`
+	Monitored bool     `json:"monitored"`
+	Name      string   `json:"name"`
+	Roles     []string `json:"roles"`
+	SortName  string   `json:"sort_name"`
+	Works     int64    `json:"works"`
+}
+
+// OrganisationPage defines model for OrganisationPage.
+type OrganisationPage struct {
+	Items      []OrganisationEntry `json:"items"`
+	NextCursor *string             `json:"next_cursor,omitempty"`
+}
+
 // Pack One source, many works (ADR-50, todo 4.11) -- a provenance fact, not an identity tier.
 type Pack struct {
 	AcquisitionId *int64           `json:"acquisition_id,omitempty"`
@@ -2985,29 +3034,18 @@ type Person struct {
 	SortName       string  `json:"sort_name"`
 }
 
-// PersonCredit One thing a person did on one work of one library; parts lists the parts of a part-scoped role.
-type PersonCredit struct {
-	CategoryId int64     `json:"category_id"`
-	Character  *string   `json:"character,omitempty"`
-	Parts      *[]string `json:"parts,omitempty"`
-	Role       string    `json:"role"`
-
-	// Work One work in a person's discography, plus the artist page's own "available / missing / requested" signal (Lidarr-like discography).
-	Work PersonWork `json:"work"`
-}
-
 // PersonDetail defines model for PersonDetail.
 type PersonDetail struct {
 	Aliases []string `json:"aliases"`
 
 	// Biography From the providers, when one has it (ADR-8).
-	Biography      *string        `json:"biography,omitempty"`
-	Born           *string        `json:"born,omitempty"`
-	Country        *string        `json:"country,omitempty"`
-	Credits        []PersonCredit `json:"credits"`
-	Died           *string        `json:"died,omitempty"`
-	Disambiguation *string        `json:"disambiguation,omitempty"`
-	Gender         *string        `json:"gender,omitempty"`
+	Biography      *string      `json:"biography,omitempty"`
+	Born           *string      `json:"born,omitempty"`
+	Country        *string      `json:"country,omitempty"`
+	Credits        []WorkCredit `json:"credits"`
+	Died           *string      `json:"died,omitempty"`
+	Disambiguation *string      `json:"disambiguation,omitempty"`
+	Gender         *string      `json:"gender,omitempty"`
 
 	// Genres Every genre tagged on any of their works; a person carries none of their own (ADR-32).
 	Genres []string `json:"genres"`
@@ -4310,6 +4348,17 @@ type WorkStatus string
 // WorkWantedState Set when this work has a monitored desired_item, regardless of whether the wanted filter was used.
 type WorkWantedState string
 
+// WorkCredit One thing a person or organisation did on one work of one library; parts lists the parts of a part-scoped role.
+type WorkCredit struct {
+	CategoryId int64     `json:"category_id"`
+	Character  *string   `json:"character,omitempty"`
+	Parts      *[]string `json:"parts,omitempty"`
+	Role       string    `json:"role"`
+
+	// Work One work in a person's discography, plus the artist page's own "available / missing / requested" signal (Lidarr-like discography).
+	Work PersonWork `json:"work"`
+}
+
 // WorkDetail defines model for WorkDetail.
 type WorkDetail struct {
 	AddedAt time.Time `json:"added_at"`
@@ -4711,6 +4760,28 @@ type ListMoveJobsParamsReason string
 
 // ListMoveJobsParamsState defines parameters for ListMoveJobs.
 type ListMoveJobsParamsState string
+
+// ListOrganisationsParams defines parameters for ListOrganisations.
+type ListOrganisationsParams struct {
+	Category *int64 `form:"category,omitempty" json:"category,omitempty"`
+
+	// Role Comma-separated roles (network, label, studio, publisher); any when absent.
+	Role      *string `form:"role,omitempty" json:"role,omitempty"`
+	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
+
+	// Q Matches the start of the name.
+	Q      *string                      `form:"q,omitempty" json:"q,omitempty"`
+	Sort   *ListOrganisationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir    *ListOrganisationsParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+	Cursor *string                      `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int                         `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListOrganisationsParamsSort defines parameters for ListOrganisations.
+type ListOrganisationsParamsSort string
+
+// ListOrganisationsParamsDir defines parameters for ListOrganisations.
+type ListOrganisationsParamsDir string
 
 // ListPacksParams defines parameters for ListPacks.
 type ListPacksParams struct {
@@ -5941,6 +6012,12 @@ type ServerInterface interface {
 	// Change the port, proxy or IP whitelist. Administrator only.
 	// (PATCH /network)
 	UpdateNetworkSettings(w http.ResponseWriter, r *http.Request)
+	// A page of the labels, networks, studios and publishers of one library, or of every library the caller may read.
+	// (GET /organisations)
+	ListOrganisations(w http.ResponseWriter, r *http.Request, params ListOrganisationsParams)
+	// One organisation, with its works in each library the caller may read.
+	// (GET /organisations/{id})
+	GetOrganisation(w http.ResponseWriter, r *http.Request, id int64)
 	// Every detected pack (ADR-50, todo 4.11), newest first.
 	// (GET /packs)
 	ListPacks(w http.ResponseWriter, r *http.Request, params ListPacksParams)
@@ -7114,6 +7191,18 @@ func (_ Unimplemented) GetNetworkSettings(w http.ResponseWriter, r *http.Request
 // Change the port, proxy or IP whitelist. Administrator only.
 // (PATCH /network)
 func (_ Unimplemented) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A page of the labels, networks, studios and publishers of one library, or of every library the caller may read.
+// (GET /organisations)
+func (_ Unimplemented) ListOrganisations(w http.ResponseWriter, r *http.Request, params ListOrganisationsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One organisation, with its works in each library the caller may read.
+// (GET /organisations/{id})
+func (_ Unimplemented) GetOrganisation(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12040,6 +12129,130 @@ func (siw *ServerInterfaceWrapper) UpdateNetworkSettings(w http.ResponseWriter, 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UpdateNetworkSettings(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListOrganisations operation middleware
+func (siw *ServerInterfaceWrapper) ListOrganisations(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListOrganisationsParams
+
+	// ------------- Optional query parameter "category" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "category", r.URL.Query(), &params.Category)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "role" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "role", r.URL.Query(), &params.Role)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "role", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "monitored" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "monitored", r.URL.Query(), &params.Monitored)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "monitored", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "sort" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "sort", r.URL.Query(), &params.Sort)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "sort", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "dir" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListOrganisations(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetOrganisation operation middleware
+func (siw *ServerInterfaceWrapper) GetOrganisation(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetOrganisation(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17107,6 +17320,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/network", wrapper.UpdateNetworkSettings)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/organisations", wrapper.ListOrganisations)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/organisations/{id}", wrapper.GetOrganisation)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/packs", wrapper.ListPacks)
