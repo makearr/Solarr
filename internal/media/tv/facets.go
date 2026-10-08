@@ -1,0 +1,38 @@
+package tv
+
+import (
+	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/media"
+)
+
+// facets are a series' own fields beyond the base ones.
+var facets = []media.Facet{
+	{
+		Key: "year", Label: "Year", Entity: model.LevelEntityWork, Kind: media.FacetNumber,
+		Source: media.FacetSource{Kind: media.SourceColumn, Name: "year"}, Column: true, Sortable: true, Filterable: true,
+	},
+	{
+		Key: "status", Label: "Status", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
+		Source:  media.FacetSource{Kind: media.SourceField, Name: "status"},
+		Choices: []media.Choice{{Key: string(StatusContinuing), Label: "Continuing"}, {Key: string(StatusEnded), Label: "Ended"}, {Key: string(StatusUpcoming), Label: "Upcoming"}},
+		Column:  true, Filterable: true,
+	},
+	{
+		Key: "series_type", Label: "Series type", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
+		Source:  media.FacetSource{Kind: media.SourceField, Name: "series_type"},
+		Choices: []media.Choice{{Key: string(SeriesStandard), Label: "Standard"}, {Key: string(SeriesDaily), Label: "Daily"}, {Key: string(SeriesAnime), Label: "Anime"}},
+		Column:  true, Filterable: true,
+	},
+	{
+		Key: "network", Label: "Network", Entity: model.LevelEntityWork, Kind: media.FacetText,
+		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Filterable: true,
+	},
+	{
+		Key: "genre", Label: "Genre", Entity: model.LevelEntityWork, Kind: media.FacetList,
+		Source: media.FacetSource{Kind: media.SourceClassification, Name: "genre"}, Filterable: true,
+	},
+	{
+		Key: "runtime", Label: "Runtime", Entity: model.LevelEntityWork, Kind: media.FacetDuration,
+		Source: media.FacetSource{Kind: media.SourceColumn, Name: "runtime_ms"}, Column: true,
+	},
+}

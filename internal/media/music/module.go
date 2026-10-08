@@ -66,6 +66,7 @@ func (Module) Descriptor() media.Descriptor {
 			{Key: "artist", Label: "Artist", Lead: true, Followable: true},
 		},
 		FollowOptions: followOptions,
+		Facets:        facets,
 	}
 }
 

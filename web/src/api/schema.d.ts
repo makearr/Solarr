@@ -4722,6 +4722,8 @@ export interface components {
             roles: components["schemas"]["MediaRole"][];
             /** @description The settings a follow of a person or organisation offers in this type's libraries. */
             follow_options: components["schemas"]["FollowOption"][];
+            /** @description The type's own fields of its entities beyond the base ones, as lists and pages show them. */
+            facets: components["schemas"]["Facet"][];
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -5913,6 +5915,21 @@ export interface components {
             character?: string;
             parts?: string[];
             work: components["schemas"]["PersonWork"];
+        };
+        Facet: {
+            key: string;
+            label: string;
+            /** @enum {string} */
+            entity: "work" | "work_part" | "person" | "organisation";
+            /** @enum {string} */
+            kind: "text" | "number" | "enum" | "list" | "duration";
+            choices?: {
+                key: string;
+                label: string;
+            }[];
+            column: boolean;
+            sortable: boolean;
+            filterable: boolean;
         };
         FollowOption: {
             key: string;

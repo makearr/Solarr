@@ -74,6 +74,8 @@ type Descriptor struct {
 	Roles      []Role
 	// FollowOptions are the settings a follow of a person or organisation offers in this type's libraries.
 	FollowOptions []FollowOption
+	// Facets are the type's own fields of its entities, beyond the base ones.
+	Facets []Facet
 }
 
 // Module is one media type. Its behaviour is in the capability interfaces it also implements.
@@ -230,6 +232,11 @@ func NewRegistry(modules ...Module) (*Registry, error) {
 		}
 		if _, exists := registry.modules[key]; exists {
 			return nil, fmt.Errorf("media: %s is registered twice", key)
+		}
+		for _, facet := range module.Descriptor().Facets {
+			if err := checkFacet(facet); err != nil {
+				return nil, fmt.Errorf("media: %s: %w", key, err)
+			}
 		}
 		registry.modules[key] = module
 		registry.order = append(registry.order, key)

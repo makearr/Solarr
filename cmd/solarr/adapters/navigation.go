@@ -75,6 +75,9 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 			}
 			info.FollowOptions = append(info.FollowOptions, view)
 		}
+		for _, facet := range descriptor.Facets {
+			info.Facets = append(info.Facets, facetView(facet))
+		}
 		for _, role := range descriptor.Roles {
 			info.Roles = append(info.Roles, apiserver.MediaRole{
 				Key: role.Key, Label: role.Label, Lead: role.Lead, Followable: role.Followable,
@@ -84,6 +87,25 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		out = append(out, info)
 	}
 	return out
+}
+
+// facetView maps one facet as the media types answer shows it.
+func facetView(facet media.Facet) gen.Facet {
+	view := gen.Facet{
+		Key: facet.Key, Label: facet.Label, Entity: gen.FacetEntity(facet.Entity), Kind: gen.FacetKind(facet.Kind),
+		Column: facet.Column, Sortable: facet.Sortable, Filterable: facet.Filterable,
+	}
+	if len(facet.Choices) > 0 {
+		choices := make([]struct {
+			Key   string `json:"key"`
+			Label string `json:"label"`
+		}, len(facet.Choices))
+		for i, choice := range facet.Choices {
+			choices[i].Key, choices[i].Label = choice.Key, choice.Label
+		}
+		view.Choices = &choices
+	}
+	return view
 }
 
 // MediaSweeps answers scan.Sweeps: the sweep of the media type a category holds.

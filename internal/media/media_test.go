@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
 )
@@ -71,5 +72,34 @@ func TestCapability_AnswersOnlyAModuleThatImplementsIt(t *testing.T) {
 	want := []media.NamingExample{{Label: "sample", Path: "a/b"}}
 	if got := capability.NamingExamples(settings.NamingProfile{}); !reflect.DeepEqual(got, want) {
 		t.Errorf("NamingExamples() = %+v, want %+v", got, want)
+	}
+}
+
+type faceted struct {
+	plain
+	facets []media.Facet
+}
+
+func (f faceted) Descriptor() media.Descriptor {
+	descriptor := f.plain.Descriptor()
+	descriptor.Facets = f.facets
+	return descriptor
+}
+
+// A facet reads what exists: a known source, a column the work has, an enum with its choices.
+func TestNewRegistry_RefusesAFacetCoreCannotRead(t *testing.T) {
+	good := media.Facet{Key: "year", Entity: model.LevelEntityWork, Kind: media.FacetNumber, Source: media.FacetSource{Kind: media.SourceColumn, Name: "year"}}
+	if _, err := media.NewRegistry(faceted{plain{"ok"}, []media.Facet{good}}); err != nil {
+		t.Fatalf("a year column was refused: %v", err)
+	}
+	for name, facet := range map[string]media.Facet{
+		"a column the work lacks": {Key: "x", Entity: model.LevelEntityWork, Kind: media.FacetText, Source: media.FacetSource{Kind: media.SourceColumn, Name: "colour"}},
+		"an unknown source":       {Key: "x", Entity: model.LevelEntityWork, Kind: media.FacetText, Source: media.FacetSource{Kind: "table", Name: "x"}},
+		"an enum without choices": {Key: "x", Entity: model.LevelEntityWork, Kind: media.FacetEnum, Source: media.FacetSource{Kind: media.SourceField, Name: "status"}},
+		"a field without a name":  {Key: "x", Entity: model.LevelEntityWork, Kind: media.FacetText, Source: media.FacetSource{Kind: media.SourceField}},
+	} {
+		if _, err := media.NewRegistry(faceted{plain{"bad"}, []media.Facet{facet}}); err == nil {
+			t.Errorf("%s was registered", name)
+		}
 	}
 }

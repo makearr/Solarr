@@ -203,6 +203,23 @@ const (
 	ExclusionPatternWriteActionRefuse ExclusionPatternWriteAction = "refuse"
 )
 
+// Defines values for FacetEntity.
+const (
+	FacetEntityOrganisation FacetEntity = "organisation"
+	FacetEntityPerson       FacetEntity = "person"
+	FacetEntityWork         FacetEntity = "work"
+	FacetEntityWorkPart     FacetEntity = "work_part"
+)
+
+// Defines values for FacetKind.
+const (
+	FacetKindDuration FacetKind = "duration"
+	FacetKindEnum     FacetKind = "enum"
+	FacetKindList     FacetKind = "list"
+	FacetKindNumber   FacetKind = "number"
+	FacetKindText     FacetKind = "text"
+)
+
 // Defines values for FileManagementChangeFileDate.
 const (
 	FileManagementChangeFileDateNone        FileManagementChangeFileDate = "none"
@@ -1839,6 +1856,27 @@ type ExternalID struct {
 	Provider   string `json:"provider"`
 }
 
+// Facet defines model for Facet.
+type Facet struct {
+	Choices *[]struct {
+		Key   string `json:"key"`
+		Label string `json:"label"`
+	} `json:"choices,omitempty"`
+	Column     bool        `json:"column"`
+	Entity     FacetEntity `json:"entity"`
+	Filterable bool        `json:"filterable"`
+	Key        string      `json:"key"`
+	Kind       FacetKind   `json:"kind"`
+	Label      string      `json:"label"`
+	Sortable   bool        `json:"sortable"`
+}
+
+// FacetEntity defines model for Facet.Entity.
+type FacetEntity string
+
+// FacetKind defines model for Facet.Kind.
+type FacetKind string
+
 // FileManagement Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here.
 type FileManagement struct {
 	ChangeFileDate FileManagementChangeFileDate `json:"change_file_date"`
@@ -2745,6 +2783,9 @@ type MediaType string
 
 // MediaTypeInfo defines model for MediaTypeInfo.
 type MediaTypeInfo struct {
+	// Facets The type's own fields of its entities beyond the base ones, as lists and pages show them.
+	Facets []Facet `json:"facets"`
+
 	// FollowOptions The settings a follow of a person or organisation offers in this type's libraries.
 	FollowOptions []FollowOption `json:"follow_options"`
 	Group         MediaTerm      `json:"group"`

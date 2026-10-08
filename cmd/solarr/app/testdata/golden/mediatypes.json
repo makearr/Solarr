@@ -1,5 +1,65 @@
 [
   {
+    "facets": [
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "year",
+        "kind": "number",
+        "label": "Year",
+        "sortable": true
+      },
+      {
+        "choices": [
+          {
+            "key": "Album",
+            "label": "Album"
+          },
+          {
+            "key": "EP",
+            "label": "EP"
+          },
+          {
+            "key": "Single",
+            "label": "Single"
+          },
+          {
+            "key": "Broadcast",
+            "label": "Broadcast"
+          },
+          {
+            "key": "Other",
+            "label": "Other"
+          }
+        ],
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "primary_type",
+        "kind": "enum",
+        "label": "Type",
+        "sortable": false
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "label",
+        "kind": "text",
+        "label": "Label",
+        "sortable": false
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "genre",
+        "kind": "list",
+        "label": "Genre",
+        "sortable": false
+      }
+    ],
     "follow_options": [
       {
         "choices": [
@@ -118,6 +178,90 @@
     }
   },
   {
+    "facets": [
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "year",
+        "kind": "number",
+        "label": "Year",
+        "sortable": true
+      },
+      {
+        "choices": [
+          {
+            "key": "continuing",
+            "label": "Continuing"
+          },
+          {
+            "key": "ended",
+            "label": "Ended"
+          },
+          {
+            "key": "upcoming",
+            "label": "Upcoming"
+          }
+        ],
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "status",
+        "kind": "enum",
+        "label": "Status",
+        "sortable": false
+      },
+      {
+        "choices": [
+          {
+            "key": "standard",
+            "label": "Standard"
+          },
+          {
+            "key": "daily",
+            "label": "Daily"
+          },
+          {
+            "key": "anime",
+            "label": "Anime"
+          }
+        ],
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "series_type",
+        "kind": "enum",
+        "label": "Series type",
+        "sortable": false
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "network",
+        "kind": "text",
+        "label": "Network",
+        "sortable": false
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "genre",
+        "kind": "list",
+        "label": "Genre",
+        "sortable": false
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": false,
+        "key": "runtime",
+        "kind": "duration",
+        "label": "Runtime",
+        "sortable": false
+      }
+    ],
     "follow_options": [
       {
         "choices": [

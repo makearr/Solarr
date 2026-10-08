@@ -77,6 +77,7 @@ func (Module) Descriptor() media.Descriptor {
 			{Key: "guest_star", Label: "Guest star", PartScoped: true, Character: true},
 		},
 		FollowOptions: followOptions,
+		Facets:        facets,
 	}
 }
 

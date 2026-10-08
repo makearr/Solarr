@@ -7353,7 +7353,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -7369,6 +7369,10 @@ components:
           type: array
           description: The settings a follow of a person or organisation offers in this type's libraries.
           items: { $ref: "#/components/schemas/FollowOption" }
+        facets:
+          type: array
+          description: The type's own fields of its entities beyond the base ones, as lists and pages show them.
+          items: { $ref: "#/components/schemas/Facet" }
 
     MediaType:
       type: string
@@ -8781,6 +8785,26 @@ components:
           type: array
           items: { type: string }
         work: { $ref: "#/components/schemas/PersonWork" }
+
+    Facet:
+      type: object
+      required: [key, label, entity, kind, column, sortable, filterable]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        entity: { type: string, enum: [work, work_part, person, organisation] }
+        kind: { type: string, enum: [text, number, enum, list, duration] }
+        choices:
+          type: array
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
+        column: { type: boolean }
+        sortable: { type: boolean }
+        filterable: { type: boolean }
 
     FollowOption:
       type: object

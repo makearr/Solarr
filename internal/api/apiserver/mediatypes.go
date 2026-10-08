@@ -34,6 +34,8 @@ type MediaTypeInfo struct {
 	Roles        []MediaRole
 	// FollowOptions are what a follow offers in this type's libraries, as the generated shape carries them.
 	FollowOptions []gen.FollowOption
+	// Facets are the type's own fields, as the generated shape carries them.
+	Facets []gen.Facet
 }
 
 // MediaTypeCatalog answers which media types have a module, so a handler never names one.
@@ -58,11 +60,18 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				Key: gen.MediaType(info.Key), Label: info.Label, Roles: roles,
 				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
-				FollowOptions: nonNilOptions(info.FollowOptions),
+				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
 			})
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+func nonNilFacets(facets []gen.Facet) []gen.Facet {
+	if facets == nil {
+		return []gen.Facet{}
+	}
+	return facets
 }
 
 func nonNilOptions(options []gen.FollowOption) []gen.FollowOption {
