@@ -69,8 +69,8 @@ var followOptions = []media.FollowOption{{
 }}
 
 // FollowLimit implements media.Following.
-func (Following) FollowLimit(backCatalogue bool) int {
-	if backCatalogue {
+func (Following) FollowLimit(follow media.Follow) int {
+	if follow.BackCatalogue {
 		return maxPerBackCatalogue
 	}
 	return maxPerFollow

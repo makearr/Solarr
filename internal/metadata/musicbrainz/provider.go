@@ -611,3 +611,86 @@ func rememberJSON[T any](ctx context.Context, p Provider, source, kind, key stri
 		p.logger.WarnContext(ctx, "musicbrainz: cache write failed", slog.String("kind", kind), slog.Any("error", err))
 	}
 }
+
+// cacheKindLabel is one label's details; cacheKindLabelCatalogue its release groups.
+const (
+	cacheKindLabel          = "musicbrainz:label"
+	cacheKindLabelCatalogue = "musicbrainz:label-catalogue"
+)
+
+// Label answers one label's details, cache-first, from the sources that can look one up.
+func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (Label, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	var label Label
+	if p.cachedJSON(ctx, cacheKindLabel, mbid, &label) {
+		return label, nil
+	}
+	var errs []error
+	for _, source := range p.orderedSources() {
+		lookup, ok := source.(LabelLookup)
+		if !ok {
+			continue
+		}
+		found, err := lookup.Label(ctx, mbid)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		p.rememberJSON(ctx, cacheKindLabel, source.Name(), mbid, found)
+		return found, nil
+	}
+	if len(errs) == 0 {
+		return Label{}, fmt.Errorf("musicbrainz: no source can look up a label (mbid %s)", mbid)
+	}
+	return Label{}, fmt.Errorf("musicbrainz: no source answered label %s: %w", mbid, errors.Join(errs...))
+}
+
+// LabelReleaseGroups answers what a label released, cache-first, from the sources that can browse it.
+func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, labelMBID string) ([]ReleaseGroup, error) {
+	ctx = httpx.WithPriority(ctx, httpx.Priority(priority))
+	var groups []ReleaseGroup
+	if p.cachedJSON(ctx, cacheKindLabelCatalogue, labelMBID, &groups) {
+		return groups, nil
+	}
+	var errs []error
+	for _, source := range p.orderedSources() {
+		catalogue, ok := source.(LabelCatalogue)
+		if !ok {
+			continue
+		}
+		found, err := catalogue.LabelReleaseGroups(ctx, labelMBID)
+		if err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		p.rememberJSON(ctx, cacheKindLabelCatalogue, source.Name(), labelMBID, found)
+		return found, nil
+	}
+	if len(errs) == 0 {
+		return nil, fmt.Errorf("musicbrainz: no source can browse a label (mbid %s)", labelMBID)
+	}
+	return nil, fmt.Errorf("musicbrainz: no source answered label catalogue %s: %w", labelMBID, errors.Join(errs...))
+}
+
+// cachedJSON reads a fresh cache entry into into.
+func (p Provider) cachedJSON(ctx context.Context, kind, key string, into any) bool {
+	if wantsFresh(ctx) {
+		return false
+	}
+	entry, err := p.cache.Get(ctx, kind, key)
+	if err != nil || p.stale(entry) {
+		return false
+	}
+	return json.Unmarshal([]byte(entry.Body), into) == nil
+}
+
+// rememberJSON stores one answer; a failed write only costs a later lookup.
+func (p Provider) rememberJSON(ctx context.Context, kind, source, key string, value any) {
+	body, err := json.Marshal(value)
+	if err != nil {
+		return
+	}
+	if err := p.cache.Set(ctx, kind, key, metacache.Entry{Source: source, Body: string(body), FetchedAt: p.clock.Now()}); err != nil {
+		p.logger.WarnContext(ctx, "musicbrainz: cache write failed", slog.String("kind", kind), slog.Any("error", err))
+	}
+}

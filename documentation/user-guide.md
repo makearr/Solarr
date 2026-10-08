@@ -242,8 +242,10 @@ On posters and artist pages: **green** complete, **red** missing, **purple** dow
 Overview and Table views, role chips, sorted by name, number of works, newest work or when added, either way. A person
 has one page wherever you open them: who they are, then their works in each of your libraries, shown as that library
 shows them (an artist's albums by release type, an actor's series as posters with the parts they played), what TMDB also
-knows them for (with **Add to Solarr**), and **Follow** for each library they could be followed into. Networks (and,
-for music, labels) work the same way. People who are both an actor and a music artist are matched across libraries by their Wikidata item; a name that differs only in punctuation (a quoted nickname) is now tried too.
+knows them for (with **Add to Solarr**), and **Follow** for each library they could be followed into. Networks and
+labels work the same way: a music library's **Labels** level lists the labels of its albums (from MusicBrainz, filled
+in by the hourly metadata run), and following a label adds what it releases from then on, or its back catalogue, up
+to 25 albums a run, with the release types you tick. People who are both an actor and a music artist are matched across libraries by their Wikidata item; a name that differs only in punctuation (a quoted nickname) is now tried too.
 
 **TV upgrades.** With a target or cutoff set on a series library, a season whose files all exist but fall short of it is hunted for a better release (Wanted > Cutoff unmet lists the episodes). A download replaces an episode file only when it is better on resolution, codec, HDR, channels, bitrate and the other target fields; an equal one is dropped, and the replaced file waits in the recycle bin. Turn **Upgrades allowed** off in the library's Quality settings to stop it.
 

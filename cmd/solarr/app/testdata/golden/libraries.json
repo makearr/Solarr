@@ -19,6 +19,12 @@
         "entity": "work_part",
         "key": "tracks",
         "label": "Tracks"
+      },
+      {
+        "default_sort": "name",
+        "entity": "organisation",
+        "key": "labels",
+        "label": "Labels"
       }
     ],
     "media_type": "music",

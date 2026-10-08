@@ -467,6 +467,67 @@ func (d direct) ArtistReleaseGroups(ctx context.Context, artistMBID string) ([]R
 	return all, nil
 }
 
+type directLabel struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"`
+	Country  string `json:"country"`
+	LifeSpan struct {
+		Begin string `json:"begin"`
+		End   string `json:"end"`
+	} `json:"life-span"`
+}
+
+// Label implements LabelLookup.
+func (d direct) Label(ctx context.Context, mbid string) (Label, error) {
+	var parsed directLabel
+	if err := getJSON(ctx, d.client, fmt.Sprintf("%s/label/%s?fmt=json", d.baseURL, url.PathEscape(mbid)), &parsed); err != nil {
+		return Label{}, fmt.Errorf("musicbrainz: label %s: %w", mbid, err)
+	}
+	return Label{
+		MBID: parsed.ID, Name: parsed.Name, Type: parsed.Type, Country: parsed.Country,
+		Founded: parsed.LifeSpan.Begin, Defunct: parsed.LifeSpan.End,
+	}, nil
+}
+
+type directLabelReleases struct {
+	ReleaseCount int `json:"release-count"`
+	Releases     []struct {
+		ReleaseGroup directBrowseReleaseGroup `json:"release-group"`
+	} `json:"releases"`
+}
+
+// LabelReleaseGroups implements LabelCatalogue: MusicBrainz browses releases by label, not release groups, so each
+// release's group is taken once; paged like ArtistReleaseGroups and bounded the same way.
+func (d direct) LabelReleaseGroups(ctx context.Context, labelMBID string) ([]ReleaseGroup, error) {
+	var all []ReleaseGroup
+	seen := map[string]bool{}
+	for page := 0; page < artistReleaseGroupsMaxPages; page++ {
+		offset := page * artistReleaseGroupsPageSize
+		requestURL := fmt.Sprintf("%s/release?label=%s&inc=release-groups&limit=%d&offset=%d&fmt=json",
+			d.baseURL, url.QueryEscape(labelMBID), artistReleaseGroupsPageSize, offset)
+		var parsed directLabelReleases
+		if err := getJSON(ctx, d.client, requestURL, &parsed); err != nil {
+			return nil, fmt.Errorf("musicbrainz: label releases %s: %w", labelMBID, err)
+		}
+		for _, release := range parsed.Releases {
+			rg := release.ReleaseGroup
+			if rg.ID == "" || seen[rg.ID] {
+				continue
+			}
+			seen[rg.ID] = true
+			all = append(all, ReleaseGroup{
+				MBID: rg.ID, Title: rg.Title, PrimaryType: rg.PrimaryType,
+				SecondaryTypes: rg.SecondaryTypes, FirstReleaseDate: rg.FirstReleaseDate,
+			})
+		}
+		if len(parsed.Releases) < artistReleaseGroupsPageSize || offset+len(parsed.Releases) >= parsed.ReleaseCount {
+			break
+		}
+	}
+	return all, nil
+}
+
 // luceneQuoted wraps a value in double quotes for a MusicBrainz Lucene query,
 // escaping the two characters that would otherwise break out of the quoted
 // phrase or be read as Lucene operators.
@@ -486,6 +547,7 @@ type directRelease struct {
 	Barcode   string `json:"barcode"`
 	LabelInfo []struct {
 		Label struct {
+			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"label"`
 		CatalogNumber string `json:"catalog-number"`
@@ -554,6 +616,7 @@ func (parsed directRelease) toRelease() Release {
 	}
 	if len(parsed.LabelInfo) > 0 {
 		release.LabelName = parsed.LabelInfo[0].Label.Name
+		release.LabelMBID = parsed.LabelInfo[0].Label.ID
 		release.CatalogueNumber = parsed.LabelInfo[0].CatalogNumber
 	}
 	for _, medium := range parsed.Media {

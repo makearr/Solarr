@@ -173,7 +173,7 @@ type Following interface {
 	// AddFollowed adds one candidate to the follow's library. Additive only: a held work is left as it is (Invariant 71).
 	AddFollowed(ctx context.Context, follow Follow, candidate FollowCandidate) error
 	// FollowLimit bounds what one run adds for one follow; 0 is no bound.
-	FollowLimit(backCatalogue bool) int
+	FollowLimit(follow Follow) int
 }
 
 // ErrNoFollowSource reports a follow whose provider is not set up yet: no key stored, or no id to follow by.

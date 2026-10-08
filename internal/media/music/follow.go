@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media"
@@ -20,17 +21,25 @@ var ErrFollowNotWired = errors.New("music: following is not wired")
 // ErrNoArtistID reports an artist with no MusicBrainz id yet: there is no discography to browse until one exists.
 var ErrNoArtistID = fmt.Errorf("%w: the artist has no MusicBrainz id yet", media.ErrNoFollowSource)
 
+// ErrNoLabelID reports a label known only by name: MusicBrainz is browsed by a label's id.
+var ErrNoLabelID = fmt.Errorf("%w: the label has no MusicBrainz id yet", media.ErrNoFollowSource)
+
 // ArtistSearch searches one artist's missing albums in one library, after their albums were added.
 type ArtistSearch func(ctx context.Context, categoryID, personID int64) error
 
-// Discography is the provider as following an artist needs it.
+// Discography is the provider as following an artist or a label needs it.
 type Discography interface {
 	ArtistReleaseGroups(ctx context.Context, priority musicbrainz.Priority, artistMBID string) ([]musicbrainz.ReleaseGroup, error)
+	LabelReleaseGroups(ctx context.Context, priority musicbrainz.Priority, labelMBID string) ([]musicbrainz.ReleaseGroup, error)
 }
+
+// newReleaseWindow lets a label's follow also catch an album released shortly before the follow was made.
+const newReleaseWindow = 30 * 24 * time.Hour
 
 // Following is music's part of a follow: an artist's release groups, as the follow's options admit (section 19.6).
 type Following struct {
 	People           library.People
+	Organisations    library.Organisations
 	Identity         library.Identity
 	Desired          *library.Desired
 	Categories       CategoryFinder
@@ -56,27 +65,26 @@ var followOptions = []media.FollowOption{
 	},
 }
 
-// FollowLimit implements media.Following: an artist's follow brings their whole admitted discography.
-func (Following) FollowLimit(bool) int { return 0 }
+// labelsPerRun bounds what a label's follow adds in one run: a label's catalogue runs into the thousands.
+const labelsPerRun = 25
+
+// FollowLimit implements media.Following: an artist's follow brings their whole admitted discography, a label's a
+// few albums a run.
+func (Following) FollowLimit(follow media.Follow) int {
+	if follow.SubjectType == "organisation" {
+		return labelsPerRun
+	}
+	return 0
+}
 
 // FollowCandidates implements media.Following: the artist's release groups the follow's options admit, newest first.
 func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([]media.FollowCandidate, error) {
 	if f.Discography == nil || f.Desired == nil {
 		return nil, ErrFollowNotWired
 	}
-	if follow.SubjectType != "person" {
-		return nil, nil
-	}
-	artistMBID, ok, err := f.People.ExternalIDFor(ctx, follow.SubjectID, ProviderArtist)
+	groups, since, err := f.releaseGroupsOf(ctx, follow)
 	if err != nil {
-		return nil, fmt.Errorf("music: artist id: %w", err)
-	}
-	if !ok {
-		return nil, ErrNoArtistID
-	}
-	groups, err := f.Discography.ArtistReleaseGroups(ctx, musicbrainz.PriorityBackfill, artistMBID)
-	if err != nil {
-		return nil, fmt.Errorf("musicbrainz: %w", err)
+		return nil, err
 	}
 	filters := ParseSubscriptionFilters(follow.FiltersJSON)
 	if category, ok := f.Categories.Category(follow.CategoryID); ok && filters.IncludePrimaryTypes == nil && category.MonitorReleaseTypes != nil {
@@ -86,7 +94,7 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 	}
 	var candidates []media.FollowCandidate
 	for _, group := range groups {
-		if !filters.Admits(group) {
+		if !filters.Admits(group) || (since != "" && group.FirstReleaseDate < since) {
 			continue
 		}
 		held, err := f.held(ctx, group.MBID, follow.CategoryID)
@@ -94,12 +102,53 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 			return nil, err
 		}
 		year, _ := strconv.ParseInt(strings.SplitN(group.FirstReleaseDate, "-", 2)[0], 10, 64)
-		candidates = append(candidates, media.FollowCandidate{
-			Provider: ProviderReleaseGroup, ExternalID: group.MBID, Title: group.Title, Year: year, Role: CreditRoleArtist, Held: held,
-		})
+		candidate := media.FollowCandidate{Provider: ProviderReleaseGroup, ExternalID: group.MBID, Title: group.Title, Year: year, Held: held}
+		if follow.SubjectType == "person" {
+			candidate.Role = CreditRoleArtist
+		}
+		candidates = append(candidates, candidate)
 	}
 	slices.SortStableFunc(candidates, func(a, b media.FollowCandidate) int { return int(b.Year - a.Year) })
 	return candidates, nil
+}
+
+// releaseGroupsOf browses the subject's release groups: an artist's whole discography, a label's catalogue from
+// shortly before the follow on unless it asked for the back catalogue.
+func (f Following) releaseGroupsOf(ctx context.Context, follow media.Follow) ([]musicbrainz.ReleaseGroup, string, error) {
+	switch follow.SubjectType {
+	case "person":
+		artistMBID, ok, err := f.People.ExternalIDFor(ctx, follow.SubjectID, ProviderArtist)
+		if err != nil {
+			return nil, "", fmt.Errorf("music: artist id: %w", err)
+		}
+		if !ok {
+			return nil, "", ErrNoArtistID
+		}
+		groups, err := f.Discography.ArtistReleaseGroups(ctx, musicbrainz.PriorityBackfill, artistMBID)
+		if err != nil {
+			return nil, "", fmt.Errorf("musicbrainz: %w", err)
+		}
+		return groups, "", nil
+	case "organisation":
+		label, err := f.Organisations.Get(ctx, follow.SubjectID, nil)
+		if err != nil {
+			return nil, "", fmt.Errorf("music: label: %w", err)
+		}
+		labelMBID := label.IDs[ProviderLabel]
+		if labelMBID == "" {
+			return nil, "", ErrNoLabelID
+		}
+		groups, err := f.Discography.LabelReleaseGroups(ctx, musicbrainz.PriorityBackfill, labelMBID)
+		if err != nil {
+			return nil, "", fmt.Errorf("musicbrainz: %w", err)
+		}
+		since := time.Unix(follow.CreatedAt, 0).UTC().Add(-newReleaseWindow).Format("2006-01-02")
+		if follow.BackCatalogue {
+			since = ""
+		}
+		return groups, since, nil
+	}
+	return nil, "", nil
 }
 
 // held reports whether the library already wants the release group as an album, monitored or not.

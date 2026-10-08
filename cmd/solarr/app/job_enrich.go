@@ -26,9 +26,11 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 	imageClient := p.providerClient(providerWikimediaImage, nil, httpx.ClientConfig{})
 
 	desired := library.NewDesired(p.library)
+	organisations := library.NewOrganisations(p.library)
 	job := music.NewEnrichJob(music.EnrichJobConfig{
 		Identity:        library.NewIdentity(p.library),
 		People:          library.NewPeople(p.library),
+		Organisations:   &organisations,
 		Provider:        p.musicBrainzProvider(),
 		Biography:       p.wikidataFetcher(),
 		WikidataEnabled: func() bool { return *p.cache.Snapshot().MetadataSettings().Wikidata },

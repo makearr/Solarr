@@ -57,7 +57,9 @@ does the rule that decides whether a viewer may see someone. A work belongs to a
 `desired_item` rows. Both are rewritten for the people concerned in the same transaction as the change that
 moves them: a credit, a work's first wanted item in a library, a work's removal, a merge, a network link
 (`internal/db/library/peoplerollup.go`). A library set to add discovered albums as `none` therefore lists
-no artist for files it does not want.
+no artist for files it does not want. An album's label is a `work_organisation` row (role `label`, kind `label`,
+id `musicbrainz:label`); the `work_field` `label` from provider `musicbrainz` records that the album was asked, its
+value the label or NULL for none, so each album is asked once.
 
 ## Interned attributes against per-file measurements
 

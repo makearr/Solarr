@@ -151,7 +151,7 @@ func (s Service) Preview(ctx context.Context, subject library.Subject, request R
 	if err != nil {
 		return Preview{}, err
 	}
-	preview := Preview{Limit: module.FollowLimit(request.BackCatalogue)}
+	preview := Preview{Limit: module.FollowLimit(follow)}
 	for _, candidate := range candidates {
 		skip, err := s.skipped(ctx, candidate)
 		if err != nil {
@@ -258,7 +258,7 @@ func (s Service) expand(ctx context.Context, subscription library.Subscription, 
 	if err != nil {
 		return 0, err
 	}
-	limit := module.FollowLimit(subscription.MonitorBackCatalogue)
+	limit := module.FollowLimit(follow)
 	added := 0
 	for _, candidate := range candidates {
 		if limit > 0 && added == limit {

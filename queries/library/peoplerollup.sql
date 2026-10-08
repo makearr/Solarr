@@ -35,3 +35,23 @@ SELECT DISTINCT organisation_id FROM work_organisation WHERE work_id = ? ORDER B
 
 -- name: CountDesiredItemsInCategory :one
 SELECT CAST(COUNT(*) AS INTEGER) AS items FROM desired_item WHERE work_id = ? AND category_id = ?;
+
+-- name: ListWorkOrganisationIDsInRole :many
+SELECT organisation_id FROM work_organisation WHERE work_id = ? AND role = ? ORDER BY organisation_id;
+
+-- name: FillOrganisationDetails :exec
+UPDATE organisation SET country = COALESCE(NULLIF(country, ''), sqlc.narg(country)),
+  fields_json = json_set(COALESCE(fields_json, '{}'), '$.type', sqlc.arg(type), '$.founded', sqlc.arg(founded), '$.defunct', sqlc.arg(defunct))
+WHERE id = sqlc.arg(id);
+
+-- Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
+-- that role from the asking provider. The edition label is the default (else first) edition's provider id.
+-- name: ListWorksToAskOrganisation :many
+SELECT w.id AS work_id, x.external_id,
+       CAST(COALESCE((SELECT e.label FROM edition e WHERE e.work_id = w.id AND e.kind NOT IN ('unknown', 'withdrawn')
+                 ORDER BY e.is_default DESC, e.id LIMIT 1), '') AS TEXT) AS edition_label
+FROM work w
+JOIN work_external_id x ON x.work_id = w.id AND x.provider = sqlc.arg(external_provider)
+WHERE w.media_type = sqlc.arg(media_type) AND w.id > sqlc.arg(after_id)
+  AND NOT EXISTS (SELECT 1 FROM work_field f WHERE f.work_id = w.id AND f.field = sqlc.arg(field) AND f.provider = sqlc.arg(asked_provider))
+ORDER BY w.id LIMIT sqlc.arg(page_size);

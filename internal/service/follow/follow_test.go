@@ -48,7 +48,7 @@ func (f fakeType) AddFollowed(_ context.Context, _ media.Follow, candidate media
 	return nil
 }
 
-func (f fakeType) FollowLimit(bool) int { return f.limit }
+func (f fakeType) FollowLimit(media.Follow) int { return f.limit }
 
 func (f fakeType) SearchFollowed(_ context.Context, followed media.Follow) error {
 	*f.searched = append(*f.searched, followed.SubjectID)

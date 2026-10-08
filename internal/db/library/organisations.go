@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -261,4 +262,135 @@ func logoFromFields(raw sql.NullString) string {
 		return ""
 	}
 	return fields.Logo
+}
+
+// OrganisationLink is an organisation a provider names for a work: found by its id there, else by kind and name.
+type OrganisationLink struct {
+	Kind       string
+	Name       string
+	Provider   string
+	ExternalID string
+}
+
+// SetWorkOrganisation records a provider's answer for a work's organisation in one role, replacing the work's
+// others in that role; a nil link records that the provider names none, so the work is not asked again. It answers
+// the organisation and whether it was created now.
+func (o Organisations) SetWorkOrganisation(
+	ctx context.Context, at time.Time, workID int64, role, askedProvider string, link *OrganisationLink,
+) (organisationID int64, created bool, err error) {
+	err = o.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		before, err := queries.ListWorkOrganisationIDsInRole(ctx, librarydb.ListWorkOrganisationIDsInRoleParams{WorkID: workID, Role: role})
+		if err != nil {
+			return err
+		}
+		if err := queries.ClearWorkOrganisationRole(ctx, librarydb.ClearWorkOrganisationRoleParams{WorkID: workID, Role: role}); err != nil {
+			return err
+		}
+		answer := sql.NullString{}
+		if link != nil {
+			answer = sql.NullString{String: link.Name, Valid: true}
+			if organisationID, created, err = resolveOrganisation(ctx, queries, *link); err != nil {
+				return err
+			}
+			if err := queries.LinkWorkOrganisation(ctx, librarydb.LinkWorkOrganisationParams{WorkID: workID, OrganisationID: organisationID, Role: role}); err != nil {
+				return err
+			}
+		}
+		if err := queries.SetWorkField(ctx, librarydb.SetWorkFieldParams{
+			WorkID: workID, Field: role, Provider: askedProvider, Value: answer, FetchedAt: at.Unix(),
+		}); err != nil {
+			return err
+		}
+		return refreshOrganisations(ctx, queries, append(before, organisationID))
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("library: %s of work %d: %w", role, workID, err)
+	}
+	return organisationID, created, nil
+}
+
+// resolveOrganisation finds the organisation by its provider id, else by kind and name (then remembering the id),
+// and creates it when new.
+func resolveOrganisation(ctx context.Context, queries *librarydb.Queries, link OrganisationLink) (int64, bool, error) {
+	if link.ExternalID != "" {
+		found, err := queries.GetOrganisationByExternalID(ctx, librarydb.GetOrganisationByExternalIDParams{Provider: link.Provider, ExternalID: link.ExternalID})
+		if err == nil {
+			return found.ID, false, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return 0, false, err
+		}
+	}
+	var id int64
+	created := false
+	found, err := queries.FindOrganisationByName(ctx, librarydb.FindOrganisationByNameParams{Kind: link.Kind, Name: link.Name})
+	switch {
+	case err == nil:
+		id = found.ID
+	case errors.Is(err, sql.ErrNoRows):
+		made, err := queries.CreateOrganisation(ctx, librarydb.CreateOrganisationParams{Name: link.Name, SortName: link.Name, Kind: link.Kind})
+		if err != nil {
+			return 0, false, err
+		}
+		id, created = made.ID, true
+	default:
+		return 0, false, err
+	}
+	if link.ExternalID != "" {
+		if err := queries.LinkOrganisationExternalID(ctx, librarydb.LinkOrganisationExternalIDParams{
+			Provider: link.Provider, ExternalID: link.ExternalID, OrganisationID: id,
+		}); err != nil {
+			return 0, false, err
+		}
+	}
+	return id, created, nil
+}
+
+// OrganisationDetails are what a provider says of an organisation itself; empty values are left as they are.
+type OrganisationDetails struct {
+	Country string
+	Type    string
+	Founded string
+	Defunct string
+}
+
+// FillDetails keeps a provider's details of an organisation; a country already known stays.
+func (o Organisations) FillDetails(ctx context.Context, organisationID int64, details OrganisationDetails) error {
+	err := o.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).FillOrganisationDetails(ctx, librarydb.FillOrganisationDetailsParams{
+			Country: sql.NullString{String: details.Country, Valid: details.Country != ""},
+			Type:    details.Type, Founded: details.Founded, Defunct: details.Defunct, ID: organisationID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: details of organisation %d: %w", organisationID, err)
+	}
+	return nil
+}
+
+// WorkToAsk is a work whose organisation a provider has not been asked for yet, with the ids it is asked by.
+type WorkToAsk struct {
+	WorkID       int64
+	ExternalID   string
+	EditionLabel string
+}
+
+// WorksToAsk pages the works of a media type, by their id at externalProvider, whose organisation in role
+// askedProvider was never asked for.
+func (o Organisations) WorksToAsk(
+	ctx context.Context, mediaType, externalProvider, role, askedProvider string, afterWorkID int64, limit int,
+) ([]WorkToAsk, error) {
+	rows, err := librarydb.New(o.store.Read()).ListWorksToAskOrganisation(ctx, librarydb.ListWorksToAskOrganisationParams{
+		ExternalProvider: externalProvider, MediaType: mediaType, AfterID: afterWorkID, Field: role, AskedProvider: askedProvider,
+		PageSize: int64(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: works to ask for a %s: %w", role, err)
+	}
+	out := make([]WorkToAsk, len(rows))
+	for i, row := range rows {
+		out[i] = WorkToAsk{WorkID: row.WorkID, ExternalID: row.ExternalID, EditionLabel: row.EditionLabel}
+	}
+	return out, nil
 }

@@ -273,6 +273,7 @@ type Querier interface {
 	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
+	FillOrganisationDetails(ctx context.Context, arg FillOrganisationDetailsParams) error
 	FillOrganisationLibrary(ctx context.Context, organisationIds []int64) error
 	// One pass yields a row per role and the any-role row: sqlc expands a slice only once per query.
 	FillPersonLibrary(ctx context.Context, personIds []int64) error
@@ -678,6 +679,7 @@ type Querier interface {
 	ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error)
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
+	ListWorkOrganisationIDsInRole(ctx context.Context, arg ListWorkOrganisationIDsInRoleParams) ([]int64, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWorkPartRefsRow, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
@@ -706,6 +708,9 @@ type Querier interface {
 	// carrying several after a merge. 'musicbrainz:release-group' must match
 	// internal/media/music.ProviderReleaseGroup.
 	ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error)
+	// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
+	// that role from the asking provider. The edition label is the default (else first) edition's provider id.
+	ListWorksToAskOrganisation(ctx context.Context, arg ListWorksToAskOrganisationParams) ([]ListWorksToAskOrganisationRow, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.

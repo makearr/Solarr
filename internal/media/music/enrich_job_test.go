@@ -1737,3 +1737,38 @@ func TestEnrichJob_ReturnsAnAlbumWhoseReleaseGroupIsGoneToReview(t *testing.T) {
 		t.Error("the album nobody asked for is still in the library")
 	}
 }
+
+// An album's label comes with its release: linked as the work's label organisation, and "[no label]" links none.
+func TestEnrichJob_LinksTheReleasesLabel(t *testing.T) {
+	for _, tc := range []struct {
+		name, mbid string
+		want       int
+	}{
+		{"Mute", "label-1", 1},
+		{"[no label]", "157afde4-4bf5-4039-8ad2-5a15acc85176", 0},
+	} {
+		source := &fakeSource{
+			rg:      musicbrainz.ReleaseGroup{MBID: "rg-1", Title: "KI Pecezinu", PrimaryType: "Album"},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "KI Pecezinu", Status: "official", LabelName: tc.name, LabelMBID: tc.mbid},
+		}
+		organisations := &library.Organisations{}
+		job, opened, _ := newEnrichJobRealigning(t, source, nil, nil, nil, func(config *music.EnrichJobConfig) {
+			config.Organisations = organisations
+		})
+		*organisations = library.NewOrganisations(opened)
+		createPlaceholder(t, opened, "rg-1", "rel-1")
+		if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+		var linked int
+		if err := opened.Read().QueryRowContext(t.Context(),
+			`SELECT COUNT(*) FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id
+			 JOIN organisation_external_id x ON x.organisation_id = o.id AND x.provider = 'musicbrainz:label' AND x.external_id = ?
+			 WHERE wo.role = 'label' AND o.kind = 'label' AND o.name = ?`, tc.mbid, tc.name).Scan(&linked); err != nil || linked != tc.want {
+			t.Errorf("%s: labels linked = %d, %v; want %d", tc.name, linked, err, tc.want)
+		}
+		if asked, _ := organisations.WorksToAsk(t.Context(), "music", music.ProviderReleaseGroup, music.RoleLabel, "musicbrainz", 0, 10); len(asked) != 0 {
+			t.Errorf("%s: the album is still to be asked about its label: %+v", tc.name, asked)
+		}
+	}
+}

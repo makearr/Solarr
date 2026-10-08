@@ -100,6 +100,7 @@ const (
 type EnrichJob struct {
 	identity        library.Identity
 	people          library.People
+	organisations   *library.Organisations
 	provider        musicbrainz.Provider
 	biography       Biographer
 	artworks        library.Artworks
@@ -142,10 +143,12 @@ type Realigner interface {
 // own facts only, no prose biography (and, following from that, no image
 // either: Wikidata's own P18 claim is read from the same lookup).
 type EnrichJobConfig struct {
-	Identity  library.Identity
-	People    library.People
-	Provider  musicbrainz.Provider
-	Biography Biographer
+	Identity library.Identity
+	People   library.People
+	// Organisations is optional: without it albums keep no label.
+	Organisations *library.Organisations
+	Provider      musicbrainz.Provider
+	Biography     Biographer
 	// WikidataEnabled is the configured switch, read per artist; nil is on.
 	WikidataEnabled func() bool
 	// PeopleBackfillPerRun is the configured budget, read per run; nil is 200.
@@ -181,7 +184,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 		logger = slog.Default()
 	}
 	return &EnrichJob{
-		identity: config.Identity, people: config.People, provider: config.Provider,
+		identity: config.Identity, people: config.People, organisations: config.Organisations, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
 		backfillPerRun: config.PeopleBackfillPerRun, checkpointEvery: config.CheckpointBatches,
 		artworks: config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
@@ -279,6 +282,8 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx, artists)...)
 	j.handOn(ctx, refinedWorkIDs, payload.Manual)
 	j.backfillPeople(ctx, &backfill, backfill.budget)
+	// Labels after the albums: a release refined in this run is cached, so asking costs nothing.
+	j.backfillLabels(ctx, labelBackfillPerRun)
 	return nil
 }
 

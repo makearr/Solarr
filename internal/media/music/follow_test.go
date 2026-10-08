@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -106,7 +107,7 @@ func newFollowing(t *testing.T, source musicbrainz.Source, categories music.Cate
 		Clock: fake, Logger: slog.New(slog.DiscardHandler),
 	})
 	return music.Following{
-		People: library.NewPeople(libraryStore), Identity: library.NewIdentity(libraryStore), Desired: &desired,
+		People: library.NewPeople(libraryStore), Organisations: library.NewOrganisations(libraryStore), Identity: library.NewIdentity(libraryStore), Desired: &desired,
 		Categories: categories, Discography: provider, DefaultProfileID: 99, Clock: fake,
 	}, libraryStore
 }
@@ -223,5 +224,47 @@ func (c twoCategories) Category(id int64) (settings.Category, bool) {
 		return c.second, true
 	default:
 		return settings.Category{}, false
+	}
+}
+
+// labelSource answers a label's catalogue beside fakeDiscographySource's artist one.
+type labelSource struct {
+	fakeDiscographySource
+	catalogue []musicbrainz.ReleaseGroup
+}
+
+func (l *labelSource) LabelReleaseGroups(context.Context, string) ([]musicbrainz.ReleaseGroup, error) {
+	return l.catalogue, nil
+}
+
+// A label's follow adds what it releases from shortly before the follow on, or everything when asked.
+func TestFollowing_ALabelBringsItsNewReleases(t *testing.T) {
+	source := &labelSource{catalogue: []musicbrainz.ReleaseGroup{
+		{MBID: "rg-old", Title: "Old", PrimaryType: "Album", FirstReleaseDate: "1999-01-01"},
+		{MBID: "rg-new", Title: "New", PrimaryType: "Album", FirstReleaseDate: "2026-06-01"},
+	}}
+	following, opened := newFollowing(t, source, fixedCategory{ID: 1, MediaType: "music"})
+	work, err := library.NewIdentity(opened).ResolveWorks(t.Context(), clock.NewFakeAtEpoch().Now(), []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-held", Confidence: 1, Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Held", SortTitle: "held"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	label, _, err := library.NewOrganisations(opened).SetWorkOrganisation(t.Context(), time.Unix(0, 0), work[0], music.RoleLabel, "musicbrainz",
+		&library.OrganisationLink{Kind: music.RoleLabel, Name: "Mute", Provider: music.ProviderLabel, ExternalID: "label-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	followed := media.Follow{SubjectType: "organisation", SubjectID: label, CategoryID: 1, CreatedAt: time.Date(2026, 6, 15, 0, 0, 0, 0, time.UTC).Unix()}
+	candidates, err := following.FollowCandidates(t.Context(), followed)
+	if got := candidateIDs(candidates); err != nil || !slices.Equal(got, []string{"rg-new"}) || candidates[0].Role != "" {
+		t.Errorf("new releases = %v (%+v), %v; want only the one from after the follow, with no artist role", got, candidates, err)
+	}
+	followed.BackCatalogue = true
+	if candidates, _ := following.FollowCandidates(t.Context(), followed); !slices.Equal(candidateIDs(candidates), []string{"rg-new", "rg-old"}) {
+		t.Errorf("back catalogue = %v; want both, newest first", candidateIDs(candidates))
+	}
+	if limit := following.FollowLimit(followed); limit != 25 {
+		t.Errorf("a label's limit = %d, want 25 a run", limit)
 	}
 }

@@ -7,6 +7,7 @@ package librarydb
 
 import (
 	"context"
+	"database/sql"
 	"strings"
 )
 
@@ -62,6 +63,31 @@ func (q *Queries) CountDesiredItemsInCategory(ctx context.Context, arg CountDesi
 	var items int64
 	err := row.Scan(&items)
 	return items, err
+}
+
+const fillOrganisationDetails = `-- name: FillOrganisationDetails :exec
+UPDATE organisation SET country = COALESCE(NULLIF(country, ''), ?1),
+  fields_json = json_set(COALESCE(fields_json, '{}'), '$.type', ?2, '$.founded', ?3, '$.defunct', ?4)
+WHERE id = ?5
+`
+
+type FillOrganisationDetailsParams struct {
+	Country sql.NullString
+	Type    interface{}
+	Founded interface{}
+	Defunct interface{}
+	ID      int64
+}
+
+func (q *Queries) FillOrganisationDetails(ctx context.Context, arg FillOrganisationDetailsParams) error {
+	_, err := q.db.ExecContext(ctx, fillOrganisationDetails,
+		arg.Country,
+		arg.Type,
+		arg.Founded,
+		arg.Defunct,
+		arg.ID,
+	)
+	return err
 }
 
 const fillOrganisationLibrary = `-- name: FillOrganisationLibrary :exec
@@ -163,6 +189,96 @@ func (q *Queries) ListPeopleOfWork(ctx context.Context, workID int64) ([]int64, 
 			return nil, err
 		}
 		items = append(items, person_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkOrganisationIDsInRole = `-- name: ListWorkOrganisationIDsInRole :many
+SELECT organisation_id FROM work_organisation WHERE work_id = ? AND role = ? ORDER BY organisation_id
+`
+
+type ListWorkOrganisationIDsInRoleParams struct {
+	WorkID int64
+	Role   string
+}
+
+func (q *Queries) ListWorkOrganisationIDsInRole(ctx context.Context, arg ListWorkOrganisationIDsInRoleParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkOrganisationIDsInRole, arg.WorkID, arg.Role)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var organisation_id int64
+		if err := rows.Scan(&organisation_id); err != nil {
+			return nil, err
+		}
+		items = append(items, organisation_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorksToAskOrganisation = `-- name: ListWorksToAskOrganisation :many
+SELECT w.id AS work_id, x.external_id,
+       CAST(COALESCE((SELECT e.label FROM edition e WHERE e.work_id = w.id AND e.kind NOT IN ('unknown', 'withdrawn')
+                 ORDER BY e.is_default DESC, e.id LIMIT 1), '') AS TEXT) AS edition_label
+FROM work w
+JOIN work_external_id x ON x.work_id = w.id AND x.provider = ?1
+WHERE w.media_type = ?2 AND w.id > ?3
+  AND NOT EXISTS (SELECT 1 FROM work_field f WHERE f.work_id = w.id AND f.field = ?4 AND f.provider = ?5)
+ORDER BY w.id LIMIT ?6
+`
+
+type ListWorksToAskOrganisationParams struct {
+	ExternalProvider string
+	MediaType        string
+	AfterID          int64
+	Field            string
+	AskedProvider    string
+	PageSize         int64
+}
+
+type ListWorksToAskOrganisationRow struct {
+	WorkID       int64
+	ExternalID   string
+	EditionLabel string
+}
+
+// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
+// that role from the asking provider. The edition label is the default (else first) edition's provider id.
+func (q *Queries) ListWorksToAskOrganisation(ctx context.Context, arg ListWorksToAskOrganisationParams) ([]ListWorksToAskOrganisationRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksToAskOrganisation,
+		arg.ExternalProvider,
+		arg.MediaType,
+		arg.AfterID,
+		arg.Field,
+		arg.AskedProvider,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorksToAskOrganisationRow{}
+	for rows.Next() {
+		var i ListWorksToAskOrganisationRow
+		if err := rows.Scan(&i.WorkID, &i.ExternalID, &i.EditionLabel); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

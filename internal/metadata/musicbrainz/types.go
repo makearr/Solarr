@@ -91,9 +91,11 @@ type Release struct {
 	// attributes as MusicBrainz or the proxy reported them -- not every source
 	// carries every field (the proxy in particular has no catalogue number or
 	// barcode in its shape), so a field a source did not answer is simply empty.
-	Date            string
-	Country         string
-	LabelName       string
+	Date      string
+	Country   string
+	LabelName string
+	// LabelMBID is the label's own id, empty from a source that names labels only.
+	LabelMBID       string
 	CatalogueNumber string
 	Barcode         string
 	Media           []Medium
@@ -212,6 +214,27 @@ type ArtistLookup interface {
 // identified only at release-group level compares the files against.
 type ReleaseLister interface {
 	Releases(ctx context.Context, releaseGroupMBID string) ([]Release, error)
+}
+
+// Label is one record label (or imprint) as MusicBrainz knows it.
+type Label struct {
+	MBID string
+	Name string
+	// Type is MusicBrainz's own vocabulary ("Original Production", "Imprint", "Holding", ...).
+	Type    string
+	Country string
+	Founded string
+	Defunct string
+}
+
+// LabelLookup is an optional Source capability: one label's own details.
+type LabelLookup interface {
+	Label(ctx context.Context, mbid string) (Label, error)
+}
+
+// LabelCatalogue is an optional Source capability: the release groups a label released, browsed by its releases.
+type LabelCatalogue interface {
+	LabelReleaseGroups(ctx context.Context, labelMBID string) ([]ReleaseGroup, error)
 }
 
 // Discography is an optional Source capability: every release group credited

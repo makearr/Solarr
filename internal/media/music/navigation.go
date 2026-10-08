@@ -8,10 +8,11 @@ const (
 	LevelArtists = "artists"
 	LevelAlbums  = "albums"
 	LevelTracks  = "tracks"
+	LevelLabels  = "labels"
 )
 
 // Navigation is music's ADR-54 NavigationLevels declaration: Artists, Albums,
-// Tracks, in the order the sidebar shows them.
+// Tracks, Labels, in the order the sidebar shows them.
 type Navigation struct{}
 
 // Levels implements model.NavigationLevels.
@@ -20,5 +21,6 @@ func (Navigation) Levels() []model.Level {
 		{Key: LevelArtists, Label: "Artists", Entity: model.LevelEntityPerson, DefaultSort: "name"},
 		{Key: LevelAlbums, Label: "Albums", Entity: model.LevelEntityWork, DefaultSort: "title"},
 		{Key: LevelTracks, Label: "Tracks", Entity: model.LevelEntityWorkPart, DefaultSort: "artist"},
+		{Key: LevelLabels, Label: "Labels", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 	}
 }

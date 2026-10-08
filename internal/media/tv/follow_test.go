@@ -79,7 +79,7 @@ func (f followFixture) run(t *testing.T, followed media.Follow) {
 	}
 	added := 0
 	for _, candidate := range candidates {
-		if candidate.Held || added == f.following.FollowLimit(followed.BackCatalogue) {
+		if candidate.Held || added == f.following.FollowLimit(followed) {
 			continue
 		}
 		if err := f.following.AddFollowed(t.Context(), followed, candidate); err != nil {
@@ -146,8 +146,9 @@ func TestFollowingTheBackCatalogueWantsRegularCastOnly(t *testing.T) {
 	if got := fixture.held(t); got != 1 || len(fixture.asked) != 1 || !fixture.asked[7] {
 		t.Errorf("series held = %d, shows looked up = %v, want the long-running one and not the single-episode guest spot", got, fixture.asked)
 	}
-	if fixture.following.FollowLimit(true) != 25 || fixture.following.FollowLimit(false) != 5 {
-		t.Errorf("limits = %d and %d, want 25 for the back catalogue and 5 otherwise", fixture.following.FollowLimit(true), fixture.following.FollowLimit(false))
+	back, forward := fixture.following.FollowLimit(media.Follow{BackCatalogue: true}), fixture.following.FollowLimit(media.Follow{})
+	if back != 25 || forward != 5 {
+		t.Errorf("limits = %d and %d, want 25 for the back catalogue and 5 otherwise", back, forward)
 	}
 }
 
