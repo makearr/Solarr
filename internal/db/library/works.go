@@ -115,6 +115,8 @@ type WorkFilter struct {
 	CutoffUnmetOnly bool
 	// Where are the conditions of a custom filter, all of which must hold.
 	Where []listfilter.Condition
+	// Facets are the media type's facets a condition of Where may name.
+	Facets []WorkFacet
 }
 
 // WorkCursor is a position in the list: the id always breaks ties, since without it a
@@ -167,6 +169,10 @@ type WorkListRow struct {
 	Monitored   bool
 	Description string
 	SizeBytes   int64
+	// PresentTotal, RequiredTotal and Upgradable sum the work's monitored SET items: one album, or every season.
+	PresentTotal  int64
+	RequiredTotal int64
+	Upgradable    int64
 }
 
 // Works reads the library list surface.
@@ -190,7 +196,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
 	addPrefix(&predicates, filter.TitlePrefix)
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
-	addWorkConditions(&predicates, filter.Where)
+	addWorkConditions(&predicates, addFacetConditions(&predicates, filter.Where, filter.Facets))
 	predicates.AddIf(filter.FreshSince != "",
 		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+
 			" OR EXISTS (SELECT 1 FROM candidate_decision fcd JOIN candidate fc ON fc.id = fcd.candidate_id"+
@@ -270,6 +276,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       CAST(" + numberColumn + " AS INTEGER) AS sort_number, CAST(" + textColumn + " AS TEXT) AS sort_text" +
 		",\n       CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
 		" WHERE wf.work_id = work.id), 0) AS INTEGER) AS size_bytes" +
+		",\n       " + setTotalsColumns +
 		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -319,6 +326,14 @@ func tagNameColumn(operator string) string {
 	return "COALESCE((SELECT MIN(st.name) FROM tag_assignment sa JOIN tag st ON st.id = sa.tag_id" +
 		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND sa.source " + operator + " 'musicbrainz'), '') COLLATE NOCASE"
 }
+
+// setTotalsColumns sum a work's monitored SET items, what a list shows for a work of many groups.
+const setTotalsColumns = `CAST(COALESCE((SELECT SUM(st.present_count) FROM desired_item st
+      WHERE st.work_id = work.id AND st.monitored = 1 AND st.satisfaction_kind = 'SET'), 0) AS INTEGER) AS present_total,
+   CAST(COALESCE((SELECT SUM(st.required_count) FROM desired_item st
+      WHERE st.work_id = work.id AND st.monitored = 1 AND st.satisfaction_kind = 'SET'), 0) AS INTEGER) AS required_total,
+   CAST((SELECT COUNT(*) FROM desired_item st
+      WHERE st.work_id = work.id AND st.monitored = 1 AND st.satisfaction_kind = 'SET' AND st.state = 'UPGRADABLE') AS INTEGER) AS upgradable`
 
 // unverifiedColumn is D6's "only local ids", over the per-work external-id index.
 const unverifiedColumn = "(EXISTS (SELECT 1 FROM work_external_id ux WHERE ux.work_id = work.id) AND " +
@@ -438,7 +453,8 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
 			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover,
-			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes); err != nil {
+			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes,
+			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

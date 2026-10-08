@@ -1,0 +1,250 @@
+package library
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"slices"
+	"strings"
+
+	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
+)
+
+// The sources a work facet is read from, as media.Facet declares them.
+const (
+	FacetColumn         = "column"
+	FacetField          = "field"
+	FacetOrganisation   = "organisation"
+	FacetClassification = "classification"
+	FacetTags           = "tags"
+)
+
+// facetColumns are the work columns a facet may read; the media registry refuses any other.
+var facetColumns = []string{"year", "primary_type", "runtime_ms", "original_language"}
+
+// WorkFacet is one facet of a media type as the works list reads and filters it.
+type WorkFacet struct {
+	Key string
+	// Source is one of the Facet* sources and Name what it names there: a column, a field, a role, a kind, a tag source.
+	Source string
+	Name   string
+	// Kind is what a custom filter compares it as, and Choices an enum's values.
+	Kind    listfilter.Kind
+	Choices []string
+}
+
+// FacetFields adds the filterable facets to a list's own custom-filter fields; a facet wins over a base field of
+// the same key.
+func FacetFields(base map[string]listfilter.Field, facets []WorkFacet) map[string]listfilter.Field {
+	fields := make(map[string]listfilter.Field, len(base)+len(facets))
+	for key, field := range base {
+		fields[key] = field
+	}
+	for _, facet := range facets {
+		fields[facet.Key] = listfilter.Field{Kind: facet.Kind, Choices: facet.Choices}
+	}
+	return fields
+}
+
+// fieldRank orders a work_field's providers as mergeFields does: the user's own first, then fieldPriority.
+func fieldRank(alias string) string {
+	var cases strings.Builder
+	for i, provider := range fieldPriority {
+		fmt.Fprintf(&cases, " WHEN %s.provider = '%s' THEN %d", alias, provider, i)
+	}
+	return "CASE" + cases.String() + fmt.Sprintf(" ELSE %d END", len(fieldPriority))
+}
+
+// facetCondition is one custom-filter condition on a facet as a predicate over work; false for a facet it cannot read.
+func facetCondition(condition listfilter.Condition, facet WorkFacet) (string, []any, bool) {
+	switch facet.Source {
+	case FacetColumn:
+		if !slices.Contains(facetColumns, facet.Name) {
+			return "", nil, false
+		}
+		expression := "COALESCE(work." + facet.Name + ", 0)"
+		if facet.Kind == listfilter.Text || facet.Kind == listfilter.Enum {
+			expression = "COALESCE(work." + facet.Name + ", '')"
+		}
+		fragment, arguments := condition.SQL(facet.Kind, expression)
+		return fragment, arguments, true
+	case FacetField:
+		expression := "COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = work.id AND f.field = ? AND f.value IS NOT NULL" +
+			" ORDER BY " + fieldRank("f") + " LIMIT 1), '')"
+		fragment, arguments := condition.SQL(facet.Kind, expression)
+		return fragment, append([]any{facet.Name}, arguments...), true
+	case FacetOrganisation:
+		return existsValue(condition, "FROM work_organisation fo JOIN organisation fon ON fon.id = fo.organisation_id"+
+			" WHERE fo.work_id = work.id AND fo.role = ?", "fon.name", facet.Name)
+	case FacetClassification:
+		return existsValue(condition, "FROM work_classification fc WHERE fc.work_id = work.id AND fc.kind = ?", "fc.value", facet.Name)
+	case FacetTags:
+		return existsValue(condition, "FROM tag_assignment ft JOIN tag ftn ON ftn.id = ft.tag_id"+
+			" WHERE ft.subject_type = 'work' AND ft.subject_id = work.id AND ft.source = ?", "ftn.name", facet.Name)
+	}
+	return "", nil, false
+}
+
+// existsValue is existsText over a subquery with one argument: "has a value matching", and for the negative
+// operators "has no value matching".
+func existsValue(condition listfilter.Condition, from, column, argument string) (string, []any, bool) {
+	negative := condition.Op == "not_contains" || condition.Op == "is_not"
+	positive := condition
+	switch condition.Op {
+	case "not_contains":
+		positive.Op = "contains"
+	case "is_not":
+		positive.Op = "is"
+	}
+	fragment, arguments := positive.SQL(listfilter.Text, column)
+	exists := "EXISTS (SELECT 1 " + from + " AND " + fragment + ")"
+	if negative {
+		exists = "NOT " + exists
+	}
+	return exists, append([]any{argument}, arguments...), true
+}
+
+// addFacetConditions adds the conditions naming a facet; the others are left to the list's own fields.
+func addFacetConditions(predicates *store.Predicates, conditions []listfilter.Condition, facets []WorkFacet) []listfilter.Condition {
+	var rest []listfilter.Condition
+	for _, condition := range conditions {
+		index := slices.IndexFunc(facets, func(facet WorkFacet) bool { return facet.Key == condition.Field })
+		if index < 0 {
+			rest = append(rest, condition)
+			continue
+		}
+		if fragment, arguments, ok := facetCondition(condition, facets[index]); ok {
+			predicates.Add(fragment, arguments...)
+		}
+	}
+	return rest
+}
+
+// FacetValues reads the facets of a page of works: work id to facet key to its values, one for a single-valued facet.
+func (w Works) FacetValues(ctx context.Context, facets []WorkFacet, workIDs []int64) (map[int64]map[string][]string, error) {
+	values := make(map[int64]map[string][]string, len(workIDs))
+	if len(workIDs) == 0 || len(facets) == 0 {
+		return values, nil
+	}
+	add := func(workID int64, key, value string) {
+		if value == "" {
+			return
+		}
+		if values[workID] == nil {
+			values[workID] = map[string][]string{}
+		}
+		if !slices.Contains(values[workID][key], value) {
+			values[workID][key] = append(values[workID][key], value)
+		}
+	}
+	ids, idArgs := idList(workIDs)
+	bySource := map[string][]WorkFacet{}
+	for _, facet := range facets {
+		bySource[facet.Source] = append(bySource[facet.Source], facet)
+	}
+	reader := w.store.Read()
+	for _, facet := range bySource[FacetColumn] {
+		if !slices.Contains(facetColumns, facet.Name) {
+			continue
+		}
+		err := eachRow(ctx, reader, "SELECT id, CAST(COALESCE("+facet.Name+", '') AS TEXT) FROM work WHERE id IN ("+ids+")", idArgs,
+			func(id int64, value string) { add(id, facet.Key, value) })
+		if err != nil {
+			return nil, err
+		}
+	}
+	if fields := bySource[FacetField]; len(fields) > 0 {
+		keyOf := map[string]string{}
+		var names []any
+		for _, facet := range fields {
+			keyOf[facet.Name] = facet.Key
+			names = append(names, facet.Name)
+		}
+		query := "SELECT work_id, field, value FROM (SELECT f.work_id, f.field, f.value, ROW_NUMBER() OVER (PARTITION BY f.work_id, f.field ORDER BY " +
+			fieldRank("f") + ") AS rank FROM work_field f WHERE f.value IS NOT NULL AND f.work_id IN (" + ids + ") AND f.field IN (" +
+			marks(len(names)) + ")) WHERE rank = 1"
+		err := eachTriple(ctx, reader, query, append(slices.Clone(idArgs), names...), func(id int64, field, value string) { add(id, keyOf[field], value) })
+		if err != nil {
+			return nil, err
+		}
+	}
+	for source, query := range map[string]string{
+		FacetOrganisation: "SELECT wo.work_id, wo.role, o.name FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id" +
+			" WHERE wo.work_id IN (%s) AND wo.role IN (%s) ORDER BY wo.work_id, o.name",
+		FacetClassification: "SELECT work_id, kind, value FROM work_classification WHERE work_id IN (%s) AND kind IN (%s) ORDER BY work_id, value",
+		FacetTags: "SELECT ta.subject_id, ta.source, t.name FROM tag_assignment ta JOIN tag t ON t.id = ta.tag_id" +
+			" WHERE ta.subject_type = 'work' AND ta.subject_id IN (%s) AND ta.source IN (%s) ORDER BY ta.subject_id, t.name",
+	} {
+		named := bySource[source]
+		if len(named) == 0 {
+			continue
+		}
+		keysOf := map[string][]string{}
+		var names []any
+		for _, facet := range named {
+			if len(keysOf[facet.Name]) == 0 {
+				names = append(names, facet.Name)
+			}
+			keysOf[facet.Name] = append(keysOf[facet.Name], facet.Key)
+		}
+		err := eachTriple(ctx, reader, fmt.Sprintf(query, ids, marks(len(names))), append(slices.Clone(idArgs), names...),
+			func(id int64, name, value string) {
+				for _, key := range keysOf[name] {
+					add(id, key, value)
+				}
+			})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return values, nil
+}
+
+func idList(ids []int64) (string, []any) {
+	arguments := make([]any, len(ids))
+	for i, id := range ids {
+		arguments[i] = id
+	}
+	return marks(len(ids)), arguments
+}
+
+func marks(n int) string { return strings.TrimSuffix(strings.Repeat("?,", n), ",") }
+
+type rowReader interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
+func eachRow(ctx context.Context, reader rowReader, query string, arguments []any, each func(int64, string)) error {
+	rows, err := reader.QueryContext(ctx, query, arguments...)
+	if err != nil {
+		return fmt.Errorf("library: facets: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id int64
+		var value string
+		if err := rows.Scan(&id, &value); err != nil {
+			return fmt.Errorf("library: facets: %w", err)
+		}
+		each(id, value)
+	}
+	return rows.Err()
+}
+
+func eachTriple(ctx context.Context, reader rowReader, query string, arguments []any, each func(int64, string, string)) error {
+	rows, err := reader.QueryContext(ctx, query, arguments...)
+	if err != nil {
+		return fmt.Errorf("library: facets: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id int64
+		var name, value string
+		if err := rows.Scan(&id, &name, &value); err != nil {
+			return fmt.Errorf("library: facets: %w", err)
+		}
+		each(id, name, value)
+	}
+	return rows.Err()
+}
