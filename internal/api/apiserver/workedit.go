@@ -64,6 +64,10 @@ type BulkEditChange struct {
 	ProfileID  *int64
 	AddTags    []string
 	RemoveTags []string
+	// Fields are editable facets to set; MonitorOption, with Specials, is one of the type's options applied last.
+	Fields        map[string]string
+	MonitorOption string
+	Specials      bool
 }
 
 func (s *Server) routeGetWorkEdit(w http.ResponseWriter, r *http.Request) {
@@ -193,7 +197,10 @@ func (s *Server) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
 		Where: derefOr(body.Where, ""),
 	}
-	change := BulkEditChange{Monitored: body.Monitored, AddTags: derefOr(body.AddTags, nil), RemoveTags: derefOr(body.RemoveTags, nil)}
+	change := BulkEditChange{
+		Monitored: body.Monitored, AddTags: derefOr(body.AddTags, nil), RemoveTags: derefOr(body.RemoveTags, nil),
+		Fields: derefOr(body.Fields, nil), MonitorOption: derefOr(body.MonitorOption, ""), Specials: derefOr(body.Specials, false),
+	}
 	if body.Profile != nil {
 		change.SetProfile, change.ProfileID = true, body.Profile.Id
 	}

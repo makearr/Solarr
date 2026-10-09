@@ -26,13 +26,13 @@ import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
 
 import { CustomFilterMenu } from "../CustomFilterMenu";
-import { BulkEditDialog } from "../EditAlbum";
 import { STATUS_CHOICES } from "../filterFields";
 import {
   DEFAULT_POSTER_OPTIONS, IndexPoster, IndexViewToggle, OVERVIEW_ROW_HEIGHT, OverviewList, POSTER_GAP, POSTER_PADDING,
   POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, workEntry, type IndexView, type PosterOptions,
 } from "../IndexViews";
 import { formatBytes } from "../Queue";
+import { BulkEditWork } from "./EditWork";
 import { formatMinutes } from "./workFormat";
 
 type Work = components["schemas"]["Work"];
@@ -349,7 +349,9 @@ function BulkBar({
 }) {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
-  const [confirm, setConfirm] = useState<{ kind: "monitor"; monitored: boolean; count: number } | { kind: "option"; option: string } | { kind: "remove" }>();
+  const [confirm, setConfirm] = useState<
+    { kind: "monitor"; monitored: boolean; count: number } | { kind: "option"; option: string; count: number } | { kind: "remove" }
+  >();
   const [editing, setEditing] = useState(false);
   const [option, setOption] = useState(info?.monitor_options[0]?.key ?? "");
   const [removal, setRemoval] = useState({ deleteFiles: false, exclude: true });
@@ -367,8 +369,22 @@ function BulkBar({
     },
     onSuccess: ({ monitored, count: matched }) => setConfirm({ kind: "monitor", monitored, count: matched }),
   });
+  // A monitor option goes through the bulk edit, so "select all matching" reaches every work, counted first.
+  const optionPreview = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/works/bulk/edit", { body: { ...selectionBody(request), monitor_option: option, preview: true } });
+      if (error) throw error;
+      return data.count;
+    },
+    onSuccess: (matched) => setConfirm({ kind: "option", option, count: matched }),
+  });
   const apply = useMutation({
     mutationFn: async () => {
+      if (confirm?.kind === "option") {
+        const { error } = await api.POST("/works/bulk/edit", { body: { ...selectionBody(request), monitor_option: confirm.option } });
+        if (error) throw error;
+        return;
+      }
       if (confirm?.kind === "monitor") {
         const { error } = await api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored: confirm.monitored } });
         if (error) throw error;
@@ -377,10 +393,7 @@ function BulkBar({
       let failed = 0;
       for (const [index, id] of explicitIds.entries()) {
         setProgress(`${index + 1} of ${explicitIds.length}`);
-        const { error } =
-          confirm?.kind === "option"
-            ? await api.POST("/works/{id}/monitor", { params: { path: { id } }, body: { option: confirm.option } })
-            : await api.POST("/works/{id}/remove", { params: { path: { id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } });
+        const { error } = await api.POST("/works/{id}/remove", { params: { path: { id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } });
         if (error) failed++;
       }
       setProgress(failed > 0 ? `${failed} could not be changed` : undefined);
@@ -400,7 +413,7 @@ function BulkBar({
         {t("action.unmonitor")}
       </Button>
       <Button onClick={() => setEditing(true)}>{t("action.edit")}</Button>
-      {explicitIds.length > 0 && (info?.monitor_options.length ?? 0) > 0 && (
+      {(info?.monitor_options.length ?? 0) > 0 && (
         <span className="flex items-center gap-1">
           <select value={option} onChange={(event) => setOption(event.target.value)} className="rounded-md border border-border-subtle bg-canvas px-2 py-1">
             {info?.monitor_options.map((entry) => (
@@ -409,7 +422,9 @@ function BulkBar({
               </option>
             ))}
           </select>
-          <Button onClick={() => setConfirm({ kind: "option", option })}>Apply</Button>
+          <Button busy={preview.isPending} onClick={() => optionPreview.mutate()}>
+            Apply
+          </Button>
         </span>
       )}
       {explicitIds.length > 0 && administrator && (
@@ -422,9 +437,9 @@ function BulkBar({
       </Button>
       {progress && <span className="text-ink-muted">{progress}</span>}
       {editing && (
-        <BulkEditDialog
+        <BulkEditWork
           selection={selectionBody(request)}
-          mediaType={info?.key}
+          info={info}
           onClose={() => setEditing(false)}
           onDone={() => {
             setEditing(false);
@@ -440,7 +455,7 @@ function BulkBar({
             confirm.kind === "monitor"
               ? `${confirm.monitored ? "Monitor" : "Unmonitor"} ${confirm.count} ${confirm.count === 1 ? words.work : words.works}.`
               : confirm.kind === "option"
-                ? `Monitor ${optionLabel.toLowerCase()} of ${explicitIds.length} ${words.works}. ${words.Parts} already chosen by hand are decided again.`
+                ? `Monitor ${optionLabel.toLowerCase()} of ${confirm.count} ${confirm.count === 1 ? words.work : words.works}. ${words.Parts} already chosen by hand are decided again.`
                 : t("work.remove.consequence", words)
           }
           confirmLabel={confirm.kind === "remove" ? t("action.remove") : "Apply"}

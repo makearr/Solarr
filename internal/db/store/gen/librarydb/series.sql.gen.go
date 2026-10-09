@@ -342,36 +342,6 @@ func (q *Queries) ListSeriesInCategory(ctx context.Context, arg ListSeriesInCate
 	return items, nil
 }
 
-const listSeriesMediaObjects = `-- name: ListSeriesMediaObjects :many
-SELECT wf.media_object_id FROM work_file wf WHERE wf.work_id = ?1
-UNION
-SELECT f.media_object_id FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id WHERE d.work_id = ?1
-`
-
-// Every media object that belongs to a series: attached to an episode or linked to the work.
-func (q *Queries) ListSeriesMediaObjects(ctx context.Context, workID int64) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listSeriesMediaObjects, workID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []int64{}
-	for rows.Next() {
-		var media_object_id int64
-		if err := rows.Scan(&media_object_id); err != nil {
-			return nil, err
-		}
-		items = append(items, media_object_id)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSeriesTitles = `-- name: ListSeriesTitles :many
 SELECT w.id AS work_id, w.canonical_title AS title, w.year AS year
 FROM work w

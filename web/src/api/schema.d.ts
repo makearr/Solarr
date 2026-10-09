@@ -1956,7 +1956,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+         * Change monitoring, a monitor option, quality profile, tags and editable fields of every work matching a selection (Radarr's and Sonarr's Edit selected).
          * @description The selection is the one /works/bulk/monitor takes, filters included, so "select all matching" under a filter touches only what the list showed. Only what is present is changed: monitored, profile (an object whose id null returns the albums to their library's profiles), and tags to add or remove. preview counts and changes nothing.
          */
         post: operations["bulkEditWorks"];
@@ -3193,89 +3193,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/series": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** A page of one TV library's series, ordered by sort title. */
-        get: operations["listSeries"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** A series with its seasons and episodes. */
-        get: operations["getSeries"];
-        put?: never;
-        post?: never;
-        /** Remove a series from the library, with its files in the recycle bin when asked. */
-        delete: operations["deleteSeries"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/refresh": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Re-read the series from the metadata sources. Never changes monitoring. */
-        post: operations["refreshSeries"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/type": {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Say what kind of series this is, or return to what the providers say. */
-        put: operations["setSeriesType"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/series/{id}/posters": {
         parameters: {
             query: {
@@ -3311,27 +3228,6 @@ export interface paths {
         get?: never;
         /** Make one of the offered posters this series' own; it is kept over later refreshes. */
         put: operations["setSeriesPoster"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/quality": {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Give the series a quality profile of its own, or return it to the library's. */
-        put: operations["setSeriesQuality"];
         post?: never;
         delete?: never;
         options?: never;
@@ -5381,139 +5277,6 @@ export interface components {
             died?: string;
             monitored: boolean;
         };
-        /** @description Episode counts of one series or season. present counts monitored episodes with a file. */
-        SeriesCounts: {
-            total: number;
-            monitored: number;
-            present: number;
-            /** @description Monitored episodes that have aired and have no file. */
-            aired_missing: number;
-        };
-        SeriesSummary: {
-            /** Format: int64 */
-            id: number;
-            title: string;
-            sort_title: string;
-            /** Format: int64 */
-            year?: number;
-            /** @enum {string} */
-            status?: "continuing" | "ended" | "upcoming";
-            /**
-             * @description Detected from the providers, or the person's own choice; anime is also searched by absolute number.
-             * @enum {string}
-             */
-            series_type?: "standard" | "daily" | "anime";
-            network?: string;
-            poster_url?: string;
-            overview?: string;
-            /** @description At least one season is monitored. */
-            monitored: boolean;
-            /** @description Seasons with episodes */
-            seasons: number;
-            counts: components["schemas"]["SeriesCounts"];
-            /** Format: date-time */
-            next_airing?: string;
-            /** Format: int64 */
-            quality_profile_id?: number;
-            genres?: string[];
-            /** @description Each season with episodes, specials included as season 0, and whether it is monitored (Season Pass). */
-            season_states?: {
-                number: number;
-                monitored: boolean;
-            }[];
-            /**
-             * Format: int64
-             * @description Unix seconds.
-             */
-            added_at: number;
-        };
-        SeriesPage: {
-            items: components["schemas"]["SeriesSummary"][];
-            next_cursor?: string;
-        };
-        SeriesEpisode: {
-            /**
-             * Format: int64
-             * @description The part id.
-             */
-            id: number;
-            season: number;
-            number: number;
-            absolute?: number;
-            title?: string;
-            overview?: string;
-            air_date?: string;
-            /** Format: date-time */
-            air_time?: string;
-            /** @enum {string} */
-            air_confidence?: "unknown" | "low" | "medium" | "high";
-            runtime_minutes?: number;
-            monitored: boolean;
-            /**
-             * @description What a person wants to see in the column.
-             * @enum {string}
-             */
-            state: "present" | "missing" | "unaired" | "unmonitored";
-            file?: components["schemas"]["SeriesEpisodeFile"];
-        };
-        /** @description The file behind a present episode and what the probe measured of it; a part the probe has not read is absent. */
-        SeriesEpisodeFile: {
-            /** Format: int64 */
-            media_object_id: number;
-            /** Format: int64 */
-            size_bytes: number;
-            resolution?: string;
-            video_codec?: string;
-            hdr?: string;
-            audio_codec?: string;
-            audio_channels?: string;
-            container?: string;
-            video_bitrate_kbps?: number;
-            /** @description Language codes of the audio tracks the probe read; absent when none were. */
-            audio_languages?: string[];
-            /** @description Language codes of embedded and sidecar subtitles; und when a file names none. */
-            subtitles: string[];
-            /** @description Absent when the library has no target or the file is not measured yet. */
-            meets_target?: boolean;
-        };
-        SeriesSeason: {
-            number: number;
-            monitored: boolean;
-            counts: components["schemas"]["SeriesCounts"];
-            poster_url?: string;
-            /** Format: int64 */
-            desired_item_id?: number;
-        };
-        SeriesDetail: {
-            summary: components["schemas"]["SeriesSummary"];
-            aliases?: string[];
-            runtime_minutes?: number;
-            certification?: string;
-            rating?: number;
-            original_language?: string;
-            original_country?: string;
-            /** @description Local clock time and zone, e.g. 22:00 America/New_York. */
-            air_time?: string;
-            first_aired?: string;
-            last_aired?: string;
-            /** @description Provider to id, e.g. tvdb, tvmaze, tmdb, imdb. */
-            ids: {
-                [key: string]: string;
-            };
-            seasons: components["schemas"]["SeriesSeason"][];
-            episodes: components["schemas"]["SeriesEpisode"][];
-            fanart_url?: string;
-            /** @description The series' clear logo */
-            logo_url?: string;
-            /**
-             * Format: int64
-             * @description The network as a Networks-level entity.
-             */
-            network_id?: number;
-            network_logo_url?: string;
-            /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
-            credits?: components["schemas"]["SeriesCredit"][];
-        };
         AddCandidate: {
             /** @description One of the type's add_kinds. */
             kind: string;
@@ -5614,27 +5377,6 @@ export interface components {
             freed_bytes: number;
             /** @description One line each for what was left alone and why. */
             problems: string[];
-        };
-        SeriesCredit: {
-            /** Format: int64 */
-            person_id: number;
-            name: string;
-            image_url?: string;
-            role: string;
-            character?: string;
-            order: number;
-            /**
-             * Format: int64
-             * @description The part id of an episode-scoped credit; absent for the whole series.
-             */
-            episode_id?: number;
-        };
-        AddSeriesResult: {
-            /** Format: int64 */
-            series_id: number;
-            created: boolean;
-            episodes: number;
-            seasons: number;
         };
         PersonPage: {
             items: components["schemas"]["PersonEntry"][];
@@ -10589,6 +10331,17 @@ export interface operations {
                     };
                     add_tags?: string[];
                     remove_tags?: string[];
+                    /** @description The type's editable facets to set, by key ("" returns one to its sources). */
+                    fields?: {
+                        [key: string]: string;
+                    };
+                    /** @description One of the type's monitor options, applied after the rest. */
+                    monitor_option?: string;
+                    /**
+                     * @description With monitor_option
+                     * @default false
+                     */
+                    specials?: boolean;
                 };
             };
         };
@@ -12735,153 +12488,6 @@ export interface operations {
             403: components["responses"]["Problem"];
         };
     };
-    listSeries: {
-        parameters: {
-            query: {
-                category_id: number;
-                /** @description From `next_cursor` of the previous page. Absent on the first page. */
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One page. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesPage"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    getSeries: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The series. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesDetail"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    deleteSeries: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-                /** @description Send the series' files to the recycle bin; never deleted directly. */
-                delete_files?: boolean;
-                /** @description Remember the series so a scan, a follow or an import list does not add it back. */
-                exclude?: boolean;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Removed. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    refreshSeries: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description What the refresh did. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddSeriesResult"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
-        };
-    };
-    setSeriesType: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    type: "standard" | "daily" | "anime" | "auto";
-                };
-            };
-        };
-        responses: {
-            /** @description Set. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
     getSeriesPosters: {
         parameters: {
             query: {
@@ -12926,42 +12532,6 @@ export interface operations {
         };
         responses: {
             /** @description The poster was replaced. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    setSeriesQuality: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /**
-                     * Format: int64
-                     * @description A TV quality profile; null or absent returns the series to the library's.
-                     */
-                    quality_profile_id?: number | null;
-                };
-            };
-        };
-        responses: {
-            /** @description Set. */
             204: {
                 headers: {
                     [name: string]: unknown;

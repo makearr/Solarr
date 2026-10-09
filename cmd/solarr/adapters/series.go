@@ -6,17 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
-	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // SeriesCatalog satisfies apiserver.SeriesCatalog over the TV service and the library's series reader.
@@ -29,100 +24,6 @@ type SeriesCatalog struct {
 	Clock            clock.Clock
 	// Remover sends a deleted series' files to the recycle bin.
 	Remover FileRemover
-}
-
-// List maps a page of series.
-func (c SeriesCatalog) List(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.SeriesSummary, error) {
-	rows, err := c.Reader.List(ctx, categoryID, library.SeriesCursor{SortTitle: after.Sort, ID: after.ID}, int64(limit), c.Clock.Now())
-	if err != nil {
-		return nil, err
-	}
-	views := make([]gen.SeriesSummary, len(rows))
-	for i, row := range rows {
-		views[i] = summaryView(row)
-	}
-	return views, nil
-}
-
-// Get maps one series with its seasons and episodes.
-func (c SeriesCatalog) Get(ctx context.Context, categoryID, seriesID int64) (gen.SeriesDetail, error) {
-	now := c.Clock.Now()
-	row, err := c.Reader.Get(ctx, categoryID, seriesID, now)
-	if err != nil {
-		return gen.SeriesDetail{}, translateSeriesError(err)
-	}
-	detail := gen.SeriesDetail{Summary: summaryView(row.Summary), Ids: row.IDs, Seasons: []gen.SeriesSeason{}, Episodes: make([]gen.SeriesEpisode, len(row.Episodes))}
-	if len(row.Aliases) > 0 {
-		detail.Aliases = &row.Aliases
-	}
-	if row.RuntimeMs > 0 {
-		minutes := int(row.RuntimeMs / 60_000)
-		detail.RuntimeMinutes = &minutes
-	}
-	setString(&detail.LogoUrl, imageOfKind(row.Summary.Fields["images"], "logo"))
-	setString(&detail.FanartUrl, imageOfKind(row.Summary.Fields["images"], "fanart"))
-	if network, found, err := c.Reader.NetworkOfSeries(ctx, seriesID); err == nil && found {
-		detail.NetworkId = &network.ID
-		setString(&detail.NetworkLogoUrl, network.LogoURL)
-	}
-	setString(&detail.OriginalLanguage, row.Language)
-	setString(&detail.OriginalCountry, row.Summary.Fields["original_country"])
-	setString(&detail.AirTime, row.Summary.Fields["air_time"])
-	posters := seasonPosters(row.Summary.Fields["season_images"])
-	for _, season := range row.Summary.Seasons {
-		view := gen.SeriesSeason{Number: season.Number, Monitored: season.Monitored, Counts: countsView(season.Counts), DesiredItemId: &season.DesiredItemID}
-		if url := posters[season.Number]; url != "" {
-			view.PosterUrl = &url
-		}
-		detail.Seasons = append(detail.Seasons, view)
-	}
-	category, haveCategory := c.Categories.Category(categoryID)
-	for i, episode := range row.Episodes {
-		detail.Episodes[i] = episodeView(episode, now)
-		if episode.File != nil {
-			detail.Episodes[i].File = episodeFileView(*episode.File, category, haveCategory)
-		}
-	}
-	credits := make([]gen.SeriesCredit, len(row.Credits))
-	for i, credit := range row.Credits {
-		credits[i] = gen.SeriesCredit{PersonId: credit.PersonID, Name: credit.Name, Role: credit.Role, Order: int(credit.Order)}
-		setString(&credits[i].ImageUrl, credit.ImageURL)
-		setString(&credits[i].Character, credit.Character)
-		if credit.PartID > 0 {
-			credits[i].EpisodeId = &credit.PartID
-		}
-	}
-	detail.Credits = &credits
-	return detail, nil
-}
-
-func episodeView(episode library.SeriesEpisode, now time.Time) gen.SeriesEpisode {
-	view := gen.SeriesEpisode{Id: episode.PartID, Season: episode.Season, Number: episode.Number, Monitored: episode.Monitored}
-	setString(&view.Title, episode.Title)
-	setString(&view.AirDate, episode.Date)
-	if episode.AvailableAt > 0 {
-		at := time.Unix(episode.AvailableAt, 0).UTC()
-		view.AirTime = &at
-	}
-	if episode.AvailableConfidence != "" {
-		confidence := gen.SeriesEpisodeAirConfidence(episode.AvailableConfidence)
-		view.AirConfidence = &confidence
-	}
-	if episode.RuntimeMs > 0 {
-		minutes := int(episode.RuntimeMs / 60_000)
-		view.RuntimeMinutes = &minutes
-	}
-	switch {
-	case episode.Present:
-		view.State = gen.SeriesEpisodeStatePresent
-	case !episode.Monitored:
-		view.State = gen.SeriesEpisodeStateUnmonitored
-	case episode.AvailableAt > now.Unix() || (episode.AvailableAt == 0 && episode.Date > now.UTC().Format("2006-01-02")):
-		view.State = gen.SeriesEpisodeStateUnaired
-	default:
-		view.State = gen.SeriesEpisodeStateMissing
-	}
-	return view
 }
 
 // LookupWorks implements media.Adding for TV: the sources' series, each marked when the library already holds it.
@@ -194,74 +95,19 @@ func (c SeriesCatalog) AddWork(ctx context.Context, request media.AddRequest) (m
 }
 
 // Refresh re-reads one series from the sources; monitoring and season items stay as they are.
-func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error) {
+func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) error {
 	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return gen.AddSeriesResult{}, translateSeriesError(err)
+		return translateSeriesError(err)
 	}
 	profile := c.DefaultProfileID
 	if category, ok := c.Categories.Category(categoryID); ok {
 		profile = c.Categories.ProfileFor(category, profile)
 	}
-	result, err := c.Service.Refresh(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile})
-	if err != nil {
-		if errors.Is(err, tv.ErrNoSource) {
-			return gen.AddSeriesResult{}, fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
-		}
-		return gen.AddSeriesResult{}, err
+	_, err := c.Service.Refresh(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile})
+	if errors.Is(err, tv.ErrNoSource) {
+		return fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
 	}
-	return gen.AddSeriesResult{SeriesId: result.WorkID, Created: false, Episodes: result.Episodes, Seasons: result.Seasons}, nil
-}
-
-// Delete removes a series. Its files go to the recycle bin when asked (never deleted directly), and the series is
-// remembered when it must not be added back; with neither, the next scan finds the folder and adds it again.
-func (c SeriesCatalog) Delete(ctx context.Context, categoryID, seriesID int64, deleteFiles, exclude bool) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
-	summaries, err := c.Reader.SummariesByIDs(ctx, categoryID, []int64{seriesID}, c.Clock.Now())
-	if err != nil || len(summaries) == 0 {
-		return translateSeriesError(library.ErrSeriesNotFound)
-	}
-	provider, err := c.Reader.ProviderIDs(ctx, seriesID)
-	if err != nil {
-		return err
-	}
-	if deleteFiles {
-		files, err := c.Reader.MediaObjects(ctx, seriesID)
-		if err != nil {
-			return err
-		}
-		recycling := RecyclingFor(c.Categories, []int64{categoryID})
-		for _, mediaObjectID := range files {
-			if err := c.Remover.RecycleFile(ctx, mediaObjectID, recycling); err != nil {
-				return fmt.Errorf("recycle file %d: %w", mediaObjectID, err)
-			}
-		}
-	}
-	if exclude {
-		var ids []library.ExternalIDWrite
-		for name, id := range provider {
-			ids = append(ids, library.ExternalIDWrite{Provider: name, ExternalID: id})
-		}
-		if err := c.Service.Exclusions.Exclude(ctx, c.Clock.Now(), tv.MediaType, summaries[0].Title, ids); err != nil {
-			return err
-		}
-	}
-	return c.Service.Series.DeleteSeries(ctx, seriesID)
-}
-
-// SetType says what kind of series this is; "auto" returns to what the providers say.
-func (c SeriesCatalog) SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
-	value := seriesType
-	if seriesType == "auto" {
-		value = ""
-	} else if !tv.SeriesType(seriesType).Valid() {
-		return fmt.Errorf("%w: unknown series type %q", apiserver.ErrInvalidChoice, seriesType)
-	}
-	return c.Service.Series.SetManualField(ctx, c.Clock.Now(), seriesID, "series_type", value)
+	return err
 }
 
 // PosterOptions lists the posters the providers hold for a series, the thumbnail being the poster itself.
@@ -311,20 +157,6 @@ func (c SeriesCatalog) SetPoster(ctx context.Context, categoryID, seriesID int64
 	return c.Service.Series.SetManualField(ctx, c.Clock.Now(), seriesID, "images", string(value))
 }
 
-// SetProfile gives the series a quality profile of its own, or the library's when nil.
-func (c SeriesCatalog) SetProfile(ctx context.Context, categoryID, seriesID int64, profileID *int64) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
-	if profileID != nil {
-		profile, found := c.Categories.Cache.Snapshot().QualityProfile(*profileID)
-		if !found || profile.MediaType != "tv" {
-			return fmt.Errorf("%w: quality profile %d is not a TV profile", apiserver.ErrInvalidChoice, *profileID)
-		}
-	}
-	return c.Service.SetProfile(ctx, categoryID, seriesID, profileID)
-}
-
 func translateSeriesError(err error) error {
 	if errors.Is(err, library.ErrSeriesNotFound) {
 		return apiserver.ErrSeriesNotFound
@@ -332,109 +164,8 @@ func translateSeriesError(err error) error {
 	return err
 }
 
-func summaryView(row library.SeriesSummary) gen.SeriesSummary {
-	view := gen.SeriesSummary{
-		Id: row.WorkID, Title: row.Title, SortTitle: row.SortTitle, Monitored: row.Monitored, Counts: countsView(row.Counts), AddedAt: row.AddedAt,
-	}
-	states := make([]struct {
-		Monitored bool `json:"monitored"`
-		Number    int  `json:"number"`
-	}, 0, len(row.Seasons))
-	for _, season := range row.Seasons {
-		if season.Number > 0 {
-			view.Seasons++
-		}
-		states = append(states, struct {
-			Monitored bool `json:"monitored"`
-			Number    int  `json:"number"`
-		}{Monitored: season.Monitored, Number: season.Number})
-	}
-	view.SeasonStates = &states
-	if row.Year > 0 {
-		view.Year = &row.Year
-	}
-	if status := row.Fields["status"]; status != "" {
-		typed := gen.SeriesSummaryStatus(status)
-		view.Status = &typed
-	}
-	setString(&view.Network, row.Fields["network"])
-	if kind := tv.SeriesType(row.Fields["series_type"]); kind.Valid() {
-		typed := gen.SeriesSummarySeriesType(kind)
-		view.SeriesType = &typed
-	}
-	setString(&view.Overview, row.Description)
-	setString(&view.PosterUrl, posterOf(row.Fields["images"]))
-	if row.NextAvailable > 0 {
-		next := time.Unix(row.NextAvailable, 0).UTC()
-		view.NextAiring = &next
-	}
-	if row.ProfileID > 0 {
-		view.QualityProfileId = &row.ProfileID
-	}
-	if len(row.Genres) > 0 {
-		view.Genres = &row.Genres
-	}
-	return view
-}
-
-func countsView(counts library.SeriesCounts) gen.SeriesCounts {
-	return gen.SeriesCounts{Total: int(counts.Total), Monitored: int(counts.Monitored), Present: int(counts.Present), AiredMissing: int(counts.AiredMissing)}
-}
-
-func posterOf(imagesJSON string) string { return imageOfKind(imagesJSON, "poster") }
-
-// imageOfKind is the first picture of a kind (poster, fanart, logo) in a series' stored images, in the provider order.
-func imageOfKind(imagesJSON, kind string) string {
-	var images []tv.Image
-	if json.Unmarshal([]byte(imagesJSON), &images) != nil {
-		return ""
-	}
-	for _, image := range images {
-		if image.Kind == kind {
-			return image.URL
-		}
-	}
-	return ""
-}
-
-func seasonPosters(seasonsJSON string) map[int]string {
-	var seasons []tv.Season
-	posters := map[int]string{}
-	if json.Unmarshal([]byte(seasonsJSON), &seasons) == nil {
-		for _, season := range seasons {
-			posters[season.Number] = season.Poster
-		}
-	}
-	return posters
-}
-
 func setString(into **string, value string) {
 	if value != "" {
 		*into = &value
 	}
-}
-
-func episodeFileView(file library.EpisodeFile, category settings.Category, haveCategory bool) *gen.SeriesEpisodeFile {
-	view := &gen.SeriesEpisodeFile{MediaObjectId: file.MediaObjectID, SizeBytes: file.SizeBytes, Subtitles: file.Subtitles}
-	if view.Subtitles == nil {
-		view.Subtitles = []string{}
-	}
-	if len(file.Languages) > 0 {
-		view.AudioLanguages = &file.Languages
-	}
-	setString(&view.Resolution, file.Resolution)
-	setString(&view.VideoCodec, file.VideoCodec)
-	setString(&view.Hdr, file.HDR)
-	setString(&view.AudioCodec, file.AudioCodec)
-	setString(&view.AudioChannels, file.AudioChannels)
-	setString(&view.Container, file.Container)
-	if file.VideoBitrate > 0 {
-		kbps := int(file.VideoBitrate / 1000)
-		view.VideoBitrateKbps = &kbps
-	}
-	if haveCategory && category.QualityTarget != nil && file.VideoCodec != "" {
-		meets := quality.MeetsTarget(*category.QualityTarget, tv.FileFacts(file).File)
-		view.MeetsTarget = &meets
-	}
-	return view
 }

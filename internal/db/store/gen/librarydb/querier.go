@@ -613,8 +613,6 @@ type Querier interface {
 	// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
 	// ordered by sort title with the id as the tie-break.
 	ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error)
-	// Every media object that belongs to a series: attached to an episode or linked to the work.
-	ListSeriesMediaObjects(ctx context.Context, workID int64) ([]int64, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
 	ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.

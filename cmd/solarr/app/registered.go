@@ -136,8 +136,7 @@ func (p *process) tvModule() tv.Module {
 			if len(libraries) == 0 {
 				return false, fmt.Errorf("series %d is in no library", workID)
 			}
-			_, err = p.seriesCatalog().Refresh(ctx, libraries[0], workID)
-			return false, err
+			return false, p.seriesCatalog().Refresh(ctx, libraries[0], workID)
 		},
 		Feed: tv.Feed{
 			Grab: p.tvGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.tvIndexerConns, Logger: p.logger,

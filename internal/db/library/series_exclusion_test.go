@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store"
 )
 
 func TestADeletedSeriesIsGoneWithItsPartsAndCanBeExcluded(t *testing.T) {
@@ -24,7 +25,7 @@ func TestADeletedSeriesIsGoneWithItsPartsAndCanBeExcluded(t *testing.T) {
 	if err := exclusions.Exclude(t.Context(), seriesAt, "tv", "Example Show", ids); err != nil {
 		t.Fatal(err)
 	}
-	if err := series.DeleteSeries(t.Context(), result.WorkID); err != nil {
+	if err := removeWithFiles(t, opened, result.WorkID); err != nil {
 		t.Fatal(err)
 	}
 
@@ -48,4 +49,11 @@ func TestADeletedSeriesIsGoneWithItsPartsAndCanBeExcluded(t *testing.T) {
 	if excluded, _ := exclusions.Excluded(t.Context(), ids); excluded {
 		t.Error("still excluded after unexclude")
 	}
+}
+
+// removeWithFiles removes a work as an excluded series is removed, files or not.
+func removeWithFiles(t *testing.T, opened *store.Store, workID int64) error {
+	t.Helper()
+	_, err := library.NewIdentity(opened).RemoveWork(t.Context(), workID, true)
+	return err
 }

@@ -27,7 +27,6 @@ import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
-import { SeasonPass } from "./SeasonPass";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
 import { Duplicates } from "./Duplicates";
@@ -67,9 +66,7 @@ async function redirectToLibrary(categoryId: string) {
 
 /** Search-and-add is a per-media-type screen: series for a TV library, albums and artists for music. */
 
-/** Wanted is per media type: missing episodes for a TV library, albums for music. */
-
-/** A level of people or organisations is one list for every media type; works are still per type (R1.6). */
+/** A library's level by the entity it lists, one screen per entity for every media type (R1.6). */
 function LevelForLibrary() {
   const { categoryId, level } = useParams({ strict: false }) as { categoryId: string; level: string };
   const library = useLibrary(categoryId);
@@ -77,7 +74,6 @@ function LevelForLibrary() {
   if (entity === "person") return <PeopleIndex />;
   if (entity === "organisation") return <OrganisationIndex />;
   if (entity === "work") return <WorkIndex />;
-  if (library?.media_type === "tv" && level === "seasonpass") return <SeasonPass />;
   return <LibraryLevelList />;
 }
 
@@ -164,6 +160,14 @@ const routes = [
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/overview",
+    beforeLoad: async ({ params }) => {
+      throw await redirectToLibrary((params as { categoryId: string }).categoryId);
+    },
+  }),
+  // Season pass gave way to the series list's Edit selected (R1.6); old links land on the library.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/seasonpass",
     beforeLoad: async ({ params }) => {
       throw await redirectToLibrary((params as { categoryId: string }).categoryId);
     },

@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
-import { t } from "@/lib/i18n";
+import { t, vocabularyOf } from "@/lib/i18n";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Pencil } from "lucide-react";
 
@@ -202,4 +202,186 @@ function EditLoadedWork({ id, onClose }: { id: number; onClose: () => void }) {
   const info = useMediaTypes().find((entry) => entry.key === work.data?.media_type);
   if (!work.data) return null;
   return <EditWork work={work.data} info={info} onClose={onClose} />;
+}
+
+/** A selection as POST /works/bulk/edit takes it. */
+export interface BulkSelection {
+  ids?: number[];
+  category_id?: number;
+  excluded_ids?: number[];
+  fresh?: boolean;
+  where?: string;
+}
+
+/** Radarr's and Sonarr's Edit selected: what the dialog sets is applied to every work of the selection after the count
+ *  is shown; anything left at "No change" stays as each work has it. */
+export function BulkEditWork({
+  selection,
+  info,
+  onClose,
+  onDone,
+}: {
+  selection: BulkSelection;
+  info: MediaTypeInfo | undefined;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const words = vocabularyOf(info);
+  const [monitored, setMonitored] = useState<"keep" | "yes" | "no">("keep");
+  const [option, setOption] = useState("");
+  const [specials, setSpecials] = useState(false);
+  const [profile, setProfile] = useState<"keep" | "default" | number>("keep");
+  const [addTags, setAddTags] = useState("");
+  const [removeTags, setRemoveTags] = useState("");
+  const [fields, setFields] = useState<Record<string, string>>({});
+  const [count, setCount] = useState<number | null>(null);
+  const editable = (info?.facets ?? []).filter((facet) => facet.editable);
+  const profiles = useQuery({
+    queryKey: ["qualityProfiles"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/qualityprofiles");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const names = (raw: string) => raw.split(",").map((name) => name.trim()).filter((name) => name !== "");
+  const send = useMutation({
+    mutationFn: async (preview: boolean) => {
+      const { data, error } = await api.POST("/works/bulk/edit", {
+        body: {
+          ...selection,
+          preview,
+          monitored: monitored === "keep" ? undefined : monitored === "yes",
+          profile: profile === "keep" ? undefined : { id: profile === "default" ? null : profile },
+          add_tags: names(addTags),
+          remove_tags: names(removeTags),
+          fields: Object.keys(fields).length > 0 ? fields : undefined,
+          monitor_option: option || undefined,
+          specials,
+        },
+      });
+      if (error) throw error;
+      return { count: data.count, preview };
+    },
+    onSuccess: (result) => {
+      if (result.preview) setCount(result.count);
+      else onDone();
+    },
+  });
+  const changed = () => setCount(null);
+  const nothing =
+    monitored === "keep" && option === "" && profile === "keep" && names(addTags).length === 0 && names(removeTags).length === 0 &&
+    Object.keys(fields).length === 0;
+  return (
+    <Dialog
+      title={`${t("action.edit")}: the selected ${words.works}`}
+      description={`Only what you change is applied; the rest of each ${words.work} stays as it is.`}
+      onClose={onClose}
+      actions={
+        <>
+          {count !== null && (
+            <span className="mr-auto text-sm">
+              Change {count} {count === 1 ? words.work : words.works}?
+            </span>
+          )}
+          <Button variant="ghost" onClick={onClose}>
+            {t("action.cancel")}
+          </Button>
+          {count === null ? (
+            <Button variant="primary" disabled={nothing} busy={send.isPending} onClick={() => send.mutate(true)}>
+              Review
+            </Button>
+          ) : (
+            <Button variant="primary" busy={send.isPending} busyLabel="Applying…" onClick={() => send.mutate(false)}>
+              Apply
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3 text-sm">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">Monitored</span>
+          <select value={monitored} onChange={(event) => { setMonitored(event.target.value as "keep" | "yes" | "no"); changed(); }} className={field}>
+            <option value="keep">No change</option>
+            <option value="yes">{t("action.monitor")}</option>
+            <option value="no">{t("action.unmonitor")}</option>
+          </select>
+        </label>
+        {(info?.monitor_options.length ?? 0) > 0 && (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-ink-muted">Monitor which {words.parts}</span>
+            <span className="flex flex-wrap items-center gap-2">
+              <select value={option} onChange={(event) => { setOption(event.target.value); changed(); }} className={field}>
+                <option value="">No change</option>
+                {info?.monitor_options.map((entry) => (
+                  <option key={entry.key} value={entry.key}>
+                    {entry.label}
+                  </option>
+                ))}
+              </select>
+              {option && (
+                <label className="flex items-center gap-1 text-xs text-ink-muted">
+                  <input type="checkbox" checked={specials} onChange={(event) => setSpecials(event.target.checked)} /> also the specials
+                </label>
+              )}
+            </span>
+          </label>
+        )}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">Quality profile</span>
+          <select
+            value={String(profile)}
+            onChange={(event) => {
+              const value = event.target.value;
+              setProfile(value === "keep" || value === "default" ? value : Number(value));
+              changed();
+            }}
+            className={field}
+          >
+            <option value="keep">No change</option>
+            <option value="default">The library&apos;s default</option>
+            {(profiles.data ?? [])
+              .filter((one) => one.media_type === info?.key)
+              .map((one) => (
+                <option key={one.id} value={one.id}>
+                  {one.name}
+                </option>
+              ))}
+          </select>
+        </label>
+        {editable.map((facet) => (
+          <label key={facet.key} className="flex flex-col gap-1">
+            <span className="text-xs text-ink-muted">{facet.label}</span>
+            <select
+              value={fields[facet.key] ?? "keep"}
+              onChange={(event) => {
+                const rest = Object.fromEntries(Object.entries(fields).filter(([key]) => key !== facet.key));
+                setFields(event.target.value === "keep" ? rest : { ...rest, [facet.key]: event.target.value });
+                changed();
+              }}
+              className={field}
+            >
+              <option value="keep">No change</option>
+              <option value="">Automatic</option>
+              {(facet.choices ?? []).map((choice) => (
+                <option key={choice.key} value={choice.key}>
+                  {choice.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">Add tags</span>
+          <input value={addTags} onChange={(event) => { setAddTags(event.target.value); changed(); }} placeholder="comma separated" className={field} />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">Remove tags</span>
+          <input value={removeTags} onChange={(event) => { setRemoveTags(event.target.value); changed(); }} placeholder="comma separated" className={field} />
+        </label>
+        {send.isError && <p className="text-sm text-danger">That could not be applied.</p>}
+      </div>
+    </Dialog>
+  );
 }

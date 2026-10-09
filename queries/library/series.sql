@@ -141,12 +141,6 @@ INSERT OR IGNORE INTO work_organisation (work_id, organisation_id, role) VALUES 
 UPDATE person SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.biography', sqlc.arg(biography))
 WHERE id = sqlc.arg(id) AND COALESCE(json_extract(COALESCE(fields_json, '{}'), '$.biography'), '') = '';
 
--- Every media object that belongs to a series: attached to an episode or linked to the work.
--- name: ListSeriesMediaObjects :many
-SELECT wf.media_object_id FROM work_file wf WHERE wf.work_id = sqlc.arg(work_id)
-UNION
-SELECT f.media_object_id FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id WHERE d.work_id = sqlc.arg(work_id);
-
 -- A part's number under one other scheme ("absolute" for anime), for a whole work.
 -- name: ListAltNumbersForWork :many
 SELECT a.part_id, a.alt_ref FROM alt_numbering a JOIN work_part p ON p.id = a.part_id

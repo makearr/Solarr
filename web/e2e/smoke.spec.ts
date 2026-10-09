@@ -173,7 +173,7 @@ test("a scan fills the artist wall with photos and the album wall with covers", 
   await page.screenshot({ path: "/e2e-out/albums-wall.png" });
 
   // One work page for every type (R1.6): an album opens inside its library as Lidarr's, its tracklist on Overview.
-  await page.locator('main a[href^="/works/"]').first().click();
+  await page.locator('main a[href^="/library/1/works/"]').first().click();
   await expect(page).toHaveURL(/\/library\/1\/works\/\d+$/);
   await expect(page.getByRole("heading", { name: "Tracks" })).toBeVisible();
   await page.screenshot({ path: "/e2e-out/album-page.png", fullPage: true });

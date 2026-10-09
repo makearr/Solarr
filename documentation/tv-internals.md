@@ -52,15 +52,17 @@ person page asks TMDB what the person is known for (`tv.Profiling`, `GET /people
 the one people and organisations list of every media type (`GET /people`, `GET /organisations`, `person_library` and
 `organisation_library` in `database-layout.md`), and a person or network has one page (`/people/{id}`, `/organisations/{id}`).
 
-## Monitoring a held series (`Service.ApplyMonitor`, Season pass)
+## Monitoring a held series (`Service.ApplyMonitor`)
 
 `POST /works/{id}/monitor` with an `option` (TV's `media.Monitoring`; the same endpoint takes a season as `group`
 and episodes as `parts`, for every media type) re-applies one of Sonarr's nine monitor choices to what is already held: every episode becomes
 monitored or not as the choice says ("existing" wants the episodes with a file, "missing" those without) and each season item
 follows (`Desired.ApplyPartMonitoring`, one transaction per season). A season item is monitored exactly when one of its
 episodes is, also when one episode is toggled by hand, so wanting a single episode of an unmonitored season reaches the
-planner. `PUT /series/{id}/quality` gives every season of a series its own quality profile (the album precedent,
-`desired_profile_override`). The Season pass screen (a grid of series and season chips over these) is reachable at `/library/<id>/seasonpass` but no longer in the navigation (2026-10-03, user).
+planner. `PUT /works/{id}/edit` gives every season of a series its own quality profile (the album precedent,
+`desired_profile_override`) and changes monitoring only when the person changed it, so saving tags keeps a series'
+season-by-season choice; `POST /works/bulk/edit` applies a monitor option, the profile, tags and the series type to a
+selection, which replaced the Season pass screen.
 
 ## Deleting, series type, pictures
 

@@ -121,3 +121,41 @@ func TestLookupWorks_TakesTheKindsOfTheLibrarysType(t *testing.T) {
 		t.Errorf("adding an album to a TV library: %d %s, want 400", status, answer)
 	}
 }
+
+// Saving a series' Edit with only its tags changed keeps its season-by-season monitoring; switching it off reaches
+// every season.
+func TestWorkEdit_KeepsTheGroupsMonitoringUnlessItChanges(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	server.monitor(t, fmt.Sprintf("/works/%d/monitor", ids.series), `{"monitored":false,"group":"s02"}`)
+	edit := fmt.Sprintf("/works/%d/edit", ids.series)
+	if got := string(server.get(t, edit)); !strings.Contains(got, `"monitored":true`) {
+		t.Fatalf("the edit reads %s, want monitored (a season is)", got)
+	}
+	if status, body := server.send(t, http.MethodPut, edit, `{"monitored":true,"profile_id":null,"tags":["Watch"]}`); status != http.StatusOK {
+		t.Fatalf("save: %d %s", status, body)
+	}
+	groups, _, _ := server.monitored(t, ids.series)
+	if !groups["s01"] || groups["s02"] {
+		t.Errorf("after saving tags, seasons = %v; want s01 still monitored and s02 still not", groups)
+	}
+	if status, _ := server.send(t, http.MethodPut, edit, `{"monitored":false,"profile_id":null,"tags":["Watch"]}`); status != http.StatusOK {
+		t.Fatal("unmonitor failed")
+	}
+	if groups, _, _ = server.monitored(t, ids.series); groups["s01"] || groups["s02"] {
+		t.Errorf("after unmonitoring, seasons = %v; want none", groups)
+	}
+}
+
+// Editing a selection sets the type's editable fields and applies a monitor option to every work of it.
+func TestBulkEdit_SetsFieldsAndAMonitorOption(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	body := fmt.Sprintf(`{"ids":[%d],"fields":{"series_type":"anime"},"monitor_option":"none"}`, ids.series)
+	if status, answer := server.post(t, "/works/bulk/edit", body); status != http.StatusOK || !strings.Contains(answer, `"count":1`) {
+		t.Fatalf("bulk edit: %d %s", status, answer)
+	}
+	if got := string(server.get(t, fmt.Sprintf("/works/%d/edit", ids.series))); !strings.Contains(got, `"fields":{"series_type":"anime"}`) || !strings.Contains(got, `"monitored":false`) {
+		t.Errorf("after the bulk edit the series reads %s; want anime and nothing monitored", got)
+	}
+}

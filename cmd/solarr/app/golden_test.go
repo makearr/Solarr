@@ -442,8 +442,6 @@ func TestGolden_ReadAnswersOfBothLibrariesStayTheSame(t *testing.T) {
 		{"organisations-of-tv", fmt.Sprintf("/organisations?category=%d", ids.tv)},
 		{"organisation-network", fmt.Sprintf("/organisations/%d", ids.network)},
 		{"tv-level-series", fmt.Sprintf("/libraries/%d/series", ids.tv)},
-		{"tv-series", fmt.Sprintf("/series?category_id=%d", ids.tv)},
-		{"tv-series-detail", fmt.Sprintf("/series/%d?category_id=%d", ids.series, ids.tv)},
 		{"calendar", "/calendar?from=2020-01-01&to=2020-12-31"},
 	}
 

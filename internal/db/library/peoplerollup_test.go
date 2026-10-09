@@ -99,7 +99,7 @@ func TestPeopleAndOrganisationsFollowTheirSeriesIntoAndOutOfALibrary(t *testing.
 	}
 	assertRollupsCurrent(t, opened, "refreshed with a new cast member")
 
-	if err := series.DeleteSeries(t.Context(), result.WorkID); err != nil {
+	if err := removeWithFiles(t, opened, result.WorkID); err != nil {
 		t.Fatal(err)
 	}
 	assertRollupsCurrent(t, opened, "deleted")

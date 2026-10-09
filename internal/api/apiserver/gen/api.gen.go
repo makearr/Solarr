@@ -607,36 +607,6 @@ const (
 	ScheduleTierNormal   ScheduleTier = "normal"
 )
 
-// Defines values for SeriesEpisodeAirConfidence.
-const (
-	SeriesEpisodeAirConfidenceHigh    SeriesEpisodeAirConfidence = "high"
-	SeriesEpisodeAirConfidenceLow     SeriesEpisodeAirConfidence = "low"
-	SeriesEpisodeAirConfidenceMedium  SeriesEpisodeAirConfidence = "medium"
-	SeriesEpisodeAirConfidenceUnknown SeriesEpisodeAirConfidence = "unknown"
-)
-
-// Defines values for SeriesEpisodeState.
-const (
-	SeriesEpisodeStateMissing     SeriesEpisodeState = "missing"
-	SeriesEpisodeStatePresent     SeriesEpisodeState = "present"
-	SeriesEpisodeStateUnaired     SeriesEpisodeState = "unaired"
-	SeriesEpisodeStateUnmonitored SeriesEpisodeState = "unmonitored"
-)
-
-// Defines values for SeriesSummarySeriesType.
-const (
-	SeriesSummarySeriesTypeAnime    SeriesSummarySeriesType = "anime"
-	SeriesSummarySeriesTypeDaily    SeriesSummarySeriesType = "daily"
-	SeriesSummarySeriesTypeStandard SeriesSummarySeriesType = "standard"
-)
-
-// Defines values for SeriesSummaryStatus.
-const (
-	SeriesSummaryStatusContinuing SeriesSummaryStatus = "continuing"
-	SeriesSummaryStatusEnded      SeriesSummaryStatus = "ended"
-	SeriesSummaryStatusUpcoming   SeriesSummaryStatus = "upcoming"
-)
-
 // Defines values for SettingDefinitionKind.
 const (
 	SettingDefinitionKindBool       SettingDefinitionKind = "bool"
@@ -859,14 +829,6 @@ const (
 	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
 )
 
-// Defines values for SetSeriesTypeJSONBodyType.
-const (
-	SetSeriesTypeJSONBodyTypeAnime    SetSeriesTypeJSONBodyType = "anime"
-	SetSeriesTypeJSONBodyTypeAuto     SetSeriesTypeJSONBodyType = "auto"
-	SetSeriesTypeJSONBodyTypeDaily    SetSeriesTypeJSONBodyType = "daily"
-	SetSeriesTypeJSONBodyTypeStandard SetSeriesTypeJSONBodyType = "standard"
-)
-
 // Defines values for ListLogsParamsLevel.
 const (
 	ListLogsParamsLevelDebug ListLogsParamsLevel = "debug"
@@ -991,14 +953,6 @@ type AddIndexerRequest struct {
 
 	// Priority Lower is preferred when several indexers list the same release.
 	Priority *int64 `json:"priority,omitempty"`
-}
-
-// AddSeriesResult defines model for AddSeriesResult.
-type AddSeriesResult struct {
-	Created  bool  `json:"created"`
-	Episodes int   `json:"episodes"`
-	Seasons  int   `json:"seasons"`
-	SeriesId int64 `json:"series_id"`
 }
 
 // AddWorkRequest defines model for AddWorkRequest.
@@ -3731,167 +3685,6 @@ type SecretMask struct {
 	Masked *string `json:"masked,omitempty"`
 }
 
-// SeriesCounts Episode counts of one series or season. present counts monitored episodes with a file.
-type SeriesCounts struct {
-	// AiredMissing Monitored episodes that have aired and have no file.
-	AiredMissing int `json:"aired_missing"`
-	Monitored    int `json:"monitored"`
-	Present      int `json:"present"`
-	Total        int `json:"total"`
-}
-
-// SeriesCredit defines model for SeriesCredit.
-type SeriesCredit struct {
-	Character *string `json:"character,omitempty"`
-
-	// EpisodeId The part id of an episode-scoped credit; absent for the whole series.
-	EpisodeId *int64  `json:"episode_id,omitempty"`
-	ImageUrl  *string `json:"image_url,omitempty"`
-	Name      string  `json:"name"`
-	Order     int     `json:"order"`
-	PersonId  int64   `json:"person_id"`
-	Role      string  `json:"role"`
-}
-
-// SeriesDetail defines model for SeriesDetail.
-type SeriesDetail struct {
-	// AirTime Local clock time and zone, e.g. 22:00 America/New_York.
-	AirTime       *string   `json:"air_time,omitempty"`
-	Aliases       *[]string `json:"aliases,omitempty"`
-	Certification *string   `json:"certification,omitempty"`
-
-	// Credits Cast and crew of the whole series, and guest stars and episode crew by episode.
-	Credits    *[]SeriesCredit `json:"credits,omitempty"`
-	Episodes   []SeriesEpisode `json:"episodes"`
-	FanartUrl  *string         `json:"fanart_url,omitempty"`
-	FirstAired *string         `json:"first_aired,omitempty"`
-
-	// Ids Provider to id, e.g. tvdb, tvmaze, tmdb, imdb.
-	Ids       map[string]string `json:"ids"`
-	LastAired *string           `json:"last_aired,omitempty"`
-
-	// LogoUrl The series' clear logo
-	LogoUrl *string `json:"logo_url,omitempty"`
-
-	// NetworkId The network as a Networks-level entity.
-	NetworkId        *int64         `json:"network_id,omitempty"`
-	NetworkLogoUrl   *string        `json:"network_logo_url,omitempty"`
-	OriginalCountry  *string        `json:"original_country,omitempty"`
-	OriginalLanguage *string        `json:"original_language,omitempty"`
-	Rating           *float32       `json:"rating,omitempty"`
-	RuntimeMinutes   *int           `json:"runtime_minutes,omitempty"`
-	Seasons          []SeriesSeason `json:"seasons"`
-	Summary          SeriesSummary  `json:"summary"`
-}
-
-// SeriesEpisode defines model for SeriesEpisode.
-type SeriesEpisode struct {
-	Absolute      *int                        `json:"absolute,omitempty"`
-	AirConfidence *SeriesEpisodeAirConfidence `json:"air_confidence,omitempty"`
-	AirDate       *string                     `json:"air_date,omitempty"`
-	AirTime       *time.Time                  `json:"air_time,omitempty"`
-
-	// File The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
-	File *SeriesEpisodeFile `json:"file,omitempty"`
-
-	// Id The part id.
-	Id             int64   `json:"id"`
-	Monitored      bool    `json:"monitored"`
-	Number         int     `json:"number"`
-	Overview       *string `json:"overview,omitempty"`
-	RuntimeMinutes *int    `json:"runtime_minutes,omitempty"`
-	Season         int     `json:"season"`
-
-	// State What a person wants to see in the column.
-	State SeriesEpisodeState `json:"state"`
-	Title *string            `json:"title,omitempty"`
-}
-
-// SeriesEpisodeAirConfidence defines model for SeriesEpisode.AirConfidence.
-type SeriesEpisodeAirConfidence string
-
-// SeriesEpisodeState What a person wants to see in the column.
-type SeriesEpisodeState string
-
-// SeriesEpisodeFile The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
-type SeriesEpisodeFile struct {
-	AudioChannels *string `json:"audio_channels,omitempty"`
-	AudioCodec    *string `json:"audio_codec,omitempty"`
-
-	// AudioLanguages Language codes of the audio tracks the probe read; absent when none were.
-	AudioLanguages *[]string `json:"audio_languages,omitempty"`
-	Container      *string   `json:"container,omitempty"`
-	Hdr            *string   `json:"hdr,omitempty"`
-	MediaObjectId  int64     `json:"media_object_id"`
-
-	// MeetsTarget Absent when the library has no target or the file is not measured yet.
-	MeetsTarget *bool   `json:"meets_target,omitempty"`
-	Resolution  *string `json:"resolution,omitempty"`
-	SizeBytes   int64   `json:"size_bytes"`
-
-	// Subtitles Language codes of embedded and sidecar subtitles; und when a file names none.
-	Subtitles        []string `json:"subtitles"`
-	VideoBitrateKbps *int     `json:"video_bitrate_kbps,omitempty"`
-	VideoCodec       *string  `json:"video_codec,omitempty"`
-}
-
-// SeriesPage defines model for SeriesPage.
-type SeriesPage struct {
-	Items      []SeriesSummary `json:"items"`
-	NextCursor *string         `json:"next_cursor,omitempty"`
-}
-
-// SeriesSeason defines model for SeriesSeason.
-type SeriesSeason struct {
-	// Counts Episode counts of one series or season. present counts monitored episodes with a file.
-	Counts        SeriesCounts `json:"counts"`
-	DesiredItemId *int64       `json:"desired_item_id,omitempty"`
-	Monitored     bool         `json:"monitored"`
-	Number        int          `json:"number"`
-	PosterUrl     *string      `json:"poster_url,omitempty"`
-}
-
-// SeriesSummary defines model for SeriesSummary.
-type SeriesSummary struct {
-	// AddedAt Unix seconds.
-	AddedAt int64 `json:"added_at"`
-
-	// Counts Episode counts of one series or season. present counts monitored episodes with a file.
-	Counts SeriesCounts `json:"counts"`
-	Genres *[]string    `json:"genres,omitempty"`
-	Id     int64        `json:"id"`
-
-	// Monitored At least one season is monitored.
-	Monitored        bool       `json:"monitored"`
-	Network          *string    `json:"network,omitempty"`
-	NextAiring       *time.Time `json:"next_airing,omitempty"`
-	Overview         *string    `json:"overview,omitempty"`
-	PosterUrl        *string    `json:"poster_url,omitempty"`
-	QualityProfileId *int64     `json:"quality_profile_id,omitempty"`
-
-	// SeasonStates Each season with episodes, specials included as season 0, and whether it is monitored (Season Pass).
-	SeasonStates *[]struct {
-		Monitored bool `json:"monitored"`
-		Number    int  `json:"number"`
-	} `json:"season_states,omitempty"`
-
-	// Seasons Seasons with episodes
-	Seasons int `json:"seasons"`
-
-	// SeriesType Detected from the providers, or the person's own choice; anime is also searched by absolute number.
-	SeriesType *SeriesSummarySeriesType `json:"series_type,omitempty"`
-	SortTitle  string                   `json:"sort_title"`
-	Status     *SeriesSummaryStatus     `json:"status,omitempty"`
-	Title      string                   `json:"title"`
-	Year       *int64                   `json:"year,omitempty"`
-}
-
-// SeriesSummarySeriesType Detected from the providers, or the person's own choice; anime is also searched by absolute number.
-type SeriesSummarySeriesType string
-
-// SeriesSummaryStatus defines model for SeriesSummary.Status.
-type SeriesSummaryStatus string
-
 // SettingDefinition One setting registered once in Go (ADR-26, todo 4.14) -- the single source for its tier, default and help text. Either a scalar instance_setting key, or (kind entity, since the non-scalar audit's own deep pass) a whole settings surface such as quality profiles or categories, which has no single value and so an always-empty default.
 type SettingDefinition struct {
 	// Default Encoded the same way the value itself is stored (a JSON array for string_list). Always empty for kind entity.
@@ -4883,33 +4676,6 @@ type SearchParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ListSeriesParams defines parameters for ListSeries.
-type ListSeriesParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-
-	// Cursor From `next_cursor` of the previous page. Absent on the first page.
-	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// DeleteSeriesParams defines parameters for DeleteSeries.
-type DeleteSeriesParams struct {
-	// DeleteFiles Send the series' files to the recycle bin; never deleted directly.
-	DeleteFiles *bool `form:"delete_files,omitempty" json:"delete_files,omitempty"`
-
-	// Exclude Remember the series so a scan, a follow or an import list does not add it back.
-	Exclude *bool `form:"exclude,omitempty" json:"exclude,omitempty"`
-
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// GetSeriesParams defines parameters for GetSeries.
-type GetSeriesParams struct {
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
 // SetSeriesPosterParams defines parameters for SetSeriesPoster.
 type SetSeriesPosterParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -4919,36 +4685,6 @@ type SetSeriesPosterParams struct {
 type GetSeriesPostersParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
-
-// SetSeriesQualityJSONBody defines parameters for SetSeriesQuality.
-type SetSeriesQualityJSONBody struct {
-	// QualityProfileId A TV quality profile; null or absent returns the series to the library's.
-	QualityProfileId *int64 `json:"quality_profile_id"`
-}
-
-// SetSeriesQualityParams defines parameters for SetSeriesQuality.
-type SetSeriesQualityParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// RefreshSeriesParams defines parameters for RefreshSeries.
-type RefreshSeriesParams struct {
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// SetSeriesTypeJSONBody defines parameters for SetSeriesType.
-type SetSeriesTypeJSONBody struct {
-	Type SetSeriesTypeJSONBodyType `json:"type"`
-}
-
-// SetSeriesTypeParams defines parameters for SetSeriesType.
-type SetSeriesTypeParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// SetSeriesTypeJSONBodyType defines parameters for SetSeriesType.
-type SetSeriesTypeJSONBodyType string
 
 // SetAuthPolicyJSONBody defines parameters for SetAuthPolicy.
 type SetAuthPolicyJSONBody struct {
@@ -5065,16 +4801,25 @@ type BulkEditWorksJSONBody struct {
 	CategoryId  *int64    `json:"category_id,omitempty"`
 	CutoffUnmet *bool     `json:"cutoff_unmet,omitempty"`
 	ExcludedIds *[]int64  `json:"excluded_ids,omitempty"`
-	Fresh       *bool     `json:"fresh,omitempty"`
-	Ids         *[]int64  `json:"ids,omitempty"`
-	Monitored   *bool     `json:"monitored,omitempty"`
-	Preview     *bool     `json:"preview,omitempty"`
-	Profile     *struct {
+
+	// Fields The type's editable facets to set, by key ("" returns one to its sources).
+	Fields *map[string]string `json:"fields,omitempty"`
+	Fresh  *bool              `json:"fresh,omitempty"`
+	Ids    *[]int64           `json:"ids,omitempty"`
+
+	// MonitorOption One of the type's monitor options, applied after the rest.
+	MonitorOption *string `json:"monitor_option,omitempty"`
+	Monitored     *bool   `json:"monitored,omitempty"`
+	Preview       *bool   `json:"preview,omitempty"`
+	Profile       *struct {
 		Id *int64 `json:"id"`
 	} `json:"profile,omitempty"`
 	RemoveTags *[]string `json:"remove_tags,omitempty"`
-	Wanted     *bool     `json:"wanted,omitempty"`
-	Where      *string   `json:"where,omitempty"`
+
+	// Specials With monitor_option
+	Specials *bool   `json:"specials,omitempty"`
+	Wanted   *bool   `json:"wanted,omitempty"`
+	Where    *string `json:"where,omitempty"`
 }
 
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
@@ -5439,12 +5184,6 @@ type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 
 // SetSeriesPosterJSONRequestBody defines body for SetSeriesPoster for application/json ContentType.
 type SetSeriesPosterJSONRequestBody = ImagePick
-
-// SetSeriesQualityJSONRequestBody defines body for SetSeriesQuality for application/json ContentType.
-type SetSeriesQualityJSONRequestBody SetSeriesQualityJSONBody
-
-// SetSeriesTypeJSONRequestBody defines body for SetSeriesType for application/json ContentType.
-type SetSeriesTypeJSONRequestBody SetSeriesTypeJSONBody
 
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
@@ -6057,30 +5796,12 @@ type ServerInterface interface {
 	// Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
 	// (GET /search)
 	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
-	// A page of one TV library's series, ordered by sort title.
-	// (GET /series)
-	ListSeries(w http.ResponseWriter, r *http.Request, params ListSeriesParams)
-	// Remove a series from the library, with its files in the recycle bin when asked.
-	// (DELETE /series/{id})
-	DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams)
-	// A series with its seasons and episodes.
-	// (GET /series/{id})
-	GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams)
 	// Make one of the offered posters this series' own; it is kept over later refreshes.
 	// (PUT /series/{id}/poster)
 	SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams)
 	// The posters the providers hold for a series, to pick one from.
 	// (GET /series/{id}/posters)
 	GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPostersParams)
-	// Give the series a quality profile of its own, or return it to the library's.
-	// (PUT /series/{id}/quality)
-	SetSeriesQuality(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesQualityParams)
-	// Re-read the series from the metadata sources. Never changes monitoring.
-	// (POST /series/{id}/refresh)
-	RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams)
-	// Say what kind of series this is, or return to what the providers say.
-	// (PUT /series/{id}/type)
-	SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesTypeParams)
 	// Whether a login is required.
 	// (GET /settings/auth)
 	GetAuthPolicy(w http.ResponseWriter, r *http.Request)
@@ -6171,7 +5892,7 @@ type ServerInterface interface {
 	// Add a looked-up candidate to a library as intent, never a download (ADR-56): an album or a series becomes wanted with the chosen monitoring, an artist is followed. Manage on the library.
 	// (POST /works)
 	AddWork(w http.ResponseWriter, r *http.Request)
-	// Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+	// Change monitoring, a monitor option, quality profile, tags and editable fields of every work matching a selection (Radarr's and Sonarr's Edit selected).
 	// (POST /works/bulk/edit)
 	BulkEditWorks(w http.ResponseWriter, r *http.Request)
 	// Monitor or unmonitor every work matching a selection (section 21.7).
@@ -7353,24 +7074,6 @@ func (_ Unimplemented) Search(w http.ResponseWriter, r *http.Request, params Sea
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// A page of one TV library's series, ordered by sort title.
-// (GET /series)
-func (_ Unimplemented) ListSeries(w http.ResponseWriter, r *http.Request, params ListSeriesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Remove a series from the library, with its files in the recycle bin when asked.
-// (DELETE /series/{id})
-func (_ Unimplemented) DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// A series with its seasons and episodes.
-// (GET /series/{id})
-func (_ Unimplemented) GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Make one of the offered posters this series' own; it is kept over later refreshes.
 // (PUT /series/{id}/poster)
 func (_ Unimplemented) SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams) {
@@ -7380,24 +7083,6 @@ func (_ Unimplemented) SetSeriesPoster(w http.ResponseWriter, r *http.Request, i
 // The posters the providers hold for a series, to pick one from.
 // (GET /series/{id}/posters)
 func (_ Unimplemented) GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPostersParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Give the series a quality profile of its own, or return it to the library's.
-// (PUT /series/{id}/quality)
-func (_ Unimplemented) SetSeriesQuality(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesQualityParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Re-read the series from the metadata sources. Never changes monitoring.
-// (POST /series/{id}/refresh)
-func (_ Unimplemented) RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Say what kind of series this is, or return to what the providers say.
-// (PUT /series/{id}/type)
-func (_ Unimplemented) SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesTypeParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7581,7 +7266,7 @@ func (_ Unimplemented) AddWork(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
+// Change monitoring, a monitor option, quality profile, tags and editable fields of every work matching a selection (Radarr's and Sonarr's Edit selected).
 // (POST /works/bulk/edit)
 func (_ Unimplemented) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -13651,182 +13336,6 @@ func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
-// ListSeries operation middleware
-func (siw *ServerInterfaceWrapper) ListSeries(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListSeriesParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "cursor" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSeries(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DeleteSeries operation middleware
-func (siw *ServerInterfaceWrapper) DeleteSeries(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DeleteSeriesParams
-
-	// ------------- Optional query parameter "delete_files" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "delete_files", r.URL.Query(), &params.DeleteFiles)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "delete_files", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "exclude" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "exclude", r.URL.Query(), &params.Exclude)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "exclude", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DeleteSeries(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetSeries operation middleware
-func (siw *ServerInterfaceWrapper) GetSeries(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetSeriesParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSeries(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // SetSeriesPoster operation middleware
 func (siw *ServerInterfaceWrapper) SetSeriesPoster(w http.ResponseWriter, r *http.Request) {
 
@@ -13920,159 +13429,6 @@ func (siw *ServerInterfaceWrapper) GetSeriesPosters(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetSeriesPosters(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetSeriesQuality operation middleware
-func (siw *ServerInterfaceWrapper) SetSeriesQuality(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetSeriesQualityParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetSeriesQuality(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// RefreshSeries operation middleware
-func (siw *ServerInterfaceWrapper) RefreshSeries(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RefreshSeriesParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RefreshSeries(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetSeriesType operation middleware
-func (siw *ServerInterfaceWrapper) SetSeriesType(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetSeriesTypeParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetSeriesType(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16574,28 +15930,10 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/search", wrapper.Search)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series", wrapper.ListSeries)
-	})
-	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/series/{id}", wrapper.DeleteSeries)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series/{id}", wrapper.GetSeries)
-	})
-	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/poster", wrapper.SetSeriesPoster)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/{id}/posters", wrapper.GetSeriesPosters)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/series/{id}/quality", wrapper.SetSeriesQuality)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/series/{id}/refresh", wrapper.RefreshSeries)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/series/{id}/type", wrapper.SetSeriesType)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/auth", wrapper.GetAuthPolicy)

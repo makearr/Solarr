@@ -64,7 +64,10 @@ func (a WorkEdit) GetWorkEdit(ctx context.Context, workID int64) (apiserver.Work
 		return apiserver.WorkEditRow{}, err
 	}
 	if len(items) > 0 {
-		row.Monitored = items[0].Monitored == 1
+		// Monitored when any group is: Sonarr's series switch.
+		for _, item := range items {
+			row.Monitored = row.Monitored || item.Monitored == 1
+		}
 		profileID, found, err := a.Desired.ProfileOverride(ctx, items[0].ID)
 		if err != nil {
 			return apiserver.WorkEditRow{}, err
@@ -105,12 +108,25 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			names = append(names, name)
 		}
 	}
-	groups, err := a.Monitor.MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: edit.Monitored})
+	// Monitoring changes only when the person changed it, so saving tags keeps a series' season-by-season choice.
+	items, err := a.Desired.AlbumItemsForWork(ctx, workID)
 	if err != nil {
 		return err
 	}
-	for _, group := range groups {
-		if err := a.Desired.SetProfileOverride(ctx, group.Wanted.ID, edit.ProfileID); err != nil {
+	monitored := false
+	for _, item := range items {
+		monitored = monitored || item.Monitored == 1
+	}
+	if len(items) == 0 || monitored != edit.Monitored {
+		if _, err := a.Monitor.MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: edit.Monitored}); err != nil {
+			return err
+		}
+		if items, err = a.Desired.AlbumItemsForWork(ctx, workID); err != nil {
+			return err
+		}
+	}
+	for _, item := range items {
+		if err := a.Desired.SetProfileOverride(ctx, item.ID, edit.ProfileID); err != nil {
 			return err
 		}
 	}
@@ -177,6 +193,9 @@ func (a WorkEdit) BulkEdit(
 		if err == nil {
 			err = a.SaveWorkEdit(ctx, workID, applyBulkChange(edit, change))
 		}
+		if err == nil && change.MonitorOption != "" {
+			_, err = a.Monitor.MonitorWork(ctx, workID, apiserver.MonitorScope{Option: change.MonitorOption, Special: change.Specials})
+		}
 		if err != nil {
 			a.Monitor.Logger.Warn("bulk edit: one work failed, continuing", slog.Int64("work_id", workID), slog.Any("error", err))
 			continue
@@ -193,6 +212,11 @@ func applyBulkChange(edit apiserver.WorkEditRow, change apiserver.BulkEditChange
 	}
 	if change.SetProfile {
 		edit.ProfileID = change.ProfileID
+	}
+	if len(change.Fields) > 0 {
+		edit.Fields = change.Fields
+	} else {
+		edit.Fields = nil
 	}
 	removed := make(map[string]bool, len(change.RemoveTags))
 	for _, name := range change.RemoveTags {
