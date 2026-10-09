@@ -210,6 +210,7 @@ func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apis
 				Extension: detail.File.Extension, SizeBytes: detail.File.SizeBytes, Resolution: detail.File.Resolution,
 				HDR: detail.File.HDR, AudioChannels: detail.File.AudioChannels, VideoBitrateKbps: detail.File.VideoBitrateKbps,
 				AudioLanguages: detail.File.AudioLanguages, Subtitles: detail.File.Subtitles,
+				FrameRate: detail.File.FrameRate, CRF: detail.File.CRF,
 			}
 		}
 		rows[index] = row

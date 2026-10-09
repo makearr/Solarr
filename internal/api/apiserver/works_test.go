@@ -61,6 +61,7 @@ type worksFixture struct {
 	workDetail           *fakeWorkDetailReader
 	worksMonitor         *fakeWorksMonitor
 	workEditor           *fakeWorkEditor
+	wantedParts          *fakeWantedParts
 	search               *fakeSearchReader
 	unidentified         *fakeUnidentifiedReader
 	unidentifiedResolver *fakeUnidentifiedResolver
@@ -256,6 +257,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	indexerTester := &fakeConnectionTester{}
 	downloaderTester := &fakeConnectionTester{}
 	candidateSearcher := &fakeCandidateSearcher{}
+	wantedParts := &fakeWantedParts{}
 	fsys := fsx.NewMem(fake)
 	running, jobRegistry := jobs.NewRunning(fake), jobs.NewRegistry()
 	server, err := apiserver.New(apiserver.Config{
@@ -299,6 +301,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		IndexerTester:        indexerTester,
 		DownloaderTester:     downloaderTester,
 		CandidateSearcher:    candidateSearcher,
+		WantedParts:          wantedParts,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
 		Navigation:           navigation,
@@ -320,7 +323,8 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	}
 	return worksFixture{
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
-		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
+		wantedParts: wantedParts,
+		search:      search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, people: people, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
 		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,

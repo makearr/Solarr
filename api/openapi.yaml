@@ -2709,6 +2709,37 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The run is not in a revertible state (still running, or already reverted).
 
+  /wanted/parts:
+    get:
+      operationId: listWantedParts
+      tags: [library]
+      summary: >-
+        Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored,
+        out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff).
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: view
+          in: query
+          schema: { type: string, enum: [missing, cutoff], default: missing }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WantedPartPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/exclusions:
     get:
       operationId: listWorkExclusions
@@ -5162,36 +5193,6 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
-  /series/wanted:
-    get:
-      operationId: listWantedEpisodes
-      tags: [series]
-      summary: "Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first."
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-        - name: view
-          in: query
-          description: missing (default) or cutoff, the present episodes whose file is below the library's target or cutoff.
-          schema: { type: string, enum: [missing, cutoff] }
-        - name: cursor
-          in: query
-          schema: { type: string }
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
-      responses:
-        "200":
-          description: One page.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/WantedEpisodePage" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
   /series/lookup:
     get:
       operationId: lookupSeries
@@ -7108,7 +7109,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -7147,6 +7148,7 @@ components:
               key: { type: string }
               label: { type: string }
         work_image: { type: string, enum: [cover, poster], description: "The shape of a work's picture: an album's square cover, a series' tall poster." }
+        wanted_grain: { type: string, enum: [work, part], description: "What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts)." }
 
     MediaType:
       type: string
@@ -8385,6 +8387,31 @@ components:
           description: Cast and crew of the whole series, and guest stars and episode crew by episode.
           items: { $ref: "#/components/schemas/SeriesCredit" }
 
+    WantedPart:
+      type: object
+      required: [part_id, work_id, work_title, group_ref, group_label, number]
+      properties:
+        part_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64 }
+        work_title: { type: string }
+        group_ref: { type: string, description: The group the part is wanted through, searched as a whole. }
+        group_label: { type: string }
+        number: { type: string }
+        title: { type: string }
+        date: { type: string }
+        available_at: { type: string, format: date-time }
+        file: { $ref: "#/components/schemas/PartFile" }
+
+    WantedPartPage:
+      type: object
+      required: [items]
+      properties:
+        judged: { type: boolean, description: For the cutoff view, false when the library sets neither a target nor a cutoff. }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WantedPart" }
+        next_cursor: { type: string }
+
     WorkExclusion:
       type: object
       required: [title, provider, external_id, created_at]
@@ -8417,30 +8444,6 @@ components:
         character: { type: string }
         order: { type: integer }
         episode_id: { type: integer, format: int64, description: The part id of an episode-scoped credit; absent for the whole series. }
-
-    WantedEpisode:
-      type: object
-      required: [part_id, series_id, series_title, season, number]
-      properties:
-        part_id: { type: integer, format: int64 }
-        series_id: { type: integer, format: int64 }
-        series_title: { type: string }
-        season: { type: integer }
-        number: { type: integer }
-        title: { type: string }
-        air_date: { type: string }
-        air_time: { type: string, format: date-time }
-        file: { $ref: "#/components/schemas/SeriesEpisodeFile" }
-
-    WantedEpisodePage:
-      type: object
-      required: [items]
-      properties:
-        judged: { type: boolean, description: For the cutoff view, false when the library sets neither a target nor a cutoff. }
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/WantedEpisode" }
-        next_cursor: { type: string }
 
     SeriesCandidate:
       type: object
@@ -8857,6 +8860,8 @@ components:
         video_bitrate_kbps: { type: integer, format: int64 }
         audio_languages: { type: array, items: { type: string }, description: Language codes of the audio tracks the probe read. }
         subtitles: { type: array, items: { type: string }, description: Language codes of embedded and sidecar subtitles. }
+        frame_rate: { type: number }
+        crf: { type: number, description: The constant rate factor the encoder states. }
         meets_target:
           type: boolean
           description: Codec, file type and bitrate match the library's target. Absent when it sets none.

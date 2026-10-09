@@ -26,7 +26,6 @@ var directWiredMediaFiles = []string{
 	"cmd/solarr/adapters/duplicates.go",
 	"cmd/solarr/adapters/importsessions.go",
 	"cmd/solarr/adapters/people.go",
-	"cmd/solarr/adapters/series_cutoff.go",
 	"cmd/solarr/adapters/series.go",
 	"cmd/solarr/adapters/unidentified.go",
 	"cmd/solarr/adapters/unidentified_tv.go",

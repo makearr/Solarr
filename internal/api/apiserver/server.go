@@ -132,6 +132,8 @@ type Config struct {
 	WorkRefresher WorkRefresher
 	// WorkExclusions lists and lifts "do not add it back". Optional: nil answers 503.
 	WorkExclusions WorkExclusions
+	// WantedParts is Wanted at the grain of a part. Optional: nil answers 503.
+	WantedParts WantedPartsReader
 	// ArrConnections reads a connection's indexers and download clients. Optional: nil answers 503.
 	ArrConnections ArrConnections
 	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
@@ -282,6 +284,7 @@ type Server struct {
 	incompleteDiscographies IncompleteDiscographies
 	workRefresher           WorkRefresher
 	workExclusions          WorkExclusions
+	wantedParts             WantedPartsReader
 	arrConnections          ArrConnections
 	blockedContent          BlockedContentLister
 	packs                   PackLister
@@ -388,6 +391,7 @@ func New(config Config) (*Server, error) {
 		incompleteDiscographies: config.IncompleteDiscographies,
 		workRefresher:           config.WorkRefresher,
 		workExclusions:          config.WorkExclusions,
+		wantedParts:             config.WantedParts,
 		arrConnections:          config.ArrConnections,
 		blockedContent:          config.BlockedContent,
 		packs:                   config.Packs,
@@ -523,7 +527,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Get("/series", server.routeListSeries)
 			secured.Post("/series", server.AddSeries)
-			secured.Get("/series/wanted", server.routeListWantedEpisodes)
+			secured.Get("/wanted/parts", server.routeListWantedParts)
 			secured.Get("/images/remote", server.routeGetRemoteImage)
 			secured.Get("/series/lookup", server.routeLookupSeries)
 			secured.Get("/works/exclusions", server.routeListWorkExclusions)

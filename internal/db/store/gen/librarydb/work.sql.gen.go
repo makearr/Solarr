@@ -1443,6 +1443,79 @@ func (q *Queries) ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID 
 	return items, nil
 }
 
+const listWantedParts = `-- name: ListWantedParts :many
+SELECT p.id AS part_id, p.work_id, w.canonical_title AS work_title, p.media_ref, p.title, p.date, p.available_at
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
+  AND p.monitored = 1
+  AND ((p.available_at IS NOT NULL AND p.available_at <= ?2)
+       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date <= ?3))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
+                  WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary')
+  AND (COALESCE(p.date, '') < ?4 OR (COALESCE(p.date, '') = ?4 AND p.id < ?5))
+ORDER BY COALESCE(p.date, '') DESC, p.id DESC
+LIMIT ?6
+`
+
+type ListWantedPartsParams struct {
+	CategoryID int64
+	Now        sql.NullInt64
+	Today      sql.NullString
+	AfterDate  sql.NullString
+	AfterID    int64
+	PageSize   int64
+}
+
+type ListWantedPartsRow struct {
+	PartID      int64
+	WorkID      int64
+	WorkTitle   string
+	MediaRef    string
+	Title       sql.NullString
+	Date        sql.NullString
+	AvailableAt sql.NullInt64
+}
+
+// A library's missing parts, newest first: monitored, out, and no file covers them (Sonarr's Wanted, Missing).
+func (q *Queries) ListWantedParts(ctx context.Context, arg ListWantedPartsParams) ([]ListWantedPartsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWantedParts,
+		arg.CategoryID,
+		arg.Now,
+		arg.Today,
+		arg.AfterDate,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWantedPartsRow{}
+	for rows.Next() {
+		var i ListWantedPartsRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.WorkID,
+			&i.WorkTitle,
+			&i.MediaRef,
+			&i.Title,
+			&i.Date,
+			&i.AvailableAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkClassifications = `-- name: ListWorkClassifications :many
 SELECT work_id, kind, value, source
 FROM work_classification WHERE work_id = ? ORDER BY kind, value

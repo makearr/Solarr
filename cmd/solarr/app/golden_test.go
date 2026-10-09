@@ -430,6 +430,8 @@ func TestGolden_ReadAnswersOfBothLibrariesStayTheSame(t *testing.T) {
 		{"tv-work", fmt.Sprintf("/works/%d", ids.series)},
 		{"tv-work-parts-s01", fmt.Sprintf("/works/%d/parts?group=s01", ids.series)},
 		{"tv-work-parts-first", fmt.Sprintf("/works/%d/parts?limit=1", ids.series)},
+		{"tv-wanted-parts", fmt.Sprintf("/wanted/parts?category_id=%d", ids.tv)},
+		{"tv-wanted-parts-cutoff", fmt.Sprintf("/wanted/parts?category_id=%d&view=cutoff", ids.tv)},
 		{"tv-works-by-network", fmt.Sprintf("/works?category_id=%d&where=%s", ids.tv,
 			url.QueryEscape(`[{"field":"network","op":"contains","value":"northern"}]`))},
 		{"music-work", fmt.Sprintf("/works/%d", ids.album)},
@@ -442,7 +444,6 @@ func TestGolden_ReadAnswersOfBothLibrariesStayTheSame(t *testing.T) {
 		{"tv-level-series", fmt.Sprintf("/libraries/%d/series", ids.tv)},
 		{"tv-series", fmt.Sprintf("/series?category_id=%d", ids.tv)},
 		{"tv-series-detail", fmt.Sprintf("/series/%d?category_id=%d", ids.series, ids.tv)},
-		{"tv-wanted-missing", fmt.Sprintf("/series/wanted?category_id=%d", ids.tv)},
 		{"calendar", "/calendar?from=2020-01-01&to=2020-12-31"},
 	}
 

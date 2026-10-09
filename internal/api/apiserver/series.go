@@ -47,11 +47,6 @@ type SeriesCatalog interface {
 	PosterOptions(ctx context.Context, categoryID, seriesID int64) ([]ImageOptionRow, error)
 	// SetPoster makes one of the offered posters the series' own; ErrImageNotOffered for any other address.
 	SetPoster(ctx context.Context, categoryID, seriesID int64, url string) error
-	// Wanted returns up to limit+1 missing episodes after the cursor (date, id), newest first.
-	Wanted(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.WantedEpisode, error)
-	// CutoffUnmet returns up to limit+1 present episodes whose file is below the library's target or cutoff, from the
-	// offset; judged is false when the library sets neither, so nothing can be below it.
-	CutoffUnmet(ctx context.Context, categoryID int64, offset, limit int) (episodes []gen.WantedEpisode, judged bool, err error)
 }
 
 // seriesAccess checks the caller against one library and the catalogue being wired; false means it answered.
@@ -233,73 +228,6 @@ func (s *Server) RefreshSeries(w http.ResponseWriter, r *http.Request, id int64,
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, result)
-}
-
-func (s *Server) routeListWantedEpisodes(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	categoryID, err := strconv.ParseInt(query.Get("category_id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category_id is required and must be a number")
-		return
-	}
-	params := gen.ListWantedEpisodesParams{CategoryId: categoryID}
-	if raw := query.Get("cursor"); raw != "" {
-		params.Cursor = &raw
-	}
-	if raw := query.Get("view"); raw != "" {
-		view := gen.ListWantedEpisodesParamsView(raw)
-		params.View = &view
-	}
-	if raw := query.Get("limit"); raw != "" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "limit must be a number")
-			return
-		}
-		params.Limit = &limit
-	}
-	s.ListWantedEpisodes(w, r, params)
-}
-
-// ListWantedEpisodes answers one page of a TV library's missing episodes.
-func (s *Server) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params gen.ListWantedEpisodesParams) {
-	if _, ok := s.seriesAccess(w, r, params.CategoryId, settings.PermissionRead); !ok {
-		return
-	}
-	cursor, err := paginate.DecodeText(derefOr(params.Cursor, ""))
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
-		return
-	}
-	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
-	if derefOr((*string)(params.View), "") == "cutoff" {
-		rows, judged, err := s.series.CutoffUnmet(r.Context(), params.CategoryId, int(cursor.ID), limit+1)
-		if err != nil {
-			writeError(w, s.logger, err)
-			return
-		}
-		page := gen.WantedEpisodePage{Items: rows, Judged: &judged}
-		if len(rows) > limit {
-			page.Items = rows[:limit]
-			next := paginate.TextCursor{Sort: "offset", ID: cursor.ID + int64(limit)}.Encode()
-			page.NextCursor = &next
-		}
-		writeJSON(w, s.logger, http.StatusOK, page)
-		return
-	}
-	rows, err := s.series.Wanted(r.Context(), params.CategoryId, cursor, limit+1)
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	page := gen.WantedEpisodePage{Items: rows}
-	if len(rows) > limit {
-		page.Items = rows[:limit]
-		last := page.Items[len(page.Items)-1]
-		next := paginate.TextCursor{Sort: derefOr(last.AirDate, ""), ID: last.PartId}.Encode()
-		page.NextCursor = &next
-	}
-	writeJSON(w, s.logger, http.StatusOK, page)
 }
 
 func (s *Server) routeSetSeriesQuality(w http.ResponseWriter, r *http.Request) {

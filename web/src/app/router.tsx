@@ -30,7 +30,6 @@ import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { AddSeries } from "./AddSeries";
 import { SeasonPass } from "./SeasonPass";
-import { SeriesWanted } from "./SeriesWanted";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
 import { Duplicates } from "./Duplicates";
@@ -51,7 +50,7 @@ import { Shell } from "./Shell";
 import { defaultLevelKey } from "./Sidebar";
 import { Unidentified } from "./Unidentified";
 import { UserSettings } from "./Users";
-import { Wanted } from "./Wanted";
+import { WantedPage } from "./work/WantedPage";
 import { UnidentifiedReview } from "./UnidentifiedReview";
 import { WorkIndex } from "./work/WorkIndex";
 import { WorkPage } from "./work/WorkPage";
@@ -75,11 +74,6 @@ function DiscoverForLibrary() {
 }
 
 /** Wanted is per media type: missing episodes for a TV library, albums for music. */
-function WantedForLibrary() {
-  const { categoryId } = useParams({ strict: false }) as { categoryId: string };
-  const library = useLibrary(categoryId);
-  return library?.media_type === "tv" ? <SeriesWanted /> : <Wanted />;
-}
 
 /** A level of people or organisations is one list for every media type; works are still per type (R1.6). */
 function LevelForLibrary() {
@@ -179,7 +173,7 @@ const routes = [
       throw await redirectToLibrary((params as { categoryId: string }).categoryId);
     },
   }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: WantedForLibrary }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/wanted", component: WantedPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/statistics", component: Statistics }),
   // Packs moved here from Storage 2026-09-11 (a pack is one library's own
   // provenance fact, ADR-50, not a storage concern) -- still the same

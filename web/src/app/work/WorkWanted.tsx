@@ -7,12 +7,15 @@ import { ArrowDown, ArrowUp, ListFilter, Search } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCanRequest } from "@/lib/useLibraryPermission";
+import type { MediaTypeInfo } from "@/lib/useMediaTypes";
+import { vocabularyOf } from "@/lib/i18n";
 
-import { InteractiveSearch } from "./InteractiveSearch";
+import { InteractiveSearch } from "../InteractiveSearch";
+import { grabNote } from "./grabNote";
 import {
   DEFAULT_POSTER_OPTIONS, IndexViewToggle, OverviewRows, PosterOptionsMenu, PosterWall, workEntry, type IndexView,
   type PosterOptions,
-} from "./IndexViews";
+} from "../IndexViews";
 import { usePreference } from "@/lib/usePreference";
 
 type Work = components["schemas"]["Work"];
@@ -27,18 +30,24 @@ const STATE_LABEL: Record<string, string> = {
 
 const PAGE_SIZES = [25, 50, 100] as const;
 
-const COLUMNS: readonly { sort: Sort; label: string; width: string }[] = [
-  { sort: "artist", label: "Artist", width: "1fr" },
-  { sort: "title", label: "Album", width: "1.4fr" },
-  { sort: "year", label: "Released", width: "6rem" },
-  { sort: "searched", label: "Last searched", width: "10rem" },
-];
+// The table's sortable columns; the first is the type's lead (an album's artist), named as the type names it.
+function columnsOf(info: MediaTypeInfo | undefined): { sort: Sort; label: string }[] {
+  const lead = info?.roles.find((role) => role.lead);
+  return [
+    { sort: "artist", label: lead?.label ?? "" },
+    { sort: "title", label: info?.work.one || "Title" },
+    { sort: "year", label: "Released" },
+    { sort: "searched", label: "Last searched" },
+  ];
+}
 
 const GRID = "grid grid-cols-[1fr_1.4fr_6rem_10rem_6rem_14rem] items-center gap-3 px-3";
 
-/** Lidarr's Wanted -> Missing: sortable by header, paged, searched one album, one page or the whole
- *  library at a time. Search sends the best release; the list icon lets a person choose it. */
-export function Wanted() {
+/** Lidarr's Wanted for a type wanted work by work: sortable by header, paged, searched one work, one page or the
+ *  whole library at a time. Search sends the best release; the list icon lets a person choose it. */
+export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
+  const words = vocabularyOf(info);
+  const COLUMNS = columnsOf(info);
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const search = useSearch({ strict: false }) as {
     sort?: Sort;
@@ -110,17 +119,7 @@ export function Wanted() {
     },
     onMutate: (workId) => setRowResult((held) => ({ ...held, [workId]: "Searching…" })),
     onSuccess: (data, workId) => {
-      const message = data.already_downloading
-        ? "Already downloading"
-        : data.held
-          ? "Waiting for room in the download client"
-          : !data.sent && data.refused
-            ? "The download client refused every release found"
-            : data.sent
-          ? "Sent to the download client"
-          : data.found > 0
-            ? `${data.found} found, none acceptable`
-            : "Nothing found";
+      const message = grabNote(data);
       setRowResult((held) => ({ ...held, [workId]: message }));
       void queryClient.invalidateQueries({ queryKey: ["wanted"] });
     },
@@ -148,7 +147,7 @@ export function Wanted() {
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border-subtle px-4 py-2">
         <h2 className="text-sm font-medium">Wanted</h2>
-        <div className="flex gap-1" role="group" aria-label="Which wanted albums">
+        <div className="flex gap-1" role="group" aria-label={`Which wanted ${words.works}`}>
           {(["missing", "cutoff"] as const).map((option) => (
             <button
               key={option}
@@ -206,12 +205,12 @@ export function Wanted() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {works.isLoading && <Message>Loading…</Message>}
           {works.isSuccess && items.length === 0 && page === 0 && (
-            <Message>Nothing wanted -- every monitored album in this library is complete.</Message>
+            <Message>Nothing wanted -- every monitored {words.work} in this library is complete.</Message>
           )}
           {layout === "poster" ? (
-            <PosterWall entries={items.map((work) => workEntry(work, categoryId))} options={posterOptions} />
+            <PosterWall entries={items.map((work) => workEntry(work, categoryId, info))} options={posterOptions} />
           ) : (
-            <OverviewRows entries={items.map((work) => workEntry(work, categoryId))} />
+            <OverviewRows entries={items.map((work) => workEntry(work, categoryId, info))} />
           )}
         </div>
       )}
@@ -238,12 +237,12 @@ export function Wanted() {
         {works.isLoading && <Message>Loading…</Message>}
         {works.isError && <Message>Wanted items could not be read.</Message>}
         {works.isSuccess && items.length === 0 && page === 0 && (
-          <Message>Nothing wanted -- every monitored album in this library is complete.</Message>
+          <Message>Nothing wanted -- every monitored {words.work} in this library is complete.</Message>
         )}
         {items.map((work) => (
           <div key={work.id} role="row" className={`${GRID} border-b border-border-subtle py-1.5 text-sm`}>
             <span className="truncate">{work.artist ?? ""}</span>
-            <Link to="/works/$id" params={{ id: String(work.id) }} className="truncate hover:underline">
+            <Link {...workEntry(work, categoryId, info).link} className="truncate hover:underline">
               {work.title}
             </Link>
             <span className="text-ink-muted">{work.year ?? ""}</span>
@@ -296,7 +295,7 @@ export function Wanted() {
         <span>
           Page {page + 1}
           {pages !== undefined && ` of ${pages}`}
-          {total !== undefined && ` · ${total.toLocaleString()} ${total === 1 ? "album" : "albums"}`}
+          {total !== undefined && ` · ${total.toLocaleString()} ${total === 1 ? words.work : words.works}`}
         </span>
         <button
           type="button"

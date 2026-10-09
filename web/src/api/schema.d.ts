@@ -1744,6 +1744,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/wanted/parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored, out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff). */
+        get: operations["listWantedParts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/exclusions": {
         parameters: {
             query?: never;
@@ -3210,23 +3227,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/series/wanted": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first. */
-        get: operations["listWantedEpisodes"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/series/lookup": {
         parameters: {
             query?: never;
@@ -4574,6 +4574,11 @@ export interface components {
              * @enum {string}
              */
             work_image: "cover" | "poster";
+            /**
+             * @description What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
+             * @enum {string}
+             */
+            wanted_grain: "work" | "part";
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -5598,6 +5603,28 @@ export interface components {
             /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
             credits?: components["schemas"]["SeriesCredit"][];
         };
+        WantedPart: {
+            /** Format: int64 */
+            part_id: number;
+            /** Format: int64 */
+            work_id: number;
+            work_title: string;
+            /** @description The group the part is wanted through */
+            group_ref: string;
+            group_label: string;
+            number: string;
+            title?: string;
+            date?: string;
+            /** Format: date-time */
+            available_at?: string;
+            file?: components["schemas"]["PartFile"];
+        };
+        WantedPartPage: {
+            /** @description For the cutoff view */
+            judged?: boolean;
+            items: components["schemas"]["WantedPart"][];
+            next_cursor?: string;
+        };
         WorkExclusion: {
             title: string;
             /** @description One id the work was excluded by; removing it allows the work again. */
@@ -5632,26 +5659,6 @@ export interface components {
              * @description The part id of an episode-scoped credit; absent for the whole series.
              */
             episode_id?: number;
-        };
-        WantedEpisode: {
-            /** Format: int64 */
-            part_id: number;
-            /** Format: int64 */
-            series_id: number;
-            series_title: string;
-            season: number;
-            number: number;
-            title?: string;
-            air_date?: string;
-            /** Format: date-time */
-            air_time?: string;
-            file?: components["schemas"]["SeriesEpisodeFile"];
-        };
-        WantedEpisodePage: {
-            /** @description For the cutoff view */
-            judged?: boolean;
-            items: components["schemas"]["WantedEpisode"][];
-            next_cursor?: string;
         };
         SeriesCandidate: {
             /** @example tvdb */
@@ -6015,6 +6022,9 @@ export interface components {
             audio_languages?: string[];
             /** @description Language codes of embedded and sidecar subtitles. */
             subtitles?: string[];
+            frame_rate?: number;
+            /** @description The constant rate factor the encoder states. */
+            crf?: number;
             /** @description Codec, file type and bitrate match the library's target. Absent when it sets none. */
             meets_target?: boolean;
             /** @description Good enough that upgrades stop. Absent when the library sets neither target nor cutoff. */
@@ -10203,6 +10213,34 @@ export interface operations {
             409: components["responses"]["Problem"];
         };
     };
+    listWantedParts: {
+        parameters: {
+            query: {
+                category_id: number;
+                view?: "missing" | "cutoff";
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WantedPartPage"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
     listWorkExclusions: {
         parameters: {
             query: {
@@ -12823,35 +12861,6 @@ export interface operations {
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
-        };
-    };
-    listWantedEpisodes: {
-        parameters: {
-            query: {
-                category_id: number;
-                /** @description missing (default) or cutoff, the present episodes whose file is below the library's target or cutoff. */
-                view?: "missing" | "cutoff";
-                cursor?: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One page. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["WantedEpisodePage"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
         };
     };
     lookupSeries: {

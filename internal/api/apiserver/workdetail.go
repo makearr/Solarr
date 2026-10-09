@@ -95,6 +95,7 @@ type PartFileRow struct {
 	Resolution, HDR, AudioChannels string
 	VideoBitrateKbps               int64
 	AudioLanguages, Subtitles      []string
+	FrameRate, CRF                 float64
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -277,7 +278,7 @@ func annotateFileQuality(access authz.Access, categoryIDs []int64, parts []gen.W
 		for i := range parts {
 			file := parts[i].File
 			// A file the probe has not measured yet is not judged, rather than shown as failing.
-			if file == nil || file.AudioCodec == nil {
+			if file == nil || file.AudioCodec == nil && file.VideoCodec == nil {
 				continue
 			}
 			judgement, judged := quality.Judge(access.Snapshot(), category, partFileFacts(*file))
@@ -298,17 +299,14 @@ func annotateFileQuality(access authz.Access, categoryIDs []int64, parts []gen.W
 func partFileFacts(file gen.PartFile) score.Facts {
 	facts := score.Facts{File: score.FileFacts{
 		AudioBitrate: file.BitrateKbps * 1000, OverallBitrate: file.BitrateKbps * 1000, Lossless: file.Lossless,
+		AudioCodec: derefOr(file.AudioCodec, ""), Container: derefOr(file.Container, ""),
+		// The file's own type, not ffprobe's demuxer list ("mov,mp4,m4a,3gp,3g2,mj2").
+		Extension:  derefOr(file.Extension, ""),
+		Resolution: derefOr(file.Resolution, ""), VideoCodec: derefOr(file.VideoCodec, ""), HDR: derefOr(file.Hdr, ""),
+		AudioChannels: derefOr(file.AudioChannels, ""), AudioLanguages: derefOr(file.AudioLanguages, nil),
+		SubtitleLanguages: derefOr(file.Subtitles, nil), VideoBitrate: derefOr(file.VideoBitrateKbps, 0) * 1000,
+		FrameRate: float64(derefOr(file.FrameRate, 0)), CRF: float64(derefOr(file.Crf, 0)),
 	}}
-	if file.AudioCodec != nil {
-		facts.File.AudioCodec = *file.AudioCodec
-	}
-	// The file's own type, not ffprobe's demuxer list ("mov,mp4,m4a,3gp,3g2,mj2").
-	if file.Extension != nil {
-		facts.File.Extension = *file.Extension
-	}
-	if file.Container != nil {
-		facts.File.Container = *file.Container
-	}
 	return facts
 }
 
@@ -731,20 +729,7 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 			views[index].Wanted = &wanted
 		}
 		if row.File != nil {
-			views[index].File = &gen.PartFile{
-				MediaObjectId: row.File.MediaObjectID, AudioCodec: strPtr(row.File.AudioCodec),
-				VideoCodec: strPtr(row.File.VideoCodec), Container: strPtr(row.File.Container),
-				BitrateKbps: row.File.BitrateKbps, Lossless: row.File.Lossless,
-				Extension: strPtr(row.File.Extension), Resolution: strPtr(row.File.Resolution), Hdr: strPtr(row.File.HDR),
-				AudioChannels: strPtr(row.File.AudioChannels), AudioLanguages: nonEmptyStrings(row.File.AudioLanguages),
-				Subtitles: nonEmptyStrings(row.File.Subtitles),
-			}
-			if row.File.SizeBytes > 0 {
-				views[index].File.SizeBytes = &row.File.SizeBytes
-			}
-			if row.File.VideoBitrateKbps > 0 {
-				views[index].File.VideoBitrateKbps = &row.File.VideoBitrateKbps
-			}
+			views[index].File = partFileView(*row.File)
 		}
 		if !row.AvailableAt.IsZero() {
 			views[index].AvailableAt = &row.AvailableAt
@@ -759,6 +744,33 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 		}
 	}
 	return views
+}
+
+// partFileView is one part's file as the API shows it; a measure the probe did not take is absent.
+func partFileView(file PartFileRow) *gen.PartFile {
+	view := &gen.PartFile{
+		MediaObjectId: file.MediaObjectID, AudioCodec: strPtr(file.AudioCodec),
+		VideoCodec: strPtr(file.VideoCodec), Container: strPtr(file.Container),
+		BitrateKbps: file.BitrateKbps, Lossless: file.Lossless,
+		Extension: strPtr(file.Extension), Resolution: strPtr(file.Resolution), Hdr: strPtr(file.HDR),
+		AudioChannels: strPtr(file.AudioChannels), AudioLanguages: nonEmptyStrings(file.AudioLanguages),
+		Subtitles: nonEmptyStrings(file.Subtitles),
+	}
+	if file.SizeBytes > 0 {
+		view.SizeBytes = &file.SizeBytes
+	}
+	if file.VideoBitrateKbps > 0 {
+		view.VideoBitrateKbps = &file.VideoBitrateKbps
+	}
+	if file.FrameRate > 0 {
+		rate := float32(file.FrameRate)
+		view.FrameRate = &rate
+	}
+	if file.CRF > 0 {
+		crf := float32(file.CRF)
+		view.Crf = &crf
+	}
+	return view
 }
 
 func (s *Server) routeRemoveWork(w http.ResponseWriter, r *http.Request) {

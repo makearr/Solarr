@@ -482,3 +482,18 @@ WHERE work_id = sqlc.arg(work_id)
   AND (CAST(sqlc.arg(group_ref) AS TEXT) = '' OR substr(media_ref, 1, length(CAST(sqlc.arg(group_ref) AS TEXT)) + 1) = CAST(sqlc.arg(group_ref) AS TEXT) || ':')
   AND (sort_key > sqlc.arg(after_sort_key) OR (sort_key = sqlc.arg(after_sort_key) AND id > sqlc.arg(after_id)))
 ORDER BY sort_key, id LIMIT sqlc.arg(page_size);
+
+-- A library's missing parts, newest first: monitored, out, and no file covers them (Sonarr's Wanted, Missing).
+-- name: ListWantedParts :many
+SELECT p.id AS part_id, p.work_id, w.canonical_title AS work_title, p.media_ref, p.title, p.date, p.available_at
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
+  AND p.monitored = 1
+  AND ((p.available_at IS NOT NULL AND p.available_at <= sqlc.arg(now))
+       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date <= sqlc.arg(today)))
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
+                  WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary')
+  AND (COALESCE(p.date, '') < sqlc.arg(after_date) OR (COALESCE(p.date, '') = sqlc.arg(after_date) AND p.id < sqlc.arg(after_id)))
+ORDER BY COALESCE(p.date, '') DESC, p.id DESC
+LIMIT sqlc.arg(page_size);

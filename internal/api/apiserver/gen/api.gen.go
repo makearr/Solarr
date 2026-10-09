@@ -418,6 +418,12 @@ const (
 	MediaTypeYoutube   MediaType = "youtube"
 )
 
+// Defines values for MediaTypeInfoWantedGrain.
+const (
+	MediaTypeInfoWantedGrainPart MediaTypeInfoWantedGrain = "part"
+	MediaTypeInfoWantedGrainWork MediaTypeInfoWantedGrain = "work"
+)
+
 // Defines values for MediaTypeInfoWorkImage.
 const (
 	MediaTypeInfoWorkImageCover  MediaTypeInfoWorkImage = "cover"
@@ -885,12 +891,6 @@ const (
 	SetQueueClientPausedParamsActionResume SetQueueClientPausedParamsAction = "resume"
 )
 
-// Defines values for ListWantedEpisodesParamsView.
-const (
-	ListWantedEpisodesParamsViewCutoff  ListWantedEpisodesParamsView = "cutoff"
-	ListWantedEpisodesParamsViewMissing ListWantedEpisodesParamsView = "missing"
-)
-
 // Defines values for SetSeriesTypeJSONBodyType.
 const (
 	SetSeriesTypeJSONBodyTypeAnime    SetSeriesTypeJSONBodyType = "anime"
@@ -905,6 +905,12 @@ const (
 	ListLogsParamsLevelError ListLogsParamsLevel = "error"
 	ListLogsParamsLevelInfo  ListLogsParamsLevel = "info"
 	ListLogsParamsLevelWarn  ListLogsParamsLevel = "warn"
+)
+
+// Defines values for ListWantedPartsParamsView.
+const (
+	ListWantedPartsParamsViewCutoff  ListWantedPartsParamsView = "cutoff"
+	ListWantedPartsParamsViewMissing ListWantedPartsParamsView = "missing"
 )
 
 // Defines values for ListWorksParamsDir.
@@ -2805,11 +2811,17 @@ type MediaTypeInfo struct {
 		Key   string `json:"key"`
 		Label string `json:"label"`
 	} `json:"search_terms"`
-	Work MediaTerm `json:"work"`
+
+	// WantedGrain What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
+	WantedGrain MediaTypeInfoWantedGrain `json:"wanted_grain"`
+	Work        MediaTerm                `json:"work"`
 
 	// WorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
 	WorkImage MediaTypeInfoWorkImage `json:"work_image"`
 }
+
+// MediaTypeInfoWantedGrain What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
+type MediaTypeInfoWantedGrain string
 
 // MediaTypeInfoWorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
 type MediaTypeInfoWorkImage string
@@ -3092,11 +3104,15 @@ type PartFile struct {
 	BitrateKbps int64   `json:"bitrate_kbps"`
 	Container   *string `json:"container,omitempty"`
 
+	// Crf The constant rate factor the encoder states.
+	Crf *float32 `json:"crf,omitempty"`
+
 	// Extension The file's own type, "m4a" -- container is ffprobe's demuxer list.
-	Extension     *string `json:"extension,omitempty"`
-	Hdr           *string `json:"hdr,omitempty"`
-	Lossless      bool    `json:"lossless"`
-	MediaObjectId int64   `json:"media_object_id"`
+	Extension     *string  `json:"extension,omitempty"`
+	FrameRate     *float32 `json:"frame_rate,omitempty"`
+	Hdr           *string  `json:"hdr,omitempty"`
+	Lossless      bool     `json:"lossless"`
+	MediaObjectId int64    `json:"media_object_id"`
 
 	// MeetsCutoff Good enough that upgrades stop. Absent when the library sets neither target nor cutoff.
 	MeetsCutoff *bool `json:"meets_cutoff,omitempty"`
@@ -4213,24 +4229,27 @@ type WantedAutomaticSearch string
 // WantedState defines model for Wanted.State.
 type WantedState string
 
-// WantedEpisode defines model for WantedEpisode.
-type WantedEpisode struct {
-	AirDate *string    `json:"air_date,omitempty"`
-	AirTime *time.Time `json:"air_time,omitempty"`
+// WantedPart defines model for WantedPart.
+type WantedPart struct {
+	AvailableAt *time.Time `json:"available_at,omitempty"`
+	Date        *string    `json:"date,omitempty"`
 
-	// File The file behind a present episode and what the probe measured of it; a part the probe has not read is absent.
-	File        *SeriesEpisodeFile `json:"file,omitempty"`
-	Number      int                `json:"number"`
-	PartId      int64              `json:"part_id"`
-	Season      int                `json:"season"`
-	SeriesId    int64              `json:"series_id"`
-	SeriesTitle string             `json:"series_title"`
-	Title       *string            `json:"title,omitempty"`
+	// File The file covering one part, and what probing measured of it.
+	File       *PartFile `json:"file,omitempty"`
+	GroupLabel string    `json:"group_label"`
+
+	// GroupRef The group the part is wanted through
+	GroupRef  string  `json:"group_ref"`
+	Number    string  `json:"number"`
+	PartId    int64   `json:"part_id"`
+	Title     *string `json:"title,omitempty"`
+	WorkId    int64   `json:"work_id"`
+	WorkTitle string  `json:"work_title"`
 }
 
-// WantedEpisodePage defines model for WantedEpisodePage.
-type WantedEpisodePage struct {
-	Items []WantedEpisode `json:"items"`
+// WantedPartPage defines model for WantedPartPage.
+type WantedPartPage struct {
+	Items []WantedPart `json:"items"`
 
 	// Judged For the cutoff view
 	Judged     *bool   `json:"judged,omitempty"`
@@ -4949,19 +4968,6 @@ type LookupSeriesParams struct {
 	Limit      *int   `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// ListWantedEpisodesParams defines parameters for ListWantedEpisodes.
-type ListWantedEpisodesParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-
-	// View missing (default) or cutoff, the present episodes whose file is below the library's target or cutoff.
-	View   *ListWantedEpisodesParamsView `form:"view,omitempty" json:"view,omitempty"`
-	Cursor *string                       `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit  *int                          `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// ListWantedEpisodesParamsView defines parameters for ListWantedEpisodes.
-type ListWantedEpisodesParamsView string
-
 // DeleteSeriesParams defines parameters for DeleteSeries.
 type DeleteSeriesParams struct {
 	// DeleteFiles Send the series' files to the recycle bin; never deleted directly.
@@ -5088,6 +5094,17 @@ type SetUserAccessJSONBody struct {
 	// Permission `none` is never returned: a category a caller cannot read is absent entirely, and reaching it directly is a 404 rather than a 403.
 	Permission Permission `json:"permission"`
 }
+
+// ListWantedPartsParams defines parameters for ListWantedParts.
+type ListWantedPartsParams struct {
+	CategoryId int64                      `form:"category_id" json:"category_id"`
+	View       *ListWantedPartsParamsView `form:"view,omitempty" json:"view,omitempty"`
+	Cursor     *string                    `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit      *int                       `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// ListWantedPartsParamsView defines parameters for ListWantedParts.
+type ListWantedPartsParamsView string
 
 // ListWorksParams defines parameters for ListWorks.
 type ListWorksParams struct {
@@ -6122,9 +6139,6 @@ type ServerInterface interface {
 	// Search the metadata sources for a series to add.
 	// (GET /series/lookup)
 	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
-	// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
-	// (GET /series/wanted)
-	ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams)
 	// Remove a series from the library, with its files in the recycle bin when asked.
 	// (DELETE /series/{id})
 	DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams)
@@ -6227,6 +6241,9 @@ type ServerInterface interface {
 	// Grant or change access to one category.
 	// (PUT /users/{id}/access)
 	SetUserAccess(w http.ResponseWriter, r *http.Request, id int64)
+	// Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored, out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff).
+	// (GET /wanted/parts)
+	ListWantedParts(w http.ResponseWriter, r *http.Request, params ListWantedPartsParams)
 	// A page of the library the caller may see (ADR-27).
 	// (GET /works)
 	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
@@ -7439,12 +7456,6 @@ func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, para
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Sonarr's Wanted, Missing: monitored episodes that have aired and have no file, newest first.
-// (GET /series/wanted)
-func (_ Unimplemented) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, params ListWantedEpisodesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Remove a series from the library, with its files in the recycle bin when asked.
 // (DELETE /series/{id})
 func (_ Unimplemented) DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams) {
@@ -7646,6 +7657,12 @@ func (_ Unimplemented) UpdateUser(w http.ResponseWriter, r *http.Request, id int
 // Grant or change access to one category.
 // (PUT /users/{id}/access)
 func (_ Unimplemented) SetUserAccess(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored, out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff).
+// (GET /wanted/parts)
+func (_ Unimplemented) ListWantedParts(w http.ResponseWriter, r *http.Request, params ListWantedPartsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13959,72 +13976,6 @@ func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
-// ListWantedEpisodes operation middleware
-func (siw *ServerInterfaceWrapper) ListWantedEpisodes(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListWantedEpisodesParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "view" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "view", r.URL.Query(), &params.View)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "cursor" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListWantedEpisodes(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // DeleteSeries operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 
@@ -15064,6 +15015,72 @@ func (siw *ServerInterfaceWrapper) SetUserAccess(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetUserAccess(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWantedParts operation middleware
+func (siw *ServerInterfaceWrapper) ListWantedParts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWantedPartsParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "view" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "view", r.URL.Query(), &params.View)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "view", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWantedParts(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16744,9 +16761,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series/wanted", wrapper.ListWantedEpisodes)
-	})
-	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/series/{id}", wrapper.DeleteSeries)
 	})
 	r.Group(func(r chi.Router) {
@@ -16847,6 +16861,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/users/{id}/access", wrapper.SetUserAccess)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/wanted/parts", wrapper.ListWantedParts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works", wrapper.ListWorks)

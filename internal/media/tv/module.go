@@ -95,6 +95,7 @@ func (Module) Descriptor() media.Descriptor {
 		Facets:         facets,
 		MonitorOptions: monitorChoices,
 		WorkImage:      media.ImagePoster,
+		WantedGrain:    media.WantedParts,
 		// The consumer refuses to add an excluded series (Service.excluded).
 		ScanHonoursExclusions: true,
 	}

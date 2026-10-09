@@ -84,6 +84,8 @@ type Descriptor struct {
 	SearchTerms []Choice
 	// WorkImage is the shape a work's picture has: an album's square cover, a series' tall poster.
 	WorkImage ImageShape
+	// WantedGrain is what Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes).
+	WantedGrain WantedGrain
 	// ScanHonoursExclusions says the type's scan leaves an excluded work's files out, so a work removed and excluded
 	// can go although its files stay.
 	ScanHonoursExclusions bool
@@ -91,6 +93,15 @@ type Descriptor struct {
 
 // ImageShape is the shape of an entity's picture.
 type ImageShape string
+
+// WantedGrain is the level a type's Wanted lists.
+type WantedGrain string
+
+// The grains Wanted lists at; the zero value is works.
+const (
+	WantedWorks WantedGrain = ""
+	WantedParts WantedGrain = "part"
+)
 
 // The shapes of a work's picture.
 const (

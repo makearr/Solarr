@@ -62,6 +62,8 @@ type PartFile struct {
 	Resolution, HDR, AudioChannels string
 	VideoBitrateKbps               int64
 	AudioLanguages, Subtitles      []string
+	// FrameRate is measured; CRF is the constant rate factor the encoder states, 0 when it states none.
+	FrameRate, CRF float64
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -308,6 +310,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			SizeBytes:     row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
 			AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
 			AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
+			FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64,
 		}
 	}
 	partIDs := make([]int64, len(parts))

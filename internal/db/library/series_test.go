@@ -268,12 +268,12 @@ func TestWantedListsAiredMonitoredEpisodesWithoutAFileNewestFirst(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	reader := library.NewSeriesReader(opened)
-	got, err := reader.Wanted(t.Context(), 4, library.WantedCursor{}, 10, seriesAt)
-	if err != nil || len(got) != 1 || got[0].Number != 2 || got[0].SeriesTitle != "Example Show" {
+	works := library.NewWorks(opened)
+	got, err := works.WantedParts(t.Context(), 4, library.WantedPartsCursor{}, 10, seriesAt)
+	if err != nil || len(got) != 1 || got[0].MediaRef != "s01:e02" || got[0].WorkTitle != "Example Show" {
 		t.Fatalf("wanted = %+v, %v: only e02 is monitored, aired and missing", got, err)
 	}
-	if other, _ := reader.Wanted(t.Context(), 5, library.WantedCursor{}, 10, seriesAt); len(other) != 0 {
+	if other, _ := works.WantedParts(t.Context(), 5, library.WantedPartsCursor{}, 10, seriesAt); len(other) != 0 {
 		t.Errorf("another library sees %+v", other)
 	}
 }

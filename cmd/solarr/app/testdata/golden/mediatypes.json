@@ -183,6 +183,7 @@
         "label": "Album"
       }
     ],
+    "wanted_grain": "work",
     "work": {
       "many": "Albums",
       "one": "Album"
@@ -446,6 +447,7 @@
       }
     ],
     "search_terms": [],
+    "wanted_grain": "part",
     "work": {
       "many": "Series",
       "one": "Series"

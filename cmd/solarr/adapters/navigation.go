@@ -161,6 +161,10 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		for _, option := range descriptor.MonitorOptions {
 			info.MonitorOptions = append(info.MonitorOptions, apiserver.MediaChoice{Key: option.Key, Label: option.Label})
 		}
+		info.WantedGrain = "work"
+		if descriptor.WantedGrain == media.WantedParts {
+			info.WantedGrain = "part"
+		}
 		info.WorkImage = string(descriptor.WorkImage)
 		if info.WorkImage == "" {
 			info.WorkImage = string(media.ImageCover)

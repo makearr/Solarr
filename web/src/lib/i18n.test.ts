@@ -7,7 +7,7 @@ import { t, vocabularyOf } from "./i18n";
 const series: components["schemas"]["MediaTypeInfo"] = {
   key: "tv", label: "TV", work: { one: "Series", many: "Series" }, part: { one: "", many: "" }, group: { one: "", many: "" },
   lead_people: { one: "", many: "" }, organisation: { one: "", many: "" }, roles: [], follow_options: [], facets: [],
-  monitor_options: [], search_terms: [], work_image: "poster",
+  monitor_options: [], search_terms: [], work_image: "poster", wanted_grain: "part",
 };
 
 describe("t", () => {
