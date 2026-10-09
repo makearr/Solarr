@@ -23,7 +23,7 @@ SELECT mo.id AS media_object_id, mo.size_bytes,
        d.work_id, wp.id AS part_id, w.media_type,
        CAST(COALESCE((SELECT tp.name FROM credit tc JOIN person tp ON tp.id = tc.person_id
                       WHERE tc.work_id = d.work_id AND tc.part_id = wp.id AND tc.role = 'artist' ORDER BY tc.ord LIMIT 1),
-                     (SELECT ap.name FROM person ap WHERE ap.id = w.primary_artist_id), '') AS TEXT) AS artist,
+                     (SELECT ap.name FROM person ap WHERE ap.id = w.lead_person_id), '') AS TEXT) AS artist,
        lp.root_folder_id, lp.rel_path
 FROM desired_item_file f
 JOIN desired_item d ON d.id = f.desired_item_id

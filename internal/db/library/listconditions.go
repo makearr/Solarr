@@ -56,7 +56,7 @@ func addWorkConditions(predicates *store.Predicates, conditions []listfilter.Con
 		case "title":
 			fragment, arguments = condition.SQL(listfilter.Text, "work.canonical_title")
 		case "artist":
-			fragment, arguments = condition.SQL(listfilter.Text, "COALESCE(primary_artist.name, '')")
+			fragment, arguments = condition.SQL(listfilter.Text, "COALESCE(lead_person.name, '')")
 		case "year":
 			fragment, arguments = condition.SQL(listfilter.Number, "COALESCE(work.year, 0)")
 		case "monitored":

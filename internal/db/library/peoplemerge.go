@@ -159,7 +159,7 @@ func mergeArtist(ctx context.Context, queries *librarydb.Queries, merge ArtistMe
 			return queries.MergeAliasesInto(ctx, librarydb.MergeAliasesIntoParams{WinnerID: winner, LoserID: loser})
 		},
 		func() error {
-			return queries.MergePrimaryArtistInto(ctx, librarydb.MergePrimaryArtistIntoParams{
+			return queries.MergeLeadPersonInto(ctx, librarydb.MergeLeadPersonIntoParams{
 				WinnerID: sql.NullInt64{Int64: winner, Valid: true}, LoserID: sql.NullInt64{Int64: loser, Valid: true},
 			})
 		},

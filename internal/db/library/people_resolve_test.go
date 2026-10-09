@@ -107,7 +107,7 @@ func TestAddCredit_RecordsAWorkLevelCredit(t *testing.T) {
 
 // The Tracks navigation level's own denormalized sort key (ADR-54,
 // 0021_work_primary_artist.sql): the primary (ord=0, role="artist") credit
-// must refresh work.primary_artist_id/primary_artist_sort_name, since
+// must refresh work.lead_person_id/lead_person_sort_name, since
 // AddCredit is its only writer.
 func TestAddCredit_OrdZeroArtistSetsWorkPrimaryArtist(t *testing.T) {
 	opened, queries := newLibrary(t)
@@ -130,18 +130,18 @@ func TestAddCredit_OrdZeroArtistSetsWorkPrimaryArtist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWork: %v", err)
 	}
-	if !work.PrimaryArtistID.Valid || work.PrimaryArtistID.Int64 != personID {
-		t.Errorf("PrimaryArtistID = %+v, want %d", work.PrimaryArtistID, personID)
+	if !work.LeadPersonID.Valid || work.LeadPersonID.Int64 != personID {
+		t.Errorf("LeadPersonID = %+v, want %d", work.LeadPersonID, personID)
 	}
-	if !work.PrimaryArtistSortName.Valid || work.PrimaryArtistSortName.String != "Katupoken" {
-		t.Errorf("PrimaryArtistSortName = %+v, want \"Katupoken\"", work.PrimaryArtistSortName)
+	if !work.LeadPersonSortName.Valid || work.LeadPersonSortName.String != "Katupoken" {
+		t.Errorf("LeadPersonSortName = %+v, want \"Katupoken\"", work.LeadPersonSortName)
 	}
 }
 
 // A credit that is not the primary artist (a featured performer, ord > 0, or
 // any non-"artist" role) must never touch the denormalized column -- a second
 // AddCredit call for a featured artist must not overwrite the real primary.
-func TestAddCredit_NonPrimaryCreditDoesNotSetWorkPrimaryArtist(t *testing.T) {
+func TestAddCredit_NonPrimaryCreditDoesNotSetWorkLeadPerson(t *testing.T) {
 	opened, queries := newLibrary(t)
 	identity := library.NewIdentity(opened)
 	people := library.NewPeople(opened)
@@ -175,8 +175,8 @@ func TestAddCredit_NonPrimaryCreditDoesNotSetWorkPrimaryArtist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWork: %v", err)
 	}
-	if !work.PrimaryArtistID.Valid || work.PrimaryArtistID.Int64 != primary {
-		t.Errorf("PrimaryArtistID = %+v, want the original primary %d unchanged", work.PrimaryArtistID, primary)
+	if !work.LeadPersonID.Valid || work.LeadPersonID.Int64 != primary {
+		t.Errorf("LeadPersonID = %+v, want the original primary %d unchanged", work.LeadPersonID, primary)
 	}
 }
 

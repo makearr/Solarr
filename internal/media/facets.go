@@ -60,7 +60,7 @@ type Facet struct {
 }
 
 // workColumns are the base columns of a work a facet may read; a facet never adds one.
-var workColumns = []string{"year", "primary_type", "runtime_ms", "original_language"}
+var workColumns = []string{"year", "subtype", "runtime_ms", "original_language"}
 
 // checkFacet refuses a facet core could not read: an unknown source, a column the work does not have, an enum
 // without choices.

@@ -707,20 +707,20 @@ type TitleSearch struct {
 }
 
 type Work struct {
-	ID                    int64
-	MediaType             string
-	CanonicalTitle        string
-	SortTitle             string
-	OriginalLanguage      sql.NullString
-	Year                  sql.NullInt64
-	RuntimeMs             sql.NullInt64
-	AddedAt               int64
-	UpdatedAt             int64
-	AddedBy               sql.NullInt64
-	Description           sql.NullString
-	PrimaryArtistID       sql.NullInt64
-	PrimaryArtistSortName sql.NullString
-	PrimaryType           sql.NullString
+	ID                 int64
+	MediaType          string
+	CanonicalTitle     string
+	SortTitle          string
+	OriginalLanguage   sql.NullString
+	Year               sql.NullInt64
+	RuntimeMs          sql.NullInt64
+	AddedAt            int64
+	UpdatedAt          int64
+	AddedBy            sql.NullInt64
+	Description        sql.NullString
+	LeadPersonID       sql.NullInt64
+	LeadPersonSortName sql.NullString
+	Subtype            sql.NullString
 }
 
 type WorkArrival struct {

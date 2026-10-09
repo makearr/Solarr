@@ -25,10 +25,10 @@ UPDATE OR IGNORE person_external_id SET person_id = sqlc.arg(winner_id) WHERE pe
 -- name: MergeAliasesInto :exec
 UPDATE OR IGNORE person_alias SET person_id = sqlc.arg(winner_id) WHERE person_id = sqlc.arg(loser_id);
 
--- name: MergePrimaryArtistInto :exec
-UPDATE work SET primary_artist_id = sqlc.arg(winner_id),
-  primary_artist_sort_name = (SELECT sort_name FROM person WHERE id = sqlc.arg(winner_id))
-WHERE primary_artist_id = sqlc.arg(loser_id);
+-- name: MergeLeadPersonInto :exec
+UPDATE work SET lead_person_id = sqlc.arg(winner_id),
+  lead_person_sort_name = (SELECT sort_name FROM person WHERE id = sqlc.arg(winner_id))
+WHERE lead_person_id = sqlc.arg(loser_id);
 
 -- name: MergeTagAssignmentsInto :exec
 UPDATE OR IGNORE tag_assignment SET subject_id = sqlc.arg(winner_id)

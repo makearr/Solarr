@@ -190,8 +190,8 @@ func personWorkRow(work library.DiscographyRow) apiserver.PersonWorkRow {
 	if work.Year.Valid {
 		row.Year = &work.Year.Int64
 	}
-	if work.PrimaryType.Valid {
-		row.PrimaryType = &work.PrimaryType.String
+	if work.Subtype.Valid {
+		row.PrimaryType = &work.Subtype.String
 	}
 	if work.WantedState.Valid {
 		row.WantedState = &work.WantedState.String

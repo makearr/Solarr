@@ -15,7 +15,7 @@ SELECT lp.media_object_id, lp.root_folder_id, lp.rel_path, wf.work_id,
   w.canonical_title AS work_title,
   CAST(COALESCE((SELECT e.year FROM edition e WHERE e.work_id = wf.work_id AND e.year IS NOT NULL
     ORDER BY e.is_default DESC, e.id LIMIT 1), w.year, 0) AS INTEGER) AS year,
-  CAST(COALESCE((SELECT p.name FROM person p WHERE p.id = w.primary_artist_id), '') AS TEXT) AS artist_name,
+  CAST(COALESCE((SELECT p.name FROM person p WHERE p.id = w.lead_person_id), '') AS TEXT) AS artist_name,
   CAST(COALESCE(wp.media_ref, '') AS TEXT) AS media_ref,
   CAST(COALESCE(wp.title, '') AS TEXT) AS part_title,
   CAST(COALESCE((SELECT GROUP_CONCAT(name, '; ') FROM (SELECT t.name FROM tag_assignment ta
@@ -35,7 +35,7 @@ SELECT lp.media_object_id, lp.root_folder_id, lp.rel_path, wf.work_id,
   CAST(COALESCE((SELECT pe.external_id FROM work_part_external_id pe
     WHERE pe.part_id = wp.id AND pe.provider = ?4 LIMIT 1), '') AS TEXT) AS part_external_id,
   CAST(COALESCE((SELECT px.external_id FROM person_external_id px
-    WHERE px.person_id = w.primary_artist_id AND px.provider = ?5 LIMIT 1), '') AS TEXT) AS person_external_id,
+    WHERE px.person_id = w.lead_person_id AND px.provider = ?5 LIMIT 1), '') AS TEXT) AS person_external_id,
   CAST(COALESCE(tw.digest, '') AS TEXT) AS digest
 FROM library_path lp
 JOIN work_file wf ON wf.media_object_id = lp.media_object_id

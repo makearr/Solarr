@@ -122,8 +122,8 @@ func (a Works) ListWorks(
 			view.LastSearchedAt = &at
 		}
 		view.PresentTotal, view.RequiredTotal, view.Upgradable = row.PresentTotal, row.RequiredTotal, row.Upgradable
-		if row.PrimaryArtistID.Valid {
-			view.LeadID = row.PrimaryArtistID.Int64
+		if row.LeadPersonID.Valid {
+			view.LeadID = row.LeadPersonID.Int64
 		}
 		views[index] = view
 	}

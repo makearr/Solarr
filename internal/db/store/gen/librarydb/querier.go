@@ -735,8 +735,8 @@ type Querier interface {
 	MergeArtworkInto(ctx context.Context, arg MergeArtworkIntoParams) error
 	MergeCreditsInto(ctx context.Context, arg MergeCreditsIntoParams) error
 	MergeExternalIDsInto(ctx context.Context, arg MergeExternalIDsIntoParams) error
+	MergeLeadPersonInto(ctx context.Context, arg MergeLeadPersonIntoParams) error
 	MergeMonitoredInto(ctx context.Context, arg MergeMonitoredIntoParams) error
-	MergePrimaryArtistInto(ctx context.Context, arg MergePrimaryArtistIntoParams) error
 	MergeSubscriptionsInto(ctx context.Context, arg MergeSubscriptionsIntoParams) error
 	MergeTagAssignmentsInto(ctx context.Context, arg MergeTagAssignmentsIntoParams) error
 	// newest_release.
@@ -912,11 +912,11 @@ type Querier interface {
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
-	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
-	// The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
+	// The Tracks navigation level's own denormalized sort key (0021's
 	// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 	// role='artist' ord=0 credit is ever recorded.
-	SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error
+	SetWorkLeadPerson(ctx context.Context, arg SetWorkLeadPersonParams) error
+	SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error
 	SetWorkRating(ctx context.Context, arg SetWorkRatingParams) error
 	// Unlike year, unconditional: nothing else writes a work's description yet,
 	// so there is no earlier value worth protecting.
@@ -938,12 +938,12 @@ type Querier interface {
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
 	UpdateSubscriptionScope(ctx context.Context, arg UpdateSubscriptionScopeParams) error
-	// Same "enrichment fills a gap, never overwrites" rule as year: a work
-	// created before this column existed, or from a source with no MusicBrainz
-	// answer, only gets its primary_type backfilled here.
-	UpdateWorkPrimaryTypeIfNull(ctx context.Context, arg UpdateWorkPrimaryTypeIfNullParams) error
 	// A provider fills what a work lacks and corrects what it measured; year and language, once set, stay.
 	UpdateWorkSeriesDetails(ctx context.Context, arg UpdateWorkSeriesDetailsParams) error
+	// Same "enrichment fills a gap, never overwrites" rule as year: a work
+	// created before this column existed, or from a source with no MusicBrainz
+	// answer, only gets its subtype backfilled here.
+	UpdateWorkSubtypeIfNull(ctx context.Context, arg UpdateWorkSubtypeIfNullParams) error
 	// The list surface composes its own WHERE in internal/db/library/works.go: a filter
 	// written here as an is-it-empty test is not sargable, so SQLite uses no index for that
 	// column and sorts the whole table for every page (documentation/sql-and-sqlc.md).

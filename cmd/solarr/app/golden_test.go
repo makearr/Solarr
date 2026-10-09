@@ -210,7 +210,7 @@ func (g goldenServer) seedAlbum(ctx context.Context, t *testing.T, libraries gol
 	for _, file := range files {
 		links = append(links, library.WorkLink{
 			Provider: music.ProviderReleaseGroup, ExternalID: releaseGroup, MediaObjectID: file.MediaObjectID, Confidence: 1,
-			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Quiet Orchards", SortTitle: "quiet orchards", PrimaryType: "Album"},
+			Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: "Quiet Orchards", SortTitle: "quiet orchards", Subtype: "Album"},
 			Edition: &library.EditionLink{
 				Provider: music.ProviderRelease, ExternalID: release, Confidence: 1,
 				Edition: library.EditionIdentity{Kind: "release", Label: "Quiet Orchards"},

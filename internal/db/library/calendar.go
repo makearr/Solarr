@@ -17,9 +17,9 @@ type CalendarEntry struct {
 	WorkID int64
 	Title  string
 	Artist string
-	// PrimaryType is MusicBrainz's own vocabulary ("Album", "Single", ...),
+	// Subtype is MusicBrainz's own vocabulary ("Album", "Single", ...),
 	// empty when the work has none yet.
-	PrimaryType string
+	Subtype string
 	// ReleaseDate is a partial ISO date as the provider gave it: "2024",
 	// "2024-03" or "2024-03-01". Shown as-is rather than guessed into a full
 	// date, since a month-precision release is a real thing to say.
@@ -60,7 +60,7 @@ func (c Calendar) Entries(
 	for i, row := range rows {
 		entries[i] = CalendarEntry{
 			WorkID: row.ID, Title: row.CanonicalTitle, Artist: row.ArtistName,
-			PrimaryType: row.PrimaryType.String, ReleaseDate: asString(row.ReleaseDate),
+			Subtype: row.Subtype.String, ReleaseDate: asString(row.ReleaseDate),
 			OnDisk: row.OnDisk,
 		}
 	}
@@ -74,7 +74,7 @@ func (c Calendar) Entries(
 		season, number := parseSeriesRef(row.MediaRef)
 		entries = append(entries, CalendarEntry{
 			WorkID: row.WorkID, Title: row.CanonicalTitle, Artist: fmt.Sprintf("S%02dE%02d %s", season, number, row.Title.String),
-			PrimaryType: "Episode", ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, CategoryID: asInt(row.CategoryID),
+			Subtype: "Episode", ReleaseDate: row.Date.String, OnDisk: row.OnDisk, PartID: row.PartID, CategoryID: asInt(row.CategoryID),
 		})
 	}
 	if len(episodes) > 0 {

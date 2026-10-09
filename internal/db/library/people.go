@@ -21,7 +21,7 @@ type PersonIdentity struct {
 	Name           string
 	Disambiguation string
 	// Kind is the provider's own vocabulary ("Person", "Group", ...), stored
-	// as-is, same reasoning as ReleaseGroup.PrimaryType.
+	// as-is, same reasoning as ReleaseGroup.Subtype.
 	Kind    string
 	Gender  string
 	Country string
@@ -196,7 +196,7 @@ func (p People) AddCredit(ctx context.Context, workID, personID int64, role stri
 }
 
 // AddLeadCredit is AddCredit first in the media type's lead role (an album's artist): the person the work is listed
-// under, kept in work.primary_artist_id and its sort name, the Tracks level's denormalised key (0021).
+// under, kept in work.lead_person_id and its sort name, the Tracks level's denormalised key (0021).
 func (p People) AddLeadCredit(ctx context.Context, workID, personID int64, role string) error {
 	return p.addCredit(ctx, workID, personID, role, 0, true)
 }
@@ -220,10 +220,10 @@ func (p People) addCredit(ctx context.Context, workID, personID int64, role stri
 		if err != nil {
 			return fmt.Errorf("primary artist: get person: %w", err)
 		}
-		return queries.SetWorkPrimaryArtist(ctx, librarydb.SetWorkPrimaryArtistParams{
-			PrimaryArtistID:       sql.NullInt64{Int64: personID, Valid: true},
-			PrimaryArtistSortName: sql.NullString{String: person.SortName, Valid: true},
-			ID:                    workID,
+		return queries.SetWorkLeadPerson(ctx, librarydb.SetWorkLeadPersonParams{
+			LeadPersonID:       sql.NullInt64{Int64: personID, Valid: true},
+			LeadPersonSortName: sql.NullString{String: person.SortName, Valid: true},
+			ID:                 workID,
 		})
 	})
 	if err != nil {
@@ -358,7 +358,7 @@ const discographyStatusColumns = `(SELECT di.present_count FROM desired_item di
 // it as a plain non-null string -- a panic waiting on the first row with no
 // monitored desired_item.
 func (p People) Discography(ctx context.Context, personID int64, role string) ([]DiscographyRow, error) {
-	query := `SELECT ` + workColumns + `, work.primary_type,
+	query := `SELECT ` + workColumns + `, work.subtype,
        ` + workStateColumn + `,
        CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
        ` + discographyStatusColumns + `,
@@ -379,7 +379,7 @@ ORDER BY work.year, work.sort_title, work.id`
 		var row DiscographyRow
 		if err := rows.Scan(&row.ID, &row.MediaType, &row.CanonicalTitle, &row.SortTitle,
 			&row.OriginalLanguage, &row.Year, &row.RuntimeMs, &row.AddedAt, &row.UpdatedAt, &row.AddedBy,
-			&row.PrimaryType, &row.WantedState, &row.OnDiskCount,
+			&row.Subtype, &row.WantedState, &row.OnDiskCount,
 			&row.PresentCount, &row.RequiredCount, &row.AvailableFrom, &row.Downloading, &row.Unverified); err != nil {
 			return nil, fmt.Errorf("library: scan discography row: %w", err)
 		}
@@ -481,8 +481,8 @@ func (p People) Subscribe(
 // a person this package itself created (arr_import_item.person_created), and
 // only after the person's own subscription (no cascade of its own,
 // subscription.subject_id is a polymorphic reference with no FK) and any
-// work crediting them as primary_artist_id (also no cascade) are already
-// gone, or this fails on the same foreign key work.primary_artist_id
+// work crediting them as lead_person_id (also no cascade) are already
+// gone, or this fails on the same foreign key work.lead_person_id
 // enforces.
 func (p People) Delete(ctx context.Context, personID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

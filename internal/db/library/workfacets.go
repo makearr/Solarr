@@ -22,7 +22,7 @@ const (
 )
 
 // facetColumns are the work columns a facet may read; the media registry refuses any other.
-var facetColumns = []string{"year", "primary_type", "runtime_ms", "original_language"}
+var facetColumns = []string{"year", "subtype", "runtime_ms", "original_language"}
 
 // WorkFacet is one facet of a media type as the works list reads and filters it.
 type WorkFacet struct {

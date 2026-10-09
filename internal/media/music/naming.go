@@ -294,8 +294,8 @@ func NamingContext(
 	if year, ok := releaseYear(detail, edition); ok {
 		facts.ReleaseYear = year
 	}
-	if detail.Work.PrimaryType.Valid {
-		facts.AlbumType = detail.Work.PrimaryType.String
+	if detail.Work.Subtype.Valid {
+		facts.AlbumType = detail.Work.Subtype.String
 	}
 	if len(detail.Genres) > 0 {
 		facts.AlbumGenre = detail.Genres[0]

@@ -126,8 +126,8 @@ type WorkArtwork struct {
 	RootFolderIDs []int64
 	// CategoryIDs are the categories wanting this work, the other half of
 	// ADR-27 visibility: a wanted album with no files has no root folder.
-	CategoryIDs     []int64
-	PrimaryArtistID *int64
+	CategoryIDs  []int64
+	LeadPersonID *int64
 }
 
 // GetForWork answers a work's recorded cover art, if any. Found is false (not
@@ -152,11 +152,11 @@ func (a Artworks) GetForWork(ctx context.Context, workID int64) (WorkArtwork, er
 	}
 
 	var primaryArtistID *int64
-	if work, err := queries.GetWork(ctx, workID); err == nil && work.PrimaryArtistID.Valid {
-		primaryArtistID = &work.PrimaryArtistID.Int64
+	if work, err := queries.GetWork(ctx, workID); err == nil && work.LeadPersonID.Valid {
+		primaryArtistID = &work.LeadPersonID.Int64
 	}
 
-	found := WorkArtwork{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, PrimaryArtistID: primaryArtistID}
+	found := WorkArtwork{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, LeadPersonID: primaryArtistID}
 	cacheKey, err := queries.GetArtwork(ctx, librarydb.GetArtworkParams{
 		SubjectType: "work", SubjectID: workID, Kind: artworkKindCover,
 	})

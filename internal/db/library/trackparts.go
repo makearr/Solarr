@@ -59,14 +59,14 @@ type TrackParts struct{ store *store.Store }
 func NewTrackParts(opened *store.Store) TrackParts { return TrackParts{store: opened} }
 
 // composeAlbumPage builds the album-page query backing List, ordered by the
-// work_primary_artist_sort index (migration 0021) rather than an unindexed
+// work_lead_person_sort index (migration 0021) rather than an unindexed
 // per-row credit/person subquery (ADR-28).
 func composeAlbumPage(filter TrackFilter, after TrackAlbumCursor, albumPageSize int) (string, []any) {
 	var predicates store.Predicates
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
 
 	// Matches the expression index (migration 0046) exactly; a work with no artist sorts first.
-	artistExpr := "COALESCE(primary_artist_sort_name, '') COLLATE NOCASE"
+	artistExpr := "COALESCE(lead_person_sort_name, '') COLLATE NOCASE"
 	operator, direction := ">", ""
 	if filter.Descending {
 		operator, direction = "<", " DESC"
@@ -75,8 +75,8 @@ func composeAlbumPage(filter TrackFilter, after TrackAlbumCursor, albumPageSize 
 		"("+artistExpr+" "+operator+" ? OR ("+artistExpr+" = ? AND (sort_title "+operator+" ? OR (sort_title = ? AND id "+operator+" ?))))",
 		after.ArtistSortName, after.ArtistSortName, after.AlbumSortTitle, after.AlbumSortTitle, after.AlbumID)
 
-	query := "SELECT id, sort_title, canonical_title, year, primary_artist_sort_name,\n" +
-		"       (SELECT p.name FROM person p WHERE p.id = work.primary_artist_id) AS artist_name\n" +
+	query := "SELECT id, sort_title, canonical_title, year, lead_person_sort_name,\n" +
+		"       (SELECT p.name FROM person p WHERE p.id = work.lead_person_id) AS artist_name\n" +
 		"FROM work" + predicates.Where() +
 		"\nORDER BY " + artistExpr + direction + ", sort_title" + direction + ", id" + direction + "\nLIMIT ?"
 	return query, predicates.Args(albumPageSize)
@@ -137,7 +137,7 @@ func (t TrackParts) List(
 }
 
 // ExplainAlbumPage returns SQLite's plan for the album-page query List runs,
-// so a test can assert the ordering actually reaches work_primary_artist_sort
+// so a test can assert the ordering actually reaches work_lead_person_sort
 // rather than sorting the whole table (documentation/sql-and-sqlc.md, the
 // same shape Works.ExplainList already gives the Albums level).
 func (t TrackParts) ExplainAlbumPage(ctx context.Context, filter TrackFilter, after TrackAlbumCursor, albumPageSize int) (string, error) {

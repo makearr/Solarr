@@ -377,11 +377,11 @@ func (q *Queries) CreateEdition(ctx context.Context, arg CreateEditionParams) (E
 const createWork = `-- name: CreateWork :one
 
 INSERT INTO work (media_type, canonical_title, sort_title, original_language,
-                  year, runtime_ms, added_at, updated_at, added_by, primary_type)
+                  year, runtime_ms, added_at, updated_at, added_by, subtype)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
           year, runtime_ms, added_at, updated_at, added_by, description,
-          primary_artist_id, primary_artist_sort_name, primary_type
+          lead_person_id, lead_person_sort_name, subtype
 `
 
 type CreateWorkParams struct {
@@ -394,7 +394,7 @@ type CreateWorkParams struct {
 	AddedAt          int64
 	UpdatedAt        int64
 	AddedBy          sql.NullInt64
-	PrimaryType      sql.NullString
+	Subtype          sql.NullString
 }
 
 // Identity queries. Column lists follow table order, or sqlc stops reusing models.
@@ -409,7 +409,7 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 		arg.AddedAt,
 		arg.UpdatedAt,
 		arg.AddedBy,
-		arg.PrimaryType,
+		arg.Subtype,
 	)
 	var i Work
 	err := row.Scan(
@@ -424,9 +424,9 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 		&i.UpdatedAt,
 		&i.AddedBy,
 		&i.Description,
-		&i.PrimaryArtistID,
-		&i.PrimaryArtistSortName,
-		&i.PrimaryType,
+		&i.LeadPersonID,
+		&i.LeadPersonSortName,
+		&i.Subtype,
 	)
 	return i, err
 }
@@ -648,7 +648,7 @@ func (q *Queries) FindWorkPart(ctx context.Context, arg FindWorkPartParams) (Wor
 const findWorksByClassification = `-- name: FindWorksByClassification :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
 FROM work w
 JOIN work_classification c ON c.work_id = w.id
 WHERE c.kind = ?1 AND c.value = ?2
@@ -691,9 +691,9 @@ func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksBy
 			&i.UpdatedAt,
 			&i.AddedBy,
 			&i.Description,
-			&i.PrimaryArtistID,
-			&i.PrimaryArtistSortName,
-			&i.PrimaryType,
+			&i.LeadPersonID,
+			&i.LeadPersonSortName,
+			&i.Subtype,
 		); err != nil {
 			return nil, err
 		}
@@ -711,7 +711,7 @@ func (q *Queries) FindWorksByClassification(ctx context.Context, arg FindWorksBy
 const findWorksByNormalizedTitle = `-- name: FindWorksByNormalizedTitle :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
 FROM work w
 JOIN work_title t ON t.work_id = w.id
 WHERE t.normalized = ?1
@@ -749,9 +749,9 @@ func (q *Queries) FindWorksByNormalizedTitle(ctx context.Context, arg FindWorksB
 			&i.UpdatedAt,
 			&i.AddedBy,
 			&i.Description,
-			&i.PrimaryArtistID,
-			&i.PrimaryArtistSortName,
-			&i.PrimaryType,
+			&i.LeadPersonID,
+			&i.LeadPersonSortName,
+			&i.Subtype,
 		); err != nil {
 			return nil, err
 		}
@@ -824,7 +824,7 @@ func (q *Queries) GetEditionByExternalID(ctx context.Context, arg GetEditionByEx
 const getWork = `-- name: GetWork :one
 SELECT id, media_type, canonical_title, sort_title, original_language,
        year, runtime_ms, added_at, updated_at, added_by, description,
-       primary_artist_id, primary_artist_sort_name, primary_type
+       lead_person_id, lead_person_sort_name, subtype
 FROM work WHERE id = ?
 `
 
@@ -843,9 +843,9 @@ func (q *Queries) GetWork(ctx context.Context, id int64) (Work, error) {
 		&i.UpdatedAt,
 		&i.AddedBy,
 		&i.Description,
-		&i.PrimaryArtistID,
-		&i.PrimaryArtistSortName,
-		&i.PrimaryType,
+		&i.LeadPersonID,
+		&i.LeadPersonSortName,
+		&i.Subtype,
 	)
 	return i, err
 }
@@ -853,7 +853,7 @@ func (q *Queries) GetWork(ctx context.Context, id int64) (Work, error) {
 const getWorkByExternalID = `-- name: GetWorkByExternalID :one
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -880,9 +880,9 @@ func (q *Queries) GetWorkByExternalID(ctx context.Context, arg GetWorkByExternal
 		&i.UpdatedAt,
 		&i.AddedBy,
 		&i.Description,
-		&i.PrimaryArtistID,
-		&i.PrimaryArtistSortName,
-		&i.PrimaryType,
+		&i.LeadPersonID,
+		&i.LeadPersonSortName,
+		&i.Subtype,
 	)
 	return i, err
 }
@@ -911,10 +911,10 @@ func (q *Queries) GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkEx
 }
 
 const getWorkNamingByExternalID = `-- name: GetWorkNamingByExternalID :one
-SELECT w.canonical_title, w.year, p.name AS primary_artist_name
+SELECT w.canonical_title, w.year, p.name AS lead_person_name
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
-LEFT JOIN person p ON p.id = w.primary_artist_id
+LEFT JOIN person p ON p.id = w.lead_person_id
 WHERE e.provider = ? AND e.external_id = ?
 `
 
@@ -924,16 +924,16 @@ type GetWorkNamingByExternalIDParams struct {
 }
 
 type GetWorkNamingByExternalIDRow struct {
-	CanonicalTitle    string
-	Year              sql.NullInt64
-	PrimaryArtistName sql.NullString
+	CanonicalTitle string
+	Year           sql.NullInt64
+	LeadPersonName sql.NullString
 }
 
 // An import names an album it already knows by the canonical title and artist, never the tags.
 func (q *Queries) GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error) {
 	row := q.db.QueryRowContext(ctx, getWorkNamingByExternalID, arg.Provider, arg.ExternalID)
 	var i GetWorkNamingByExternalIDRow
-	err := row.Scan(&i.CanonicalTitle, &i.Year, &i.PrimaryArtistName)
+	err := row.Scan(&i.CanonicalTitle, &i.Year, &i.LeadPersonName)
 	return i, err
 }
 
@@ -1084,13 +1084,13 @@ func (q *Queries) ListAltNumbersForParts(ctx context.Context, partIds []int64) (
 }
 
 const listCalendarEntries = `-- name: ListCalendarEntries :many
-SELECT w.id, w.canonical_title, w.sort_title, w.primary_type,
+SELECT w.id, w.canonical_title, w.sort_title, w.subtype,
        COALESCE(pa.name, '') AS artist_name,
        MIN(wd.date) AS release_date,
        EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
-LEFT JOIN person pa ON pa.id = w.primary_artist_id
+LEFT JOIN person pa ON pa.id = w.lead_person_id
 WHERE wd.kind = ?1
   AND wd.date >= ?2 AND wd.date <= ?3
   AND (
@@ -1119,7 +1119,7 @@ type ListCalendarEntriesRow struct {
 	ID             int64
 	CanonicalTitle string
 	SortTitle      string
-	PrimaryType    sql.NullString
+	Subtype        sql.NullString
 	ArtistName     string
 	ReleaseDate    interface{}
 	OnDisk         bool
@@ -1150,7 +1150,7 @@ func (q *Queries) ListCalendarEntries(ctx context.Context, arg ListCalendarEntri
 			&i.ID,
 			&i.CanonicalTitle,
 			&i.SortTitle,
-			&i.PrimaryType,
+			&i.Subtype,
 			&i.ArtistName,
 			&i.ReleaseDate,
 			&i.OnDisk,
@@ -2080,6 +2080,24 @@ func (q *Queries) SetWorkField(ctx context.Context, arg SetWorkFieldParams) erro
 	return err
 }
 
+const setWorkLeadPerson = `-- name: SetWorkLeadPerson :exec
+UPDATE work SET lead_person_id = ?, lead_person_sort_name = ? WHERE id = ?
+`
+
+type SetWorkLeadPersonParams struct {
+	LeadPersonID       sql.NullInt64
+	LeadPersonSortName sql.NullString
+	ID                 int64
+}
+
+// The Tracks navigation level's own denormalized sort key (0021's
+// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
+// role='artist' ord=0 credit is ever recorded.
+func (q *Queries) SetWorkLeadPerson(ctx context.Context, arg SetWorkLeadPersonParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkLeadPerson, arg.LeadPersonID, arg.LeadPersonSortName, arg.ID)
+	return err
+}
+
 const setWorkPartMonitored = `-- name: SetWorkPartMonitored :exec
 UPDATE work_part SET monitored = ? WHERE id = ?
 `
@@ -2091,24 +2109,6 @@ type SetWorkPartMonitoredParams struct {
 
 func (q *Queries) SetWorkPartMonitored(ctx context.Context, arg SetWorkPartMonitoredParams) error {
 	_, err := q.db.ExecContext(ctx, setWorkPartMonitored, arg.Monitored, arg.ID)
-	return err
-}
-
-const setWorkPrimaryArtist = `-- name: SetWorkPrimaryArtist :exec
-UPDATE work SET primary_artist_id = ?, primary_artist_sort_name = ? WHERE id = ?
-`
-
-type SetWorkPrimaryArtistParams struct {
-	PrimaryArtistID       sql.NullInt64
-	PrimaryArtistSortName sql.NullString
-	ID                    int64
-}
-
-// The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
-// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
-// role='artist' ord=0 credit is ever recorded.
-func (q *Queries) SetWorkPrimaryArtist(ctx context.Context, arg SetWorkPrimaryArtistParams) error {
-	_, err := q.db.ExecContext(ctx, setWorkPrimaryArtist, arg.PrimaryArtistID, arg.PrimaryArtistSortName, arg.ID)
 	return err
 }
 
@@ -2188,21 +2188,21 @@ func (q *Queries) UpdateEdition(ctx context.Context, arg UpdateEditionParams) er
 	return err
 }
 
-const updateWorkPrimaryTypeIfNull = `-- name: UpdateWorkPrimaryTypeIfNull :exec
-UPDATE work SET primary_type = ?, updated_at = ? WHERE id = ? AND primary_type IS NULL
+const updateWorkSubtypeIfNull = `-- name: UpdateWorkSubtypeIfNull :exec
+UPDATE work SET subtype = ?, updated_at = ? WHERE id = ? AND subtype IS NULL
 `
 
-type UpdateWorkPrimaryTypeIfNullParams struct {
-	PrimaryType sql.NullString
-	UpdatedAt   int64
-	ID          int64
+type UpdateWorkSubtypeIfNullParams struct {
+	Subtype   sql.NullString
+	UpdatedAt int64
+	ID        int64
 }
 
 // Same "enrichment fills a gap, never overwrites" rule as year: a work
 // created before this column existed, or from a source with no MusicBrainz
-// answer, only gets its primary_type backfilled here.
-func (q *Queries) UpdateWorkPrimaryTypeIfNull(ctx context.Context, arg UpdateWorkPrimaryTypeIfNullParams) error {
-	_, err := q.db.ExecContext(ctx, updateWorkPrimaryTypeIfNull, arg.PrimaryType, arg.UpdatedAt, arg.ID)
+// answer, only gets its subtype backfilled here.
+func (q *Queries) UpdateWorkSubtypeIfNull(ctx context.Context, arg UpdateWorkSubtypeIfNullParams) error {
+	_, err := q.db.ExecContext(ctx, updateWorkSubtypeIfNull, arg.Subtype, arg.UpdatedAt, arg.ID)
 	return err
 }
 

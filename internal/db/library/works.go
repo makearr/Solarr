@@ -18,16 +18,16 @@ import (
 const workColumns = `work.id, work.media_type, work.canonical_title, work.sort_title, work.original_language,
        work.year, work.runtime_ms, work.added_at, work.updated_at, work.added_by`
 
-// workArtistColumn reads work.primary_artist_id (migration 0021) via a plain
+// workArtistColumn reads work.lead_person_id (migration 0021) via a plain
 // LEFT JOIN -- a correlated subquery here used to force SQLite to sort the
 // whole result regardless of index (ADR-28; see notes.md for the story).
-const workArtistColumn = `primary_artist.name AS artist`
+const workArtistColumn = `lead_person.name AS artist`
 
 // workArtistJoin is workArtistColumn's join, appended to every list query's
-// FROM clause. "primary_artist" avoids colliding with any other query in this
+// FROM clause. "lead_person" avoids colliding with any other query in this
 // file that might alias person differently.
 const workArtistJoin = `
-LEFT JOIN person primary_artist ON primary_artist.id = work.primary_artist_id`
+LEFT JOIN person lead_person ON lead_person.id = work.lead_person_id`
 
 // workStateColumn is the work's album-level state: its monitored SET item first, a track's own
 // SINGLE only when there is no SET -- the oldest item was once taken, so a track wanted before
@@ -244,7 +244,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		orderBy = "arrival.arrived_at" + orderDirection + ", arrival.work_id" + orderDirection
 	case WorkSortArtist:
 		// Exactly the expression migration 0046 indexes, so the order stays indexed.
-		artist := "COALESCE(primary_artist_sort_name, '') COLLATE NOCASE"
+		artist := "COALESCE(lead_person_sort_name, '') COLLATE NOCASE"
 		predicates.AddIf(after.ID != 0,
 			"("+artist+", work.sort_title, work.id) "+operator+" (?, ?, ?)",
 			after.SortArtist, after.SortTitle, after.ID)
@@ -268,11 +268,11 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + ",\n       " + workStateColumn +
 		",\n       " + discographyStatusColumns +
 		",\n       EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS on_disk" +
-		",\n       COALESCE(work.primary_artist_sort_name, '') AS artist_sort" +
+		",\n       COALESCE(work.lead_person_sort_name, '') AS artist_sort" +
 		",\n       " + lastSearchedColumn + " AS last_searched" +
 		",\n       " + unverifiedColumn + " AS unverified" +
 		",\n       COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = work.id), 0) AS arrived_at" +
-		",\n       (work.primary_artist_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artwork aw" +
+		",\n       (work.lead_person_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artwork aw" +
 		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id)) AS artist_cover" +
 		",\n       EXISTS (SELECT 1 FROM desired_item mon WHERE mon.work_id = work.id AND mon.monitored = 1" +
 		" AND mon.satisfaction_kind = 'SET') AS monitored" +
@@ -280,7 +280,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       CAST(" + numberColumn + " AS INTEGER) AS sort_number, CAST(" + textColumn + " AS TEXT) AS sort_text" +
 		",\n       CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
 		" WHERE wf.work_id = work.id), 0) AS INTEGER) AS size_bytes" +
-		",\n       " + setTotalsColumns + ", work.primary_artist_id" +
+		",\n       " + setTotalsColumns + ", work.lead_person_id" +
 		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -460,7 +460,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
 			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover,
 			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes,
-			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable, &work.PrimaryArtistID); err != nil {
+			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable, &work.LeadPersonID); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

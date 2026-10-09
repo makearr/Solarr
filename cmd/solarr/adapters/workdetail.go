@@ -59,8 +59,8 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 	if detail.Work.Description.Valid {
 		row.Description = &detail.Work.Description.String
 	}
-	if detail.Work.PrimaryArtistID.Valid {
-		row.LeadID = detail.Work.PrimaryArtistID.Int64
+	if detail.Work.LeadPersonID.Valid {
+		row.LeadID = detail.Work.LeadPersonID.Int64
 	}
 	if row.Pictures, err = a.Works.Pictures(ctx, id); err != nil {
 		return apiserver.WorkDetailRow{}, err

@@ -221,7 +221,7 @@ func (o Organisations) Get(ctx context.Context, id int64, visible []int64) (Orga
 func (o Organisations) Credits(ctx context.Context, id int64, visible []int64) ([]OrganisationCredit, error) {
 	scope := inScope("d.category_id", visible)
 	query := `SELECT DISTINCT d.category_id, wo.role,
-       ` + workColumns + `, work.primary_type,
+       ` + workColumns + `, work.subtype,
        ` + workStateColumn + `,
        CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
        ` + discographyStatusColumns + `,
@@ -242,7 +242,7 @@ ORDER BY d.category_id, wo.role, work.year DESC, work.sort_title, work.id`
 		row := &credit.DiscographyRow
 		if err := rows.Scan(&credit.CategoryID, &credit.Role,
 			&row.ID, &row.MediaType, &row.CanonicalTitle, &row.SortTitle, &row.OriginalLanguage, &row.Year, &row.RuntimeMs,
-			&row.AddedAt, &row.UpdatedAt, &row.AddedBy, &row.PrimaryType, &row.WantedState, &row.OnDiskCount,
+			&row.AddedAt, &row.UpdatedAt, &row.AddedBy, &row.Subtype, &row.WantedState, &row.OnDiskCount,
 			&row.PresentCount, &row.RequiredCount, &row.AvailableFrom, &row.Downloading, &row.Unverified); err != nil {
 			return nil, fmt.Errorf("library: scan organisation %d work: %w", id, err)
 		}

@@ -21,13 +21,13 @@ type WorkIdentity struct {
 	MediaType      string
 	CanonicalTitle string
 	SortTitle      string
-	// PrimaryType is MusicBrainz's own release-group vocabulary (Album, EP,
+	// Subtype is MusicBrainz's own release-group vocabulary (Album, EP,
 	// Single, Broadcast, Other, ...), stored as-is when the caller already
 	// knows it. Empty when it doesn't -- findOrCreateWork leaves the column
 	// NULL rather than write "", so a later enrichment pass can still fill
-	// it in (UpdateWorkPrimaryTypeIfNull's own "fills a gap, never
+	// it in (UpdateWorkSubtypeIfNull's own "fills a gap, never
 	// overwrites" rule, work.year's own precedent).
-	PrimaryType string
+	Subtype string
 }
 
 // WorkLink is one caller's Identifier chain result, ready to record: the external id
@@ -321,12 +321,12 @@ func findOrCreateWorks(
 				created[index] = true
 				works[position] = "(?, ?, ?, ?, ?, ?, ?)"
 				workArgs = append(workArgs, id, link.Work.MediaType, link.Work.CanonicalTitle, link.Work.SortTitle,
-					at.Unix(), at.Unix(), nullString(link.Work.PrimaryType))
+					at.Unix(), at.Unix(), nullString(link.Work.Subtype))
 				externals[position] = "(?, ?, ?, ?, ?)"
 				externalArgs = append(externalArgs, link.Provider, link.ExternalID, id, link.Confidence, at.Unix())
 			}
 			if _, err := tx.ExecContext(ctx, "INSERT INTO work (id, media_type, canonical_title, sort_title,"+
-				" added_at, updated_at, primary_type) VALUES "+strings.Join(works, ", "), workArgs...); err != nil {
+				" added_at, updated_at, subtype) VALUES "+strings.Join(works, ", "), workArgs...); err != nil {
 				return nil, nil, fmt.Errorf("library: create works: %w", err)
 			}
 			if _, err := tx.ExecContext(ctx, "INSERT INTO work_external_id (provider, external_id, work_id,"+

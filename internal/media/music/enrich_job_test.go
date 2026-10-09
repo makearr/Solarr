@@ -1097,7 +1097,7 @@ func TestEnrichJob_EnrichesAWorkIdentifiedWithoutAnEdition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWork: %v", err)
 	}
-	if !work.PrimaryArtistID.Valid || work.Year.Int64 != 1991 || work.PrimaryType.String != "Album" {
+	if !work.LeadPersonID.Valid || work.Year.Int64 != 1991 || work.Subtype.String != "Album" {
 		t.Errorf("work = %+v, want primary artist set, year 1991, type Album", work)
 	}
 	remaining, err := library.NewIdentity(opened).EditionlessWorks(t.Context(), 0, 10)
@@ -1581,7 +1581,7 @@ func TestEnrichJob_ResolvesEachArtistOncePerRun(t *testing.T) {
 		if err != nil {
 			t.Fatalf("GetWorkByExternalID: %v", err)
 		}
-		if !work.PrimaryArtistID.Valid {
+		if !work.LeadPersonID.Valid {
 			t.Errorf("work %d has no artist; every album must still be credited", work.ID)
 		}
 	}

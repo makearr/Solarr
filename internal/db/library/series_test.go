@@ -292,7 +292,7 @@ func TestCalendarListsMonitoredEpisodesAndCountsTheirDates(t *testing.T) {
 	}
 	calendar := library.NewCalendar(opened)
 	entries, err := calendar.Entries(t.Context(), "2020-01-01", "2020-01-31", []int64{4}, 50)
-	if err != nil || len(entries) != 2 || entries[0].PartID == 0 || entries[0].CategoryID != 4 || entries[0].Artist != "S01E01 Pilot" || entries[0].PrimaryType != "Episode" {
+	if err != nil || len(entries) != 2 || entries[0].PartID == 0 || entries[0].CategoryID != 4 || entries[0].Artist != "S01E01 Pilot" || entries[0].Subtype != "Episode" {
 		t.Fatalf("entries = %+v, %v", entries, err)
 	}
 	if other, _ := calendar.Entries(t.Context(), "2020-01-01", "2020-01-31", []int64{9}, 50); len(other) != 0 {

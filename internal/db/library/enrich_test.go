@@ -140,7 +140,7 @@ func TestRefineEdition_WorkYearIsSetOnlyWhenStillNull(t *testing.T) {
 	}
 }
 
-// Mirrors TestRefineEdition_WorkYearIsSetOnlyWhenStillNull: primary_type
+// Mirrors TestRefineEdition_WorkYearIsSetOnlyWhenStillNull: subtype
 // follows the exact same "enrichment fills a gap, never overwrites" rule.
 func TestRefineEdition_WorkPrimaryTypeIsSetOnlyWhenStillNull(t *testing.T) {
 	opened, queries := newLibrary(t)
@@ -155,8 +155,8 @@ func TestRefineEdition_WorkPrimaryTypeIsSetOnlyWhenStillNull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWork: %v", err)
 	}
-	if !work.PrimaryType.Valid || work.PrimaryType.String != "Album" {
-		t.Fatalf("PrimaryType after first refine = %+v, want Album", work.PrimaryType)
+	if !work.Subtype.Valid || work.Subtype.String != "Album" {
+		t.Fatalf("Subtype after first refine = %+v, want Album", work.Subtype)
 	}
 
 	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), editionID, workID, nil, "", "EP",
@@ -167,8 +167,8 @@ func TestRefineEdition_WorkPrimaryTypeIsSetOnlyWhenStillNull(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetWork: %v", err)
 	}
-	if work.PrimaryType.String != "Album" {
-		t.Errorf("PrimaryType after second refine = %q, want the original Album kept", work.PrimaryType.String)
+	if work.Subtype.String != "Album" {
+		t.Errorf("Subtype after second refine = %q, want the original Album kept", work.Subtype.String)
 	}
 }
 

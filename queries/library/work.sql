@@ -2,40 +2,40 @@
 
 -- name: CreateWork :one
 INSERT INTO work (media_type, canonical_title, sort_title, original_language,
-                  year, runtime_ms, added_at, updated_at, added_by, primary_type)
+                  year, runtime_ms, added_at, updated_at, added_by, subtype)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, media_type, canonical_title, sort_title, original_language,
           year, runtime_ms, added_at, updated_at, added_by, description,
-          primary_artist_id, primary_artist_sort_name, primary_type;
+          lead_person_id, lead_person_sort_name, subtype;
 
 -- name: GetWork :one
 SELECT id, media_type, canonical_title, sort_title, original_language,
        year, runtime_ms, added_at, updated_at, added_by, description,
-       primary_artist_id, primary_artist_sort_name, primary_type
+       lead_person_id, lead_person_sort_name, subtype
 FROM work WHERE id = ?;
 
 -- Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 -- name: GetWorkByExternalID :one
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?;
 
 -- An import names an album it already knows by the canonical title and artist, never the tags.
 -- name: GetWorkNamingByExternalID :one
-SELECT w.canonical_title, w.year, p.name AS primary_artist_name
+SELECT w.canonical_title, w.year, p.name AS lead_person_name
 FROM work w
 JOIN work_external_id e ON e.work_id = w.id
-LEFT JOIN person p ON p.id = w.primary_artist_id
+LEFT JOIN person p ON p.id = w.lead_person_id
 WHERE e.provider = ? AND e.external_id = ?;
 
--- name: SetWorkPrimaryArtist :exec
--- The Tracks navigation level's own denormalized sort key (0021_work_primary_artist.sql's
+-- name: SetWorkLeadPerson :exec
+-- The Tracks navigation level's own denormalized sort key (0021's
 -- doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 -- role='artist' ord=0 credit is ever recorded.
-UPDATE work SET primary_artist_id = ?, primary_artist_sort_name = ? WHERE id = ?;
+UPDATE work SET lead_person_id = ?, lead_person_sort_name = ? WHERE id = ?;
 
 -- The list surface composes its own WHERE in internal/db/library/works.go: a filter
 -- written here as an is-it-empty test is not sargable, so SQLite uses no index for that
@@ -69,9 +69,9 @@ UPDATE work SET year = ?, updated_at = ? WHERE id = ? AND year IS NULL;
 
 -- Same "enrichment fills a gap, never overwrites" rule as year: a work
 -- created before this column existed, or from a source with no MusicBrainz
--- answer, only gets its primary_type backfilled here.
--- name: UpdateWorkPrimaryTypeIfNull :exec
-UPDATE work SET primary_type = ?, updated_at = ? WHERE id = ? AND primary_type IS NULL;
+-- answer, only gets its subtype backfilled here.
+-- name: UpdateWorkSubtypeIfNull :exec
+UPDATE work SET subtype = ?, updated_at = ? WHERE id = ? AND subtype IS NULL;
 
 -- Unlike year, unconditional: nothing else writes a work's description yet,
 -- so there is no earlier value worth protecting.
@@ -95,7 +95,7 @@ FROM work_title WHERE work_id = ? ORDER BY kind, title;
 -- name: FindWorksByNormalizedTitle :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
 FROM work w
 JOIN work_title t ON t.work_id = w.id
 WHERE t.normalized = sqlc.arg(normalized)
@@ -218,7 +218,7 @@ FROM work_classification WHERE work_id = ? ORDER BY kind, value;
 -- name: FindWorksByClassification :many
 SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
        w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
-       w.primary_artist_id, w.primary_artist_sort_name, w.primary_type
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
 FROM work w
 JOIN work_classification c ON c.work_id = w.id
 WHERE c.kind = sqlc.arg(kind) AND c.value = sqlc.arg(value)
@@ -344,13 +344,13 @@ SELECT media_object_id FROM work_file WHERE work_id = ? ORDER BY media_object_id
 -- Only libraries the caller can see: a wanted work through its desired_item, a followed artist's
 -- release through the subscription that follows them.
 -- name: ListCalendarEntries :many
-SELECT w.id, w.canonical_title, w.sort_title, w.primary_type,
+SELECT w.id, w.canonical_title, w.sort_title, w.subtype,
        COALESCE(pa.name, '') AS artist_name,
        MIN(wd.date) AS release_date,
        EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
-LEFT JOIN person pa ON pa.id = w.primary_artist_id
+LEFT JOIN person pa ON pa.id = w.lead_person_id
 WHERE wd.kind = sqlc.arg(kind)
   AND wd.date >= sqlc.arg(from_date) AND wd.date <= sqlc.arg(to_date)
   AND (

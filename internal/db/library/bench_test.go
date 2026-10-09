@@ -482,10 +482,10 @@ var planCases = []struct {
 	// sort index the way an IN-based filter does (notes.md).
 	{"fresh", library.WorkFilter{FreshSince: "2026-01-01"}, library.WorkCursor{}, "work_sort"},
 	// The Albums view's grouped order: migration 0022's expression index.
-	{"artist", library.WorkFilter{Sort: library.WorkSortArtist}, library.WorkCursor{}, "work_primary_artist_sort"},
+	{"artist", library.WorkFilter{Sort: library.WorkSortArtist}, library.WorkCursor{}, "work_lead_person_sort"},
 	{"artist, category visibility and cursor",
 		library.WorkFilter{Sort: library.WorkSortArtist, CategoryIDs: []int64{1}},
-		library.WorkCursor{SortArtist: "artist 50", SortTitle: "silver signals 50", ID: 100}, "work_primary_artist_sort"},
+		library.WorkCursor{SortArtist: "artist 50", SortTitle: "silver signals 50", ID: 100}, "work_lead_person_sort"},
 }
 
 // sortsOuterResult reports a temp b-tree at the plan's top level; a correlated subquery's own,
@@ -548,7 +548,7 @@ func TestADR28_VisibilityByDesiredItemSeeksByWork(t *testing.T) {
 }
 
 // The Tracks level's own acceptance case (ADR-54): reaches
-// work_primary_artist_sort and takes its ordering from the index.
+// work_lead_person_sort and takes its ordering from the index.
 func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	timed(t)
 
@@ -558,8 +558,8 @@ func TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ExplainAlbumPage: %v", err)
 	}
-	if !strings.Contains(plan, "work_primary_artist_sort") {
-		t.Errorf("plan does not reach work_primary_artist_sort:\n%s", plan)
+	if !strings.Contains(plan, "work_lead_person_sort") {
+		t.Errorf("plan does not reach work_lead_person_sort:\n%s", plan)
 	}
 	if sortsOuterResult(plan) {
 		t.Errorf("plan uses a temp b-tree for ORDER BY rather than an index:\n%s", plan)

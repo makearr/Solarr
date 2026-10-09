@@ -144,7 +144,7 @@ func TestTrackParts_PaginatesAtTheAlbumBoundaryNeverSplittingOneAlbum(t *testing
 	}
 }
 
-// The plan assertion (reaches work_primary_artist_sort, never sorts) lives in
+// The plan assertion (reaches work_lead_person_sort, never sorts) lives in
 // bench_test.go's TestADR28_TrackAlbumPagePlanReachesTheIndexAndNeverSorts,
 // at corpus scale -- a small table lets SQLite get away with a plan that says
 // nothing about 500k rows (bench_test.go's own planCases doc comment).

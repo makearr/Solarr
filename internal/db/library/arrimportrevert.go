@@ -36,7 +36,7 @@ type ArrImportRevertResult struct {
 // Deletion order matters: every work this run created is deleted first (so
 // any primary-artist credit it set on a person about to be deleted no
 // longer references that person, clearing the one foreign key --
-// work.primary_artist_id -- that would otherwise block it), then each
+// work.lead_person_id -- that would otherwise block it), then each
 // person's own subscription (subscription.subject_id carries no FK of its
 // own to clean up after), then the person itself. A person still credited
 // or still primary-artist on a work this run did not create (a rare mixed

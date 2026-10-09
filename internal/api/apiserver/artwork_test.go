@@ -148,7 +148,7 @@ func TestGetWorkArtwork_FallsBackToThePrimaryArtistsImage(t *testing.T) {
 
 	artistID := int64(42)
 	fixture.artwork.row = apiserver.WorkArtworkRow{
-		Found: false, RootFolderIDs: []int64{root.ID}, PrimaryArtistID: &artistID,
+		Found: false, RootFolderIDs: []int64{root.ID}, LeadPersonID: &artistID,
 	}
 	fixture.artwork.personRow = apiserver.PersonArtworkRow{CacheKey: "person-42-cover", Found: true}
 	fixture.writeFixtureImage(t, "person-42-cover", "small", []byte("the artist's own photo"))
@@ -175,7 +175,7 @@ func TestGetWorkArtwork_PrimaryArtistWithNoImageStillAnswers404(t *testing.T) {
 
 	artistID := int64(42)
 	fixture.artwork.row = apiserver.WorkArtworkRow{
-		Found: false, RootFolderIDs: []int64{root.ID}, PrimaryArtistID: &artistID,
+		Found: false, RootFolderIDs: []int64{root.ID}, LeadPersonID: &artistID,
 	}
 	fixture.artwork.personRow = apiserver.PersonArtworkRow{Found: false}
 

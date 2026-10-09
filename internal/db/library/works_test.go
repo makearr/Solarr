@@ -308,12 +308,12 @@ func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) 
 	setArtist := func(workID int64, sortName string) {
 		t.Helper()
 		personID := resolvePersonNamed(t, people, "artist-"+sortName, sortName)
-		if err := queries.SetWorkPrimaryArtist(t.Context(), librarydb.SetWorkPrimaryArtistParams{
-			PrimaryArtistID:       sql.NullInt64{Int64: personID, Valid: true},
-			PrimaryArtistSortName: sql.NullString{String: sortName, Valid: true},
-			ID:                    workID,
+		if err := queries.SetWorkLeadPerson(t.Context(), librarydb.SetWorkLeadPersonParams{
+			LeadPersonID:       sql.NullInt64{Int64: personID, Valid: true},
+			LeadPersonSortName: sql.NullString{String: sortName, Valid: true},
+			ID:                 workID,
 		}); err != nil {
-			t.Fatalf("SetWorkPrimaryArtist: %v", err)
+			t.Fatalf("SetWorkLeadPerson: %v", err)
 		}
 	}
 	pipoB := createWork(t, opened, "music", "Kebilegev Bibihi")
@@ -756,11 +756,11 @@ func TestListWorks_ArtistCoverMarksAnAlbumWithoutItsOwnCover(t *testing.T) {
 	personID := resolvePersonNamed(t, library.NewPeople(opened), "artist-1", "Katupoken")
 	credited := func(title string) librarydb.Work {
 		work := createWork(t, opened, "music", title)
-		if err := queries.SetWorkPrimaryArtist(t.Context(), librarydb.SetWorkPrimaryArtistParams{
-			PrimaryArtistID: sql.NullInt64{Int64: personID, Valid: true}, PrimaryArtistSortName: sql.NullString{String: "Katupoken", Valid: true},
+		if err := queries.SetWorkLeadPerson(t.Context(), librarydb.SetWorkLeadPersonParams{
+			LeadPersonID: sql.NullInt64{Int64: personID, Valid: true}, LeadPersonSortName: sql.NullString{String: "Katupoken", Valid: true},
 			ID: work.ID,
 		}); err != nil {
-			t.Fatalf("SetWorkPrimaryArtist: %v", err)
+			t.Fatalf("SetWorkLeadPerson: %v", err)
 		}
 		return work
 	}

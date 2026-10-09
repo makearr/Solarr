@@ -13,7 +13,7 @@ var facets = []media.Facet{
 	},
 	{
 		Key: "primary_type", Label: "Type", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
-		Source:  media.FacetSource{Kind: media.SourceColumn, Name: "primary_type"},
+		Source:  media.FacetSource{Kind: media.SourceColumn, Name: "subtype"},
 		Choices: []media.Choice{{Key: "Album", Label: "Album"}, {Key: "EP", Label: "EP"}, {Key: "Single", Label: "Single"}, {Key: "Broadcast", Label: "Broadcast"}, {Key: "Other", Label: "Other"}},
 		Column:  true, Sortable: true, Filterable: true,
 	},

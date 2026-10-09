@@ -199,8 +199,8 @@ func TestArrImportRevert_NeverDeletesWhatTheRunOnlyMatched(t *testing.T) {
 }
 
 // A person this run created and set as a work it also created's primary
-// artist (AddCredit's own role="artist" ord=0 case, work.primary_artist_id)
-// must still delete cleanly: work.primary_artist_id carries no ON DELETE
+// artist (AddCredit's own role="artist" ord=0 case, work.lead_person_id)
+// must still delete cleanly: work.lead_person_id carries no ON DELETE
 // clause of its own, so deleting the person while that reference still
 // stands would foreign-key-violate. Revert must delete the work -- clearing
 // the reference -- before the person, not the other way round.
@@ -216,8 +216,8 @@ func TestArrImportRevert_DeletesTheWorkBeforeItsOwnPrimaryArtist(t *testing.T) {
 	if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
-	if row, err := queries.GetWork(t.Context(), work.ID); err != nil || !row.PrimaryArtistID.Valid {
-		t.Fatalf("work.primary_artist_id after AddCredit = %+v, err=%v, want it set (test setup)", row, err)
+	if row, err := queries.GetWork(t.Context(), work.ID); err != nil || !row.LeadPersonID.Valid {
+		t.Fatalf("work.lead_person_id after AddCredit = %+v, err=%v, want it set (test setup)", row, err)
 	}
 
 	importID, err := imports.Start(t.Context(), 1, "lidarr", firstSeen.Unix())

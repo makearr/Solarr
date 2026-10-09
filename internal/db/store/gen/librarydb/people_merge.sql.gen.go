@@ -191,6 +191,22 @@ func (q *Queries) MergeExternalIDsInto(ctx context.Context, arg MergeExternalIDs
 	return err
 }
 
+const mergeLeadPersonInto = `-- name: MergeLeadPersonInto :exec
+UPDATE work SET lead_person_id = ?1,
+  lead_person_sort_name = (SELECT sort_name FROM person WHERE id = ?1)
+WHERE lead_person_id = ?2
+`
+
+type MergeLeadPersonIntoParams struct {
+	WinnerID sql.NullInt64
+	LoserID  sql.NullInt64
+}
+
+func (q *Queries) MergeLeadPersonInto(ctx context.Context, arg MergeLeadPersonIntoParams) error {
+	_, err := q.db.ExecContext(ctx, mergeLeadPersonInto, arg.WinnerID, arg.LoserID)
+	return err
+}
+
 const mergeMonitoredInto = `-- name: MergeMonitoredInto :exec
 UPDATE person SET monitored = MAX(monitored, (SELECT l.monitored FROM person l WHERE l.id = ?1))
 WHERE person.id = ?2
@@ -203,22 +219,6 @@ type MergeMonitoredIntoParams struct {
 
 func (q *Queries) MergeMonitoredInto(ctx context.Context, arg MergeMonitoredIntoParams) error {
 	_, err := q.db.ExecContext(ctx, mergeMonitoredInto, arg.LoserID, arg.WinnerID)
-	return err
-}
-
-const mergePrimaryArtistInto = `-- name: MergePrimaryArtistInto :exec
-UPDATE work SET primary_artist_id = ?1,
-  primary_artist_sort_name = (SELECT sort_name FROM person WHERE id = ?1)
-WHERE primary_artist_id = ?2
-`
-
-type MergePrimaryArtistIntoParams struct {
-	WinnerID sql.NullInt64
-	LoserID  sql.NullInt64
-}
-
-func (q *Queries) MergePrimaryArtistInto(ctx context.Context, arg MergePrimaryArtistIntoParams) error {
-	_, err := q.db.ExecContext(ctx, mergePrimaryArtistInto, arg.WinnerID, arg.LoserID)
 	return err
 }
 

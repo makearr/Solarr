@@ -263,8 +263,8 @@ func insertWorkDetail(ctx context.Context, opened *store.Store, plans []*workPla
 
 		// Bounded sort-name modulus, no real person row needed (ADR-28 plan
 		// benchmark only orders by this column, migration 0021).
-		return queries.SetWorkPrimaryArtist(ctx, librarydb.SetWorkPrimaryArtistParams{
-			ID: plan.id, PrimaryArtistSortName: text(fmt.Sprintf("Artist %04d", plan.id%500)),
+		return queries.SetWorkLeadPerson(ctx, librarydb.SetWorkLeadPersonParams{
+			ID: plan.id, LeadPersonSortName: text(fmt.Sprintf("Artist %04d", plan.id%500)),
 		})
 	})
 	if err != nil {

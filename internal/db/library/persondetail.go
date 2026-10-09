@@ -113,7 +113,7 @@ func (p People) Get(ctx context.Context, id int64, visible []int64) (PersonProfi
 func (p People) Credits(ctx context.Context, id int64, visible []int64) ([]PersonCredit, error) {
 	scope := inScope("d.category_id", visible)
 	query := `SELECT DISTINCT d.category_id, c.role, c.character, COALESCE(pt.media_ref, ''), COALESCE(pt.sort_key, ''),
-       ` + workColumns + `, work.primary_type,
+       ` + workColumns + `, work.subtype,
        ` + workStateColumn + `,
        CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
        ` + discographyStatusColumns + `,
@@ -136,7 +136,7 @@ ORDER BY d.category_id, c.role, work.year, work.sort_title, work.id, c.character
 		row := &credit.DiscographyRow
 		if err := rows.Scan(&credit.CategoryID, &credit.Role, &credit.Character, &part, &sortKey,
 			&row.ID, &row.MediaType, &row.CanonicalTitle, &row.SortTitle, &row.OriginalLanguage, &row.Year, &row.RuntimeMs,
-			&row.AddedAt, &row.UpdatedAt, &row.AddedBy, &row.PrimaryType, &row.WantedState, &row.OnDiskCount,
+			&row.AddedAt, &row.UpdatedAt, &row.AddedBy, &row.Subtype, &row.WantedState, &row.OnDiskCount,
 			&row.PresentCount, &row.RequiredCount, &row.AvailableFrom, &row.Downloading, &row.Unverified); err != nil {
 			return nil, fmt.Errorf("library: scan person %d credit: %w", id, err)
 		}

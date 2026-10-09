@@ -26,11 +26,11 @@ type ArtworkReader interface {
 // folders to run the ADR-27 visibility check against, and its primary
 // artist -- the album-falls-back-to-artist-image chain (2026-09-11).
 type WorkArtworkRow struct {
-	CacheKey        string
-	Found           bool
-	RootFolderIDs   []int64
-	CategoryIDs     []int64
-	PrimaryArtistID *int64
+	CacheKey      string
+	Found         bool
+	RootFolderIDs []int64
+	CategoryIDs   []int64
+	LeadPersonID  *int64
 }
 
 // PersonArtworkRow is what ArtworkReader answers for a person: the cache key
@@ -121,11 +121,11 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 
 	cacheKey := row.CacheKey
 	if !row.Found {
-		if row.PrimaryArtistID == nil {
+		if row.LeadPersonID == nil {
 			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no cover art for this work")
 			return
 		}
-		person, err := s.artwork.GetPersonArtwork(r.Context(), *row.PrimaryArtistID)
+		person, err := s.artwork.GetPersonArtwork(r.Context(), *row.LeadPersonID)
 		if err != nil {
 			writeError(w, s.logger, err)
 			return

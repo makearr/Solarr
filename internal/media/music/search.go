@@ -475,7 +475,7 @@ func primaryArtistName(detail library.WorkDetail) string {
 			return credit.PersonName
 		}
 	}
-	return detail.Work.PrimaryArtistSortName.String
+	return detail.Work.LeadPersonSortName.String
 }
 
 // buildSearchTiers is section 10.2's own progressive widening, scoped to

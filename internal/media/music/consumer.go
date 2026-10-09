@@ -1209,7 +1209,7 @@ func matchedWorkIdentity(observed scan.Observed, group musicbrainz.ReleaseGroup)
 	if group.Title != "" {
 		identity.CanonicalTitle, identity.SortTitle = group.Title, SortTitle(group.Title)
 	}
-	identity.PrimaryType = group.PrimaryType
+	identity.Subtype = group.PrimaryType
 	return identity
 }
 

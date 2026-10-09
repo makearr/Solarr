@@ -140,7 +140,7 @@ func (i Identity) KnownWork(ctx context.Context, provider, externalID string) (K
 	if err != nil {
 		return KnownWorkNaming{}, false, fmt.Errorf("library: known work: %w", err)
 	}
-	known := KnownWorkNaming{Title: row.CanonicalTitle, ArtistName: row.PrimaryArtistName.String}
+	known := KnownWorkNaming{Title: row.CanonicalTitle, ArtistName: row.LeadPersonName.String}
 	if row.Year.Valid {
 		known.Year = &row.Year.Int64
 	}
@@ -247,8 +247,8 @@ func refineWork(
 		}
 	}
 	if workPrimaryType != "" {
-		if err := queries.UpdateWorkPrimaryTypeIfNull(ctx, librarydb.UpdateWorkPrimaryTypeIfNullParams{
-			ID: workID, PrimaryType: nullString(workPrimaryType), UpdatedAt: at,
+		if err := queries.UpdateWorkSubtypeIfNull(ctx, librarydb.UpdateWorkSubtypeIfNullParams{
+			ID: workID, Subtype: nullString(workPrimaryType), UpdatedAt: at,
 		}); err != nil {
 			return fmt.Errorf("update work primary type: %w", err)
 		}
