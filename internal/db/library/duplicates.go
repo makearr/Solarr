@@ -48,9 +48,10 @@ type DuplicateGroup struct {
 // durationToleranceMs is how far apart two lengths may be for one recording: encoders and trimmed silence move it.
 const durationToleranceMs = 3000
 
-// Groups answers the tracks held more than once in one library, those with the most bytes in their extra copies
-// first. Only files the probe has measured a length for can be told apart, so only they are compared.
-func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs []int64, limit int) ([]DuplicateGroup, error) {
+// Groups answers the parts held more than once in one library, those with the most bytes in their extra copies first.
+// byName matches one recording under any work by its artist, title and length (music); otherwise copies are matched by
+// the part record they cover, never by a name. Only files the probe has measured a length for are compared.
+func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs []int64, limit int, byName bool) ([]DuplicateGroup, error) {
 	inRoots := make(map[int64]bool, len(rootFolderIDs))
 	for _, id := range rootFolderIDs {
 		inRoots[id] = true
@@ -71,8 +72,7 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 			continue
 		}
 		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle)}
-		if row.MediaType != "music" {
-			// Another episode is never a duplicate: video is told apart by the record it covers, never by a name.
+		if !byName {
 			k = key{partID: row.PartID}
 		} else if k.title == "" {
 			continue

@@ -5,6 +5,9 @@ import { useState } from "react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { type Vocabulary, vocabularyOf } from "@/lib/i18n";
+import { useLibrary } from "@/lib/useLibrary";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { formatBytes } from "./Queue";
 
@@ -107,9 +110,9 @@ function linkable(copy: Copy, keep: Copy): boolean {
   return copy.paths.every((path) => kept.has(extensionOf(path)));
 }
 
-/** One track held more than once: pick the copy to keep (the library's choice is ticked first), say what becomes of each
+/** One part held more than once: pick the copy to keep (the library's choice is ticked first), say what becomes of each
  *  other copy, and confirm. Nothing is removed without the dialog. */
-function GroupCard({ group, categoryId, onDone }: { group: Group; categoryId: number; onDone: () => void }) {
+function GroupCard({ group, categoryId, words, onDone }: { group: Group; categoryId: number; words: Vocabulary; onDone: () => void }) {
   const initialKeep = Math.max(0, group.copies.findIndex((copy) => copy.keep));
   const [keepIndex, setKeepIndex] = useState(initialKeep);
   const [actions, setActions] = useState<Record<number, Action>>({});
@@ -210,7 +213,7 @@ function GroupCard({ group, categoryId, onDone }: { group: Group; categoryId: nu
                 <li key={copy.media_object_id} className="flex flex-col">
                   <span className={actionFor(copy) === "recycle" ? "font-medium text-warn" : "font-medium"}>
                     {actionFor(copy) === "recycle"
-                      ? "Moved to the recycle bin (restorable for 7 days). The album it is on will miss this track."
+                      ? `Moved to the recycle bin (restorable for 7 days). The ${words.work} it is on will miss this ${words.part}.`
                       : "Every path becomes a link to the kept file; the old file waits in the recycle bin for 7 days."}
                   </span>
                   <span className="break-all font-mono text-ink-muted">{copy.paths.join("\n")}</span>
@@ -242,10 +245,13 @@ function GroupCard({ group, categoryId, onDone }: { group: Group; categoryId: nu
   );
 }
 
-/** Tracks this library holds more than once, found by artist, title and length and not by their bytes: a flac and a
- *  96 kbit mp3 of one song are one track twice. Choose the copy to keep and what becomes of the others. */
+/** Parts this library holds more than once, not found by their bytes: for music by artist, title and length, so a flac
+ *  and a 96 kbit mp3 of one song are one track twice; otherwise two files on one part. Choose the copy to keep. */
 export function Duplicates() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  const library = useLibrary(categoryId);
+  const info = useMediaTypes().find((type) => type.key === library?.media_type);
+  const words = vocabularyOf(info);
   const queryClient = useQueryClient();
   const report = useQuery({
     queryKey: ["duplicates", categoryId],
@@ -262,20 +268,22 @@ export function Duplicates() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Duplicates</h1>
         <p className="text-sm text-ink-muted">
-          The same recording stored more than once: the same artist and title, lengths within a few seconds, in any format and
-          on any album. The library suggests the copy closer to its target quality; you decide. Giving a copy up either links its
-          file to the kept one (so the other album keeps its track) or moves it to the recycle bin. Files the probe has not
+          {info?.duplicates_by_name
+            ? `The same recording stored more than once: the same artist and title, lengths within a few seconds, in any format and on any ${words.work}.`
+            : `Two files on one ${words.part}.`}{" "}
+          The library suggests the copy closer to its target quality; you decide. Giving a copy up either links its file to the
+          kept one (so the other {words.work} keeps its {words.part}) or moves it to the recycle bin. Files the probe has not
           measured yet are not compared.
         </p>
       </header>
       {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
       {report.error !== null && !report.isLoading && <p className="text-sm text-danger">The report could not be made.</p>}
-      {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate tracks found.</p>}
+      {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}
       {data && data.groups.length > 0 && (
         <>
           <p className="text-sm">
-            {data.groups.length} {data.groups.length === 1 ? "track" : "tracks"} held more than once; dropping the extra copies
+            {data.groups.length} {data.groups.length === 1 ? words.part : words.parts} held more than once; dropping the extra copies
             would free <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
           </p>
           <ul className="flex flex-col gap-2">
@@ -284,6 +292,7 @@ export function Duplicates() {
                 key={group.copies.map((copy) => copy.media_object_id).join("-")}
                 group={group}
                 categoryId={Number(categoryId)}
+                words={words}
                 onDone={() => void queryClient.invalidateQueries({ queryKey: ["links", Number(categoryId)] })}
               />
             ))}

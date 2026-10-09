@@ -3,7 +3,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { vocabularyOf } from "@/lib/i18n";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { formatBytes } from "./Queue";
 
@@ -60,10 +62,10 @@ function Breakdown({ title, note, rows }: { title: string; note: string; rows: F
   );
 }
 
-type SeriesFigures = components["schemas"]["StatisticsSeries"][];
+type WorkFigures = components["schemas"]["StatisticsSeries"][];
 
-/** The series that take most space, or have most episodes missing, each a link to its page. */
-function SeriesList({ title, note, rows, categoryId, gaps }: { title: string; note: string; rows: SeriesFigures | undefined; categoryId: string; gaps?: boolean }) {
+/** The works that take most space, or have most parts missing, each a link to its page. */
+function WorkList({ title, note, rows, categoryId, gaps }: { title: string; note: string; rows: WorkFigures | undefined; categoryId: string; gaps?: boolean }) {
   if (!rows || rows.length === 0) return null;
   const largest = Math.max(1, ...rows.map((row) => (gaps ? (row.missing ?? 0) : (row.bytes ?? 0))));
   return (
@@ -83,7 +85,7 @@ function SeriesList({ title, note, rows, categoryId, gaps }: { title: string; no
               </span>
               <span className="w-52 shrink-0 text-right text-xs tabular-nums text-ink-muted">
                 {gaps
-                  ? `${row.missing ?? 0} missing${(row.unaired ?? 0) > 0 ? ` · ${row.unaired} to air` : ""}`
+                  ? `${row.missing ?? 0} missing${(row.unaired ?? 0) > 0 ? ` · ${row.unaired} to come` : ""}`
                   : `${row.files ?? 0} files · ${formatBytes(row.bytes ?? 0)}`}
               </span>
             </li>
@@ -95,14 +97,14 @@ function SeriesList({ title, note, rows, categoryId, gaps }: { title: string; no
 }
 
 /** Where a figure leads: the filtered view that shows exactly those items. */
-function stateLink(categoryId: string, state: string): { to: string; search?: Record<string, string> } {
-  if (state === "COMPLETE") return { to: `/library/${categoryId}/albums` };
+function stateLink(categoryId: string, worksLevel: string, state: string): { to: string; search?: Record<string, string> } {
+  if (state === "COMPLETE") return { to: `/library/${categoryId}/${worksLevel}` };
   if (state === "UPGRADABLE") return { to: `/library/${categoryId}/wanted`, search: { view: "cutoff" } };
   return { to: `/library/${categoryId}/wanted` };
 }
 
 /** One library's statistics (section 21.12), read from the rollup the background job computed: composition,
- *  completeness and the last month's downloads. Each completeness figure opens exactly those albums. */
+ *  completeness and the last month's downloads, in the words of the library's type. */
 export function Statistics() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const stats = useQuery({
@@ -115,7 +117,14 @@ export function Statistics() {
     },
   });
   const data = stats.data;
-  const video = useLibrary(categoryId ?? "")?.media_type === "tv";
+  const library = useLibrary(categoryId ?? "");
+  const info = useMediaTypes().find((type) => type.key === library?.media_type);
+  const words = vocabularyOf(info);
+  const worksLevel = library?.levels.find((level) => level.entity === "work")?.key ?? "works";
+  // A type wanted part by part keeps one wanted item per group (Sonarr's seasons); others one per work.
+  const items = info?.wanted_grain === "part" ? words.groups : words.works;
+  // The picture figures are measured only for video, so their presence says the library holds some.
+  const video = (data?.files_by_video_codec ?? []).length > 0;
   const totalFiles = (data?.files_by_codec ?? []).reduce((sum, row) => sum + row.files, 0);
   const totalBytes = (data?.files_by_codec ?? []).reduce((sum, row) => sum + row.bytes, 0);
   const growth = data?.growth_by_month ?? [];
@@ -141,11 +150,11 @@ export function Statistics() {
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">Completeness</h2>
             <p className="text-xs text-ink-muted">
-              {albums} monitored {video ? "seasons" : "albums"}. {video ? "" : "Each figure opens those albums."}
+              {albums} monitored {items}. Each figure opens those {items}.
             </p>
             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {data.albums_by_state.map((row) => {
-                const target = stateLink(categoryId ?? "", row.key);
+                const target = stateLink(categoryId ?? "", worksLevel, row.key);
                 return (
                   <li key={row.key}>
                     <Link
@@ -159,7 +168,7 @@ export function Statistics() {
                   </li>
                 );
               })}
-              {data.albums_by_state.length === 0 && <li className="text-sm text-ink-muted">No monitored albums.</li>}
+              {data.albums_by_state.length === 0 && <li className="text-sm text-ink-muted">No monitored {items}.</li>}
             </ul>
           </section>
 
@@ -188,10 +197,16 @@ export function Statistics() {
                   </>
                 )}
               </section>
-              <SeriesList title="Biggest series" note="The 20 series taking most space, each file counted once." rows={data.series_by_size} categoryId={categoryId ?? ""} />
-              <SeriesList title="Gaps" note="Monitored episodes without a file: the aired ones are missing, the others are still to air." rows={data.series_gaps} categoryId={categoryId ?? ""} gaps />
             </>
           )}
+          <WorkList title={`Biggest ${words.works}`} note={`The 20 ${words.works} taking most space, each file counted once.`} rows={data.series_by_size} categoryId={categoryId ?? ""} />
+          <WorkList
+            title="Gaps"
+            note={`Monitored ${words.parts} without a file: the ones already out are missing, the others are still to come.`}
+            rows={data.series_gaps}
+            categoryId={categoryId ?? ""}
+            gaps
+          />
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">{video ? "Audio codecs (by file)" : "Composition"}</h2>
             <p className="text-xs text-ink-muted">

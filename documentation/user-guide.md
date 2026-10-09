@@ -130,7 +130,8 @@ choice or a quality profile to every ticked series, or deletes them, after a con
 **Wanted → Cutoff unmet** (TV) lists the episodes on disk whose measured file is below the library's target or cutoff, each with an
 interactive search for that one episode; it needs a target or cutoff on the Quality page.
 The TV **Statistics** page breaks the library down by resolution, codec, HDR and audio, shows size and bitrate per hour of picture,
-the 20 biggest series and the 20 with most episodes missing. The probe reads video files in the background (a first pass over a large
+the 20 biggest series and the 20 with most episodes missing (a music library's Statistics also lists its 20 biggest
+albums). The probe reads video files in the background (a first pass over a large
 library takes hours); the figures fill in as it goes.
 
 **Follow** (on a person's or a network's page) adds their new works to a library for you, one follow per library: an

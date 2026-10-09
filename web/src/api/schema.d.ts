@@ -4406,6 +4406,8 @@ export interface components {
             wanted_grain: "work" | "part";
             /** @description A held import unit is committed by hand, anyway or as a work named (Identify as). */
             commits_held_imports: boolean;
+            /** @description A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part. */
+            duplicates_by_name: boolean;
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.

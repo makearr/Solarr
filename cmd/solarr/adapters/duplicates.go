@@ -14,10 +14,13 @@ import (
 type Duplicates struct {
 	Store    library.Duplicates
 	Settings *settings.Cache
+	// ByName says whether a media type matches duplicates by name.
+	ByName func(mediaType string) bool
 }
 
 func (d Duplicates) Duplicates(ctx context.Context, categoryID int64, rootFolderIDs []int64, limit int) ([]apiserver.DuplicateGroupRow, error) {
-	groups, err := d.Store.Groups(ctx, categoryID, rootFolderIDs, limit)
+	category, _ := d.Settings.Snapshot().Category(categoryID)
+	groups, err := d.Store.Groups(ctx, categoryID, rootFolderIDs, limit, d.ByName(category.MediaType))
 	if err != nil {
 		return nil, err
 	}

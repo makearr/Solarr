@@ -166,3 +166,35 @@ func TestStatistics_GrowthByMonthAndDecisionsByOutcome(t *testing.T) {
 		t.Errorf("decisions = %v, want %v (the old DEFER is outside the window)", counts, want)
 	}
 }
+
+// Each library keeps its own 20 biggest works, whatever the works of another library weigh.
+func TestStatistics_BiggestWorksAreTwentyPerLibrary(t *testing.T) {
+	opened, _ := newLibrary(t)
+	statistics := library.NewStatistics(opened)
+	for index := range 22 {
+		work := createWork(t, opened, "music", fmt.Sprintf("Album %02d", index))
+		item := createDesiredInCategory(t, opened, work.ID, 1)
+		attach(t, opened, item.ID, createObject(t, opened, fmt.Sprintf("a%d", index), int64(100+index)).ID, "primary", "")
+	}
+	for index := range 25 {
+		work := createWork(t, opened, "tv", fmt.Sprintf("Series %02d", index))
+		item := createDesiredInCategory(t, opened, work.ID, 2)
+		attach(t, opened, item.ID, createObject(t, opened, fmt.Sprintf("s%d", index), int64(1_000_000+index)).ID, "primary", "")
+	}
+	if err := statistics.Compute(t.Context(), map[int64]int64{}, 5_000); err != nil {
+		t.Fatal(err)
+	}
+	for category, biggest := range map[int64]int64{1: 121, 2: 1_000_024} {
+		got, err := statistics.ForCategory(t.Context(), library.StatSeriesSize, category)
+		if err != nil {
+			t.Fatal(err)
+		}
+		largest := int64(0)
+		for _, figure := range got {
+			largest = max(largest, int64(figure.Value))
+		}
+		if len(got) != 20 || largest != biggest {
+			t.Errorf("library %d: %d works, the largest %d; want 20 with %d", category, len(got), largest, biggest)
+		}
+	}
+}

@@ -130,6 +130,12 @@ func (m MediaTypes) CommitsHeldImports(mediaType string) bool {
 	return ok && module.Descriptor().CommitsHeldImports
 }
 
+// DuplicatesByName says whether a library's type matches duplicates by name.
+func (m MediaTypes) DuplicatesByName(mediaType string) bool {
+	module, ok := m.Registry.Module(media.Key(mediaType))
+	return ok && module.Descriptor().DuplicatesByName
+}
+
 // PlacingFilesOf answers a media type's placing of a file nothing identified.
 func (m MediaTypes) PlacingFilesOf(mediaType string) (media.PlacingFiles, bool) {
 	return media.Capability[media.PlacingFiles](m.Registry, media.Key(mediaType))
@@ -196,6 +202,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 			info.AddKinds = append(info.AddKinds, apiserver.MediaChoice{Key: kind.Key, Label: kind.Label})
 		}
 		info.CommitsHeldImports = descriptor.CommitsHeldImports
+		info.DuplicatesByName = descriptor.DuplicatesByName
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {
 			info.WantedGrain = "part"

@@ -134,7 +134,7 @@ export function IdentifyAs({
         <div className="flex flex-wrap items-end gap-3 text-xs text-ink-muted">
           <label className="flex flex-col gap-1">
             {words.Group}
-            <input value={group} onChange={(event) => setGroup(event.target.value.replace(/\D/g, ""))} placeholder="from the name" className={`${input} w-24`} />
+            <input value={group} onChange={(event) => setGroup(event.target.value.replace(/\D/g, ""))} placeholder="from the name" className={`${input} w-32`} />
           </label>
           <label className="flex flex-col gap-1">
             {words.Parts}

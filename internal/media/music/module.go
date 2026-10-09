@@ -133,6 +133,7 @@ func (Module) Descriptor() media.Descriptor {
 		WorkImage:          media.ImageCover,
 		AddKinds:           []media.Choice{{Key: "album", Label: "Albums"}, {Key: "artist", Label: "Artists"}},
 		CommitsHeldImports: true,
+		DuplicatesByName:   true,
 	}
 }
 

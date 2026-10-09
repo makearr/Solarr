@@ -11,6 +11,7 @@
       }
     ],
     "commits_held_imports": true,
+    "duplicates_by_name": true,
     "facets": [
       {
         "column": true,
@@ -209,6 +210,7 @@
       }
     ],
     "commits_held_imports": false,
+    "duplicates_by_name": false,
     "facets": [
       {
         "column": true,

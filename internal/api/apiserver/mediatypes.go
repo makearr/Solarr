@@ -48,6 +48,8 @@ type MediaTypeInfo struct {
 	AddKinds []MediaChoice
 	// CommitsHeldImports says a held import unit is committed by hand.
 	CommitsHeldImports bool
+	// DuplicatesByName says a duplicate is one recording under any work, matched by name and length.
+	DuplicatesByName bool
 }
 
 // MediaChoice is one key a media type offers, with its label.
@@ -79,6 +81,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
 				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage), WantedGrain: gen.MediaTypeInfoWantedGrain(info.WantedGrain),
 				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports,
+				DuplicatesByName: info.DuplicatesByName,
 			})
 		}
 	}

@@ -6859,7 +6859,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -6909,6 +6909,7 @@ components:
               label: { type: string }
         wanted_grain: { type: string, enum: [work, part], description: "What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts)." }
         commits_held_imports: { type: boolean, description: "A held import unit is committed by hand, anyway or as a work named (Identify as)." }
+        duplicates_by_name: { type: boolean, description: "A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part." }
 
     MediaType:
       type: string

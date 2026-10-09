@@ -47,7 +47,7 @@ type Querier interface {
 	AggregateFilesByRootAndVideo(ctx context.Context) ([]AggregateFilesByRootAndVideoRow, error)
 	// Monitored episodes without a file, by series: aired ones are missing, the rest are still to come.
 	AggregateSeriesGaps(ctx context.Context, today sql.NullString) ([]AggregateSeriesGapsRow, error)
-	// The series of a video library by what they take on disk; each file counted once however many items cover it.
+	// The 20 works of each library taking most space; each file counted once however many items cover it.
 	AggregateSeriesSize(ctx context.Context) ([]AggregateSeriesSizeRow, error)
 	// Bytes per hour of picture and the average video bitrate by resolution and codec: bloated or starved files show here.
 	AggregateSizePerHour(ctx context.Context) ([]AggregateSizePerHourRow, error)

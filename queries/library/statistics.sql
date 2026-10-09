@@ -86,19 +86,21 @@ LEFT JOIN media_attributes ma ON ma.id = mo.measured_attributes_id
 WHERE ma.video_codec IS NOT NULL AND ma.video_codec <> ''
 GROUP BY lp.root_folder_id, video_codec, resolution, hdr, audio_codec, audio_channels;
 
--- The series of a video library by what they take on disk; each file counted once however many items cover it.
+-- The 20 works of each library taking most space; each file counted once however many items cover it.
 -- name: AggregateSeriesSize :many
-SELECT x.category_id, x.work_id, w.canonical_title AS title,
-       CAST(COUNT(*) AS INTEGER) AS files,
-       CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes
-FROM (SELECT DISTINCT d.category_id, d.work_id, f.media_object_id
-      FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
-      WHERE f.role = 'primary') x
-JOIN work w ON w.id = x.work_id AND w.media_type = 'tv'
-JOIN media_object mo ON mo.id = x.media_object_id
-GROUP BY x.category_id, x.work_id
-ORDER BY bytes DESC
-LIMIT 2000;
+SELECT category_id, work_id, title, files, bytes
+FROM (SELECT x.category_id, x.work_id, w.canonical_title AS title,
+             CAST(COUNT(*) AS INTEGER) AS files,
+             CAST(COALESCE(SUM(mo.size_bytes), 0) AS INTEGER) AS bytes,
+             ROW_NUMBER() OVER (PARTITION BY x.category_id ORDER BY COALESCE(SUM(mo.size_bytes), 0) DESC, x.work_id) AS place
+      FROM (SELECT DISTINCT d.category_id, d.work_id, f.media_object_id
+            FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+            WHERE f.role = 'primary') x
+      JOIN work w ON w.id = x.work_id
+      JOIN media_object mo ON mo.id = x.media_object_id
+      GROUP BY x.category_id, x.work_id)
+WHERE place <= 20
+ORDER BY category_id, bytes DESC, work_id;
 
 -- Monitored episodes without a file, by series: aired ones are missing, the rest are still to come.
 -- name: AggregateSeriesGaps :many

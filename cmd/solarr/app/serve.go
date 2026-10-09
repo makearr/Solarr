@@ -715,8 +715,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ArtworkChoices: adapters.ArtworkChoices{
 			Works: library.NewWorks(p.library), Picturing: adapters.MediaTypes{Registry: p.media}.PicturingOf, People: p.musicPictures(),
 		},
-		Statistics:         adapters.Statistics{Statistics: library.NewStatistics(p.library)},
-		Duplicates:         adapters.Duplicates{Store: library.NewDuplicates(p.library), Settings: p.cache},
+		Statistics: adapters.Statistics{Statistics: library.NewStatistics(p.library)},
+		Duplicates: adapters.Duplicates{
+			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,
+		},
 		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem())},
 		DuplicateResolver: adapters.DuplicateResolver{
 			FS: p.fsys, Physical: library.NewPhysical(p.library), Recycle: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()),

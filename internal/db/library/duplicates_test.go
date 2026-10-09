@@ -56,7 +56,7 @@ func TestDuplicates_FindsTheSameTrackInDifferentFormatsAndLeavesDifferentOnesAlo
 		attach(t, opened, items[f.album], object.ID, "primary", ref)
 	}
 
-	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50)
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50, true)
 	if err != nil {
 		t.Fatalf("Groups: %v", err)
 	}
@@ -106,7 +106,7 @@ func TestDuplicates_VideoIsToldApartByEpisodeRecordNotByTitle(t *testing.T) {
 		}
 		attach(t, opened, item, object.ID, "primary", f.ref)
 	}
-	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50)
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50, false)
 	if err != nil {
 		t.Fatalf("Groups: %v", err)
 	}

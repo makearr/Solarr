@@ -2701,6 +2701,9 @@ type MediaTypeInfo struct {
 	// CommitsHeldImports A held import unit is committed by hand, anyway or as a work named (Identify as).
 	CommitsHeldImports bool `json:"commits_held_imports"`
 
+	// DuplicatesByName A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part.
+	DuplicatesByName bool `json:"duplicates_by_name"`
+
 	// Facets The type's own fields of its entities beyond the base ones, as lists and pages show them.
 	Facets []Facet `json:"facets"`
 
