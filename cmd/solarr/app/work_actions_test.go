@@ -159,3 +159,44 @@ func TestBulkEdit_SetsFieldsAndAMonitorOption(t *testing.T) {
 		t.Errorf("after the bulk edit the series reads %s; want anime and nothing monitored", got)
 	}
 }
+
+// A series' poster is chosen through the one picture choice: its sources' posters listed, the pick kept first.
+func TestWorkPictures_ChooseASeriesPoster(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	var listed struct {
+		Options []struct {
+			URL string `json:"url"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal(server.get(t, fmt.Sprintf("/works/%d/artwork/options", ids.series)), &listed); err != nil {
+		t.Fatal(err)
+	}
+	var urls []string
+	for _, option := range listed.Options {
+		urls = append(urls, option.URL)
+	}
+	want := []string{"https://artworks.thetvdb.com/marble-1.jpg", "https://artworks.thetvdb.com/marble-2.jpg"}
+	if strings.Join(urls, " ") != strings.Join(want, " ") {
+		t.Fatalf("options = %v, want %v", urls, want)
+	}
+
+	pick := fmt.Sprintf("/works/%d/artwork", ids.series)
+	if status, body := server.send(t, http.MethodPut, pick, `{"url":"https://artworks.thetvdb.com/elsewhere.jpg"}`); status != http.StatusBadRequest {
+		t.Errorf("an unlisted poster: %d %s, want 400", status, body)
+	}
+	if status, body := server.send(t, http.MethodPut, pick, fmt.Sprintf(`{"url":%q}`, want[1])); status != http.StatusNoContent {
+		t.Fatalf("pick: %d %s", status, body)
+	}
+	var work struct {
+		Pictures struct {
+			Poster string `json:"poster"`
+		} `json:"pictures"`
+	}
+	if err := json.Unmarshal(server.get(t, fmt.Sprintf("/works/%d", ids.series)), &work); err != nil {
+		t.Fatal(err)
+	}
+	if work.Pictures.Poster != want[1] {
+		t.Errorf("poster after the pick = %q, want %q", work.Pictures.Poster, want[1])
+	}
+}

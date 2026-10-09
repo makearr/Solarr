@@ -16,7 +16,7 @@ var ErrImageNotOffered = errors.New("apiserver: that image is not one the provid
 // ImageOptionRow is one picture a provider offers.
 type ImageOptionRow struct{ URL, ThumbURL, Source, Label string }
 
-// ArtworkChoices browses and picks provider images for an album or artist (M1g 1.3).
+// ArtworkChoices browses and picks provider images for a work or an artist (M1g 1.3).
 type ArtworkChoices interface {
 	WorkOptions(ctx context.Context, workID int64) ([]ImageOptionRow, error)
 	PersonOptions(ctx context.Context, personID int64) ([]ImageOptionRow, error)
@@ -140,6 +140,10 @@ func (s *Server) decodeImagePick(w http.ResponseWriter, r *http.Request) (string
 }
 
 func (s *Server) writeImageOptions(w http.ResponseWriter, options []ImageOptionRow, err error) {
+	if errors.Is(err, ErrNotBuiltForMediaType) {
+		writeError(w, s.logger, err)
+		return
+	}
 	if err != nil {
 		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The providers could not be read", err.Error())
 		return
@@ -155,6 +159,8 @@ func (s *Server) writeImagePicked(w http.ResponseWriter, err error) {
 	switch {
 	case err == nil:
 		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, ErrNotBuiltForMediaType):
+		writeError(w, s.logger, err)
 	case errors.Is(err, ErrImageNotOffered):
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "that image is not one the providers offer")
 	default:

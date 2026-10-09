@@ -14,7 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// SeriesCatalog satisfies apiserver.SeriesCatalog over the TV service and the library's series reader.
+// SeriesCatalog is TV's add, refresh and picture choice over the TV service and the library's series reader.
 type SeriesCatalog struct {
 	Service          tv.Service
 	Reader           library.SeriesReader
@@ -110,29 +110,24 @@ func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) 
 	return err
 }
 
-// PosterOptions lists the posters the providers hold for a series, the thumbnail being the poster itself.
-func (c SeriesCatalog) PosterOptions(ctx context.Context, categoryID, seriesID int64) ([]apiserver.ImageOptionRow, error) {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return nil, translateSeriesError(err)
-	}
+// WorkPictures implements media.Picturing for TV: the posters the providers hold, the thumbnail being the poster itself.
+func (c SeriesCatalog) WorkPictures(ctx context.Context, seriesID int64) ([]media.ImageOption, error) {
 	images, err := c.Reader.Images(ctx, seriesID)
 	if err != nil {
 		return nil, err
 	}
-	var options []apiserver.ImageOptionRow
+	var options []media.ImageOption
 	for _, image := range images {
 		if image.Kind == "poster" {
-			options = append(options, apiserver.ImageOptionRow{URL: image.URL, ThumbURL: image.URL, Source: image.Source, Label: "Poster"})
+			options = append(options, media.ImageOption{URL: image.URL, ThumbURL: image.URL, Source: image.Source, Label: "Poster"})
 		}
 	}
 	return options, nil
 }
 
-// SetPoster puts the chosen poster first among the series' pictures as the user's own, keeping the other pictures.
-func (c SeriesCatalog) SetPoster(ctx context.Context, categoryID, seriesID int64, url string) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
+// PickWorkPicture implements media.Picturing for TV: the chosen poster goes first among the series' pictures as the
+// user's own, keeping the other pictures.
+func (c SeriesCatalog) PickWorkPicture(ctx context.Context, seriesID int64, url string) error {
 	images, err := c.Reader.Images(ctx, seriesID)
 	if err != nil {
 		return err
@@ -148,7 +143,7 @@ func (c SeriesCatalog) SetPoster(ctx context.Context, categoryID, seriesID int64
 		}
 	}
 	if len(chosen) == 0 {
-		return apiserver.ErrImageNotOffered
+		return media.ErrImageNotOffered
 	}
 	value, err := json.Marshal(append(chosen, rest...))
 	if err != nil {

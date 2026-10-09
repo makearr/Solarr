@@ -196,6 +196,9 @@
       "wanted": null
     }
   ],
+  "pictures": {
+    "poster": "https://artworks.thetvdb.com/marble-1.jpg"
+  },
   "runtime_ms": 2700000,
   "sort_title": "marble stations",
   "title": "The Marble Stations",

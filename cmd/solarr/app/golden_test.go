@@ -267,7 +267,11 @@ func (goldenSkyhook) Series(context.Context, int64) (skyhook.Series, error) {
 		Status: "Continuing", Runtime: 45, TimeOfDay: &skyhook.TimeOfDay{Hours: 21},
 		OriginalNetwork: "Northern Channel", Network: "Northern Channel", Genres: []string{"Drama", "Mystery"},
 		ContentRating: "TV-14", Rating: skyhook.Rating{Count: 120, Value: "7.9"},
-		Actors:  []skyhook.Actor{{Name: "Iris Calder", Character: "The Harbourmaster"}, {Name: "Tom Aske", Character: "Finn"}},
+		Actors: []skyhook.Actor{{Name: "Iris Calder", Character: "The Harbourmaster"}, {Name: "Tom Aske", Character: "Finn"}},
+		Images: []skyhook.Image{
+			{CoverType: "poster", URL: "https://artworks.thetvdb.com/marble-1.jpg"},
+			{CoverType: "poster", URL: "https://artworks.thetvdb.com/marble-2.jpg"},
+		},
 		Seasons: []skyhook.Season{{SeasonNumber: 1}, {SeasonNumber: 2}},
 		Episodes: []skyhook.Episode{
 			episode(1, 1, 1, "Slack Water", "2020-02-03"), episode(2, 1, 2, "The Long Pier", "2020-02-10"),

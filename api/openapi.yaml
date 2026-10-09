@@ -13,8 +13,6 @@ servers:
   - url: /api/v1
 
 tags:
-  - name: series
-    description: TV series, seasons and episodes (stage 8).
   - name: system
     description: Liveness, readiness and build identity. Unauthenticated.
   - name: auth
@@ -3205,8 +3203,9 @@ paths:
       tags: [library]
       summary: The pictures providers hold for this work, to pick one from.
       description: >-
-        Asked of the providers live (Cover Art Archive, TheAudioDB, Wikidata), so it can be slow; a provider
-        that is down is left out as long as another answered. Visibility as for the image itself.
+        Asked of the work's media type: music asks Cover Art Archive and TheAudioDB live, so it can be slow, and a
+        provider that is down is left out as long as another answered; TV lists the posters its sources gave. 409 for
+        a type that has no picture choice. Visibility as for the image itself.
       responses:
         "200":
           description: The options, possibly none.
@@ -5146,55 +5145,6 @@ paths:
         "204": { description: Removed. }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
-
-  /series/{id}/posters:
-    parameters:
-      - name: category_id
-        in: query
-        required: true
-        schema: { type: integer, format: int64 }
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    get:
-      operationId: getSeriesPosters
-      tags: [series]
-      summary: The posters the providers hold for a series, to pick one from.
-      responses:
-        "200":
-          description: The options, possibly none.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ImageOptions" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
-  /series/{id}/poster:
-    parameters:
-      - name: category_id
-        in: query
-        required: true
-        schema: { type: integer, format: int64 }
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    put:
-      operationId: setSeriesPoster
-      tags: [series]
-      summary: Make one of the offered posters this series' own; it is kept over later refreshes.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ImagePick" }
-      responses:
-        "204": { description: The poster was replaced. }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
 
   /people/{id}/follow:
     parameters:

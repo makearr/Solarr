@@ -10,16 +10,19 @@ import { remoteImage } from "@/lib/remoteImage";
 
 import { bumpArtwork } from "./artworkVersion";
 
-type Subject = "works" | "people" | "series";
+type Subject = "works" | "people";
 
-/** A series is read and written inside a library, and its posters are provider pictures shown through the image cache. */
-interface SeriesScope {
-  categoryId: number;
-  onChosen: () => void;
+interface ChooseImageProps {
+  subject: Subject;
+  id: number;
+  title: string;
+  /** A poster type's pictures come from the CDNs the image cache serves; a cover's are shown as the provider lists them. */
+  shape?: "cover" | "poster";
+  onChosen?: () => void;
 }
 
-/** Browse the pictures the providers hold for an album or artist and keep one (M1g 1.3). */
-export function ChooseImage({ subject, id, title, series }: { subject: Subject; id: number; title: string; series?: SeriesScope }) {
+/** Browse the pictures the providers hold for a work or an artist and keep one (M1g 1.3). */
+export function ChooseImage(props: ChooseImageProps) {
   const [open, setOpen] = useState(false);
   if (!useIsAdministrator()) return null;
   return (
@@ -31,34 +34,18 @@ export function ChooseImage({ subject, id, title, series }: { subject: Subject; 
       >
         Choose image
       </button>
-      {open && <ImagePicker subject={subject} id={id} title={title} series={series} onClose={() => setOpen(false)} />}
+      {open && <ImagePicker {...props} onClose={() => setOpen(false)} />}
     </>
   );
 }
 
-function ImagePicker({
-  subject,
-  id,
-  title,
-  series,
-  onClose,
-}: {
-  subject: Subject;
-  id: number;
-  title: string;
-  series?: SeriesScope;
-  onClose: () => void;
-}) {
+function ImagePicker({ subject, id, title, shape = "cover", onChosen, onClose }: ChooseImageProps & { onClose: () => void }) {
   const options = useQuery({
     queryKey: [subject, id, "artwork-options"],
     queryFn: async () => {
       const path = { params: { path: { id } } };
       const { data, error } =
-        subject === "series"
-          ? await api.GET("/series/{id}/posters", { params: { path: { id }, query: { category_id: series?.categoryId ?? 0 } } })
-          : subject === "works"
-            ? await api.GET("/works/{id}/artwork/options", path)
-            : await api.GET("/people/{id}/artwork/options", path);
+        subject === "works" ? await api.GET("/works/{id}/artwork/options", path) : await api.GET("/people/{id}/artwork/options", path);
       if (error) throw error;
       return data;
     },
@@ -68,17 +55,12 @@ function ImagePicker({
   const choose = useMutation({
     mutationFn: async (url: string) => {
       const request = { params: { path: { id } }, body: { url } };
-      const { error } =
-        subject === "series"
-          ? await api.PUT("/series/{id}/poster", { params: { path: { id }, query: { category_id: series?.categoryId ?? 0 } }, body: { url } })
-          : subject === "works"
-            ? await api.PUT("/works/{id}/artwork", request)
-            : await api.PUT("/people/{id}/artwork", request);
+      const { error } = subject === "works" ? await api.PUT("/works/{id}/artwork", request) : await api.PUT("/people/{id}/artwork", request);
       if (error) throw error;
     },
     onSuccess: () => {
-      if (subject === "series") series?.onChosen();
-      else bumpArtwork(subject, id);
+      bumpArtwork(subject, id);
+      onChosen?.();
       onClose();
     },
   });
@@ -123,11 +105,11 @@ function ImagePicker({
                              hover:border-accent disabled:opacity-50"
                 >
                   <img
-                    src={subject === "series" ? remoteImage(option.thumb_url, "small") : option.thumb_url}
+                    src={shape === "poster" ? remoteImage(option.thumb_url, "small") : option.thumb_url}
                     alt={option.label}
                     loading="lazy"
                     referrerPolicy="no-referrer"
-                    className={`w-full rounded object-cover ${subject === "series" ? "aspect-[2/3]" : "aspect-square"}`}
+                    className={`w-full rounded object-cover ${shape === "poster" ? "aspect-[2/3]" : "aspect-square"}`}
                   />
                   <span className="text-xs">{option.label}</span>
                   <span className="text-xs text-ink-muted">{option.source}</span>

@@ -152,12 +152,7 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
         image={
           <div className="flex flex-col items-center gap-2">
             <Image shape={shape} title={work.title} src={poster ? remoteImage(poster, "small") : undefined} artwork={poster ? undefined : { subject: "works", id: work.id, size: "full" }} />
-            {/* Artwork choice is still per type until R1.7: a poster type's pictures are its providers'. */}
-            {shape === "poster" && categoryId ? (
-              <ChooseImage subject="series" id={work.id} title={work.title} series={{ categoryId: Number(categoryId), onChosen: changed }} />
-            ) : (
-              <ChooseImage subject="works" id={work.id} title={work.title} />
-            )}
+            <ChooseImage subject="works" id={work.id} title={work.title} shape={shape} onChosen={changed} />
           </div>
         }
         title={work.pictures?.logo ? <img src={remoteImage(work.pictures.logo, "small")} alt={work.title} className="max-h-20 max-w-xs object-contain object-left" /> : work.title}

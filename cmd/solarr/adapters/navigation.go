@@ -124,6 +124,11 @@ func (m MediaTypes) AddKinds(mediaType string) []media.Choice {
 	return nil
 }
 
+// PicturingOf answers a media type's choice of a work's picture.
+func (m MediaTypes) PicturingOf(mediaType string) (media.Picturing, bool) {
+	return media.Capability[media.Picturing](m.Registry, media.Key(mediaType))
+}
+
 // RefreshingOf answers a media type's refresh of one work.
 func (m MediaTypes) RefreshingOf(mediaType string) (media.Refreshing, bool) {
 	return media.Capability[media.Refreshing](m.Registry, media.Key(mediaType))

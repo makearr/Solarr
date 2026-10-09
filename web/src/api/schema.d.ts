@@ -2000,7 +2000,7 @@ export interface paths {
         };
         /**
          * The pictures providers hold for this work, to pick one from.
-         * @description Asked of the providers live (Cover Art Archive, TheAudioDB, Wikidata), so it can be slow; a provider that is down is left out as long as another answered. Visibility as for the image itself.
+         * @description Asked of the work's media type: music asks Cover Art Archive and TheAudioDB live, so it can be slow, and a provider that is down is left out as long as another answered; TV lists the posters its sources gave. 409 for a type that has no picture choice. Visibility as for the image itself.
          */
         get: operations["getWorkArtworkOptions"];
         put?: never;
@@ -3188,48 +3188,6 @@ export interface paths {
         post?: never;
         /** Take a root folder out of a category. Administrator only. */
         delete: operations["detachRootFolderFromCategory"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/posters": {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        /** The posters the providers hold for a series, to pick one from. */
-        get: operations["getSeriesPosters"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/poster": {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Make one of the offered posters this series' own; it is kept over later refreshes. */
-        put: operations["setSeriesPoster"];
-        post?: never;
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -12486,62 +12444,6 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
-        };
-    };
-    getSeriesPosters: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The options, possibly none. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ImageOptions"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    setSeriesPoster: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ImagePick"];
-            };
-        };
-        responses: {
-            /** @description The poster was replaced. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
         };
     };
     listPersonFollows: {

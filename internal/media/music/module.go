@@ -24,6 +24,8 @@ type Module struct {
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
 	// Adder looks a work up and adds it; nil leaves the type without an add.
 	Adder media.Adding
+	// Pictures lists and keeps the providers' pictures of a work; nil leaves the picture unchosen.
+	Pictures media.Picturing
 	// Refresh reads one album again from its sources; nil leaves it unrefreshable.
 	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Rename is what renaming a music library needs; nil leaves music without a rename.
@@ -52,6 +54,22 @@ func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.Ad
 		return media.AddResult{}, media.ErrNotWired
 	}
 	return m.Adder.AddWork(ctx, request)
+}
+
+// WorkPictures implements media.Picturing.
+func (m Module) WorkPictures(ctx context.Context, workID int64) ([]media.ImageOption, error) {
+	if m.Pictures == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Pictures.WorkPictures(ctx, workID)
+}
+
+// PickWorkPicture implements media.Picturing.
+func (m Module) PickWorkPicture(ctx context.Context, workID int64, imageURL string) error {
+	if m.Pictures == nil {
+		return media.ErrNotWired
+	}
+	return m.Pictures.PickWorkPicture(ctx, workID, imageURL)
 }
 
 // RefreshWork implements media.Refreshing.

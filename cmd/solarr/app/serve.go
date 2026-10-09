@@ -712,8 +712,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Unidentified: library.NewUnidentified(p.library), Attempts: library.NewAttempts(p.library),
 			Identity: library.NewIdentity(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 		},
-		Artwork:            adapters.Artwork{Artworks: library.NewArtworks(p.library)},
-		ArtworkChoices:     p.artworkChoices(),
+		Artwork: adapters.Artwork{Artworks: library.NewArtworks(p.library)},
+		ArtworkChoices: adapters.ArtworkChoices{
+			Works: library.NewWorks(p.library), Picturing: adapters.MediaTypes{Registry: p.media}.PicturingOf, People: p.musicPictures(),
+		},
 		Statistics:         adapters.Statistics{Statistics: library.NewStatistics(p.library)},
 		Duplicates:         adapters.Duplicates{Store: library.NewDuplicates(p.library), Settings: p.cache},
 		RecycleBinContents: adapters.RecycleBinContents{Bin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem())},
@@ -732,7 +734,6 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Profiling: adapters.MediaTypes{Registry: p.media}.ProfilingIn(adapters.Categories{Cache: p.cache}),
 		},
 		Organisations: adapters.Organisations{Organisations: library.NewOrganisations(p.library), Works: library.NewWorks(p.library)},
-		Series:        p.seriesCatalog(),
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},

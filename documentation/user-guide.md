@@ -78,8 +78,8 @@ library compared with each artist's discography (live albums and compilations le
 missing first, with one click to follow the artist and add the rest. It fills in after the weekly
 comparison has run (Settings → Scheduler → Compare discographies).
 
-On an album's or artist's page, **Choose image** lists the pictures the metadata providers hold
-(Cover Art Archive, TheAudioDB, Wikidata); the one you pick is kept over later refreshes.
+On an album's, series' or artist's page, **Choose image** lists the pictures the metadata providers hold
+(Cover Art Archive, TheAudioDB, Wikidata; a series' posters from its TV sources); the one you pick is kept over later refreshes.
 
 ## 4b. Add TV
 

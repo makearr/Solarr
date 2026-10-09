@@ -103,8 +103,6 @@ type Config struct {
 	People PeopleReader
 	// Organisations lists and reads labels, networks, studios and publishers. Optional: nil answers 503.
 	Organisations OrganisationsReader
-	// Series feeds the TV screens. Optional: nil answers 503.
-	Series SeriesCatalog
 	// PersonRemover removes an artist. Optional: nil answers 503.
 	PersonRemover PersonRemover
 	// Follower follows people and organisations into libraries. Optional: nil answers 503.
@@ -269,7 +267,6 @@ type Server struct {
 	configPath              string
 	people                  PeopleReader
 	organisations           OrganisationsReader
-	series                  SeriesCatalog
 	personRemover           PersonRemover
 	follower                Follower
 	artistActions           ArtistActions
@@ -376,7 +373,6 @@ func New(config Config) (*Server, error) {
 		configPath:              config.ConfigPath,
 		people:                  config.People,
 		organisations:           config.Organisations,
-		series:                  config.Series,
 		personRemover:           config.PersonRemover,
 		follower:                config.Follower,
 		artistActions:           config.ArtistActions,
@@ -527,8 +523,6 @@ func New(config Config) (*Server, error) {
 			secured.Get("/images/remote", server.routeGetRemoteImage)
 			secured.Get("/works/exclusions", server.routeListWorkExclusions)
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
-			secured.Get("/series/{id}/posters", server.routeGetSeriesPosters)
-			secured.Put("/series/{id}/poster", server.routeSetSeriesPoster)
 			secured.Get("/works/lookup", server.routeLookupWorks)
 			secured.Post("/works", server.AddWork)
 			secured.Get("/arr/instances", server.ListArrInstances)

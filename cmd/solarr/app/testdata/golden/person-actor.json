@@ -9,6 +9,7 @@
         "id": 2,
         "media_type": "tv",
         "on_disk": true,
+        "poster_url": "https://artworks.thetvdb.com/marble-1.jpg",
         "present_count": 2,
         "required_count": 3,
         "sort_title": "marble stations",

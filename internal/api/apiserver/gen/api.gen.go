@@ -4676,16 +4676,6 @@ type SearchParams struct {
 	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// SetSeriesPosterParams defines parameters for SetSeriesPoster.
-type SetSeriesPosterParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// GetSeriesPostersParams defines parameters for GetSeriesPosters.
-type GetSeriesPostersParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
 // SetAuthPolicyJSONBody defines parameters for SetAuthPolicy.
 type SetAuthPolicyJSONBody struct {
 	AuthRequired bool    `json:"auth_required"`
@@ -5181,9 +5171,6 @@ type UpdateScheduleJSONRequestBody UpdateScheduleJSONBody
 
 // SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
 type SimulateScoreJSONRequestBody SimulateScoreJSONBody
-
-// SetSeriesPosterJSONRequestBody defines body for SetSeriesPoster for application/json ContentType.
-type SetSeriesPosterJSONRequestBody = ImagePick
 
 // SetAuthPolicyJSONRequestBody defines body for SetAuthPolicy for application/json ContentType.
 type SetAuthPolicyJSONRequestBody SetAuthPolicyJSONBody
@@ -5796,12 +5783,6 @@ type ServerInterface interface {
 	// Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
 	// (GET /search)
 	Search(w http.ResponseWriter, r *http.Request, params SearchParams)
-	// Make one of the offered posters this series' own; it is kept over later refreshes.
-	// (PUT /series/{id}/poster)
-	SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams)
-	// The posters the providers hold for a series, to pick one from.
-	// (GET /series/{id}/posters)
-	GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPostersParams)
 	// Whether a login is required.
 	// (GET /settings/auth)
 	GetAuthPolicy(w http.ResponseWriter, r *http.Request)
@@ -7071,18 +7052,6 @@ func (_ Unimplemented) SimulateScore(w http.ResponseWriter, r *http.Request) {
 // Ranked cross-media title search (section 21.5), category-filtered (ADR-27).
 // (GET /search)
 func (_ Unimplemented) Search(w http.ResponseWriter, r *http.Request, params SearchParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Make one of the offered posters this series' own; it is kept over later refreshes.
-// (PUT /series/{id}/poster)
-func (_ Unimplemented) SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// The posters the providers hold for a series, to pick one from.
-// (GET /series/{id}/posters)
-func (_ Unimplemented) GetSeriesPosters(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesPostersParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13336,108 +13305,6 @@ func (siw *ServerInterfaceWrapper) Search(w http.ResponseWriter, r *http.Request
 	handler.ServeHTTP(w, r)
 }
 
-// SetSeriesPoster operation middleware
-func (siw *ServerInterfaceWrapper) SetSeriesPoster(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetSeriesPosterParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetSeriesPoster(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GetSeriesPosters operation middleware
-func (siw *ServerInterfaceWrapper) GetSeriesPosters(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetSeriesPostersParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetSeriesPosters(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // GetAuthPolicy operation middleware
 func (siw *ServerInterfaceWrapper) GetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 
@@ -15928,12 +15795,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/search", wrapper.Search)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/series/{id}/poster", wrapper.SetSeriesPoster)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series/{id}/posters", wrapper.GetSeriesPosters)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/settings/auth", wrapper.GetAuthPolicy)

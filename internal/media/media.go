@@ -160,6 +160,21 @@ type Refreshing interface {
 	RefreshWork(ctx context.Context, workID int64) (duplicate bool, err error)
 }
 
+// ImageOption is one picture a provider offers for a work or a person.
+type ImageOption struct {
+	URL, ThumbURL, Source, Label string
+}
+
+// ErrImageNotOffered is a pick of an address no provider listed.
+var ErrImageNotOffered = errors.New("media: that image is not one the providers offer")
+
+// Picturing is the capability of a media type whose work picture is chosen from what its providers hold.
+type Picturing interface {
+	WorkPictures(ctx context.Context, workID int64) ([]ImageOption, error)
+	// PickWorkPicture keeps imageURL, one of WorkPictures, over later refreshes; ErrImageNotOffered otherwise.
+	PickWorkPicture(ctx context.Context, workID int64, imageURL string) error
+}
+
 // ErrNotWired reports a capability whose module was built without what it needs.
 var ErrNotWired = errors.New("media: not wired in this build")
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -44,18 +45,18 @@ func TestArtworkChoice_ListsDistinctOptionsAndKeepsAPick(t *testing.T) {
 		HTTP: client, FS: memFS, ImagesDir: "/cache/images", Clock: fake,
 	})
 
-	options, err := choice.WorkOptions(t.Context(), workID)
+	options, err := choice.WorkPictures(t.Context(), workID)
 	if err != nil {
-		t.Fatalf("WorkOptions: %v", err)
+		t.Fatalf("WorkPictures: %v", err)
 	}
 	if len(options) != 2 || options[0].URL != cover || options[1].Label != "Back, Booklet" || options[1].ThumbURL != options[1].URL {
 		t.Fatalf("options = %+v, want the shared front once and the back with both labels", options)
 	}
-	if err := choice.PickWork(t.Context(), workID, "https://elsewhere.invalid/x.png"); !errors.Is(err, music.ErrImageNotOffered) {
-		t.Fatalf("PickWork of an unlisted address = %v, want ErrImageNotOffered", err)
+	if err := choice.PickWorkPicture(t.Context(), workID, "https://elsewhere.invalid/x.png"); !errors.Is(err, media.ErrImageNotOffered) {
+		t.Fatalf("PickWorkPicture of an unlisted address = %v, want ErrImageNotOffered", err)
 	}
-	if err := choice.PickWork(t.Context(), workID, cover); err != nil {
-		t.Fatalf("PickWork: %v", err)
+	if err := choice.PickWorkPicture(t.Context(), workID, cover); err != nil {
+		t.Fatalf("PickWorkPicture: %v", err)
 	}
 	recorded, err := library.NewArtworks(opened).GetForWork(t.Context(), workID)
 	if err != nil || !recorded.Found {

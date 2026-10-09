@@ -86,7 +86,7 @@ func (p *process) musicModule() music.Module {
 		result, err := music.EnqueueRefreshAlbum(ctx, p.queue, workID)
 		return result.Duplicate, err
 	}
-	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures(), Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -125,8 +125,9 @@ func (p *process) tvModule() tv.Module {
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Hunt:  p.tvHunt,
-		Adder: p.seriesCatalog(),
+		Hunt:     p.tvHunt,
+		Adder:    p.seriesCatalog(),
+		Pictures: p.seriesCatalog(),
 		// A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
 		Refresh: func(ctx context.Context, workID int64) (bool, error) {
 			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
