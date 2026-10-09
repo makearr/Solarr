@@ -22,7 +22,7 @@ import (
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
 // A new type is one more module here; nothing else in this package names a type's scan.
 func (p *process) registerMedia() error {
-	registry, err := media.NewRegistry(p.musicModule(), p.tvModule())
+	registry, err := media.NewRegistry(append([]media.Module{p.musicModule(), p.tvModule()}, p.extraMedia...)...)
 	if err != nil {
 		return err
 	}

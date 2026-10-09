@@ -17,6 +17,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
@@ -44,6 +45,12 @@ type goldenServer struct {
 
 func newGoldenServer(t *testing.T) goldenServer {
 	t.Helper()
+	return newGoldenServerWith(t)
+}
+
+// newGoldenServerWith is newGoldenServer with further media types registered beside music and TV.
+func newGoldenServerWith(t *testing.T, extra ...media.Module) goldenServer {
+	t.Helper()
 	ctx := t.Context()
 	root := t.TempDir()
 
@@ -68,7 +75,7 @@ func newGoldenServer(t *testing.T) goldenServer {
 	ring := logbuffer.NewRing(slog.DiscardHandler, 16)
 	running := &process{
 		build: Build{Version: "golden"}, config: loaded, fsys: fsx.NewOS(), logger: slog.New(ring), logRing: ring,
-		timezone: "UTC", configPath: filepath.Join(root, "config.yml"), tool: mediatool.New(nil, 0),
+		timezone: "UTC", configPath: filepath.Join(root, "config.yml"), tool: mediatool.New(nil, 0), extraMedia: extra,
 	}
 	t.Cleanup(running.close)
 

@@ -54,10 +54,12 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
-	build  Build
-	config config.Config
-	fsys   fsx.FS
-	logger *slog.Logger
+	// extraMedia are media types a test registers beside the built-in ones (revision 2's R1.9 proof).
+	extraMedia []media.Module
+	build      Build
+	config     config.Config
+	fsys       fsx.FS
+	logger     *slog.Logger
 	// logRing is the in-memory buffer the Logs screen reads (revision 7.16).
 	logRing  *logbuffer.Ring
 	settings *store.Store
