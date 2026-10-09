@@ -66,6 +66,8 @@ type process struct {
 	jobs     *store.Store
 	library  *store.Store
 	metadata *store.Store
+	// statistics is what was seen and done; library.db is correct with it empty (D7).
+	statistics *store.Store
 	// configPath is where config.yml lives, for the write-back ADR-58's
 	// revised precedence needs (2026-09-12): config.yml now outranks
 	// settings.db, so the Network screen has to be able to update it.
@@ -238,6 +240,7 @@ func (p *process) openDatabases(ctx context.Context) error {
 		{settingsProfile, &p.settings, migrations.Settings},
 		{jobsProfile, &p.jobs, migrations.Jobs},
 		{libraryProfile, &p.library, migrations.Library},
+		{statisticsProfile, &p.statistics, migrations.Statistics},
 	} {
 		opened, report, err := store.OpenChecked(ctx, wall, p.storeConfig(target.profile),
 			store.RecoveryOptions{BackupDir: backupDir})
@@ -361,6 +364,8 @@ var (
 	libraryProfile = databaseProfile{name: "library", readPoolSize: 4}
 	// Small, hot and written constantly, but never queried across 500k rows.
 	jobsProfile = databaseProfile{name: "jobs", readPoolSize: 2, cacheSizeKB: 8192}
+	// Append-mostly records read by History and the statistics, never by a decision.
+	statisticsProfile = databaseProfile{name: "statistics", readPoolSize: 2, cacheSizeKB: 8192}
 	// Fully cached in Go by ADR-25, so its page cache serves startup and little else.
 	settingsProfile = databaseProfile{name: "settings", readPoolSize: 1, cacheSizeKB: 2048}
 	// Disposable (ADR-2); small on purpose, the same as settings.
@@ -625,7 +630,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			BuildDate: p.build.BuildDate, SourceURL: p.build.SourceURL, License: p.build.License,
 			SQLiteDriver: store.DriverName(),
 		},
-		Checker:       health.New(p.settings, p.jobs, p.library),
+		Checker:       health.New(p.settings, p.jobs, p.library, p.statistics),
 		Auth:          authConfig,
 		Jobs:          p.queue,
 		Running:       p.running,
@@ -669,7 +674,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Calendar:  adapters.Calendar{Calendar: library.NewCalendar(p.library)},
 		Backups: backupSource{
 			FS: p.fsys, Directory: p.config.Paths.BackupDir,
-			Stores: []*store.Store{p.library, p.jobs, p.settings},
+			Stores: []*store.Store{p.library, p.jobs, p.settings, p.statistics},
 		},
 		WorkAdder: adapters.WorkAdding{
 			Categories: adapters.Categories{Cache: p.cache},
@@ -789,7 +794,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 // close drains and closes the databases. The write queues drain before their
 // handles close, which is bounded because every transaction is bounded.
 func (p *process) close() {
-	for _, opened := range []*store.Store{p.library, p.jobs, p.settings, p.metadata} {
+	for _, opened := range []*store.Store{p.library, p.jobs, p.settings, p.statistics, p.metadata} {
 		if opened == nil {
 			continue
 		}

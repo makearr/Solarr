@@ -1,6 +1,6 @@
 # Database layout
 
-Three persistent databases, one disposable cache (ADR-2). Each has one writer and a read pool
+Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `statistics.db`). Each has one writer and a read pool
 (ADR-3), and **no query joins across them** — compose in Go (architecture section 4.3).
 
 | Database | Holds | Shape |
@@ -8,8 +8,10 @@ Three persistent databases, one disposable cache (ADR-2). Each has one writer an
 | `settings.db` | Configuration and credentials | Small, rarely written, **fully cached in memory** |
 | `library.db` | Everything that scales with the library | Large, written constantly, never cached whole |
 | `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
+| `statistics.db` | What was seen and done: download history, and (moving there) candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
 
-There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
+`statistics.db` is being filled in steps (revision 2, D7): the file and its `history` table exist; until the
+writers move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
 aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the
 aged record. `event_log` sits in `jobs.db`, whose profile it shares: high churn,
 retention-bounded, and not authoritative for library correctness. Under ADR-3's one writer per
@@ -113,6 +115,7 @@ grows. The others take their size and pool from what they hold, in
 |---|---|---|---|
 | `library.db` | 4 | `cache_size_kb` (64 MiB) | The only one at ADR-22 scale |
 | `jobs.db` | 2 | 8 MiB | Small, hot, never queried across 500k rows |
+| `statistics.db` | 2 | 8 MiB | Append-mostly; read by History and the statistics |
 | `settings.db` | 1 | 2 MiB | Fully cached in Go already (ADR-25) |
 | any checkpointer | — | 2 MiB | Walks the log; a reader's cache would be idle |
 
@@ -146,7 +149,7 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Task | Default | What |
 |---|---|---|
 | Database maintenance | Sundays 04:00 | Per database in turn: `integrity_check`, `optimize`, `VACUUM`, `wal_checkpoint(TRUNCATE)` |
-| Backup | daily 01:00 | A rotation backup of `library.db` and `jobs.db` |
+| Backup | daily 01:00 | A rotation backup of `library.db`, `jobs.db` and `statistics.db` |
 | Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 | Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision and no held download refers to it. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |

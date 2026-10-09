@@ -14,7 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 )
 
-//go:embed settings/*.sql jobs/*.sql library/*.sql metadata/*.sql
+//go:embed settings/*.sql jobs/*.sql library/*.sql metadata/*.sql statistics/*.sql
 var files embed.FS
 
 // disableForeignKeysMarker, present anywhere in a migration's own SQL, asks store.Migrate to run
@@ -34,6 +34,9 @@ func Jobs() (store.Owner, error) { return owner("jobs") }
 
 // Library returns the migration set for library.db.
 func Library() (store.Owner, error) { return owner("library") }
+
+// Statistics returns the migration set for statistics.db: what was seen and done, never read to decide (D7).
+func Statistics() (store.Owner, error) { return owner("statistics") }
 
 // Metadata returns the migration set for cache/metadata.db (ADR-2). Disposable, but
 // still schema-owned and versioned the same way as the three authoritative databases.

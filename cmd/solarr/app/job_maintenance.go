@@ -171,9 +171,9 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		}
 	}
 	// settings.db backs itself up on every change and prunes by keep_settings, so it is left out.
-	backedUp := []*store.Store{p.library, p.jobs}
+	backedUp := []*store.Store{p.library, p.jobs, p.statistics}
 	executor.Handle(databaseMaintenanceJobType, databaseMaintenanceJob{
-		stores: []*store.Store{p.settings, p.jobs, p.library, p.metadata}, logger: p.logger,
+		stores: []*store.Store{p.settings, p.jobs, p.library, p.statistics, p.metadata}, logger: p.logger,
 	})
 	executor.Handle(recycleBinCleanupJobType, recycleBinCleanupJob{
 		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), cache: p.cache, logger: p.logger,

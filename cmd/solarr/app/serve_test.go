@@ -4,14 +4,14 @@ import "testing"
 
 // SQLite's cache is per connection, so the ceiling is every connection of every
 // database holding a full one at once. It is a ceiling rather than a resident cost, but
-// a NAS still has to be able to reach it, and one figure applied to all three databases
+// a NAS still has to be able to reach it, and one figure applied to every database
 // put it over a gigabyte (documentation/database-layout.md).
 func TestDatabaseProfiles_KeepTheCacheCeilingInHand(t *testing.T) {
 	const libraryCacheKB = 65536
 
 	// Checkpoint connections are on top of this at 2 MiB each, fixed in the store.
 	totalKB := 0
-	for _, profile := range []databaseProfile{libraryProfile, jobsProfile, settingsProfile} {
+	for _, profile := range []databaseProfile{libraryProfile, jobsProfile, settingsProfile, statisticsProfile} {
 		cacheKB := profile.cacheSizeKB
 		if cacheKB == 0 {
 			cacheKB = libraryCacheKB
