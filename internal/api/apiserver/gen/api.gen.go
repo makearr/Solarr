@@ -3039,9 +3039,12 @@ type PartFile struct {
 	MeetsCutoff *bool `json:"meets_cutoff,omitempty"`
 
 	// MeetsTarget Codec, file type and bitrate match the library's target. Absent when it sets none.
-	MeetsTarget *bool   `json:"meets_target,omitempty"`
-	Resolution  *string `json:"resolution,omitempty"`
-	SizeBytes   *int64  `json:"size_bytes,omitempty"`
+	MeetsTarget *bool `json:"meets_target,omitempty"`
+
+	// Path Where the file is, relative to its root folder (its primary path when it has several).
+	Path       *string `json:"path,omitempty"`
+	Resolution *string `json:"resolution,omitempty"`
+	SizeBytes  *int64  `json:"size_bytes,omitempty"`
 
 	// Subtitles Language codes of embedded and sidecar subtitles.
 	Subtitles        *[]string `json:"subtitles,omitempty"`
@@ -4101,8 +4104,10 @@ type WorkDetail struct {
 	MediaType  string   `json:"media_type"`
 
 	// OnDisk Whether this work is linked to any root folder at all. The coarsest possible "is there really a file for this" signal -- per-track presence needs a media_object-to-work_part link this project does not have yet.
-	OnDisk bool       `json:"on_disk"`
-	Parts  []WorkPart `json:"parts"`
+	OnDisk bool `json:"on_disk"`
+
+	// PartCount How many parts the work has; the parts themselves are paged from GET /works/{id}/parts.
+	PartCount int64 `json:"part_count"`
 
 	// Pictures The work's pictures at their providers, by kind (poster, fanart, logo); a person's own choice first.
 	Pictures  *map[string]string `json:"pictures,omitempty"`

@@ -167,7 +167,7 @@ func TestLibraryQuality_ATooLongDelayIsA400(t *testing.T) {
 }
 
 // "The items in the library should also show if a file satisfies the target or cutoff."
-func TestGetWork_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
+func TestListWorkParts_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
 	fixture := newWorksFixture(t)
 	library, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
 	ids := profileIDs(t, fixture.cache)
@@ -187,16 +187,16 @@ func TestGetWork_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
 	}
 	fixture.workDetail.row = apiserver.WorkDetailRow{
 		ID: 1, MediaType: "music", Title: "Album", SortTitle: "album", CategoryIDs: []int64{library.ID},
-		Parts: []apiserver.PartRow{
-			{ID: 1, MediaRef: "disc1:track1", File: file("aac", "m4a", 270, false)},  // within 10% of 256
-			{ID: 2, MediaRef: "disc1:track2", File: file("aac", "m4a", 128, false)},  // too low
-			{ID: 3, MediaRef: "disc1:track3", File: file("flac", "flac", 900, true)}, // the cutoff profile
-			{ID: 4, MediaRef: "disc1:track4", File: file("", "", 0, false)},          // not probed yet
-			{ID: 5, MediaRef: "disc1:track5", File: file("mp3", "mp3", 320, false)},  // fits only after the cutoff
-		},
+	}
+	fixture.workDetail.parts = []apiserver.PartRow{
+		{ID: 1, MediaRef: "disc1:track1", File: file("aac", "m4a", 270, false)},  // within 10% of 256
+		{ID: 2, MediaRef: "disc1:track2", File: file("aac", "m4a", 128, false)},  // too low
+		{ID: 3, MediaRef: "disc1:track3", File: file("flac", "flac", 900, true)}, // the cutoff profile
+		{ID: 4, MediaRef: "disc1:track4", File: file("", "", 0, false)},          // not probed yet
+		{ID: 5, MediaRef: "disc1:track5", File: file("mp3", "mp3", 320, false)},  // fits only after the cutoff
 	}
 
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1"))
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/parts"))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
 	}
@@ -206,7 +206,7 @@ func TestGetWork_MarksFilesAgainstTheTargetAndCutoff(t *testing.T) {
 				MeetsTarget *bool `json:"meets_target"`
 				MeetsCutoff *bool `json:"meets_cutoff"`
 			} `json:"file"`
-		} `json:"parts"`
+		} `json:"items"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)

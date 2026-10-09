@@ -91,7 +91,7 @@ func (f followFixture) run(t *testing.T, followed media.Follow) {
 
 func (f followFixture) held(t *testing.T) int {
 	t.Helper()
-	list, err := f.reader.List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	list, err := seriesIn(t.Context(), f.opened, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestFollowingAPersonAddsTheirNewSeriesOnceAndOnlyInTheFollowedRoles(t *test
 	if len(fixture.asked) != 1 || !fixture.asked[7] {
 		t.Errorf("shows looked up = %v, want only 7: the old show, the film and the directing credit are not added", fixture.asked)
 	}
-	list, _ := fixture.reader.List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	list, _ := seriesIn(t.Context(), fixture.opened, 3)
 	if list[0].Counts.Monitored == 0 {
 		t.Errorf("counts = %+v: the follow's monitor choice (all) should apply", list[0].Counts)
 	}

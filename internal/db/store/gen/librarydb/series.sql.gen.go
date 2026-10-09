@@ -279,69 +279,6 @@ func (q *Queries) ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersF
 	return items, nil
 }
 
-const listSeriesInCategory = `-- name: ListSeriesInCategory :many
-SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description
-FROM work w
-WHERE w.media_type = 'tv'
-  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
-  AND (w.sort_title > ?2 OR (w.sort_title = ?2 AND w.id > ?3))
-ORDER BY w.sort_title, w.id
-LIMIT ?4
-`
-
-type ListSeriesInCategoryParams struct {
-	CategoryID int64
-	AfterSort  string
-	AfterID    int64
-	PageSize   int64
-}
-
-type ListSeriesInCategoryRow struct {
-	ID             int64
-	CanonicalTitle string
-	SortTitle      string
-	Year           sql.NullInt64
-	AddedAt        int64
-	Description    sql.NullString
-}
-
-// A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
-// ordered by sort title with the id as the tie-break.
-func (q *Queries) ListSeriesInCategory(ctx context.Context, arg ListSeriesInCategoryParams) ([]ListSeriesInCategoryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSeriesInCategory,
-		arg.CategoryID,
-		arg.AfterSort,
-		arg.AfterID,
-		arg.PageSize,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListSeriesInCategoryRow{}
-	for rows.Next() {
-		var i ListSeriesInCategoryRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.CanonicalTitle,
-			&i.SortTitle,
-			&i.Year,
-			&i.AddedAt,
-			&i.Description,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSeriesTitles = `-- name: ListSeriesTitles :many
 SELECT w.id AS work_id, w.canonical_title AS title, w.year AS year
 FROM work w

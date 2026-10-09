@@ -90,6 +90,7 @@ type PartFileRow struct {
 	BitrateKbps   int64
 	Lossless      bool
 	Extension     string
+	RelPath       string
 	SizeBytes     int64
 	// What the probe measured of a video; empty for a field it did not read.
 	Resolution, HDR, AudioChannels string
@@ -138,7 +139,7 @@ type WorkDetailRow struct {
 	UpdatedAt     time.Time
 	ExternalIDs   []ExternalIDRow
 	Editions      []EditionRow
-	Parts         []PartRow
+	PartCount     int64
 	Credits       []CreditRow
 	Genres        []string
 	RootFolderIDs []int64
@@ -263,7 +264,6 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	view := buildWorkDetailView(row)
 	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
 	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
-	annotateFileQuality(access, row.CategoryIDs, view.Parts)
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
@@ -573,7 +573,7 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
 		ExternalIds: buildExternalIDViews(row.ExternalIDs),
 		Editions:    buildEditionViews(row.Editions),
-		Parts:       buildPartViews(row.Parts),
+		PartCount:   row.PartCount,
 		Credits:     buildCreditViews(row.Credits),
 		Genres:      row.Genres,
 	}
@@ -752,7 +752,7 @@ func partFileView(file PartFileRow) *gen.PartFile {
 		MediaObjectId: file.MediaObjectID, AudioCodec: strPtr(file.AudioCodec),
 		VideoCodec: strPtr(file.VideoCodec), Container: strPtr(file.Container),
 		BitrateKbps: file.BitrateKbps, Lossless: file.Lossless,
-		Extension: strPtr(file.Extension), Resolution: strPtr(file.Resolution), Hdr: strPtr(file.HDR),
+		Extension: strPtr(file.Extension), Path: strPtr(file.RelPath), Resolution: strPtr(file.Resolution), Hdr: strPtr(file.HDR),
 		AudioChannels: strPtr(file.AudioChannels), AudioLanguages: nonEmptyStrings(file.AudioLanguages),
 		Subtitles: nonEmptyStrings(file.Subtitles),
 	}

@@ -16,6 +16,7 @@ import (
 // with and answers a canned row or error, without a real library.db.
 type fakeWorkDetailReader struct {
 	row       apiserver.WorkDetailRow
+	parts     []apiserver.PartRow
 	err       error
 	lastID    int64
 	lastGroup string
@@ -38,10 +39,10 @@ func (f *fakeWorkDetailReader) WorkPlaces(_ context.Context, id int64) ([]int64,
 
 func (f *fakeWorkDetailReader) ListWorkParts(_ context.Context, id int64, group string, _ paginate.TextCursor, limit int) ([]apiserver.PartRow, error) {
 	f.lastID, f.lastGroup = id, group
-	if len(f.row.Parts) > limit {
-		return f.row.Parts[:limit], f.err
+	if len(f.parts) > limit {
+		return f.parts[:limit], f.err
 	}
-	return f.row.Parts, f.err
+	return f.parts, f.err
 }
 
 // Invariant 37: a work under a root folder attached to a category the caller
@@ -127,10 +128,7 @@ func TestGetWork_UnderAVisibleRootFolderAnswers200WithFullShape(t *testing.T) {
 			{ID: 10, Kind: "official", Label: "release-1", IsDefault: true,
 				ExternalIDs: []apiserver.ExternalIDRow{{Provider: "musicbrainz:release", ExternalID: "release-1"}}},
 		},
-		Parts: []apiserver.PartRow{
-			{ID: 20, MediaRef: "01", SortKey: "01", Monitored: true,
-				ExternalIDs: []apiserver.ExternalIDRow{{Provider: "musicbrainz:recording", ExternalID: "rec-1"}}},
-		},
+		PartCount:     1,
 		RootFolderIDs: []int64{rootVisible.ID},
 	}
 
@@ -160,11 +158,7 @@ func TestGetWork_UnderAVisibleRootFolderAnswers200WithFullShape(t *testing.T) {
 				ExternalID string `json:"external_id"`
 			} `json:"external_ids"`
 		} `json:"editions"`
-		Parts []struct {
-			ID       int64  `json:"id"`
-			MediaRef string `json:"media_ref"`
-			SortKey  string `json:"sort_key"`
-		} `json:"parts"`
+		PartCount int64 `json:"part_count"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -179,8 +173,8 @@ func TestGetWork_UnderAVisibleRootFolderAnswers200WithFullShape(t *testing.T) {
 	if len(body.Editions) != 1 || body.Editions[0].Label != "release-1" || len(body.Editions[0].ExternalIDs) != 1 {
 		t.Errorf("editions = %+v, want the one edition with its own external id", body.Editions)
 	}
-	if len(body.Parts) != 1 || body.Parts[0].MediaRef != "01" {
-		t.Errorf("parts = %+v, want the one part", body.Parts)
+	if body.PartCount != 1 {
+		t.Errorf("part_count = %d, want 1", body.PartCount)
 	}
 }
 

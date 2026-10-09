@@ -5638,6 +5638,8 @@ export interface components {
             container?: string;
             /** @description The file's own type, "m4a" -- container is ffprobe's demuxer list. */
             extension?: string;
+            /** @description Where the file is, relative to its root folder (its primary path when it has several). */
+            path?: string;
             /**
              * Format: int64
              * @description 0 when the attribute probe has not measured this file yet.
@@ -5787,7 +5789,11 @@ export interface components {
             editions: components["schemas"]["Edition"][];
             credits: components["schemas"]["Credit"][];
             genres: string[];
-            parts: components["schemas"]["WorkPart"][];
+            /**
+             * Format: int64
+             * @description How many parts the work has; the parts themselves are paged from GET /works/{id}/parts.
+             */
+            part_count: number;
             /** @description Null when nothing has ever wanted this album -- no scan, no subscription, no request. */
             wanted?: components["schemas"]["Wanted"] | null;
         };

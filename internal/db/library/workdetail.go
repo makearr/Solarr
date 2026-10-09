@@ -58,6 +58,8 @@ type PartFile struct {
 	Lossless      bool
 	// Extension is the file's own type, "m4a": ffprobe's container is a demuxer list.
 	Extension string
+	// RelPath is where the file is under its root folder, its primary path first.
+	RelPath   string
 	SizeBytes int64
 	// What the probe measured of a video; empty for a field it did not read.
 	Resolution, HDR, AudioChannels string
@@ -308,6 +310,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
 			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
 			Extension:     strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
+			RelPath:       row.RelPath,
 			SizeBytes:     row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
 			AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
 			AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),

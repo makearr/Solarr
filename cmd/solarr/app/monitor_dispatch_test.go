@@ -20,11 +20,14 @@ type monitoredWork struct {
 		Ref       string `json:"ref"`
 		Monitored bool   `json:"monitored"`
 	} `json:"groups"`
-	Parts []struct {
+}
+
+type monitoredParts struct {
+	Items []struct {
 		ID        int64  `json:"id"`
 		MediaRef  string `json:"media_ref"`
 		Monitored bool   `json:"monitored"`
-	} `json:"parts"`
+	} `json:"items"`
 }
 
 func (g goldenServer) monitored(t *testing.T, workID int64) (groups, parts map[string]bool, partIDs map[string]int64) {
@@ -33,11 +36,15 @@ func (g goldenServer) monitored(t *testing.T, workID int64) (groups, parts map[s
 	if err := json.Unmarshal(g.get(t, fmt.Sprintf("/works/%d", workID)), &work); err != nil {
 		t.Fatal(err)
 	}
+	var page monitoredParts
+	if err := json.Unmarshal(g.get(t, fmt.Sprintf("/works/%d/parts?limit=200", workID)), &page); err != nil {
+		t.Fatal(err)
+	}
 	groups, parts, partIDs = map[string]bool{}, map[string]bool{}, map[string]int64{}
 	for _, group := range work.Groups {
 		groups[group.Ref] = group.Monitored
 	}
-	for _, part := range work.Parts {
+	for _, part := range page.Items {
 		parts[part.MediaRef], partIDs[part.MediaRef] = part.Monitored, part.ID
 	}
 	return groups, parts, partIDs

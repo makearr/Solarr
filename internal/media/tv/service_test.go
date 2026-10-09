@@ -319,3 +319,20 @@ func TestSetEpisodeMonitoringChangesOnlyTheEpisodesItNames(t *testing.T) {
 		t.Errorf("parts = %v: the unnamed ones stay as the add left them", parts)
 	}
 }
+
+// seriesIn answers the series a library holds, each as the TV reader sees it on addNow.
+func seriesIn(ctx context.Context, opened *store.Store, categoryID int64) ([]library.SeriesSummary, error) {
+	rows, err := library.NewWorks(opened).List(ctx, library.WorkFilter{MediaType: "tv", CategoryIDs: []int64{categoryID}}, library.WorkCursor{}, 50)
+	if err != nil {
+		return nil, err
+	}
+	summaries := make([]library.SeriesSummary, 0, len(rows))
+	for _, row := range rows {
+		detail, err := library.NewSeriesReader(opened).Get(ctx, categoryID, row.ID, addNow)
+		if err != nil {
+			return nil, err
+		}
+		summaries = append(summaries, detail.Summary)
+	}
+	return summaries, nil
+}

@@ -88,41 +88,11 @@ type SeriesDetailRow struct {
 	Credits   []SeriesCreditRow
 }
 
-// SeriesCursor is where the next page of a series list starts.
-type SeriesCursor struct {
-	SortTitle string
-	ID        int64
-}
-
 // SeriesReader answers the TV screens' questions.
 type SeriesReader struct{ store *store.Store }
 
 // NewSeriesReader builds it over an open library store.
 func NewSeriesReader(opened *store.Store) SeriesReader { return SeriesReader{store: opened} }
-
-// List returns up to pageSize series of one category after the cursor, with counts as of now.
-func (r SeriesReader) List(ctx context.Context, categoryID int64, after SeriesCursor, pageSize int64, now time.Time) ([]SeriesSummary, error) {
-	queries := librarydb.New(r.store.Read())
-	rows, err := queries.ListSeriesInCategory(ctx, librarydb.ListSeriesInCategoryParams{
-		CategoryID: categoryID, AfterSort: after.SortTitle, AfterID: after.ID, PageSize: pageSize,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("library: list series: %w", err)
-	}
-	summaries := make([]SeriesSummary, len(rows))
-	ids := make([]int64, len(rows))
-	for i, row := range rows {
-		ids[i] = row.ID
-		summaries[i] = SeriesSummary{
-			WorkID: row.ID, Title: row.CanonicalTitle, SortTitle: row.SortTitle, Year: row.Year.Int64,
-			Description: row.Description.String, AddedAt: row.AddedAt,
-		}
-	}
-	if err := r.fill(ctx, queries, summaries, ids, now); err != nil {
-		return nil, err
-	}
-	return summaries, nil
-}
 
 // Get returns one series of a category with every episode; ErrSeriesNotFound when it is not there.
 func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now time.Time) (SeriesDetailRow, error) {

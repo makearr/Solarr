@@ -103,7 +103,7 @@ func TestScanAddsTheSeriesAndAttachesEpisodes(t *testing.T) {
 	}
 
 	reader := library.NewSeriesReader(opened)
-	list, err := reader.List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	list, err := seriesIn(t.Context(), opened, 3)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("list = %+v, %v", list, err)
 	}
@@ -139,7 +139,7 @@ func TestScanMonitorsWhatTheLibraryAsksFor(t *testing.T) {
 		if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
 			t.Fatal(err)
 		}
-		list, err := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+		list, err := seriesIn(t.Context(), opened, 3)
 		if err != nil || len(list) != 1 {
 			t.Fatalf("%s: list = %+v, %v", policy, list, err)
 		}
@@ -158,7 +158,7 @@ func TestAnExcludedSeriesIsNeitherAddedNorQueued(t *testing.T) {
 	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow); len(list) != 0 {
+	if list, _ := seriesIn(t.Context(), opened, 3); len(list) != 0 {
 		t.Errorf("an excluded series was added: %+v", list)
 	}
 	queued, err := librarydb.New(opened.Read()).CountUnidentified(t.Context(), librarydb.CountUnidentifiedParams{FilterRootFolders: 0, RootFolderIds: "[]"})
@@ -175,7 +175,7 @@ func TestScanQueuesAFolderItCannotPlace(t *testing.T) {
 	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
 		t.Fatal(err)
 	}
-	if list, _ := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow); len(list) != 0 {
+	if list, _ := seriesIn(t.Context(), opened, 3); len(list) != 0 {
 		t.Errorf("nothing should have been added: %+v", list)
 	}
 	queued, err := librarydb.New(opened.Read()).CountUnidentified(t.Context(), librarydb.CountUnidentifiedParams{FilterRootFolders: 0, RootFolderIds: "[]"})
@@ -240,7 +240,7 @@ func TestScanFindsASeriesAlreadyInTheLibraryByAliasAndMultiEpisodeFiles(t *testi
 	if err := consumer.Observe(t.Context(), root, 3, second); err != nil {
 		t.Fatal(err)
 	}
-	list, _ := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	list, _ := seriesIn(t.Context(), opened, 3)
 	if len(list) != 1 || list[0].Counts.Present != 2 {
 		t.Errorf("one series, two episodes present: %+v", list)
 	}
@@ -315,7 +315,7 @@ func scanOne(t *testing.T, sky namedSkyhook, files ...string) []library.SeriesSu
 	if err := consumer.Observe(t.Context(), settings.RootFolder{ID: 1, Path: scanRoot, Online: true}, 3, batch); err != nil {
 		t.Fatal(err)
 	}
-	list, err := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	list, err := seriesIn(t.Context(), opened, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +380,7 @@ func TestRetryPlacesFilesWaitingForReviewOnceTheProvidersKnowTheSeries(t *testin
 	if waiting, _ := unidentified.Count(t.Context()); waiting != 0 {
 		t.Errorf("waiting = %d after the retry, want the files placed", waiting)
 	}
-	if list, _ := library.NewSeriesReader(opened).List(t.Context(), 3, library.SeriesCursor{}, 10, addNow); len(list) != 1 || list[0].Counts.Present != 2 {
+	if list, _ := seriesIn(t.Context(), opened, 3); len(list) != 1 || list[0].Counts.Present != 2 {
 		t.Errorf("list = %+v, want the series with both episodes present", list)
 	}
 }

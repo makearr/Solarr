@@ -106,7 +106,7 @@ func TestImportPlacesAFolderOfEpisodesUnderTheSeriesAndCoversThem(t *testing.T) 
 			t.Errorf("%s not placed: %v", want, err)
 		}
 	}
-	list, _ := reader.List(t.Context(), 3, library.SeriesCursor{}, 10, addNow)
+	list, _ := seriesIn(t.Context(), opened, 3)
 	if len(list) != 1 || list[0].Counts.Present != 2 {
 		t.Errorf("both episodes of the season are on disk: %+v", list)
 	}

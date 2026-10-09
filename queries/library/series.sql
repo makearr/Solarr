@@ -55,17 +55,6 @@ INSERT INTO work_certification (work_id, system, rating)
 VALUES (?, ?, ?)
 ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating;
 
--- A TV library's series: works with a desired item in the category (visibility is desired-item membership, ADR-27),
--- ordered by sort title with the id as the tie-break.
--- name: ListSeriesInCategory :many
-SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description
-FROM work w
-WHERE w.media_type = 'tv'
-  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
-  AND (w.sort_title > sqlc.arg(after_sort) OR (w.sort_title = sqlc.arg(after_sort) AND w.id > sqlc.arg(after_id)))
-ORDER BY w.sort_title, w.id
-LIMIT sqlc.arg(page_size);
-
 -- name: GetSeriesInCategory :one
 SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms
 FROM work w

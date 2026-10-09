@@ -188,17 +188,14 @@ func TestSeriesReaderListsAndDetailsOnlyWhatTheCategoryHolds(t *testing.T) {
 	}
 
 	reader := library.NewSeriesReader(opened)
-	list, err := reader.List(t.Context(), 5, library.SeriesCursor{}, 10, seriesAt)
-	if err != nil || len(list) != 1 {
-		t.Fatalf("list = %+v, %v", list, err)
+	got, err := reader.Get(t.Context(), 5, result.WorkID, seriesAt)
+	if err != nil {
+		t.Fatal(err)
 	}
-	row := list[0]
+	row := got.Summary
 	if row.Counts.Total != 2 || row.Counts.Monitored != 2 || row.Counts.AiredMissing != 2 || !row.Monitored || row.ProfileID != 2 ||
 		row.Fields["network"] != "" || len(row.Seasons) != 2 || row.Genres[0] != "Drama" {
 		t.Errorf("row = %+v", row)
-	}
-	if other, _ := reader.List(t.Context(), 6, library.SeriesCursor{}, 10, seriesAt); len(other) != 0 {
-		t.Errorf("another category sees %+v", other)
 	}
 	if _, err := reader.Get(t.Context(), 6, result.WorkID, seriesAt); !errors.Is(err, library.ErrSeriesNotFound) {
 		t.Errorf("Get in the wrong category: %v", err)

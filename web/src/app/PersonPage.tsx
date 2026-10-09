@@ -15,6 +15,7 @@ import { workLink } from "@/lib/workLink";
 
 import { AddToLibrary } from "./work/AddWork";
 import { ChooseImage } from "./ChooseImage";
+import { useAllParts } from "./work/WorkParts";
 import { CoverArt } from "./CoverArt";
 import { FollowPanel } from "./FollowPanel";
 
@@ -467,17 +468,7 @@ function KnownForTile({ title, categoryId }: { title: KnownFor; categoryId: numb
 function AlbumRow({ work }: { work: PersonWork }) {
   const [expanded, setExpanded] = useState(false);
 
-  const tracks = useQuery({
-    queryKey: ["work", work.id],
-    enabled: expanded,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}", {
-        params: { path: { id: work.id } },
-      });
-      if (error) throw error;
-      return data;
-    },
-  });
+  const tracks = useAllParts(work.id, undefined, expanded);
 
   return (
     <li className="flex flex-col text-sm">
@@ -506,17 +497,17 @@ function AlbumRow({ work }: { work: PersonWork }) {
 
       {expanded && (
         <div className="border-t border-border-subtle bg-canvas px-3 py-2 pl-11">
-          {tracks.isLoading && <p className="text-xs text-ink-muted">Loading tracks…</p>}
-          {tracks.error !== null && <p className="text-xs text-ink-muted">Tracks could not be read.</p>}
-          {tracks.data && tracks.data.parts.length === 0 && (
+          {tracks.loading && <p className="text-xs text-ink-muted">Loading tracks…</p>}
+          {tracks.error && <p className="text-xs text-ink-muted">Tracks could not be read.</p>}
+          {!tracks.loading && !tracks.error && tracks.parts.length === 0 && (
             <p className="text-xs text-ink-muted">No tracklist yet.</p>
           )}
-          {tracks.data && tracks.data.parts.length > 0 && (
+          {tracks.parts.length > 0 && (
             <ul className="flex flex-col gap-1">
-              {tracks.data.parts.map((part) => (
+              {tracks.parts.map((part) => (
                 <li key={part.id} className="flex items-center gap-3 text-xs">
                   <span className="w-10 shrink-0 text-right font-mono tabular-nums text-ink-muted">
-                    {formatTrackNumber(part.media_ref, part.sort_key, discCountOf(tracks.data.parts))}
+                    {formatTrackNumber(part.media_ref, part.sort_key, discCountOf(tracks.parts))}
                   </span>
                   <span className="min-w-0 flex-1 truncate">{part.title ?? part.media_ref}</span>
                   {part.runtime_ms != null && (

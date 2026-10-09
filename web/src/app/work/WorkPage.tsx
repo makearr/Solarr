@@ -175,8 +175,8 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
                   Unverified
                 </Chip>
               )}
-              {groups.length > 0 && work.parts.length === 0 && <Chip>{t("work.waitingForMetadata")}</Chip>}
-              {groups.length > 0 && work.parts.length > 0 && (
+              {groups.length > 0 && work.part_count === 0 && <Chip>{t("work.waitingForMetadata")}</Chip>}
+              {groups.length > 0 && work.part_count > 0 && (
                 <Chip tone={counts.required > 0 && counts.present >= counts.required ? "ok" : "neutral"}>
                   {counts.required > 0
                     ? t("work.partsOnDisk", { ...words, present: counts.present, required: counts.required })
@@ -470,7 +470,8 @@ function EditionCard({ edition, workTitle }: { edition: Edition; workTitle: stri
   );
 }
 
-/** Sonarr's Files tab: every part with a file, what the probe measured, and whether it meets the library's quality. */
+/** Sonarr's Files tab: every part with a file, where it is, what the probe measured, and whether it meets the library's
+ *  quality. */
 function FilesTab({ work, words }: { work: Work; words: Vocabulary }) {
   const { parts, loading } = useAllParts(work.id, undefined);
   const present = parts.filter((part) => part.file);
@@ -487,6 +488,7 @@ function FilesTab({ work, words }: { work: Work; words: Vocabulary }) {
             </td>
             <td className="py-1.5">
               <span>{part.title ?? part.media_ref}</span>
+              {part.file?.path && <span className="block break-all font-mono text-xs text-ink-muted">{part.file.path}</span>}
               <span className="mt-0.5 flex flex-wrap gap-1">
                 {part.file && fileChips(part.file).map((chip) => <Chip key={chip}>{chip}</Chip>)}
               </span>
