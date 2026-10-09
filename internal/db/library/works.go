@@ -58,6 +58,8 @@ const (
 	WorkSortStatus  WorkSort = "status"
 	WorkSortGenre   WorkSort = "genre"
 	WorkSortTag     WorkSort = "tag"
+	// WorkSortFacet orders by WorkFilter.SortFacet, one of the type's own facets (a series' network).
+	WorkSortFacet WorkSort = "facet"
 )
 
 // SortDirection is which way WorkSort orders. The zero value is ascending.
@@ -117,6 +119,8 @@ type WorkFilter struct {
 	Where []listfilter.Condition
 	// Facets are the media type's facets a condition of Where may name.
 	Facets []WorkFacet
+	// SortFacet is the facet WorkSortFacet orders by.
+	SortFacet WorkFacet
 }
 
 // WorkCursor is a position in the list: the id always breaks ties, since without it a
@@ -250,8 +254,8 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		numberColumn = sortNumberColumn(filter.Sort)
 		predicates.AddIf(after.ID != 0, "("+numberColumn+", work.id) "+operator+" (?, ?)", after.SortNumber, after.ID)
 		orderBy = numberColumn + orderDirection + ", work.id" + orderDirection
-	case WorkSortStatus, WorkSortGenre, WorkSortTag:
-		textColumn = sortTextColumn(filter.Sort)
+	case WorkSortStatus, WorkSortGenre, WorkSortTag, WorkSortFacet:
+		textColumn = sortTextColumn(filter.Sort, filter.SortFacet)
 		predicates.AddIf(after.ID != 0, "("+textColumn+", work.id) "+operator+" (?, ?)", after.SortText, after.ID)
 		orderBy = textColumn + orderDirection + ", work.id" + orderDirection
 	default:
@@ -309,8 +313,10 @@ func sortNumberColumn(sort WorkSort) string {
 }
 
 // sortTextColumn is the text a status, genre or tag sort orders by: the album's first genre or tag by name.
-func sortTextColumn(sort WorkSort) string {
+func sortTextColumn(sort WorkSort, facet WorkFacet) string {
 	switch sort {
+	case WorkSortFacet:
+		return facetSortColumn(facet)
 	case WorkSortGenre:
 		return tagNameColumn("=")
 	case WorkSortTag:

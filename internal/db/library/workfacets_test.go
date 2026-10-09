@@ -69,3 +69,44 @@ func TestTheWorksListServesASeriesWithItsFacets(t *testing.T) {
 		}
 	}
 }
+
+// A facet orders the list both ways, page by page: works without a value come first ascending, as "" sorts.
+func TestTheWorksListOrdersByAFacet(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	statuses := map[string]string{"Alpha": "upcoming", "Bravo": "continuing", "Charlie": "ended", "Delta": ""}
+	for title, status := range statuses {
+		work := createWork(t, opened, "tv", title)
+		createDesiredInCategory(t, opened, work.ID, 4)
+		if status != "" {
+			if err := works.SetManualField(t.Context(), seriesAt, work.ID, "status", status); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	order := func(direction library.SortDirection) []string {
+		t.Helper()
+		var titles []string
+		var after library.WorkCursor
+		for range 6 {
+			rows, err := works.List(t.Context(), library.WorkFilter{
+				CategoryIDs: []int64{4}, Sort: library.WorkSortFacet, SortFacet: tvFacets[1], Direction: direction,
+			}, after, 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) == 0 {
+				break
+			}
+			titles = append(titles, rows[0].CanonicalTitle)
+			after = library.WorkCursor{SortText: rows[0].SortText, ID: rows[0].ID}
+		}
+		return titles
+	}
+	if got, want := order(library.SortAscending), []string{"Delta", "Bravo", "Charlie", "Alpha"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("by status ascending = %v, want %v", got, want)
+	}
+	if got, want := order(library.SortDescending), []string{"Alpha", "Charlie", "Bravo", "Delta"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("by status descending = %v, want %v", got, want)
+	}
+}

@@ -209,9 +209,9 @@ export function Wanted() {
             <Message>Nothing wanted -- every monitored album in this library is complete.</Message>
           )}
           {layout === "poster" ? (
-            <PosterWall entries={items.map(workEntry)} options={posterOptions} />
+            <PosterWall entries={items.map((work) => workEntry(work, categoryId))} options={posterOptions} />
           ) : (
-            <OverviewRows entries={items.map(workEntry)} />
+            <OverviewRows entries={items.map((work) => workEntry(work, categoryId))} />
           )}
         </div>
       )}

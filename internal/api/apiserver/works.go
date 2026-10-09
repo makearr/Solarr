@@ -42,6 +42,15 @@ const (
 	WorkSortTag     WorkSort = "tag"
 )
 
+// Facet answers the facet key of a "facet:<key>" sort, empty for a base one.
+func (s WorkSort) Facet() string {
+	key, _ := strings.CutPrefix(string(s), "facet:")
+	if key == string(s) {
+		return ""
+	}
+	return key
+}
+
 // SortDirection is which way a WorkSort orders. The zero value is ascending.
 type SortDirection string
 
@@ -134,6 +143,8 @@ type WorkRow struct {
 	Facets map[string][]string
 	// PresentTotal, RequiredTotal and Upgradable sum the work's monitored groups.
 	PresentTotal, RequiredTotal, Upgradable int64
+	// PosterURL is the work's poster at its provider, empty for a work with none (an album's cover is its artwork).
+	PosterURL string
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -164,7 +175,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 
-	sort := WorkSort(derefOr(params.Sort, gen.ListWorksParamsSort("")))
+	sort := WorkSort(derefOr(params.Sort, ""))
 	direction := SortAscending
 	if derefOr(params.Dir, gen.ListWorksParamsDir("")) == gen.ListWorksParamsDirDesc {
 		direction = SortDescending
@@ -209,9 +220,11 @@ func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
 	case WorkSortArtist:
 		artist, title, _ := strings.Cut(cursor.Sort, artistCursorSeparator)
 		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}
-	default:
-		return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}
 	}
+	if sort.Facet() != "" {
+		return WorksCursor{SortText: cursor.Sort, ID: cursor.ID}
+	}
+	return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}
 }
 
 // visibility resolves what a caller may see into ADR-27's two halves -- root
@@ -307,6 +320,7 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.
 			facets = map[string][]string{}
 		}
 		views[index].Facets = &facets
+		views[index].PosterUrl = strPtr(row.PosterURL)
 		views[index].Totals = &struct {
 			Present    int64 `json:"present"`
 			Required   int64 `json:"required"`
@@ -347,6 +361,9 @@ func cursorValueFor(sort WorkSort, row WorkRow) string {
 	case WorkSortArtist:
 		return row.ArtistSortName + artistCursorSeparator + row.SortTitle
 	default:
+		if sort.Facet() != "" {
+			return row.SortText
+		}
 		return row.SortTitle
 	}
 }

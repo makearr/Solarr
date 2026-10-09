@@ -22,7 +22,8 @@ import (
 // CandidateSearch bridges the search a person asks for to the web interface: todo 5.2's manual search, per item and
 // per library, plus ADR-57's acquire.send. The type's own search runs through its media.Searching.
 type CandidateSearch struct {
-	Works library.Works
+	Works   library.Works
+	Desired library.Desired
 	// Searching answers a media type's search; nil or false leaves a type unsearchable.
 	Searching func(mediaType string) (media.Searching, bool)
 	// Search carries the stores decision rows and blocklisting read; any type's will do.
@@ -76,8 +77,44 @@ func (c CandidateSearch) SearchWork(
 	return c.searchItemResultView(ctx, result), nil
 }
 
-// GrabWork is the automatic search of the scope: search, then send the best release.
+// GrabWork is the automatic search of the scope: search, then send the best release. A whole work wanted group by
+// group (a series) is Sonarr's "Search monitored": each monitored group that is not complete, in turn.
 func (c CandidateSearch) GrabWork(ctx context.Context, workID int64, scope apiserver.SearchScope) (apiserver.GrabResult, error) {
+	if scope.Group == nil && scope.Part == nil {
+		whole, refs, err := c.Desired.GroupsToSearch(ctx, workID)
+		if err != nil {
+			return apiserver.GrabResult{}, err
+		}
+		if !whole {
+			return c.grabGroups(ctx, workID, refs)
+		}
+	}
+	return c.grabOne(ctx, workID, scope)
+}
+
+// grabGroups searches each group in turn and adds up what they came to.
+func (c CandidateSearch) grabGroups(ctx context.Context, workID int64, refs []string) (apiserver.GrabResult, error) {
+	if len(refs) == 0 {
+		return apiserver.GrabResult{}, apiserver.ErrWorkNotWanted
+	}
+	var total apiserver.GrabResult
+	for _, ref := range refs {
+		result, err := c.grabOne(ctx, workID, apiserver.SearchScope{Group: &ref})
+		if err != nil {
+			return total, err
+		}
+		total.Found += result.Found
+		total.Refused += result.Refused
+		total.AlreadyDownloading = total.AlreadyDownloading || result.AlreadyDownloading
+		total.Held = total.Held || result.Held
+		if total.Sent == nil {
+			total.Sent = result.Sent
+		}
+	}
+	return total, nil
+}
+
+func (c CandidateSearch) grabOne(ctx context.Context, workID int64, scope apiserver.SearchScope) (apiserver.GrabResult, error) {
 	searching, itemID, part, err := c.searching(ctx, workID, scope)
 	if err != nil {
 		return apiserver.GrabResult{}, err

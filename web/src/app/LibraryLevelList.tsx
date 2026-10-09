@@ -136,7 +136,7 @@ function imageSourceFor(level: string | undefined, item: LevelItem): { subject: 
 /** A level row as the index views show it. */
 function entryOf(level: string | undefined, item: LevelItem): IndexEntry {
   return {
-    id: item.id, kind: level === "artists" ? "artists" : level === "albums" ? "albums" : "tracks",
+    id: item.id, kind: level === "artists" ? "artists" : level === "albums" ? "works" : "tracks",
     title: item.title, subtitle: item.subtitle, year: item.year, status: item.status,
     presentCount: item.present_count, requiredCount: item.required_count, monitored: item.monitored,
     overview: item.overview, sizeBytes: item.size_bytes, artistCover: item.artist_cover,

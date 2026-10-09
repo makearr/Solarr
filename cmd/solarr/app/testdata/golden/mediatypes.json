@@ -39,7 +39,7 @@
         "key": "primary_type",
         "kind": "enum",
         "label": "Type",
-        "sortable": false
+        "sortable": true
       },
       {
         "column": true,
@@ -48,7 +48,7 @@
         "key": "label",
         "kind": "text",
         "label": "Label",
-        "sortable": false
+        "sortable": true
       },
       {
         "column": false,
@@ -57,7 +57,7 @@
         "key": "genre",
         "kind": "list",
         "label": "Genre",
-        "sortable": false
+        "sortable": true
       }
     ],
     "follow_options": [
@@ -221,7 +221,7 @@
         "key": "status",
         "kind": "enum",
         "label": "Status",
-        "sortable": false
+        "sortable": true
       },
       {
         "choices": [
@@ -254,7 +254,7 @@
         "key": "network",
         "kind": "text",
         "label": "Network",
-        "sortable": false
+        "sortable": true
       },
       {
         "column": false,
@@ -263,7 +263,7 @@
         "key": "genre",
         "kind": "list",
         "label": "Genre",
-        "sortable": false
+        "sortable": true
       },
       {
         "column": true,

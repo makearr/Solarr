@@ -4,14 +4,16 @@ import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 
 import { api } from "@/api/client";
 
-import { EditAlbumButton } from "./EditAlbum";
+import { grabNote } from "./work/grabNote";
+
+import { EditWorkButton } from "./work/EditWork";
 
 /** Radarr's per-item actions on an album or artist (asked 2026-09-30): monitor, search, refresh.
  *  Every click stops at the button, since the tile or row around it is a link. */
 export function useItemActions(level: string | undefined, id: number, monitored: boolean | undefined) {
   const queryClient = useQueryClient();
   const [note, setNote] = useState<string>();
-  const album = level === "albums";
+  const album = level === "works";
   const refresh = useMutation({
     mutationFn: async () => {
       const { error } = album
@@ -27,7 +29,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
       if (album) {
         const { data, error } = await api.POST("/works/{id}/grab", { params: { path: { id } } });
         if (error) throw error;
-        return data.sent ? "Sent to the download client" : data.found > 0 ? "Found, none acceptable" : "Nothing found";
+        return grabNote(data);
       }
       const { error } = await api.POST("/people/{id}/search", { params: { path: { id } } });
       if (error) throw error;
@@ -103,7 +105,7 @@ export function ActionButtons({ actions, showNote = true }: { actions: Actions; 
       >
         <RefreshCw aria-hidden className={`size-3.5 ${actions.refresh.isPending ? "animate-spin" : ""}`} />
       </button>
-      {actions.album && <EditAlbumButton id={actions.id} />}
+      {actions.album && <EditWorkButton id={actions.id} />}
       {showNote && actions.note && <span className="truncate text-xs text-ink-muted">{actions.note}</span>}
     </span>
   );

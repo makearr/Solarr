@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -51,13 +52,22 @@ func (a Works) ListWorks(
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
 	}
+	sort, sortFacet := library.WorkSort(filter.Sort), library.WorkFacet{}
+	if key := filter.Sort.Facet(); key != "" {
+		index := slices.IndexFunc(facets, func(facet library.WorkFacet) bool { return facet.Key == key && facet.Sortable })
+		if index < 0 {
+			return nil, fmt.Errorf("%w: %s cannot order this list", apiserver.ErrInvalidChoice, key)
+		}
+		sort, sortFacet = library.WorkSortFacet, facets[index]
+	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
 			Where:           where,
 			Facets:          facets,
+			SortFacet:       sortFacet,
 			RootFolderIDs:   filter.RootFolderIDs,
 			CategoryIDs:     filter.CategoryIDs,
-			Sort:            library.WorkSort(filter.Sort),
+			Sort:            sort,
 			Direction:       library.SortDirection(filter.Direction),
 			FreshSince:      freshSince,
 			FreshRSSSince:   freshRSSSince,
@@ -117,17 +127,26 @@ func (a Works) ListWorks(
 		}
 		views[index] = view
 	}
-	return views, a.fillFacets(ctx, views)
+	return views, a.fillTypeFields(ctx, views)
 }
 
-// fillFacets reads each row's facets, by the facets of its own media type.
-func (a Works) fillFacets(ctx context.Context, views []apiserver.WorkRow) error {
+// fillTypeFields reads each row's poster and its facets, by the facets of its own media type.
+func (a Works) fillTypeFields(ctx context.Context, views []apiserver.WorkRow) error {
+	byType := map[string][]int64{}
+	ids := make([]int64, len(views))
+	for i, view := range views {
+		byType[view.MediaType] = append(byType[view.MediaType], view.ID)
+		ids[i] = view.ID
+	}
+	posters, err := a.Works.Posters(ctx, ids)
+	if err != nil {
+		return err
+	}
+	for i := range views {
+		views[i].PosterURL = posters[views[i].ID]
+	}
 	if a.Facets == nil {
 		return nil
-	}
-	byType := map[string][]int64{}
-	for _, view := range views {
-		byType[view.MediaType] = append(byType[view.MediaType], view.ID)
 	}
 	for mediaType, ids := range byType {
 		values, err := a.Works.FacetValues(ctx, a.Facets(mediaType), ids)

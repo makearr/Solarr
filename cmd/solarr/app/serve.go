@@ -752,8 +752,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},
-		WorkRefresher: adapters.WorkRefresher{Works: library.NewWorks(p.library), Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf},
-		PersonRemover: adapters.People{Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library)},
+		WorkExclusions: adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
+		WorkRefresher:  adapters.WorkRefresher{Works: library.NewWorks(p.library), Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf},
+		PersonRemover:  adapters.People{Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library)},
 		Follower: adapters.Follow{
 			Service: p.followService(), People: library.NewPeople(p.library), Organisations: library.NewOrganisations(p.library),
 		},

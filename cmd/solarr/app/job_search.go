@@ -190,7 +190,7 @@ func (p *process) registerSearchCategoryJob(registry *jobs.Registry, executor *j
 // candidateSearcher builds adapters.CandidateSearch over the real stores.
 func (p *process) candidateSearcher() adapters.CandidateSearch {
 	return adapters.CandidateSearch{
-		Works: library.NewWorks(p.library), Searching: adapters.MediaTypes{Registry: p.media}.SearchingOf,
+		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library), Searching: adapters.MediaTypes{Registry: p.media}.SearchingOf,
 		Search: p.musicSearch(), Dispatch: p.musicDispatch(), Queue: p.queue, Clock: clock.NewSystem(),
 	}
 }

@@ -15,14 +15,14 @@ var facets = []media.Facet{
 		Key: "primary_type", Label: "Type", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
 		Source:  media.FacetSource{Kind: media.SourceColumn, Name: "primary_type"},
 		Choices: []media.Choice{{Key: "Album", Label: "Album"}, {Key: "EP", Label: "EP"}, {Key: "Single", Label: "Single"}, {Key: "Broadcast", Label: "Broadcast"}, {Key: "Other", Label: "Other"}},
-		Column:  true, Filterable: true,
+		Column:  true, Sortable: true, Filterable: true,
 	},
 	{
 		Key: "label", Label: "Label", Entity: model.LevelEntityWork, Kind: media.FacetText,
-		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: RoleLabel}, Column: true, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: RoleLabel}, Column: true, Sortable: true, Filterable: true,
 	},
 	{
 		Key: "genre", Label: "Genre", Entity: model.LevelEntityWork, Kind: media.FacetList,
-		Source: media.FacetSource{Kind: media.SourceTags, Name: "musicbrainz"}, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceTags, Name: "musicbrainz"}, Sortable: true, Filterable: true,
 	},
 }

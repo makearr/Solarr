@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -129,6 +130,8 @@ type Config struct {
 	ArtistActions ArtistActions
 	// WorkRefresher is a work's Refresh. Optional: nil answers 503.
 	WorkRefresher WorkRefresher
+	// WorkExclusions lists and lifts "do not add it back". Optional: nil answers 503.
+	WorkExclusions WorkExclusions
 	// ArrConnections reads a connection's indexers and download clients. Optional: nil answers 503.
 	ArrConnections ArrConnections
 	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
@@ -278,6 +281,7 @@ type Server struct {
 	links                   LinkManager
 	incompleteDiscographies IncompleteDiscographies
 	workRefresher           WorkRefresher
+	workExclusions          WorkExclusions
 	arrConnections          ArrConnections
 	blockedContent          BlockedContentLister
 	packs                   PackLister
@@ -383,6 +387,7 @@ func New(config Config) (*Server, error) {
 		links:                   config.Links,
 		incompleteDiscographies: config.IncompleteDiscographies,
 		workRefresher:           config.WorkRefresher,
+		workExclusions:          config.WorkExclusions,
 		arrConnections:          config.ArrConnections,
 		blockedContent:          config.BlockedContent,
 		packs:                   config.Packs,
@@ -521,8 +526,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/series/wanted", server.routeListWantedEpisodes)
 			secured.Get("/images/remote", server.routeGetRemoteImage)
 			secured.Get("/series/lookup", server.routeLookupSeries)
-			secured.Get("/series/exclusions", server.ListSeriesExclusions)
-			secured.Delete("/series/exclusions", server.routeRemoveSeriesExclusion)
+			secured.Get("/works/exclusions", server.routeListWorkExclusions)
+			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Delete("/series/{id}", server.routeDeleteSeries)
 			secured.Get("/series/{id}", server.routeGetSeries)
 			secured.Post("/series/{id}/refresh", server.routeRefreshSeries)
@@ -835,6 +840,9 @@ func (s *Server) routeListJobs(w http.ResponseWriter, r *http.Request) {
 	s.ListJobs(w, r, params)
 }
 
+// worksSortPattern is the spec's pattern for GET /works' sort.
+var worksSortPattern = regexp.MustCompile(`^(title|year|added|artist|searched|imported|size|profile|status|genre|tag|facet:[a-z_]+)$`)
+
 func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	var params gen.ListWorksParams
@@ -861,18 +869,12 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		params.CategoryId = &categoryID
 	}
 	if raw := query.Get("sort"); raw != "" {
-		switch gen.ListWorksParamsSort(raw) {
-		case gen.ListWorksParamsSortTitle, gen.ListWorksParamsSortYear, gen.ListWorksParamsSortAdded,
-			gen.ListWorksParamsSortArtist, gen.ListWorksParamsSortSearched, gen.ListWorksParamsSortImported,
-			gen.ListWorksParamsSortSize, gen.ListWorksParamsSortProfile, gen.ListWorksParamsSortStatus,
-			gen.ListWorksParamsSortGenre, gen.ListWorksParamsSortTag:
-			sort := gen.ListWorksParamsSort(raw)
-			params.Sort = &sort
-		default:
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "sort must be title, year, added, artist, searched, imported, size, profile, status, genre or tag")
+		if !worksSortPattern.MatchString(raw) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request",
+				"sort must be title, year, added, artist, searched, imported, size, profile, status, genre, tag or facet:<key>")
 			return
 		}
+		params.Sort = &raw
 	}
 	if raw := query.Get("dir"); raw != "" {
 		switch gen.ListWorksParamsDir(raw) {

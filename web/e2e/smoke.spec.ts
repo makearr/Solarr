@@ -66,7 +66,8 @@ test("the default tier shows the whole library tree", async ({ page }) => {
 
   // After its levels a library has Wanted, Insights, Files and Settings; their pages are tabs (2026-10-04).
   for (const entry of ["Artists", "Albums", "Tracks", "Labels", "Wanted", "Insights", "Files"]) {
-    await expect(nav.getByRole("link", { name: entry, exact: true })).toBeVisible();
+    // A level shows its count beside its name once the library has been counted.
+    await expect(nav.getByRole("link", { name: new RegExp(`^${entry}( [\\d,]+)?$`) })).toBeVisible();
   }
   await expect(nav.getByRole("link", { name: "Settings", exact: true })).toHaveCount(1);
 

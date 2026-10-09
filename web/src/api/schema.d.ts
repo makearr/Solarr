@@ -1744,6 +1744,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/exclusions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The works of one media type that were removed and must not be added again. Administrator only. */
+        get: operations["listWorkExclusions"];
+        put?: never;
+        post?: never;
+        /** Allow a removed work to be added again, by any of the ids it was excluded by. Administrator only. */
+        delete: operations["removeWorkExclusion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}": {
         parameters: {
             query?: never;
@@ -3204,24 +3222,6 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/exclusions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The series that were deleted and must not be added again, by any library. */
-        get: operations["listSeriesExclusions"];
-        put?: never;
-        post?: never;
-        /** Allow a deleted series to be added again. Administrator only. */
-        delete: operations["removeSeriesExclusion"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4720,6 +4720,8 @@ export interface components {
             next_cursor?: string;
         };
         Work: {
+            /** @description The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover). */
+            poster_url?: string;
             /**
              * Format: int64
              * @description The person the work is listed under (an album's artist), for a type with a lead role.
@@ -5596,9 +5598,9 @@ export interface components {
             /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
             credits?: components["schemas"]["SeriesCredit"][];
         };
-        SeriesExclusion: {
+        WorkExclusion: {
             title: string;
-            /** @description One id the series was excluded by; removing it allows the series again. */
+            /** @description One id the work was excluded by; removing it allows the work again. */
             provider: string;
             external_id: string;
             /**
@@ -9361,8 +9363,8 @@ export interface operations {
                 limit?: number;
                 /** @description Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing. */
                 category_id?: number;
-                /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added). */
-                sort?: "title" | "year" | "added" | "artist" | "searched" | "imported" | "size" | "profile" | "status" | "genre" | "tag";
+                /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added). facet:<key> orders by one of the library's media type's sortable facets (a series' network, an album's label); an unknown or unsortable one is refused. */
+                sort?: string;
                 dir?: "asc" | "desc";
                 /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
                 fresh?: boolean;
@@ -10199,6 +10201,55 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description The run is not in a revertible state (still running, or already reverted). */
             409: components["responses"]["Problem"];
+        };
+    };
+    listWorkExclusions: {
+        parameters: {
+            query: {
+                media_type: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One entry per removed work. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkExclusion"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    removeWorkExclusion: {
+        parameters: {
+            query: {
+                media_type: string;
+                provider: string;
+                external_id: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Allowed again. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getWork: {
@@ -12801,51 +12852,6 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-        };
-    };
-    listSeriesExclusions: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description One entry per deleted series. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesExclusion"][];
-                };
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-        };
-    };
-    removeSeriesExclusion: {
-        parameters: {
-            query: {
-                provider: string;
-                external_id: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Allowed again. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
         };
     };
     lookupSeries: {

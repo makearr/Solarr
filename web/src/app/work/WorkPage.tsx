@@ -105,18 +105,12 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
     },
     onSuccess: changed,
   });
-  // Sonarr's "Search monitored": a work searched as a whole when it is wanted as one, else each monitored group in turn.
+  // A series is searched season by season on the server: Sonarr's "Search monitored".
   const search = useMutation({
     mutationFn: async () => {
-      const whole = groups.find((group) => group.ref === "");
-      const scopes = whole ? [whole] : groups.filter((group) => group.monitored && group.state !== "COMPLETE");
-      const notes: string[] = [];
-      for (const group of scopes) {
-        const { data, error } = await api.POST("/works/{id}/grab", { params: { path: { id: work.id }, query: group.ref ? { group: group.ref } : {} } });
-        if (error) throw error;
-        notes.push(scopes.length > 1 ? `${group.label}: ${grabNote(data)}` : grabNote(data));
-      }
-      return notes.length > 0 ? notes.join(" · ") : t("work.notWanted", words);
+      const { data, error } = await api.POST("/works/{id}/grab", { params: { path: { id: work.id } } });
+      if (error) throw error;
+      return grabNote(data);
     },
     onSuccess: (summary) => {
       setNote(summary);

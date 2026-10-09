@@ -32,6 +32,8 @@ type WorkFacet struct {
 	// Kind is what a custom filter compares it as, and Choices an enum's values.
 	Kind    listfilter.Kind
 	Choices []string
+	// Sortable lets the list order by it.
+	Sortable bool
 }
 
 // FacetFields adds the filterable facets to a list's own custom-filter fields; a facet wins over a base field of
@@ -84,6 +86,30 @@ func facetCondition(condition listfilter.Condition, facet WorkFacet) (string, []
 			" WHERE ft.subject_type = 'work' AND ft.subject_id = work.id AND ft.source = ?", "ftn.name", facet.Name)
 	}
 	return "", nil, false
+}
+
+// facetSortColumn is the text a facet sort orders a work by: its value, or the first of several by name. Names come
+// from the compiled descriptors, never from a request, and are quoted all the same.
+func facetSortColumn(facet WorkFacet) string {
+	name := "'" + strings.ReplaceAll(facet.Name, "'", "''") + "'"
+	switch facet.Source {
+	case FacetColumn:
+		if slices.Contains(facetColumns, facet.Name) {
+			return "COALESCE(CAST(work." + facet.Name + " AS TEXT), '') COLLATE NOCASE"
+		}
+	case FacetField:
+		return "COALESCE((SELECT sf.value FROM work_field sf WHERE sf.work_id = work.id AND sf.field = " + name +
+			" AND sf.value IS NOT NULL ORDER BY " + fieldRank("sf") + " LIMIT 1), '') COLLATE NOCASE"
+	case FacetOrganisation:
+		return "COALESCE((SELECT MIN(son.name) FROM work_organisation so JOIN organisation son ON son.id = so.organisation_id" +
+			" WHERE so.work_id = work.id AND so.role = " + name + "), '') COLLATE NOCASE"
+	case FacetClassification:
+		return "COALESCE((SELECT MIN(sc.value) FROM work_classification sc WHERE sc.work_id = work.id AND sc.kind = " + name + "), '') COLLATE NOCASE"
+	case FacetTags:
+		return "COALESCE((SELECT MIN(stn.name) FROM tag_assignment st JOIN tag stn ON stn.id = st.tag_id" +
+			" WHERE st.subject_type = 'work' AND st.subject_id = work.id AND st.source = " + name + "), '') COLLATE NOCASE"
+	}
+	return "''"
 }
 
 // existsValue is existsText over a subquery with one argument: "has a value matching", and for the negative

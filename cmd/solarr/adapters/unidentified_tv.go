@@ -18,9 +18,7 @@ type UnidentifiedTV struct {
 	Unidentified library.Unidentified
 	Cache        *settings.Cache
 	// Exclusions lifts a series' exclusion when a person picks it by hand.
-	Exclusions interface {
-		RemoveExclusion(ctx context.Context, provider, externalID string) error
-	}
+	Exclusions WorkExclusions
 }
 
 // ResolveTV places one queued file, and with wholeFolder every other queued file directly beside it by its own name.
@@ -43,7 +41,7 @@ func (a UnidentifiedTV) ResolveTV(
 	if !ok {
 		return 0, 0, fmt.Errorf("%w: the file is not in a TV library", apiserver.ErrInvalidChoice)
 	}
-	if err := a.Exclusions.RemoveExclusion(ctx, provider, externalID); err != nil {
+	if err := a.Exclusions.Allow(ctx, tv.MediaType, provider, externalID); err != nil {
 		return 0, 0, err
 	}
 	workID, err := a.Identifier.Resolve(ctx, categoryID, entry, ids, season, episodes)

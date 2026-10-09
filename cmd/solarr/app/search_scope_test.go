@@ -28,7 +28,7 @@ func TestWorkSearch_ResolvesTheScopeForEveryType(t *testing.T) {
 		{fmt.Sprintf("/works/%d/search?part=%d", ids.series, episodes["s02:e01"]), "", http.StatusConflict, "No indexers"},
 		{fmt.Sprintf("/works/%d/search?group=s01", ids.series), `{"series":"Other"}`, http.StatusBadRequest, "Bad request"},
 		{fmt.Sprintf("/works/%d/grab?group=s09", ids.series), "", http.StatusConflict, "Not wanted"},
-		{fmt.Sprintf("/works/%d/grab", ids.series), "", http.StatusConflict, "Not wanted"},
+		{fmt.Sprintf("/works/%d/grab", ids.series), "", http.StatusConflict, "No indexers"},
 		{fmt.Sprintf("/works/%d/grab", ids.album), "", http.StatusConflict, "No indexers"},
 		{fmt.Sprintf("/works/%d/search?part=%d", ids.album, track), "", http.StatusConflict, "Whole items only"},
 		{fmt.Sprintf("/works/%d/search?part=%d", ids.album, episodes["s01:e01"]), "", http.StatusNotFound, "Not found"},

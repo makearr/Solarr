@@ -15,7 +15,7 @@ var facets = []media.Facet{
 		Key: "status", Label: "Status", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
 		Source:  media.FacetSource{Kind: media.SourceField, Name: "status"},
 		Choices: []media.Choice{{Key: string(StatusContinuing), Label: "Continuing"}, {Key: string(StatusEnded), Label: "Ended"}, {Key: string(StatusUpcoming), Label: "Upcoming"}},
-		Column:  true, Filterable: true,
+		Column:  true, Sortable: true, Filterable: true,
 	},
 	{
 		Key: "series_type", Label: "Series type", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
@@ -25,11 +25,11 @@ var facets = []media.Facet{
 	},
 	{
 		Key: "network", Label: "Network", Entity: model.LevelEntityWork, Kind: media.FacetText,
-		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Sortable: true, Filterable: true,
 	},
 	{
 		Key: "genre", Label: "Genre", Entity: model.LevelEntityWork, Kind: media.FacetList,
-		Source: media.FacetSource{Kind: media.SourceClassification, Name: "genre"}, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceClassification, Name: "genre"}, Sortable: true, Filterable: true,
 	},
 	{
 		Key: "runtime", Label: "Runtime", Entity: model.LevelEntityWork, Kind: media.FacetDuration,

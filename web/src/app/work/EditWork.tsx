@@ -5,6 +5,9 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
+import { Pencil } from "lucide-react";
+
+import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 
@@ -162,4 +165,41 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
       )}
     </Dialog>
   );
+}
+
+/** Edit on a tile or row of an index: the work is read when the dialog opens. */
+export function EditWorkButton({ id }: { id: number }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        title={t("action.edit")}
+        aria-label={t("action.edit")}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          setOpen(true);
+        }}
+        className="flex size-7 items-center justify-center rounded-full border border-border-subtle bg-canvas/85 text-ink-muted shadow-sm hover:text-ink"
+      >
+        <Pencil aria-hidden className="size-3.5" />
+      </button>
+      {open && <EditLoadedWork id={id} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+function EditLoadedWork({ id, onClose }: { id: number; onClose: () => void }) {
+  const work = useQuery({
+    queryKey: ["work", id],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/works/{id}", { params: { path: { id } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const info = useMediaTypes().find((entry) => entry.key === work.data?.media_type);
+  if (!work.data) return null;
+  return <EditWork work={work.data} info={info} onClose={onClose} />;
 }

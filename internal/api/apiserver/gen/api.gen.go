@@ -907,21 +907,6 @@ const (
 	ListLogsParamsLevelWarn  ListLogsParamsLevel = "warn"
 )
 
-// Defines values for ListWorksParamsSort.
-const (
-	ListWorksParamsSortAdded    ListWorksParamsSort = "added"
-	ListWorksParamsSortArtist   ListWorksParamsSort = "artist"
-	ListWorksParamsSortGenre    ListWorksParamsSort = "genre"
-	ListWorksParamsSortImported ListWorksParamsSort = "imported"
-	ListWorksParamsSortProfile  ListWorksParamsSort = "profile"
-	ListWorksParamsSortSearched ListWorksParamsSort = "searched"
-	ListWorksParamsSortSize     ListWorksParamsSort = "size"
-	ListWorksParamsSortStatus   ListWorksParamsSort = "status"
-	ListWorksParamsSortTag      ListWorksParamsSort = "tag"
-	ListWorksParamsSortTitle    ListWorksParamsSort = "title"
-	ListWorksParamsSortYear     ListWorksParamsSort = "year"
-)
-
 // Defines values for ListWorksParamsDir.
 const (
 	ListWorksParamsDirAsc  ListWorksParamsDir = "asc"
@@ -3891,17 +3876,6 @@ type SeriesEpisodeFile struct {
 	VideoCodec       *string  `json:"video_codec,omitempty"`
 }
 
-// SeriesExclusion defines model for SeriesExclusion.
-type SeriesExclusion struct {
-	// CreatedAt Unix seconds.
-	CreatedAt  int64  `json:"created_at"`
-	ExternalId string `json:"external_id"`
-
-	// Provider One id the series was excluded by; removing it allows the series again.
-	Provider string `json:"provider"`
-	Title    string `json:"title"`
-}
-
 // SeriesPage defines model for SeriesPage.
 type SeriesPage struct {
 	Items      []SeriesSummary `json:"items"`
@@ -4286,7 +4260,10 @@ type Work struct {
 	Monitored *bool  `json:"monitored,omitempty"`
 
 	// Overview The album's description, cut to a paragraph, for the Overview view.
-	Overview      *string `json:"overview,omitempty"`
+	Overview *string `json:"overview,omitempty"`
+
+	// PosterUrl The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover).
+	PosterUrl     *string `json:"poster_url,omitempty"`
 	PresentCount  *int64  `json:"present_count,omitempty"`
 	RequiredCount *int64  `json:"required_count,omitempty"`
 
@@ -4389,6 +4366,17 @@ type WorkEdit struct {
 
 	// Tags Tags the user assigned, by name.
 	Tags []string `json:"tags"`
+}
+
+// WorkExclusion defines model for WorkExclusion.
+type WorkExclusion struct {
+	// CreatedAt Unix seconds.
+	CreatedAt  int64  `json:"created_at"`
+	ExternalId string `json:"external_id"`
+
+	// Provider One id the work was excluded by; removing it allows the work again.
+	Provider string `json:"provider"`
+	Title    string `json:"title"`
 }
 
 // WorkGroup defines model for WorkGroup.
@@ -4954,12 +4942,6 @@ type ListSeriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// RemoveSeriesExclusionParams defines parameters for RemoveSeriesExclusion.
-type RemoveSeriesExclusionParams struct {
-	Provider   string `form:"provider" json:"provider"`
-	ExternalId string `form:"external_id" json:"external_id"`
-}
-
 // LookupSeriesParams defines parameters for LookupSeries.
 type LookupSeriesParams struct {
 	CategoryId int64  `form:"category_id" json:"category_id"`
@@ -5116,9 +5098,9 @@ type ListWorksParams struct {
 	// CategoryId Narrows to one category. Naming a category the caller cannot read answers 404, matching a single-item lookup (Invariant 37) rather than a filter that silently returns nothing.
 	CategoryId *int64 `form:"category_id,omitempty" json:"category_id,omitempty"`
 
-	// Sort Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added).
-	Sort *ListWorksParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
-	Dir  *ListWorksParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+	// Sort Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added). facet:<key> orders by one of the library's media type's sortable facets (a series' network, an album's label); an unknown or unsortable one is refused.
+	Sort *string             `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir  *ListWorksParamsDir `form:"dir,omitempty" json:"dir,omitempty"`
 
 	// Fresh Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required.
 	Fresh *bool `form:"fresh,omitempty" json:"fresh,omitempty"`
@@ -5132,9 +5114,6 @@ type ListWorksParams struct {
 	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
 	Where *string `form:"where,omitempty" json:"where,omitempty"`
 }
-
-// ListWorksParamsSort defines parameters for ListWorks.
-type ListWorksParamsSort string
 
 // ListWorksParamsDir defines parameters for ListWorks.
 type ListWorksParamsDir string
@@ -5178,6 +5157,18 @@ type BulkSetWorkMonitoredJSONBody struct {
 
 	// Where The list's custom filter (the JSON the list carried)
 	Where *string `json:"where,omitempty"`
+}
+
+// RemoveWorkExclusionParams defines parameters for RemoveWorkExclusion.
+type RemoveWorkExclusionParams struct {
+	MediaType  string `form:"media_type" json:"media_type"`
+	Provider   string `form:"provider" json:"provider"`
+	ExternalId string `form:"external_id" json:"external_id"`
+}
+
+// ListWorkExclusionsParams defines parameters for ListWorkExclusions.
+type ListWorkExclusionsParams struct {
+	MediaType string `form:"media_type" json:"media_type"`
 }
 
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.
@@ -6128,12 +6119,6 @@ type ServerInterface interface {
 	// Add a series to a library (Sonarr's add dialog).
 	// (POST /series)
 	AddSeries(w http.ResponseWriter, r *http.Request)
-	// Allow a deleted series to be added again. Administrator only.
-	// (DELETE /series/exclusions)
-	RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, params RemoveSeriesExclusionParams)
-	// The series that were deleted and must not be added again, by any library.
-	// (GET /series/exclusions)
-	ListSeriesExclusions(w http.ResponseWriter, r *http.Request)
 	// Search the metadata sources for a series to add.
 	// (GET /series/lookup)
 	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
@@ -6251,6 +6236,12 @@ type ServerInterface interface {
 	// Monitor or unmonitor every work matching a selection (section 21.7).
 	// (POST /works/bulk/monitor)
 	BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request)
+	// Allow a removed work to be added again, by any of the ids it was excluded by. Administrator only.
+	// (DELETE /works/exclusions)
+	RemoveWorkExclusion(w http.ResponseWriter, r *http.Request, params RemoveWorkExclusionParams)
+	// The works of one media type that were removed and must not be added again. Administrator only.
+	// (GET /works/exclusions)
+	ListWorkExclusions(w http.ResponseWriter, r *http.Request, params ListWorkExclusionsParams)
 	// A work's full structural detail: its own fields, editions, parts, and every level's external ids.
 	// (GET /works/{id})
 	GetWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -7442,18 +7433,6 @@ func (_ Unimplemented) AddSeries(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Allow a deleted series to be added again. Administrator only.
-// (DELETE /series/exclusions)
-func (_ Unimplemented) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, params RemoveSeriesExclusionParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// The series that were deleted and must not be added again, by any library.
-// (GET /series/exclusions)
-func (_ Unimplemented) ListSeriesExclusions(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Search the metadata sources for a series to add.
 // (GET /series/lookup)
 func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams) {
@@ -7685,6 +7664,18 @@ func (_ Unimplemented) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 // Monitor or unmonitor every work matching a selection (section 21.7).
 // (POST /works/bulk/monitor)
 func (_ Unimplemented) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Allow a removed work to be added again, by any of the ids it was excluded by. Administrator only.
+// (DELETE /works/exclusions)
+func (_ Unimplemented) RemoveWorkExclusion(w http.ResponseWriter, r *http.Request, params RemoveWorkExclusionParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The works of one media type that were removed and must not be added again. Administrator only.
+// (GET /works/exclusions)
+func (_ Unimplemented) ListWorkExclusions(w http.ResponseWriter, r *http.Request, params ListWorkExclusionsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13903,85 +13894,6 @@ func (siw *ServerInterfaceWrapper) AddSeries(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
-// RemoveSeriesExclusion operation middleware
-func (siw *ServerInterfaceWrapper) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params RemoveSeriesExclusionParams
-
-	// ------------- Required query parameter "provider" -------------
-
-	if paramValue := r.URL.Query().Get("provider"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "provider", r.URL.Query(), &params.Provider)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "external_id" -------------
-
-	if paramValue := r.URL.Query().Get("external_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "external_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "external_id", r.URL.Query(), &params.ExternalId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "external_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RemoveSeriesExclusion(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ListSeriesExclusions operation middleware
-func (siw *ServerInterfaceWrapper) ListSeriesExclusions(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSeriesExclusions(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // LookupSeries operation middleware
 func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.Request) {
 
@@ -15295,6 +15207,120 @@ func (siw *ServerInterfaceWrapper) BulkSetWorkMonitored(w http.ResponseWriter, r
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.BulkSetWorkMonitored(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveWorkExclusion operation middleware
+func (siw *ServerInterfaceWrapper) RemoveWorkExclusion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveWorkExclusionParams
+
+	// ------------- Required query parameter "media_type" -------------
+
+	if paramValue := r.URL.Query().Get("media_type"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "media_type"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "media_type", r.URL.Query(), &params.MediaType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "media_type", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "provider" -------------
+
+	if paramValue := r.URL.Query().Get("provider"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "provider"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "provider", r.URL.Query(), &params.Provider)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "provider", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "external_id" -------------
+
+	if paramValue := r.URL.Query().Get("external_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "external_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "external_id", r.URL.Query(), &params.ExternalId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "external_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveWorkExclusion(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListWorkExclusions operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkExclusions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkExclusionsParams
+
+	// ------------- Required query parameter "media_type" -------------
+
+	if paramValue := r.URL.Query().Get("media_type"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "media_type"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "media_type", r.URL.Query(), &params.MediaType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "media_type", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkExclusions(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16715,12 +16741,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/series", wrapper.AddSeries)
 	})
 	r.Group(func(r chi.Router) {
-		r.Delete(options.BaseURL+"/series/exclusions", wrapper.RemoveSeriesExclusion)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series/exclusions", wrapper.ListSeriesExclusions)
-	})
-	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
 	})
 	r.Group(func(r chi.Router) {
@@ -16836,6 +16856,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/bulk/monitor", wrapper.BulkSetWorkMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/works/exclusions", wrapper.RemoveWorkExclusion)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/exclusions", wrapper.ListWorkExclusions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}", wrapper.GetWork)

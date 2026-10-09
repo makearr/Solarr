@@ -1920,8 +1920,9 @@ paths:
             the primary artist's sort name, then title -- the Albums view's
             grouping -- with a work that has no artist first. imported orders by when
             the newest file arrived and lists only works with files (the dashboard's
-            Recently added).
-          schema: { type: string, enum: [title, year, added, artist, searched, imported, size, profile, status, genre, tag] }
+            Recently added). facet:<key> orders by one of the library's media type's sortable facets (a series'
+            network, an album's label); an unknown or unsortable one is refused.
+          schema: { type: string, pattern: '^(title|year|added|artist|searched|imported|size|profile|status|genre|tag|facet:[a-z_]+)$' }
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
@@ -2707,6 +2708,49 @@ paths:
         "409":
           $ref: "#/components/responses/Problem"
           description: The run is not in a revertible state (still running, or already reverted).
+
+  /works/exclusions:
+    get:
+      operationId: listWorkExclusions
+      tags: [library]
+      summary: The works of one media type that were removed and must not be added again. Administrator only.
+      parameters:
+        - name: media_type
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: One entry per removed work.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WorkExclusion" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: removeWorkExclusion
+      tags: [library]
+      summary: Allow a removed work to be added again, by any of the ids it was excluded by. Administrator only.
+      parameters:
+        - name: media_type
+          in: query
+          required: true
+          schema: { type: string }
+        - name: provider
+          in: query
+          required: true
+          schema: { type: string }
+        - name: external_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "204": { description: Allowed again. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /works/{id}:
     parameters:
@@ -5148,39 +5192,6 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
-  /series/exclusions:
-    get:
-      operationId: listSeriesExclusions
-      tags: [series]
-      summary: The series that were deleted and must not be added again, by any library.
-      responses:
-        "200":
-          description: One entry per deleted series.
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/SeriesExclusion" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-    delete:
-      operationId: removeSeriesExclusion
-      tags: [series]
-      summary: Allow a deleted series to be added again. Administrator only.
-      parameters:
-        - name: provider
-          in: query
-          required: true
-          schema: { type: string }
-        - name: external_id
-          in: query
-          required: true
-          schema: { type: string }
-      responses:
-        "204": { description: Allowed again. }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-
   /series/lookup:
     get:
       operationId: lookupSeries
@@ -7359,6 +7370,7 @@ components:
       type: object
       required: [id, media_type, title, sort_title, added_at, updated_at]
       properties:
+        poster_url: { type: string, description: "The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover)." }
         lead_id:
           type: integer
           format: int64
@@ -8373,12 +8385,12 @@ components:
           description: Cast and crew of the whole series, and guest stars and episode crew by episode.
           items: { $ref: "#/components/schemas/SeriesCredit" }
 
-    SeriesExclusion:
+    WorkExclusion:
       type: object
       required: [title, provider, external_id, created_at]
       properties:
         title: { type: string }
-        provider: { type: string, description: One id the series was excluded by; removing it allows the series again. }
+        provider: { type: string, description: One id the work was excluded by; removing it allows the work again. }
         external_id: { type: string }
         created_at: { type: integer, format: int64, description: Unix seconds. }
 

@@ -62,3 +62,41 @@ func TestRemoveWork_ExcludedGoesWhereTheScanHonoursIt(t *testing.T) {
 		}
 	}
 }
+
+// A list orders by a type's sortable facets and refuses one that is not; a work removed and excluded is listed as such
+// for its type and allowed back.
+func TestWorks_SortByAFacetAndListTheExcluded(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	for target, want := range map[string]int{
+		fmt.Sprintf("/works?category_id=%d&sort=facet:network", ids.tv):          http.StatusOK,
+		fmt.Sprintf("/works?category_id=%d&sort=facet:network&dir=desc", ids.tv): http.StatusOK,
+		fmt.Sprintf("/works?category_id=%d&sort=facet:runtime", ids.tv):          http.StatusBadRequest,
+		fmt.Sprintf("/works?category_id=%d&sort=facet:label", ids.music):         http.StatusOK,
+		fmt.Sprintf("/works?category_id=%d&sort=network", ids.tv):                http.StatusBadRequest,
+	} {
+		if status, body := server.send(t, http.MethodGet, target, ""); status != want {
+			t.Errorf("GET %s: %d %s, want %d", target, status, body, want)
+		}
+	}
+	if status, body := server.post(t, fmt.Sprintf("/works/%d/remove", ids.series), `{"exclude":true}`); status != http.StatusOK {
+		t.Fatalf("remove: %d %s", status, body)
+	}
+	var excluded []struct {
+		Title, Provider string
+		ExternalID      string `json:"external_id"`
+	}
+	if err := json.Unmarshal(server.get(t, "/works/exclusions?media_type=tv"), &excluded); err != nil || len(excluded) != 1 || excluded[0].Title != "The Marble Stations" {
+		t.Fatalf("excluded series = %+v, %v; want the one removed", excluded, err)
+	}
+	if got := string(server.get(t, "/works/exclusions?media_type=music")); got != "[]\n" {
+		t.Errorf("excluded albums = %s, want none", got)
+	}
+	allow := fmt.Sprintf("/works/exclusions?media_type=tv&provider=%s&external_id=%s", excluded[0].Provider, excluded[0].ExternalID)
+	if status, body := server.send(t, http.MethodDelete, allow, ""); status != http.StatusNoContent {
+		t.Fatalf("allow: %d %s", status, body)
+	}
+	if got := string(server.get(t, "/works/exclusions?media_type=tv")); got != "[]\n" {
+		t.Errorf("after allowing it again, excluded series = %s", got)
+	}
+}

@@ -6,6 +6,8 @@ import { Check, LayoutGrid, Rows3, Settings2, StretchHorizontal } from "lucide-r
 import { albumStatusFill, albumStatusLabel, type AlbumStatus } from "@/lib/albumStatus";
 import type { components } from "@/api/schema";
 import type { useLibraryList } from "@/list/useLibraryList";
+import { remoteImage } from "@/lib/remoteImage";
+import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 
 import { CoverArt } from "./CoverArt";
 import { ActionButtons, MonitorToggle, useItemActions } from "./LevelItemActions";
@@ -15,7 +17,7 @@ import { formatBytes } from "./Queue";
 /** One album or artist as Radarr's index views show it (asked 2026-09-30), whichever list it came from. */
 export interface IndexEntry {
   id: number;
-  kind: "albums" | "artists" | "tracks";
+  kind: "works" | "artists" | "tracks";
   title: string;
   subtitle?: string;
   year?: number;
@@ -27,6 +29,12 @@ export interface IndexEntry {
   sizeBytes?: number;
   artistCover?: boolean;
   image: { subject: "works" | "people"; id: number } | null;
+  /** A provider's picture, for a work whose picture is not its own artwork (a series' poster). */
+  imageSrc?: string;
+  /** A tall poster rather than a square cover. */
+  portrait?: boolean;
+  /** What the counts count: "tracks", "episodes". */
+  partsLabel?: string;
   link: LinkProps | null;
 }
 
@@ -34,14 +42,20 @@ export type IndexView = "poster" | "overview" | "list";
 
 type Work = components["schemas"]["Work"];
 
-/** An album from the works list as the index views show it. */
-export function workEntry(work: Work): IndexEntry {
+/** A work from the works list as the index views show it: inside its library when there is one, in its type's shape. */
+export function workEntry(work: Work, categoryId?: string, info?: MediaTypeInfo): IndexEntry {
   return {
-    id: work.id, kind: "albums", title: work.title,
-    subtitle: [work.artist ?? work.media_type, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
+    id: work.id, kind: "works", title: work.title,
+    subtitle: [work.artist, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
     year: work.year, status: work.status, presentCount: work.present_count, requiredCount: work.required_count,
     monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
-    image: { subject: "works", id: work.id }, link: { to: "/works/$id", params: { id: String(work.id) } },
+    image: { subject: "works", id: work.id },
+    imageSrc: work.poster_url ? remoteImage(work.poster_url, "small") : undefined,
+    portrait: info?.work_image === "poster",
+    partsLabel: info?.part.many.toLowerCase() || undefined,
+    link: categoryId
+      ? { to: "/library/$categoryId/works/$workId", params: { categoryId, workId: String(work.id) } }
+      : { to: "/works/$id", params: { id: String(work.id) } },
   };
 }
 
@@ -74,7 +88,7 @@ export function posterRowHeight(options: PosterOptions, cellWidth: number, image
   );
 }
 
-const actionable = (entry: IndexEntry) => entry.kind === "albums" || entry.kind === "artists";
+const actionable = (entry: IndexEntry) => entry.kind === "works" || entry.kind === "artists";
 
 /** One poster with Radarr's bookmark and hover actions; a component of its own, since the actions are hooks. */
 export function IndexPoster({ entry, options }: { entry: IndexEntry; options: PosterOptions }) {
@@ -87,6 +101,8 @@ export function IndexPoster({ entry, options }: { entry: IndexEntry; options: Po
         title={entry.title}
         subtitle={entry.subtitle ?? (entry.year != null ? String(entry.year) : undefined)}
         link={entry.link}
+        imageSrc={entry.imageSrc}
+        portrait={entry.portrait}
         badge={entry.artistCover ? <ArtistCoverMark /> : undefined}
         topLeft={options.showMonitored ? <MonitorToggle actions={actions} /> : undefined}
         hoverActions={actionable(entry) ? <ActionButtons actions={actions} showNote={false} /> : undefined}
@@ -223,15 +239,17 @@ function OverviewRow({ entry }: { entry: IndexEntry }) {
   const details = [
     entry.year != null ? String(entry.year) : null,
     entry.requiredCount != null
-      ? `${entry.presentCount ?? 0} of ${entry.requiredCount} ${entry.kind === "artists" ? "albums" : "tracks"}`
+      ? `${entry.presentCount ?? 0} of ${entry.requiredCount} ${entry.kind === "artists" ? "albums" : (entry.partsLabel ?? "tracks")}`
       : null,
     entry.status ? albumStatusLabel(entry.status) : null,
     entry.sizeBytes ? formatBytes(entry.sizeBytes) : null,
   ].filter((detail): detail is string => detail !== null);
   const body = (
     <div className="flex h-full gap-4 border-b border-border-subtle py-3">
-      <div className="relative h-full shrink-0" style={{ width: OVERVIEW_ROW_HEIGHT - 24 }}>
-        {entry.image && (
+      <div className="relative h-full shrink-0" style={{ width: (OVERVIEW_ROW_HEIGHT - 24) * (entry.portrait ? 0.67 : 1) }}>
+        {entry.imageSrc ? (
+          <img src={entry.imageSrc} alt="" loading="lazy" className="size-full rounded-md border border-border-subtle object-cover" />
+        ) : entry.image && (
           <CoverArt
             subject={entry.image.subject}
             workId={entry.image.id}

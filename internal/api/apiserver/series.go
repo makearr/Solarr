@@ -39,10 +39,6 @@ type SeriesCatalog interface {
 	Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error)
 	// Delete removes a series; deleteFiles sends its files to the recycle bin, exclude remembers it so it is not added back.
 	Delete(ctx context.Context, categoryID, seriesID int64, deleteFiles, exclude bool) error
-	// Exclusions lists the deleted series that must not be added again.
-	Exclusions(ctx context.Context) ([]gen.SeriesExclusion, error)
-	// RemoveExclusion allows the series the id belongs to again.
-	RemoveExclusion(ctx context.Context, provider, externalID string) error
 	// SetType says what kind of series this is; "auto" returns to what the providers say.
 	SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error
 	// SetProfile gives the series a quality profile of its own, or the library's when nil.
@@ -363,44 +359,6 @@ func (s *Server) DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, 
 		return
 	}
 	if err := s.series.Delete(r.Context(), params.CategoryId, id, derefOr(params.DeleteFiles, false), derefOr(params.Exclude, true)); err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-// ListSeriesExclusions answers the deleted series that are not added again. Administrator only.
-func (s *Server) ListSeriesExclusions(w http.ResponseWriter, r *http.Request) {
-	if !s.requireAdministrator(w, r) {
-		return
-	}
-	if s.series == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "series are not available")
-		return
-	}
-	list, err := s.series.Exclusions(r.Context())
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	writeJSON(w, s.logger, http.StatusOK, list)
-}
-
-func (s *Server) routeRemoveSeriesExclusion(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	s.RemoveSeriesExclusion(w, r, gen.RemoveSeriesExclusionParams{Provider: query.Get("provider"), ExternalId: query.Get("external_id")})
-}
-
-// RemoveSeriesExclusion lets a deleted series be added again. Administrator only.
-func (s *Server) RemoveSeriesExclusion(w http.ResponseWriter, r *http.Request, params gen.RemoveSeriesExclusionParams) {
-	if !s.requireAdministrator(w, r) {
-		return
-	}
-	if s.series == nil || params.Provider == "" || params.ExternalId == "" {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "provider and external_id are required")
-		return
-	}
-	if err := s.series.RemoveExclusion(r.Context(), params.Provider, params.ExternalId); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}

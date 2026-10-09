@@ -24,14 +24,12 @@ import { Import } from "./Import";
 import { LibraryFileManagement } from "./LibraryFileManagement";
 import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
-import { Library } from "./Library";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { AddSeries } from "./AddSeries";
 import { SeasonPass } from "./SeasonPass";
-import { SeriesIndex } from "./SeriesIndex";
 import { SeriesWanted } from "./SeriesWanted";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
@@ -55,6 +53,7 @@ import { Unidentified } from "./Unidentified";
 import { UserSettings } from "./Users";
 import { Wanted } from "./Wanted";
 import { UnidentifiedReview } from "./UnidentifiedReview";
+import { WorkIndex } from "./work/WorkIndex";
 import { WorkPage } from "./work/WorkPage";
 
 /** A redirect to one library's own default level. Not every media type
@@ -89,10 +88,8 @@ function LevelForLibrary() {
   const entity = library?.levels.find((entry) => entry.key === level)?.entity;
   if (entity === "person") return <PeopleIndex />;
   if (entity === "organisation") return <OrganisationIndex />;
-  if (library?.media_type === "tv") {
-    if (level === "series") return <SeriesIndex />;
-    if (level === "seasonpass") return <SeasonPass />;
-  }
+  if (entity === "work") return <WorkIndex />;
+  if (library?.media_type === "tv" && level === "seasonpass") return <SeasonPass />;
   return <LibraryLevelList />;
 }
 
@@ -132,7 +129,6 @@ const routes = [
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/libraries", component: Libraries }),
   createRoute({ getParentRoute: () => rootRoute, path: "/calendar", component: Calendar }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/albums", component: Library }),
   // Real screens (unlike naming below), so each gets its own static route
   // rather than falling through the generic $section catch-all. Quality and
   // language profiles are global, not per-library (todo 4.3, 2026-09-12) --

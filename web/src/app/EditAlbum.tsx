@@ -194,11 +194,11 @@ function EditAlbumDialog({ id, onClose }: { id: number; onClose: () => void }) {
   );
 }
 
-type Selection = { ids?: number[]; category_id?: number; excluded_ids?: number[]; fresh?: boolean };
+type Selection = { ids?: number[]; category_id?: number; excluded_ids?: number[]; fresh?: boolean; where?: string };
 type Choice = "keep" | "yes" | "no";
 
 /** Radarr's Edit selected: what the dialog sets is applied to every album of the selection, after the count is shown. */
-export function BulkEditDialog({ selection, onClose, onDone }: { selection: Selection; onClose: () => void; onDone: () => void }) {
+export function BulkEditDialog({ selection, mediaType, onClose, onDone }: { selection: Selection; mediaType?: string; onClose: () => void; onDone: () => void }) {
   const [monitored, setMonitored] = useState<Choice>("keep");
   const [profile, setProfile] = useState<"keep" | "default" | number>("keep");
   const [addTags, setAddTags] = useState("");
@@ -274,7 +274,7 @@ export function BulkEditDialog({ selection, onClose, onDone }: { selection: Sele
             >
               <option value="keep">No change</option>
               <option value="default">Library default</option>
-              {(profiles.data ?? []).filter((one) => one.media_type === "music").map((one) => (
+              {(profiles.data ?? []).filter((one) => one.media_type === (mediaType ?? "music")).map((one) => (
                 <option key={one.id} value={one.id}>{one.name}</option>
               ))}
             </select>

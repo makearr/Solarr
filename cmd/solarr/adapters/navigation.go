@@ -62,7 +62,7 @@ func (m MediaTypes) WorkFacets(mediaType string) []library.WorkFacet {
 			if facet.Entity != model.LevelEntityWork || slices.ContainsFunc(out, func(seen library.WorkFacet) bool { return seen.Key == facet.Key }) {
 				continue
 			}
-			read := library.WorkFacet{Key: facet.Key, Source: string(facet.Source.Kind), Name: facet.Source.Name, Kind: listfilter.Text}
+			read := library.WorkFacet{Key: facet.Key, Source: string(facet.Source.Kind), Name: facet.Source.Name, Kind: listfilter.Text, Sortable: facet.Sortable}
 			switch facet.Kind {
 			case media.FacetNumber, media.FacetDuration:
 				read.Kind = listfilter.Number

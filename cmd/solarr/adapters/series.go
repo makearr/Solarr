@@ -181,7 +181,7 @@ func (c SeriesCatalog) Add(ctx context.Context, userID int64, request gen.AddSer
 	if request.QualityProfileId != nil {
 		profile = *request.QualityProfileId
 	}
-	if err := c.RemoveExclusion(ctx, provider, request.ExternalId); err != nil {
+	if err := (WorkExclusions{Exclusions: c.Service.Exclusions}).Allow(ctx, tv.MediaType, provider, request.ExternalId); err != nil {
 		return gen.AddSeriesResult{}, err
 	}
 	result, err := c.Service.Add(ctx, tv.AddRequest{
@@ -252,46 +252,6 @@ func (c SeriesCatalog) Delete(ctx context.Context, categoryID, seriesID int64, d
 		}
 	}
 	return c.Service.Series.DeleteSeries(ctx, seriesID)
-}
-
-// Exclusions lists the deleted series that are not added again, one entry per series.
-func (c SeriesCatalog) Exclusions(ctx context.Context) ([]gen.SeriesExclusion, error) {
-	rows, err := c.Service.Exclusions.List(ctx, tv.MediaType)
-	if err != nil {
-		return nil, err
-	}
-	type key struct {
-		title string
-		at    int64
-	}
-	seen := map[key]bool{}
-	views := make([]gen.SeriesExclusion, 0, len(rows))
-	for _, row := range rows {
-		if k := (key{row.Title, row.CreatedAt}); !seen[k] {
-			seen[k] = true
-			views = append(views, gen.SeriesExclusion{Title: row.Title, Provider: row.Provider, ExternalId: row.ExternalID, CreatedAt: row.CreatedAt})
-		}
-	}
-	return views, nil
-}
-
-// RemoveExclusion allows the series the id belongs to again, by every id it was excluded by.
-func (c SeriesCatalog) RemoveExclusion(ctx context.Context, provider, externalID string) error {
-	rows, err := c.Service.Exclusions.List(ctx, tv.MediaType)
-	if err != nil {
-		return err
-	}
-	var ids []library.ExternalIDWrite
-	for _, row := range rows {
-		if row.Provider == provider && row.ExternalID == externalID {
-			for _, sibling := range rows {
-				if sibling.Title == row.Title && sibling.CreatedAt == row.CreatedAt {
-					ids = append(ids, library.ExternalIDWrite{Provider: sibling.Provider, ExternalID: sibling.ExternalID})
-				}
-			}
-		}
-	}
-	return c.Service.Exclusions.Unexclude(ctx, ids)
 }
 
 // SetType says what kind of series this is; "auto" returns to what the providers say.

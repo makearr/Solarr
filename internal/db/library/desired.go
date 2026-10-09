@@ -453,6 +453,24 @@ func (d Desired) AlbumItemsForWork(ctx context.Context, workID int64) ([]library
 	return slices.DeleteFunc(items, func(item librarydb.DesiredItem) bool { return item.SatisfactionKind != "SET" }), nil
 }
 
+// GroupsToSearch answers whether a work is wanted as a whole and, when it is wanted group by group, the refs of its
+// monitored groups that are not complete: what a search of the whole work searches.
+func (d Desired) GroupsToSearch(ctx context.Context, workID int64) (whole bool, refs []string, err error) {
+	items, err := d.AlbumItemsForWork(ctx, workID)
+	if err != nil {
+		return false, nil, err
+	}
+	for _, item := range items {
+		if item.MediaRef == "" {
+			return true, nil, nil
+		}
+		if item.Monitored == 1 && item.State != "COMPLETE" {
+			refs = append(refs, item.MediaRef)
+		}
+	}
+	return len(items) == 0, refs, nil
+}
+
 // FileMembership is one desired_item_file row: which item and role a file
 // covers.
 type FileMembership struct {
