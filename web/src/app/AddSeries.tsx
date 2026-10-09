@@ -7,7 +7,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { usePreference } from "@/lib/usePreference";
 
-import { seasonGroup } from "./SeasonSearch";
+import { seasonGroup } from "@/lib/seasonGroup";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { remoteImage } from "@/lib/remoteImage";
 
@@ -72,7 +72,7 @@ export function AddPanel({ candidate, categoryId, onDone }: { candidate: Candida
       void queryClient.invalidateQueries({ queryKey: ["series", categoryId] });
       void queryClient.invalidateQueries({ queryKey: ["libraries"] });
       onDone();
-      void navigate({ to: "/library/$categoryId/series/$seriesId", params: { categoryId, seriesId: String(result.series_id) } });
+      void navigate({ to: "/library/$categoryId/works/$workId", params: { categoryId, workId: String(result.series_id) } });
     },
   });
   const help = MONITOR_OPTIONS.find((option) => option.value === monitor)?.help;
@@ -203,8 +203,8 @@ export function AddSeries() {
                   <div className="mt-auto">
                     {candidate.library_id != null ? (
                       <Link
-                        to="/library/$categoryId/series/$seriesId"
-                        params={{ categoryId, seriesId: String(candidate.library_id) }}
+                        to="/library/$categoryId/works/$workId"
+                        params={{ categoryId, workId: String(candidate.library_id) }}
                         className="inline-flex items-center gap-1 text-xs text-ok"
                       >
                         <Check aria-hidden className="size-3.5" /> Already in your library

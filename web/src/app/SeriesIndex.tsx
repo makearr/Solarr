@@ -163,7 +163,7 @@ export function SeriesPosterTile({ series, categoryId, options = DEFAULT_POSTER_
       portrait
       title={series.title}
       subtitle={[series.year, series.network, `${series.counts.present}/${series.counts.monitored}`].filter(Boolean).join(" · ")}
-      link={{ to: "/library/$categoryId/series/$seriesId", params: { categoryId, seriesId: String(series.id) } }}
+      link={{ to: "/library/$categoryId/works/$workId", params: { categoryId, workId: String(series.id) } }}
       topLeft={options.showMonitored ? <MonitorBookmark series={series} categoryId={categoryId} /> : undefined}
       showTitle={options.showTitle}
       status={options.showAvailability ? seriesStatus(series) : undefined}
@@ -185,8 +185,8 @@ function SeriesOverviewList({ list, categoryId }: { list: ReturnType<typeof useL
           return (
             <div key={series.id} className="absolute inset-x-0 px-4" style={{ height: virtual.size, transform: `translateY(${virtual.start}px)` }}>
               <Link
-                to="/library/$categoryId/series/$seriesId"
-                params={{ categoryId, seriesId: String(series.id) }}
+                to="/library/$categoryId/works/$workId"
+                params={{ categoryId, workId: String(series.id) }}
                 className="block h-full hover:bg-surface"
               >
                 <div className="flex h-full gap-4 border-b border-border-subtle py-3">
@@ -304,7 +304,7 @@ export function SeriesIndex() {
   const quiet = "rounded-md border border-border-subtle px-2 py-1 text-ink-muted enabled:hover:text-ink disabled:opacity-50";
   const control = "rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink";
   const columns: readonly Column<Series>[] = [
-    { key: "title", header: "Title", sortable: true, width: "minmax(12rem,2fr)", render: (series) => <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(series.id) }} className="hover:underline" onClick={(event) => event.stopPropagation()}>{series.title}</Link> },
+    { key: "title", header: "Title", sortable: true, width: "minmax(12rem,2fr)", render: (series) => <Link to="/library/$categoryId/works/$workId" params={{ categoryId, workId: String(series.id) }} className="hover:underline" onClick={(event) => event.stopPropagation()}>{series.title}</Link> },
     { key: "year", header: "Year", sortable: true, width: "4.5rem", render: (series) => series.year ?? "" },
     { key: "network", header: "Network", sortable: true, width: "minmax(7rem,1fr)", render: (series) => series.network ?? "" },
     { key: "status", header: "Status", width: "6rem", render: (series) => (series.status === "ended" ? "Ended" : "Continuing") },

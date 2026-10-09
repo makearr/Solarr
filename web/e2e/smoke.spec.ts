@@ -170,6 +170,19 @@ test("a scan fills the artist wall with photos and the album wall with covers", 
   await page.goto("/library/1/albums");
   await expect.poll(async () => loadedImages(page), { timeout: 6 * 60_000, intervals: [5_000] }).toBeGreaterThan(2);
   await page.screenshot({ path: "/e2e-out/albums-wall.png" });
+
+  // One work page for every type (R1.6): an album opens inside its library as Lidarr's, its tracklist on Overview.
+  await page.locator('main a[href^="/works/"]').first().click();
+  await expect(page).toHaveURL(/\/library\/1\/works\/\d+$/);
+  await expect(page.getByRole("heading", { name: "Tracks" })).toBeVisible();
+  await page.screenshot({ path: "/e2e-out/album-page.png", fullPage: true });
+  for (const tab of ["Files", "History", "Search"]) {
+    await page.getByRole("link", { name: tab, exact: true }).last().click();
+    await expect(page).toHaveURL(new RegExp(`/works/\\d+/${tab.toLowerCase()}$`));
+  }
+  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.screenshot({ path: "/e2e-out/album-edit.png" });
 });
 
 // 2026-10-04: the bin shows what it holds and can be emptied by hand.

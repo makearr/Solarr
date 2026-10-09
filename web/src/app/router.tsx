@@ -32,7 +32,6 @@ import { LibraryLevelList } from "./LibraryLevelList";
 import { AddSeries } from "./AddSeries";
 import { SeasonPass } from "./SeasonPass";
 import { SeriesIndex } from "./SeriesIndex";
-import { SeriesPage } from "./SeriesPage";
 import { SeriesWanted } from "./SeriesWanted";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
@@ -56,7 +55,7 @@ import { Unidentified } from "./Unidentified";
 import { UserSettings } from "./Users";
 import { Wanted } from "./Wanted";
 import { UnidentifiedReview } from "./UnidentifiedReview";
-import { WorkDetail } from "./WorkDetail";
+import { WorkPage } from "./work/WorkPage";
 
 /** A redirect to one library's own default level. Not every media type
  *  declares Artists or Albums, so the level is read from the library itself. */
@@ -195,13 +194,35 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/duplicates", component: Duplicates }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/activity", component: Activity }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/series/$seriesId", component: SeriesPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/works/$workId", component: WorkPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/works/$workId/$tab", component: WorkPage }),
+  // A series had its own page until R1.6; old links land on the work page.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/series/$seriesId",
+    beforeLoad: ({ params }) => {
+      const { categoryId, seriesId } = params as { categoryId: string; seriesId: string };
+      throw redirect({ to: "/library/$categoryId/works/$workId", params: { categoryId, workId: seriesId } });
+    },
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/people/$personId", component: PersonPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/organisations/$organisationId", component: OrganisationPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/networks/$networkId", component: OrganisationPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/organisations/$id", component: OrganisationPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LevelForLibrary }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/works/$id", component: WorkDetail }),
+  // A work linked without its library (queue, history, search) opens inside the first library that lists it.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/works/$id",
+    beforeLoad: async ({ params }) => {
+      const id = (params as { id: string }).id;
+      const { data } = await api.GET("/works/{id}", { params: { path: { id: Number(id) } } });
+      const library = data?.library_ids?.[0];
+      if (library !== undefined) throw redirect({ to: "/library/$categoryId/works/$workId", params: { categoryId: String(library), workId: id } });
+    },
+    component: WorkPage,
+  }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/works/$id/$tab", component: WorkPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: PeopleIndex }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),

@@ -56,8 +56,8 @@ function byDate(entries: readonly CalendarEntry[] | undefined): Map<string, Cale
 export function entryTarget(entry: CalendarEntry) {
   if (entry.part_id != null && entry.category_id != null) {
     return {
-      to: "/library/$categoryId/series/$seriesId",
-      params: { categoryId: String(entry.category_id), seriesId: String(entry.work_id) },
+      to: "/library/$categoryId/works/$workId",
+      params: { categoryId: String(entry.category_id), workId: String(entry.work_id) },
     } as const;
   }
   return { to: "/works/$id", params: { id: String(entry.work_id) } } as const;

@@ -1,28 +1,37 @@
-import * as Dialog from "@radix-ui/react-dialog";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X } from "lucide-react";
 
 import { api } from "@/api/client";
+import { t } from "@/lib/i18n";
+import { Dialog } from "@/ui/Dialog";
 
 import { CandidateList } from "./CandidateList";
 import { IndexerProblems } from "./IndexerProblems";
 
-/** Lidarr's Interactive Search: search now, list what was found best first, the person sends one. */
+/** What of a work a search is for: one group by its ref (a season), one part by its id, or the work's own item. */
+export interface SearchScope {
+  group?: string;
+  part?: number;
+}
+
+/** Lidarr's and Sonarr's Interactive Search: search now, list what was found best first, the person sends one. */
 export function InteractiveSearch({
   workId,
+  scope = {},
   title,
   onClose,
 }: {
   workId: number;
+  scope?: SearchScope;
   title: string;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const query = { ...(scope.group !== undefined ? { group: scope.group } : {}), ...(scope.part ? { part: scope.part } : {}) };
   // A query, not a mutation: opening the dialog is the search, and reopening reuses it for a minute.
   const found = useQuery({
-    queryKey: ["work", workId, "interactive-search"],
+    queryKey: ["work", workId, "interactive-search", query],
     queryFn: async () => {
-      const { data, error } = await api.POST("/works/{id}/search", { params: { path: { id: workId } } });
+      const { data, error } = await api.POST("/works/{id}/search", { params: { path: { id: workId }, query } });
       if (error) throw error;
       return data;
     },
@@ -32,50 +41,38 @@ export function InteractiveSearch({
   const send = useMutation({
     mutationFn: async (decisionId: number) => {
       const { error } = await api.POST("/works/{id}/candidates/{decisionId}/send", {
-        params: { path: { id: workId, decisionId } },
+        params: { path: { id: workId, decisionId }, query },
       });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["wanted"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["wanted"] });
+      void queryClient.invalidateQueries({ queryKey: ["series"] });
+      void queryClient.invalidateQueries({ queryKey: ["work", workId] });
+    },
   });
 
   return (
-    <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <Dialog.Content
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[85vh] w-[min(56rem,calc(100vw-2rem))]
-                     -translate-x-1/2 -translate-y-1/2 flex-col gap-3 rounded-lg border border-border-subtle
-                     bg-canvas p-4 shadow-xl"
-        >
-          <div className="flex items-center gap-2">
-            <Dialog.Title className="text-sm font-medium">Interactive search: {title}</Dialog.Title>
-            <Dialog.Close aria-label="Close" className="ml-auto rounded-md p-1 text-ink-muted hover:text-ink">
-              <X aria-hidden className="size-4" />
-            </Dialog.Close>
-          </div>
-          <Dialog.Description className="text-xs text-ink-muted">
-            Best first. Send puts a release in the download client's queue.
-          </Dialog.Description>
-          <IndexerProblems problems={found.data?.indexer_errors} />
-          <div className="min-h-0 overflow-y-auto">
-            {found.isError ? (
-              <p className="text-xs text-danger">The search could not run -- is an indexer connected and enabled?</p>
-            ) : (
-              <CandidateList
-                decisions={found.data?.decisions ?? []}
-                loading={found.isLoading}
-                onSend={(decisionId) => send.mutate(decisionId)}
-                sendPendingId={send.isPending ? send.variables : undefined}
-                sendError={send.isError ? send.variables : undefined}
-                sendErrorDetail={send.isError ? (send.error as { detail?: string }).detail : undefined}
-              />
-            )}
-            {send.isSuccess && <p className="mt-2 text-xs text-ok">Sent to the download client.</p>}
-          </div>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+    <Dialog
+      width="wide"
+      title={`${t("action.interactive")}: ${title}`}
+      description="Best first. A release that covers more of what is missing leads at equal quality. Send puts it in the download client's queue."
+      onClose={onClose}
+    >
+      <IndexerProblems problems={found.data?.indexer_errors} />
+      {found.isError ? (
+        <p className="text-xs text-danger">{t("search.failed")}</p>
+      ) : (
+        <CandidateList
+          decisions={found.data?.decisions ?? []}
+          loading={found.isLoading}
+          onSend={(decisionId) => send.mutate(decisionId)}
+          sendPendingId={send.isPending ? send.variables : undefined}
+          sendError={send.isError ? send.variables : undefined}
+          sendErrorDetail={send.isError ? (send.error as { detail?: string }).detail : undefined}
+        />
+      )}
+      {send.isSuccess && <p className="mt-2 text-xs text-ok">{t("grab.sent")}.</p>}
+    </Dialog>
   );
 }
-

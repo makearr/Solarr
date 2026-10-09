@@ -21,6 +21,8 @@ const catalogue = {
   "work.notFound": "This {work} could not be found.",
   "work.loading": "Loading…",
   "work.partsOnDisk": "{present} of {required} {parts} on disk",
+  "work.partsPresent": "{present} {parts} on disk",
+  "work.waitingForMetadata": "Waiting for metadata",
   "work.noParts": "No {parts} are known yet.",
   "work.notWanted": "Nothing of this {work} is wanted.",
   "work.remove.title": "Remove {title}",

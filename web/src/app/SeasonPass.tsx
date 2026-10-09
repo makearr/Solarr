@@ -7,7 +7,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 
-import { seasonGroup } from "./SeasonSearch";
+import { seasonGroup } from "@/lib/seasonGroup";
 
 type Series = components["schemas"]["SeriesSummary"];
 
@@ -87,7 +87,7 @@ export function SeasonPass() {
             >
               {row.monitored ? <BookmarkCheck aria-hidden className="size-4 text-accent" /> : <Bookmark aria-hidden className="size-4" />}
             </button>
-            <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(row.id) }} className="min-w-40 flex-1 truncate text-sm hover:text-accent">
+            <Link to="/library/$categoryId/works/$workId" params={{ categoryId, workId: String(row.id) }} className="min-w-40 flex-1 truncate text-sm hover:text-accent">
               {row.title}
               <span className="ml-2 text-xs text-ink-muted">{[row.year, row.network, row.status].filter(Boolean).join(" · ")}</span>
             </Link>

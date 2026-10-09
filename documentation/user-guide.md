@@ -99,8 +99,8 @@ Under a TV library: **Series** (as posters with a progress bar, as an overview w
 (everyone credited, by role; open one for their credits here, their biography and what else they are known for),
 **Networks**, **Wanted**
 (aired episodes without a file) and **Unidentified**. A series page lists its seasons and episodes with directors,
-writers and guest stars; **Edit** re-applies any monitor choice to what you already hold and gives the series its own
-quality profile. Wanting one episode also wants its season.
+writers and guest stars; **Edit** re-applies any monitor choice to what you already hold, gives the series its own
+quality profile and sets its type (standard, daily, anime). Wanting one episode also wants its season.
 
 **Edit → Delete series** removes a series; tick "move its files to the recycle bin" to recycle them, and keep "do not add it back"
 ticked so a scan, a follow or an import list leaves it out (the Series index lists the deleted ones, with **Allow again**).
@@ -187,10 +187,13 @@ full, and stop when the library's root folders have no space above their reserve
 - **Calendar**: month, week, a seven-day forecast, one day, an agenda and a year view of the releases of
   artists you follow and albums you have asked for. Green has it, blue is wanted and not out yet, red
   wanted and out.
-- An **album's page**, under Search, says when it was last searched and when it will be searched
-  again -- or why it will not: a download on its way, no indexer, searching switched off, no space,
-  or waiting for its release date. **Interactive search** lists every release found, best first,
-  and names any indexer that failed or did not answer in time.
+- **Every work has one page** (an album, a series), with the same action row -- Monitor, Search, Refresh, Edit,
+  Remove -- and tabs: **Overview** (a series' seasons as Sonarr shows them, an album's tracklist as Lidarr does),
+  **Files** (what is on disk and what the probe measured), **History** and **Search**. Search says when the work was
+  last searched and when it will be searched again -- or why it will not: a download on its way, no indexer,
+  searching switched off, no space, or waiting for its release date. **Interactive search** lists every release
+  found, best first, and names any indexer that failed or did not answer in time. **Remove** can also delete the
+  files (to the recycle bin) and keep the work from being added back by a follow or an import list.
 
 ## 7. Import a folder (advanced, administrators)
 

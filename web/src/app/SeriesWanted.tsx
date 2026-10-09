@@ -6,7 +6,8 @@ import { Search } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
-import { SeasonSearchDialog, seasonGroup } from "./SeasonSearch";
+import { seasonGroup } from "@/lib/seasonGroup";
+import { InteractiveSearch } from "./InteractiveSearch";
 
 type Episode = components["schemas"]["WantedEpisode"];
 
@@ -137,8 +138,8 @@ export function SeriesWanted() {
           return (
             <li key={episode.part_id} className="flex flex-wrap items-center gap-3 px-3 py-2 text-sm">
               <Link
-                to="/library/$categoryId/series/$seriesId"
-                params={{ categoryId, seriesId: String(episode.series_id) }}
+                to="/library/$categoryId/works/$workId"
+                params={{ categoryId, workId: String(episode.series_id) }}
                 className="w-56 truncate font-medium hover:underline"
               >
                 {episode.series_title}
@@ -180,10 +181,9 @@ export function SeriesWanted() {
         </div>
       )}
       {dialog && (
-        <SeasonSearchDialog
-          seriesId={dialog.series_id}
-          season={dialog.season}
-          part={view === "cutoff" ? dialog.part_id : undefined}
+        <InteractiveSearch
+          workId={dialog.series_id}
+          scope={{ group: seasonGroup(dialog.season), part: view === "cutoff" ? dialog.part_id : undefined }}
           title={view === "cutoff" ? `${dialog.series_title} ${episodeLabel(dialog)}` : `${dialog.series_title}, season ${dialog.season}`}
           onClose={() => setDialog(null)}
         />

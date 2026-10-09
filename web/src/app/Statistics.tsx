@@ -75,7 +75,7 @@ function SeriesList({ title, note, rows, categoryId, gaps }: { title: string; no
           const value = gaps ? (row.missing ?? 0) : (row.bytes ?? 0);
           return (
             <li key={row.series_id} className="flex items-center gap-3 text-sm">
-              <Link to="/library/$categoryId/series/$seriesId" params={{ categoryId, seriesId: String(row.series_id) }} className="w-56 shrink-0 truncate hover:underline" title={row.title}>
+              <Link to="/library/$categoryId/works/$workId" params={{ categoryId, workId: String(row.series_id) }} className="w-56 shrink-0 truncate hover:underline" title={row.title}>
                 {row.title}
               </Link>
               <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">

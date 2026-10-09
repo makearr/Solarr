@@ -357,7 +357,7 @@ function PosterImage({ url, kind, workId, title }: { url?: string; kind: string;
 export function CreditTile({ credit, label }: { credit: Credit; label: string }) {
   const parts = (credit.parts ?? []).map((part) => part.replace(/:/g, "").toUpperCase());
   return (
-    <Link {...workLink(credit.work.media_type, credit.category_id, credit.work.id)} className="group flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
+    <Link {...workLink(credit.category_id, credit.work.id)} className="group flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
       <PosterImage url={credit.work.poster_url} kind={credit.work.media_type} workId={credit.work.poster_url ? undefined : credit.work.id} title={credit.work.title} />
       <span className="truncate text-sm font-medium">
         {credit.work.title}
@@ -425,7 +425,7 @@ function KnownForTile({ title, categoryId }: { title: KnownFor; categoryId: numb
   );
   if (title.work_id) {
     return (
-      <Link {...workLink(title.kind, categoryId, title.work_id)} className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
+      <Link {...workLink(categoryId, title.work_id)} className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
         {caption}
         <span className="text-xs text-ok">In your library</span>
       </Link>
