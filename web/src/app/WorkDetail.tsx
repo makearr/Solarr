@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search as SearchIcon, Trash2 as TrashIcon } from "lucide-react";
+import { Trash2 as TrashIcon } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -169,20 +169,6 @@ export function WorkDetail() {
     onSuccess: () => {
       invalidate();
       void queryClient.invalidateQueries({ queryKey: ["works"] });
-    },
-  });
-
-  const searchTrack = useMutation({
-    mutationFn: async (partId: number) => {
-      if (id === undefined) return;
-      const { error } = await api.POST("/works/{id}/parts/{partId}/search", {
-        params: { path: { id, partId } },
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      invalidate();
-      void queryClient.invalidateQueries({ queryKey: ["work", id, "candidates"] });
     },
   });
 
@@ -403,8 +389,6 @@ export function WorkDetail() {
             onToggleMonitored={(partId, monitored) =>
               setPartMonitored.mutate({ partId, monitored })
             }
-            searchPending={searchTrack.isPending ? searchTrack.variables : undefined}
-            onSearch={administrator ? (partId) => searchTrack.mutate(partId) : undefined}
             removePending={removeTrack.isPending ? removeTrack.variables.partId : undefined}
             onRemove={administrator ? (partId, deleteFiles) => removeTrack.mutate({ partId, deleteFiles }) : undefined}
           />
@@ -553,8 +537,6 @@ function PartsSection({
   discCount,
   monitorPending,
   onToggleMonitored,
-  searchPending,
-  onSearch,
   removePending,
   onRemove,
 }: {
@@ -562,8 +544,6 @@ function PartsSection({
   discCount: number;
   monitorPending: boolean;
   onToggleMonitored: (partId: number, monitored: boolean) => void;
-  searchPending: number | undefined;
-  onSearch?: (partId: number) => void;
   removePending: number | undefined;
   onRemove?: (partId: number, deleteFiles: boolean) => void;
 }) {
@@ -597,8 +577,6 @@ function PartsSection({
             columns={columns}
             pending={monitorPending}
             onToggleMonitored={(monitored) => onToggleMonitored(part.id, monitored)}
-            searching={searchPending === part.id}
-            onSearch={onSearch && (() => onSearch(part.id))}
             removing={removePending === part.id}
             onRemove={onRemove && ((deleteFiles) => onRemove(part.id, deleteFiles))}
           />
@@ -614,8 +592,6 @@ function PartRow({
   columns,
   pending,
   onToggleMonitored,
-  searching,
-  onSearch,
   removing,
   onRemove,
 }: {
@@ -624,9 +600,7 @@ function PartRow({
   columns: readonly ColumnKey[];
   pending: boolean;
   onToggleMonitored: (monitored: boolean) => void;
-  searching: boolean;
-  /** Absent for a caller the server would refuse: searching and deleting a track are administrator-only. */
-  onSearch?: () => void;
+  /** Absent for a caller the server would refuse: deleting a track is administrator-only. */
   removing: boolean;
   onRemove?: (deleteFiles: boolean) => void;
 }) {
@@ -686,20 +660,6 @@ function PartRow({
           )}
         </span>
 
-        {onSearch && (
-        <button
-          type="button"
-          aria-label={`Search for ${part.title ?? part.media_ref}`}
-          title="Want this track on its own and search every indexer for it"
-          disabled={searching}
-          onClick={onSearch}
-          className="flex shrink-0 items-center gap-1 rounded-full border border-border-subtle px-1.5 py-0.5
-                     text-[0.6875rem] text-ink-muted hover:text-ink disabled:opacity-50"
-        >
-          <SearchIcon aria-hidden className="size-3" />
-          {searching ? "Searching…" : "Search"}
-        </button>
-        )}
         {onRemove && (
         <button
           type="button"

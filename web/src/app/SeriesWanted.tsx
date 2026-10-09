@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
-import { SeasonSearchDialog } from "./SeasonSearch";
+import { SeasonSearchDialog, seasonGroup } from "./SeasonSearch";
 
 type Episode = components["schemas"]["WantedEpisode"];
 
@@ -42,8 +42,8 @@ export function SeriesWanted() {
 
   const grab = useMutation({
     mutationFn: async (episode: Episode) => {
-      const { data, error } = await api.POST("/series/{id}/seasons/{season}/grab", {
-        params: { path: { id: episode.series_id, season: episode.season }, query: { category_id: Number(categoryId) } },
+      const { data, error } = await api.POST("/works/{id}/grab", {
+        params: { path: { id: episode.series_id }, query: { group: seasonGroup(episode.season) } },
       });
       if (error) throw error;
       return { episode, data };
@@ -181,10 +181,9 @@ export function SeriesWanted() {
       )}
       {dialog && (
         <SeasonSearchDialog
-          categoryId={Number(categoryId)}
           seriesId={dialog.series_id}
           season={dialog.season}
-          episode={view === "cutoff" ? dialog.number : undefined}
+          part={view === "cutoff" ? dialog.part_id : undefined}
           title={view === "cutoff" ? `${dialog.series_title} ${episodeLabel(dialog)}` : `${dialog.series_title}, season ${dialog.season}`}
           onClose={() => setDialog(null)}
         />

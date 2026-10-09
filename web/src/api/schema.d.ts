@@ -1994,14 +1994,19 @@ export interface paths {
     };
     "/works/{id}/candidates": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
             };
             cookie?: never;
         };
-        /** Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet. */
+        /** The latest search's decisions for what the scope names, best first (section 12's "why wasn't this downloaded"). Empty, never 404, for something nobody has searched yet. */
         get: operations["listWorkCandidates"];
         put?: never;
         post?: never;
@@ -2013,7 +2018,12 @@ export interface paths {
     };
     "/works/{id}/candidates/{decisionId}/send": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -2033,7 +2043,12 @@ export interface paths {
     };
     "/works/{id}/candidates/{decisionId}/blocklist": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -2051,32 +2066,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/works/{id}/parts/{partId}/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-                partId: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Search every configured indexer for this one track.
-         * @description The track's own SINGLE desired_item is what gets searched, so this ensures one exists and is monitored first -- asking for a track to be found is asking for it, and a button labelled Search that quietly found nothing because nothing wanted the track would be a lie.
-         */
-        post: operations["searchTrack"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/works/{id}/search": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -2085,7 +2082,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. With a body, searches those terms instead ("search with different terms"); a release matching them counts as matching the work. */
+        /** Interactive search: ask every enabled indexer for what the scope names (the work's own item, one group, or one part of a group) and record a decision per release. Nothing is sent. With a body, searches those terms instead, keyed by the media type's search_terms; a release matching them counts as matching the work. */
         post: operations["searchWork"];
         delete?: never;
         options?: never;
@@ -2095,7 +2092,12 @@ export interface paths {
     };
     "/works/{id}/grab": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -2104,7 +2106,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way. */
+        /** Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way. */
         post: operations["grabWork"];
         delete?: never;
         options?: never;
@@ -3371,99 +3373,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/series/{id}/seasons/{season}/search": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent. */
-        post: operations["searchSeason"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/seasons/{season}/grab": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Automatic search, as in Sonarr: search the season and send its best accepted release to a download client. */
-        post: operations["grabSeason"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/seasons/{season}/candidates": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        /** The latest search's decisions for this season, best first. Empty for a season nobody has searched. */
-        get: operations["listSeasonCandidates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/seasons/{season}/candidates/{decision_id}/send": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-                decision_id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send one accepted release to a matching download client (a person's own pick, never gated). */
-        post: operations["sendSeasonCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/people/{id}/follow": {
         parameters: {
             query?: never;
@@ -4652,6 +4561,11 @@ export interface components {
             facets: components["schemas"]["Facet"][];
             /** @description The ways a whole work can be monitored at once, for POST /works/{id}/monitor's option. */
             monitor_options: {
+                key: string;
+                label: string;
+            }[];
+            /** @description The words a person may search with instead of a work's own, the keys of POST /works/{id}/search's body. */
+            search_terms: {
                 key: string;
                 label: string;
             }[];
@@ -7249,7 +7163,12 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+        SearchGroup: string;
+        /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+        SearchPart: number;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -10708,7 +10627,12 @@ export interface operations {
     };
     listWorkCandidates: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -10732,7 +10656,12 @@ export interface operations {
     };
     sendCandidate: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -10766,7 +10695,12 @@ export interface operations {
     };
     blocklistCandidate: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -10786,43 +10720,14 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
-    searchTrack: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-                partId: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description What this run found, decided and persisted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchItemResult"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            /** @description No indexer is configured or enabled. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
     searchWork: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -10832,8 +10737,7 @@ export interface operations {
         requestBody?: {
             content: {
                 "application/json": {
-                    artist: string;
-                    album: string;
+                    [key: string]: string;
                 };
             };
         };
@@ -10849,7 +10753,7 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-            /** @description The work is not currently wanted (no album-level desired item), or no indexer is configured/enabled. */
+            /** @description Nothing wanted covers the scope, the type searches whole items only, or no indexer is enabled. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10862,7 +10766,12 @@ export interface operations {
     };
     grabWork: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description The group of the work a search is for, by its ref (a season); absent is the work's own item. */
+                group?: components["parameters"]["SearchGroup"];
+                /** @description The one part a search is narrowed to, by its id; the group holding it is what is searched. */
+                part?: components["parameters"]["SearchPart"];
+            };
             header?: never;
             path: {
                 id: number;
@@ -13131,150 +13040,6 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-        };
-    };
-    searchSeason: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-                /** @description Search this one episode (even if it is unmonitored or present) instead of the season's missing ones. */
-                episode?: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description What this run found, decided and persisted. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SearchItemResult"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            /** @description Nothing is wanted in the season, or no indexer is enabled. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    grabSeason: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-                /** @description Search this one episode (even if it is unmonitored or present) instead of the season's missing ones. */
-                episode?: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description What the search found and what, if anything, was sent. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GrabResult"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            /** @description Nothing is wanted in the season, no indexer is enabled, or no client takes the release. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
-        };
-    };
-    listSeasonCandidates: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The decisions. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CandidateDecision"][];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    sendSeasonCandidate: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-                decision_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description The acquisition this created. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Acquisition"];
-                };
-            };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            /** @description The decision is not accepted, no client takes its protocol, or a download is already on its way. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/problem+json": components["schemas"]["Problem"];
-                };
-            };
         };
     };
     listPersonFollows: {

@@ -29,6 +29,8 @@ type Module struct {
 	Following
 	// Profiling is TV's part of a person's page.
 	Profiling
+	// Searching is TV's part of a search a person asks for.
+	Searching
 }
 
 // ScanSweep implements media.Scanning.

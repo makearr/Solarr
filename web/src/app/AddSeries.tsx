@@ -7,6 +7,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { usePreference } from "@/lib/usePreference";
 
+import { seasonGroup } from "./SeasonSearch";
 import { useDebouncedValue } from "./useDebouncedValue";
 import { remoteImage } from "@/lib/remoteImage";
 
@@ -30,9 +31,7 @@ async function searchEachMonitoredSeason(seriesId: number, categoryId: number) {
   const { data } = await api.GET("/series/{id}", { params: { path: { id: seriesId }, query: { category_id: categoryId } } });
   for (const season of data?.seasons ?? []) {
     if (season.monitored && season.number > 0 && season.counts.aired_missing > 0) {
-      await api.POST("/series/{id}/seasons/{season}/grab", {
-        params: { path: { id: seriesId, season: season.number }, query: { category_id: categoryId } },
-      });
+      await api.POST("/works/{id}/grab", { params: { path: { id: seriesId }, query: { group: seasonGroup(season.number) } } });
     }
   }
 }

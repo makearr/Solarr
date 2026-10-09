@@ -104,8 +104,6 @@ type Config struct {
 	Organisations OrganisationsReader
 	// Series feeds the TV screens. Optional: nil answers 503.
 	Series SeriesCatalog
-	// Seasons searches and downloads TV seasons. Optional: nil answers 503.
-	Seasons SeasonAcquirer
 	// PersonRemover removes an artist. Optional: nil answers 503.
 	PersonRemover PersonRemover
 	// Follower follows people and organisations into libraries. Optional: nil answers 503.
@@ -269,7 +267,6 @@ type Server struct {
 	people                  PeopleReader
 	organisations           OrganisationsReader
 	series                  SeriesCatalog
-	seasons                 SeasonAcquirer
 	personRemover           PersonRemover
 	follower                Follower
 	artistActions           ArtistActions
@@ -375,7 +372,6 @@ func New(config Config) (*Server, error) {
 		people:                  config.People,
 		organisations:           config.Organisations,
 		series:                  config.Series,
-		seasons:                 config.Seasons,
 		personRemover:           config.PersonRemover,
 		follower:                config.Follower,
 		artistActions:           config.ArtistActions,
@@ -520,7 +516,6 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/search", server.routeSearchWork)
 			secured.Post("/works/{id}/grab", server.routeGrabWork)
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
-			secured.Post("/works/{id}/parts/{partId}/search", server.routeSearchTrack)
 			secured.Get("/series", server.routeListSeries)
 			secured.Post("/series", server.AddSeries)
 			secured.Get("/series/wanted", server.routeListWantedEpisodes)
@@ -535,10 +530,6 @@ func New(config Config) (*Server, error) {
 			secured.Put("/series/{id}/type", server.routeSetSeriesType)
 			secured.Get("/series/{id}/posters", server.routeGetSeriesPosters)
 			secured.Put("/series/{id}/poster", server.routeSetSeriesPoster)
-			secured.Post("/series/{id}/seasons/{season}/search", server.routeSearchSeason)
-			secured.Post("/series/{id}/seasons/{season}/grab", server.routeGrabSeason)
-			secured.Get("/series/{id}/seasons/{season}/candidates", server.routeListSeasonCandidates)
-			secured.Post("/series/{id}/seasons/{season}/candidates/{decision_id}/send", server.routeSendSeasonCandidate)
 			secured.Get("/discover/search", server.routeDiscoverSearch)
 			secured.Post("/discover/add", server.DiscoverAdd)
 			secured.Get("/arr/instances", server.ListArrInstances)

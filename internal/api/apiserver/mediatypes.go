@@ -38,6 +38,8 @@ type MediaTypeInfo struct {
 	Facets []gen.Facet
 	// MonitorOptions are the ways a whole work can be monitored at once.
 	MonitorOptions []MediaChoice
+	// SearchTerms are the words a person may search with instead of a work's own.
+	SearchTerms []MediaChoice
 }
 
 // MediaChoice is one key a media type offers, with its label.
@@ -66,14 +68,14 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
-				MonitorOptions: monitorOptionViews(info.MonitorOptions),
+				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
 			})
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
 }
 
-func monitorOptionViews(options []MediaChoice) []struct {
+func choiceViews(options []MediaChoice) []struct {
 	Key   string `json:"key"`
 	Label string `json:"label"`
 } {

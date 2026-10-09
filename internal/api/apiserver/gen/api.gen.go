@@ -2800,7 +2800,13 @@ type MediaTypeInfo struct {
 	Organisation MediaTerm   `json:"organisation"`
 	Part         MediaTerm   `json:"part"`
 	Roles        []MediaRole `json:"roles"`
-	Work         MediaTerm   `json:"work"`
+
+	// SearchTerms The words a person may search with instead of a work's own, the keys of POST /works/{id}/search's body.
+	SearchTerms []struct {
+		Key   string `json:"key"`
+		Label string `json:"label"`
+	} `json:"search_terms"`
+	Work MediaTerm `json:"work"`
 }
 
 // MetadataSettings The metadata providers' own settings.
@@ -4400,6 +4406,12 @@ type WorkPartPage struct {
 	NextCursor *string    `json:"next_cursor,omitempty"`
 }
 
+// SearchGroup defines model for SearchGroup.
+type SearchGroup = string
+
+// SearchPart defines model for SearchPart.
+type SearchPart = int64
+
 // ListArrImportsParams defines parameters for ListArrImports.
 type ListArrImportsParams struct {
 	InstanceId int64 `form:"instance_id" json:"instance_id"`
@@ -4963,36 +4975,6 @@ type RefreshSeriesParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
-// ListSeasonCandidatesParams defines parameters for ListSeasonCandidates.
-type ListSeasonCandidatesParams struct {
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// SendSeasonCandidateParams defines parameters for SendSeasonCandidate.
-type SendSeasonCandidateParams struct {
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// GrabSeasonParams defines parameters for GrabSeason.
-type GrabSeasonParams struct {
-	// Episode Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
-	Episode *int `form:"episode,omitempty" json:"episode,omitempty"`
-
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// SearchSeasonParams defines parameters for SearchSeason.
-type SearchSeasonParams struct {
-	// Episode Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
-	Episode *int `form:"episode,omitempty" json:"episode,omitempty"`
-
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
 // SetSeriesTypeJSONBody defines parameters for SetSeriesType.
 type SetSeriesTypeJSONBody struct {
 	Type SetSeriesTypeJSONBodyType `json:"type"`
@@ -5156,6 +5138,42 @@ type GetWorkArtworkParams struct {
 // GetWorkArtworkParamsSize defines parameters for GetWorkArtwork.
 type GetWorkArtworkParamsSize string
 
+// ListWorkCandidatesParams defines parameters for ListWorkCandidates.
+type ListWorkCandidatesParams struct {
+	// Group The group of the work a search is for, by its ref (a season); absent is the work's own item.
+	Group *SearchGroup `form:"group,omitempty" json:"group,omitempty"`
+
+	// Part The one part a search is narrowed to, by its id; the group holding it is what is searched.
+	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
+}
+
+// BlocklistCandidateParams defines parameters for BlocklistCandidate.
+type BlocklistCandidateParams struct {
+	// Group The group of the work a search is for, by its ref (a season); absent is the work's own item.
+	Group *SearchGroup `form:"group,omitempty" json:"group,omitempty"`
+
+	// Part The one part a search is narrowed to, by its id; the group holding it is what is searched.
+	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
+}
+
+// SendCandidateParams defines parameters for SendCandidate.
+type SendCandidateParams struct {
+	// Group The group of the work a search is for, by its ref (a season); absent is the work's own item.
+	Group *SearchGroup `form:"group,omitempty" json:"group,omitempty"`
+
+	// Part The one part a search is narrowed to, by its id; the group holding it is what is searched.
+	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
+}
+
+// GrabWorkParams defines parameters for GrabWork.
+type GrabWorkParams struct {
+	// Group The group of the work a search is for, by its ref (a season); absent is the work's own item.
+	Group *SearchGroup `form:"group,omitempty" json:"group,omitempty"`
+
+	// Part The one part a search is narrowed to, by its id; the group holding it is what is searched.
+	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
+}
+
 // SetWorkMonitoredJSONBody defines parameters for SetWorkMonitored.
 type SetWorkMonitoredJSONBody struct {
 	// Group A group's ref ("s03"); "" is a work's single group.
@@ -5201,9 +5219,15 @@ type RemoveWorkJSONBody struct {
 }
 
 // SearchWorkJSONBody defines parameters for SearchWork.
-type SearchWorkJSONBody struct {
-	Album  string `json:"album"`
-	Artist string `json:"artist"`
+type SearchWorkJSONBody map[string]string
+
+// SearchWorkParams defines parameters for SearchWork.
+type SearchWorkParams struct {
+	// Group The group of the work a search is for, by its ref (a season); absent is the work's own item.
+	Group *SearchGroup `form:"group,omitempty" json:"group,omitempty"`
+
+	// Part The one part a search is narrowed to, by its id; the group holding it is what is searched.
+	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
 }
 
 // AddArrInstanceJSONRequestBody defines body for AddArrInstance for application/json ContentType.
@@ -6081,18 +6105,6 @@ type ServerInterface interface {
 	// Re-read the series from the metadata sources. Never changes monitoring.
 	// (POST /series/{id}/refresh)
 	RefreshSeries(w http.ResponseWriter, r *http.Request, id int64, params RefreshSeriesParams)
-	// The latest search's decisions for this season, best first. Empty for a season nobody has searched.
-	// (GET /series/{id}/seasons/{season}/candidates)
-	ListSeasonCandidates(w http.ResponseWriter, r *http.Request, id int64, season int, params ListSeasonCandidatesParams)
-	// Send one accepted release to a matching download client (a person's own pick, never gated).
-	// (POST /series/{id}/seasons/{season}/candidates/{decision_id}/send)
-	SendSeasonCandidate(w http.ResponseWriter, r *http.Request, id int64, season int, decisionId int64, params SendSeasonCandidateParams)
-	// Automatic search, as in Sonarr: search the season and send its best accepted release to a download client.
-	// (POST /series/{id}/seasons/{season}/grab)
-	GrabSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params GrabSeasonParams)
-	// Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
-	// (POST /series/{id}/seasons/{season}/search)
-	SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams)
 	// Say what kind of series this is, or return to what the providers say.
 	// (PUT /series/{id}/type)
 	SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesTypeParams)
@@ -6198,24 +6210,24 @@ type ServerInterface interface {
 	// The pictures providers hold for this work, to pick one from.
 	// (GET /works/{id}/artwork/options)
 	GetWorkArtworkOptions(w http.ResponseWriter, r *http.Request, id int64)
-	// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
+	// The latest search's decisions for what the scope names, best first (section 12's "why wasn't this downloaded"). Empty, never 404, for something nobody has searched yet.
 	// (GET /works/{id}/candidates)
-	ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64)
+	ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64, params ListWorkCandidatesParams)
 	// Never offer this release again (section 10.11): blocklisted by its indexer and guid, permanently, as the user's own choice. Later searches drop it before it is decided. Administrator only.
 	// (POST /works/{id}/candidates/{decisionId}/blocklist)
-	BlocklistCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
+	BlocklistCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params BlocklistCandidateParams)
 	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 	// (POST /works/{id}/candidates/{decisionId}/send)
-	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64)
+	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params SendCandidateParams)
 	// What an album's Edit dialog shows (Radarr's Edit).
 	// (GET /works/{id}/edit)
 	GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
 	// Save an album's Edit dialog in one call.
 	// (PUT /works/{id}/edit)
 	SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
-	// Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way.
+	// Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 	// (POST /works/{id}/grab)
-	GrabWork(w http.ResponseWriter, r *http.Request, id int64)
+	GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams)
 	// Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
@@ -6225,9 +6237,6 @@ type ServerInterface interface {
 	// Stop wanting one track, and optionally delete its file. Administrator only.
 	// (POST /works/{id}/parts/{partId}/remove)
 	RemovePart(w http.ResponseWriter, r *http.Request, id int64, partId int64)
-	// Search every configured indexer for this one track.
-	// (POST /works/{id}/parts/{partId}/search)
-	SearchTrack(w http.ResponseWriter, r *http.Request, id int64, partId int64)
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
@@ -6237,9 +6246,9 @@ type ServerInterface interface {
 	// Stop wanting an album, and optionally delete its files. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
-	// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. With a body, searches those terms instead ("search with different terms"); a release matching them counts as matching the work.
+	// Interactive search: ask every enabled indexer for what the scope names (the work's own item, one group, or one part of a group) and record a decision per release. Nothing is sent. With a body, searches those terms instead, keyed by the media type's search_terms; a release matching them counts as matching the work.
 	// (POST /works/{id}/search)
-	SearchWork(w http.ResponseWriter, r *http.Request, id int64)
+	SearchWork(w http.ResponseWriter, r *http.Request, id int64, params SearchWorkParams)
 }
 
 // Unimplemented server implementation that returns http.StatusNotImplemented for each endpoint.
@@ -7440,30 +7449,6 @@ func (_ Unimplemented) RefreshSeries(w http.ResponseWriter, r *http.Request, id 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The latest search's decisions for this season, best first. Empty for a season nobody has searched.
-// (GET /series/{id}/seasons/{season}/candidates)
-func (_ Unimplemented) ListSeasonCandidates(w http.ResponseWriter, r *http.Request, id int64, season int, params ListSeasonCandidatesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Send one accepted release to a matching download client (a person's own pick, never gated).
-// (POST /series/{id}/seasons/{season}/candidates/{decision_id}/send)
-func (_ Unimplemented) SendSeasonCandidate(w http.ResponseWriter, r *http.Request, id int64, season int, decisionId int64, params SendSeasonCandidateParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Automatic search, as in Sonarr: search the season and send its best accepted release to a download client.
-// (POST /series/{id}/seasons/{season}/grab)
-func (_ Unimplemented) GrabSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params GrabSeasonParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
-// (POST /series/{id}/seasons/{season}/search)
-func (_ Unimplemented) SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Say what kind of series this is, or return to what the providers say.
 // (PUT /series/{id}/type)
 func (_ Unimplemented) SetSeriesType(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesTypeParams) {
@@ -7674,21 +7659,21 @@ func (_ Unimplemented) GetWorkArtworkOptions(w http.ResponseWriter, r *http.Requ
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every release ever decided against this work's own wanted album item (section 12's own "why wasn't this downloaded"), newest first. Empty, never 404, for a work nobody has searched yet.
+// The latest search's decisions for what the scope names, best first (section 12's "why wasn't this downloaded"). Empty, never 404, for something nobody has searched yet.
 // (GET /works/{id}/candidates)
-func (_ Unimplemented) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64, params ListWorkCandidatesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Never offer this release again (section 10.11): blocklisted by its indexer and guid, permanently, as the user's own choice. Later searches drop it before it is decided. Administrator only.
 // (POST /works/{id}/candidates/{decisionId}/blocklist)
-func (_ Unimplemented) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
+func (_ Unimplemented) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params BlocklistCandidateParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
 // Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 // (POST /works/{id}/candidates/{decisionId}/send)
-func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64) {
+func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params SendCandidateParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7704,9 +7689,9 @@ func (_ Unimplemented) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id i
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way.
+// Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 // (POST /works/{id}/grab)
-func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7728,12 +7713,6 @@ func (_ Unimplemented) RemovePart(w http.ResponseWriter, r *http.Request, id int
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Search every configured indexer for this one track.
-// (POST /works/{id}/parts/{partId}/search)
-func (_ Unimplemented) SearchTrack(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 // (POST /works/{id}/parts/{partId}/wanted)
 func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
@@ -7752,9 +7731,9 @@ func (_ Unimplemented) RemoveWork(w http.ResponseWriter, r *http.Request, id int
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Search every configured indexer for this work's own wanted album (stage 5's candidate pipeline, section 10.1/10.2). Synchronous -- one album, a handful of indexer calls, tiers 0-2 (exact, +year, +alias) widening only until one clears the match-distance gate. With a body, searches those terms instead ("search with different terms"); a release matching them counts as matching the work.
+// Interactive search: ask every enabled indexer for what the scope names (the work's own item, one group, or one part of a group) and record a decision per release. Nothing is sent. With a body, searches those terms instead, keyed by the media type's search_terms; a release matching them counts as matching the work.
 // (POST /works/{id}/search)
-func (_ Unimplemented) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) SearchWork(w http.ResponseWriter, r *http.Request, id int64, params SearchWorkParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14403,271 +14382,6 @@ func (siw *ServerInterfaceWrapper) RefreshSeries(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
-// ListSeasonCandidates operation middleware
-func (siw *ServerInterfaceWrapper) ListSeasonCandidates(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "season" -------------
-	var season int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ListSeasonCandidatesParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListSeasonCandidates(w, r, id, season, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SendSeasonCandidate operation middleware
-func (siw *ServerInterfaceWrapper) SendSeasonCandidate(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "season" -------------
-	var season int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "decision_id" -------------
-	var decisionId int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "decision_id", chi.URLParam(r, "decision_id"), &decisionId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "decision_id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SendSeasonCandidateParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SendSeasonCandidate(w, r, id, season, decisionId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// GrabSeason operation middleware
-func (siw *ServerInterfaceWrapper) GrabSeason(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "season" -------------
-	var season int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GrabSeasonParams
-
-	// ------------- Optional query parameter "episode" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "episode", r.URL.Query(), &params.Episode)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "episode", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GrabSeason(w, r, id, season, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SearchSeason operation middleware
-func (siw *ServerInterfaceWrapper) SearchSeason(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "season" -------------
-	var season int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SearchSeasonParams
-
-	// ------------- Optional query parameter "episode" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "episode", r.URL.Query(), &params.Episode)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "episode", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SearchSeason(w, r, id, season, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // SetSeriesType operation middleware
 func (siw *ServerInterfaceWrapper) SetSeriesType(w http.ResponseWriter, r *http.Request) {
 
@@ -15702,8 +15416,27 @@ func (siw *ServerInterfaceWrapper) ListWorkCandidates(w http.ResponseWriter, r *
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkCandidatesParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "group", r.URL.Query(), &params.Group)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "part" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "part", r.URL.Query(), &params.Part)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListWorkCandidates(w, r, id)
+		siw.Handler.ListWorkCandidates(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15744,8 +15477,27 @@ func (siw *ServerInterfaceWrapper) BlocklistCandidate(w http.ResponseWriter, r *
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params BlocklistCandidateParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "group", r.URL.Query(), &params.Group)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "part" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "part", r.URL.Query(), &params.Part)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.BlocklistCandidate(w, r, id, decisionId)
+		siw.Handler.BlocklistCandidate(w, r, id, decisionId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15786,8 +15538,27 @@ func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SendCandidateParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "group", r.URL.Query(), &params.Group)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "part" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "part", r.URL.Query(), &params.Part)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SendCandidate(w, r, id, decisionId)
+		siw.Handler.SendCandidate(w, r, id, decisionId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15885,8 +15656,27 @@ func (siw *ServerInterfaceWrapper) GrabWork(w http.ResponseWriter, r *http.Reque
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GrabWorkParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "group", r.URL.Query(), &params.Group)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "part" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "part", r.URL.Query(), &params.Part)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GrabWork(w, r, id)
+		siw.Handler.GrabWork(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16031,48 +15821,6 @@ func (siw *ServerInterfaceWrapper) RemovePart(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
-// SearchTrack operation middleware
-func (siw *ServerInterfaceWrapper) SearchTrack(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "partId" -------------
-	var partId int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "partId", chi.URLParam(r, "partId"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "partId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SearchTrack(w, r, id, partId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // SetTrackWanted operation middleware
 func (siw *ServerInterfaceWrapper) SetTrackWanted(w http.ResponseWriter, r *http.Request) {
 
@@ -16203,8 +15951,27 @@ func (siw *ServerInterfaceWrapper) SearchWork(w http.ResponseWriter, r *http.Req
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params SearchWorkParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "group", r.URL.Query(), &params.Group)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "part" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "part", r.URL.Query(), &params.Part)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SearchWork(w, r, id)
+		siw.Handler.SearchWork(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16925,18 +16692,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/series/{id}/refresh", wrapper.RefreshSeries)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series/{id}/seasons/{season}/candidates", wrapper.ListSeasonCandidates)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/candidates/{decision_id}/send", wrapper.SendSeasonCandidate)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/grab", wrapper.GrabSeason)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/search", wrapper.SearchSeason)
-	})
-	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/type", wrapper.SetSeriesType)
 	})
 	r.Group(func(r chi.Router) {
@@ -17067,9 +16822,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/remove", wrapper.RemovePart)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/search", wrapper.SearchTrack)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/wanted", wrapper.SetTrackWanted)

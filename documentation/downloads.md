@@ -15,6 +15,13 @@ Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pr
   download already on its way costs nothing and is looked at again in an hour. Every search counts
   toward the backoff, whoever started it.
 
+**A person's search** is one set of routes for every media type: `POST /works/{id}/search` (interactive:
+decisions recorded, nothing sent), `POST /works/{id}/grab` (automatic: the best release is sent),
+`GET /works/{id}/candidates` and `.../candidates/{decisionId}/send|blocklist`. Each takes a scope: `group` (a
+season's ref), `part` (one episode's id; its season is searched, narrowed to it) or neither (an album). The work's
+type answers it through `media.Searching`; music searches whole albums only, as Lidarr does, and refuses a `part`.
+A search body replaces the work's own words by the keys of the type's `search_terms` (music: artist and album).
+
 **RSS sync** (every 15 minutes, as Lidarr's) reads each indexer's newest 100 audio releases
 (each indexer's **Music categories**, Connections -> Indexers, default 3000 Audio -- without a
 category a feed is mostly television; searches use the same categories), groups them by the artist they

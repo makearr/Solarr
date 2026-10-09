@@ -81,10 +81,21 @@ type CandidateDecision struct {
 	NoClient bool
 }
 
-// SearchTerms are a person's own artist and album, searched instead of the work's own.
-type SearchTerms struct {
-	Artist, Album string
+// SearchScope is what of a work a search is for: one group by its ref, one part by its id, or neither for the work's
+// own item.
+type SearchScope struct {
+	Group *string
+	Part  *int64
 }
+
+// ErrWholeItemOnly reports a part search of a type that searches whole items only.
+var ErrWholeItemOnly = errors.New("apiserver: only a whole item is searched")
+
+// ErrPartNotFound reports a scope naming a part the work does not have.
+var ErrPartNotFound = errors.New("apiserver: no such part of this work")
+
+// ErrInvalidSearchTerms reports search terms the work's type cannot search with; the wrapped text says why.
+var ErrInvalidSearchTerms = errors.New("apiserver: invalid search terms")
 
 // IndexerSearchError records one indexer's own search failure within a run.
 type IndexerSearchError struct {
@@ -113,41 +124,81 @@ type Acquisition struct {
 	UpdatedAt         time.Time
 }
 
-// CandidateSearcher is stage 5's own candidate pipeline, exposed to the web
-// interface (todo 5.2's "manual search, per-item and per-category").
+// CandidateSearcher is the search a person asks for (todo 5.2), of a work, one of its groups or one part.
 type CandidateSearcher interface {
-	// SearchWork searches the work's own terms, or terms when a person gave different ones.
-	SearchWork(ctx context.Context, workID int64, terms *SearchTerms) (SearchItemResult, error)
-	// SearchTrack searches for one track on its own, wanting it first if
-	// nothing did.
-	SearchTrack(ctx context.Context, workID, partID int64) (SearchItemResult, error)
-	ListWorkCandidates(ctx context.Context, workID int64) ([]CandidateDecision, error)
+	// SearchWork searches what the scope names, with the type's own terms when a person gave different ones.
+	SearchWork(ctx context.Context, workID int64, scope SearchScope, terms map[string]string) (SearchItemResult, error)
+	// ListWorkCandidates answers the latest search's decisions for the scope, best first.
+	ListWorkCandidates(ctx context.Context, workID int64, scope SearchScope) ([]CandidateDecision, error)
 	// SearchCategory enqueues an automatic search of the library, or of workIDs only when given;
 	// duplicate reports whether the same run was already queued.
 	SearchCategory(ctx context.Context, categoryID int64, workIDs []int64) (duplicate bool, err error)
 	// SearchCutoffUnmet searches every monitored album of the library that is below its cutoff.
 	SearchCutoffUnmet(ctx context.Context, categoryID int64) (duplicate bool, err error)
-	// GrabWork is the automatic search of one album: search, then send the best release.
-	GrabWork(ctx context.Context, workID int64) (GrabResult, error)
-	// SendCandidate is ADR-57's own acquire.send: dispatch decisionID (which
-	// must belong to workID and be ACCEPT) to a matching downloader.
-	SendCandidate(ctx context.Context, workID, decisionID int64) (Acquisition, error)
+	// GrabWork is the automatic search of the scope: search, then send the best release.
+	GrabWork(ctx context.Context, workID int64, scope SearchScope) (GrabResult, error)
+	// SendCandidate is ADR-57's acquire.send: dispatch decisionID, which must be the scope's and ACCEPT.
+	SendCandidate(ctx context.Context, workID int64, scope SearchScope, decisionID int64) (Acquisition, error)
 	// BlocklistCandidate never offers decisionID's release again (section 10.11).
-	BlocklistCandidate(ctx context.Context, workID, decisionID int64) error
+	BlocklistCandidate(ctx context.Context, workID int64, scope SearchScope, decisionID int64) error
 }
 
-// routeSearchWork parses the id path parameter.
-func (s *Server) routeSearchWork(w http.ResponseWriter, r *http.Request) {
+// searchScope reads the group and part query parameters every scoped search route takes.
+func (s *Server) searchScope(w http.ResponseWriter, r *http.Request) (SearchScope, bool) {
+	var scope SearchScope
+	query := r.URL.Query()
+	if query.Has("group") {
+		group := query.Get("group")
+		scope.Group = &group
+	}
+	if query.Has("part") {
+		part, err := strconv.ParseInt(query.Get("part"), 10, 64)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "part must be a part id")
+			return SearchScope{}, false
+		}
+		scope.Part = &part
+	}
+	return scope, true
+}
+
+// workRoute reads a scoped work route's id and scope.
+func (s *Server) workRoute(w http.ResponseWriter, r *http.Request) (int64, SearchScope, bool) {
 	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
 	if err != nil {
-		return
+		return 0, SearchScope{}, false
 	}
-	s.SearchWork(w, r, id)
+	scope, ok := s.searchScope(w, r)
+	return id, scope, ok
 }
 
-// SearchWork runs stage 5's candidate pipeline against one work's own wanted album. It can send
-// a download, so it needs request on the album's library, as the library-wide search does.
-func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
+// decisionRoute is workRoute with the decision id.
+func (s *Server) decisionRoute(w http.ResponseWriter, r *http.Request) (int64, int64, SearchScope, bool) {
+	id, scope, ok := s.workRoute(w, r)
+	if !ok {
+		return 0, 0, SearchScope{}, false
+	}
+	decisionID, err := parsePathID(w, s, r, "decisionId", "a decision id must be a number")
+	if err != nil {
+		return 0, 0, SearchScope{}, false
+	}
+	return id, decisionID, scope, true
+}
+
+func (s *Server) routeSearchWork(w http.ResponseWriter, r *http.Request) {
+	if id, scope, ok := s.workRoute(w, r); ok {
+		s.searchWork(w, r, id, scope)
+	}
+}
+
+// SearchWork satisfies the generated interface; routeSearchWork is what is mounted.
+func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64, params gen.SearchWorkParams) {
+	s.searchWork(w, r, id, SearchScope{Group: params.Group, Part: params.Part})
+}
+
+// searchWork runs one interactive search. A send can follow it, so it needs request on the work's library, as the
+// library-wide search does.
+func (s *Server) searchWork(w http.ResponseWriter, r *http.Request, id int64, scope SearchScope) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -156,18 +207,23 @@ func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
-	var terms *SearchTerms
+	var terms map[string]string
 	if r.ContentLength != 0 {
 		var body gen.SearchWorkJSONRequestBody
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil ||
-			strings.TrimSpace(body.Artist) == "" || strings.TrimSpace(body.Album) == "" {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "different terms need both an artist and an album")
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "terms must be an object of strings")
 			return
 		}
-		terms = &SearchTerms{Artist: strings.TrimSpace(body.Artist), Album: strings.TrimSpace(body.Album)}
+		for key, value := range body {
+			if value = strings.TrimSpace(value); value != "" {
+				if terms == nil {
+					terms = map[string]string{}
+				}
+				terms[key] = value
+			}
+		}
 	}
-	result, err := s.candidateSearcher.SearchWork(r.Context(), id, terms)
+	result, err := s.candidateSearcher.SearchWork(r.Context(), id, scope, terms)
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
@@ -175,50 +231,19 @@ func (s *Server) SearchWork(w http.ResponseWriter, r *http.Request, id int64) {
 	writeJSON(w, s.logger, http.StatusOK, searchItemResultView(result))
 }
 
-// routeSearchTrack parses both path parameters.
-func (s *Server) routeSearchTrack(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
-	if err != nil {
-		return
-	}
-	partID, err := parsePathID(w, s, r, "partId", "a part id must be a number")
-	if err != nil {
-		return
-	}
-	s.SearchTrack(w, r, id, partID)
-}
-
-// SearchTrack runs the same pipeline against one track's own SINGLE item.
-func (s *Server) SearchTrack(w http.ResponseWriter, r *http.Request, id, partID int64) {
-	if !s.requireAdministrator(w, r) {
-		return
-	}
-	if s.candidateSearcher == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeInternal,
-			"Not available", "searching is not wired up in this build")
-		return
-	}
-	result, err := s.candidateSearcher.SearchTrack(r.Context(), id, partID)
-	if err != nil {
-		writeCandidateSearchError(w, s, err)
-		return
-	}
-	writeJSON(w, s.logger, http.StatusOK, searchItemResultView(result))
-}
-
-// routeListWorkCandidates parses the id path parameter.
 func (s *Server) routeListWorkCandidates(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
-	if err != nil {
-		return
+	if id, scope, ok := s.workRoute(w, r); ok {
+		s.listWorkCandidates(w, r, id, scope)
 	}
-	s.ListWorkCandidates(w, r, id)
 }
 
-// ListWorkCandidates answers every decision ever recorded against this
-// work's own wanted album, newest first -- empty, never 404, for a work
-// nobody has searched.
-func (s *Server) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64) {
+// ListWorkCandidates satisfies the generated interface; routeListWorkCandidates is what is mounted.
+func (s *Server) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id int64, params gen.ListWorkCandidatesParams) {
+	s.listWorkCandidates(w, r, id, SearchScope{Group: params.Group, Part: params.Part})
+}
+
+// listWorkCandidates answers the latest search's decisions, best first: empty, never 404, for nothing searched yet.
+func (s *Server) listWorkCandidates(w http.ResponseWriter, r *http.Request, id int64, scope SearchScope) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -227,7 +252,7 @@ func (s *Server) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id i
 	if !s.workVisible(w, r, access, id) {
 		return
 	}
-	decisions, err := s.candidateSearcher.ListWorkCandidates(r.Context(), id)
+	decisions, err := s.candidateSearcher.ListWorkCandidates(r.Context(), id, scope)
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
@@ -239,22 +264,19 @@ func (s *Server) ListWorkCandidates(w http.ResponseWriter, r *http.Request, id i
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
 
-// routeSendCandidate parses both path parameters.
 func (s *Server) routeSendCandidate(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
-	if err != nil {
-		return
+	if id, decisionID, scope, ok := s.decisionRoute(w, r); ok {
+		s.sendCandidate(w, r, id, decisionID, scope)
 	}
-	decisionID, err := parsePathID(w, s, r, "decisionId", "a decision id must be a number")
-	if err != nil {
-		return
-	}
-	s.SendCandidate(w, r, id, decisionID)
 }
 
-// SendCandidate dispatches one ACCEPTed decision to a matching downloader (ADR-57's
-// acquire.send); request on the album's library, as SearchWork.
-func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64) {
+// SendCandidate satisfies the generated interface; routeSendCandidate is what is mounted.
+func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64, params gen.SendCandidateParams) {
+	s.sendCandidate(w, r, id, decisionID, SearchScope{Group: params.Group, Part: params.Part})
+}
+
+// sendCandidate dispatches one ACCEPTed decision (ADR-57's acquire.send); request on the work's library.
+func (s *Server) sendCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64, scope SearchScope) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -263,7 +285,7 @@ func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decis
 	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
-	acquisition, err := s.candidateSearcher.SendCandidate(r.Context(), id, decisionID)
+	acquisition, err := s.candidateSearcher.SendCandidate(r.Context(), id, scope, decisionID)
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
@@ -272,23 +294,22 @@ func (s *Server) SendCandidate(w http.ResponseWriter, r *http.Request, id, decis
 }
 
 func (s *Server) routeBlocklistCandidate(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
-	if err != nil {
-		return
+	if id, decisionID, scope, ok := s.decisionRoute(w, r); ok {
+		s.blocklistCandidate(w, r, id, decisionID, scope)
 	}
-	decisionID, err := parsePathID(w, s, r, "decisionId", "a decision id must be a number")
-	if err != nil {
-		return
-	}
-	s.BlocklistCandidate(w, r, id, decisionID)
 }
 
-// BlocklistCandidate never offers one release again. Administrator only, like the Blocklists page.
-func (s *Server) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64) {
+// BlocklistCandidate satisfies the generated interface; routeBlocklistCandidate is what is mounted.
+func (s *Server) BlocklistCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64, params gen.BlocklistCandidateParams) {
+	s.blocklistCandidate(w, r, id, decisionID, SearchScope{Group: params.Group, Part: params.Part})
+}
+
+// blocklistCandidate never offers one release again. Administrator only, like the Blocklists page.
+func (s *Server) blocklistCandidate(w http.ResponseWriter, r *http.Request, id, decisionID int64, scope SearchScope) {
 	if !s.requireAdministrator(w, r) {
 		return
 	}
-	if err := s.candidateSearcher.BlocklistCandidate(r.Context(), id, decisionID); err != nil {
+	if err := s.candidateSearcher.BlocklistCandidate(r.Context(), id, scope, decisionID); err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
 	}
@@ -352,15 +373,18 @@ type GrabResult struct {
 }
 
 func (s *Server) routeGrabWork(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathID(w, s, r, "id", "a work id must be a number")
-	if err != nil {
-		return
+	if id, scope, ok := s.workRoute(w, r); ok {
+		s.grabWork(w, r, id, scope)
 	}
-	s.GrabWork(w, r, id)
 }
 
-// GrabWork is Lidarr's automatic search of one album; request on its library, as SearchWork.
-func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
+// GrabWork satisfies the generated interface; routeGrabWork is what is mounted.
+func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64, params gen.GrabWorkParams) {
+	s.grabWork(w, r, id, SearchScope{Group: params.Group, Part: params.Part})
+}
+
+// grabWork is Lidarr's and Sonarr's automatic search; request on the work's library, as searchWork.
+func (s *Server) grabWork(w http.ResponseWriter, r *http.Request, id int64, scope SearchScope) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
@@ -369,7 +393,7 @@ func (s *Server) GrabWork(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
-	result, err := s.candidateSearcher.GrabWork(r.Context(), id)
+	result, err := s.candidateSearcher.GrabWork(r.Context(), id, scope)
 	if err != nil {
 		writeCandidateSearchError(w, s, err)
 		return
@@ -398,8 +422,11 @@ func parsePathID(w http.ResponseWriter, s *Server, r *http.Request, param, messa
 func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	switch {
 	case errors.Is(err, ErrWorkNotWanted):
-		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
-			"Not wanted", "this work has no album-level desired item to search for")
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not wanted", "nothing wanted covers what was asked for")
+	case errors.Is(err, ErrWholeItemOnly):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Whole items only", "this media type searches whole items, not one part")
+	case errors.Is(err, ErrInvalidSearchTerms):
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 	case errors.Is(err, ErrNoIndexersConfigured):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
 			"No indexers", "no indexer is configured and enabled")
@@ -418,6 +445,8 @@ func writeCandidateSearchError(w http.ResponseWriter, s *Server, err error) {
 	case errors.Is(err, ErrDownloadClientRefused):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Refused by the download client",
 			strings.TrimPrefix(err.Error(), ErrDownloadClientRefused.Error()+": "))
+	case errors.Is(err, ErrPartNotFound):
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such part of this work")
 	case errors.Is(err, ErrCandidateDecisionNotFound):
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such decision")
 	case errors.Is(err, sql.ErrNoRows):

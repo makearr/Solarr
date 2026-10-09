@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/cutoff"
+	"github.com/makearr/Solarr/internal/acquiring/dispatch"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/acquiring/rss"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -78,6 +80,8 @@ type Descriptor struct {
 	Facets []Facet
 	// MonitorOptions are the ways a whole work can be monitored at once (Sonarr's "future episodes"), when a type has them.
 	MonitorOptions []Choice
+	// SearchTerms are the words a person may search with instead of a work's own, when a type takes them.
+	SearchTerms []Choice
 }
 
 // Module is one media type. Its behaviour is in the capability interfaces it also implements.
@@ -188,6 +192,32 @@ type Monitoring interface {
 
 // ErrUnknownMonitorOption reports a monitor option the work's media type does not have.
 var ErrUnknownMonitorOption = errors.New("media: unknown monitor option")
+
+// Searching is the capability of a media type whose wanted items a person searches for and grabs by hand.
+type Searching interface {
+	// SearchWanted searches one wanted item and records what it decided; nothing is sent.
+	SearchWanted(ctx context.Context, search WantedSearch) (judge.Result, error)
+	// GrabWanted searches one wanted item and sends its best accepted release, unless a download is on its way.
+	GrabWanted(ctx context.Context, search WantedSearch) (judge.Result, dispatch.Best, error)
+}
+
+// WantedSearch is one search a person asked for.
+type WantedSearch struct {
+	ItemID int64
+	// Part narrows the search to one part of the item, by its ref; empty searches what the item is missing.
+	Part string
+	// Terms replace the work's own words, keyed by the type's SearchTerms.
+	Terms map[string]string
+}
+
+// ErrNoIndexers reports a search with no enabled indexer to ask.
+var ErrNoIndexers = errors.New("media: no indexer is enabled")
+
+// ErrInvalidTerms reports search terms the type cannot search with.
+var ErrInvalidTerms = errors.New("media: invalid search terms")
+
+// ErrWholeItemOnly reports a part search of a type that searches whole items, as Lidarr searches whole albums.
+var ErrWholeItemOnly = errors.New("media: only a whole item is searched")
 
 // Grouping is the capability of a media type whose works hold their parts in groups (a series' seasons).
 type Grouping interface {

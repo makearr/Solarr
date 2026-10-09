@@ -81,6 +81,11 @@ func (m MediaTypes) MonitoringOf(mediaType string) (media.Monitoring, bool) {
 	return media.Capability[media.Monitoring](m.Registry, media.Key(mediaType))
 }
 
+// SearchingOf answers a media type's search a person asks for.
+func (m MediaTypes) SearchingOf(mediaType string) (media.Searching, bool) {
+	return media.Capability[media.Searching](m.Registry, media.Key(mediaType))
+}
+
 // RoleKeys lists every credit role a registered media type declares, once each.
 func (m MediaTypes) RoleKeys() []string {
 	var keys []string
@@ -122,6 +127,9 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		}
 		for _, option := range descriptor.MonitorOptions {
 			info.MonitorOptions = append(info.MonitorOptions, apiserver.MediaChoice{Key: option.Key, Label: option.Label})
+		}
+		for _, term := range descriptor.SearchTerms {
+			info.SearchTerms = append(info.SearchTerms, apiserver.MediaChoice{Key: term.Key, Label: term.Label})
 		}
 		for _, role := range descriptor.Roles {
 			info.Roles = append(info.Roles, apiserver.MediaRole{

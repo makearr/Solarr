@@ -273,16 +273,6 @@ func (p *process) seriesCatalog() adapters.SeriesCatalog {
 	}
 }
 
-// seasonSearch is the TV seasons' interactive search and send.
-func (p *process) seasonSearch() adapters.SeasonSearch {
-	grab := p.tvGrab()
-	return adapters.SeasonSearch{
-		Acquire: grab, Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
-		Conns: p.tvIndexerConns, Clock: clock.NewSystem(),
-		Views: adapters.CandidateSearch{Search: p.musicSearch(), Dispatch: p.musicDispatch(), Clock: clock.NewSystem()},
-	}
-}
-
 // tmdbCredential is the user's own TMDB key, empty until they store one.
 func (p *process) tmdbCredential() string {
 	key, err := p.cache.TMDBAPIKey()

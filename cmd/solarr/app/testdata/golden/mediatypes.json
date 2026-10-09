@@ -173,6 +173,16 @@
         "part_scoped": false
       }
     ],
+    "search_terms": [
+      {
+        "key": "artist",
+        "label": "Artist"
+      },
+      {
+        "key": "album",
+        "label": "Album"
+      }
+    ],
     "work": {
       "many": "Albums",
       "one": "Album"
@@ -433,6 +443,7 @@
         "part_scoped": true
       }
     ],
+    "search_terms": [],
     "work": {
       "many": "Series",
       "one": "Series"

@@ -9,107 +9,127 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
+	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// CandidateSearch bridges stage 5's candidate pipeline
-// (internal/media/music.Search and .Dispatch) to the web interface -- todo
-// 5.2's own "manual search, per-item and per-category" plus ADR-57's own
-// acquire.send.
+// CandidateSearch bridges the search a person asks for to the web interface: todo 5.2's manual search, per item and
+// per library, plus ADR-57's acquire.send. The type's own search runs through its media.Searching.
 type CandidateSearch struct {
-	Works    library.Works
-	Monitor  WorksMonitor
+	Works library.Works
+	// Searching answers a media type's search; nil or false leaves a type unsearchable.
+	Searching func(mediaType string) (media.Searching, bool)
+	// Search carries the stores decision rows and blocklisting read; any type's will do.
 	Search   music.Search
 	Dispatch music.Dispatch
 	Queue    *jobs.Queue
-	Indexers music.IndexerSource
 	Clock    clock.Clock
 }
 
-// SearchWork resolves workID to its own album-level wanted item and runs
-// the pipeline against it.
+// target resolves a scope to the wanted item it is searched through and the part ref it narrows to.
+func (c CandidateSearch) target(ctx context.Context, workID int64, scope apiserver.SearchScope) (int64, string, error) {
+	itemID, part, err := c.Works.WantedItemFor(ctx, workID, library.SearchScope{Group: scope.Group, PartID: scope.Part})
+	switch {
+	case errors.Is(err, library.ErrNoWantedItem):
+		return 0, "", apiserver.ErrWorkNotWanted
+	case errors.Is(err, library.ErrPartNotFound):
+		return 0, "", apiserver.ErrPartNotFound
+	}
+	return itemID, part, err
+}
+
+// searching resolves the scope and the work's type's search.
+func (c CandidateSearch) searching(ctx context.Context, workID int64, scope apiserver.SearchScope) (media.Searching, int64, string, error) {
+	mediaType, err := c.Works.MediaTypeOf(ctx, workID)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	searching, ok := media.Searching(nil), false
+	if c.Searching != nil {
+		searching, ok = c.Searching(mediaType)
+	}
+	if !ok {
+		return nil, 0, "", apiserver.ErrWorkNotWanted
+	}
+	itemID, part, err := c.target(ctx, workID, scope)
+	return searching, itemID, part, err
+}
+
+// SearchWork runs the work's type's interactive search against the scope's wanted item.
 func (c CandidateSearch) SearchWork(
-	ctx context.Context, workID int64, terms *apiserver.SearchTerms,
+	ctx context.Context, workID int64, scope apiserver.SearchScope, terms map[string]string,
 ) (apiserver.SearchItemResult, error) {
-	detail, err := c.Works.Detail(ctx, workID)
+	searching, itemID, part, err := c.searching(ctx, workID, scope)
 	if err != nil {
 		return apiserver.SearchItemResult{}, err
 	}
-	if detail.Wanted == nil {
-		return apiserver.SearchItemResult{}, apiserver.ErrWorkNotWanted
-	}
-
-	indexers, err := c.Indexers(ctx)
+	result, err := searching.SearchWanted(ctx, media.WantedSearch{ItemID: itemID, Part: part, Terms: terms})
 	if err != nil {
-		return apiserver.SearchItemResult{}, fmt.Errorf("adapters: candidate search: indexers: %w", err)
-	}
-	if len(indexers) == 0 {
-		return apiserver.SearchItemResult{}, apiserver.ErrNoIndexersConfigured
-	}
-
-	var custom *music.SearchTerms
-	if terms != nil {
-		custom = &music.SearchTerms{Artist: terms.Artist, Album: terms.Album}
-	}
-	result, err := c.Search.SearchItemWithTerms(ctx, detail.Wanted.ID, indexers, c.Clock.Now(), custom)
-	if err != nil {
-		return apiserver.SearchItemResult{}, err
+		return apiserver.SearchItemResult{}, searchError(err)
 	}
 	return c.searchItemResultView(ctx, result), nil
 }
 
-// BlocklistCandidate blocklists the release one of workID's decisions recorded.
-func (c CandidateSearch) BlocklistCandidate(ctx context.Context, workID, decisionID int64) error {
-	detail, err := c.Works.Detail(ctx, workID)
+// GrabWork is the automatic search of the scope: search, then send the best release.
+func (c CandidateSearch) GrabWork(ctx context.Context, workID int64, scope apiserver.SearchScope) (apiserver.GrabResult, error) {
+	searching, itemID, part, err := c.searching(ctx, workID, scope)
+	if err != nil {
+		return apiserver.GrabResult{}, err
+	}
+	found, best, err := searching.GrabWanted(ctx, media.WantedSearch{ItemID: itemID, Part: part})
+	if err != nil {
+		return apiserver.GrabResult{}, searchError(err)
+	}
+	view := apiserver.GrabResult{Found: len(found.Decisions), AlreadyDownloading: best.AlreadyInFlight, Held: best.Held, Refused: best.Refused}
+	if best.Sent != nil {
+		sent := acquisitionView(*best.Sent)
+		view.Sent = &sent
+	}
+	return view, nil
+}
+
+// searchError maps a type's search errors to apiserver's.
+func searchError(err error) error {
+	switch {
+	case errors.Is(err, media.ErrNoIndexers):
+		return apiserver.ErrNoIndexersConfigured
+	case errors.Is(err, media.ErrWholeItemOnly):
+		return apiserver.ErrWholeItemOnly
+	case errors.Is(err, media.ErrInvalidTerms):
+		return fmt.Errorf("%w: %w", apiserver.ErrInvalidSearchTerms, err)
+	}
+	return translateDispatchError(err)
+}
+
+// BlocklistCandidate blocklists the release one of the scope's decisions recorded.
+func (c CandidateSearch) BlocklistCandidate(ctx context.Context, workID int64, scope apiserver.SearchScope, decisionID int64) error {
+	itemID, _, err := c.target(ctx, workID, scope)
+	if errors.Is(err, apiserver.ErrWorkNotWanted) {
+		return apiserver.ErrCandidateDecisionNotFound
+	}
 	if err != nil {
 		return err
 	}
-	if detail.Wanted == nil {
-		return apiserver.ErrCandidateDecisionNotFound
-	}
-	return translateDispatchError(c.Search.BlocklistRelease(ctx, detail.Wanted.ID, decisionID, c.Clock.Now()))
+	return translateDispatchError(c.Search.BlocklistRelease(ctx, itemID, decisionID, c.Clock.Now()))
 }
 
-// SearchTrack runs the pipeline against one track's own SINGLE item,
-// creating and monitoring it first: asking for a track to be found is
-// asking for it.
-func (c CandidateSearch) SearchTrack(ctx context.Context, workID, partID int64) (apiserver.SearchItemResult, error) {
-	wanted, err := c.Monitor.SetTrackWanted(ctx, workID, partID, true)
-	if err != nil {
-		return apiserver.SearchItemResult{}, err
+// ListWorkCandidates answers the latest search's decisions for the scope's wanted item, best first: empty, not an
+// error, for something never searched or never wanted.
+func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64, scope apiserver.SearchScope) ([]apiserver.CandidateDecision, error) {
+	itemID, _, err := c.target(ctx, workID, scope)
+	if errors.Is(err, apiserver.ErrWorkNotWanted) {
+		return nil, nil
 	}
-
-	indexers, err := c.Indexers(ctx)
-	if err != nil {
-		return apiserver.SearchItemResult{}, fmt.Errorf("adapters: track search: indexers: %w", err)
-	}
-	if len(indexers) == 0 {
-		return apiserver.SearchItemResult{}, apiserver.ErrNoIndexersConfigured
-	}
-
-	result, err := c.Search.SearchItem(ctx, wanted.ID, indexers, c.Clock.Now())
-	if err != nil {
-		return apiserver.SearchItemResult{}, err
-	}
-	return c.searchItemResultView(ctx, result), nil
-}
-
-// ListWorkCandidates answers the latest search's decisions for workID's wanted album, best first --
-// empty, not an error, for a work never searched or never wanted at all.
-func (c CandidateSearch) ListWorkCandidates(ctx context.Context, workID int64) ([]apiserver.CandidateDecision, error) {
-	detail, err := c.Works.Detail(ctx, workID)
 	if err != nil {
 		return nil, err
 	}
-	if detail.Wanted == nil {
-		return nil, nil
-	}
-	details, err := c.Search.Candidates.ListDecisionsForItem(ctx, detail.Wanted.ID, candidateHistoryLimit)
+	details, err := c.Search.Candidates.ListDecisionsForItem(ctx, itemID, candidateHistoryLimit)
 	if err != nil {
 		return nil, err
 	}
@@ -131,18 +151,16 @@ func latestRun(details []library.DecisionDetail) []library.DecisionDetail {
 // single request answers -- generous for a manual, low-frequency action.
 const candidateHistoryLimit = 100
 
-// SendCandidate resolves workID to its own wanted album item and dispatches
-// decisionID to a matching downloader (ADR-57's acquire.send).
-func (c CandidateSearch) SendCandidate(ctx context.Context, workID, decisionID int64) (apiserver.Acquisition, error) {
-	detail, err := c.Works.Detail(ctx, workID)
+// SendCandidate dispatches decisionID, one of the scope's decisions, to a matching downloader (ADR-57's acquire.send).
+func (c CandidateSearch) SendCandidate(ctx context.Context, workID int64, scope apiserver.SearchScope, decisionID int64) (apiserver.Acquisition, error) {
+	itemID, _, err := c.target(ctx, workID, scope)
+	if errors.Is(err, apiserver.ErrWorkNotWanted) {
+		return apiserver.Acquisition{}, apiserver.ErrCandidateDecisionNotFound
+	}
 	if err != nil {
 		return apiserver.Acquisition{}, err
 	}
-	if detail.Wanted == nil {
-		return apiserver.Acquisition{}, apiserver.ErrCandidateDecisionNotFound
-	}
-
-	acquisition, err := c.Dispatch.Send(ctx, detail.Wanted.ID, decisionID, c.Clock.Now())
+	acquisition, err := c.Dispatch.Send(ctx, itemID, decisionID, c.Clock.Now())
 	if err != nil {
 		return apiserver.Acquisition{}, translateDispatchError(err)
 	}
@@ -213,38 +231,6 @@ func (c CandidateSearch) SearchCutoffUnmet(ctx context.Context, categoryID int64
 	return result.Duplicate, nil
 }
 
-// GrabWork is the automatic search of workID's wanted album: search, then send the best release.
-func (c CandidateSearch) GrabWork(ctx context.Context, workID int64) (apiserver.GrabResult, error) {
-	detail, err := c.Works.Detail(ctx, workID)
-	if err != nil {
-		return apiserver.GrabResult{}, err
-	}
-	if detail.Wanted == nil {
-		return apiserver.GrabResult{}, apiserver.ErrWorkNotWanted
-	}
-	indexers, err := c.Indexers(ctx)
-	if err != nil {
-		return apiserver.GrabResult{}, fmt.Errorf("adapters: grab: indexers: %w", err)
-	}
-	if len(indexers) == 0 {
-		return apiserver.GrabResult{}, apiserver.ErrNoIndexersConfigured
-	}
-	result, err := music.Grab{Search: c.Search, Dispatch: c.Dispatch}.SearchAndSend(
-		ctx, detail.Wanted.ID, indexers, music.GrabUser, c.Clock.Now())
-	if err != nil {
-		return apiserver.GrabResult{}, translateDispatchError(err)
-	}
-	view := apiserver.GrabResult{
-		Found: len(result.Search.Decisions), AlreadyDownloading: result.AlreadyInFlight, Held: result.Held,
-		Refused: result.Refused,
-	}
-	if result.Sent != nil {
-		sent := acquisitionView(*result.Sent)
-		view.Sent = &sent
-	}
-	return view, nil
-}
-
 // decisionViews adds what a row shows beyond the decision: its indexer's name, and whether the
 // release has been blocklisted since.
 func (c CandidateSearch) decisionViews(ctx context.Context, details []library.DecisionDetail) []apiserver.CandidateDecision {
@@ -300,7 +286,7 @@ func (c CandidateSearch) sendableFirst(ctx context.Context, views []apiserver.Ca
 	return views
 }
 
-func (c CandidateSearch) searchItemResultView(ctx context.Context, result music.ItemSearchResult) apiserver.SearchItemResult {
+func (c CandidateSearch) searchItemResultView(ctx context.Context, result judge.Result) apiserver.SearchItemResult {
 	decisions := c.decisionViews(ctx, result.Decisions)
 	indexerErrors := make([]apiserver.IndexerSearchError, len(result.IndexerErrors))
 	for index, indexerError := range result.IndexerErrors {

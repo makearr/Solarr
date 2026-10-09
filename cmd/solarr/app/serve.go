@@ -748,7 +748,6 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		Organisations: adapters.Organisations{Organisations: library.NewOrganisations(p.library), Works: library.NewWorks(p.library)},
 		Series:        p.seriesCatalog(),
-		Seasons:       p.seasonSearch(),
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},

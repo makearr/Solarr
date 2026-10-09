@@ -7,29 +7,32 @@ import { api } from "@/api/client";
 import { CandidateList } from "./CandidateList";
 import { IndexerProblems } from "./IndexerProblems";
 
+/** The group a season is wanted through, as POST /works/{id}/search's group takes it. */
+export function seasonGroup(season: number): string {
+  return `s${String(season).padStart(2, "0")}`;
+}
+
 /** Sonarr's interactive search for one season: search now, list what was found best first, the person sends one. */
 export function SeasonSearchDialog({
-  categoryId,
   seriesId,
   season,
-  episode,
+  part,
   title,
   onClose,
 }: {
-  categoryId: number;
   seriesId: number;
   season: number;
-  /** Search this one episode instead of what the season is missing. */
-  episode?: number;
+  /** Search this one episode, by its part id, instead of what the season is missing. */
+  part?: number;
   title: string;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
-  const params = { path: { id: seriesId, season }, query: { category_id: categoryId, ...(episode ? { episode } : {}) } };
+  const query = { group: seasonGroup(season), ...(part ? { part } : {}) };
   const found = useQuery({
-    queryKey: ["series", String(categoryId), String(seriesId), "season", season, episode ?? 0, "interactive-search"],
+    queryKey: ["work", seriesId, "interactive-search", query],
     queryFn: async () => {
-      const { data, error } = await api.POST("/series/{id}/seasons/{season}/search", { params });
+      const { data, error } = await api.POST("/works/{id}/search", { params: { path: { id: seriesId }, query } });
       if (error) throw error;
       return data;
     },
@@ -38,12 +41,12 @@ export function SeasonSearchDialog({
   });
   const send = useMutation({
     mutationFn: async (decisionId: number) => {
-      const { error } = await api.POST("/series/{id}/seasons/{season}/candidates/{decision_id}/send", {
-        params: { path: { ...params.path, decision_id: decisionId }, query: params.query },
+      const { error } = await api.POST("/works/{id}/candidates/{decisionId}/send", {
+        params: { path: { id: seriesId, decisionId }, query },
       });
       if (error) throw error;
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["series", String(categoryId)] }),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["series"] }),
   });
 
   return (

@@ -79,7 +79,8 @@ func (p *process) musicModule() music.Module {
 			return err
 		},
 	}
-	return music.Module{Hunt: p.musicHunt, Feed: feed, CutoffJob: check, Following: following, Rename: &rename, Sweep: scan.Sweep{
+	searching := music.Searching{Acquire: p.musicGrab(), Indexers: p.indexerConns, Clock: clock.NewSystem()}
+	return music.Module{Hunt: p.musicHunt, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -135,7 +136,8 @@ func (p *process) tvModule() tv.Module {
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
-		Retry: retry,
+		Retry:     retry,
+		Searching: tv.Searching{Acquire: p.tvGrab(), Conns: p.tvIndexerConns, Clock: clock.NewSystem()},
 		Following: tv.Following{
 			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,
 			Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},

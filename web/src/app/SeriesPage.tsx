@@ -9,7 +9,7 @@ import { useLibrary } from "@/lib/useLibrary";
 
 import { ChooseImage } from "./ChooseImage";
 import { formatBytes } from "./Queue";
-import { SeasonSearchDialog } from "./SeasonSearch";
+import { SeasonSearchDialog, seasonGroup } from "./SeasonSearch";
 import { remoteImage } from "@/lib/remoteImage";
 
 type Episode = components["schemas"]["SeriesEpisode"];
@@ -510,7 +510,7 @@ export function SeriesPage() {
     mutationFn: async (target: { season: number; monitored: boolean }) => {
       const { error } = await api.POST("/works/{id}/monitor", {
         params: { path: { id: Number(seriesId) } },
-        body: { monitored: target.monitored, group: `s${String(target.season).padStart(2, "0")}` },
+        body: { monitored: target.monitored, group: seasonGroup(target.season) },
       });
       if (error) throw error;
     },
@@ -529,12 +529,12 @@ export function SeriesPage() {
 
   const [editing, setEditing] = useState(false);
   const [dialogSeason, setDialogSeason] = useState<number | null>(null);
-  const [dialogEpisode, setDialogEpisode] = useState<number | undefined>(undefined);
+  const [dialogEpisode, setDialogEpisode] = useState<Episode | undefined>(undefined);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const grabEpisode = useMutation({
-    mutationFn: async (target: { season: number; episode: number }) => {
-      const { data, error } = await api.POST("/series/{id}/seasons/{season}/grab", {
-        params: { path: { id: Number(seriesId), season: target.season }, query: { category_id: Number(categoryId), episode: target.episode } },
+    mutationFn: async (target: { season: number; part: number }) => {
+      const { data, error } = await api.POST("/works/{id}/grab", {
+        params: { path: { id: Number(seriesId) }, query: { group: seasonGroup(target.season), part: target.part } },
       });
       if (error) throw error;
       return { season: target.season, data };
@@ -548,8 +548,8 @@ export function SeriesPage() {
   });
   const grab = useMutation({
     mutationFn: async (season: number) => {
-      const { data, error } = await api.POST("/series/{id}/seasons/{season}/grab", {
-        params: { path: { id: Number(seriesId), season }, query: { category_id: Number(categoryId) } },
+      const { data, error } = await api.POST("/works/{id}/grab", {
+        params: { path: { id: Number(seriesId) }, query: { group: seasonGroup(season) } },
       });
       if (error) throw error;
       return { season, data };
@@ -685,9 +685,9 @@ export function SeriesPage() {
             setDialogEpisode(undefined);
             setDialogSeason(season.number);
           }}
-          onEpisodeSearch={(episode) => grabEpisode.mutate({ season: season.number, episode: episode.number })}
+          onEpisodeSearch={(episode) => grabEpisode.mutate({ season: season.number, part: episode.id })}
           onEpisodeInteractive={(episode) => {
-            setDialogEpisode(episode.number);
+            setDialogEpisode(episode);
             setDialogSeason(season.number);
           }}
           searchNote={grab.isPending && grab.variables === season.number ? "Searching…" : notes[season.number]}
@@ -695,11 +695,10 @@ export function SeriesPage() {
       ))}
       {dialogSeason !== null && (
         <SeasonSearchDialog
-          categoryId={Number(categoryId)}
           seriesId={Number(seriesId)}
           season={dialogSeason}
-          episode={dialogEpisode}
-          title={`${series.title}, ${seasonLabel(dialogSeason)}${dialogEpisode ? ` episode ${dialogEpisode}` : ""}`}
+          part={dialogEpisode?.id}
+          title={`${series.title}, ${seasonLabel(dialogSeason)}${dialogEpisode ? ` episode ${dialogEpisode.number}` : ""}`}
           onClose={() => setDialogSeason(null)}
         />
       )}

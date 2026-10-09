@@ -28,6 +28,8 @@ type Module struct {
 	CutoffJob
 	// Following is music's part of a follow.
 	Following
+	// Searching is music's part of a search a person asks for.
+	Searching
 }
 
 // HuntSearch implements media.Hunting.
@@ -67,6 +69,7 @@ func (Module) Descriptor() media.Descriptor {
 		},
 		FollowOptions: followOptions,
 		Facets:        facets,
+		SearchTerms:   termChoices,
 	}
 }
 

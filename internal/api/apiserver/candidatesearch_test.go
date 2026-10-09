@@ -26,9 +26,9 @@ type fakeCandidateSearcher struct {
 	sendErr        error
 
 	lastSearchWorkID     int64
-	lastSearchTerms      *apiserver.SearchTerms
+	lastSearchTerms      map[string]string
+	lastScope            apiserver.SearchScope
 	blocklisted          [][2]int64
-	lastSearchPartID     int64
 	lastListCandidatesID int64
 	lastSearchCategoryID int64
 	lastSearchWorkIDs    []int64
@@ -37,33 +37,27 @@ type fakeCandidateSearcher struct {
 	lastSendDecisionID   int64
 }
 
-func (f *fakeCandidateSearcher) SendCandidate(_ context.Context, workID, decisionID int64) (apiserver.Acquisition, error) {
-	f.lastSendWorkID = workID
+func (f *fakeCandidateSearcher) SendCandidate(_ context.Context, workID int64, scope apiserver.SearchScope, decisionID int64) (apiserver.Acquisition, error) {
+	f.lastSendWorkID, f.lastScope = workID, scope
 	f.lastSendDecisionID = decisionID
 	return f.acquisition, f.sendErr
 }
 
 func (f *fakeCandidateSearcher) SearchWork(
-	_ context.Context, workID int64, terms *apiserver.SearchTerms,
+	_ context.Context, workID int64, scope apiserver.SearchScope, terms map[string]string,
 ) (apiserver.SearchItemResult, error) {
-	f.lastSearchWorkID = workID
+	f.lastSearchWorkID, f.lastScope = workID, scope
 	f.lastSearchTerms = terms
 	return f.searchResult, f.searchErr
 }
 
-func (f *fakeCandidateSearcher) BlocklistCandidate(_ context.Context, workID, decisionID int64) error {
+func (f *fakeCandidateSearcher) BlocklistCandidate(_ context.Context, workID int64, _ apiserver.SearchScope, decisionID int64) error {
 	f.blocklisted = append(f.blocklisted, [2]int64{workID, decisionID})
 	return nil
 }
 
-func (f *fakeCandidateSearcher) SearchTrack(_ context.Context, workID, partID int64) (apiserver.SearchItemResult, error) {
-	f.lastSearchWorkID = workID
-	f.lastSearchPartID = partID
-	return f.searchResult, f.searchErr
-}
-
-func (f *fakeCandidateSearcher) ListWorkCandidates(_ context.Context, workID int64) ([]apiserver.CandidateDecision, error) {
-	f.lastListCandidatesID = workID
+func (f *fakeCandidateSearcher) ListWorkCandidates(_ context.Context, workID int64, scope apiserver.SearchScope) ([]apiserver.CandidateDecision, error) {
+	f.lastListCandidatesID, f.lastScope = workID, scope
 	return f.candidates, f.candidateErr
 }
 
@@ -77,8 +71,8 @@ func (f *fakeCandidateSearcher) SearchCategory(_ context.Context, categoryID int
 	return f.duplicate, f.categoryErr
 }
 
-func (f *fakeCandidateSearcher) GrabWork(_ context.Context, workID int64) (apiserver.GrabResult, error) {
-	f.lastSearchWorkID = workID
+func (f *fakeCandidateSearcher) GrabWork(_ context.Context, workID int64, scope apiserver.SearchScope) (apiserver.GrabResult, error) {
+	f.lastSearchWorkID, f.lastScope = workID, scope
 	return f.grabResult, f.searchErr
 }
 
@@ -360,36 +354,49 @@ func TestSearchCategory_ReportsADuplicateRun(t *testing.T) {
 	}
 }
 
-// A track search wants the track before it looks for it, so the button
-// cannot report "nothing found" for a track nothing was asking for.
-func TestSearchTrack_ReachesTheSearcherWithBothIDs(t *testing.T) {
-	fixture := newWorksFixture(t)
-	fixture.createUser(t, "admin", settings.RoleAdmin)
-	cookies := fixture.signIn(t, "admin")
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/12/parts/34/search", ""))
-	if recorder.Code != http.StatusOK {
-		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+// Every acquisition route takes the same scope: a group by its ref, a part by its id; a part that is no id is refused.
+func TestWorkAcquisition_PassesTheScope(t *testing.T) {
+	group, part := "s01", int64(34)
+	for _, tc := range []struct {
+		method, path string
+		want         apiserver.SearchScope
+	}{
+		{http.MethodPost, "/api/v1/works/42/search?group=s01", apiserver.SearchScope{Group: &group}},
+		{http.MethodPost, "/api/v1/works/42/grab?part=34", apiserver.SearchScope{Part: &part}},
+		{http.MethodGet, "/api/v1/works/42/candidates?group=s01&part=34", apiserver.SearchScope{Group: &group, Part: &part}},
+		{http.MethodPost, "/api/v1/works/42/candidates/7/send?group=s01", apiserver.SearchScope{Group: &group}},
+		{http.MethodPost, "/api/v1/works/42/grab", apiserver.SearchScope{}},
+	} {
+		fixture, cookies := searchableWorkFixture(t, settings.PermissionRequest)
+		request := authedPost(t, cookies, tc.path, "")
+		request.Method = tc.method
+		if recorder := fixture.do(request); recorder.Code != http.StatusOK {
+			t.Fatalf("%s %s: status %d, body %s", tc.method, tc.path, recorder.Code, recorder.Body)
+		}
+		if got := fixture.candidateSearcher.lastScope; !reflect.DeepEqual(got, tc.want) {
+			t.Errorf("%s %s: scope %+v, want %+v", tc.method, tc.path, got, tc.want)
+		}
 	}
-	if got := fixture.candidateSearcher; got.lastSearchWorkID != 12 || got.lastSearchPartID != 34 {
-		t.Errorf("searched work %d part %d, want 12 and 34", got.lastSearchWorkID, got.lastSearchPartID)
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionRequest)
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/grab?part=s01e02", "")); recorder.Code != http.StatusBadRequest {
+		t.Errorf("a part that is no id: status %d, want 400", recorder.Code)
 	}
 }
 
-// "Search with different terms": the typed artist and album reach the pipeline; half a pair is refused.
+// "Search with different terms": the typed terms reach the type's search trimmed, empty ones dropped.
 func TestSearchWork_ForwardsDifferentTerms(t *testing.T) {
 	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
 
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":" Heka ","album":"Zanuvode"}`))
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":" Heka ","album":"Zanuvode","year":" "}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
-	if got := fixture.candidateSearcher.lastSearchTerms; got == nil || *got != (apiserver.SearchTerms{Artist: "Heka", Album: "Zanuvode"}) {
+	if got := fixture.candidateSearcher.lastSearchTerms; !reflect.DeepEqual(got, map[string]string{"artist": "Heka", "album": "Zanuvode"}) {
 		t.Errorf("terms = %+v, want Heka / Zanuvode", got)
 	}
-	recorder = fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":"Heka","album":""}`))
+	recorder = fixture.do(authedPost(t, cookies, "/api/v1/works/42/search", `{"artist":7}`))
 	if recorder.Code != http.StatusBadRequest {
-		t.Errorf("half a pair: status %d, want 400", recorder.Code)
+		t.Errorf("a term that is no string: status %d, want 400", recorder.Code)
 	}
 }
 

@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path"
 	"slices"
@@ -332,4 +333,61 @@ func (w Works) Places(ctx context.Context, id int64) (rootFolderIDs, categoryIDs
 		}
 	}
 	return rootFolderIDs, categoryIDs, nil
+}
+
+// ErrNoWantedItem reports a work, group or part that no wanted item covers, so there is nothing to search.
+var ErrNoWantedItem = errors.New("library: nothing wanted covers it")
+
+// SearchScope names what of a work a search is for: one group by its ref, one part by its id, or neither for the
+// work's own item.
+type SearchScope struct {
+	Group  *string
+	PartID *int64
+}
+
+// WantedItemFor answers the SET item a scope is searched through and the ref of the part it narrows to, if any.
+func (w Works) WantedItemFor(ctx context.Context, workID int64, scope SearchScope) (int64, string, error) {
+	queries := librarydb.New(w.store.Read())
+	items, err := queries.ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return 0, "", fmt.Errorf("library: wanted item of work %d: %w", workID, err)
+	}
+	items = slices.DeleteFunc(items, func(item librarydb.DesiredItem) bool { return item.SatisfactionKind != "SET" })
+	ref := ""
+	switch {
+	case scope.PartID != nil:
+		part, err := queries.GetWorkPart(ctx, *scope.PartID)
+		if errors.Is(err, sql.ErrNoRows) || err == nil && part.WorkID != workID {
+			return 0, "", ErrPartNotFound
+		}
+		if err != nil {
+			return 0, "", fmt.Errorf("library: wanted item of work %d: %w", workID, err)
+		}
+		partRef := part.MediaRef
+		// The group whose ref scopes the part, before the work's own item.
+		slices.SortStableFunc(items, func(a, b librarydb.DesiredItem) int { return len(b.MediaRef) - len(a.MediaRef) })
+		for _, item := range items {
+			if partInScope(partRef, item.MediaRef) {
+				return item.ID, partRef, nil
+			}
+		}
+		return 0, "", ErrNoWantedItem
+	case scope.Group != nil:
+		ref = *scope.Group
+	}
+	for _, item := range items {
+		if item.MediaRef == ref {
+			return item.ID, "", nil
+		}
+	}
+	return 0, "", ErrNoWantedItem
+}
+
+// MediaTypeOf answers a work's media type; sql.ErrNoRows for no such work.
+func (w Works) MediaTypeOf(ctx context.Context, workID int64) (string, error) {
+	work, err := librarydb.New(w.store.Read()).GetWork(ctx, workID)
+	if err != nil {
+		return "", fmt.Errorf("library: media type of work %d: %w", workID, err)
+	}
+	return work.MediaType, nil
 }

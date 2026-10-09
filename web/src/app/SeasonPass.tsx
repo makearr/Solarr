@@ -7,6 +7,8 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibrary } from "@/lib/useLibrary";
 
+import { seasonGroup } from "./SeasonSearch";
+
 type Series = components["schemas"]["SeriesSummary"];
 
 /** Sonarr's Season Pass: every series with a switch for the whole series and one chip per season, so what is wanted
@@ -34,7 +36,7 @@ export function SeasonPass() {
     mutationFn: async (target: { id: number; season: number; monitored: boolean }) => {
       const { error } = await api.POST("/works/{id}/monitor", {
         params: { path: { id: target.id } },
-        body: { monitored: target.monitored, group: `s${String(target.season).padStart(2, "0")}` },
+        body: { monitored: target.monitored, group: seasonGroup(target.season) },
       });
       if (error) throw error;
     },
