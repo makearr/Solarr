@@ -6,11 +6,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"sync"
 
-	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media/tv"
 )
@@ -23,75 +20,38 @@ type TVAdder interface {
 	SetSeriesType(ctx context.Context, workID int64, kind tv.SeriesType) error
 }
 
-// sonarrWorkers is how many series an import adds at once.
-const sonarrWorkers = 4
-
-// syncSonarr adds every series Sonarr holds by its TVDB id, best-effort per series. A series Solarr already holds is
-// matched and left as it is; one it creates takes Sonarr's monitored flags, series and season. Series are counted
-// in the Artists columns, the run's first-kind tally.
-func (a ArrSync) syncSonarr(
-	ctx context.Context, importID int64, instance settings.ArrInstance, client arrimport.SonarrClient, options apiserver.ArrSyncOptions,
-) (library.ArrImportCounts, error) {
-	if _, err := client.SystemStatus(ctx); err != nil {
-		return library.ArrImportCounts{}, fmt.Errorf("connect: %w", err)
-	}
-	all, err := client.Series(ctx)
-	if err != nil {
-		return library.ArrImportCounts{}, fmt.Errorf("list series: %w", err)
-	}
-	if a.TV == nil {
-		return library.ArrImportCounts{}, errors.New("no TV service")
-	}
-	roots := a.Cache.Snapshot().RootFolders()
-	profileNames := sonarrProfileNames(ctx, client)
-
-	var counts library.ArrImportCounts
-	var failures []string
-	wanted := func(monitored bool) bool {
-		return (monitored && options.Monitored) || (!monitored && options.Unmonitored)
-	}
-	var total int64
-	for _, series := range all {
-		if wanted(series.Monitored) {
-			total++
-		}
-	}
-	// A few series are added at once: each waits mostly on the providers, whose own rate limits still pace the calls.
-	var (
-		mu     sync.Mutex
-		walked int64
-		group  sync.WaitGroup
-		gate   = make(chan struct{}, sonarrWorkers)
-	)
-	for _, series := range all {
-		if !wanted(series.Monitored) {
-			continue
-		}
-		group.Add(1)
-		gate <- struct{}{}
-		go func() {
-			defer group.Done()
-			defer func() { <-gate }()
-			created, err := a.syncSeries(ctx, importID, instance, roots, series, options, client, profileNames)
-			mu.Lock()
-			defer mu.Unlock()
-			a.Progress.set(importID, walked, total)
-			walked++
+// sonarrSource walks Sonarr's series, four at once: each is added by its TVDB id. A series Solarr already holds is
+// matched and left as it is; one it creates takes Sonarr's monitored flags, series and season. Series are counted in
+// the Artists columns, the run's first-kind tally.
+func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient) arrSource[arrimport.SonarrSeries] {
+	var profileNames map[int64]string
+	return arrSource[arrimport.SonarrSeries]{
+		connect: func(ctx context.Context) error {
+			if a.TV == nil {
+				return errors.New("no TV service")
+			}
+			_, err := client.SystemStatus(ctx)
+			return err
+		},
+		list: func(ctx context.Context) ([]arrimport.SonarrSeries, error) {
+			profileNames = sonarrProfileNames(ctx, client)
+			return client.Series(ctx)
+		},
+		describe: func(series arrimport.SonarrSeries) arrItem {
+			return arrItem{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored}
+		},
+		workers: 4,
+		sync: func(ctx context.Context, categoryID int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
+			created, err := a.syncSeries(ctx, importID, categoryID, series, client, profileNames)
 			switch {
 			case err != nil:
-				failures = append(failures, fmt.Sprintf("%s: %v", series.Title, err))
+				return library.ArrImportCounts{}, err
 			case created:
-				counts.ArtistsCreated++
-			default:
-				counts.ArtistsMatched++
+				return library.ArrImportCounts{ArtistsCreated: 1}, nil
 			}
-		}()
+			return library.ArrImportCounts{ArtistsMatched: 1}, nil
+		},
 	}
-	group.Wait()
-	if len(failures) > 0 {
-		return counts, errors.New(strings.Join(failures, "; "))
-	}
-	return counts, nil
 }
 
 // sonarrProfileNames reads the instance's quality profile names; a failure leaves the map empty, so every series
@@ -109,15 +69,11 @@ func sonarrProfileNames(ctx context.Context, client arrimport.SonarrClient) map[
 }
 
 func (a ArrSync) syncSeries(
-	ctx context.Context, importID int64, instance settings.ArrInstance, roots []settings.RootFolder,
-	series arrimport.SonarrSeries, options apiserver.ArrSyncOptions, client arrimport.SonarrClient, profileNames map[int64]string,
+	ctx context.Context, importID, categoryID int64, series arrimport.SonarrSeries, client arrimport.SonarrClient,
+	profileNames map[int64]string,
 ) (bool, error) {
 	if series.TVDBID == 0 {
 		return false, errors.New("no TVDB id")
-	}
-	categoryID, ok := a.categoryFor(instance, rewritePath(series.RootFolderPath, options.PathRewrites), roots)
-	if !ok {
-		return false, fmt.Errorf("no category matches root folder %q", series.RootFolderPath)
 	}
 	category, _ := a.Cache.Snapshot().Category(categoryID)
 	monitor := tv.MonitorNone

@@ -151,12 +151,15 @@ func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
 	options apiserver.ArrSyncOptions,
 ) {
+	walk := arrWalk{importID: importID, options: options, progress: a.Progress, place: func(rootFolder string) (int64, bool) {
+		return a.categoryFor(instance, rootFolder, a.Cache.Snapshot().RootFolders())
+	}}
 	var counts library.ArrImportCounts
 	var syncErr error
 	if instance.App == settings.ArrAppSonarr {
-		counts, syncErr = a.syncSonarr(ctx, importID, instance, client.Sonarr(), options)
+		counts, syncErr = walkArr(ctx, walk, a.sonarrSource(importID, client.Sonarr()))
 	} else {
-		counts, syncErr = a.syncLidarr(ctx, importID, instance, client, options)
+		counts, syncErr = walkArr(ctx, walk, a.lidarrSource(importID, client, options))
 	}
 	defer a.Progress.clear(importID)
 
@@ -293,88 +296,53 @@ func arrImportItemView(item library.ArrImportItem) apiserver.ArrImportItem {
 	}
 }
 
-// syncLidarr walks every monitored artist and their monitored albums,
-// best-effort per artist/album (the same tolerance commitCluster's own
-// per-unit loop already has for a bad file mid-batch): one artist Lidarr
-// cannot be matched to a category, or one album with no MusicBrainz id,
-// does not stop the rest. A failure connecting or listing artists at all is
-// the one thing that fails the whole run.
-func (a ArrSync) syncLidarr(
-	ctx context.Context, importID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
-	options apiserver.ArrSyncOptions,
-) (library.ArrImportCounts, error) {
-	if _, err := client.SystemStatus(ctx); err != nil {
-		return library.ArrImportCounts{}, fmt.Errorf("connect: %w", err)
-	}
-	artists, err := client.Artists(ctx)
-	if err != nil {
-		return library.ArrImportCounts{}, fmt.Errorf("list artists: %w", err)
-	}
-
-	roots := a.Cache.Snapshot().RootFolders()
-
-	var counts library.ArrImportCounts
-	var failures []string
-	fail := func(format string, args ...any) { failures = append(failures, fmt.Sprintf(format, args...)) }
-
-	wanted := func(monitored bool) bool {
-		return (monitored && options.Monitored) || (!monitored && options.Unmonitored)
-	}
-	var total int64
-	for _, artist := range artists {
-		if wanted(artist.Monitored) {
-			total++
-		}
-	}
-	var walked int64
-	for _, artist := range artists {
-		if !wanted(artist.Monitored) {
-			continue
-		}
-		a.Progress.set(importID, walked, total)
-		walked++
-		categoryID, ok := a.categoryFor(instance, rewritePath(artist.RootFolderPath, options.PathRewrites), roots)
-		if !ok {
-			fail("%s: no category matches root folder %q", artist.ArtistName, artist.RootFolderPath)
-			continue
-		}
-		personID, created, err := a.syncArtist(ctx, importID, artist, artist.Monitored)
-		if err != nil {
-			fail("%s: %v", artist.ArtistName, err)
-			continue
-		}
-		if created {
-			counts.ArtistsCreated++
-		} else {
-			counts.ArtistsMatched++
-		}
-
-		albums, err := client.Albums(ctx, artist.ID)
-		if err != nil {
-			fail("%s: list albums: %v", artist.ArtistName, err)
-			continue
-		}
-		for _, album := range albums {
-			if !wanted(album.Monitored) || !albumWanted(album, options.Albums) {
-				continue
-			}
-			workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album)
+// lidarrSource walks Lidarr's artists: each becomes a person (followed when monitored), then its wanted albums
+// become works with an album item, each matched by its MusicBrainz id. One album failing does not stop the artist's.
+func (a ArrSync) lidarrSource(importID int64, client arrimport.LidarrClient, options apiserver.ArrSyncOptions) arrSource[arrimport.LidarrArtist] {
+	return arrSource[arrimport.LidarrArtist]{
+		connect: func(ctx context.Context) error { _, err := client.SystemStatus(ctx); return err },
+		list:    client.Artists,
+		describe: func(artist arrimport.LidarrArtist) arrItem {
+			return arrItem{Name: artist.ArtistName, RootFolder: artist.RootFolderPath, Monitored: artist.Monitored}
+		},
+		workers: 1,
+		sync: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
+			var counts library.ArrImportCounts
+			personID, created, err := a.syncArtist(ctx, importID, artist, artist.Monitored)
 			if err != nil {
-				fail("%s - %s: %v", artist.ArtistName, album.Title, err)
-				continue
+				return counts, err
 			}
-			if workCreated {
-				counts.AlbumsCreated++
+			if created {
+				counts.ArtistsCreated++
 			} else {
-				counts.AlbumsMatched++
+				counts.ArtistsMatched++
 			}
-		}
+			albums, err := client.Albums(ctx, artist.ID)
+			if err != nil {
+				return counts, fmt.Errorf("list albums: %w", err)
+			}
+			var failures []string
+			for _, album := range albums {
+				wanted := (album.Monitored && options.Monitored) || (!album.Monitored && options.Unmonitored)
+				if !wanted || !albumWanted(album, options.Albums) {
+					continue
+				}
+				workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album)
+				switch {
+				case err != nil:
+					failures = append(failures, fmt.Sprintf("%s: %v", album.Title, err))
+				case workCreated:
+					counts.AlbumsCreated++
+				default:
+					counts.AlbumsMatched++
+				}
+			}
+			if len(failures) > 0 {
+				return counts, errors.New(strings.Join(failures, "; "))
+			}
+			return counts, nil
+		},
 	}
-
-	if len(failures) > 0 {
-		return counts, errors.New(strings.Join(failures, "; "))
-	}
-	return counts, nil
 }
 
 // syncArtist resolves-or-creates the person behind artist's own MusicBrainz
