@@ -2,6 +2,7 @@ package tv
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -78,8 +79,9 @@ func (Module) Descriptor() media.Descriptor {
 			{Key: "writer", Label: "Writer", Followable: true, PartScoped: true},
 			{Key: "guest_star", Label: "Guest star", PartScoped: true, Character: true},
 		},
-		FollowOptions: followOptions,
-		Facets:        facets,
+		FollowOptions:  followOptions,
+		Facets:         facets,
+		MonitorOptions: monitorChoices,
 	}
 }
 
@@ -112,4 +114,21 @@ func (Module) GroupLabel(ref string) string {
 	default:
 		return "Season " + strconv.Itoa(season)
 	}
+}
+
+// monitorChoices are Sonarr's monitor options, as a series' Monitor menu offers them.
+var monitorChoices = []media.Choice{
+	{Key: string(MonitorAll), Label: "All episodes"}, {Key: string(MonitorFuture), Label: "Future episodes"},
+	{Key: string(MonitorMissing), Label: "Missing episodes"}, {Key: string(MonitorExisting), Label: "Existing episodes"},
+	{Key: string(MonitorRecent), Label: "Recent episodes"}, {Key: string(MonitorPilot), Label: "Pilot episode"},
+	{Key: string(MonitorFirstSeason), Label: "First season"}, {Key: string(MonitorLastSeason), Label: "Last season"},
+	{Key: string(MonitorNone), Label: "None"},
+}
+
+// ApplyMonitorOption implements media.Monitoring.
+func (m Module) ApplyMonitorOption(ctx context.Context, categoryID, workID int64, option string, withSpecials bool) error {
+	if !MonitorOption(option).Valid() {
+		return fmt.Errorf("%w: %q", media.ErrUnknownMonitorOption, option)
+	}
+	return m.Service.ApplyMonitor(ctx, categoryID, workID, MonitorOption(option), withSpecials)
 }

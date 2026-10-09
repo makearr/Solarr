@@ -885,19 +885,6 @@ const (
 	ListWantedEpisodesParamsViewMissing ListWantedEpisodesParamsView = "missing"
 )
 
-// Defines values for ApplySeriesMonitoringJSONBodyOption.
-const (
-	ApplySeriesMonitoringJSONBodyOptionAll         ApplySeriesMonitoringJSONBodyOption = "all"
-	ApplySeriesMonitoringJSONBodyOptionExisting    ApplySeriesMonitoringJSONBodyOption = "existing"
-	ApplySeriesMonitoringJSONBodyOptionFirstSeason ApplySeriesMonitoringJSONBodyOption = "first_season"
-	ApplySeriesMonitoringJSONBodyOptionFuture      ApplySeriesMonitoringJSONBodyOption = "future"
-	ApplySeriesMonitoringJSONBodyOptionLastSeason  ApplySeriesMonitoringJSONBodyOption = "last_season"
-	ApplySeriesMonitoringJSONBodyOptionMissing     ApplySeriesMonitoringJSONBodyOption = "missing"
-	ApplySeriesMonitoringJSONBodyOptionNone        ApplySeriesMonitoringJSONBodyOption = "none"
-	ApplySeriesMonitoringJSONBodyOptionPilot       ApplySeriesMonitoringJSONBodyOption = "pilot"
-	ApplySeriesMonitoringJSONBodyOptionRecent      ApplySeriesMonitoringJSONBodyOption = "recent"
-)
-
 // Defines values for SetSeriesTypeJSONBodyType.
 const (
 	SetSeriesTypeJSONBodyTypeAnime    SetSeriesTypeJSONBodyType = "anime"
@@ -2802,8 +2789,14 @@ type MediaTypeInfo struct {
 	Key MediaType `json:"key"`
 
 	// Label Also the default name of a library of this type.
-	Label        string      `json:"label"`
-	LeadPeople   MediaTerm   `json:"lead_people"`
+	Label      string    `json:"label"`
+	LeadPeople MediaTerm `json:"lead_people"`
+
+	// MonitorOptions The ways a whole work can be monitored at once, for POST /works/{id}/monitor's option.
+	MonitorOptions []struct {
+		Key   string `json:"key"`
+		Label string `json:"label"`
+	} `json:"monitor_options"`
 	Organisation MediaTerm   `json:"organisation"`
 	Part         MediaTerm   `json:"part"`
 	Roles        []MediaRole `json:"roles"`
@@ -4943,31 +4936,6 @@ type GetSeriesParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
-// SetEpisodeMonitoredJSONBody defines parameters for SetEpisodeMonitored.
-type SetEpisodeMonitoredJSONBody struct {
-	Monitored bool `json:"monitored"`
-}
-
-// SetEpisodeMonitoredParams defines parameters for SetEpisodeMonitored.
-type SetEpisodeMonitoredParams struct {
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// ApplySeriesMonitoringJSONBody defines parameters for ApplySeriesMonitoring.
-type ApplySeriesMonitoringJSONBody struct {
-	Option   ApplySeriesMonitoringJSONBodyOption `json:"option"`
-	Specials *bool                               `json:"specials,omitempty"`
-}
-
-// ApplySeriesMonitoringParams defines parameters for ApplySeriesMonitoring.
-type ApplySeriesMonitoringParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// ApplySeriesMonitoringJSONBodyOption defines parameters for ApplySeriesMonitoring.
-type ApplySeriesMonitoringJSONBodyOption string
-
 // SetSeriesPosterParams defines parameters for SetSeriesPoster.
 type SetSeriesPosterParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -5012,17 +4980,6 @@ type GrabSeasonParams struct {
 	// Episode Search this one episode (even if it is unmonitored or present) instead of the season's missing ones.
 	Episode *int `form:"episode,omitempty" json:"episode,omitempty"`
 
-	// CategoryId The library the series is in; access is checked against it.
-	CategoryId int64 `form:"category_id" json:"category_id"`
-}
-
-// SetSeasonMonitoredJSONBody defines parameters for SetSeasonMonitored.
-type SetSeasonMonitoredJSONBody struct {
-	Monitored bool `json:"monitored"`
-}
-
-// SetSeasonMonitoredParams defines parameters for SetSeasonMonitored.
-type SetSeasonMonitoredParams struct {
 	// CategoryId The library the series is in; access is checked against it.
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
@@ -5201,10 +5158,21 @@ type GetWorkArtworkParamsSize string
 
 // SetWorkMonitoredJSONBody defines parameters for SetWorkMonitored.
 type SetWorkMonitoredJSONBody struct {
-	Monitored bool `json:"monitored"`
+	// Group A group's ref ("s03"); "" is a work's single group.
+	Group *string `json:"group,omitempty"`
 
-	// Search Search the album at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
+	// Monitored Required except with an option.
+	Monitored *bool `json:"monitored,omitempty"`
+
+	// Option One of the media type's monitor options.
+	Option *string  `json:"option,omitempty"`
+	Parts  *[]int64 `json:"parts,omitempty"`
+
+	// Search Search the work at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
 	Search *bool `json:"search,omitempty"`
+
+	// Specials With an option
+	Specials *bool `json:"specials,omitempty"`
 }
 
 // ListWorkPartsParams defines parameters for ListWorkParts.
@@ -5213,11 +5181,6 @@ type ListWorkPartsParams struct {
 	Group  *string `form:"group,omitempty" json:"group,omitempty"`
 	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
-// SetPartMonitoredJSONBody defines parameters for SetPartMonitored.
-type SetPartMonitoredJSONBody struct {
-	Monitored bool `json:"monitored"`
 }
 
 // RemovePartJSONBody defines parameters for RemovePart.
@@ -5459,20 +5422,11 @@ type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 // AddSeriesJSONRequestBody defines body for AddSeries for application/json ContentType.
 type AddSeriesJSONRequestBody = AddSeriesRequest
 
-// SetEpisodeMonitoredJSONRequestBody defines body for SetEpisodeMonitored for application/json ContentType.
-type SetEpisodeMonitoredJSONRequestBody SetEpisodeMonitoredJSONBody
-
-// ApplySeriesMonitoringJSONRequestBody defines body for ApplySeriesMonitoring for application/json ContentType.
-type ApplySeriesMonitoringJSONRequestBody ApplySeriesMonitoringJSONBody
-
 // SetSeriesPosterJSONRequestBody defines body for SetSeriesPoster for application/json ContentType.
 type SetSeriesPosterJSONRequestBody = ImagePick
 
 // SetSeriesQualityJSONRequestBody defines body for SetSeriesQuality for application/json ContentType.
 type SetSeriesQualityJSONRequestBody SetSeriesQualityJSONBody
-
-// SetSeasonMonitoredJSONRequestBody defines body for SetSeasonMonitored for application/json ContentType.
-type SetSeasonMonitoredJSONRequestBody SetSeasonMonitoredJSONBody
 
 // SetSeriesTypeJSONRequestBody defines body for SetSeriesType for application/json ContentType.
 type SetSeriesTypeJSONRequestBody SetSeriesTypeJSONBody
@@ -5515,9 +5469,6 @@ type SaveWorkEditJSONRequestBody = WorkEdit
 
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
-
-// SetPartMonitoredJSONRequestBody defines body for SetPartMonitored for application/json ContentType.
-type SetPartMonitoredJSONRequestBody SetPartMonitoredJSONBody
 
 // RemovePartJSONRequestBody defines body for RemovePart for application/json ContentType.
 type RemovePartJSONRequestBody RemovePartJSONBody
@@ -6118,12 +6069,6 @@ type ServerInterface interface {
 	// A series with its seasons and episodes.
 	// (GET /series/{id})
 	GetSeries(w http.ResponseWriter, r *http.Request, id int64, params GetSeriesParams)
-	// Monitor or unmonitor one episode.
-	// (PUT /series/{id}/episodes/{part_id}/monitored)
-	SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64, params SetEpisodeMonitoredParams)
-	// Re-apply one of Sonarr's monitor choices to a series the library holds.
-	// (PUT /series/{id}/monitoring)
-	ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params ApplySeriesMonitoringParams)
 	// Make one of the offered posters this series' own; it is kept over later refreshes.
 	// (PUT /series/{id}/poster)
 	SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams)
@@ -6145,9 +6090,6 @@ type ServerInterface interface {
 	// Automatic search, as in Sonarr: search the season and send its best accepted release to a download client.
 	// (POST /series/{id}/seasons/{season}/grab)
 	GrabSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params GrabSeasonParams)
-	// Monitor or unmonitor every episode of a season.
-	// (PUT /series/{id}/seasons/{season}/monitored)
-	SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params SetSeasonMonitoredParams)
 	// Interactive search: ask every indexer for this season (id query first, then text) and record a decision per release that covers a wanted episode. Nothing is sent.
 	// (POST /series/{id}/seasons/{season}/search)
 	SearchSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params SearchSeasonParams)
@@ -6274,15 +6216,12 @@ type ServerInterface interface {
 	// Automatic search, as in Lidarr: search this work's wanted album and send its best accepted release to a download client. Nothing is searched while a download for the album is already on its way.
 	// (POST /works/{id}/grab)
 	GrabWork(w http.ResponseWriter, r *http.Request, id int64)
-	// Monitor or unmonitor a work at the album level (section 19.6).
+	// Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
 	// One page of a work's parts (tracks, episodes), of one group or of all, in order.
 	// (GET /works/{id}/parts)
 	ListWorkParts(w http.ResponseWriter, r *http.Request, id int64, params ListWorkPartsParams)
-	// Monitor or unmonitor a single part (track) of a work.
-	// (POST /works/{id}/parts/{partId}/monitor)
-	SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64)
 	// Stop wanting one track, and optionally delete its file. Administrator only.
 	// (POST /works/{id}/parts/{partId}/remove)
 	RemovePart(w http.ResponseWriter, r *http.Request, id int64, partId int64)
@@ -7477,18 +7416,6 @@ func (_ Unimplemented) GetSeries(w http.ResponseWriter, r *http.Request, id int6
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Monitor or unmonitor one episode.
-// (PUT /series/{id}/episodes/{part_id}/monitored)
-func (_ Unimplemented) SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64, params SetEpisodeMonitoredParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Re-apply one of Sonarr's monitor choices to a series the library holds.
-// (PUT /series/{id}/monitoring)
-func (_ Unimplemented) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params ApplySeriesMonitoringParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Make one of the offered posters this series' own; it is kept over later refreshes.
 // (PUT /series/{id}/poster)
 func (_ Unimplemented) SetSeriesPoster(w http.ResponseWriter, r *http.Request, id int64, params SetSeriesPosterParams) {
@@ -7528,12 +7455,6 @@ func (_ Unimplemented) SendSeasonCandidate(w http.ResponseWriter, r *http.Reques
 // Automatic search, as in Sonarr: search the season and send its best accepted release to a download client.
 // (POST /series/{id}/seasons/{season}/grab)
 func (_ Unimplemented) GrabSeason(w http.ResponseWriter, r *http.Request, id int64, season int, params GrabSeasonParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Monitor or unmonitor every episode of a season.
-// (PUT /series/{id}/seasons/{season}/monitored)
-func (_ Unimplemented) SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params SetSeasonMonitoredParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7789,7 +7710,7 @@ func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Monitor or unmonitor a work at the album level (section 19.6).
+// Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 // (POST /works/{id}/monitor)
 func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -7798,12 +7719,6 @@ func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, 
 // One page of a work's parts (tracks, episodes), of one group or of all, in order.
 // (GET /works/{id}/parts)
 func (_ Unimplemented) ListWorkParts(w http.ResponseWriter, r *http.Request, id int64, params ListWorkPartsParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Monitor or unmonitor a single part (track) of a work.
-// (POST /works/{id}/parts/{partId}/monitor)
-func (_ Unimplemented) SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14284,117 +14199,6 @@ func (siw *ServerInterfaceWrapper) GetSeries(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
-// SetEpisodeMonitored operation middleware
-func (siw *ServerInterfaceWrapper) SetEpisodeMonitored(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "part_id" -------------
-	var partId int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "part_id", chi.URLParam(r, "part_id"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part_id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetEpisodeMonitoredParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetEpisodeMonitored(w, r, id, partId, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// ApplySeriesMonitoring operation middleware
-func (siw *ServerInterfaceWrapper) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params ApplySeriesMonitoringParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ApplySeriesMonitoring(w, r, id, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // SetSeriesPoster operation middleware
 func (siw *ServerInterfaceWrapper) SetSeriesPoster(w http.ResponseWriter, r *http.Request) {
 
@@ -14787,66 +14591,6 @@ func (siw *ServerInterfaceWrapper) GrabSeason(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GrabSeason(w, r, id, season, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// SetSeasonMonitored operation middleware
-func (siw *ServerInterfaceWrapper) SetSeasonMonitored(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "season" -------------
-	var season int
-
-	err = runtime.BindStyledParameterWithOptions("simple", "season", chi.URLParam(r, "season"), &season, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "season", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params SetSeasonMonitoredParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetSeasonMonitored(w, r, id, season, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16245,48 +15989,6 @@ func (siw *ServerInterfaceWrapper) ListWorkParts(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
-// SetPartMonitored operation middleware
-func (siw *ServerInterfaceWrapper) SetPartMonitored(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	// ------------- Path parameter "id" -------------
-	var id int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
-		return
-	}
-
-	// ------------- Path parameter "partId" -------------
-	var partId int64
-
-	err = runtime.BindStyledParameterWithOptions("simple", "partId", chi.URLParam(r, "partId"), &partId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "partId", Err: err})
-		return
-	}
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.SetPartMonitored(w, r, id, partId)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // RemovePart operation middleware
 func (siw *ServerInterfaceWrapper) RemovePart(w http.ResponseWriter, r *http.Request) {
 
@@ -17211,12 +16913,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/series/{id}", wrapper.GetSeries)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/series/{id}/episodes/{part_id}/monitored", wrapper.SetEpisodeMonitored)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/series/{id}/monitoring", wrapper.ApplySeriesMonitoring)
-	})
-	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/series/{id}/poster", wrapper.SetSeriesPoster)
 	})
 	r.Group(func(r chi.Router) {
@@ -17236,9 +16932,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/grab", wrapper.GrabSeason)
-	})
-	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/series/{id}/seasons/{season}/monitored", wrapper.SetSeasonMonitored)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/series/{id}/seasons/{season}/search", wrapper.SearchSeason)
@@ -17371,9 +17064,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/parts", wrapper.ListWorkParts)
-	})
-	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/monitor", wrapper.SetPartMonitored)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/remove", wrapper.RemovePart)

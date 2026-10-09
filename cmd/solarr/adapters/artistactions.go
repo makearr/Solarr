@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -56,7 +57,7 @@ func (a ArtistActions) MonitorAll(ctx context.Context, personID int64) (int64, e
 	}
 	var monitored int64
 	for _, work := range works {
-		if _, err := a.Monitor.SetWorkMonitored(ctx, work.ID, true); err != nil {
+		if _, err := a.Monitor.MonitorWork(ctx, work.ID, apiserver.MonitorScope{Monitored: true}); err != nil {
 			return monitored, err
 		}
 		monitored++

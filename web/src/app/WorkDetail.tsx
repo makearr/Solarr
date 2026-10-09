@@ -148,9 +148,9 @@ export function WorkDetail() {
   const setPartMonitored = useMutation({
     mutationFn: async ({ partId, monitored }: { partId: number; monitored: boolean }) => {
       if (id === undefined) return;
-      const { error } = await api.POST("/works/{id}/parts/{partId}/monitor", {
-        params: { path: { id, partId } },
-        body: { monitored },
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id } },
+        body: { monitored, parts: [partId] },
       });
       if (error) throw error;
     },

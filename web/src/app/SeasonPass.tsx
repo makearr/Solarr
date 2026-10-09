@@ -32,9 +32,9 @@ export function SeasonPass() {
 
   const setSeason = useMutation({
     mutationFn: async (target: { id: number; season: number; monitored: boolean }) => {
-      const { error } = await api.PUT("/series/{id}/seasons/{season}/monitored", {
-        params: { path: { id: target.id, season: target.season }, query: { category_id: Number(categoryId) } },
-        body: { monitored: target.monitored },
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id: target.id } },
+        body: { monitored: target.monitored, group: `s${String(target.season).padStart(2, "0")}` },
       });
       if (error) throw error;
     },
@@ -42,8 +42,8 @@ export function SeasonPass() {
   });
   const setSeries = useMutation({
     mutationFn: async (target: { id: number; monitored: boolean }) => {
-      const { error } = await api.PUT("/series/{id}/monitoring", {
-        params: { path: { id: target.id }, query: { category_id: Number(categoryId) } },
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id: target.id } },
         body: { option: target.monitored ? "all" : "none" },
       });
       if (error) throw error;

@@ -9,6 +9,8 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/listfilter"
@@ -29,6 +31,10 @@ type WorksMonitor struct {
 	// Libraries gives a removal its library's recycling bin.
 	Libraries        LibraryLookup
 	DefaultProfileID int64
+	// Monitoring answers a media type's monitor options; nil has none.
+	Monitoring func(mediaType string) (media.Monitoring, bool)
+	// GroupLabel names a group of a media type's work; nil names it by its ref.
+	GroupLabel func(mediaType, ref string) string
 	// Clock resolves the Fresh filter of a bulk selection.
 	Clock  clock.Clock
 	Fresh  FreshWindow
@@ -42,19 +48,102 @@ type FileRemover interface {
 	RecycleFile(ctx context.Context, mediaObjectID int64, recycling library.Recycling) error
 }
 
-// SetWorkMonitored always ensures the album item exists, monitored or not:
-// an explicit "not interested" from a user is worth recording the same way
-// as a category's monitor_discovered policy would (Invariant 71 -- once it
-// exists, a later scan or subscription pass leaves it alone either way).
-func (a WorksMonitor) SetWorkMonitored(
-	ctx context.Context, workID int64, monitored bool,
-) (apiserver.WantedRow, error) {
+// MonitorWork monitors or unmonitors what the scope names, then answers the work's groups.
+func (a WorksMonitor) MonitorWork(ctx context.Context, workID int64, scope apiserver.MonitorScope) ([]apiserver.GroupRow, error) {
 	detail, err := a.Works.Detail(ctx, workID)
 	if err != nil {
-		return apiserver.WantedRow{}, err
+		return nil, err
 	}
+	switch {
+	case scope.Option != "":
+		err = a.applyOption(ctx, detail, scope)
+	case len(scope.Parts) > 0:
+		for _, partID := range scope.Parts {
+			if err = a.Desired.SetPartMonitored(ctx, workID, partID, scope.Monitored); err != nil {
+				break
+			}
+		}
+	case scope.Group != nil:
+		err = a.monitorGroup(ctx, detail, *scope.Group, scope.Monitored)
+	case len(detail.Groups) == 0:
+		_, err = a.ensureWorkItem(ctx, detail, scope.Monitored)
+	default:
+		for _, group := range detail.Groups {
+			if err = a.monitorGroup(ctx, detail, group.Ref, scope.Monitored); err != nil {
+				break
+			}
+		}
+	}
+	if errors.Is(err, library.ErrPartNotFound) {
+		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
+	if err != nil {
+		return nil, err
+	}
+	after, err := a.Works.Detail(ctx, workID)
+	if err != nil {
+		return nil, err
+	}
+	groups := make([]apiserver.GroupRow, len(after.Groups))
+	for i, group := range after.Groups {
+		label := group.Ref
+		if a.GroupLabel != nil {
+			label = a.GroupLabel(after.Work.MediaType, group.Ref)
+		}
+		groups[i] = apiserver.GroupRow{Ref: group.Ref, Label: label, Wanted: apiserver.WantedRow{
+			ID: group.ID, Monitored: group.Monitored, RequiredCount: group.RequiredCount, PresentCount: group.PresentCount,
+			State: group.State, LastSearchedAt: group.LastSearchedAt,
+		}}
+	}
+	return groups, nil
+}
 
-	category, ok := a.Categories.CategoryForMediaType(detail.Work.MediaType)
+// applyOption applies one of the type's monitor options in the work's library.
+func (a WorksMonitor) applyOption(ctx context.Context, detail library.WorkDetail, scope apiserver.MonitorScope) error {
+	var monitoring media.Monitoring
+	ok := false
+	if a.Monitoring != nil {
+		monitoring, ok = a.Monitoring(detail.Work.MediaType)
+	}
+	if !ok {
+		return fmt.Errorf("%w: a %s has no monitor options", apiserver.ErrInvalidChoice, detail.Work.MediaType)
+	}
+	if len(detail.CategoryIDs) == 0 {
+		return fmt.Errorf("%w: the work is in no library", apiserver.ErrInvalidChoice)
+	}
+	err := monitoring.ApplyMonitorOption(ctx, detail.CategoryIDs[0], detail.Work.ID, scope.Option, scope.Special)
+	if errors.Is(err, media.ErrUnknownMonitorOption) {
+		return fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
+	return err
+}
+
+// monitorGroup sets one group: a work's single group by its item alone, a group with a ref with the parts under it.
+func (a WorksMonitor) monitorGroup(ctx context.Context, detail library.WorkDetail, ref string, monitored bool) error {
+	if ref == "" {
+		_, err := a.ensureWorkItem(ctx, detail, monitored)
+		return err
+	}
+	found, err := a.Desired.SetSeasonMonitored(ctx, detail.Work.ID, ref, monitored)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("%w: the work has no group %q", apiserver.ErrInvalidChoice, ref)
+	}
+	return nil
+}
+
+// ensureWorkItem always ensures the work's single SET item exists in its library, monitored or not: an explicit "not
+// interested" is recorded the same way a category's monitor_discovered policy would be (Invariant 71).
+func (a WorksMonitor) ensureWorkItem(ctx context.Context, detail library.WorkDetail, monitored bool) (apiserver.WantedRow, error) {
+	category, ok := settings.Category{}, false
+	if len(detail.CategoryIDs) > 0 {
+		category, ok = a.Categories.Category(detail.CategoryIDs[0])
+	}
+	if !ok {
+		category, ok = a.Categories.CategoryForMediaType(detail.Work.MediaType)
+	}
 	if !ok {
 		return apiserver.WantedRow{}, fmt.Errorf("no category configured for %s", detail.Work.MediaType)
 	}
@@ -62,9 +151,8 @@ func (a WorksMonitor) SetWorkMonitored(
 	if category.QualityProfileID != nil {
 		profileID = *category.QualityProfileID
 	}
-
 	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
-		WorkID: workID, CategoryID: category.ID, ProfileID: profileID, Monitored: monitored,
+		WorkID: detail.Work.ID, CategoryID: category.ID, ProfileID: profileID, Monitored: monitored,
 	})
 	if err != nil {
 		return apiserver.WantedRow{}, err
@@ -75,16 +163,11 @@ func (a WorksMonitor) SetWorkMonitored(
 		}
 		item.Monitored = boolToInt64(monitored)
 	}
-
 	row := apiserver.WantedRow{ID: item.ID, Monitored: monitored, PresentCount: item.PresentCount, State: item.State}
 	if item.RequiredCount.Valid {
 		row.RequiredCount = &item.RequiredCount.Int64
 	}
 	return row, nil
-}
-
-func (a WorksMonitor) SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error {
-	return a.Desired.SetPartMonitored(ctx, workID, partID, monitored)
 }
 
 // SetTrackWanted ensures the track's own SINGLE item exists, wanted or not,
@@ -153,7 +236,7 @@ func (a WorksMonitor) BulkSetMonitored(
 
 	var affected int64
 	for _, workID := range matched {
-		if _, err := a.SetWorkMonitored(ctx, workID, monitored); err != nil {
+		if _, err := a.MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: monitored}); err != nil {
 			a.Logger.Warn("bulk monitor: one work failed, continuing",
 				slog.Int64("work_id", workID), slog.Any("error", err))
 			continue

@@ -154,6 +154,7 @@
       "many": "Artists",
       "one": "Artist"
     },
+    "monitor_options": [],
     "organisation": {
       "many": "Labels",
       "one": "Label"
@@ -312,6 +313,44 @@
       "many": "Cast",
       "one": "Cast member"
     },
+    "monitor_options": [
+      {
+        "key": "all",
+        "label": "All episodes"
+      },
+      {
+        "key": "future",
+        "label": "Future episodes"
+      },
+      {
+        "key": "missing",
+        "label": "Missing episodes"
+      },
+      {
+        "key": "existing",
+        "label": "Existing episodes"
+      },
+      {
+        "key": "recent",
+        "label": "Recent episodes"
+      },
+      {
+        "key": "pilot",
+        "label": "Pilot episode"
+      },
+      {
+        "key": "first_season",
+        "label": "First season"
+      },
+      {
+        "key": "last_season",
+        "label": "Last season"
+      },
+      {
+        "key": "none",
+        "label": "None"
+      }
+    ],
     "organisation": {
       "many": "Networks",
       "one": "Network"

@@ -1797,8 +1797,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Monitor or unmonitor a work at the album level (section 19.6).
-         * @description Always ensures the work's album-level SET desired_item exists (creating it on first use, monitored or not) and sets its monitored flag either way -- an explicit "not interested" is worth recording the same way a category's monitor_discovered policy would. Never deletes the item (Invariant 71): a later scan or subscription pass finds it and leaves it exactly as the user set it.
+         * Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
+         * @description Without a group, parts or option it is the whole work: every group's wanted item (a work with none gets one in its library, monitored or not: an explicit "not interested" is recorded too). A group sets its item and every part under it; parts set those parts alone; an option is one of the media type's monitor options (GET /mediatypes). Never deletes an item (Invariant 71).
          */
         post: operations["setWorkMonitored"];
         delete?: never;
@@ -1879,29 +1879,6 @@ export interface paths {
         post?: never;
         /** Delete one of the user's own tags and take it off every album. Administrator only. */
         delete: operations["deleteTag"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/works/{id}/parts/{partId}/monitor": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-                partId: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Monitor or unmonitor a single part (track) of a work.
-         * @description Toggles work_part.monitored and recomputes every album-level SET item over the work in the same transaction: unmonitoring a bonus track shrinks the album's required_count rather than holding it PARTIAL forever (Appendix E D3).
-         */
-        post: operations["setPartMonitored"];
-        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -3310,30 +3287,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/series/{id}/monitoring": {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Re-apply one of Sonarr's monitor choices to a series the library holds.
-         * @description Each episode becomes monitored or not as the choice says, and every season follows. Existing wants the episodes that have a file, Missing those that do not.
-         */
-        put: operations["applySeriesMonitoring"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/series/{id}/type": {
         parameters: {
             query: {
@@ -3411,29 +3364,6 @@ export interface paths {
         get?: never;
         /** Give the series a quality profile of its own, or return it to the library's. */
         put: operations["setSeriesQuality"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/episodes/{part_id}/monitored": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                part_id: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Monitor or unmonitor one episode. */
-        put: operations["setEpisodeMonitored"];
         post?: never;
         delete?: never;
         options?: never;
@@ -3528,29 +3458,6 @@ export interface paths {
         put?: never;
         /** Send one accepted release to a matching download client (a person's own pick, never gated). */
         post: operations["sendSeasonCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/{id}/seasons/{season}/monitored": {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /** Monitor or unmonitor every episode of a season. */
-        put: operations["setSeasonMonitored"];
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4743,6 +4650,11 @@ export interface components {
             follow_options: components["schemas"]["FollowOption"][];
             /** @description The type's own fields of its entities beyond the base ones, as lists and pages show them. */
             facets: components["schemas"]["Facet"][];
+            /** @description The ways a whole work can be monitored at once, for POST /works/{id}/monitor's option. */
+            monitor_options: {
+                key: string;
+                label: string;
+            }[];
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -10392,9 +10304,17 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    monitored: boolean;
+                    /** @description Required except with an option. */
+                    monitored?: boolean;
+                    /** @description A group's ref ("s03"); "" is a work's single group. */
+                    group?: string;
+                    parts?: number[];
+                    /** @description One of the media type's monitor options. */
+                    option?: string;
+                    /** @description With an option */
+                    specials?: boolean;
                     /**
-                     * @description Search the album at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
+                     * @description Search the work at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
                      * @default false
                      */
                     search?: boolean;
@@ -10402,17 +10322,20 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The album's wanted state after the change. */
+            /** @description The work's groups after the change. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Wanted"];
+                    "application/json": {
+                        groups: components["schemas"]["WorkGroup"][];
+                    };
                 };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };
@@ -10565,36 +10488,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    setPartMonitored: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-                partId: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    monitored: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Updated. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
@@ -13115,41 +13008,6 @@ export interface operations {
             502: components["responses"]["Problem"];
         };
     };
-    applySeriesMonitoring: {
-        parameters: {
-            query: {
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    /** @enum {string} */
-                    option: "all" | "future" | "missing" | "existing" | "recent" | "pilot" | "first_season" | "last_season" | "none";
-                    /** @default false */
-                    specials?: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Applied. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
     setSeriesType: {
         parameters: {
             query: {
@@ -13270,39 +13128,6 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    setEpisodeMonitored: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                part_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    monitored: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Done. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
@@ -13450,39 +13275,6 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-        };
-    };
-    setSeasonMonitored: {
-        parameters: {
-            query: {
-                /** @description The library the series is in; access is checked against it. */
-                category_id: number;
-            };
-            header?: never;
-            path: {
-                id: number;
-                season: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    monitored: boolean;
-                };
-            };
-        };
-        responses: {
-            /** @description Done. */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
         };
     };
     listPersonFollows: {

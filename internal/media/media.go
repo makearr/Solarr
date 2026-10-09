@@ -76,6 +76,8 @@ type Descriptor struct {
 	FollowOptions []FollowOption
 	// Facets are the type's own fields of its entities, beyond the base ones.
 	Facets []Facet
+	// MonitorOptions are the ways a whole work can be monitored at once (Sonarr's "future episodes"), when a type has them.
+	MonitorOptions []Choice
 }
 
 // Module is one media type. Its behaviour is in the capability interfaces it also implements.
@@ -177,6 +179,15 @@ type Following interface {
 	// FollowLimit bounds what one run adds for one follow; 0 is no bound.
 	FollowLimit(follow Follow) int
 }
+
+// Monitoring is the capability of a media type with monitor options: one applied to a work of a library.
+type Monitoring interface {
+	// ApplyMonitorOption sets which of the work's parts are monitored; withSpecials adds the specials group.
+	ApplyMonitorOption(ctx context.Context, categoryID, workID int64, option string, withSpecials bool) error
+}
+
+// ErrUnknownMonitorOption reports a monitor option the work's media type does not have.
+var ErrUnknownMonitorOption = errors.New("media: unknown monitor option")
 
 // Grouping is the capability of a media type whose works hold their parts in groups (a series' seasons).
 type Grouping interface {

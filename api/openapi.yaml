@@ -2777,37 +2777,47 @@ paths:
     post:
       operationId: setWorkMonitored
       tags: [library]
-      summary: Monitor or unmonitor a work at the album level (section 19.6).
+      summary: Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
       description: >-
-        Always ensures the work's album-level SET desired_item exists
-        (creating it on first use, monitored or not) and sets its monitored
-        flag either way -- an explicit "not interested" is worth recording
-        the same way a category's monitor_discovered policy would. Never
-        deletes the item (Invariant 71): a later scan or subscription pass
-        finds it and leaves it exactly as the user set it.
+        Without a group, parts or option it is the whole work: every group's wanted item (a work with none
+        gets one in its library, monitored or not: an explicit "not interested" is recorded too). A group
+        sets its item and every part under it; parts set those parts alone; an option is one of the media
+        type's monitor options (GET /mediatypes). Never deletes an item (Invariant 71).
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [monitored]
               properties:
-                monitored: { type: boolean }
+                monitored: { type: boolean, description: Required except with an option. }
+                group: { type: string, description: "A group's ref (\"s03\"); \"\" is a work's single group." }
+                parts:
+                  type: array
+                  items: { type: integer, format: int64 }
+                option: { type: string, description: One of the media type's monitor options. }
+                specials: { type: boolean, description: With an option, the specials group too. }
                 search:
                   type: boolean
                   default: false
                   description: >-
-                    Search the album at once when it becomes monitored (D16: the person's "Start search
+                    Search the work at once when it becomes monitored (D16: the person's "Start search
                     for missing albums" preference). Ignored when monitored is false.
       responses:
         "200":
-          description: The album's wanted state after the change.
+          description: The work's groups after the change.
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Wanted" }
+              schema:
+                type: object
+                required: [groups]
+                properties:
+                  groups:
+                    type: array
+                    items: { $ref: "#/components/schemas/WorkGroup" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
   /works/{id}/edit:
@@ -2918,40 +2928,6 @@ paths:
       summary: Delete one of the user's own tags and take it off every album. Administrator only.
       responses:
         "204": { description: Deleted. }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
-  /works/{id}/parts/{partId}/monitor:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-      - name: partId
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    post:
-      operationId: setPartMonitored
-      tags: [library]
-      summary: Monitor or unmonitor a single part (track) of a work.
-      description: >-
-        Toggles work_part.monitored and recomputes every album-level SET
-        item over the work in the same transaction: unmonitoring a bonus
-        track shrinks the album's required_count rather than holding it
-        PARTIAL forever (Appendix E D3).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [monitored]
-              properties:
-                monitored: { type: boolean }
-      responses:
-        "204": { description: Updated. }
-        "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
@@ -5335,42 +5311,6 @@ paths:
         "404": { $ref: "#/components/responses/Problem" }
         "502": { $ref: "#/components/responses/Problem" }
 
-  /series/{id}/monitoring:
-    parameters:
-      - name: category_id
-        in: query
-        required: true
-        schema: { type: integer, format: int64 }
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    put:
-      operationId: applySeriesMonitoring
-      tags: [series]
-      summary: Re-apply one of Sonarr's monitor choices to a series the library holds.
-      description: >-
-        Each episode becomes monitored or not as the choice says, and every season follows. Existing wants the episodes
-        that have a file, Missing those that do not.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [option]
-              properties:
-                option:
-                  type: string
-                  enum: [all, future, missing, existing, recent, pilot, first_season, last_season, none]
-                specials: { type: boolean, default: false }
-      responses:
-        "204": { description: Applied. }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
   /series/{id}/type:
     parameters:
       - name: category_id
@@ -5479,40 +5419,6 @@ paths:
       responses:
         "204": { description: Set. }
         "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-
-  /series/{id}/episodes/{part_id}/monitored:
-    parameters:
-      - name: category_id
-        in: query
-        required: true
-        description: The library the series is in; access is checked against it.
-        schema: { type: integer, format: int64 }
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-      - name: part_id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-    put:
-      operationId: setEpisodeMonitored
-      tags: [series]
-      summary: Monitor or unmonitor one episode.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [monitored]
-              properties:
-                monitored: { type: boolean }
-      responses:
-        "204": { description: Done. }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -5661,40 +5567,6 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: "#/components/schemas/Problem" }
-
-  /series/{id}/seasons/{season}/monitored:
-    parameters:
-      - name: category_id
-        in: query
-        required: true
-        description: The library the series is in; access is checked against it.
-        schema: { type: integer, format: int64 }
-      - name: id
-        in: path
-        required: true
-        schema: { type: integer, format: int64 }
-      - name: season
-        in: path
-        required: true
-        schema: { type: integer }
-    put:
-      operationId: setSeasonMonitored
-      tags: [series]
-      summary: Monitor or unmonitor every episode of a season.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [monitored]
-              properties:
-                monitored: { type: boolean }
-      responses:
-        "204": { description: Done. }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
 
   /people/{id}/follow:
     parameters:
@@ -7384,7 +7256,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -7404,6 +7276,15 @@ components:
           type: array
           description: The type's own fields of its entities beyond the base ones, as lists and pages show them.
           items: { $ref: "#/components/schemas/Facet" }
+        monitor_options:
+          type: array
+          description: The ways a whole work can be monitored at once, for POST /works/{id}/monitor's option.
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
 
     MediaType:
       type: string

@@ -49,11 +49,11 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 			"roles": []any{map[string]any{
 				"key": "artist", "label": "Artist", "lead": true, "followable": true, "part_scoped": false, "character": false,
 			}},
-			"follow_options": []any{}, "facets": []any{},
+			"follow_options": []any{}, "facets": []any{}, "monitor_options": []any{},
 		},
 		{
 			"key": "tv", "label": "TV", "work": term("Series", "Series"), "part": term("", ""), "group": term("", ""),
-			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{},
+			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {

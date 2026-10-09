@@ -54,7 +54,8 @@ the one people and organisations list of every media type (`GET /people`, `GET /
 
 ## Monitoring a held series (`Service.ApplyMonitor`, Season pass)
 
-`PUT /series/{id}/monitoring` re-applies one of Sonarr's nine monitor choices to what is already held: every episode becomes
+`POST /works/{id}/monitor` with an `option` (TV's `media.Monitoring`; the same endpoint takes a season as `group`
+and episodes as `parts`, for every media type) re-applies one of Sonarr's nine monitor choices to what is already held: every episode becomes
 monitored or not as the choice says ("existing" wants the episodes with a file, "missing" those without) and each season item
 follows (`Desired.ApplyPartMonitoring`, one transaction per season). A season item is monitored exactly when one of its
 episodes is, also when one episode is toggled by hand, so wanting a single episode of an unmonitored season reaches the

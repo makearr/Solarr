@@ -37,16 +37,12 @@ type SeriesCatalog interface {
 	Lookup(ctx context.Context, categoryID int64, query string, limit int) ([]gen.SeriesCandidate, error)
 	Add(ctx context.Context, userID int64, request gen.AddSeriesRequest) (gen.AddSeriesResult, error)
 	Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error)
-	SetEpisodeMonitored(ctx context.Context, categoryID, seriesID, partID int64, monitored bool) error
-	SetSeasonMonitored(ctx context.Context, categoryID, seriesID int64, season int, monitored bool) error
 	// Delete removes a series; deleteFiles sends its files to the recycle bin, exclude remembers it so it is not added back.
 	Delete(ctx context.Context, categoryID, seriesID int64, deleteFiles, exclude bool) error
 	// Exclusions lists the deleted series that must not be added again.
 	Exclusions(ctx context.Context) ([]gen.SeriesExclusion, error)
 	// RemoveExclusion allows the series the id belongs to again.
 	RemoveExclusion(ctx context.Context, provider, externalID string) error
-	// ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.
-	ApplyMonitor(ctx context.Context, categoryID, seriesID int64, option string, specials bool) error
 	// SetType says what kind of series this is; "auto" returns to what the providers say.
 	SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error
 	// SetProfile gives the series a quality profile of its own, or the library's when nil.
@@ -243,85 +239,6 @@ func (s *Server) RefreshSeries(w http.ResponseWriter, r *http.Request, id int64,
 	writeJSON(w, s.logger, http.StatusOK, result)
 }
 
-type monitoredBody struct {
-	Monitored *bool `json:"monitored"`
-}
-
-func (s *Server) readMonitored(w http.ResponseWriter, r *http.Request) (bool, bool) {
-	var body monitoredBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || body.Monitored == nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "monitored is required")
-		return false, false
-	}
-	return *body.Monitored, true
-}
-
-func (s *Server) routeSetEpisodeMonitored(w http.ResponseWriter, r *http.Request) {
-	id, category, ok := s.seriesPath(w, r)
-	if !ok {
-		return
-	}
-	partID, err := strconv.ParseInt(chi.URLParam(r, "part_id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "part id must be a number")
-		return
-	}
-	s.setEpisodeMonitored(w, r, id, partID, category)
-}
-
-// SetEpisodeMonitored satisfies the generated interface; routeSetEpisodeMonitored is what is mounted.
-func (s *Server) SetEpisodeMonitored(w http.ResponseWriter, r *http.Request, id, partID int64, params gen.SetEpisodeMonitoredParams) {
-	s.setEpisodeMonitored(w, r, id, partID, params.CategoryId)
-}
-
-func (s *Server) setEpisodeMonitored(w http.ResponseWriter, r *http.Request, id, partID, categoryID int64) {
-	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
-		return
-	}
-	monitored, ok := s.readMonitored(w, r)
-	if !ok {
-		return
-	}
-	if err := s.series.SetEpisodeMonitored(r.Context(), categoryID, id, partID, monitored); err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (s *Server) routeSetSeasonMonitored(w http.ResponseWriter, r *http.Request) {
-	id, category, ok := s.seriesPath(w, r)
-	if !ok {
-		return
-	}
-	season, err := strconv.Atoi(chi.URLParam(r, "season"))
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "season must be a number")
-		return
-	}
-	s.setSeasonMonitored(w, r, id, season, category)
-}
-
-// SetSeasonMonitored satisfies the generated interface; routeSetSeasonMonitored is what is mounted.
-func (s *Server) SetSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, params gen.SetSeasonMonitoredParams) {
-	s.setSeasonMonitored(w, r, id, season, params.CategoryId)
-}
-
-func (s *Server) setSeasonMonitored(w http.ResponseWriter, r *http.Request, id int64, season int, categoryID int64) {
-	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
-		return
-	}
-	monitored, ok := s.readMonitored(w, r)
-	if !ok {
-		return
-	}
-	if err := s.series.SetSeasonMonitored(r.Context(), categoryID, id, season, monitored); err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}
-
 func (s *Server) routeListWantedEpisodes(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	categoryID, err := strconv.ParseInt(query.Get("category_id"), 10, 64)
@@ -387,38 +304,6 @@ func (s *Server) ListWantedEpisodes(w http.ResponseWriter, r *http.Request, para
 		page.NextCursor = &next
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
-}
-
-func (s *Server) routeApplySeriesMonitoring(w http.ResponseWriter, r *http.Request) {
-	id, category, ok := s.seriesPath(w, r)
-	if !ok {
-		return
-	}
-	s.applySeriesMonitoring(w, r, id, category)
-}
-
-// ApplySeriesMonitoring satisfies the generated interface; routeApplySeriesMonitoring is what is mounted.
-func (s *Server) ApplySeriesMonitoring(w http.ResponseWriter, r *http.Request, id int64, params gen.ApplySeriesMonitoringParams) {
-	s.applySeriesMonitoring(w, r, id, params.CategoryId)
-}
-
-func (s *Server) applySeriesMonitoring(w http.ResponseWriter, r *http.Request, id, categoryID int64) {
-	if _, ok := s.seriesAccess(w, r, categoryID, settings.PermissionManage); !ok {
-		return
-	}
-	var body struct {
-		Option   string `json:"option"`
-		Specials bool   `json:"specials"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil || body.Option == "" {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "option is required")
-		return
-	}
-	if err := s.series.ApplyMonitor(r.Context(), categoryID, id, body.Option, body.Specials); err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) routeSetSeriesQuality(w http.ResponseWriter, r *http.Request) {

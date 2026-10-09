@@ -96,7 +96,7 @@ function SeriesEdit({ seriesId, categoryId, profileId, seriesType, onChanged }: 
   const query = { category_id: Number(categoryId) };
   const apply = useMutation({
     mutationFn: async () => {
-      const { error } = await api.PUT("/series/{id}/monitoring", { params: { path: { id: seriesId }, query }, body: { option: choice, specials } });
+      const { error } = await api.POST("/works/{id}/monitor", { params: { path: { id: seriesId } }, body: { option: choice, specials } });
       if (error) throw error;
     },
     onSuccess: onChanged,
@@ -508,9 +508,9 @@ export function SeriesPage() {
   });
   const setSeason = useMutation({
     mutationFn: async (target: { season: number; monitored: boolean }) => {
-      const { error } = await api.PUT("/series/{id}/seasons/{season}/monitored", {
-        params: { path: { id: Number(seriesId), season: target.season }, query: { category_id: Number(categoryId) } },
-        body: { monitored: target.monitored },
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id: Number(seriesId) } },
+        body: { monitored: target.monitored, group: `s${String(target.season).padStart(2, "0")}` },
       });
       if (error) throw error;
     },
@@ -518,9 +518,9 @@ export function SeriesPage() {
   });
   const setEpisode = useMutation({
     mutationFn: async (target: { episode: Episode; monitored: boolean }) => {
-      const { error } = await api.PUT("/series/{id}/episodes/{part_id}/monitored", {
-        params: { path: { id: Number(seriesId), part_id: target.episode.id }, query: { category_id: Number(categoryId) } },
-        body: { monitored: target.monitored },
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id: Number(seriesId) } },
+        body: { monitored: target.monitored, parts: [target.episode.id] },
       });
       if (error) throw error;
     },

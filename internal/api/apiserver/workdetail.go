@@ -151,15 +151,9 @@ type BulkSelection struct {
 // 19.6). Defined here and implemented by the caller, same reasoning as
 // WorksReader's own doc comment.
 type WorksMonitor interface {
-	// SetWorkMonitored always ensures the album-level SET item exists
-	// (creating it on first use, monitored or not) and sets its monitored
-	// flag either way. Answers a missing work id with an error wrapping
-	// sql.ErrNoRows.
-	SetWorkMonitored(ctx context.Context, workID int64, monitored bool) (WantedRow, error)
-	// SetPartMonitored toggles one part's monitored flag and recomputes
-	// every album item over the work. Answers a missing work or part id
-	// with an error wrapping sql.ErrNoRows.
-	SetPartMonitored(ctx context.Context, workID, partID int64, monitored bool) error
+	// MonitorWork monitors or unmonitors what scope names and answers the work's groups after. A missing work
+	// answers an error wrapping sql.ErrNoRows, an option the type does not have ErrInvalidChoice.
+	MonitorWork(ctx context.Context, workID int64, scope MonitorScope) ([]GroupRow, error)
 	// SetTrackWanted always ensures the track's own SINGLE desired_item
 	// exists (creating it on first use, wanted or not) and sets its
 	// monitored flag either way -- distinct from SetPartMonitored, which
@@ -178,6 +172,16 @@ type WorksMonitor interface {
 	// RemovePart stops wanting one track; deleteFiles also recycles its file.
 	// Answers a part outside the work with an error wrapping sql.ErrNoRows.
 	RemovePart(ctx context.Context, workID, partID int64, deleteFiles bool) (RemovePartResult, error)
+}
+
+// MonitorScope is what POST /works/{id}/monitor changes: the whole work, a group, some parts, or an option.
+type MonitorScope struct {
+	Monitored bool
+	// Group is set for one group; "" is a work's single group.
+	Group   *string
+	Parts   []int64
+	Option  string
+	Special bool
 }
 
 // RemovePartResult is what removing a track did.
@@ -331,15 +335,29 @@ func (s *Server) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int
 		return
 	}
 
-	wanted, err := s.worksMonitor.SetWorkMonitored(r.Context(), id, body.Monitored)
+	if body.Option == nil && body.Monitored == nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "monitored is required without an option")
+		return
+	}
+	scope := MonitorScope{
+		Monitored: derefOr(body.Monitored, false), Group: body.Group, Parts: derefOr(body.Parts, nil),
+		Option: derefOr(body.Option, ""), Special: derefOr(body.Specials, false),
+	}
+	groups, err := s.worksMonitor.MonitorWork(r.Context(), id, scope)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	if body.Monitored && derefOr(body.Search, false) {
+	if scope.Monitored && derefOr(body.Search, false) {
 		s.searchNowMonitored(r, id)
 	}
-	writeJSON(w, s.logger, http.StatusOK, buildWantedView(wanted))
+	views := make([]gen.WorkGroup, len(groups))
+	for index, group := range groups {
+		views[index] = groupView(group)
+	}
+	writeJSON(w, s.logger, http.StatusOK, struct {
+		Groups []gen.WorkGroup `json:"groups"`
+	}{Groups: views})
 }
 
 // searchNowMonitored queues a search for an album just monitored (D16); failing to queue one does not
@@ -355,59 +373,6 @@ func (s *Server) searchNowMonitored(r *http.Request, id int64) {
 	if _, err := s.candidateSearcher.SearchCategory(r.Context(), detail.CategoryIDs[0], []int64{id}); err != nil {
 		s.logger.Warn("search after monitoring", "work_id", id, "error", err)
 	}
-}
-
-// routeSetPartMonitored parses id and partId, mirroring routeSetWorkMonitored.
-func (s *Server) routeSetPartMonitored(w http.ResponseWriter, r *http.Request) {
-	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a work id must be a number")
-		return
-	}
-	partID, err := strconv.ParseInt(chi.URLParam(r, "partId"), 10, 64)
-	if err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "a part id must be a number")
-		return
-	}
-	s.SetPartMonitored(w, r, id, partID)
-}
-
-// SetPartMonitored toggles one part's monitored state.
-func (s *Server) SetPartMonitored(w http.ResponseWriter, r *http.Request, id, partID int64) {
-	access, err := authz.FromContext(r.Context())
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	if s.workDetail == nil || s.worksMonitor == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
-			"Unavailable", "monitoring is not available")
-		return
-	}
-
-	var body gen.SetPartMonitoredJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "the request body could not be read")
-		return
-	}
-
-	// Monitoring decides what is searched and downloaded: request, as search itself (2026-09-28).
-	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
-		return
-	}
-
-	if err := s.worksMonitor.SetPartMonitored(r.Context(), id, partID, body.Monitored); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such part")
-			return
-		}
-		writeError(w, s.logger, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
 }
 
 // routeSetTrackWanted parses id and partId, mirroring routeSetPartMonitored.
@@ -612,15 +577,7 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 	}
 	groups := make([]gen.WorkGroup, len(row.Groups))
 	for index, group := range row.Groups {
-		groups[index] = gen.WorkGroup{
-			Ref: group.Ref, Label: group.Label, DesiredItemId: group.Wanted.ID, Monitored: group.Wanted.Monitored,
-			PresentCount: group.Wanted.PresentCount, RequiredCount: group.Wanted.RequiredCount,
-			State: gen.WorkGroupState(group.Wanted.State),
-		}
-		if group.Wanted.LastSearchedAt != 0 {
-			at := time.Unix(group.Wanted.LastSearchedAt, 0).UTC()
-			groups[index].LastSearchedAt = &at
-		}
+		groups[index] = groupView(group)
 	}
 	view.Facets, view.Groups = &facets, &groups
 	return view
@@ -846,4 +803,17 @@ func (s *Server) RemovePart(w http.ResponseWriter, r *http.Request, id, partID i
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.RemovePartResult{FilesRecycled: result.FilesRecycled})
+}
+
+func groupView(group GroupRow) gen.WorkGroup {
+	view := gen.WorkGroup{
+		Ref: group.Ref, Label: group.Label, DesiredItemId: group.Wanted.ID, Monitored: group.Wanted.Monitored,
+		PresentCount: group.Wanted.PresentCount, RequiredCount: group.Wanted.RequiredCount,
+		State: gen.WorkGroupState(group.Wanted.State),
+	}
+	if group.Wanted.LastSearchedAt != 0 {
+		at := time.Unix(group.Wanted.LastSearchedAt, 0).UTC()
+		view.LastSearchedAt = &at
+	}
+	return view
 }

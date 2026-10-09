@@ -123,8 +123,8 @@ function MonitorBookmark({ series, categoryId }: { series: Series; categoryId: s
   const queryClient = useQueryClient();
   const set = useMutation({
     mutationFn: async () => {
-      const { error } = await api.PUT("/series/{id}/monitoring", {
-        params: { path: { id: series.id }, query: { category_id: Number(categoryId) } },
+      const { error } = await api.POST("/works/{id}/monitor", {
+        params: { path: { id: series.id } },
         body: { option: series.monitored ? "none" : "existing" },
       });
       if (error) throw error;
@@ -508,7 +508,7 @@ function SeriesBulkBar({ categoryId, ids, profiles, onDone }: { categoryId: stri
       for (const id of ids) {
         let error: unknown;
         if (action.kind === "monitor") {
-          ({ error } = await api.PUT("/series/{id}/monitoring", { params: { path: { id }, query }, body: { option: action.option as never } }));
+          ({ error } = await api.POST("/works/{id}/monitor", { params: { path: { id } }, body: { option: action.option } }));
         } else if (action.kind === "profile") {
           ({ error } = await api.PUT("/series/{id}/quality", { params: { path: { id }, query }, body: { quality_profile_id: action.profileId } }));
         } else {

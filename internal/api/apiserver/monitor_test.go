@@ -19,11 +19,9 @@ type fakeWorksMonitor struct {
 	wanted apiserver.WantedRow
 	err    error
 
-	lastWorkMonitored *bool
-	lastPartID        int64
-	lastPartMonitored *bool
-	setWorkCalls      int
-	setPartCalls      int
+	groups       []apiserver.GroupRow
+	lastScope    *apiserver.MonitorScope
+	setWorkCalls int
 
 	removeResult      apiserver.RemoveWorkResult
 	removeWorkID      int64
@@ -48,20 +46,10 @@ type fakeWorksMonitor struct {
 	lastBulkSelection     apiserver.BulkSelection
 }
 
-func (f *fakeWorksMonitor) SetWorkMonitored(_ context.Context, _ int64, monitored bool) (apiserver.WantedRow, error) {
+func (f *fakeWorksMonitor) MonitorWork(_ context.Context, _ int64, scope apiserver.MonitorScope) ([]apiserver.GroupRow, error) {
 	f.setWorkCalls++
-	f.lastWorkMonitored = &monitored
-	if f.err != nil {
-		return apiserver.WantedRow{}, f.err
-	}
-	return f.wanted, nil
-}
-
-func (f *fakeWorksMonitor) SetPartMonitored(_ context.Context, _, partID int64, monitored bool) error {
-	f.setPartCalls++
-	f.lastPartID = partID
-	f.lastPartMonitored = &monitored
-	return f.err
+	f.lastScope = &scope
+	return f.groups, f.err
 }
 
 func (f *fakeWorksMonitor) SetTrackWanted(_ context.Context, _, partID int64, wanted bool) (apiserver.WantedRow, error) {
@@ -107,35 +95,58 @@ func visibleWorksFixture(t *testing.T) (worksFixture, []*http.Cookie) {
 	return fixture, cookies
 }
 
-func TestSetWorkMonitored_TogglesAndReturnsTheWantedState(t *testing.T) {
+func TestSetWorkMonitored_TogglesAndReturnsTheGroups(t *testing.T) {
 	fixture, cookies := visibleWorksFixture(t)
 	required := int64(12)
-	fixture.worksMonitor.wanted = apiserver.WantedRow{
+	fixture.worksMonitor.groups = []apiserver.GroupRow{{Ref: "", Label: "", Wanted: apiserver.WantedRow{
 		ID: 5, Monitored: true, RequiredCount: &required, PresentCount: 9, State: "PARTIAL",
-	}
+	}}}
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/monitor", `{"monitored":true}`))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
-	if fixture.worksMonitor.setWorkCalls != 1 || fixture.worksMonitor.lastWorkMonitored == nil ||
-		!*fixture.worksMonitor.lastWorkMonitored {
-		t.Errorf("want SetWorkMonitored called once with monitored=true, got %+v", fixture.worksMonitor)
+	if scope := fixture.worksMonitor.lastScope; scope == nil || !scope.Monitored || scope.Group != nil || scope.Parts != nil || scope.Option != "" {
+		t.Errorf("scope = %+v, want the whole work monitored", fixture.worksMonitor.lastScope)
 	}
-
 	var body struct {
-		ID            int64  `json:"id"`
-		Monitored     bool   `json:"monitored"`
-		RequiredCount *int64 `json:"required_count"`
-		PresentCount  int64  `json:"present_count"`
-		State         string `json:"state"`
+		Groups []struct {
+			DesiredItemID int64  `json:"desired_item_id"`
+			Monitored     bool   `json:"monitored"`
+			RequiredCount *int64 `json:"required_count"`
+			PresentCount  int64  `json:"present_count"`
+			State         string `json:"state"`
+		} `json:"groups"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if body.ID != 5 || !body.Monitored || body.PresentCount != 9 || body.State != "PARTIAL" ||
-		body.RequiredCount == nil || *body.RequiredCount != 12 {
-		t.Errorf("body = %+v, want the fake's canned Wanted round-tripped", body)
+	if len(body.Groups) != 1 || body.Groups[0].DesiredItemID != 5 || !body.Groups[0].Monitored || body.Groups[0].PresentCount != 9 ||
+		body.Groups[0].State != "PARTIAL" || body.Groups[0].RequiredCount == nil || *body.Groups[0].RequiredCount != 12 {
+		t.Errorf("body = %+v, want the fake's canned group round-tripped", body)
+	}
+}
+
+// A group, parts or an option reach the monitor as the scope; without monitored and without an option is refused.
+func TestSetWorkMonitored_CarriesTheScope(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	for body, check := range map[string]func(apiserver.MonitorScope) bool{
+		`{"monitored":false,"group":"s02"}`:   func(s apiserver.MonitorScope) bool { return s.Group != nil && *s.Group == "s02" && !s.Monitored },
+		`{"monitored":true,"parts":[20,21]}`:  func(s apiserver.MonitorScope) bool { return len(s.Parts) == 2 && s.Parts[1] == 21 && s.Monitored },
+		`{"option":"future","specials":true}`: func(s apiserver.MonitorScope) bool { return s.Option == "future" && s.Special },
+	} {
+		fixture.worksMonitor.lastScope = nil
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/monitor", body))
+		if recorder.Code != http.StatusOK || fixture.worksMonitor.lastScope == nil || !check(*fixture.worksMonitor.lastScope) {
+			t.Errorf("%s: status %d, scope %+v", body, recorder.Code, fixture.worksMonitor.lastScope)
+		}
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/monitor", `{"group":"s01"}`)); recorder.Code != http.StatusBadRequest {
+		t.Errorf("without monitored or an option: status %d, want 400", recorder.Code)
+	}
+	fixture.worksMonitor.err = apiserver.ErrInvalidChoice
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/monitor", `{"option":"sometimes"}`)); recorder.Code != http.StatusBadRequest {
+		t.Errorf("an option the type lacks: status %d, want 400", recorder.Code)
 	}
 }
 
@@ -183,30 +194,7 @@ func TestSetWorkMonitored_MalformedIDAnswers400(t *testing.T) {
 	}
 }
 
-func TestSetPartMonitored_TogglesAndAnswers204(t *testing.T) {
-	fixture, cookies := visibleWorksFixture(t)
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/parts/20/monitor", `{"monitored":false}`))
-	if recorder.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
-	}
-	if fixture.worksMonitor.setPartCalls != 1 || fixture.worksMonitor.lastPartID != 20 ||
-		fixture.worksMonitor.lastPartMonitored == nil || *fixture.worksMonitor.lastPartMonitored {
-		t.Errorf("want SetPartMonitored(work=1, part=20, monitored=false), got %+v", fixture.worksMonitor)
-	}
-}
-
-func TestSetPartMonitored_MissingPartAnswers404(t *testing.T) {
-	fixture, cookies := visibleWorksFixture(t)
-	fixture.worksMonitor.err = sql.ErrNoRows
-
-	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/1/parts/999/monitor", `{"monitored":false}`))
-	if recorder.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want 404", recorder.Code)
-	}
-}
-
-// SetTrackWanted is distinct from SetPartMonitored: it stands up the track's
+// SetTrackWanted is distinct from monitoring parts: it stands up the track's
 // own SINGLE desired_item rather than resizing the album's required_count
 // (todo 4.4), so it answers 200 with the Wanted shape, not 204.
 func TestSetTrackWanted_TogglesAndReturnsTheTracksOwnWantedState(t *testing.T) {
@@ -521,7 +509,7 @@ func TestSetWorkMonitored_NeedsRequestNotRead(t *testing.T) {
 		ID: 1, MediaType: "music", Title: "KI Pecezinu", SortTitle: "ki pecezinu", RootFolderIDs: []int64{root.ID},
 	}
 	cookies := fixture.signIn(t, "reader")
-	for _, path := range []string{"/api/v1/works/1/monitor", "/api/v1/works/1/parts/2/monitor", "/api/v1/works/1/parts/2/wanted"} {
+	for _, path := range []string{"/api/v1/works/1/monitor", "/api/v1/works/1/parts/2/wanted"} {
 		recorder := fixture.do(authedPost(t, cookies, path, `{"monitored":true}`))
 		if recorder.Code != http.StatusForbidden {
 			t.Errorf("%s: status %d, want 403", path, recorder.Code)

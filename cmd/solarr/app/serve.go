@@ -867,6 +867,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
 		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Fresh: p.freshWindow, Logger: p.logger,
+		Monitoring: adapters.MediaTypes{Registry: p.media}.MonitoringOf, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
 	}
 }
 

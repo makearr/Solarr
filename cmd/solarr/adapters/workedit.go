@@ -64,12 +64,14 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			names = append(names, name)
 		}
 	}
-	wanted, err := a.Monitor.SetWorkMonitored(ctx, workID, edit.Monitored)
+	groups, err := a.Monitor.MonitorWork(ctx, workID, apiserver.MonitorScope{Monitored: edit.Monitored})
 	if err != nil {
 		return err
 	}
-	if err := a.Desired.SetProfileOverride(ctx, wanted.ID, edit.ProfileID); err != nil {
-		return err
+	for _, group := range groups {
+		if err := a.Desired.SetProfileOverride(ctx, group.Wanted.ID, edit.ProfileID); err != nil {
+			return err
+		}
 	}
 	return a.People.SetUserTags(ctx, workID, names)
 }

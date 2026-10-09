@@ -294,17 +294,6 @@ func (c SeriesCatalog) RemoveExclusion(ctx context.Context, provider, externalID
 	return c.Service.Exclusions.Unexclude(ctx, ids)
 }
 
-// ApplyMonitor re-applies one of Sonarr's monitor options to a series the library holds.
-func (c SeriesCatalog) ApplyMonitor(ctx context.Context, categoryID, seriesID int64, option string, specials bool) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
-	if !tv.MonitorOption(option).Valid() {
-		return fmt.Errorf("%w: unknown monitor option %q", apiserver.ErrInvalidChoice, option)
-	}
-	return c.Service.ApplyMonitor(ctx, categoryID, seriesID, tv.MonitorOption(option), specials)
-}
-
 // SetType says what kind of series this is; "auto" returns to what the providers say.
 func (c SeriesCatalog) SetType(ctx context.Context, categoryID, seriesID int64, seriesType string) error {
 	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
@@ -378,33 +367,6 @@ func (c SeriesCatalog) SetProfile(ctx context.Context, categoryID, seriesID int6
 		}
 	}
 	return c.Service.SetProfile(ctx, categoryID, seriesID, profileID)
-}
-
-// SetEpisodeMonitored monitors or unmonitors one episode of a series in the library.
-func (c SeriesCatalog) SetEpisodeMonitored(ctx context.Context, categoryID, seriesID, partID int64, monitored bool) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
-	err := c.Desired.SetPartMonitored(ctx, seriesID, partID, monitored)
-	if errors.Is(err, library.ErrPartNotFound) {
-		return apiserver.ErrSeriesNotFound
-	}
-	return err
-}
-
-// SetSeasonMonitored monitors or unmonitors a whole season.
-func (c SeriesCatalog) SetSeasonMonitored(ctx context.Context, categoryID, seriesID int64, season int, monitored bool) error {
-	if err := c.Reader.InCategory(ctx, categoryID, seriesID); err != nil {
-		return translateSeriesError(err)
-	}
-	found, err := c.Desired.SetSeasonMonitored(ctx, seriesID, tv.SeasonRef(season), monitored)
-	if err != nil {
-		return err
-	}
-	if !found {
-		return apiserver.ErrSeriesNotFound
-	}
-	return nil
 }
 
 func translateSeriesError(err error) error {

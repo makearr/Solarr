@@ -36,7 +36,12 @@ type MediaTypeInfo struct {
 	FollowOptions []gen.FollowOption
 	// Facets are the type's own fields, as the generated shape carries them.
 	Facets []gen.Facet
+	// MonitorOptions are the ways a whole work can be monitored at once.
+	MonitorOptions []MediaChoice
 }
+
+// MediaChoice is one key a media type offers, with its label.
+type MediaChoice struct{ Key, Label string }
 
 // MediaTypeCatalog answers which media types have a module, so a handler never names one.
 type MediaTypeCatalog interface {
@@ -61,10 +66,25 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
+				MonitorOptions: monitorOptionViews(info.MonitorOptions),
 			})
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, out)
+}
+
+func monitorOptionViews(options []MediaChoice) []struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+} {
+	views := make([]struct {
+		Key   string `json:"key"`
+		Label string `json:"label"`
+	}, len(options))
+	for i, option := range options {
+		views[i].Key, views[i].Label = option.Key, option.Label
+	}
+	return views
 }
 
 func nonNilFacets(facets []gen.Facet) []gen.Facet {
