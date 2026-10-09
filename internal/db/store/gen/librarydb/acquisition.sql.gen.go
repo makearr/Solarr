@@ -92,13 +92,13 @@ INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_gu
                          download_client_ref, download_dir, client_category,
                          client_fingerprint, protocol, ddl_resolved_url,
                          ddl_bytes_done, ddl_resumable, state, last_error,
-                         created_at, updated_at, content_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         created_at, updated_at, content_hash, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, desired_item_id, candidate_id, indexer_id, candidate_guid,
           candidate_title, search_terms, downloader_id, download_client_ref,
           download_dir, client_category, client_fingerprint, protocol,
           ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-          created_at, updated_at, content_hash
+          created_at, updated_at, content_hash, size_bytes
 `
 
 type CreateAcquisitionParams struct {
@@ -122,6 +122,7 @@ type CreateAcquisitionParams struct {
 	CreatedAt         int64
 	UpdatedAt         int64
 	ContentHash       sql.NullString
+	SizeBytes         sql.NullInt64
 }
 
 func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error) {
@@ -146,6 +147,7 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 		arg.CreatedAt,
 		arg.UpdatedAt,
 		arg.ContentHash,
+		arg.SizeBytes,
 	)
 	var i Acquisition
 	err := row.Scan(
@@ -170,6 +172,7 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ContentHash,
+		&i.SizeBytes,
 	)
 	return i, err
 }
@@ -235,7 +238,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition WHERE id = ?
 `
 
@@ -264,6 +267,7 @@ func (q *Queries) GetAcquisition(ctx context.Context, id int64) (Acquisition, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ContentHash,
+		&i.SizeBytes,
 	)
 	return i, err
 }
@@ -273,7 +277,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition WHERE downloader_id = ? AND download_client_ref = ?
 `
 
@@ -308,6 +312,7 @@ func (q *Queries) GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisit
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ContentHash,
+		&i.SizeBytes,
 	)
 	return i, err
 }
@@ -317,7 +322,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition
 WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 `
@@ -351,6 +356,7 @@ func (q *Queries) GetActiveAcquisitionForItem(ctx context.Context, desiredItemID
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ContentHash,
+		&i.SizeBytes,
 	)
 	return i, err
 }
@@ -411,10 +417,9 @@ func (q *Queries) GetRecycleBin(ctx context.Context, id int64) (RecycleBin, erro
 }
 
 const inFlightBytesForCategory = `-- name: InFlightBytesForCategory :one
-SELECT CAST(COALESCE(SUM(c.size_bytes), 0) AS INTEGER) AS total
+SELECT CAST(COALESCE(SUM(a.size_bytes), 0) AS INTEGER) AS total
 FROM acquisition a
 JOIN desired_item di ON di.id = a.desired_item_id
-LEFT JOIN candidate c ON c.id = a.candidate_id
 WHERE di.category_id = ? AND a.state IN ('QUEUED', 'DOWNLOADING', 'COMPLETED', 'IMPORTING')
 `
 
@@ -494,7 +499,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition
 WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 ORDER BY id
@@ -532,6 +537,7 @@ func (q *Queries) ListActiveAcquisitions(ctx context.Context) ([]Acquisition, er
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ContentHash,
+			&i.SizeBytes,
 		); err != nil {
 			return nil, err
 		}
@@ -1015,7 +1021,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition
 WHERE state = 'IMPORTED'
 ORDER BY id
@@ -1053,6 +1059,7 @@ func (q *Queries) ListImportedAcquisitions(ctx context.Context) ([]Acquisition, 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.ContentHash,
+			&i.SizeBytes,
 		); err != nil {
 			return nil, err
 		}

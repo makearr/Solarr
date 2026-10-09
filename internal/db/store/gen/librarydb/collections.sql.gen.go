@@ -172,9 +172,9 @@ func (q *Queries) DequeueReadyForItem(ctx context.Context, desiredItemID int64) 
 }
 
 const enqueueReady = `-- name: EnqueueReady :exec
-INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at,
-                         expires_at, size_bytes, origin)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO ready_queue (candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin,
+                         indexer_id, guid, title, download_url, protocol, score)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (candidate_id) DO UPDATE SET
   priority = excluded.priority,
   expires_at = excluded.expires_at,
@@ -189,6 +189,12 @@ type EnqueueReadyParams struct {
 	ExpiresAt     int64
 	SizeBytes     sql.NullInt64
 	Origin        string
+	IndexerID     int64
+	Guid          string
+	Title         string
+	DownloadUrl   string
+	Protocol      string
+	Score         sql.NullFloat64
 }
 
 // Primed so something dispatches the instant a slot frees (section 10.5).
@@ -201,6 +207,12 @@ func (q *Queries) EnqueueReady(ctx context.Context, arg EnqueueReadyParams) erro
 		arg.ExpiresAt,
 		arg.SizeBytes,
 		arg.Origin,
+		arg.IndexerID,
+		arg.Guid,
+		arg.Title,
+		arg.DownloadUrl,
+		arg.Protocol,
+		arg.Score,
 	)
 	return err
 }
@@ -701,7 +713,8 @@ func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg L
 }
 
 const nextReady = `-- name: NextReady :many
-SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin
+SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin,
+       indexer_id, guid, title, download_url, protocol, score
 FROM ready_queue
 WHERE expires_at > ?1
 ORDER BY priority DESC, queued_at ASC
@@ -731,6 +744,12 @@ func (q *Queries) NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQu
 			&i.ExpiresAt,
 			&i.SizeBytes,
 			&i.Origin,
+			&i.IndexerID,
+			&i.Guid,
+			&i.Title,
+			&i.DownloadUrl,
+			&i.Protocol,
+			&i.Score,
 		); err != nil {
 			return nil, err
 		}

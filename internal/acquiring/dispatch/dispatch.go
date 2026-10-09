@@ -113,6 +113,16 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 	if detail.Decision.Outcome != "ACCEPT" {
 		return library.Acquisition{}, ErrDecisionNotAccepted
 	}
+	return d.SendRelease(ctx, itemID, detail.ReleaseCandidate, at)
+}
+
+// SendRelease sends one accepted release for the item, needing nothing but the release itself: a held one carries
+// it, so dispatch never reads where it was decided.
+func (d Dispatch) SendRelease(ctx context.Context, itemID int64, release library.ReleaseCandidate, at time.Time) (library.Acquisition, error) {
+	detail := library.DecisionDetail{ReleaseCandidate: release}
+	if _, err := d.Desired.Get(ctx, itemID); err != nil {
+		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)
+	}
 
 	// Before the client is involved: refusing after the send leaves a duplicate in its queue.
 	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
@@ -176,7 +186,7 @@ func (d Dispatch) Send(ctx context.Context, itemID, decisionID int64, at time.Ti
 		// that distinction needs client polling (section 10.9), not built
 		// this pass.
 		State:     "QUEUED",
-		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash,
+		CreatedAt: at.Unix(), UpdatedAt: at.Unix(), ContentHash: contentHash, SizeBytes: size,
 	})
 	if err != nil {
 		return library.Acquisition{}, fmt.Errorf("dispatch: %w", err)

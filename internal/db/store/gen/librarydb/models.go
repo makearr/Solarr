@@ -30,6 +30,7 @@ type Acquisition struct {
 	CreatedAt         int64
 	UpdatedAt         int64
 	ContentHash       sql.NullString
+	SizeBytes         sql.NullInt64
 }
 
 type AcquisitionFile struct {
@@ -591,6 +592,12 @@ type ReadyQueue struct {
 	ExpiresAt     int64
 	SizeBytes     sql.NullInt64
 	Origin        string
+	IndexerID     int64
+	Guid          string
+	Title         string
+	DownloadUrl   string
+	Protocol      string
+	Score         sql.NullFloat64
 }
 
 type RecycleBin struct {

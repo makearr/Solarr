@@ -675,7 +675,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:      adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
-			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library), Candidates: library.NewCandidates(p.library),
+			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library),
 			Describe: p.describeAcquisition, Clock: clock.NewSystem(),
 		},
 		LogReader: logSource{ring: p.logRing},

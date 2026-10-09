@@ -55,6 +55,8 @@ type NewAcquisition struct {
 	CreatedAt         int64
 	UpdatedAt         int64
 	ContentHash       string
+	// SizeBytes is the release's size, what the free-space gate counts while it is on its way; 0 when unknown.
+	SizeBytes int64
 }
 
 // ErrAcquisitionAlreadyInFlight reports a desired item that already has a
@@ -96,6 +98,7 @@ func (a Acquisitions) Create(ctx context.Context, req NewAcquisition) (Acquisiti
 			ClientCategory: nullString(req.ClientCategory), ClientFingerprint: nullString(req.ClientFingerprint),
 			Protocol: req.Protocol, State: req.State,
 			CreatedAt: req.CreatedAt, UpdatedAt: req.UpdatedAt, ContentHash: nullString(req.ContentHash),
+			SizeBytes: sql.NullInt64{Int64: req.SizeBytes, Valid: req.SizeBytes > 0},
 		})
 		row = created
 		return err

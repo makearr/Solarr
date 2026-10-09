@@ -14,10 +14,9 @@ import (
 
 // Queue satisfies apiserver.Queue over the download poll's live view of every client.
 type Queue struct {
-	Poll       *poll.Job
-	Ready      library.ReadyQueue
-	Candidates library.Candidates
-	Clock      clock.Clock
+	Poll  *poll.Job
+	Ready library.ReadyQueue
+	Clock clock.Clock
 	// Describe names a download's album, artist, library, indexer and client.
 	Describe func(ctx context.Context, acquisition library.Acquisition) (download.HistoryData, int64)
 }
@@ -86,18 +85,17 @@ func (a Queue) held(ctx context.Context) ([]apiserver.HeldRow, error) {
 	}
 	rows := make([]apiserver.HeldRow, 0, len(entries))
 	for _, entry := range entries {
-		candidate, err := a.Candidates.Get(ctx, entry.CandidateID)
-		if err != nil {
-			continue // expired and purged meanwhile
-		}
-		itemID, indexerID := entry.DesiredItemID, candidate.IndexerID
+		itemID, indexerID := entry.DesiredItemID, entry.IndexerID
 		data, workID := a.Describe(ctx, library.Acquisition{
-			DesiredItemID: &itemID, IndexerID: &indexerID, CandidateTitle: candidate.Title,
+			DesiredItemID: &itemID, IndexerID: &indexerID, CandidateTitle: entry.Title,
 		})
 		row := apiserver.HeldRow{
-			CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist, ReleaseTitle: candidate.Title,
-			Indexer: data.Indexer, HeldAt: time.Unix(entry.QueuedAt, 0).UTC(), SizeBytes: candidate.SizeBytes,
-			Origin: entry.Origin,
+			CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist, ReleaseTitle: entry.Title,
+			Indexer: data.Indexer, HeldAt: time.Unix(entry.QueuedAt, 0).UTC(), Origin: entry.Origin,
+		}
+		if entry.SizeBytes > 0 {
+			size := entry.SizeBytes
+			row.SizeBytes = &size
 		}
 		if workID != 0 {
 			row.WorkID = &workID

@@ -39,9 +39,16 @@ func (d Dispatch) HoldIfFull(
 	if err != nil {
 		return false, err
 	}
+	release := detail.ReleaseCandidate
+	size := int64(0)
+	if release.SizeBytes != nil {
+		size = *release.SizeBytes
+	}
 	return true, d.Ready.Hold(ctx, library.ReadyEntry{
-		CandidateID: detail.ReleaseCandidate.ID, DesiredItemID: itemID, Priority: rank,
-		QueuedAt: at.Unix(), ExpiresAt: detail.ReleaseCandidate.ExpiresAt, Origin: string(origin),
+		CandidateID: release.ID, DesiredItemID: itemID, Priority: rank,
+		QueuedAt: at.Unix(), ExpiresAt: release.ExpiresAt, Origin: string(origin),
+		IndexerID: release.IndexerID, GUID: release.GUID, Title: release.Title, DownloadURL: release.DownloadURL,
+		Protocol: release.Protocol, SizeBytes: size, Score: detail.Decision.Score,
 	})
 }
 
@@ -94,7 +101,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 	}
 	sent := 0
 	for _, entry := range entries {
-		detail, sendable, err := d.stillSendable(ctx, entry, at)
+		sendable, err := d.stillSendable(ctx, entry, at)
 		if err != nil {
 			return sent, err
 		}
@@ -104,7 +111,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 			}
 			continue
 		}
-		downloader, found := firstMatchingProtocol(downloaders, detail.ReleaseCandidate.Protocol)
+		downloader, found := firstMatchingProtocol(downloaders, entry.Protocol)
 		if !found {
 			continue // kept: a client for it may be enabled again
 		}
@@ -113,7 +120,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 		} else if !room {
 			continue
 		}
-		_, err = d.Send(ctx, entry.DesiredItemID, detail.Decision.ID, at)
+		_, err = d.SendRelease(ctx, entry.DesiredItemID, heldRelease(entry), at)
 		// Declined by the client: dropped, and the album searched afresh on its next turn.
 		if err != nil && !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) && !errors.Is(err, download.ErrRefused) &&
 			!errors.Is(err, ErrContentBlocklisted) {
@@ -129,33 +136,37 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 	return sent, nil
 }
 
-// stillSendable finds the accepted decision behind a held release and checks it may still go.
-func (d Dispatch) stillSendable(ctx context.Context, entry library.ReadyEntry, at time.Time) (library.DecisionDetail, bool, error) {
+// stillSendable checks a held release may still go (section 10.5): still monitored, nothing on its way, not
+// blocklisted. It reads only library.db; the release travels with the entry.
+func (d Dispatch) stillSendable(ctx context.Context, entry library.ReadyEntry, at time.Time) (bool, error) {
 	item, err := d.Desired.Get(ctx, entry.DesiredItemID)
 	if errors.Is(err, sql.ErrNoRows) {
-		return library.DecisionDetail{}, false, nil // the album was removed meanwhile
+		return false, nil // the album was removed meanwhile
 	}
 	if err != nil || item.Monitored == 0 {
-		return library.DecisionDetail{}, false, err
+		return false, err
 	}
 	if _, inFlight, err := d.Acquisitions.InFlightForItem(ctx, entry.DesiredItemID); err != nil || inFlight {
-		return library.DecisionDetail{}, false, err
+		return false, err
 	}
-	details, err := d.Candidates.ListDecisionsForItem(ctx, entry.DesiredItemID, DecisionLookupLimit)
-	if err != nil {
-		return library.DecisionDetail{}, false, err
-	}
-	for _, detail := range details {
-		if detail.ReleaseCandidate.ID != entry.CandidateID || detail.Decision.Outcome != "ACCEPT" {
-			continue
+	if d.Blocklist != nil {
+		indexerID := entry.IndexerID
+		if blocked, err := d.Blocklist.IsBlocked(ctx, &indexerID, entry.GUID, "", at.Unix()); err != nil || blocked {
+			return false, err
 		}
-		if d.Blocklist != nil {
-			blocked, err := d.Blocklist.IsBlocked(ctx, &detail.ReleaseCandidate.IndexerID, detail.ReleaseCandidate.GUID, "", at.Unix())
-			if err != nil || blocked {
-				return library.DecisionDetail{}, false, err
-			}
-		}
-		return detail, true, nil
 	}
-	return library.DecisionDetail{}, false, nil
+	return true, nil
+}
+
+// heldRelease is the release a held entry carries.
+func heldRelease(entry library.ReadyEntry) library.ReleaseCandidate {
+	release := library.ReleaseCandidate{
+		ID: entry.CandidateID, IndexerID: entry.IndexerID, GUID: entry.GUID, Title: entry.Title,
+		DownloadURL: entry.DownloadURL, Protocol: entry.Protocol, ExpiresAt: entry.ExpiresAt,
+	}
+	if entry.SizeBytes > 0 {
+		size := entry.SizeBytes
+		release.SizeBytes = &size
+	}
+	return release
 }

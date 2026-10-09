@@ -17,6 +17,11 @@ type ReadyEntry struct {
 	ExpiresAt     int64
 	// Origin is who asked: "user", "rss" or "automatic".
 	Origin string
+	// The release itself, so a held one is sent without reading its candidate or decision.
+	IndexerID                          int64
+	GUID, Title, DownloadURL, Protocol string
+	SizeBytes                          int64
+	Score                              float64
 }
 
 // ReadyQueue is section 10.5's ready queue: held releases, sent the moment a client has room.
@@ -35,6 +40,9 @@ func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry) error {
 		return queries.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
 			CandidateID: entry.CandidateID, DesiredItemID: entry.DesiredItemID, Priority: entry.Priority,
 			QueuedAt: entry.QueuedAt, ExpiresAt: entry.ExpiresAt, Origin: entry.Origin,
+			SizeBytes: sql.NullInt64{Int64: entry.SizeBytes, Valid: entry.SizeBytes > 0},
+			IndexerID: entry.IndexerID, Guid: entry.GUID, Title: entry.Title, DownloadUrl: entry.DownloadURL,
+			Protocol: entry.Protocol, Score: sql.NullFloat64{Float64: entry.Score, Valid: true},
 		})
 	})
 }
@@ -50,6 +58,8 @@ func (r ReadyQueue) Next(ctx context.Context, now int64, limit int) ([]ReadyEntr
 		entries[i] = ReadyEntry{
 			CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID, Priority: row.Priority,
 			QueuedAt: row.QueuedAt, ExpiresAt: row.ExpiresAt, Origin: row.Origin,
+			IndexerID: row.IndexerID, GUID: row.Guid, Title: row.Title, DownloadURL: row.DownloadUrl, Protocol: row.Protocol,
+			SizeBytes: row.SizeBytes.Int64, Score: row.Score.Float64,
 		}
 	}
 	return entries, nil

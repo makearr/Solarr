@@ -198,3 +198,31 @@ func TestHeld_AHeldUserGrabGoesBeforeAnAutomaticOne(t *testing.T) {
 		t.Errorf("sent %q first, want the user's", last.Name)
 	}
 }
+
+// A held release carries what sending it needs: it goes even after its candidate and decisions are gone, as they will
+// be once they live in statistics.db (revision 2, D7).
+func TestHeld_AHeldReleaseGoesWithoutItsCandidateOrDecision(t *testing.T) {
+	e := newHeldEnv(t, true)
+	sent := e.grabItem(t, e.first.ID).Sent
+	if sent == nil {
+		t.Fatal("the first album was not sent")
+	}
+	if result := e.grabItem(t, e.second.ID); !result.Held {
+		t.Fatal("the second album was not held")
+	}
+	for _, statement := range []string{"DELETE FROM candidate_decision", "UPDATE acquisition SET candidate_id = NULL", "DELETE FROM candidate"} {
+		if _, err := e.library.WriteDB().ExecContext(t.Context(), statement); err != nil {
+			t.Fatalf("%s: %v", statement, err)
+		}
+	}
+	if err := e.acquisitions.SetState(t.Context(), sent.ID, "COMPLETED", "", 2); err != nil {
+		t.Fatal(err)
+	}
+	e.sender.clientRef = "nzo-2"
+	if got := e.sendHeld(t); got != 1 {
+		t.Fatalf("SendHeld sent %d, want the held release", got)
+	}
+	if last := e.sender.requests[len(e.sender.requests)-1]; last.Name != "Nosi Zada-Pasulo-2003-FLAC-GROUP" {
+		t.Errorf("sent %q, want the held release", last.Name)
+	}
+}

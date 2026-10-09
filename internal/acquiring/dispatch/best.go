@@ -66,7 +66,7 @@ func (d Dispatch) SendBest(
 			best.Held = true
 			return best, nil
 		}
-		sent, err := d.Send(ctx, itemID, detail.Decision.ID, at)
+		sent, err := d.SendRelease(ctx, itemID, detail.ReleaseCandidate, at)
 		switch {
 		case errors.Is(err, library.ErrAcquisitionAlreadyInFlight):
 			best.AlreadyInFlight = true

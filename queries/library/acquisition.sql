@@ -56,20 +56,20 @@ INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_gu
                          download_client_ref, download_dir, client_category,
                          client_fingerprint, protocol, ddl_resolved_url,
                          ddl_bytes_done, ddl_resumable, state, last_error,
-                         created_at, updated_at, content_hash)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         created_at, updated_at, content_hash, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, desired_item_id, candidate_id, indexer_id, candidate_guid,
           candidate_title, search_terms, downloader_id, download_client_ref,
           download_dir, client_category, client_fingerprint, protocol,
           ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-          created_at, updated_at, content_hash;
+          created_at, updated_at, content_hash, size_bytes;
 
 -- name: GetAcquisition :one
 SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition WHERE id = ?;
 
 -- Checked before CreateAcquisition so a caller gets a clean, mapped refusal
@@ -81,7 +81,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition
 WHERE desired_item_id = ? AND state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED');
 
@@ -91,7 +91,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition
 WHERE state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED')
 ORDER BY id;
@@ -102,7 +102,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition
 WHERE state = 'IMPORTED'
 ORDER BY id;
@@ -113,7 +113,7 @@ SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
        download_dir, client_category, client_fingerprint, protocol,
        ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash
+       created_at, updated_at, content_hash, size_bytes
 FROM acquisition WHERE downloader_id = ? AND download_client_ref = ?;
 
 -- A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
@@ -267,10 +267,9 @@ UPDATE acquisition SET client_fingerprint = ?, updated_at = ? WHERE id = ?;
 -- What a library's downloads still on their way will take when they land, so the free-space gate
 -- does not count the same room twice between capacity measurements (ADR-12).
 -- name: InFlightBytesForCategory :one
-SELECT CAST(COALESCE(SUM(c.size_bytes), 0) AS INTEGER) AS total
+SELECT CAST(COALESCE(SUM(a.size_bytes), 0) AS INTEGER) AS total
 FROM acquisition a
 JOIN desired_item di ON di.id = a.desired_item_id
-LEFT JOIN candidate c ON c.id = a.candidate_id
 WHERE di.category_id = ? AND a.state IN ('QUEUED', 'DOWNLOADING', 'COMPLETED', 'IMPORTING');
 
 -- Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
