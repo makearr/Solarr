@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -82,6 +83,21 @@ type WorkDetail struct {
 	// Wanted is nil when nothing has ever wanted this album -- no scan, no
 	// subscription, no user request.
 	Wanted *DesiredItemStatus
+	// Groups are the work's SET items: an album's one, with no ref, or a series' seasons.
+	Groups []GroupStatus
+}
+
+// GroupStatus is one SET item of a work: the parts "<Ref>:..." below it, or every part for an empty Ref.
+type GroupStatus struct {
+	Ref     string
+	SortKey string
+	DesiredItemStatus
+}
+
+// PartCursor is a position in a work's parts: the sort key, the id breaking ties.
+type PartCursor struct {
+	SortKey string
+	ID      int64
 }
 
 // OnDisk reports whether this work is linked to any root folder at all
@@ -121,36 +137,9 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	if err != nil {
 		return WorkDetail{}, fmt.Errorf("library: work detail: parts: %w", err)
 	}
-	partFiles, err := queries.ListPartFilesForWork(ctx, id)
+	partDetails, err := detailParts(ctx, queries, id, parts)
 	if err != nil {
-		return WorkDetail{}, fmt.Errorf("library: work detail: part files: %w", err)
-	}
-	fileByRef := make(map[string]PartFile, len(partFiles))
-	for _, row := range partFiles {
-		if _, seen := fileByRef[row.MediaRef]; seen {
-			continue
-		}
-		fileByRef[row.MediaRef] = PartFile{
-			MediaObjectID: row.MediaObjectID,
-			AudioCodec:    row.AudioCodec.String,
-			VideoCodec:    row.VideoCodec.String,
-			Container:     row.Container.String,
-			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
-			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
-			Extension:     strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
-		}
-	}
-
-	partDetails := make([]PartDetail, len(parts))
-	for index, part := range parts {
-		partExternalIDs, err := queries.ListWorkPartExternalIDs(ctx, part.ID)
-		if err != nil {
-			return WorkDetail{}, fmt.Errorf("library: work detail: part external ids: %w", err)
-		}
-		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs}
-		if file, found := fileByRef[part.MediaRef]; found {
-			partDetails[index].File = &file
-		}
+		return WorkDetail{}, err
 	}
 
 	rootFolderIDs, err := queries.ListRootFoldersForWork(ctx, id)
@@ -216,12 +205,99 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	for index := range partDetails {
 		partDetails[index].Wanted = trackWanted[partDetails[index].Part.MediaRef]
 	}
+	var groups []GroupStatus
+	for _, item := range items {
+		if item.SatisfactionKind != "SET" || item.EditionID.Valid {
+			continue
+		}
+		group := GroupStatus{Ref: item.MediaRef, SortKey: item.MediaSortKey, DesiredItemStatus: DesiredItemStatus{
+			ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
+			LastSearchedAt: lastSearched[item.ID],
+		}}
+		if item.RequiredCount.Valid {
+			group.RequiredCount = &item.RequiredCount.Int64
+		}
+		groups = append(groups, group)
+	}
+	slices.SortStableFunc(groups, func(a, b GroupStatus) int { return strings.Compare(a.SortKey, b.SortKey) })
 
 	return WorkDetail{
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
-		CategoryIDs: categoryIDs, Wanted: wanted,
+		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups,
 	}, nil
+}
+
+// Parts answers one page of a work's parts, of one group or of all with groupRef "", each with its file and its own
+// wanted item.
+func (w Works) Parts(ctx context.Context, workID int64, groupRef string, after PartCursor, limit int) ([]PartDetail, error) {
+	queries := librarydb.New(w.store.Read())
+	parts, err := queries.ListWorkPartsPage(ctx, librarydb.ListWorkPartsPageParams{
+		WorkID: workID, GroupRef: groupRef, AfterSortKey: after.SortKey, AfterID: after.ID, PageSize: int64(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: parts of work %d: %w", workID, err)
+	}
+	details, err := detailParts(ctx, queries, workID, parts)
+	if err != nil {
+		return nil, err
+	}
+	items, err := queries.ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: parts of work %d: %w", workID, err)
+	}
+	for _, item := range items {
+		if item.SatisfactionKind != "SINGLE" || item.MediaRef == "" {
+			continue
+		}
+		for index := range details {
+			if details[index].Part.MediaRef == item.MediaRef {
+				status := DesiredItemStatus{ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State}
+				if item.RequiredCount.Valid {
+					status.RequiredCount = &item.RequiredCount.Int64
+				}
+				details[index].Wanted = &status
+			}
+		}
+	}
+	return details, nil
+}
+
+// detailParts gives parts their external ids and the file covering each.
+func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, parts []librarydb.WorkPart) ([]PartDetail, error) {
+	partFiles, err := queries.ListPartFilesForWork(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("library: work detail: part files: %w", err)
+	}
+	fileByRef := make(map[string]PartFile, len(partFiles))
+	for _, row := range partFiles {
+		if _, seen := fileByRef[row.MediaRef]; seen {
+			continue
+		}
+		fileByRef[row.MediaRef] = PartFile{
+			MediaObjectID: row.MediaObjectID,
+			AudioCodec:    row.AudioCodec.String,
+			VideoCodec:    row.VideoCodec.String,
+			Container:     row.Container.String,
+			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
+			Extension:     strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
+		}
+	}
+
+	partDetails := make([]PartDetail, len(parts))
+	for index, part := range parts {
+		partExternalIDs, err := queries.ListWorkPartExternalIDs(ctx, part.ID)
+		if err != nil {
+			return nil, fmt.Errorf("library: work detail: part external ids: %w", err)
+		}
+		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs}
+		if file, found := fileByRef[part.MediaRef]; found {
+			partDetails[index].File = &file
+		}
+	}
+
+	return partDetails, nil
 }
 
 // bitrateKbps prefers the whole file's measured rate and falls back to the
@@ -235,4 +311,25 @@ func bitrateKbps(overall, audio sql.NullInt64) int64 {
 	default:
 		return 0
 	}
+}
+
+// Places answers the root folders a work is on and the libraries that want it; sql.ErrNoRows for no such work.
+func (w Works) Places(ctx context.Context, id int64) (rootFolderIDs, categoryIDs []int64, err error) {
+	queries := librarydb.New(w.store.Read())
+	if _, err := queries.GetWork(ctx, id); err != nil {
+		return nil, nil, fmt.Errorf("library: places of work %d: %w", id, err)
+	}
+	if rootFolderIDs, err = queries.ListRootFoldersForWork(ctx, id); err != nil {
+		return nil, nil, fmt.Errorf("library: places of work %d: %w", id, err)
+	}
+	items, err := queries.ListDesiredItemsForWork(ctx, id)
+	if err != nil {
+		return nil, nil, fmt.Errorf("library: places of work %d: %w", id, err)
+	}
+	for _, item := range items {
+		if !slices.Contains(categoryIDs, item.CategoryID) {
+			categoryIDs = append(categoryIDs, item.CategoryID)
+		}
+	}
+	return rootFolderIDs, categoryIDs, nil
 }

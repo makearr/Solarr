@@ -68,6 +68,14 @@ func (m MediaTypes) WorkFacets(mediaType string) []library.WorkFacet {
 	return out
 }
 
+// GroupLabel names a group of a media type's work, by its ref when the type does not group.
+func (m MediaTypes) GroupLabel(mediaType, ref string) string {
+	if grouping, ok := media.Capability[media.Grouping](m.Registry, media.Key(mediaType)); ok {
+		return grouping.GroupLabel(ref)
+	}
+	return ref
+}
+
 // RoleKeys lists every credit role a registered media type declares, once each.
 func (m MediaTypes) RoleKeys() []string {
 	var keys []string

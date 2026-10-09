@@ -761,6 +761,14 @@ const (
 	WorkWantedStateUPGRADABLE WorkWantedState = "UPGRADABLE"
 )
 
+// Defines values for WorkGroupState.
+const (
+	WorkGroupStateCOMPLETE   WorkGroupState = "COMPLETE"
+	WorkGroupStateMISSING    WorkGroupState = "MISSING"
+	WorkGroupStatePARTIAL    WorkGroupState = "PARTIAL"
+	WorkGroupStateUPGRADABLE WorkGroupState = "UPGRADABLE"
+)
+
 // Defines values for ResolveCategoryDuplicatesJSONBodyDropAction.
 const (
 	ResolveCategoryDuplicatesJSONBodyDropActionLink    ResolveCategoryDuplicatesJSONBodyDropAction = "link"
@@ -4307,9 +4315,18 @@ type WorkDetail struct {
 	Description *string      `json:"description,omitempty"`
 	Editions    []Edition    `json:"editions"`
 	ExternalIds []ExternalID `json:"external_ids"`
-	Genres      []string     `json:"genres"`
-	Id          int64        `json:"id"`
-	Language    *string      `json:"language,omitempty"`
+
+	// Facets The media type's own fields of this work, by facet key.
+	Facets *map[string][]string `json:"facets,omitempty"`
+	Genres []string             `json:"genres"`
+
+	// Groups The work's monitored-or-not groups (an album's one, a series' seasons), in order.
+	Groups   *[]WorkGroup `json:"groups,omitempty"`
+	Id       int64        `json:"id"`
+	Language *string      `json:"language,omitempty"`
+
+	// LeadId The person the work is listed under (an album's artist).
+	LeadId *int64 `json:"lead_id,omitempty"`
 
 	// LibraryIds The libraries that hold or want the work; a video work's own page lives under one of them.
 	LibraryIds *[]int64 `json:"library_ids,omitempty"`
@@ -4339,6 +4356,25 @@ type WorkEdit struct {
 	Tags []string `json:"tags"`
 }
 
+// WorkGroup defines model for WorkGroup.
+type WorkGroup struct {
+	DesiredItemId int64 `json:"desired_item_id"`
+
+	// Label As the media type names it: "Season 3", "Specials".
+	Label          string     `json:"label"`
+	LastSearchedAt *time.Time `json:"last_searched_at,omitempty"`
+	Monitored      bool       `json:"monitored"`
+	PresentCount   int64      `json:"present_count"`
+
+	// Ref Empty for a group of the whole work; else its parts are "<ref>:...".
+	Ref           string         `json:"ref"`
+	RequiredCount *int64         `json:"required_count,omitempty"`
+	State         WorkGroupState `json:"state"`
+}
+
+// WorkGroupState defines model for WorkGroup.State.
+type WorkGroupState string
+
 // WorkPage defines model for WorkPage.
 type WorkPage struct {
 	Items []Work `json:"items"`
@@ -4363,6 +4399,12 @@ type WorkPart struct {
 
 	// Wanted This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count.
 	Wanted *Wanted `json:"wanted"`
+}
+
+// WorkPartPage defines model for WorkPartPage.
+type WorkPartPage struct {
+	Items      []WorkPart `json:"items"`
+	NextCursor *string    `json:"next_cursor,omitempty"`
 }
 
 // ListArrImportsParams defines parameters for ListArrImports.
@@ -5163,6 +5205,14 @@ type SetWorkMonitoredJSONBody struct {
 
 	// Search Search the album at once when it becomes monitored (D16: the person's "Start search for missing albums" preference). Ignored when monitored is false.
 	Search *bool `json:"search,omitempty"`
+}
+
+// ListWorkPartsParams defines parameters for ListWorkParts.
+type ListWorkPartsParams struct {
+	// Group A group's ref (GET /works/{id} lists them); absent is every part.
+	Group  *string `form:"group,omitempty" json:"group,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // SetPartMonitoredJSONBody defines parameters for SetPartMonitored.
@@ -6227,6 +6277,9 @@ type ServerInterface interface {
 	// Monitor or unmonitor a work at the album level (section 19.6).
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
+	// One page of a work's parts (tracks, episodes), of one group or of all, in order.
+	// (GET /works/{id}/parts)
+	ListWorkParts(w http.ResponseWriter, r *http.Request, id int64, params ListWorkPartsParams)
 	// Monitor or unmonitor a single part (track) of a work.
 	// (POST /works/{id}/parts/{partId}/monitor)
 	SetPartMonitored(w http.ResponseWriter, r *http.Request, id int64, partId int64)
@@ -7739,6 +7792,12 @@ func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64
 // Monitor or unmonitor a work at the album level (section 19.6).
 // (POST /works/{id}/monitor)
 func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One page of a work's parts (tracks, episodes), of one group or of all, in order.
+// (GET /works/{id}/parts)
+func (_ Unimplemented) ListWorkParts(w http.ResponseWriter, r *http.Request, id int64, params ListWorkPartsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16126,6 +16185,66 @@ func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkParts operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkParts(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkPartsParams
+
+	// ------------- Optional query parameter "group" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "group", r.URL.Query(), &params.Group)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "group", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "cursor" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cursor", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkParts(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetPartMonitored operation middleware
 func (siw *ServerInterfaceWrapper) SetPartMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -17249,6 +17368,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/parts", wrapper.ListWorkParts)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/parts/{partId}/monitor", wrapper.SetPartMonitored)

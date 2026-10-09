@@ -17,6 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // WorkDetailReader reads one work's full detail (WorksReader's own doc
@@ -24,6 +25,17 @@ import (
 type WorkDetailReader interface {
 	// GetWorkDetail answers a missing id with an error wrapping sql.ErrNoRows.
 	GetWorkDetail(ctx context.Context, id int64) (WorkDetailRow, error)
+	// WorkPlaces answers the root folders and libraries a work is in, what deciding who may see it needs.
+	WorkPlaces(ctx context.Context, id int64) (rootFolderIDs, categoryIDs []int64, err error)
+	// ListWorkParts answers one page of a work's parts, of one group or of all with group "".
+	ListWorkParts(ctx context.Context, id int64, group string, after paginate.TextCursor, limit int) ([]PartRow, error)
+}
+
+// GroupRow is one group of a work: its ref, its label and its wanted item.
+type GroupRow struct {
+	Ref    string
+	Label  string
+	Wanted WantedRow
 }
 
 // ExternalIDRow is one provider's id for a work, edition or part.
@@ -119,6 +131,10 @@ type WorkDetailRow struct {
 	CategoryIDs   []int64
 	// Wanted is nil when nothing has ever wanted this album.
 	Wanted *WantedRow
+	// LeadID is the person the work is listed under, 0 with none; Facets the type's own fields.
+	LeadID int64
+	Facets map[string][]string
+	Groups []GroupRow
 }
 
 // BulkSelection is a selection as a query (section 21.7): every work visible under RootFolderIDs or CategoryIDs
@@ -587,7 +603,104 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		wanted := buildWantedView(*row.Wanted)
 		view.Wanted = &wanted
 	}
+	if row.LeadID != 0 {
+		view.LeadId = &row.LeadID
+	}
+	facets := row.Facets
+	if facets == nil {
+		facets = map[string][]string{}
+	}
+	groups := make([]gen.WorkGroup, len(row.Groups))
+	for index, group := range row.Groups {
+		groups[index] = gen.WorkGroup{
+			Ref: group.Ref, Label: group.Label, DesiredItemId: group.Wanted.ID, Monitored: group.Wanted.Monitored,
+			PresentCount: group.Wanted.PresentCount, RequiredCount: group.Wanted.RequiredCount,
+			State: gen.WorkGroupState(group.Wanted.State),
+		}
+		if group.Wanted.LastSearchedAt != 0 {
+			at := time.Unix(group.Wanted.LastSearchedAt, 0).UTC()
+			groups[index].LastSearchedAt = &at
+		}
+	}
+	view.Facets, view.Groups = &facets, &groups
 	return view
+}
+
+// ListWorkParts answers one page of a work's parts, the work seen as GetWork sees it.
+func (s *Server) ListWorkParts(w http.ResponseWriter, r *http.Request, id int64, params gen.ListWorkPartsParams) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.workDetail == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the library is not available")
+		return
+	}
+	cursor, err := paginate.DecodeText(derefOr(params.Cursor, ""))
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
+		return
+	}
+	roots, categories, err := s.workDetail.WorkPlaces(r.Context(), id)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return
+	}
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	visibleRoots, visibleCategories, err := s.visibility(access, nil)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !workDetailVisible(visibleRoots, visibleCategories, WorkDetailRow{RootFolderIDs: roots, CategoryIDs: categories}) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
+		return
+	}
+	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
+	rows, err := s.workDetail.ListWorkParts(r.Context(), id, derefOr(params.Group, ""), cursor, limit+1)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	page := gen.WorkPartPage{}
+	if len(rows) > limit {
+		last := rows[limit-1]
+		next := paginate.TextCursor{Sort: last.SortKey, ID: last.ID}.Encode()
+		page.NextCursor = &next
+		rows = rows[:limit]
+	}
+	page.Items = buildPartViews(rows)
+	annotateFileQuality(access, categories, page.Items)
+	writeJSON(w, s.logger, http.StatusOK, page)
+}
+
+func (s *Server) routeListWorkParts(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a work id must be a number")
+		return
+	}
+	query := r.URL.Query()
+	var params gen.ListWorkPartsParams
+	if raw := query.Get("group"); raw != "" {
+		params.Group = &raw
+	}
+	if raw := query.Get("cursor"); raw != "" {
+		params.Cursor = &raw
+	}
+	if raw := query.Get("limit"); raw != "" {
+		limit, err := strconv.Atoi(raw)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "limit must be a number")
+			return
+		}
+		params.Limit = &limit
+	}
+	s.ListWorkParts(w, r, id, params)
 }
 
 func buildCreditViews(rows []CreditRow) []gen.Credit {

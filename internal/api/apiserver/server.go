@@ -511,6 +511,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/rename", server.routeRenameLibrary)
 			secured.Post("/works/{id}/parts/{partId}/monitor", server.routeSetPartMonitored)
 			secured.Post("/works/{id}/parts/{partId}/wanted", server.routeSetTrackWanted)
+			secured.Get("/works/{id}/parts", server.routeListWorkParts)
 			secured.Get("/works/{id}/artwork", server.routeGetWorkArtwork)
 			secured.Put("/works/{id}/artwork", server.routeChooseWorkArtwork)
 			secured.Get("/works/{id}/artwork/options", server.routeGetWorkArtworkOptions)

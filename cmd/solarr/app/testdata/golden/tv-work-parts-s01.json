@@ -1,0 +1,65 @@
+{
+  "items": [
+    {
+      "date": "2020-02-03",
+      "external_ids": [
+        {
+          "external_id": "1",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": {
+        "bitrate_kbps": 0,
+        "extension": "mkv",
+        "lossless": false,
+        "media_object_id": 3
+      },
+      "id": 4,
+      "media_ref": "s01:e01",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0001e0001",
+      "title": "Slack Water",
+      "wanted": null
+    },
+    {
+      "date": "2020-02-10",
+      "external_ids": [
+        {
+          "external_id": "2",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": {
+        "bitrate_kbps": 0,
+        "extension": "mkv",
+        "lossless": false,
+        "media_object_id": 4
+      },
+      "id": 5,
+      "media_ref": "s01:e02",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0001e0002",
+      "title": "The Long Pier",
+      "wanted": null
+    },
+    {
+      "date": "2020-02-17",
+      "external_ids": [
+        {
+          "external_id": "3",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": null,
+      "id": 6,
+      "media_ref": "s01:e03",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0001e0003",
+      "title": "Signals",
+      "wanted": null
+    }
+  ]
+}

@@ -2737,6 +2737,37 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/parts:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listWorkParts
+      tags: [library]
+      summary: One page of a work's parts (tracks, episodes), of one group or of all, in order.
+      parameters:
+        - name: group
+          in: query
+          description: A group's ref (GET /works/{id} lists them); absent is every part.
+          schema: { type: string }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        "200":
+          description: One page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkPartPage" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/monitor:
     parameters:
       - name: id
@@ -9137,6 +9168,28 @@ components:
         present_count: { type: integer, format: int64 }
         state: { type: string, enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE] }
 
+    WorkGroup:
+      type: object
+      required: [ref, label, desired_item_id, monitored, present_count, state]
+      properties:
+        ref: { type: string, description: "Empty for a group of the whole work; else its parts are \"<ref>:...\"." }
+        label: { type: string, description: "As the media type names it: \"Season 3\", \"Specials\"." }
+        desired_item_id: { type: integer, format: int64 }
+        monitored: { type: boolean }
+        present_count: { type: integer, format: int64 }
+        required_count: { type: integer, format: int64 }
+        state: { type: string, enum: [MISSING, PARTIAL, COMPLETE, UPGRADABLE] }
+        last_searched_at: { type: string, format: date-time }
+
+    WorkPartPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/WorkPart" }
+        next_cursor: { type: string }
+
     WorkDetail:
       type: object
       required:
@@ -9154,6 +9207,17 @@ components:
         - credits
         - genres
       properties:
+        lead_id: { type: integer, format: int64, description: "The person the work is listed under (an album's artist)." }
+        facets:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: The media type's own fields of this work, by facet key.
+        groups:
+          type: array
+          description: The work's monitored-or-not groups (an album's one, a series' seasons), in order.
+          items: { $ref: "#/components/schemas/WorkGroup" }
         can_request:
           type: boolean
           description: >-

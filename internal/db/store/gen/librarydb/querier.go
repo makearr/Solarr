@@ -685,6 +685,8 @@ type Querier interface {
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.
 	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
+	// One page of a work's parts, in one group (its parts "<group>:..."), or all of them with group ''.
+	ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPageParams) ([]WorkPart, error)
 	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is

@@ -178,6 +178,12 @@ type Following interface {
 	FollowLimit(follow Follow) int
 }
 
+// Grouping is the capability of a media type whose works hold their parts in groups (a series' seasons).
+type Grouping interface {
+	// GroupLabel names a group by its ref, as a page heads it: "Season 3", "Specials".
+	GroupLabel(ref string) string
+}
+
 // ErrNoFollowSource reports a follow whose provider is not set up yet: no key stored, or no id to follow by.
 var ErrNoFollowSource = errors.New("media: the provider a follow needs is not available")
 

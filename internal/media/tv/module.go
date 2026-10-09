@@ -2,6 +2,8 @@ package tv
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
@@ -97,4 +99,17 @@ func (Module) NamingExamples(profile settings.NamingProfile) []media.NamingExamp
 		out = append(out, media.NamingExample{Label: example.Label, Path: example.Path})
 	}
 	return out
+}
+
+// GroupLabel implements media.Grouping: "s03" is "Season 3", "s00" the specials.
+func (Module) GroupLabel(ref string) string {
+	season, err := strconv.Atoi(strings.TrimPrefix(ref, "s"))
+	switch {
+	case err != nil || !strings.HasPrefix(ref, "s"):
+		return ref
+	case season == 0:
+		return "Specials"
+	default:
+		return "Season " + strconv.Itoa(season)
+	}
 }

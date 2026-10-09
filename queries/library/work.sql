@@ -467,3 +467,12 @@ WHERE w.media_type = 'tv' AND p.monitored = 1
               AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids))))
 GROUP BY p.date
 ORDER BY p.date;
+
+-- One page of a work's parts, in one group (its parts "<group>:..."), or all of them with group ''.
+-- name: ListWorkPartsPage :many
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+FROM work_part
+WHERE work_id = sqlc.arg(work_id)
+  AND (CAST(sqlc.arg(group_ref) AS TEXT) = '' OR substr(media_ref, 1, length(CAST(sqlc.arg(group_ref) AS TEXT)) + 1) = CAST(sqlc.arg(group_ref) AS TEXT) || ':')
+  AND (sort_key > sqlc.arg(after_sort_key) OR (sort_key = sqlc.arg(after_sort_key) AND id > sqlc.arg(after_id)))
+ORDER BY sort_key, id LIMIT sqlc.arg(page_size);

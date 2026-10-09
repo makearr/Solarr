@@ -1706,6 +1706,65 @@ func (q *Queries) ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, 
 	return items, nil
 }
 
+const listWorkPartsPage = `-- name: ListWorkPartsPage :many
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+FROM work_part
+WHERE work_id = ?1
+  AND (CAST(?2 AS TEXT) = '' OR substr(media_ref, 1, length(CAST(?2 AS TEXT)) + 1) = CAST(?2 AS TEXT) || ':')
+  AND (sort_key > ?3 OR (sort_key = ?3 AND id > ?4))
+ORDER BY sort_key, id LIMIT ?5
+`
+
+type ListWorkPartsPageParams struct {
+	WorkID       int64
+	GroupRef     string
+	AfterSortKey string
+	AfterID      int64
+	PageSize     int64
+}
+
+// One page of a work's parts, in one group (its parts "<group>:..."), or all of them with group ”.
+func (q *Queries) ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPageParams) ([]WorkPart, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkPartsPage,
+		arg.WorkID,
+		arg.GroupRef,
+		arg.AfterSortKey,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []WorkPart{}
+	for rows.Next() {
+		var i WorkPart
+		if err := rows.Scan(
+			&i.ID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.SortKey,
+			&i.Title,
+			&i.RuntimeMs,
+			&i.Date,
+			&i.Monitored,
+			&i.AvailableAt,
+			&i.AvailableConfidence,
+			&i.AvailableBasis,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkTitles = `-- name: ListWorkTitles :many
 SELECT id, work_id, title, normalized, language, kind, source
 FROM work_title WHERE work_id = ? ORDER BY kind, title

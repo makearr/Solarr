@@ -30,8 +30,18 @@
       "provider": "musicbrainz:release-group"
     }
   ],
+  "facets": {
+    "primary_type": [
+      "Album"
+    ],
+    "year": [
+      "2019"
+    ]
+  },
   "genres": [],
+  "groups": [],
   "id": 1,
+  "lead_id": 1,
   "library_ids": [
     1
   ],

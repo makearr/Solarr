@@ -1766,6 +1766,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One page of a work's parts (tracks, episodes), of one group or of all, in order. */
+        get: operations["listWorkParts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/monitor": {
         parameters: {
             query?: never;
@@ -6193,7 +6212,39 @@ export interface components {
             /** @enum {string} */
             state: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
         };
+        WorkGroup: {
+            /** @description Empty for a group of the whole work; else its parts are "<ref>:...". */
+            ref: string;
+            /** @description As the media type names it: "Season 3", "Specials". */
+            label: string;
+            /** Format: int64 */
+            desired_item_id: number;
+            monitored: boolean;
+            /** Format: int64 */
+            present_count: number;
+            /** Format: int64 */
+            required_count?: number;
+            /** @enum {string} */
+            state: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
+            /** Format: date-time */
+            last_searched_at?: string;
+        };
+        WorkPartPage: {
+            items: components["schemas"]["WorkPart"][];
+            next_cursor?: string;
+        };
         WorkDetail: {
+            /**
+             * Format: int64
+             * @description The person the work is listed under (an album's artist).
+             */
+            lead_id?: number;
+            /** @description The media type's own fields of this work, by facet key. */
+            facets?: {
+                [key: string]: string[];
+            };
+            /** @description The work's monitored-or-not groups (an album's one, a series' seasons), in order. */
+            groups?: components["schemas"]["WorkGroup"][];
             /** @description Whether the caller holds request in one of the album's libraries: searching, sending and monitoring it would be accepted. */
             can_request: boolean;
             /** Format: int64 */
@@ -10292,6 +10343,36 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkDetail"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listWorkParts: {
+        parameters: {
+            query?: {
+                /** @description A group's ref (GET /works/{id} lists them); absent is every part. */
+                group?: string;
+                cursor?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkPartPage"];
                 };
             };
             400: components["responses"]["Problem"];

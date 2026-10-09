@@ -6,11 +6,16 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // WorkDetail satisfies apiserver.WorkDetailReader over library.Works.
 type WorkDetail struct {
 	Works library.Works
+	// Facets answers a media type's facets; nil shows none.
+	Facets func(mediaType string) []library.WorkFacet
+	// GroupLabel names a group of a media type's work; nil names it by its ref.
+	GroupLabel func(mediaType, ref string) string
 	// SearchStatus answers an album's last and next automatic search and why (F2); optional.
 	SearchStatus func(ctx context.Context, itemID int64) (apiserver.WantedRow, error)
 }
@@ -52,6 +57,26 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 	if detail.Work.Description.Valid {
 		row.Description = &detail.Work.Description.String
 	}
+	if detail.Work.PrimaryArtistID.Valid {
+		row.LeadID = detail.Work.PrimaryArtistID.Int64
+	}
+	if a.Facets != nil {
+		values, err := a.Works.FacetValues(ctx, a.Facets(detail.Work.MediaType), []int64{id})
+		if err != nil {
+			return apiserver.WorkDetailRow{}, err
+		}
+		row.Facets = values[id]
+	}
+	for _, group := range detail.Groups {
+		label := group.Ref
+		if a.GroupLabel != nil {
+			label = a.GroupLabel(detail.Work.MediaType, group.Ref)
+		}
+		row.Groups = append(row.Groups, apiserver.GroupRow{Ref: group.Ref, Label: label, Wanted: apiserver.WantedRow{
+			ID: group.ID, Monitored: group.Monitored, RequiredCount: group.RequiredCount, PresentCount: group.PresentCount,
+			State: group.State, LastSearchedAt: group.LastSearchedAt,
+		}})
+	}
 	if detail.Wanted != nil {
 		row.Wanted = &apiserver.WantedRow{
 			ID: detail.Wanted.ID, Monitored: detail.Wanted.Monitored,
@@ -68,6 +93,20 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		}
 	}
 	return row, nil
+}
+
+// WorkPlaces answers the root folders and libraries a work is in.
+func (a WorkDetail) WorkPlaces(ctx context.Context, id int64) ([]int64, []int64, error) {
+	return a.Works.Places(ctx, id)
+}
+
+// ListWorkParts maps one page of a work's parts.
+func (a WorkDetail) ListWorkParts(ctx context.Context, id int64, group string, after paginate.TextCursor, limit int) ([]apiserver.PartRow, error) {
+	parts, err := a.Works.Parts(ctx, id, group, library.PartCursor{SortKey: after.Sort, ID: after.ID}, limit)
+	if err != nil {
+		return nil, err
+	}
+	return partRows(parts), nil
 }
 
 func creditRows(from []library.Credit) []apiserver.CreditRow {

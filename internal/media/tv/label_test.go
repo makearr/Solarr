@@ -18,3 +18,11 @@ func TestReleaseLabelNamesTheEpisodesAReleaseHolds(t *testing.T) {
 		}
 	}
 }
+
+func TestSeasonsAreLabelledAsSonarrNamesThem(t *testing.T) {
+	for ref, want := range map[string]string{"s01": "Season 1", "s12": "Season 12", "s00": "Specials", "x": "x"} {
+		if got := (tv.Module{}).GroupLabel(ref); got != want {
+			t.Errorf("GroupLabel(%q) = %q, want %q", ref, got, want)
+		}
+	}
+}

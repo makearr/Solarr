@@ -9,15 +9,17 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // fakeWorkDetailReader mirrors fakeWorksReader: records the id it was called
 // with and answers a canned row or error, without a real library.db.
 type fakeWorkDetailReader struct {
-	row    apiserver.WorkDetailRow
-	err    error
-	lastID int64
-	calls  int
+	row       apiserver.WorkDetailRow
+	err       error
+	lastID    int64
+	lastGroup string
+	calls     int
 }
 
 func (f *fakeWorkDetailReader) GetWorkDetail(_ context.Context, id int64) (apiserver.WorkDetailRow, error) {
@@ -27,6 +29,19 @@ func (f *fakeWorkDetailReader) GetWorkDetail(_ context.Context, id int64) (apise
 		return apiserver.WorkDetailRow{}, f.err
 	}
 	return f.row, nil
+}
+
+func (f *fakeWorkDetailReader) WorkPlaces(_ context.Context, id int64) ([]int64, []int64, error) {
+	f.lastID = id
+	return f.row.RootFolderIDs, f.row.CategoryIDs, f.err
+}
+
+func (f *fakeWorkDetailReader) ListWorkParts(_ context.Context, id int64, group string, _ paginate.TextCursor, limit int) ([]apiserver.PartRow, error) {
+	f.lastID, f.lastGroup = id, group
+	if len(f.row.Parts) > limit {
+		return f.row.Parts[:limit], f.err
+	}
+	return f.row.Parts, f.err
 }
 
 // Invariant 37: a work under a root folder attached to a category the caller

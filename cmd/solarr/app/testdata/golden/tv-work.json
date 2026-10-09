@@ -1,0 +1,168 @@
+{
+  "added_at": "2021-03-04T05:06:07Z",
+  "can_request": true,
+  "credits": [
+    {
+      "person_id": 3,
+      "person_name": "Iris Calder",
+      "role": "actor"
+    },
+    {
+      "person_id": 4,
+      "person_name": "Tom Aske",
+      "role": "actor"
+    },
+    {
+      "person_id": 2,
+      "person_name": "Mara Voss",
+      "role": "creator"
+    }
+  ],
+  "description": "A ferry town keeps its own time.",
+  "editions": [],
+  "external_ids": [
+    {
+      "external_id": "7001",
+      "provider": "tmdb"
+    },
+    {
+      "external_id": "9001",
+      "provider": "tvdb"
+    }
+  ],
+  "facets": {
+    "genre": [
+      "Drama",
+      "Mystery"
+    ],
+    "network": [
+      "Northern Channel"
+    ],
+    "runtime": [
+      "2700000"
+    ],
+    "series_type": [
+      "standard"
+    ],
+    "status": [
+      "continuing"
+    ],
+    "year": [
+      "2020"
+    ]
+  },
+  "genres": [],
+  "groups": [
+    {
+      "desired_item_id": 2,
+      "label": "Season 1",
+      "monitored": true,
+      "present_count": 2,
+      "ref": "s01",
+      "required_count": 3,
+      "state": "PARTIAL"
+    },
+    {
+      "desired_item_id": 3,
+      "label": "Season 2",
+      "monitored": true,
+      "present_count": 0,
+      "ref": "s02",
+      "required_count": 1,
+      "state": "MISSING"
+    }
+  ],
+  "id": 2,
+  "language": "eng",
+  "library_ids": [
+    2
+  ],
+  "media_type": "tv",
+  "on_disk": true,
+  "parts": [
+    {
+      "date": "2020-02-03",
+      "external_ids": [
+        {
+          "external_id": "1",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": {
+        "bitrate_kbps": 0,
+        "extension": "mkv",
+        "lossless": false,
+        "media_object_id": 3
+      },
+      "id": 4,
+      "media_ref": "s01:e01",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0001e0001",
+      "title": "Slack Water",
+      "wanted": null
+    },
+    {
+      "date": "2020-02-10",
+      "external_ids": [
+        {
+          "external_id": "2",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": {
+        "bitrate_kbps": 0,
+        "extension": "mkv",
+        "lossless": false,
+        "media_object_id": 4
+      },
+      "id": 5,
+      "media_ref": "s01:e02",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0001e0002",
+      "title": "The Long Pier",
+      "wanted": null
+    },
+    {
+      "date": "2020-02-17",
+      "external_ids": [
+        {
+          "external_id": "3",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": null,
+      "id": 6,
+      "media_ref": "s01:e03",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0001e0003",
+      "title": "Signals",
+      "wanted": null
+    },
+    {
+      "date": "2099-01-05",
+      "external_ids": [
+        {
+          "external_id": "4",
+          "provider": "tvdb:episode"
+        }
+      ],
+      "file": null,
+      "id": 7,
+      "media_ref": "s02:e01",
+      "monitored": true,
+      "runtime_ms": 2700000,
+      "sort_key": "s0002e0001",
+      "title": "Return Crossing",
+      "wanted": null
+    }
+  ],
+  "runtime_ms": 2700000,
+  "sort_title": "marble stations",
+  "title": "The Marble Stations",
+  "updated_at": "2021-03-04T05:06:07Z",
+  "wanted": null,
+  "year": 2020
+}
