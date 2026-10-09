@@ -266,7 +266,7 @@ func (c Consumer) settleUnverified(
 			if err != nil {
 				return err
 			}
-			if err := c.people.AddCredit(ctx, workID, personID, CreditRoleArtist, 0); err != nil {
+			if err := c.people.AddLeadCredit(ctx, workID, personID, CreditRoleArtist); err != nil {
 				return err
 			}
 		}

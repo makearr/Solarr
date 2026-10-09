@@ -144,7 +144,7 @@ func (env *searchTestEnv) createSearchableWork(t *testing.T, artist, title strin
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
@@ -532,11 +532,11 @@ func TestSearchCategoryJob_SearchesEveryIncompleteItemInTheCategory(t *testing.T
 	}
 
 	discoveryID := env.createWork(t, "Discovery", 2001)
-	if err := people.AddCredit(t.Context(), discoveryID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), discoveryID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit (Discovery): %v", err)
 	}
 	homeworkID := env.createWork(t, "Homework", 1997)
-	if err := people.AddCredit(t.Context(), homeworkID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), homeworkID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit (Homework): %v", err)
 	}
 	discoveryItem, err := env.desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{
@@ -637,7 +637,7 @@ func TestSearchCategoryJob_OneItemFailingDoesNotStopTheRest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workingWorkID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workingWorkID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	workingItem, err := env.desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{

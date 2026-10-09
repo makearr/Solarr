@@ -500,7 +500,7 @@ func TestDesired_IncompleteItemsForOnePerson(t *testing.T) {
 	hers := createWork(t, opened, "music", "Zanuvode")
 	addTrack(t, opened, hers.ID)
 	other := createWork(t, opened, "music", "Zor A")
-	if err := people.AddCredit(t.Context(), hers.ID, heka, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), hers.ID, heka, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	for _, work := range []librarydb.Work{hers, other} {

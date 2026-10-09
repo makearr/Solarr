@@ -234,7 +234,7 @@ func TestCategoryCounters_CountsPartsAndArtistCredits(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 

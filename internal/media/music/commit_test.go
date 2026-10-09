@@ -528,7 +528,7 @@ func TestCommitUnit_NamesAKnownAlbumCanonicallyNotByItsTags(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workIDs[0], personID, music.CreditRoleArtist, 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workIDs[0], personID, music.CreditRoleArtist); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 

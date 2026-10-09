@@ -416,7 +416,7 @@ func (a ArrSync) syncAlbum(ctx context.Context, importID, categoryID, personID i
 	resolution := resolutions[0]
 
 	if resolution.WorkCreated {
-		if err := a.People.AddCredit(ctx, resolution.WorkID, personID, "artist", 0); err != nil {
+		if err := a.People.AddLeadCredit(ctx, resolution.WorkID, personID, music.CreditRoleArtist); err != nil {
 			return false, err
 		}
 	}

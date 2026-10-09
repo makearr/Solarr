@@ -116,7 +116,7 @@ func TestWorkDetail_IncludesCreditsAndGenres(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), work.ID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	if err := people.AssignGenres(t.Context(), work.ID, []library.GenreLink{{Name: "alternative rock"}}); err != nil {

@@ -246,7 +246,7 @@ func (g goldenServer) seedAlbum(ctx context.Context, t *testing.T, libraries gol
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(ctx, albumID, artistID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(ctx, albumID, artistID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 

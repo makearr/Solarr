@@ -192,7 +192,7 @@ func TestPeopleGet_IncludesAliasesBiographyAndLibraries(t *testing.T) {
 	})
 	workID := newWorkForCredits(t, identity, queries, "rg-detail-1")
 	createDesiredInCategory(t, opened, workID, 3)
-	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
@@ -408,7 +408,7 @@ func TestListPeople_SortByWorksPagesMostFirst(t *testing.T) {
 		for i := range works {
 			work := createWork(t, opened, "music", fmt.Sprintf("%s %d", name, i))
 			createDesiredInCategory(t, opened, work.ID, 1)
-			if err := people.AddCredit(t.Context(), work.ID, person, "artist", 0); err != nil {
+			if err := people.AddLeadCredit(t.Context(), work.ID, person, "artist"); err != nil {
 				t.Fatal(err)
 			}
 		}

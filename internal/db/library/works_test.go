@@ -232,7 +232,7 @@ func TestListWorks_ArtistIsThePersonCreditedInTheArtistRole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), credited.ID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), credited.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	// A non-artist role must not surface as the list's artist column.

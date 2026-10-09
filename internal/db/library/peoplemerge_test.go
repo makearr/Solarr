@@ -31,7 +31,7 @@ func TestPlanArtistMerges_LocalArtistsJoinTheIdentifiedOneByNameOrAlias(t *testi
 	for index, personID := range []int64{identified, byAlias, byName, other} {
 		work := createWork(t, opened, "music", "Album "+string(rune('A'+index)))
 		createDesiredInCategory(t, opened, work.ID, 1)
-		if err := people.AddCredit(t.Context(), work.ID, personID, "artist", 0); err != nil {
+		if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
 			t.Fatalf("AddCredit: %v", err)
 		}
 	}
@@ -77,7 +77,7 @@ func TestPlanArtistMerges_LocalNamesAlikeMergeIntoTheOneWithMostAlbums(t *testin
 		for range plan.albums {
 			work := createWork(t, opened, "music", "Album")
 			createDesiredInCategory(t, opened, work.ID, 1)
-			if err := people.AddCredit(t.Context(), work.ID, plan.person, "artist", 0); err != nil {
+			if err := people.AddLeadCredit(t.Context(), work.ID, plan.person, "artist"); err != nil {
 				t.Fatalf("AddCredit: %v", err)
 			}
 		}
@@ -100,7 +100,7 @@ func TestPlanArtistMerges_LeavesAnArtistAlsoInAnotherLibrary(t *testing.T) {
 	for _, credit := range []struct{ person, category int64 }{{identified, 1}, {local, 1}, {local, 2}} {
 		work := createWork(t, opened, "music", "Album")
 		createDesiredInCategory(t, opened, work.ID, credit.category)
-		if err := people.AddCredit(t.Context(), work.ID, credit.person, "artist", 0); err != nil {
+		if err := people.AddLeadCredit(t.Context(), work.ID, credit.person, "artist"); err != nil {
 			t.Fatalf("AddCredit: %v", err)
 		}
 	}

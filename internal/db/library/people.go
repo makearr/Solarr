@@ -189,18 +189,19 @@ func findOrCreatePerson(
 	return person.ID, nil
 }
 
-// creditRoleArtist mirrors music.CreditRoleArtist -- internal/db/library cannot
-// import internal/media/music (the dependency arrow points the other way), and
-// workArtistColumn already hardcodes this same string for the same reason.
-const creditRoleArtist = "artist"
-
-// AddCredit records a work-level credit (edition_id/part_id zero, Appendix E
-// D2) for an already-resolved person. ord is the credit order (0-based). A
-// role="artist" ord=0 credit -- the primary artist -- also refreshes
-// work.primary_artist_id/primary_artist_sort_name in the same transaction:
-// the Tracks navigation level's own denormalized sort key
-// (0021_work_primary_artist.sql), and AddCredit is its one writer.
+// AddCredit records a work-level credit (edition_id/part_id zero, Appendix E D2) for an already-resolved person; ord
+// is the credit order (0-based).
 func (p People) AddCredit(ctx context.Context, workID, personID int64, role string, ord int) error {
+	return p.addCredit(ctx, workID, personID, role, ord, false)
+}
+
+// AddLeadCredit is AddCredit first in the media type's lead role (an album's artist): the person the work is listed
+// under, kept in work.primary_artist_id and its sort name, the Tracks level's denormalised key (0021).
+func (p People) AddLeadCredit(ctx context.Context, workID, personID int64, role string) error {
+	return p.addCredit(ctx, workID, personID, role, 0, true)
+}
+
+func (p People) addCredit(ctx context.Context, workID, personID int64, role string, ord int, lead bool) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if err := queries.AddCredit(ctx, librarydb.AddCreditParams{
@@ -212,7 +213,7 @@ func (p People) AddCredit(ctx context.Context, workID, personID int64, role stri
 		if err := refreshPeople(ctx, queries, []int64{personID}); err != nil {
 			return err
 		}
-		if role != creditRoleArtist || ord != 0 {
+		if !lead {
 			return nil
 		}
 		person, err := queries.GetPerson(ctx, personID)

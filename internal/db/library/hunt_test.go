@@ -128,7 +128,7 @@ func TestWantedAlbumsByArtist_MatchesNameAndAlias(t *testing.T) {
 		t.Fatalf("BackfillDetails: %v", err)
 	}
 	work := createWork(t, opened, "music", "Album")
-	if err := people.AddCredit(t.Context(), work.ID, artist, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), work.ID, artist, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	item := createDesired(t, opened, work.ID, "SET", 10)

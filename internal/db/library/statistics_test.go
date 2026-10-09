@@ -50,7 +50,7 @@ func TestStatistics_IncompleteDiscographiesAreListedMostMissingFirst(t *testing.
 		person := resolvePersonNamed(t, people, "mbid-"+name, name)
 		work := createWork(t, opened, "music", name+" Album")
 		createDesired(t, opened, work.ID, "SET", 10)
-		if err := people.AddCredit(t.Context(), work.ID, person, "artist", 0); err != nil {
+		if err := people.AddLeadCredit(t.Context(), work.ID, person, "artist"); err != nil {
 			t.Fatal(err)
 		}
 		registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{

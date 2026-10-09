@@ -127,7 +127,7 @@ func TestAnArtistIsInTheLibraryTheirAlbumIsWantedIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, credit := range []struct{ work, person int64 }{{first, artist}, {second, other}} {
-		if err := people.AddCredit(t.Context(), credit.work, credit.person, "artist", 0); err != nil {
+		if err := people.AddLeadCredit(t.Context(), credit.work, credit.person, "artist"); err != nil {
 			t.Fatal(err)
 		}
 	}

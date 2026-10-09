@@ -775,7 +775,12 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 				slog.String("mbid", credit.MBID), slog.Any("error", err))
 			continue
 		}
-		if err := j.people.AddCredit(ctx, workID, personID, CreditRoleArtist, index); err != nil {
+		if index == 0 {
+			err = j.people.AddLeadCredit(ctx, workID, personID, CreditRoleArtist)
+		} else {
+			err = j.people.AddCredit(ctx, workID, personID, CreditRoleArtist, index)
+		}
+		if err != nil {
 			j.logger.WarnContext(ctx, "add credit failed",
 				slog.Int64("work_id", workID), slog.Int64("person_id", personID), slog.Any("error", err))
 		}

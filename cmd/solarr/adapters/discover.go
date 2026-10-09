@@ -80,7 +80,11 @@ func (a Discover) creditArtists(ctx context.Context, now time.Time, workID int64
 		if err != nil {
 			continue
 		}
-		_ = a.People.AddCredit(ctx, workID, personID, music.CreditRoleArtist, index)
+		if index == 0 {
+			_ = a.People.AddLeadCredit(ctx, workID, personID, music.CreditRoleArtist)
+		} else {
+			_ = a.People.AddCredit(ctx, workID, personID, music.CreditRoleArtist, index)
+		}
 	}
 }
 

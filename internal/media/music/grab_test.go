@@ -196,7 +196,7 @@ func TestGrab_WhatIsAlreadyDownloadingCountsAgainstTheReserve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), secondWork, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), secondWork, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	second, err := env.desired.EnsureAlbumItem(t.Context(), library.AlbumRequest{

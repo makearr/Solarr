@@ -55,7 +55,7 @@ func TestCalendar_IncludesAMonitoredArtistsRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), work.ID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
@@ -125,7 +125,7 @@ func TestCalendar_OnlyShowsTheCallersLibraries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), followed.ID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), followed.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	if _, err := people.Subscribe(t.Context(), firstSeen, personID, 1, library.SubscriptionRequest{

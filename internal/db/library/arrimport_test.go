@@ -213,7 +213,7 @@ func TestArrImportRevert_DeletesTheWorkBeforeItsOwnPrimaryArtist(t *testing.T) {
 
 	personID := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
 	work := createWork(t, opened, "music", "The Sezo Siluko")
-	if err := people.AddCredit(t.Context(), work.ID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 	if row, err := queries.GetWork(t.Context(), work.ID); err != nil || !row.PrimaryArtistID.Valid {

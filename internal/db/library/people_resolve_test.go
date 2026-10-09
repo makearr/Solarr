@@ -92,7 +92,7 @@ func TestAddCredit_RecordsAWorkLevelCredit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
@@ -122,7 +122,7 @@ func TestAddCredit_OrdZeroArtistSetsWorkPrimaryArtist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workID, personID, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
 
@@ -161,7 +161,7 @@ func TestAddCredit_NonPrimaryCreditDoesNotSetWorkPrimaryArtist(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ResolvePerson: %v", err)
 	}
-	if err := people.AddCredit(t.Context(), workID, primary, "artist", 0); err != nil {
+	if err := people.AddLeadCredit(t.Context(), workID, primary, "artist"); err != nil {
 		t.Fatalf("AddCredit (primary): %v", err)
 	}
 	if err := people.AddCredit(t.Context(), workID, featured, "artist", 1); err != nil {

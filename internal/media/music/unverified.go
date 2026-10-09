@@ -95,7 +95,7 @@ func (c Committer) CommitUnverifiedUnit(
 		if err != nil {
 			return placed, fmt.Errorf("music: unverified unit %q: artist: %w", unit.Directory, err)
 		}
-		if err := c.people.AddCredit(ctx, placed.WorkID, personID, CreditRoleArtist, 0); err != nil {
+		if err := c.people.AddLeadCredit(ctx, placed.WorkID, personID, CreditRoleArtist); err != nil {
 			return placed, fmt.Errorf("music: unverified unit %q: credit: %w", unit.Directory, err)
 		}
 	}

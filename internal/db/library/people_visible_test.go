@@ -36,7 +36,7 @@ func TestPeople_AreSeenOnlyThroughLibrariesTheViewerMaySee(t *testing.T) {
 		for _, categoryID := range categories {
 			work := createWork(t, opened, "music", name+" work")
 			createDesiredInCategory(t, opened, work.ID, categoryID)
-			if err := people.AddCredit(t.Context(), work.ID, person.ID, "artist", 0); err != nil {
+			if err := people.AddLeadCredit(t.Context(), work.ID, person.ID, "artist"); err != nil {
 				t.Fatalf("AddCredit: %v", err)
 			}
 			workIDs = append(workIDs, work.ID)

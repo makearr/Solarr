@@ -39,6 +39,9 @@ type AlbumRequest struct {
 	ProfileID  int64
 	Monitored  bool
 	AddedBy    *int64
+	// RequiredWithoutParts is how many files the work needs while it has no parts (a movie: 1); 0 leaves it unknown
+	// until its parts are known (an album before its tracklist).
+	RequiredWithoutParts int64
 }
 
 // EnsureAlbumItem finds the work's album-level SET item, or creates it from
@@ -67,7 +70,7 @@ func (d Desired) EnsureAlbumItem(ctx context.Context, request AlbumRequest) (lib
 			CategoryID: request.CategoryID, ProfileID: request.ProfileID,
 			Monitored:        boolToInt(request.Monitored),
 			SatisfactionKind: "SET",
-			RequiredCount:    sql.NullInt64{},
+			RequiredCount:    sql.NullInt64{Int64: request.RequiredWithoutParts, Valid: request.RequiredWithoutParts > 0},
 			PresentCount:     0, State: "MISSING",
 			Dirty: 1, Generation: 0,
 			AddedBy: nullInt64(request.AddedBy),
@@ -626,6 +629,9 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 	}
 	if scoped > 0 {
 		required = sql.NullInt64{Int64: monitored, Valid: true}
+	} else {
+		// A work without parts keeps what its type said it needs.
+		required = item.RequiredCount
 	}
 	if err := queries.SetDesiredItemRequiredCount(ctx,
 		librarydb.SetDesiredItemRequiredCountParams{RequiredCount: required, ID: itemID}); err != nil {

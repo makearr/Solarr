@@ -97,7 +97,7 @@ func (m *movieModule) add(ctx context.Context, categoryID int64, movie fakeMovie
 	if err != nil {
 		return 0, err
 	}
-	if err := people.AddCredit(ctx, works[0], director, "director", 0); err != nil {
+	if err := people.AddLeadCredit(ctx, works[0], director, "director"); err != nil {
 		return 0, err
 	}
 	if _, _, err := library.NewOrganisations(m.library).SetWorkOrganisation(ctx, now, works[0], "studio", "fake:movie",
@@ -105,7 +105,9 @@ func (m *movieModule) add(ctx context.Context, categoryID int64, movie fakeMovie
 		return 0, err
 	}
 	desired := library.NewDesired(m.library)
-	item, err := desired.EnsureAlbumItem(ctx, library.AlbumRequest{WorkID: works[0], CategoryID: categoryID, ProfileID: m.profileID, Monitored: monitored})
+	item, err := desired.EnsureAlbumItem(ctx, library.AlbumRequest{
+		WorkID: works[0], CategoryID: categoryID, ProfileID: m.profileID, Monitored: monitored, RequiredWithoutParts: 1,
+	})
 	if err != nil || mediaObjectID == 0 {
 		return works[0], err
 	}
@@ -277,12 +279,9 @@ func TestAThirdMediaTypeWorksThroughTheModuleAlone(t *testing.T) {
 		server.get(t, probe)
 	}
 
-	// Two seams the proof found (revision 2, R1.9): kept here as what must hold once core gives a third type its due.
-	t.Run("lead and completeness", func(t *testing.T) {
-		t.Skip("seam gaps, private/questions.md R1.9: the lead is only an \"artist\" credit; a work without parts never completes")
-		list := string(server.get(t, fmt.Sprintf("/works?category_id=%d", movieLibrary)))
-		if !strings.Contains(list, fmt.Sprintf(`"lead_id":%d`, director)) || !strings.Contains(list, `"wanted_state":"COMPLETE"`) {
-			t.Errorf("works = %s, want the director as lead and the placed movie complete", list)
-		}
-	})
+	// The two seams R1.9 found: the type's own lead role, and a work without parts complete with its one file.
+	list := string(server.get(t, fmt.Sprintf("/works?category_id=%d", movieLibrary)))
+	if !strings.Contains(list, fmt.Sprintf(`"lead_id":%d`, director)) || !strings.Contains(list, `"wanted_state":"COMPLETE"`) {
+		t.Errorf("works = %s, want the director as lead and the placed movie complete", list)
+	}
 }
