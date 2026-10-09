@@ -7596,6 +7596,24 @@ components:
       type: object
       required: [id, media_type, title, sort_title, added_at, updated_at]
       properties:
+        lead_id:
+          type: integer
+          format: int64
+          description: The person the work is listed under (an album's artist), for a type with a lead role.
+        facets:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: The media type's own fields of this work, by facet key (GET /mediatypes declares them).
+        totals:
+          type: object
+          required: [present, required, upgradable]
+          description: The work's monitored groups summed (an album's one, a series' seasons).
+          properties:
+            present: { type: integer, format: int64 }
+            required: { type: integer, format: int64 }
+            upgradable: { type: integer, format: int64, description: Groups below the cutoff. }
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         title: { type: string }

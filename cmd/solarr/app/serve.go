@@ -643,8 +643,11 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		CacheManager: adapters.CacheManager{
 			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
 		},
-		LibrarySize:  library.NewCounters(p.library),
-		Works:        adapters.Works{Works: library.NewWorks(p.library), Clock: clock.NewSystem(), Fresh: p.freshWindow},
+		LibrarySize: library.NewCounters(p.library),
+		Works: adapters.Works{
+			Works: library.NewWorks(p.library), Clock: clock.NewSystem(), Fresh: p.freshWindow,
+			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, MediaTypeOf: adapters.Categories{Cache: p.cache}.MediaTypeOf,
+		},
 		WorkDetail:   adapters.WorkDetail{Works: library.NewWorks(p.library), SearchStatus: p.searchStatus},
 		WorksMonitor: p.worksMonitor(),
 		WorkEditor: adapters.WorkEdit{

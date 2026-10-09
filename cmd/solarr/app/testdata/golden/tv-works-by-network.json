@@ -1,0 +1,46 @@
+{
+  "items": [
+    {
+      "added_at": "2021-03-04T05:06:07Z",
+      "facets": {
+        "genre": [
+          "Drama",
+          "Mystery"
+        ],
+        "network": [
+          "Northern Channel"
+        ],
+        "runtime": [
+          "2700000"
+        ],
+        "series_type": [
+          "standard"
+        ],
+        "status": [
+          "continuing"
+        ],
+        "year": [
+          "2020"
+        ]
+      },
+      "id": 2,
+      "media_type": "tv",
+      "monitored": true,
+      "overview": "A ferry town keeps its own time.",
+      "present_count": 2,
+      "required_count": 3,
+      "size_bytes": 1780000000,
+      "sort_title": "marble stations",
+      "status": "incomplete",
+      "title": "The Marble Stations",
+      "totals": {
+        "present": 2,
+        "required": 4,
+        "upgradable": 0
+      },
+      "updated_at": "2021-03-04T05:06:07Z",
+      "wanted_state": "PARTIAL",
+      "year": 2020
+    }
+  ]
+}

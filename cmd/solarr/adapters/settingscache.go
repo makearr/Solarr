@@ -143,3 +143,9 @@ func RootFolderPath(cache *settings.Cache) library.RootFolderPath {
 		return folder.Path, true
 	}
 }
+
+// MediaTypeOf answers a library's media type.
+func (c Categories) MediaTypeOf(id int64) (string, bool) {
+	category, ok := c.Category(id)
+	return category.MediaType, ok
+}

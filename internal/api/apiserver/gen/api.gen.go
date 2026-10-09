@@ -4234,12 +4234,18 @@ type Work struct {
 
 	// ArtistCover No cover of its own: its artwork is the primary artist's image, and a poster marks it. Absent means false.
 	ArtistCover *bool `json:"artist_cover,omitempty"`
-	Id          int64 `json:"id"`
+
+	// Facets The media type's own fields of this work, by facet key (GET /mediatypes declares them).
+	Facets *map[string][]string `json:"facets,omitempty"`
+	Id     int64                `json:"id"`
 
 	// LastSearchedAt When the album was last searched. Absent means never.
 	LastSearchedAt *time.Time `json:"last_searched_at,omitempty"`
-	MediaType      string     `json:"media_type"`
-	Monitored      *bool      `json:"monitored,omitempty"`
+
+	// LeadId The person the work is listed under (an album's artist), for a type with a lead role.
+	LeadId    *int64 `json:"lead_id,omitempty"`
+	MediaType string `json:"media_type"`
+	Monitored *bool  `json:"monitored,omitempty"`
 
 	// Overview The album's description, cut to a paragraph, for the Overview view.
 	Overview      *string `json:"overview,omitempty"`
@@ -4253,6 +4259,15 @@ type Work struct {
 	// Status The poster wall's colour, PersonWork.status' own vocabulary.
 	Status *WorkStatus `json:"status,omitempty"`
 	Title  string      `json:"title"`
+
+	// Totals The work's monitored groups summed (an album's one, a series' seasons).
+	Totals *struct {
+		Present  int64 `json:"present"`
+		Required int64 `json:"required"`
+
+		// Upgradable Groups below the cutoff.
+		Upgradable int64 `json:"upgradable"`
+	} `json:"totals,omitempty"`
 
 	// Unverified Known only by its own tags or folder (D6): no metadata source recognised it. Absent means false.
 	Unverified *bool     `json:"unverified,omitempty"`

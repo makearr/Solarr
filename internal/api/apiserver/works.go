@@ -128,6 +128,12 @@ type WorkRow struct {
 	Monitored   bool
 	Description string
 	SizeBytes   int64
+	// LeadID is the person the work is listed under, 0 with none.
+	LeadID int64
+	// Facets are the media type's own fields of the work, by facet key.
+	Facets map[string][]string
+	// PresentTotal, RequiredTotal and Upgradable sum the work's monitored groups.
+	PresentTotal, RequiredTotal, Upgradable int64
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -293,6 +299,19 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.
 		monitored, size := row.Monitored, row.SizeBytes
 		views[index].Status, views[index].Monitored, views[index].SizeBytes = &status, &monitored, &size
 		views[index].PresentCount, views[index].RequiredCount = row.PresentCount, row.RequiredCount
+		if row.LeadID != 0 {
+			views[index].LeadId = &row.LeadID
+		}
+		facets := row.Facets
+		if facets == nil {
+			facets = map[string][]string{}
+		}
+		views[index].Facets = &facets
+		views[index].Totals = &struct {
+			Present    int64 `json:"present"`
+			Required   int64 `json:"required"`
+			Upgradable int64 `json:"upgradable"`
+		}{Present: row.PresentTotal, Required: row.RequiredTotal, Upgradable: row.Upgradable}
 		if row.Description != "" {
 			overview := overviewOf(row.Description)
 			views[index].Overview = &overview

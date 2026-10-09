@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -425,6 +426,9 @@ func TestGolden_ReadAnswersOfBothLibrariesStayTheSame(t *testing.T) {
 		{"music-tracks", fmt.Sprintf("/libraries/%d/tracks", ids.music)},
 		{"music-works", fmt.Sprintf("/works?category_id=%d", ids.music)},
 		{"music-works-wanted", fmt.Sprintf("/works?category_id=%d&wanted=true", ids.music)},
+		{"tv-works", fmt.Sprintf("/works?category_id=%d", ids.tv)},
+		{"tv-works-by-network", fmt.Sprintf("/works?category_id=%d&where=%s", ids.tv,
+			url.QueryEscape(`[{"field":"network","op":"contains","value":"northern"}]`))},
 		{"music-work", fmt.Sprintf("/works/%d", ids.album)},
 		{"music-people", "/people"},
 		{"music-person", fmt.Sprintf("/people/%d", ids.artist)},

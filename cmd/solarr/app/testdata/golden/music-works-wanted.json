@@ -4,7 +4,16 @@
       "added_at": "2021-03-04T05:06:07Z",
       "artist": "Amber Lanterns",
       "artist_cover": true,
+      "facets": {
+        "primary_type": [
+          "Album"
+        ],
+        "year": [
+          "2019"
+        ]
+      },
       "id": 1,
+      "lead_id": 1,
       "media_type": "music",
       "monitored": true,
       "present_count": 0,
@@ -13,6 +22,11 @@
       "sort_title": "quiet orchards",
       "status": "incomplete",
       "title": "Quiet Orchards",
+      "totals": {
+        "present": 0,
+        "required": 3,
+        "upgradable": 0
+      },
       "updated_at": "2021-03-04T05:06:07Z",
       "wanted_state": "MISSING",
       "year": 2019

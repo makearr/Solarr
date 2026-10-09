@@ -19,6 +19,23 @@ type Works struct {
 	Works library.Works
 	Clock clock.Clock
 	Fresh FreshWindow
+	// Facets answers a media type's facets as the list reads them; nil lists no facets.
+	Facets func(mediaType string) []library.WorkFacet
+	// MediaTypeOf answers a library's media type.
+	MediaTypeOf func(categoryID int64) (string, bool)
+}
+
+// facetsFor are the facets a filter may name: the one library's type's, else every type's.
+func (a Works) facetsFor(categoryIDs []int64) []library.WorkFacet {
+	if a.Facets == nil {
+		return nil
+	}
+	if len(categoryIDs) == 1 && a.MediaTypeOf != nil {
+		if mediaType, ok := a.MediaTypeOf(categoryIDs[0]); ok {
+			return a.Facets(mediaType)
+		}
+	}
+	return a.Facets("")
 }
 
 func (a Works) ListWorks(
@@ -29,13 +46,15 @@ func (a Works) ListWorks(
 	if filter.Fresh {
 		freshSince, freshRSSSince = a.Fresh.Cutoffs(a.Clock)
 	}
-	where, err := listfilter.Parse(filter.Where, library.WorkFields)
+	facets := a.facetsFor(filter.CategoryIDs)
+	where, err := listfilter.Parse(filter.Where, library.FacetFields(library.WorkFields, facets))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
 	}
 	rows, err := a.Works.List(ctx,
 		library.WorkFilter{
 			Where:           where,
+			Facets:          facets,
 			RootFolderIDs:   filter.RootFolderIDs,
 			CategoryIDs:     filter.CategoryIDs,
 			Sort:            library.WorkSort(filter.Sort),
@@ -92,9 +111,36 @@ func (a Works) ListWorks(
 			at := time.Unix(row.LastSearchedAt, 0).UTC()
 			view.LastSearchedAt = &at
 		}
+		view.PresentTotal, view.RequiredTotal, view.Upgradable = row.PresentTotal, row.RequiredTotal, row.Upgradable
+		if row.PrimaryArtistID.Valid {
+			view.LeadID = row.PrimaryArtistID.Int64
+		}
 		views[index] = view
 	}
-	return views, nil
+	return views, a.fillFacets(ctx, views)
+}
+
+// fillFacets reads each row's facets, by the facets of its own media type.
+func (a Works) fillFacets(ctx context.Context, views []apiserver.WorkRow) error {
+	if a.Facets == nil {
+		return nil
+	}
+	byType := map[string][]int64{}
+	for _, view := range views {
+		byType[view.MediaType] = append(byType[view.MediaType], view.ID)
+	}
+	for mediaType, ids := range byType {
+		values, err := a.Works.FacetValues(ctx, a.Facets(mediaType), ids)
+		if err != nil {
+			return err
+		}
+		for i := range views {
+			if views[i].MediaType == mediaType {
+				views[i].Facets = values[views[i].ID]
+			}
+		}
+	}
+	return nil
 }
 
 // FreshRSSCutoff is ADR-55's availability window as a Unix time: what an RSS feed first showed since then is fresh.

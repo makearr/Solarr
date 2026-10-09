@@ -5,9 +5,11 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -37,6 +39,33 @@ func (m MediaTypes) ProfilingIn(categories interface {
 		}
 		return media.Capability[media.Profiling](m.Registry, media.Key(category.MediaType))
 	}
+}
+
+// WorkFacets answers a media type's work facets as the works list reads them; "" is every type's, once per key.
+func (m MediaTypes) WorkFacets(mediaType string) []library.WorkFacet {
+	var out []library.WorkFacet
+	for _, descriptor := range m.Registry.Descriptors() {
+		if mediaType != "" && string(descriptor.Key) != mediaType {
+			continue
+		}
+		for _, facet := range descriptor.Facets {
+			if facet.Entity != model.LevelEntityWork || slices.ContainsFunc(out, func(seen library.WorkFacet) bool { return seen.Key == facet.Key }) {
+				continue
+			}
+			read := library.WorkFacet{Key: facet.Key, Source: string(facet.Source.Kind), Name: facet.Source.Name, Kind: listfilter.Text}
+			switch facet.Kind {
+			case media.FacetNumber, media.FacetDuration:
+				read.Kind = listfilter.Number
+			case media.FacetEnum:
+				read.Kind = listfilter.Enum
+				for _, choice := range facet.Choices {
+					read.Choices = append(read.Choices, choice.Key)
+				}
+			}
+			out = append(out, read)
+		}
+	}
+	return out
 }
 
 // RoleKeys lists every credit role a registered media type declares, once each.

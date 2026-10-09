@@ -276,7 +276,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       CAST(" + numberColumn + " AS INTEGER) AS sort_number, CAST(" + textColumn + " AS TEXT) AS sort_text" +
 		",\n       CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
 		" WHERE wf.work_id = work.id), 0) AS INTEGER) AS size_bytes" +
-		",\n       " + setTotalsColumns +
+		",\n       " + setTotalsColumns + ", work.primary_artist_id" +
 		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -454,7 +454,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
 			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover,
 			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes,
-			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable); err != nil {
+			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable, &work.PrimaryArtistID); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

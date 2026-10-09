@@ -4870,6 +4870,27 @@ export interface components {
             next_cursor?: string;
         };
         Work: {
+            /**
+             * Format: int64
+             * @description The person the work is listed under (an album's artist), for a type with a lead role.
+             */
+            lead_id?: number;
+            /** @description The media type's own fields of this work, by facet key (GET /mediatypes declares them). */
+            facets?: {
+                [key: string]: string[];
+            };
+            /** @description The work's monitored groups summed (an album's one, a series' seasons). */
+            totals?: {
+                /** Format: int64 */
+                present: number;
+                /** Format: int64 */
+                required: number;
+                /**
+                 * Format: int64
+                 * @description Groups below the cutoff.
+                 */
+                upgradable: number;
+            };
             /** Format: int64 */
             id: number;
             /** @example music */
