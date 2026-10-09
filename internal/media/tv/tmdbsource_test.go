@@ -2,12 +2,15 @@ package tv_test
 
 import (
 	"context"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
+	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 )
 
 func sampleTMDB() tmdb.Series {
@@ -267,5 +270,64 @@ func TestFetchTakesTextFromTheSourceTheOrderRanksFirstAndNoneForOneLeftOut(t *te
 		if image.Source == "tmdb" {
 			t.Errorf("a source left out of the order still supplied artwork: %+v", left.Images)
 		}
+	}
+}
+
+// overlap records how many sources are being asked at one moment.
+type overlap struct {
+	mu        sync.Mutex
+	now, most int
+}
+
+func (o *overlap) ask() {
+	o.mu.Lock()
+	o.now++
+	o.most = max(o.most, o.now)
+	o.mu.Unlock()
+	time.Sleep(100 * time.Millisecond)
+	o.mu.Lock()
+	o.now--
+	o.mu.Unlock()
+}
+
+type slowTMDB struct {
+	fakeTMDB
+	seen *overlap
+}
+
+func (s slowTMDB) Series(ctx context.Context, id int64) (tmdb.Series, error) {
+	s.seen.ask()
+	return s.fakeTMDB.Series(ctx, id)
+}
+
+type slowTVmaze struct {
+	fakeTVmaze
+	seen *overlap
+}
+
+func (s slowTVmaze) LookupTVDB(ctx context.Context, id int64) (tvmaze.Show, error) {
+	s.seen.ask()
+	return s.fakeTVmaze.LookupTVDB(ctx, id)
+}
+
+func (s slowTVmaze) Show(ctx context.Context, id int64) (tvmaze.Show, error) {
+	s.seen.ask()
+	return s.fakeTVmaze.Show(ctx, id)
+}
+
+// TMDB and TVmaze each have their own rate bucket, so a fetch asks them at once: the series takes the slower one's
+// time, not both added up (revision 2, R3.5).
+func TestFetch_AsksTheSourcesWithTheirOwnBucketsAtOnce(t *testing.T) {
+	seen := &overlap{}
+	service := tv.Service{
+		Skyhook: fixedSkyhook{skyhookShow()},
+		TMDB:    slowTMDB{fakeTMDB{series: sampleTMDB(), seasons: []tmdb.Season{sampleTMDBSeason()}}, seen},
+		TVmaze:  slowTVmaze{fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "Example Show"}}, seen},
+	}
+	if _, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234}); err != nil {
+		t.Fatal(err)
+	}
+	if seen.most != 2 {
+		t.Errorf("at most %d of TMDB and TVmaze were asked at once, want both", seen.most)
 	}
 }

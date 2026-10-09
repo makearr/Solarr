@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // arrSource is one *Arr app's half of an import: what it lists, and how one listed item becomes Solarr's.
@@ -62,33 +63,26 @@ func walkArr[T any](ctx context.Context, walk arrWalk, source arrSource[T]) (lib
 		walked   int64
 		counts   library.ArrImportCounts
 		failures []string
-		group    sync.WaitGroup
-		gate     = make(chan struct{}, max(1, source.workers))
 	)
-	for _, item := range chosen {
+	parallel.Do(ctx, len(chosen), max(1, source.workers), func(ctx context.Context, index int) error {
+		item := chosen[index]
 		described := source.describe(item)
-		group.Add(1)
-		gate <- struct{}{}
-		go func() {
-			defer group.Done()
-			defer func() { <-gate }()
-			var got library.ArrImportCounts
-			categoryID, placed := walk.place(rewritePath(described.RootFolder, walk.options.PathRewrites))
-			err := fmt.Errorf("no category matches root folder %q", described.RootFolder)
-			if placed {
-				got, err = source.sync(ctx, categoryID, item)
-			}
-			mu.Lock()
-			defer mu.Unlock()
-			counts = addCounts(counts, got)
-			if err != nil {
-				failures = append(failures, fmt.Sprintf("%s: %v", described.Name, err))
-			}
-			walked++
-			walk.progress.set(walk.importID, walked, total)
-		}()
-	}
-	group.Wait()
+		var got library.ArrImportCounts
+		categoryID, placed := walk.place(rewritePath(described.RootFolder, walk.options.PathRewrites))
+		err := fmt.Errorf("no category matches root folder %q", described.RootFolder)
+		if placed {
+			got, err = source.sync(ctx, categoryID, item)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		counts = addCounts(counts, got)
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", described.Name, err))
+		}
+		walked++
+		walk.progress.set(walk.importID, walked, total)
+		return nil
+	})
 	if len(failures) > 0 {
 		return counts, errors.New(strings.Join(failures, "; "))
 	}

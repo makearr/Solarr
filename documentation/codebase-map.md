@@ -40,7 +40,7 @@ internal/
 | `platform` | Seams and infrastructure with no domain knowledge: time, filesystem, outbound HTTP, config, secrets, external tools, archives, image encoding |
 | `db` | One writer and a read pool per database (`store`), `settings.db` cached in memory, the `library.db` repositories, post-restore reconciliation |
 | `jobs` | The durable queue, and the maintenance jobs that belong to no pipeline |
-| `metadata` | Providers and the shared cache in front of them; field-level provider merge |
+| `metadata` | Providers and the shared cache in front of them. `metaresolve` holds how sources are asked and merged: `FallThrough` (in order, first answer: music's proxies then MusicBrainz), `AskAll` (at once, each in its own rate bucket: TV's TMDB, AniList, TVmaze) and `Resolve`, the one rule for a stored field (yours, else the newest) |
 | `identify` | Pure decision logic, no I/O: domain types, the release-name parsers (music; `parsetv` for TV, Sonarr's patterns on regexp2), identity matching, quality scoring, acquisition priority |
 | `scanning` | The library sweep and the background probe that fills measured attributes |
 | `importing` | Import inspection (WALK to DECIDE) and its resumable job |

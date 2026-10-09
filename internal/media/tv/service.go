@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -116,43 +117,43 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 	}
 	// The three remaining sources each have their own rate bucket, so they are asked at the same time; the order
 	// they are merged in stays TMDB, AniList, TVmaze.
-	var (
-		rich, anime, maze Series
-		haveRich, haveAni bool
-		haveMaze          bool
-	)
-	asked := parallel.Do(ctx, 3, 0, func(ctx context.Context, source int) error {
-		switch source {
-		case 0:
-			rich, haveRich = s.fetchTMDB(ctx, ids, recentOnly)
-		case 1:
-			anime, haveAni = s.fetchAniList(ctx, ids)
-		case 2:
+	type fetched struct {
+		series Series
+		found  bool
+	}
+	var rich Series
+	haveRich := false
+	answers := metaresolve.AskAll(ctx, []string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze},
+		func(ctx context.Context, source string) (fetched, error) {
+			switch source {
+			case settings.TVSourceTMDB:
+				series, found := s.fetchTMDB(ctx, ids, recentOnly)
+				return fetched{series, found}, nil
+			case settings.TVSourceAniList:
+				series, found := s.fetchAniList(ctx, ids)
+				return fetched{series, found}, nil
+			}
 			if s.TVmaze == nil {
-				return nil
+				return fetched{}, nil
 			}
-			if show, found := s.findShow(ctx, ids); found {
-				maze, haveMaze = s.fromShow(ctx, show), true
+			show, found := s.findShow(ctx, ids)
+			if !found {
+				return fetched{}, nil
 			}
+			return fetched{s.fromShow(ctx, show), true}, nil
+		})
+	for _, answer := range answers {
+		if answer.Err != nil {
+			s.warn(answer.Source, ids.TVDB, answer.Err)
 		}
-		return nil
-	})
-	for source, err := range asked {
-		if err != nil {
-			s.warn([]string{"tmdb", "anilist", "tvmaze"}[source], ids.TVDB, err)
+		if !answer.Value.found {
+			continue
 		}
-	}
-	if haveRich {
-		sources = append(sources, rich)
-		bySource[settings.TVSourceTMDB] = rich
-	}
-	if haveAni {
-		sources = append(sources, anime)
-		bySource[settings.TVSourceAniList] = anime
-	}
-	if haveMaze {
-		sources = append(sources, maze)
-		bySource[settings.TVSourceTVmaze] = maze
+		sources = append(sources, answer.Value.series)
+		bySource[answer.Source] = answer.Value.series
+		if answer.Source == settings.TVSourceTMDB {
+			rich, haveRich = answer.Value.series, true
+		}
 	}
 	if len(sources) == 0 {
 		return Series{}, ErrNoSource

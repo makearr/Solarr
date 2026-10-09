@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/metadata/metacache"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -147,17 +148,17 @@ func (p Provider) Album(
 		return rg, release, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
+	type album struct {
+		group   ReleaseGroup
+		release Release
+	}
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, source Source) (album, error) {
 		rg, release, err := source.Album(ctx, releaseGroupMBID, releaseMBID)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		p.remember(ctx, source.Name(), rg, release)
-		return rg, release, nil
+		return album{rg, release}, err
+	})
+	if answered {
+		p.remember(ctx, answer.Source.Name(), answer.Value.group, answer.Value.release)
+		return answer.Value.group, answer.Value.release, nil
 	}
 	if len(errs) > 0 && !slices.ContainsFunc(errs, func(err error) bool { return !notFound(err) }) {
 		return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: %s/%s: %w: %w",
@@ -165,6 +166,25 @@ func (p Provider) Album(
 	}
 	return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz: no source answered for %s/%s: %w",
 		releaseGroupMBID, releaseMBID, errors.Join(errs...))
+}
+
+// firstAnswer asks the sources able to answer C, in order, and stops at the first answer (metaresolve.FallThrough);
+// every failure but a 404 is logged under the source that gave it.
+func firstAnswer[C, T any](
+	ctx context.Context, p Provider, ask func(ctx context.Context, capable C) (T, error),
+) (metaresolve.Answer[Source, T], bool, []error) {
+	return metaresolve.FallThrough(ctx, p.orderedSources(), func(ctx context.Context, source Source) (T, bool, error) {
+		capable, ok := any(source).(C)
+		if !ok {
+			var none T
+			return none, false, nil
+		}
+		value, err := ask(ctx, capable)
+		if err != nil && !notFound(err) {
+			p.logger.WarnContext(ctx, "musicbrainz source failed", slog.String("source", source.Name()), slog.Any("error", err))
+		}
+		return value, true, err
+	})
 }
 
 // errReleaseNotInGroup is the proxy's own way of saying a release does not exist: it answers the
@@ -190,21 +210,12 @@ func (p Provider) Search(
 		return matches, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
-		searcher, ok := source.(Searcher)
-		if !ok {
-			continue
-		}
-		matches, err := searcher.SearchReleaseGroups(ctx, artist, title, limit)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source search failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		p.rememberSearch(ctx, source.Name(), key, matches)
-		return matches, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, searcher Searcher) ([]ReleaseGroupMatch, error) {
+		return searcher.SearchReleaseGroups(ctx, artist, title, limit)
+	})
+	if answered {
+		p.rememberSearch(ctx, answer.Source.Name(), key, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		// No configured source can search at all -- a wiring gap, not a failed
@@ -224,21 +235,12 @@ func (p Provider) SearchByQuery(ctx context.Context, priority Priority, query st
 		return matches, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
-		searcher, ok := source.(QuerySearcher)
-		if !ok {
-			continue
-		}
-		matches, err := searcher.SearchReleaseGroupsByQuery(ctx, query, limit)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source query search failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		p.rememberSearch(ctx, source.Name(), key, matches)
-		return matches, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, searcher QuerySearcher) ([]ReleaseGroupMatch, error) {
+		return searcher.SearchReleaseGroupsByQuery(ctx, query, limit)
+	})
+	if answered {
+		p.rememberSearch(ctx, answer.Source.Name(), key, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		// No configured source can search at all -- a wiring gap, not a failed
@@ -258,21 +260,12 @@ func (p Provider) Releases(ctx context.Context, priority Priority, releaseGroupM
 	if releases, ok := cachedJSON[[]Release](ctx, p, cacheKindReleases, releaseGroupMBID); ok {
 		return releases, nil
 	}
-	var errs []error
-	for _, source := range p.orderedSources() {
-		lister, ok := source.(ReleaseLister)
-		if !ok {
-			continue
-		}
-		releases, err := lister.Releases(ctx, releaseGroupMBID)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source release listing failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		rememberJSON(ctx, p, source.Name(), cacheKindReleases, releaseGroupMBID, releases)
-		return releases, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, lister ReleaseLister) ([]Release, error) {
+		return lister.Releases(ctx, releaseGroupMBID)
+	})
+	if answered {
+		rememberJSON(ctx, p, answer.Source.Name(), cacheKindReleases, releaseGroupMBID, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can list releases (release group %s)", releaseGroupMBID)
@@ -293,21 +286,12 @@ func (p Provider) SearchArtists(ctx context.Context, priority Priority, query st
 		return matches, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
-		searcher, ok := source.(ArtistSearcher)
-		if !ok {
-			continue
-		}
-		matches, err := searcher.SearchArtists(ctx, query, limit)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source artist search failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		rememberJSON(ctx, p, source.Name(), cacheKindArtistSearch, key, matches)
-		return matches, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, searcher ArtistSearcher) ([]ArtistMatch, error) {
+		return searcher.SearchArtists(ctx, query, limit)
+	})
+	if answered {
+		rememberJSON(ctx, p, answer.Source.Name(), cacheKindArtistSearch, key, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return nil, nil
@@ -324,21 +308,12 @@ func (p Provider) SearchRecordings(ctx context.Context, priority Priority, artis
 		return matches, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
-		searcher, ok := source.(RecordingSearcher)
-		if !ok {
-			continue
-		}
-		matches, err := searcher.SearchRecordingReleaseGroups(ctx, artist, title, limit)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source recording search failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		rememberJSON(ctx, p, source.Name(), cacheKindRecordingSearch, key, matches)
-		return matches, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, searcher RecordingSearcher) ([]RecordingMatch, error) {
+		return searcher.SearchRecordingReleaseGroups(ctx, artist, title, limit)
+	})
+	if answered {
+		rememberJSON(ctx, p, answer.Source.Name(), cacheKindRecordingSearch, key, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return nil, nil
@@ -353,28 +328,14 @@ func (p Provider) Recording(ctx context.Context, priority Priority, mbid string)
 	if recording, ok := cachedJSON[RecordingMatch](ctx, p, cacheKindRecording, mbid); ok {
 		return recording, nil
 	}
-	var errs []error
-	missing := 0
-	for _, source := range p.orderedSources() {
-		lookup, ok := source.(RecordingLookup)
-		if !ok {
-			continue
-		}
-		recording, err := lookup.Recording(ctx, mbid)
-		if err != nil {
-			if notFound(err) {
-				missing++
-			} else {
-				p.logger.WarnContext(ctx, "musicbrainz source recording lookup failed",
-					slog.String("source", source.Name()), slog.Any("error", err))
-			}
-			errs = append(errs, err)
-			continue
-		}
-		rememberJSON(ctx, p, source.Name(), cacheKindRecording, mbid, recording)
-		return recording, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, lookup RecordingLookup) (RecordingMatch, error) {
+		return lookup.Recording(ctx, mbid)
+	})
+	if answered {
+		rememberJSON(ctx, p, answer.Source.Name(), cacheKindRecording, mbid, answer.Value)
+		return answer.Value, nil
 	}
-	if len(errs) > 0 && missing == len(errs) {
+	if len(errs) > 0 && !slices.ContainsFunc(errs, func(err error) bool { return !notFound(err) }) {
 		return RecordingMatch{}, ErrNotFound
 	}
 	return RecordingMatch{}, fmt.Errorf("musicbrainz: no source answered recording %s: %w", mbid, errors.Join(errs...))
@@ -386,21 +347,12 @@ func (p Provider) Artist(ctx context.Context, priority Priority, mbid string) (A
 		return artist, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
-		lookup, ok := source.(ArtistLookup)
-		if !ok {
-			continue
-		}
-		artist, err := lookup.Artist(ctx, mbid)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source artist lookup failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		p.rememberArtist(ctx, source.Name(), mbid, artist)
-		return artist, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, lookup ArtistLookup) (Artist, error) {
+		return lookup.Artist(ctx, mbid)
+	})
+	if answered {
+		p.rememberArtist(ctx, answer.Source.Name(), mbid, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return Artist{}, fmt.Errorf("musicbrainz: no source can look up an artist (mbid %s)", mbid)
@@ -417,21 +369,12 @@ func (p Provider) ArtistReleaseGroups(ctx context.Context, priority Priority, ar
 		return groups, nil
 	}
 
-	var errs []error
-	for _, source := range p.orderedSources() {
-		discography, ok := source.(Discography)
-		if !ok {
-			continue
-		}
-		groups, err := discography.ArtistReleaseGroups(ctx, artistMBID)
-		if err != nil {
-			p.logger.WarnContext(ctx, "musicbrainz source discography failed",
-				slog.String("source", source.Name()), slog.Any("error", err))
-			errs = append(errs, err)
-			continue
-		}
-		p.rememberDiscography(ctx, source.Name(), artistMBID, groups)
-		return groups, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, discography Discography) ([]ReleaseGroup, error) {
+		return discography.ArtistReleaseGroups(ctx, artistMBID)
+	})
+	if answered {
+		p.rememberDiscography(ctx, answer.Source.Name(), artistMBID, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can browse a discography (artist %s)", artistMBID)
@@ -625,19 +568,12 @@ func (p Provider) Label(ctx context.Context, priority Priority, mbid string) (La
 	if p.cachedJSON(ctx, cacheKindLabel, mbid, &label) {
 		return label, nil
 	}
-	var errs []error
-	for _, source := range p.orderedSources() {
-		lookup, ok := source.(LabelLookup)
-		if !ok {
-			continue
-		}
-		found, err := lookup.Label(ctx, mbid)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		p.rememberJSON(ctx, cacheKindLabel, source.Name(), mbid, found)
-		return found, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, lookup LabelLookup) (Label, error) {
+		return lookup.Label(ctx, mbid)
+	})
+	if answered {
+		p.rememberJSON(ctx, cacheKindLabel, answer.Source.Name(), mbid, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return Label{}, fmt.Errorf("musicbrainz: no source can look up a label (mbid %s)", mbid)
@@ -652,19 +588,12 @@ func (p Provider) LabelReleaseGroups(ctx context.Context, priority Priority, lab
 	if p.cachedJSON(ctx, cacheKindLabelCatalogue, labelMBID, &groups) {
 		return groups, nil
 	}
-	var errs []error
-	for _, source := range p.orderedSources() {
-		catalogue, ok := source.(LabelCatalogue)
-		if !ok {
-			continue
-		}
-		found, err := catalogue.LabelReleaseGroups(ctx, labelMBID)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		p.rememberJSON(ctx, cacheKindLabelCatalogue, source.Name(), labelMBID, found)
-		return found, nil
+	answer, answered, errs := firstAnswer(ctx, p, func(ctx context.Context, catalogue LabelCatalogue) ([]ReleaseGroup, error) {
+		return catalogue.LabelReleaseGroups(ctx, labelMBID)
+	})
+	if answered {
+		p.rememberJSON(ctx, cacheKindLabelCatalogue, answer.Source.Name(), labelMBID, answer.Value)
+		return answer.Value, nil
 	}
 	if len(errs) == 0 {
 		return nil, fmt.Errorf("musicbrainz: no source can browse a label (mbid %s)", labelMBID)
