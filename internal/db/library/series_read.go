@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 )
 
 // ErrSeriesNotFound reports a series id that is not a TV series visible in the category asked about.
@@ -98,12 +99,6 @@ type SeriesReader struct{ store *store.Store }
 
 // NewSeriesReader builds it over an open library store.
 func NewSeriesReader(opened *store.Store) SeriesReader { return SeriesReader{store: opened} }
-
-// fieldPriority orders whose value of a field wins: a person's own, then the providers in merge order.
-var fieldPriority = []string{manualProvider, "skyhook", "tvmaze"}
-
-// manualProvider is the provider of a field the user set themselves; it wins over every source.
-const manualProvider = "__manual__"
 
 // List returns up to pageSize series of one category after the cursor, with counts as of now.
 func (r SeriesReader) List(ctx context.Context, categoryID int64, after SeriesCursor, pageSize int64, now time.Time) ([]SeriesSummary, error) {
@@ -291,24 +286,17 @@ func (r SeriesReader) fill(ctx context.Context, queries *librarydb.Queries, summ
 	return nil
 }
 
-// mergeFields picks one value per field: a person's own, then the first provider in fieldPriority, then any.
+// mergeFields picks one value per field by metaresolve's rule.
 func mergeFields(fields []librarydb.WorkField) map[string]string {
-	best := map[string]int{}
-	merged := map[string]string{}
+	values := make([]metaresolve.Value, 0, len(fields))
 	for _, field := range fields {
-		if !field.Value.Valid {
-			continue
+		if field.Value.Valid {
+			values = append(values, metaresolve.Value{Field: field.Field, Provider: field.Provider, Value: field.Value.String, FetchedAt: field.FetchedAt})
 		}
-		rank := len(fieldPriority)
-		for i, provider := range fieldPriority {
-			if provider == field.Provider {
-				rank = i
-			}
-		}
-		if have, found := best[field.Field]; !found || rank < have {
-			best[field.Field] = rank
-			merged[field.Field] = field.Value.String
-		}
+	}
+	merged := map[string]string{}
+	for name, value := range metaresolve.Resolve(values) {
+		merged[name] = value.Value
 	}
 	return merged
 }

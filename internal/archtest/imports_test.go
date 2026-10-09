@@ -101,7 +101,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/db/library": {
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
 		"internal/identify/model", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/librarydb",
-		"internal/platform/listfilter",
+		"internal/platform/listfilter", "internal/metadata/metaresolve",
 	},
 	// ADR-29's fingerprint rung (D12). Talks to acoustid.org and nothing else:
 	// it identifies, and the caller resolves what it names through the ordered

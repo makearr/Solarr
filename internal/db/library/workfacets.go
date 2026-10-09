@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
@@ -49,15 +50,6 @@ func FacetFields(base map[string]listfilter.Field, facets []WorkFacet) map[strin
 	return fields
 }
 
-// fieldRank orders a work_field's providers as mergeFields does: the user's own first, then fieldPriority.
-func fieldRank(alias string) string {
-	var cases strings.Builder
-	for i, provider := range fieldPriority {
-		fmt.Fprintf(&cases, " WHEN %s.provider = '%s' THEN %d", alias, provider, i)
-	}
-	return "CASE" + cases.String() + fmt.Sprintf(" ELSE %d END", len(fieldPriority))
-}
-
 // facetCondition is one custom-filter condition on a facet as a predicate over work; false for a facet it cannot read.
 func facetCondition(condition listfilter.Condition, facet WorkFacet) (string, []any, bool) {
 	switch facet.Source {
@@ -72,8 +64,8 @@ func facetCondition(condition listfilter.Condition, facet WorkFacet) (string, []
 		fragment, arguments := condition.SQL(facet.Kind, expression)
 		return fragment, arguments, true
 	case FacetField:
-		expression := "COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = work.id AND f.field = ? AND f.value IS NOT NULL" +
-			" ORDER BY " + fieldRank("f") + " LIMIT 1), '')"
+		expression := "COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = work.id AND f.field = ? AND f.value != ''" +
+			" ORDER BY " + metaresolve.OrderSQL("f") + " LIMIT 1), '')"
 		fragment, arguments := condition.SQL(facet.Kind, expression)
 		return fragment, append([]any{facet.Name}, arguments...), true
 	case FacetOrganisation:
@@ -99,7 +91,7 @@ func facetSortColumn(facet WorkFacet) string {
 		}
 	case FacetField:
 		return "COALESCE((SELECT sf.value FROM work_field sf WHERE sf.work_id = work.id AND sf.field = " + name +
-			" AND sf.value IS NOT NULL ORDER BY " + fieldRank("sf") + " LIMIT 1), '') COLLATE NOCASE"
+			" AND sf.value != '' ORDER BY " + metaresolve.OrderSQL("sf") + " LIMIT 1), '') COLLATE NOCASE"
 	case FacetOrganisation:
 		return "COALESCE((SELECT MIN(son.name) FROM work_organisation so JOIN organisation son ON son.id = so.organisation_id" +
 			" WHERE so.work_id = work.id AND so.role = " + name + "), '') COLLATE NOCASE"
@@ -188,7 +180,7 @@ func (w Works) FacetValues(ctx context.Context, facets []WorkFacet, workIDs []in
 			names = append(names, facet.Name)
 		}
 		query := "SELECT work_id, field, value FROM (SELECT f.work_id, f.field, f.value, ROW_NUMBER() OVER (PARTITION BY f.work_id, f.field ORDER BY " +
-			fieldRank("f") + ") AS rank FROM work_field f WHERE f.value IS NOT NULL AND f.work_id IN (" + ids + ") AND f.field IN (" +
+			metaresolve.OrderSQL("f") + ") AS rank FROM work_field f WHERE f.value != '' AND f.work_id IN (" + ids + ") AND f.field IN (" +
 			marks(len(names)) + ")) WHERE rank = 1"
 		err := eachTriple(ctx, reader, query, append(slices.Clone(idArgs), names...), func(id int64, field, value string) { add(id, keyOf[field], value) })
 		if err != nil {

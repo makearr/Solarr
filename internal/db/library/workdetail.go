@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 )
 
 // EditionDetail is one edition with the external ids recorded against it.
@@ -455,10 +456,10 @@ func (w Works) SetManualField(ctx context.Context, at time.Time, workID int64, f
 	err := w.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if value == "" {
-			return queries.DeleteWorkFieldByProvider(ctx, librarydb.DeleteWorkFieldByProviderParams{WorkID: workID, Field: field, Provider: manualProvider})
+			return queries.DeleteWorkFieldByProvider(ctx, librarydb.DeleteWorkFieldByProviderParams{WorkID: workID, Field: field, Provider: metaresolve.ManualProvider})
 		}
 		return queries.SetWorkField(ctx, librarydb.SetWorkFieldParams{
-			WorkID: workID, Field: field, Provider: manualProvider, Value: sql.NullString{String: value, Valid: true}, FetchedAt: at.Unix(),
+			WorkID: workID, Field: field, Provider: metaresolve.ManualProvider, Value: sql.NullString{String: value, Valid: true}, FetchedAt: at.Unix(),
 		})
 	})
 	if err != nil {
@@ -475,7 +476,7 @@ func (w Works) ManualFields(ctx context.Context, workID int64) (map[string]strin
 	}
 	manual := map[string]string{}
 	for _, field := range fields {
-		if field.Provider == manualProvider && field.Value.Valid {
+		if field.Provider == metaresolve.ManualProvider && field.Value.Valid {
 			manual[field.Field] = field.Value.String
 		}
 	}

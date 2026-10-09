@@ -3,6 +3,7 @@ package library_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/platform/listfilter"
@@ -108,5 +109,35 @@ func TestTheWorksListOrdersByAFacet(t *testing.T) {
 	}
 	if got, want := order(library.SortDescending), []string{"Alpha", "Charlie", "Bravo", "Delta"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("by status descending = %v, want %v", got, want)
+	}
+}
+
+// The list's SQL and the reader's Go pick a field's value by the one rule: the newest provider value, not the first.
+func TestFieldFacetsPickTheNewestValueAsTheReaderDoes(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	write := creditedSeries()
+	write.Fields = []library.SeriesFieldWrite{{Field: "status", Provider: "skyhook", Value: "ended"}}
+	result, err := series.Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write.Fields = []library.SeriesFieldWrite{{Field: "status", Provider: "tmdb", Value: "continuing"}}
+	if _, err := series.Upsert(t.Context(), seriesAt.Add(time.Hour), write); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.NewDesired(opened).EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 4, ProfileID: 1, Monitored: true}); err != nil {
+		t.Fatal(err)
+	}
+	values, err := library.NewWorks(opened).FacetValues(t.Context(), tvFacets, []int64{result.WorkID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := library.NewSeriesReader(opened).Get(t.Context(), 4, result.WorkID, seriesAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, read := values[result.WorkID]["status"], detail.Summary.Fields["status"]; !reflect.DeepEqual(got, []string{"continuing"}) || read != "continuing" {
+		t.Errorf("status: list %v, reader %q; want the newer continuing in both", got, read)
 	}
 }

@@ -61,6 +61,11 @@ no artist for files it does not want. An album's label is a `work_organisation` 
 id `musicbrainz:label`); the `work_field` `label` from provider `musicbrainz` records that the album was asked, its
 value the label or NULL for none, so each album is asked once.
 
+`work_field` keeps one row per (work, field, provider). Which value a reader sees is one rule,
+`internal/metadata/metaresolve`: a person's own (`__manual__`) wins, otherwise the newest non-empty value. A media type
+applies its provider priority when it fetches and merges its sources, so what it stored last is its current answer;
+the list's SQL orders by the same rule (`metaresolve.OrderSQL`).
+
 ## Interned attributes against per-file measurements
 
 `media_attributes` is interned: one row per distinct combination, referenced by many files.
