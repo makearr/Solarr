@@ -10,6 +10,7 @@
         "label": "Artists"
       }
     ],
+    "commits_held_imports": true,
     "facets": [
       {
         "column": true,
@@ -207,6 +208,7 @@
         "label": "Series"
       }
     ],
+    "commits_held_imports": false,
     "facets": [
       {
         "column": true,

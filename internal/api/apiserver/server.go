@@ -227,8 +227,6 @@ type Config struct {
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
 	RemoteImages RemoteImages
-	// UnidentifiedTV resolves queued files of TV libraries. Optional: without it a TV provider is refused.
-	UnidentifiedTV TVUnidentifiedResolver
 	// TVProviders reports and tests the TV metadata providers; without it those endpoints answer 503.
 	TVProviders TVProviders
 }
@@ -313,7 +311,6 @@ type Server struct {
 	downloaderTester        DownloaderTester
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
-	unidentifiedTV          TVUnidentifiedResolver
 	candidateSearcher       CandidateSearcher
 	// effectivePort is the port this process actually bound to, resolved at
 	// startup (ADR-58). The Network screen reports it beside whatever
@@ -420,7 +417,6 @@ func New(config Config) (*Server, error) {
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,
-		unidentifiedTV:          config.UnidentifiedTV,
 		effectivePort:           config.Port,
 		healthPath:              base + APIPrefix + "/health",
 		address:                 net.JoinHostPort(config.Bind, fmt.Sprint(config.Port)),

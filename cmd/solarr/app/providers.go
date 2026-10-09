@@ -356,6 +356,6 @@ func (p *process) unidentifiedTV() adapters.UnidentifiedTV {
 			Service: p.tvService(), Unidentified: queue, Clock: clock.NewSystem(), DefaultProfileID: p.defaultQualityProfileID,
 			Categories: adapters.Categories{Cache: p.cache},
 		},
-		Unidentified: queue, Cache: p.cache, Exclusions: adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
+		Unidentified: queue, Exclusions: adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 	}
 }

@@ -2698,6 +2698,9 @@ type MediaTypeInfo struct {
 		Label string `json:"label"`
 	} `json:"add_kinds"`
 
+	// CommitsHeldImports A held import unit is committed by hand, anyway or as a work named (Identify as).
+	CommitsHeldImports bool `json:"commits_held_imports"`
+
 	// Facets The type's own fields of its entities beyond the base ones, as lists and pages show them.
 	Facets []Facet `json:"facets"`
 
@@ -4460,15 +4463,18 @@ type ListUnidentifiedParams struct {
 
 // ResolveUnidentifiedJSONBody defines parameters for ResolveUnidentified.
 type ResolveUnidentifiedJSONBody struct {
-	// Episodes TV only: the episodes the file holds, when its name does not say.
-	Episodes   *[]int `json:"episodes,omitempty"`
+	// CategoryId The library to place the file in, one its root folder serves; the root folder's first library when left out. Its media type places the file.
+	CategoryId *int64 `json:"category_id,omitempty"`
 	ExternalId string `json:"external_id"`
 
-	// Provider musicbrainz:release-group for music, tvdb or tmdb for a file in a TV library (the series' id there).
-	Provider string `json:"provider"`
+	// Group For a type with groups (a season): the file's group, when its name does not say.
+	Group *int `json:"group,omitempty"`
 
-	// Season TV only: the file's season, when its name does not say.
-	Season *int `json:"season,omitempty"`
+	// Parts For a type with groups (episodes): the parts the file holds, when its name does not say.
+	Parts *[]int `json:"parts,omitempty"`
+
+	// Provider A work id as the library's lookup answers it: musicbrainz:release-group for music, tvdb or tmdb for a series.
+	Provider string `json:"provider"`
 
 	// WholeFolder Also resolve every other queued file directly in the same folder to this album or series ("identify the whole folder as"); a TV file is placed by its own name.
 	WholeFolder *bool `json:"whole_folder,omitempty"`

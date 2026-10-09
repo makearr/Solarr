@@ -4,11 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { vocabularyOf } from "@/lib/i18n";
 import { attemptLabel, outcomeLabel, passLabel } from "@/lib/identificationEvidence";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { IdentificationCandidates, type IdentificationCandidateView } from "./IdentificationCandidates";
-import { IdentifyTVFile } from "./IdentifyTVFile";
-import { ManualAlbumSearch } from "./ManualAlbumSearch";
+import { IdentifyAs, type IdentityChoice, queryFromPath } from "./IdentifyAs";
 
 type IdentificationAttempt = components["schemas"]["IdentificationAttempt"];
 
@@ -22,7 +23,7 @@ export function UnidentifiedReview() {
   const [wholeFolder, setWholeFolder] = useState(false);
   const [confirmingNotMedia, setConfirmingNotMedia] = useState(false);
 
-  // A file in a TV library is placed by series and episode, not by album.
+  // The file is placed in its root folder's first library, as that library's type places files.
   const roots = useQuery({
     queryKey: ["rootfolders"],
     queryFn: async () => {
@@ -52,12 +53,23 @@ export function UnidentifiedReview() {
     },
   });
 
+  const mediaTypes = useMediaTypes();
+  const rootLibraries = (roots.data ?? []).find((root) => root.id === review.data?.file.root_folder_id)?.categories ?? [];
+  const library = (libraries.data ?? []).find((candidate) => candidate.id === rootLibraries[0]?.id);
+  const words = vocabularyOf(mediaTypes.find((type) => type.key === library?.media_type));
   const choose = useMutation({
-    mutationFn: async (candidate: { provider?: string; external_id?: string }) => {
+    mutationFn: async (candidate: Partial<IdentityChoice>) => {
       if (candidate.provider === undefined || candidate.external_id === undefined) return;
       const { error } = await api.POST("/library/unidentified/{mediaObjectId}/resolve", {
         params: { path: { mediaObjectId: mediaObjectId as number } },
-        body: { provider: candidate.provider, external_id: candidate.external_id, whole_folder: wholeFolder },
+        body: {
+          ...(library ? { category_id: library.id } : {}),
+          provider: candidate.provider,
+          external_id: candidate.external_id,
+          group: candidate.group,
+          parts: candidate.parts,
+          whole_folder: wholeFolder,
+        },
       });
       if (error) throw error;
     },
@@ -86,10 +98,6 @@ export function UnidentifiedReview() {
   }
 
   const [latest, ...older] = review.data.items;
-  const rootFolder = (roots.data ?? []).find((root) => root.id === review.data.file.root_folder_id);
-  const tvLibrary = (libraries.data ?? []).find(
-    (library) => library.media_type === "tv" && (rootFolder?.categories ?? []).some((category) => category.id === library.id),
-  );
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
@@ -99,15 +107,15 @@ export function UnidentifiedReview() {
           </Link>
           <h1 className="break-all font-mono text-sm text-ink">{review.data.file.rel_path}</h1>
           <p className="text-xs text-ink-muted">
-            {tvLibrary ? "Pick the series and episode this file is." : "Pick the album this file belongs to."} Each pass below shows what it looked at and why it
-            did not decide on its own.
+            Pick the {words.work} this file belongs to. Each pass below shows what it looked at and why it did not decide on
+            its own.
           </p>
         </header>
 
         <div className="flex flex-wrap items-center gap-3 text-xs">
           <label className="flex items-center gap-1.5 text-ink">
             <input type="checkbox" checked={wholeFolder} onChange={(event) => setWholeFolder(event.target.checked)} />
-            {tvLibrary ? "Also place the other files waiting in this folder in that series, each by its own name" : "Use the album I pick for every file waiting in this folder"}
+            Also place the other files waiting in this folder in the {words.work} I pick
           </label>
           <span className="ml-auto flex items-center gap-1.5">
             {confirmingNotMedia ? (
@@ -142,26 +150,19 @@ export function UnidentifiedReview() {
           </span>
         </div>
 
-        {choose.isError && <p className="text-xs text-danger">That album could not be applied.</p>}
+        {choose.isError && <p className="text-xs text-danger">That {words.work} could not be applied.</p>}
         {notMedia.isError && <p className="text-xs text-danger">The file could not be marked.</p>}
 
-        {tvLibrary ? (
-          <IdentifyTVFile
-            categoryId={tvLibrary.id}
-            mediaObjectId={mediaObjectId as number}
-            relPath={review.data.file.rel_path}
-            wholeFolder={wholeFolder}
-            onDone={() => {
-              void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
-              void navigate({ to: "/unidentified" });
-            }}
-          />
-        ) : (
-          <ManualAlbumSearch
-            relPath={review.data.file.rel_path}
-            onChoose={(result) => choose.mutate(result)}
-            busy={choose.isPending}
-          />
+        {library && (
+          <div className="rounded-lg border border-border-subtle bg-surface p-3">
+            <IdentifyAs
+              categoryId={library.id}
+              guess={queryFromPath(review.data.file.rel_path)}
+              busy={choose.isPending}
+              failed={choose.isError ? ((choose.error as { detail?: string }).detail ?? "That could not be placed.") : null}
+              onPlace={(choice) => choose.mutate(choice)}
+            />
+          </div>
         )}
 
         {latest === undefined ? (

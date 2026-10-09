@@ -3547,18 +3547,25 @@ paths:
               type: object
               required: [provider, external_id]
               properties:
+                category_id:
+                  type: integer
+                  format: int64
+                  description: >-
+                    The library to place the file in, one its root folder serves; the root folder's first library
+                    when left out. Its media type places the file.
                 provider:
                   type: string
                   description: >-
-                    musicbrainz:release-group for music, tvdb or tmdb for a file in a TV library (the series' id there).
+                    A work id as the library's lookup answers it: musicbrainz:release-group for music, tvdb or tmdb
+                    for a series.
                 external_id: { type: string }
-                season:
+                group:
                   type: integer
-                  description: "TV only: the file's season, when its name does not say."
-                episodes:
+                  description: "For a type with groups (a season): the file's group, when its name does not say."
+                parts:
                   type: array
                   items: { type: integer }
-                  description: "TV only: the episodes the file holds, when its name does not say."
+                  description: "For a type with groups (episodes): the parts the file holds, when its name does not say."
                 whole_folder:
                   type: boolean
                   description: >-
@@ -6852,7 +6859,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -6901,6 +6908,7 @@ components:
               key: { type: string }
               label: { type: string }
         wanted_grain: { type: string, enum: [work, part], description: "What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts)." }
+        commits_held_imports: { type: boolean, description: "A held import unit is committed by hand, anyway or as a work named (Identify as)." }
 
     MediaType:
       type: string

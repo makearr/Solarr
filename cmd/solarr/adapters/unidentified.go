@@ -3,10 +3,14 @@ package adapters
 import (
 	"context"
 	"errors"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -35,10 +39,18 @@ func (a Unidentified) ListUnidentified(
 	return views, nil
 }
 
-// UnidentifiedResolver satisfies apiserver.UnidentifiedResolver over music.ResolveUnidentified.
+// UnidentifiedResolver satisfies apiserver.UnidentifiedResolver: a file is placed through its library's media type.
 type UnidentifiedResolver struct {
 	Unidentified library.Unidentified
 	Attempts     library.Attempts
+	Cache        *settings.Cache
+	PlacingFiles func(mediaType string) (media.PlacingFiles, bool)
+	Clock        clock.Clock
+}
+
+// MusicFiles is music's media.PlacingFiles over music.ResolveUnidentified: a file becomes part of the album named.
+type MusicFiles struct {
+	Unidentified library.Unidentified
 	Identity     library.Identity
 	Provider     musicbrainz.Provider
 	Clock        clock.Clock
@@ -58,9 +70,41 @@ func (a UnidentifiedResolver) GetUnidentified(
 	}, nil
 }
 
+// ResolveUnidentified places the file in the library named, or the first of its root folder's libraries.
 func (a UnidentifiedResolver) ResolveUnidentified(
-	ctx context.Context, mediaObjectID int64, provider, externalID string, wholeFolder bool,
+	ctx context.Context, mediaObjectID int64, categoryID *int64, placement apiserver.FilePlacement, wholeFolder bool,
 ) (workID, resolved int64, err error) {
+	entry, err := a.Unidentified.Get(ctx, mediaObjectID)
+	if err != nil {
+		return 0, 0, err
+	}
+	snapshot := a.Cache.Snapshot()
+	libraries := snapshot.CategoriesForRootFolder(entry.RootFolderID)
+	if categoryID == nil && len(libraries) > 0 {
+		categoryID = &libraries[0]
+	}
+	if categoryID == nil || !slices.Contains(libraries, *categoryID) {
+		return 0, 0, fmt.Errorf("%w: the file is in no such library", apiserver.ErrInvalidChoice)
+	}
+	category, _ := snapshot.Category(*categoryID)
+	placing, ok := a.PlacingFiles(category.MediaType)
+	if !ok {
+		return 0, 0, apiserver.ErrNotBuiltForMediaType
+	}
+	workID, resolved, err = placing.PlaceFile(ctx, *categoryID, mediaObjectID, media.Placement{
+		Provider: placement.Provider, ExternalID: placement.ExternalID, Group: placement.Group, Parts: placement.Parts,
+	}, wholeFolder)
+	if errors.Is(err, media.ErrNotWired) {
+		return workID, resolved, apiserver.ErrNotBuiltForMediaType
+	}
+	return workID, resolved, err
+}
+
+// PlaceFile implements media.PlacingFiles for music; an album has no groups, so the placement's are not read.
+func (a MusicFiles) PlaceFile(
+	ctx context.Context, _, mediaObjectID int64, placement media.Placement, wholeFolder bool,
+) (workID, resolved int64, err error) {
+	provider, externalID := placement.Provider, placement.ExternalID
 	ids := []int64{mediaObjectID}
 	if wholeFolder {
 		entry, err := a.Unidentified.Get(ctx, mediaObjectID)

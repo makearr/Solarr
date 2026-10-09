@@ -255,4 +255,6 @@ album per folder, while every file also stays under Unidentified. Resolving a fi
 scan identifying it) takes it off the unverified album, which goes with its last file unless a person
 added it. The badge shows on the album page, posters, the albums table and the artist page.
 
-Not built yet: "Identify as..." for an import unit with no candidate at all.
+"Identify as..." places a held unit as the album named whether identification found candidates or none. It and a
+file's manual resolve are one form (`web/src/app/IdentifyAs.tsx`); the resolve goes through the file's library's
+`media.PlacingFiles`, so a TV file is placed by series, season and episodes through the same request.

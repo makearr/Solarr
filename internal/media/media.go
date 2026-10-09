@@ -88,6 +88,8 @@ type Descriptor struct {
 	AddKinds []Choice
 	// WantedGrain is what Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes).
 	WantedGrain WantedGrain
+	// CommitsHeldImports says a held import unit of the type is committed by hand, anyway or as a work named.
+	CommitsHeldImports bool
 	// ScanHonoursExclusions says the type's scan leaves an excluded work's files out, so a work removed and excluded
 	// can go although its files stay.
 	ScanHonoursExclusions bool
@@ -173,6 +175,21 @@ type Picturing interface {
 	WorkPictures(ctx context.Context, workID int64) ([]ImageOption, error)
 	// PickWorkPicture keeps imageURL, one of WorkPictures, over later refreshes; ErrImageNotOffered otherwise.
 	PickWorkPicture(ctx context.Context, workID int64, imageURL string) error
+}
+
+// Placement is a person's answer to "what is this file": a work by a provider's id and, for a type with groups, the
+// group and parts it holds when its name does not say (no parts: read them from the name).
+type Placement struct {
+	Provider, ExternalID string
+	Group                int
+	Parts                []int
+}
+
+// PlacingFiles is the capability of a media type whose library files nothing identified are placed by a person.
+type PlacingFiles interface {
+	// PlaceFile places one waiting file of the library, and with wholeFolder those waiting beside it; it answers the
+	// work and how many files were placed.
+	PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement Placement, wholeFolder bool) (workID, placed int64, err error)
 }
 
 // Pass is one of the periodic passes that keep metadata current; each is one schedule for every media type.

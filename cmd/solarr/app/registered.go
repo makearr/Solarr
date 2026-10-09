@@ -97,7 +97,7 @@ func (p *process) musicModule() music.Module {
 		},
 		PicturesPass: p.artworkPass,
 	}
-	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures(), Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -139,6 +139,7 @@ func (p *process) tvModule() tv.Module {
 		Hunt:     p.tvHunt,
 		Adder:    p.seriesCatalog(),
 		Pictures: p.seriesCatalog(),
+		Files:    p.unidentifiedTV(),
 		Passes: media.Passes{
 			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
 				result, err := tv.EnqueueRefresh(ctx, p.queue)
@@ -251,5 +252,13 @@ func (p *process) musicAdder() adapters.Discover {
 				p.logger.Warn("add artist's albums", slog.Any("error", err))
 			}
 		},
+	}
+}
+
+// musicFiles places a music file nothing identified as the album a person names.
+func (p *process) musicFiles() adapters.MusicFiles {
+	return adapters.MusicFiles{
+		Unidentified: library.NewUnidentified(p.library), Identity: library.NewIdentity(p.library),
+		Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 	}
 }

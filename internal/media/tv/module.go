@@ -21,6 +21,8 @@ type Module struct {
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
 	// Adder looks a work up and adds it; nil leaves the type without an add.
 	Adder media.Adding
+	// Files places a library file nothing identified; nil leaves such files to wait.
+	Files media.PlacingFiles
 	// Pictures lists and keeps the providers' pictures of a work; nil leaves the picture unchosen.
 	Pictures media.Picturing
 	// Refresh reads one series again from its sources; nil leaves it unrefreshable.
@@ -58,6 +60,14 @@ func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.Ad
 		return media.AddResult{}, media.ErrNotWired
 	}
 	return m.Adder.AddWork(ctx, request)
+}
+
+// PlaceFile implements media.PlacingFiles.
+func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
+	if m.Files == nil {
+		return 0, 0, media.ErrNotWired
+	}
+	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
 }
 
 // WorkPictures implements media.Picturing.

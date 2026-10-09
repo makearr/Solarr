@@ -124,6 +124,17 @@ func (m MediaTypes) AddKinds(mediaType string) []media.Choice {
 	return nil
 }
 
+// CommitsHeldImports says whether a library's type commits a held import unit by hand.
+func (m MediaTypes) CommitsHeldImports(mediaType string) bool {
+	module, ok := m.Registry.Module(media.Key(mediaType))
+	return ok && module.Descriptor().CommitsHeldImports
+}
+
+// PlacingFilesOf answers a media type's placing of a file nothing identified.
+func (m MediaTypes) PlacingFilesOf(mediaType string) (media.PlacingFiles, bool) {
+	return media.Capability[media.PlacingFiles](m.Registry, media.Key(mediaType))
+}
+
 // PicturingOf answers a media type's choice of a work's picture.
 func (m MediaTypes) PicturingOf(mediaType string) (media.Picturing, bool) {
 	return media.Capability[media.Picturing](m.Registry, media.Key(mediaType))
@@ -184,6 +195,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		for _, kind := range descriptor.AddKinds {
 			info.AddKinds = append(info.AddKinds, apiserver.MediaChoice{Key: kind.Key, Label: kind.Label})
 		}
+		info.CommitsHeldImports = descriptor.CommitsHeldImports
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {
 			info.WantedGrain = "part"

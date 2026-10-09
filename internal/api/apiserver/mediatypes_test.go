@@ -49,11 +49,11 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 			"roles": []any{map[string]any{
 				"key": "artist", "label": "Artist", "lead": true, "followable": true, "part_scoped": false, "character": false,
 			}},
-			"follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{},
+			"follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false,
 		},
 		{
 			"key": "tv", "label": "TV", "work": term("Series", "Series"), "part": term("", ""), "group": term("", ""),
-			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{},
+			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false,
 		},
 	}
 	if !reflect.DeepEqual(got, want) {

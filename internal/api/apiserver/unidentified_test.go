@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -49,6 +50,8 @@ type fakeUnidentifiedResolver struct {
 	lastProvider      string
 	lastExternalID    string
 	lastWholeFolder   bool
+	lastCategoryID    *int64
+	lastPlacement     apiserver.FilePlacement
 	resolveCalls      int
 	notMedia          []int64
 
@@ -72,12 +75,14 @@ func (f *fakeUnidentifiedResolver) GetUnidentified(
 }
 
 func (f *fakeUnidentifiedResolver) ResolveUnidentified(
-	_ context.Context, mediaObjectID int64, provider, externalID string, wholeFolder bool,
+	_ context.Context, mediaObjectID int64, categoryID *int64, placement apiserver.FilePlacement, wholeFolder bool,
 ) (int64, int64, error) {
 	f.resolveCalls++
 	f.lastMediaObjectID = mediaObjectID
-	f.lastProvider = provider
-	f.lastExternalID = externalID
+	f.lastCategoryID = categoryID
+	f.lastPlacement = placement
+	f.lastProvider = placement.Provider
+	f.lastExternalID = placement.ExternalID
 	f.lastWholeFolder = wholeFolder
 	if f.resolveErr != nil {
 		return 0, 0, f.resolveErr
@@ -400,5 +405,25 @@ func TestMarkUnidentifiedNotMedia_OnlyForAVisibleFile(t *testing.T) {
 	recorder = fixture.do(authedPost(t, fixture.signIn(t, "admin"), "/api/v1/library/unidentified/7/not-media", ""))
 	if recorder.Code != http.StatusNoContent || !slices.Equal(fixture.unidentifiedResolver.notMedia, []int64{7}) {
 		t.Errorf("visible: status %d, marked %v; want 204 and [7]", recorder.Code, fixture.unidentifiedResolver.notMedia)
+	}
+}
+
+// The library and, for a type with groups, the group and parts reach the resolver as the request named them.
+func TestResolveUnidentified_ForwardsTheLibraryAndThePlacement(t *testing.T) {
+	fixture := newWorksFixture(t)
+	_, root := fixture.createCategoryWithRoot(t, "Series", "/media/series")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		`{"category_id":7,"provider":"tvdb","external_id":"9001","group":2,"parts":[3,4]}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	got := fixture.unidentifiedResolver
+	want := apiserver.FilePlacement{Provider: "tvdb", ExternalID: "9001", Group: 2, Parts: []int{3, 4}}
+	if got.lastCategoryID == nil || *got.lastCategoryID != 7 || !reflect.DeepEqual(got.lastPlacement, want) {
+		t.Errorf("resolver got library %v and %+v, want 7 and %+v", got.lastCategoryID, got.lastPlacement, want)
 	}
 }

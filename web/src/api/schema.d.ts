@@ -4404,6 +4404,8 @@ export interface components {
              * @enum {string}
              */
             wanted_grain: "work" | "part";
+            /** @description A held import unit is committed by hand, anyway or as a work named (Identify as). */
+            commits_held_imports: boolean;
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -10714,13 +10716,18 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @description musicbrainz:release-group for music, tvdb or tmdb for a file in a TV library (the series' id there). */
+                    /**
+                     * Format: int64
+                     * @description The library to place the file in, one its root folder serves; the root folder's first library when left out. Its media type places the file.
+                     */
+                    category_id?: number;
+                    /** @description A work id as the library's lookup answers it: musicbrainz:release-group for music, tvdb or tmdb for a series. */
                     provider: string;
                     external_id: string;
-                    /** @description TV only: the file's season, when its name does not say. */
-                    season?: number;
-                    /** @description TV only: the episodes the file holds, when its name does not say. */
-                    episodes?: number[];
+                    /** @description For a type with groups (a season): the file's group, when its name does not say. */
+                    group?: number;
+                    /** @description For a type with groups (episodes): the parts the file holds, when its name does not say. */
+                    parts?: number[];
                     /** @description Also resolve every other queued file directly in the same folder to this album or series ("identify the whole folder as"); a TV file is placed by its own name. */
                     whole_folder?: boolean;
                 };

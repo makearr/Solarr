@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 // A series' type is an editable facet of the one Edit: set, read back, returned to its sources; an album has none.
@@ -198,5 +200,57 @@ func TestWorkPictures_ChooseASeriesPoster(t *testing.T) {
 	}
 	if work.Pictures.Poster != want[1] {
 		t.Errorf("poster after the pick = %q, want %q", work.Pictures.Poster, want[1])
+	}
+}
+
+// A file waiting in a TV library is placed through its library's type: the series, season and episode named.
+func TestResolveUnidentified_PlacesThroughTheLibrarysType(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	ctx := t.Context()
+	files, err := library.NewPhysical(server.process.library).RegisterBatch(ctx, ids.seriesTop, []library.PhysicalFile{
+		{RelPath: "Unsorted/marble.mkv", SizeBytes: 900_000_000, QuickHash: "golden-u1", FirstSeenAt: goldenSeededAt},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	queue := library.NewUnidentified(server.process.library)
+	if err := queue.Record(ctx, []library.QueueEntry{{MediaObjectID: files[0].MediaObjectID, RootFolderID: ids.seriesTop, RelPath: "Unsorted/marble.mkv", At: goldenSeededAt.Unix()}}); err != nil {
+		t.Fatal(err)
+	}
+	resolve := fmt.Sprintf("/library/unidentified/%d/resolve", files[0].MediaObjectID)
+
+	if status, body := server.post(t, resolve, fmt.Sprintf(`{"category_id":%d,"provider":"tvdb","external_id":"9001","group":1,"parts":[2]}`, ids.music)); status != http.StatusBadRequest {
+		t.Errorf("a library the file's root does not serve: %d %s, want 400", status, body)
+	}
+	status, body := server.post(t, resolve, `{"provider":"tvdb","external_id":"9001","group":1,"parts":[2]}`)
+	if status != http.StatusOK || strings.TrimSpace(body) != fmt.Sprintf(`{"resolved":1,"work_id":%d}`, ids.series) {
+		t.Fatalf("resolve: %d %s, want the series placed", status, body)
+	}
+	if _, err := queue.Get(ctx, files[0].MediaObjectID); err == nil {
+		t.Error("the file is still waiting after it was placed")
+	}
+}
+
+// A held unit in a library whose type has no manual commit is refused, not placed by another type's committer.
+func TestCommitImportUnit_RefusesATypeWithoutManualCommits(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	sessions := library.NewImportSessions(server.process.library)
+	sessionID, err := sessions.Create(t.Context(), library.NewSession{SourcePath: "/downloads/marble", Origin: "manual", CategoryID: &ids.tv, Threshold: 0.9, StartedAt: goldenSeededAt.Unix()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	units, err := sessions.AddUnits(t.Context(), sessionID, []library.NewUnit{{RelPath: "Marble.S01E02", Shape: "folder", FileCount: 1, EvidenceJSON: "{}"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{
+		fmt.Sprintf("/import/sessions/%d/units/%d/commit", sessionID, units[0]),
+		fmt.Sprintf("/import/sessions/%d/commit", sessionID),
+	} {
+		if status, body := server.post(t, target, `{"provider":"tvdb","external_id":"9001"}`); status != http.StatusConflict {
+			t.Errorf("POST %s: %d %s, want 409", target, status, body)
+		}
 	}
 }

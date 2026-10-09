@@ -46,6 +46,8 @@ type MediaTypeInfo struct {
 	WantedGrain string
 	// AddKinds are what a library of the type adds, the first being its default.
 	AddKinds []MediaChoice
+	// CommitsHeldImports says a held import unit is committed by hand.
+	CommitsHeldImports bool
 }
 
 // MediaChoice is one key a media type offers, with its label.
@@ -76,7 +78,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
 				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage), WantedGrain: gen.MediaTypeInfoWantedGrain(info.WantedGrain),
-				AddKinds: choiceViews(info.AddKinds),
+				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports,
 			})
 		}
 	}

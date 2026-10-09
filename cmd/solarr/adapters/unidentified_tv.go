@@ -8,23 +8,24 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
 )
 
-// UnidentifiedTV satisfies apiserver.TVUnidentifiedResolver over tv.Identifier.
+// UnidentifiedTV is TV's media.PlacingFiles over tv.Identifier.
 type UnidentifiedTV struct {
 	Identifier   tv.Identifier
 	Unidentified library.Unidentified
-	Cache        *settings.Cache
 	// Exclusions lifts a series' exclusion when a person picks it by hand.
 	Exclusions WorkExclusions
 }
 
-// ResolveTV places one queued file, and with wholeFolder every other queued file directly beside it by its own name.
-func (a UnidentifiedTV) ResolveTV(
-	ctx context.Context, mediaObjectID int64, provider, externalID string, season int, episodes []int, wholeFolder bool,
+// PlaceFile places one queued file in the series, season and episodes named, and with wholeFolder every other queued
+// file directly beside it by its own name.
+func (a UnidentifiedTV) PlaceFile(
+	ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool,
 ) (int64, int64, error) {
+	provider, externalID, season, episodes := placement.Provider, placement.ExternalID, placement.Group, placement.Parts
 	id, err := strconv.ParseInt(externalID, 10, 64)
 	if err != nil || id <= 0 {
 		return 0, 0, fmt.Errorf("%w: %q is not a series id", apiserver.ErrInvalidChoice, externalID)
@@ -36,10 +37,6 @@ func (a UnidentifiedTV) ResolveTV(
 	entry, err := a.Unidentified.Get(ctx, mediaObjectID)
 	if err != nil {
 		return 0, 0, err
-	}
-	categoryID, ok := a.tvCategory(entry.RootFolderID)
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: the file is not in a TV library", apiserver.ErrInvalidChoice)
 	}
 	if err := a.Exclusions.Allow(ctx, tv.MediaType, provider, externalID); err != nil {
 		return 0, 0, err
@@ -71,16 +68,6 @@ func (a UnidentifiedTV) ResolveTV(
 		}
 	}
 	return workID, resolved, nil
-}
-
-func (a UnidentifiedTV) tvCategory(rootFolderID int64) (int64, bool) {
-	snapshot := a.Cache.Snapshot()
-	for _, id := range snapshot.CategoriesForRootFolder(rootFolderID) {
-		if category, found := snapshot.Category(id); found && category.MediaType == tv.MediaType {
-			return id, true
-		}
-	}
-	return 0, false
 }
 
 func translateTVResolveError(err error) error {

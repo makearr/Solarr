@@ -90,11 +90,10 @@ type UnidentifiedResolver interface {
 	// GetUnidentified answers one queued entry, for the visibility check
 	// before resolving it. A missing id wraps sql.ErrNoRows.
 	GetUnidentified(ctx context.Context, mediaObjectID int64) (UnidentifiedRow, error)
-	// ResolveUnidentified fetches the candidate's real title, resolves or
-	// creates the work, links the root folder and clears the queue entry;
-	// wholeFolder does the same for every file queued beside it.
+	// ResolveUnidentified places the file through its library's media type (categoryID, or the root folder's first)
+	// and clears the queue entry; wholeFolder does the same for every file queued beside it.
 	ResolveUnidentified(
-		ctx context.Context, mediaObjectID int64, provider, externalID string, wholeFolder bool,
+		ctx context.Context, mediaObjectID int64, categoryID *int64, placement FilePlacement, wholeFolder bool,
 	) (workID, resolved int64, err error)
 	// MarkNotMedia takes a queued file out of the queue for good.
 	MarkNotMedia(ctx context.Context, mediaObjectID int64) error
@@ -127,9 +126,11 @@ type IdentificationEvidence struct {
 	Kind, Detail string
 }
 
-// TVUnidentifiedResolver places a queued file of a TV library by a person's choice of series, season and episodes.
-type TVUnidentifiedResolver interface {
-	ResolveTV(ctx context.Context, mediaObjectID int64, provider, externalID string, season int, episodes []int, wholeFolder bool) (workID, resolved int64, err error)
+// FilePlacement is what a person said a waiting file is: a work, and for a type with groups its group and parts.
+type FilePlacement struct {
+	Provider, ExternalID string
+	Group                int
+	Parts                []int
 }
 
 // ErrUnsupportedProvider mirrors music.ErrUnsupportedProvider without this
@@ -163,23 +164,15 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 		return
 	}
 
+	placement := FilePlacement{Provider: body.Provider, ExternalID: body.ExternalId}
+	if body.Group != nil {
+		placement.Group = *body.Group
+	}
+	if body.Parts != nil {
+		placement.Parts = *body.Parts
+	}
 	wholeFolder := body.WholeFolder != nil && *body.WholeFolder
-	resolve := func() (int64, int64, error) {
-		return s.unidentifiedResolver.ResolveUnidentified(r.Context(), mediaObjectID, body.Provider, body.ExternalId, wholeFolder)
-	}
-	if (body.Provider == "tvdb" || body.Provider == "tmdb") && s.unidentifiedTV != nil {
-		resolve = func() (int64, int64, error) {
-			season, episodes := 0, []int(nil)
-			if body.Season != nil {
-				season = *body.Season
-			}
-			if body.Episodes != nil {
-				episodes = *body.Episodes
-			}
-			return s.unidentifiedTV.ResolveTV(r.Context(), mediaObjectID, body.Provider, body.ExternalId, season, episodes, wholeFolder)
-		}
-	}
-	workID, resolved, err := resolve()
+	workID, resolved, err := s.unidentifiedResolver.ResolveUnidentified(r.Context(), mediaObjectID, body.CategoryId, placement, wholeFolder)
 	if err != nil {
 		if errors.Is(err, ErrUnsupportedProvider) {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())

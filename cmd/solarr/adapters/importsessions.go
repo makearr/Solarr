@@ -26,6 +26,21 @@ type ImportSessions struct {
 	Clock    clock.Clock
 	// Libraries gives a revert its library's recycling bin.
 	Libraries LibraryLookup
+	// CommitsHeld says whether a media type commits a held unit by hand; its committer is music's.
+	CommitsHeld func(mediaType string) bool
+}
+
+// heldCommitBuilt refuses a session whose library's type does not commit held units by hand; one without a library is
+// left to the committer, which asks for one.
+func (a ImportSessions) heldCommitBuilt(ctx context.Context, sessionID int64) error {
+	session, err := a.Sessions.Get(ctx, sessionID)
+	if err != nil || session.CategoryID == nil || a.CommitsHeld == nil {
+		return err
+	}
+	if category, found := a.Libraries.Category(*session.CategoryID); found && !a.CommitsHeld(category.MediaType) {
+		return apiserver.ErrNotBuiltForMediaType
+	}
+	return nil
 }
 
 func (a ImportSessions) ListImportSessions(
@@ -140,6 +155,9 @@ func (a ImportSessions) AssignImportCategory(ctx context.Context, id, categoryID
 func (a ImportSessions) CommitHeldImportUnits(
 	ctx context.Context, sessionID int64, unitIDs []int64,
 ) (apiserver.ImportPlacementResult, error) {
+	if err := a.heldCommitBuilt(ctx, sessionID); err != nil {
+		return apiserver.ImportPlacementResult{}, err
+	}
 	committed, commitErrs := a.Manual.CommitAllHeld(ctx, sessionID, unitIDs)
 	messages := make([]string, 0, len(commitErrs))
 	for _, commitErr := range commitErrs {
@@ -167,6 +185,9 @@ func (a ImportSessions) CommitImportUnit(
 	}
 	if unit.SessionID != sessionID {
 		return apiserver.ImportUnitRow{}, sql.ErrNoRows
+	}
+	if err := a.heldCommitBuilt(ctx, sessionID); err != nil {
+		return apiserver.ImportUnitRow{}, err
 	}
 
 	var commitErr error

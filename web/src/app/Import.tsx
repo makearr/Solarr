@@ -6,9 +6,12 @@ import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { factsOf } from "@/lib/identificationEvidence";
+import { useLibrary } from "@/lib/useLibrary";
+import { useMediaTypes } from "@/lib/useMediaTypes";
+import { Dialog } from "@/ui/Dialog";
 
 import { IdentificationCandidates } from "./IdentificationCandidates";
-import { IdentifyUnitAs } from "./IdentifyUnitAs";
+import { IdentifyAs, type IdentityChoice, queryFromPath } from "./IdentifyAs";
 import { PathPicker, useRecentPaths } from "./PathPicker";
 import { SettingRow, Switch } from "./SettingsCard";
 
@@ -1168,15 +1171,20 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
   const [expanded, setExpanded] = useState(false);
   const [identifying, setIdentifying] = useState(false);
   const queryClient = useQueryClient();
+  const library = useLibrary(categoryId === null ? undefined : String(categoryId));
+  // Only a type whose held units are committed by hand offers Commit anyway and Identify as.
+  const commitsHeld = useMediaTypes().find((type) => type.key === library?.media_type)?.commits_held_imports === true;
 
   const commit = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (as?: IdentityChoice) => {
       const { error } = await api.POST("/import/sessions/{id}/units/{unitId}/commit", {
         params: { path: { id: sessionId, unitId: unit.id } },
+        ...(as ? { body: { provider: as.provider, external_id: as.external_id } } : {}),
       });
       if (error) throw error;
     },
     onSuccess: () => {
+      setIdentifying(false);
       void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
       void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
     },
@@ -1207,7 +1215,7 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
             <span className="text-ink-muted">{describeTransfer(unit.transfer_methods!)}</span>
           )}
         </button>
-        {unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && (
+        {commitsHeld && unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && (
           <button
             type="button"
             onClick={() => commit.mutate()}
@@ -1219,11 +1227,11 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
             {commit.isPending ? "Committing…" : "Commit anyway"}
           </button>
         )}
-        {unit.decision === "QUEUE" && categoryId !== null && (
+        {commitsHeld && unit.decision === "QUEUE" && categoryId !== null && (
           <button
             type="button"
             onClick={() => setIdentifying(true)}
-            title="Search for the album these files are and place them as it"
+            title="Search for what these files are and place them as it"
             className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
                        focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1232,17 +1240,15 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
         )}
       </div>
       {identifying && categoryId !== null && (
-        <IdentifyUnitAs
-          sessionId={sessionId}
-          unitId={unit.id}
-          categoryId={categoryId}
-          onClose={() => setIdentifying(false)}
-          onDone={() => {
-            setIdentifying(false);
-            void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
-            void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
-          }}
-        />
+        <Dialog title="Identify as…" width="wide" onClose={() => setIdentifying(false)}>
+          <IdentifyAs
+            categoryId={categoryId}
+            guess={queryFromPath(`${unit.rel_path}/`)}
+            busy={commit.isPending}
+            failed={commit.isError ? "That could not be placed. Pick another or try again." : null}
+            onPlace={(choice) => commit.mutate(choice)}
+          />
+        </Dialog>
       )}
       {commit.isError && <span className="text-danger">That could not be committed.</span>}
       {expanded && (

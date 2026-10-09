@@ -700,7 +700,6 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
 		RemoteImages:      p.remoteImages(),
-		UnidentifiedTV:    p.unidentifiedTV(),
 		LibraryHealth: adapters.LibraryHealth{
 			Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 			Desired: library.NewDesired(p.library), BlockedContent: library.NewBlockedContentStore(p.library),
@@ -709,8 +708,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Search:       adapters.Search{Search: library.NewSearch(p.library)},
 		Unidentified: adapters.Unidentified{Unidentified: library.NewUnidentified(p.library)},
 		UnidentifiedResolver: adapters.UnidentifiedResolver{
-			Unidentified: library.NewUnidentified(p.library), Attempts: library.NewAttempts(p.library),
-			Identity: library.NewIdentity(p.library), Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
+			Unidentified: library.NewUnidentified(p.library), Attempts: library.NewAttempts(p.library), Cache: p.cache,
+			PlacingFiles: adapters.MediaTypes{Registry: p.media}.PlacingFilesOf, Clock: clock.NewSystem(),
 		},
 		Artwork: adapters.Artwork{Artworks: library.NewArtworks(p.library)},
 		ArtworkChoices: adapters.ArtworkChoices{
@@ -758,7 +757,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), adapters.RootFolderPath(p.cache),
 			),
 			Manual: p.manualCommitter(), Libraries: adapters.Categories{Cache: p.cache},
-			Clock: clock.NewSystem(),
+			CommitsHeld: adapters.MediaTypes{Registry: p.media}.CommitsHeldImports,
+			Clock:       clock.NewSystem(),
 		},
 		ImportInspector:    adapters.ImportInspector{Queue: p.queue},
 		FingerprintRetrier: fingerprintRetrier{p: p},
