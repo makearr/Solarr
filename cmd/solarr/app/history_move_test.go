@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -105,5 +106,58 @@ func TestCopyStatRollup_MovesTheFiguresOnce(t *testing.T) {
 	page := string(server.get(t, fmt.Sprintf("/categories/%d/statistics", ids.music)))
 	if !strings.Contains(page, `"albums_by_state":[{"count":12,"key":"COMPLETE"}]`) {
 		t.Errorf("statistics = %s, want the copied 12 complete albums, not the later 99", page)
+	}
+}
+
+// library.db's candidates and decisions reach statistics.db under their own ids, once, and a later one follows.
+func TestCopyDecisions_KeepsIDsAndResumes(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	ctx := t.Context()
+	item, err := library.NewDesired(server.process.library).AlbumItemsForWork(ctx, ids.album)
+	if err != nil || len(item) == 0 {
+		t.Fatalf("album item: %v", err)
+	}
+	from := library.NewCandidates(server.process.library)
+	decide := func(guid string) library.Decision {
+		t.Helper()
+		candidate, err := from.Upsert(ctx, library.NewReleaseCandidate{
+			IndexerID: 1, GUID: guid, Title: guid, Protocol: "usenet", DownloadURL: "https://x/" + guid, Source: "search",
+			FirstSeenAt: 10, ExpiresAt: 1 << 40,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		decision, err := from.RecordDecision(ctx, library.NewDecision{
+			CandidateID: candidate.ID, DesiredItemID: item[0].ID, Outcome: "ACCEPT", Score: 1, ComponentsJSON: "[]", DecidedAt: 20,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return decision
+	}
+	first := decide("guid-1")
+	for range 2 {
+		if err := server.process.copyDecisions(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	later := decide("guid-2")
+	if err := server.process.copyDecisions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	details, err := statistics.NewCandidates(server.process.statistics).ListDecisionsForItem(ctx, item[0].ID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, detail := range details {
+		got = append(got, fmt.Sprintf("%d:%d:%s", detail.Decision.ID, detail.ReleaseCandidate.ID, detail.ReleaseCandidate.GUID))
+	}
+	want := []string{
+		fmt.Sprintf("%d:%d:guid-1", first.ID, first.CandidateID), fmt.Sprintf("%d:%d:guid-2", later.ID, later.CandidateID),
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("statistics.db decisions = %v, want %v (library.db's ids, each once)", got, want)
 	}
 }

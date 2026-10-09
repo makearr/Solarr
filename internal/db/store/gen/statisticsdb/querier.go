@@ -9,18 +9,41 @@ import (
 )
 
 type Querier interface {
+	// Release decisions since a time, per library and outcome.
+	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)
+	// The copy from library.db keeps every id; a row already copied is left as it is.
+	CopyCandidate(ctx context.Context, arg CopyCandidateParams) error
+	CopyDecision(ctx context.Context, arg CopyDecisionParams) error
+	CopyDecisionRollup(ctx context.Context, arg CopyDecisionRollupParams) error
 	// An event already copied is left as it is.
 	CopyHistoryEvent(ctx context.Context, arg CopyHistoryEventParams) error
+	CountDecisionRollup(ctx context.Context) (int64, error)
 	CountStatRollup(ctx context.Context) (int64, error)
+	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
+	// A candidate goes once it expired and no decision refers to it; a held release carries its own copy.
+	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
+	GetCandidate(ctx context.Context, id int64) (Candidate, error)
+	// Where a copy resumes.
+	LastCandidateID(ctx context.Context) (int64, error)
 	LastCopiedHistoryEvent(ctx context.Context) (int64, error)
+	LastDecisionID(ctx context.Context) (int64, error)
+	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
+	// The interactive search view's own listing (F16): a decision means nothing without the release it was decided about.
+	ListDecisionsForItemWithCandidate(ctx context.Context, arg ListDecisionsForItemWithCandidateParams) ([]ListDecisionsForItemWithCandidateRow, error)
+	// Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.
+	ListDecisionsToRetire(ctx context.Context, arg ListDecisionsToRetireParams) ([]ListDecisionsToRetireRow, error)
 	// One page of history, newest first, of one work or of every one with work_id 0.
 	ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error)
 	// One library's current figures of a metric.
 	ListStatRollupForCategory(ctx context.Context, arg ListStatRollupForCategoryParams) ([]StatRollup, error)
+	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
+	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
+	// Candidates and decisions. Column lists follow table order.
+	UpsertCandidate(ctx context.Context, arg UpsertCandidateParams) (Candidate, error)
 }
 
 var _ Querier = (*Queries)(nil)

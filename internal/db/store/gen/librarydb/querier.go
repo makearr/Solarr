@@ -422,6 +422,7 @@ type Querier interface {
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
+	ListAllDecisionRollup(ctx context.Context) ([]DecisionRollup, error)
 	// What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
 	ListAllStatRollup(ctx context.Context) ([]StatRollup, error)
 	// Every other number of a page of parts, one per scheme: the first provider's.
@@ -459,6 +460,8 @@ type Querier interface {
 	ListCalendarEntries(ctx context.Context, arg ListCalendarEntriesParams) ([]ListCalendarEntriesRow, error)
 	// TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
 	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
+	// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
+	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
@@ -476,6 +479,8 @@ type Querier interface {
 	// a join for.
 	ListCreditsForWorkWithPerson(ctx context.Context, workID int64) ([]ListCreditsForWorkWithPersonRow, error)
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
+	// A decision's library is its item's: the copy stores it so the statistics need no join back.
+	ListDecisionsAfter(ctx context.Context, arg ListDecisionsAfterParams) ([]ListDecisionsAfterRow, error)
 	// Every candidate with its full breakdown, newest first (F1, F16).
 	ListDecisionsForItem(ctx context.Context, arg ListDecisionsForItemParams) ([]CandidateDecision, error)
 	// The interactive search view's own listing (F16): a decision means nothing

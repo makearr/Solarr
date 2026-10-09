@@ -309,6 +309,9 @@ func (p *process) openDatabases(ctx context.Context) error {
 	if err := p.copyStatRollup(ctx); err != nil {
 		p.logger.Warn("statistics not moved to statistics.db yet", slog.Any("error", err))
 	}
+	if err := p.copyDecisions(ctx); err != nil {
+		p.logger.Warn("decisions not moved to statistics.db yet", slog.Any("error", err))
+	}
 
 	return p.reconcileRestore(ctx, wall, restored)
 }

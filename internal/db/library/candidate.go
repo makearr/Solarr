@@ -50,9 +50,11 @@ type NewReleaseCandidate struct {
 // Decision is one candidate_decision row (ADR-10): the answer to "why (not)
 // this release for this desired item", never a formatted verdict.
 type Decision struct {
-	ID              int64
-	CandidateID     int64
-	DesiredItemID   int64
+	ID            int64
+	CandidateID   int64
+	DesiredItemID int64
+	// CategoryID is the library the item was in when it was decided; 0 when not known.
+	CategoryID      int64
 	Outcome         string // "ACCEPT" | "REJECT" | "DEFER" (model.Outcome's own values)
 	Score           float64
 	ComponentsJSON  string
@@ -64,8 +66,10 @@ type Decision struct {
 
 // NewDecision is what RecordDecision needs.
 type NewDecision struct {
-	CandidateID     int64
-	DesiredItemID   int64
+	CandidateID   int64
+	DesiredItemID int64
+	// CategoryID is the item's library, which statistics.db keeps beside the decision.
+	CategoryID      int64
 	Outcome         string
 	Score           float64
 	ComponentsJSON  string
@@ -206,4 +210,60 @@ func nullFloat64Ptr(v sql.NullFloat64) *float64 {
 	}
 	value := v.Float64
 	return &value
+}
+
+// DecisionRollup is one aged-decision count: an item, a day and an outcome.
+type DecisionRollup struct {
+	DesiredItemID, Period int64
+	Outcome               string
+	Count                 int64
+	BestScore             *float64
+	TopReason             string
+}
+
+// CandidatesAfter answers up to limit releases after id afterID, oldest first: what statistics.db's copy reads.
+func (c Candidates) CandidatesAfter(ctx context.Context, afterID, limit int64) ([]ReleaseCandidate, error) {
+	rows, err := librarydb.New(c.store.Read()).ListCandidatesAfter(ctx, librarydb.ListCandidatesAfterParams{ID: afterID, Limit: limit})
+	if err != nil {
+		return nil, fmt.Errorf("library: candidates after %d: %w", afterID, err)
+	}
+	out := make([]ReleaseCandidate, len(rows))
+	for i, row := range rows {
+		out[i] = releaseCandidateFromRow(row)
+	}
+	return out, nil
+}
+
+// DecisionsAfter answers up to limit decisions after id afterID, oldest first, each with its item's library.
+func (c Candidates) DecisionsAfter(ctx context.Context, afterID, limit int64) ([]Decision, error) {
+	rows, err := librarydb.New(c.store.Read()).ListDecisionsAfter(ctx, librarydb.ListDecisionsAfterParams{ID: afterID, Limit: limit})
+	if err != nil {
+		return nil, fmt.Errorf("library: decisions after %d: %w", afterID, err)
+	}
+	out := make([]Decision, len(rows))
+	for i, row := range rows {
+		out[i] = Decision{
+			ID: row.ID, CandidateID: row.CandidateID, DesiredItemID: row.DesiredItemID, CategoryID: row.CategoryID,
+			Outcome: row.Outcome, Score: row.Score, ComponentsJSON: row.ComponentsJson,
+			RejectionsJSON: row.RejectionsJson.String, DeferralsJSON: row.DeferralsJson.String,
+			MatchConfidence: nullFloat64Ptr(row.MatchConfidence), DecidedAt: row.DecidedAt,
+		}
+	}
+	return out, nil
+}
+
+// DecisionRollups answers every aged-decision count library.db holds.
+func (c Candidates) DecisionRollups(ctx context.Context) ([]DecisionRollup, error) {
+	rows, err := librarydb.New(c.store.Read()).ListAllDecisionRollup(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: decision rollups: %w", err)
+	}
+	out := make([]DecisionRollup, len(rows))
+	for i, row := range rows {
+		out[i] = DecisionRollup{
+			DesiredItemID: row.DesiredItemID, Period: row.Period, Outcome: row.Outcome, Count: row.Count,
+			BestScore: nullFloat64Ptr(row.BestScore), TopReason: row.TopReason.String,
+		}
+	}
+	return out, nil
 }

@@ -4,6 +4,51 @@
 
 package statisticsdb
 
+import (
+	"database/sql"
+)
+
+type Candidate struct {
+	ID              int64
+	IndexerID       int64
+	Guid            string
+	Title           string
+	AttributesID    sql.NullInt64
+	SizeBytes       sql.NullInt64
+	Seeders         sql.NullInt64
+	Leechers        sql.NullInt64
+	PublishedAt     sql.NullInt64
+	Protocol        string
+	DownloadUrl     string
+	ParseConfidence sql.NullFloat64
+	Source          string
+	FirstSeenAt     int64
+	ExpiresAt       int64
+}
+
+type CandidateDecision struct {
+	ID              int64
+	CandidateID     int64
+	DesiredItemID   int64
+	CategoryID      int64
+	Outcome         string
+	Score           float64
+	ComponentsJson  string
+	RejectionsJson  sql.NullString
+	DeferralsJson   sql.NullString
+	MatchConfidence sql.NullFloat64
+	DecidedAt       int64
+}
+
+type DecisionRollup struct {
+	DesiredItemID int64
+	Period        int64
+	Outcome       string
+	Count         int64
+	BestScore     sql.NullFloat64
+	TopReason     sql.NullString
+}
+
 type History struct {
 	ID            int64
 	At            int64

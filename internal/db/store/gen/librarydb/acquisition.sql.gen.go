@@ -687,6 +687,41 @@ func (q *Queries) ListActiveRecycleBinOldestFirst(ctx context.Context, limit int
 	return items, nil
 }
 
+const listAllDecisionRollup = `-- name: ListAllDecisionRollup :many
+SELECT desired_item_id, period, outcome, count, best_score, top_reason
+FROM decision_rollup ORDER BY desired_item_id, period, outcome
+`
+
+func (q *Queries) ListAllDecisionRollup(ctx context.Context) ([]DecisionRollup, error) {
+	rows, err := q.db.QueryContext(ctx, listAllDecisionRollup)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DecisionRollup{}
+	for rows.Next() {
+		var i DecisionRollup
+		if err := rows.Scan(
+			&i.DesiredItemID,
+			&i.Period,
+			&i.Outcome,
+			&i.Count,
+			&i.BestScore,
+			&i.TopReason,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBlocklist = `-- name: ListBlocklist :many
 SELECT id, indexer_id, guid, content_hash, title, desired_item_id, reason,
        detail_json, source, expires_at, created_at
@@ -720,6 +755,120 @@ func (q *Queries) ListBlocklist(ctx context.Context, arg ListBlocklistParams) ([
 			&i.Source,
 			&i.ExpiresAt,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCandidatesAfter = `-- name: ListCandidatesAfter :many
+SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
+       published_at, protocol, download_url, parse_confidence, source,
+       first_seen_at, expires_at
+FROM candidate WHERE id > ? ORDER BY id LIMIT ?
+`
+
+type ListCandidatesAfterParams struct {
+	ID    int64
+	Limit int64
+}
+
+// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
+func (q *Queries) ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error) {
+	rows, err := q.db.QueryContext(ctx, listCandidatesAfter, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Candidate{}
+	for rows.Next() {
+		var i Candidate
+		if err := rows.Scan(
+			&i.ID,
+			&i.IndexerID,
+			&i.Guid,
+			&i.Title,
+			&i.AttributesID,
+			&i.SizeBytes,
+			&i.Seeders,
+			&i.Leechers,
+			&i.PublishedAt,
+			&i.Protocol,
+			&i.DownloadUrl,
+			&i.ParseConfidence,
+			&i.Source,
+			&i.FirstSeenAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDecisionsAfter = `-- name: ListDecisionsAfter :many
+SELECT cd.id, cd.candidate_id, cd.desired_item_id, CAST(COALESCE(di.category_id, 0) AS INTEGER) AS category_id,
+       cd.outcome, cd.score, cd.components_json, cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at
+FROM candidate_decision cd LEFT JOIN desired_item di ON di.id = cd.desired_item_id
+WHERE cd.id > ? ORDER BY cd.id LIMIT ?
+`
+
+type ListDecisionsAfterParams struct {
+	ID    int64
+	Limit int64
+}
+
+type ListDecisionsAfterRow struct {
+	ID              int64
+	CandidateID     int64
+	DesiredItemID   int64
+	CategoryID      int64
+	Outcome         string
+	Score           float64
+	ComponentsJson  string
+	RejectionsJson  sql.NullString
+	DeferralsJson   sql.NullString
+	MatchConfidence sql.NullFloat64
+	DecidedAt       int64
+}
+
+// A decision's library is its item's: the copy stores it so the statistics need no join back.
+func (q *Queries) ListDecisionsAfter(ctx context.Context, arg ListDecisionsAfterParams) ([]ListDecisionsAfterRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDecisionsAfter, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDecisionsAfterRow{}
+	for rows.Next() {
+		var i ListDecisionsAfterRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CandidateID,
+			&i.DesiredItemID,
+			&i.CategoryID,
+			&i.Outcome,
+			&i.Score,
+			&i.ComponentsJson,
+			&i.RejectionsJson,
+			&i.DeferralsJson,
+			&i.MatchConfidence,
+			&i.DecidedAt,
 		); err != nil {
 			return nil, err
 		}

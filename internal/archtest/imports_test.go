@@ -301,7 +301,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/db/store/gen/settingsdb":   {},
 	"internal/db/store/gen/jobsdb":       {},
 	"internal/db/store/gen/statisticsdb": {},
-	"internal/db/statistics":             {"internal/db/store", "internal/db/store/gen/statisticsdb"},
+	"internal/db/statistics":             {"internal/db/library", "internal/db/store", "internal/db/store/gen/statisticsdb"},
 	"internal/db/store/gen/librarydb":    {},
 	"internal/db/store/gen/metadatadb":   {},
 	// cache/metadata.db (ADR-2, ADR-29): deliberately generic, so every metadata

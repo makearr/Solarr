@@ -50,6 +50,24 @@ FROM candidate_decision cd
 JOIN candidate c ON c.id = cd.candidate_id
 WHERE cd.desired_item_id = ? ORDER BY cd.decided_at DESC, cd.id ASC LIMIT ?;
 
+-- What statistics.db's copy reads, oldest first after an id (revision 2, D7).
+-- name: ListCandidatesAfter :many
+SELECT id, indexer_id, guid, title, attributes_id, size_bytes, seeders, leechers,
+       published_at, protocol, download_url, parse_confidence, source,
+       first_seen_at, expires_at
+FROM candidate WHERE id > ? ORDER BY id LIMIT ?;
+
+-- A decision's library is its item's: the copy stores it so the statistics need no join back.
+-- name: ListDecisionsAfter :many
+SELECT cd.id, cd.candidate_id, cd.desired_item_id, CAST(COALESCE(di.category_id, 0) AS INTEGER) AS category_id,
+       cd.outcome, cd.score, cd.components_json, cd.rejections_json, cd.deferrals_json, cd.match_confidence, cd.decided_at
+FROM candidate_decision cd LEFT JOIN desired_item di ON di.id = cd.desired_item_id
+WHERE cd.id > ? ORDER BY cd.id LIMIT ?;
+
+-- name: ListAllDecisionRollup :many
+SELECT desired_item_id, period, outcome, count, best_score, top_reason
+FROM decision_rollup ORDER BY desired_item_id, period, outcome;
+
 -- name: CreateAcquisition :one
 INSERT INTO acquisition (desired_item_id, candidate_id, indexer_id, candidate_guid,
                          candidate_title, search_terms, downloader_id,
