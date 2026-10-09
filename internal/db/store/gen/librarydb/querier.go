@@ -794,6 +794,8 @@ type Querier interface {
 	RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error
 	RecordManualIdentification(ctx context.Context, arg RecordManualIdentificationParams) error
 	RecordPersonRefresh(ctx context.Context, arg RecordPersonRefreshParams) error
+	// A release RSS showed for the item; the newest first-seen is kept.
+	RecordRSSSighting(ctx context.Context, arg RecordRSSSightingParams) error
 	RecordTagWriteback(ctx context.Context, arg RecordTagWritebackParams) error
 	RecycleBin(ctx context.Context, arg RecycleBinParams) (RecycleBin, error)
 	// Recycled bytes count against the free-space gate, so they are summed per

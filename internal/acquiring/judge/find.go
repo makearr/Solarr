@@ -134,8 +134,10 @@ func (d ProtocolDelay) Apply(finds []Find) {
 	}
 }
 
-// Persist upserts the release and records the decision against itemID.
-func Persist(ctx context.Context, candidates library.Candidates, itemID int64, find Find, source string, at time.Time) (library.DecisionDetail, error) {
+// Persist upserts the release and records the decision against itemID; a release RSS showed is also a sighting.
+func Persist(
+	ctx context.Context, candidates library.Candidates, sightings *library.Sightings, itemID int64, find Find, source string, at time.Time,
+) (library.DecisionDetail, error) {
 	var sizeBytes *int64
 	if find.Raw.SizeBytes > 0 {
 		size := find.Raw.SizeBytes
@@ -161,6 +163,11 @@ func Persist(ctx context.Context, candidates library.Candidates, itemID int64, f
 	})
 	if err != nil {
 		return library.DecisionDetail{}, err
+	}
+	if sightings != nil && candidate.Source == "rss" {
+		if err := sightings.RecordRSS(ctx, itemID, candidate.FirstSeenAt); err != nil {
+			return library.DecisionDetail{}, err
+		}
 	}
 	matchConfidence := find.MatchConfidence
 	if matchConfidence == 0 {

@@ -82,6 +82,8 @@ type Search struct {
 	Clock      clock.Clock
 	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
 	Blocklist *library.BlocklistStore
+	// Sightings, when set, remember what RSS showed for "fresh" (ADR-55).
+	Sightings *library.Sightings
 	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
 }
@@ -190,7 +192,7 @@ func (s Search) SearchItemWithTerms(
 
 // pipeline is the shared search over this type's stores.
 func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
+	return judge.Pipeline{Candidates: s.Candidates, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
 }
 
 // yardstick is what one album's releases are measured against: who and what it is, and the library's quality rules.

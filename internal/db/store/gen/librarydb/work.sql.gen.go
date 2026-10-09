@@ -246,9 +246,8 @@ func (q *Queries) CountCalendarEpisodeDates(ctx context.Context, arg CountCalend
 const countFreshWorks = `-- name: CountFreshWorks :one
 SELECT CAST(COUNT(*) AS INTEGER) AS total FROM work
 WHERE EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ?1 AND wd.date >= ?2)
-   OR EXISTS (SELECT 1 FROM candidate_decision cd JOIN candidate c ON c.id = cd.candidate_id
-              JOIN desired_item di ON di.id = cd.desired_item_id
-              WHERE di.work_id = work.id AND c.source = 'rss' AND c.first_seen_at >= ?3)
+   OR EXISTS (SELECT 1 FROM rss_sighting rs JOIN desired_item di ON di.id = rs.desired_item_id
+              WHERE di.work_id = work.id AND rs.seen_at >= ?3)
 `
 
 type CountFreshWorksParams struct {

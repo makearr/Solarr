@@ -94,10 +94,22 @@ func newSearchTestEnv(t *testing.T) *searchTestEnv {
 
 // searchFn builds the Search under test, over env's own stores.
 func (env *searchTestEnv) search() music.Search {
+	sightings := library.NewSightings(env.library)
 	return music.Search{
 		Works: env.works, Desired: env.desired, Candidates: env.candidates,
-		Settings: env.settings, Clock: env.clock,
+		Settings: env.settings, Clock: env.clock, Sightings: &sightings,
 	}
+}
+
+// rssSeenAt answers when RSS last showed a release for the item, 0 when it never did.
+func (env *searchTestEnv) rssSeenAt(t *testing.T, itemID int64) int64 {
+	t.Helper()
+	var seen int64
+	err := env.library.Read().QueryRowContext(t.Context(), "SELECT seen_at FROM rss_sighting WHERE desired_item_id = ?", itemID).Scan(&seen)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		t.Fatal(err)
+	}
+	return seen
 }
 
 // createWork inserts a work row directly (CreateWork's own params, not the

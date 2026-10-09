@@ -44,6 +44,8 @@ type Search struct {
 	Settings   *settings.Cache
 	Clock      clock.Clock
 	Blocklist  *library.BlocklistStore
+	// Sightings, when set, remember what RSS showed for "fresh" (ADR-55).
+	Sightings *library.Sightings
 	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
 }
@@ -294,7 +296,7 @@ func (s Search) SearchEpisode(ctx context.Context, itemID int64, episode int, co
 
 // pipeline is the shared search over this type's stores.
 func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
+	return judge.Pipeline{Candidates: s.Candidates, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
 }
 
 // yardstick judges a release against what the season wants and the library's rules.

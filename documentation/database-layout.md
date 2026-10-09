@@ -10,6 +10,9 @@ Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `s
 | `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
 | `statistics.db` | What was seen and done: download history, and (moving there) candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
 
+Whether an item is fresh because RSS showed it (ADR-55) is `rss_sighting` in `library.db`, written when a decision
+on an RSS-found release is recorded; the planner and the Fresh filter read it, not the candidates.
+
 `statistics.db` is being filled in steps (revision 2, D7): download history and the statistics rollup live there;
 until the decisions move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
 aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the

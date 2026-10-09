@@ -76,11 +76,12 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 
 // tvGrab builds the TV module's automatic search over the real stores.
 func (p *process) tvGrab() tv.Grab {
-	blocklist := library.NewBlocklistStore(p.library)
+	blocklist, sightings := library.NewBlocklistStore(p.library), library.NewSightings(p.library)
 	return tv.Grab{
 		Search: tv.Search{
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
 			Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
+			Sightings: &sightings,
 		},
 		Dispatch: p.dispatchFor("tv"),
 	}
@@ -88,11 +89,11 @@ func (p *process) tvGrab() tv.Grab {
 
 // musicSearch builds internal/media/music.Search over the real stores.
 func (p *process) musicSearch() music.Search {
-	blocklist := library.NewBlocklistStore(p.library)
+	blocklist, sightings := library.NewBlocklistStore(p.library), library.NewSightings(p.library)
 	return music.Search{
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
 		Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(),
-		Blocklist: &blocklist,
+		Blocklist: &blocklist, Sightings: &sightings,
 	}
 }
 

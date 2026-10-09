@@ -638,6 +638,11 @@ type Request struct {
 	CreatedAt     int64
 }
 
+type RssSighting struct {
+	DesiredItemID int64
+	SeenAt        int64
+}
+
 type ScanState struct {
 	RootFolderID    int64
 	SweptThrough    int64

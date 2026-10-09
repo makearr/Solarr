@@ -38,6 +38,8 @@ type Evaluate func(raws []indexer.RawItem, conn Conn) []Find
 // Pipeline is the search every media type shares: ask, drop what is blocklisted, let the type evaluate, record.
 type Pipeline struct {
 	Candidates library.Candidates
+	// Sightings, when set, remember when RSS showed a release for an item: what "fresh" reads (ADR-55).
+	Sightings *library.Sightings
 	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
 	Blocklist *library.BlocklistStore
 	// Deadline bounds each tier's fan-out; zero is GroupDeadline.
@@ -116,7 +118,7 @@ func (p Pipeline) decide(ctx context.Context, itemID int64, finds []Find, source
 	SortBestFirst(finds)
 	decisions := make([]library.DecisionDetail, 0, len(finds))
 	for _, find := range finds {
-		detail, err := Persist(ctx, p.Candidates, itemID, find, source, at)
+		detail, err := Persist(ctx, p.Candidates, p.Sightings, itemID, find, source, at)
 		if err != nil {
 			return decisions, fmt.Errorf("persist: %w", err)
 		}

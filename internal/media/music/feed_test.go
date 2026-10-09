@@ -63,4 +63,25 @@ func TestRSSSync_SendsAWantedAlbumsReleaseFromTheFeed(t *testing.T) {
 	if err != nil || len(searched) != 0 {
 		t.Errorf("search record = %+v, %v; an RSS find is not a search and leaves the backoff alone", searched, err)
 	}
+	if seen := env.rssSeenAt(t, item.ID); len(decisions) == 0 || seen != decisions[0].ReleaseCandidate.FirstSeenAt {
+		t.Errorf("rss sighting = %d, want the release's first sighting: what makes the album fresh (ADR-55)", seen)
+	}
+}
+
+// A search's find is no RSS sighting: only a feed makes an old album fresh (ADR-55).
+func TestSearch_AFindIsNoRSSSighting(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-wanted", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
+		{ID: 5, Protocol: "usenet", Client: &fakeSabnzbdSender{clientRef: "nzo-1"}},
+	})}
+	if _, err := grab.SearchAndSend(t.Context(), item.ID, []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, music.GrabAutomatic, env.clock.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if seen := env.rssSeenAt(t, item.ID); seen != 0 {
+		t.Errorf("rss sighting = %d after a search, want none", seen)
+	}
 }

@@ -1053,8 +1053,7 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
        CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
              AND aq.updated_at >= ?2) AS INTEGER) AS recent_imports,
-       CAST(COALESCE((SELECT MAX(rc.first_seen_at) FROM candidate_decision rd JOIN candidate rc ON rc.id = rd.candidate_id
-                      WHERE rd.desired_item_id = di.id AND rc.source = 'rss'), 0) AS INTEGER) AS rss_seen_at
+       CAST(COALESCE((SELECT rs.seen_at FROM rss_sighting rs WHERE rs.desired_item_id = di.id), 0) AS INTEGER) AS rss_seen_at
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(?3 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?4
@@ -1624,6 +1623,22 @@ type RecordItemSearchedParams struct {
 // own upsert sets priority and class and never touches these two columns.
 func (q *Queries) RecordItemSearched(ctx context.Context, arg RecordItemSearchedParams) error {
 	_, err := q.db.ExecContext(ctx, recordItemSearched, arg.DesiredItemID, arg.LastSearchedAt)
+	return err
+}
+
+const recordRSSSighting = `-- name: RecordRSSSighting :exec
+INSERT INTO rss_sighting (desired_item_id, seen_at) VALUES (?, ?)
+ON CONFLICT (desired_item_id) DO UPDATE SET seen_at = MAX(rss_sighting.seen_at, excluded.seen_at)
+`
+
+type RecordRSSSightingParams struct {
+	DesiredItemID int64
+	SeenAt        int64
+}
+
+// A release RSS showed for the item; the newest first-seen is kept.
+func (q *Queries) RecordRSSSighting(ctx context.Context, arg RecordRSSSightingParams) error {
+	_, err := q.db.ExecContext(ctx, recordRSSSighting, arg.DesiredItemID, arg.SeenAt)
 	return err
 }
 
