@@ -44,7 +44,7 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		// Covers follow at once rather than at the six-hourly sweep (found 2026-09-28).
 		OnRefined: func(ctx context.Context) {
 			_, _ = p.enqueueCategoryCounts(ctx)
-			_, _ = p.enqueueArtwork(ctx)
+			_, _ = p.artworkPass(ctx, false)
 			_, _ = p.enqueueTagWriteback(ctx)
 		},
 		Tags:      mediatool.New(nil, 0),
@@ -71,30 +71,12 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 	return nil
 }
 
-// enqueueEnrichment submits one enrichment sweep. Registered as a task with
-// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
-// schedule, not only once at startup.
-func (p *process) enqueueEnrichment(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.enqueueEnrichmentRun(ctx, false)
-}
-
-// enqueueRefreshArtists starts the scheduled refresh of monitored artists.
-func (p *process) enqueueRefreshArtists(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.queue.Enqueue(ctx, jobs.Request{
-		Type: music.RefreshArtistsJobType, ActionKey: string(music.RefreshArtistsJobType),
-		Priority: jobs.PriorityLow, Payload: []byte("{}"),
-	})
-}
-
-// enqueueManualEnrichment is the scheduler's "Run now": a manual refresh.
-func (p *process) enqueueManualEnrichment(ctx context.Context) (jobs.EnqueueResult, error) {
-	return p.enqueueEnrichmentRun(ctx, true)
-}
-
-func (p *process) enqueueEnrichmentRun(ctx context.Context, manual bool) (jobs.EnqueueResult, error) {
+// enrichmentPass starts music's enrichment sweep: its part of the "Refresh works" pass, and at once after a scan, an
+// import or an add.
+func (p *process) enrichmentPass(ctx context.Context, manual bool) (duplicate bool, err error) {
 	result, err := music.EnqueueEnrichment(ctx, p.queue, manual)
 	if err != nil {
 		p.logger.Warn("enqueue music enrichment", slog.Any("error", err))
 	}
-	return result, err
+	return result.Duplicate, err
 }

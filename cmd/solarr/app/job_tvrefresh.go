@@ -1,9 +1,6 @@
 package app
 
 import (
-	"context"
-	"log/slog"
-
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -21,13 +18,4 @@ func (p *process) registerTVRefreshJob(registry *jobs.Registry, executor *jobs.E
 		Categories: adapters.Categories{Cache: p.cache}, Clock: clock.NewSystem(), Logger: p.logger,
 	}))
 	return nil
-}
-
-// enqueueTVRefresh submits one refresh sweep; registered as the "Refresh series" task.
-func (p *process) enqueueTVRefresh(ctx context.Context) (jobs.EnqueueResult, error) {
-	result, err := tv.EnqueueRefresh(ctx, p.queue)
-	if err != nil {
-		p.logger.Warn("enqueue tv refresh", slog.Any("error", err))
-	}
-	return result, err
 }

@@ -2,12 +2,14 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -15,9 +17,9 @@ import (
 // no two land on the same minute; a stored settings.db override replaces them.
 const (
 	scanScheduleCron               = "0 */6 * * *"   // every 6 hours
-	enrichmentScheduleCron         = "20 * * * *"    // every hour
+	refreshWorksScheduleCron       = "20 * * * *"    // every hour; a running series is due twice a day, 40 a run
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
-	artworkScheduleCron            = "30 */6 * * *"  // every 6 hours
+	picturesScheduleCron           = "10 * * * *"    // hourly; 1,500 series pictures a run until the library's are all kept
 	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
 	discographyScheduleCron        = "0 4 * * 1"     // Mondays at 04:00; the provider caches, so only new artists cost requests
 	statisticsScheduleCron         = "15 6 * * *"    // daily, after the counters; the statistics page reads what it wrote
@@ -33,15 +35,13 @@ const (
 	backupCleanupScheduleCron      = "30 1 * * 0"    // Sundays at 01:30, after the backup
 	recycleBinCleanupScheduleCron  = "30 2 * * *"    // daily at 02:30
 	decisionRetentionScheduleCron  = "10 3 * * *"    // daily at 03:10
-	refreshArtistsScheduleCron     = "0 5 * * 0"     // Sundays at 05:00, after database maintenance
+	refreshPeopleScheduleCron      = "0 5 * * 0"     // Sundays at 05:00, after database maintenance
 	planScheduleCron               = "*/5 * * * *"   // every 5 minutes; reads the database only
 	cutoffScheduleCron             = "40 2 * * *"    // daily at 02:40, after the probe measured the night's files
 	rssScheduleCron                = "*/15 * * * *"  // every 15 minutes, as Lidarr's RSS Sync
 	huntScheduleCron               = "*/15 * * * *"  // every 15 minutes, within the hourly budget
 	bridgeScheduleCron             = "50 3 * * *"    // daily at 03:50; 60 people a run, after the night's refreshes
-	tvArtworkScheduleCron          = "10 * * * *"    // hourly; 1,500 pictures a run until the library's are all kept
 	tvRetryScheduleCron            = "30 4 * * *"    // daily at 04:30: providers learn new series and fix old data overnight
-	tvRefreshScheduleCron          = "25 * * * *"    // every hour, 40 series a run: a running series is due twice a day
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -54,22 +54,19 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueueLibraryScans, RunFull: p.enqueueFullLibraryScans,
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "enrichment", Name: "Music enrichment", DefaultCadence: enrichmentScheduleCron,
-		EnqueueManual: p.enqueueManualEnrichment,
-		Tier:          string(settings.TierNormal), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
-		Enqueue: p.enqueueEnrichment,
+		Key: "refresh_works", Name: "Refresh works", DefaultCadence: refreshWorksScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.passEnqueue(media.PassWorks, false), EnqueueManual: p.passEnqueue(media.PassWorks, true),
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "refresh_artists", Name: "Refresh artists", DefaultCadence: refreshArtistsScheduleCron,
-		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata, Enqueue: p.enqueueRefreshArtists,
+		Key: "refresh_people", Name: "Refresh people", DefaultCadence: refreshPeopleScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryMetadata,
+		Enqueue: p.passEnqueue(media.PassPeople, false), EnqueueManual: p.passEnqueue(media.PassPeople, true),
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "refresh_series", Name: "Refresh series", DefaultCadence: tvRefreshScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueTVRefresh,
-	})
-	registry.MustRegister(jobs.Task{
-		Key: "tv_artwork", Name: "Fetch series pictures", DefaultCadence: tvArtworkScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn, Enqueue: p.enqueueTVArtwork,
+		Key: "pictures", Name: "Fetch pictures", DefaultCadence: picturesScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
+		Enqueue: p.passEnqueue(media.PassPictures, false), EnqueueManual: p.passEnqueue(media.PassPictures, true),
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "tv_retry", Name: "Identify waiting TV files", DefaultCadence: tvRetryScheduleCron,
@@ -83,11 +80,6 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "subscription_expand", Name: "Add the works of followed people", DefaultCadence: subscriptionExpandScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueFollowSweep,
-	})
-	registry.MustRegister(jobs.Task{
-		Key: "artwork", Name: "Cover art sweep", DefaultCadence: artworkScheduleCron,
-		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
-		Enqueue: p.enqueueArtwork,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "tag_writeback", Name: "Write tags into files", DefaultCadence: tagWritebackScheduleCron,
@@ -210,4 +202,32 @@ func (p *process) startSchedulers(ctx context.Context) {
 		go runner.Run(ctx)
 	}
 	p.logger.Info("schedulers started", slog.Int("tasks", len(p.taskRunners)))
+}
+
+// passEnqueue starts one metadata pass in every media type that has it, as one task: duplicate only when every type's
+// pass was already on its way, every type's error joined.
+func (p *process) passEnqueue(pass media.Pass, manual bool) func(context.Context) (jobs.EnqueueResult, error) {
+	return func(ctx context.Context) (jobs.EnqueueResult, error) {
+		var errs []error
+		started, duplicates := 0, 0
+		for _, descriptor := range p.media.Descriptors() {
+			enriching, ok := media.Capability[media.Enriching](p.media, descriptor.Key)
+			if !ok {
+				continue
+			}
+			ran, duplicate, err := enriching.StartPass(ctx, pass, manual)
+			if err != nil {
+				p.logger.Warn("start metadata pass", slog.String("pass", string(pass)), slog.String("media_type", string(descriptor.Key)), slog.Any("error", err))
+				errs = append(errs, err)
+				continue
+			}
+			if ran {
+				started++
+			}
+			if ran && duplicate {
+				duplicates++
+			}
+		}
+		return jobs.EnqueueResult{Duplicate: started > 0 && duplicates == started}, errors.Join(errs...)
+	}
 }

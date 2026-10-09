@@ -35,6 +35,8 @@ type Module struct {
 	Following
 	// Profiling is TV's part of a person's page.
 	Profiling
+	// Passes are the type's periodic metadata passes.
+	media.Passes
 	// Searching is TV's part of a search a person asks for.
 	Searching
 }

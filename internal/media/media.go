@@ -175,6 +175,40 @@ type Picturing interface {
 	PickWorkPicture(ctx context.Context, workID int64, imageURL string) error
 }
 
+// Pass is one of the periodic passes that keep metadata current; each is one schedule for every media type.
+type Pass string
+
+// The passes: works read again from their sources, people read again, pictures fetched into the cache.
+const (
+	PassWorks    Pass = "works"
+	PassPeople   Pass = "people"
+	PassPictures Pass = "pictures"
+)
+
+// Enriching is the capability of a media type that keeps its metadata current by periodic passes.
+type Enriching interface {
+	// StartPass queues the type's pass; started is false for a pass the type does not have. manual is a person's "Run now".
+	StartPass(ctx context.Context, pass Pass, manual bool) (started, duplicate bool, err error)
+}
+
+// PassStart queues one pass and says whether one was already on its way.
+type PassStart func(ctx context.Context, manual bool) (duplicate bool, err error)
+
+// Passes is a module's periodic passes, embedded to implement Enriching; a nil one is a pass the type does not have.
+type Passes struct {
+	WorksPass, PeoplePass, PicturesPass PassStart
+}
+
+// StartPass implements Enriching.
+func (p Passes) StartPass(ctx context.Context, pass Pass, manual bool) (started, duplicate bool, err error) {
+	start := map[Pass]PassStart{PassWorks: p.WorksPass, PassPeople: p.PeoplePass, PassPictures: p.PicturesPass}[pass]
+	if start == nil {
+		return false, false, nil
+	}
+	duplicate, err = start(ctx, manual)
+	return true, duplicate, err
+}
+
 // ErrNotWired reports a capability whose module was built without what it needs.
 var ErrNotWired = errors.New("media: not wired in this build")
 

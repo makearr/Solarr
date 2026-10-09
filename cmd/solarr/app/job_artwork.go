@@ -46,13 +46,11 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 	return nil
 }
 
-// enqueueArtwork submits one cover art sweep. Registered as a task with
-// internal/jobs.TaskRunner (todo 4.19), so it also fires on its own
-// schedule, not only once at startup.
-func (p *process) enqueueArtwork(ctx context.Context) (jobs.EnqueueResult, error) {
+// artworkPass starts music's cover art sweep: its part of the "Fetch pictures" pass, and after enrichment.
+func (p *process) artworkPass(ctx context.Context, _ bool) (duplicate bool, err error) {
 	result, err := music.EnqueueArtwork(ctx, p.queue)
 	if err != nil {
 		p.logger.Warn("enqueue music artwork", slog.Any("error", err))
 	}
-	return result, err
+	return result.Duplicate, err
 }

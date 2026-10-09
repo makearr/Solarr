@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -86,7 +87,17 @@ func (p *process) musicModule() music.Module {
 		result, err := music.EnqueueRefreshAlbum(ctx, p.queue, workID)
 		return result.Duplicate, err
 	}
-	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures(), Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	passes := media.Passes{
+		WorksPass: p.enrichmentPass,
+		PeoplePass: func(ctx context.Context, _ bool) (bool, error) {
+			result, err := p.queue.Enqueue(ctx, jobs.Request{
+				Type: music.RefreshArtistsJobType, ActionKey: string(music.RefreshArtistsJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
+			})
+			return result.Duplicate, err
+		},
+		PicturesPass: p.artworkPass,
+	}
+	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -96,7 +107,7 @@ func (p *process) musicModule() music.Module {
 		}),
 		// Enrichment follows at once, not at the next hourly run: a new library had no tracklists,
 		// photos or Wanted for up to an hour (found 2026-09-28).
-		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enqueueEnrichment(ctx) },
+		OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx); _, _ = p.enrichmentPass(ctx, false) },
 	}}
 }
 
@@ -128,6 +139,16 @@ func (p *process) tvModule() tv.Module {
 		Hunt:     p.tvHunt,
 		Adder:    p.seriesCatalog(),
 		Pictures: p.seriesCatalog(),
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := tv.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := tv.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
 		// A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
 		Refresh: func(ctx context.Context, workID int64) (bool, error) {
 			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
@@ -218,8 +239,8 @@ func (p *process) musicAdder() adapters.Discover {
 		Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 		Categories:       adapters.Categories{Cache: p.cache},
 		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
-		// A failed enqueue is logged by enqueueEnrichment; the hourly sweep still picks the album up.
-		Enrich: func(ctx context.Context) { _, _ = p.enqueueEnrichment(ctx) },
+		// A failed enqueue is logged by enrichmentPass; the hourly sweep still picks the album up.
+		Enrich: func(ctx context.Context) { _, _ = p.enrichmentPass(ctx, false) },
 		SearchAlbum: func(ctx context.Context, categoryID, itemID int64) {
 			if _, err := music.EnqueueSearchItems(ctx, p.queue, categoryID, []int64{itemID}); err != nil {
 				p.logger.Warn("search added album", slog.Any("error", err))

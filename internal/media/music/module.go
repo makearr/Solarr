@@ -36,6 +36,8 @@ type Module struct {
 	CutoffJob
 	// Following is music's part of a follow.
 	Following
+	// Passes are the type's periodic metadata passes.
+	media.Passes
 	// Searching is music's part of a search a person asks for.
 	Searching
 }

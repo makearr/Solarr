@@ -44,12 +44,3 @@ func (p *process) registerTVArtworkJob(registry *jobs.Registry, executor *jobs.E
 	executor.Handle(tv.ArtworkJobType, tv.NewArtworkJob(tv.ArtworkConfig{Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger}))
 	return nil
 }
-
-// enqueueTVArtwork submits one picture sweep; registered as the "Fetch series pictures" task.
-func (p *process) enqueueTVArtwork(ctx context.Context) (jobs.EnqueueResult, error) {
-	result, err := tv.EnqueueArtwork(ctx, p.queue)
-	if err != nil {
-		p.logger.Warn("enqueue tv artwork", slog.Any("error", err))
-	}
-	return result, err
-}

@@ -137,7 +137,9 @@ library takes hours); the figures fill in as it goes.
 artist's albums of the release types you tick, an actor's or director's new series by the roles you tick (with your
 TMDB key), a network's new series. A TV follow adds at most five series each time it runs, with the monitor choice you
 set; older works come only if you ask for the back catalogue. The task **Refresh
-series** (Settings → Scheduler) re-reads running series twice a day so new episodes and seasons arrive by themselves.
+works** (Settings → Scheduler) re-reads running series twice a day so new episodes and seasons arrive by themselves, and
+fills in albums' tracklists; **Refresh people** and **Fetch pictures** do the same for people and for covers and posters,
+one task each for every kind of library.
 Before you follow, the panel lists the series it would add right now (and how many already are in your library), so nothing
 arrives unseen.
 

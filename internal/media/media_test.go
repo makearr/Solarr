@@ -1,6 +1,7 @@
 package media_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -101,5 +102,16 @@ func TestNewRegistry_RefusesAFacetCoreCannotRead(t *testing.T) {
 		if _, err := media.NewRegistry(faceted{plain{"bad"}, []media.Facet{facet}}); err == nil {
 			t.Errorf("%s was registered", name)
 		}
+	}
+}
+
+// A pass the type does not have is not started; one it has is, with what it answered.
+func TestPasses_StartPass(t *testing.T) {
+	passes := media.Passes{WorksPass: func(context.Context, bool) (bool, error) { return true, nil }}
+	if started, duplicate, err := passes.StartPass(t.Context(), media.PassWorks, false); !started || !duplicate || err != nil {
+		t.Errorf("works: started %v, duplicate %v, error %v; want started duplicate", started, duplicate, err)
+	}
+	if started, _, err := passes.StartPass(t.Context(), media.PassPictures, false); started || err != nil {
+		t.Errorf("pictures: started %v, error %v; want not started", started, err)
 	}
 }
