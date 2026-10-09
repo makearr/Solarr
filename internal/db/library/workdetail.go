@@ -8,7 +8,9 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
@@ -31,6 +33,18 @@ type PartDetail struct {
 	// independent of Part.Monitored (which only shrinks or grows the
 	// album's own required_count).
 	Wanted *DesiredItemStatus
+	// Credits are the part's own: an episode's guest stars, director and writers.
+	Credits []PartCredit
+	// AltNumbers are the part's numbers under other schemes, by scheme ("absolute").
+	AltNumbers map[string]string
+}
+
+// PartCredit is one person credited on a part.
+type PartCredit struct {
+	PersonID   int64
+	PersonName string
+	Role       string
+	Character  string
 }
 
 // PartFile is the one file covering a part, and what probing measured of it.
@@ -43,6 +57,11 @@ type PartFile struct {
 	Lossless      bool
 	// Extension is the file's own type, "m4a": ffprobe's container is a demuxer list.
 	Extension string
+	SizeBytes int64
+	// What the probe measured of a video; empty for a field it did not read.
+	Resolution, HDR, AudioChannels string
+	VideoBitrateKbps               int64
+	AudioLanguages, Subtitles      []string
 }
 
 // Credit is one work-level credit, with the person's own name -- the work
@@ -51,6 +70,9 @@ type Credit struct {
 	PersonID   int64
 	PersonName string
 	Role       string
+	Character  string
+	// ImageURL is the person's photo at its provider, empty without one.
+	ImageURL string
 }
 
 // DesiredItemStatus is one desired_item's own status -- the work's
@@ -154,7 +176,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	}
 	credits := make([]Credit, len(creditRows))
 	for index, row := range creditRows {
-		credits[index] = Credit{PersonID: row.PersonID, PersonName: row.PersonName, Role: row.Role}
+		credits[index] = Credit{PersonID: row.PersonID, PersonName: row.PersonName, Role: row.Role, Character: row.Character, ImageURL: row.ImageUrl}
 	}
 
 	tagRows, err := queries.ListTagsForSubjectWithName(ctx, librarydb.ListTagsForSubjectWithNameParams{
@@ -283,6 +305,38 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 			BitrateKbps:   bitrateKbps(row.OverallBitrate, row.AudioBitrate),
 			Lossless:      row.Lossless.Valid && row.Lossless.Int64 == 1,
 			Extension:     strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
+			SizeBytes:     row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
+			AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
+			AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
+		}
+	}
+	partIDs := make([]int64, len(parts))
+	for index, part := range parts {
+		partIDs[index] = part.ID
+	}
+	creditsOf := map[int64][]PartCredit{}
+	altNumbersOf := map[int64]map[string]string{}
+	if len(partIDs) > 0 {
+		credits, err := queries.ListCreditsForParts(ctx, librarydb.ListCreditsForPartsParams{WorkID: id, PartIds: partIDs})
+		if err != nil {
+			return nil, fmt.Errorf("library: work detail: part credits: %w", err)
+		}
+		for _, credit := range credits {
+			creditsOf[credit.PartID] = append(creditsOf[credit.PartID], PartCredit{
+				PersonID: credit.PersonID, PersonName: credit.PersonName, Role: credit.Role, Character: credit.Character,
+			})
+		}
+		numbers, err := queries.ListAltNumbersForParts(ctx, partIDs)
+		if err != nil {
+			return nil, fmt.Errorf("library: work detail: part numbers: %w", err)
+		}
+		for _, number := range numbers {
+			if altNumbersOf[number.PartID] == nil {
+				altNumbersOf[number.PartID] = map[string]string{}
+			}
+			if _, have := altNumbersOf[number.PartID][number.Scheme]; !have {
+				altNumbersOf[number.PartID][number.Scheme] = number.AltRef
+			}
 		}
 	}
 
@@ -292,7 +346,7 @@ func detailParts(ctx context.Context, queries *librarydb.Queries, id int64, part
 		if err != nil {
 			return nil, fmt.Errorf("library: work detail: part external ids: %w", err)
 		}
-		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs}
+		partDetails[index] = PartDetail{Part: part, ExternalIDs: partExternalIDs, Credits: creditsOf[part.ID], AltNumbers: altNumbersOf[part.ID]}
 		if file, found := fileByRef[part.MediaRef]; found {
 			partDetails[index].File = &file
 		}
@@ -390,4 +444,37 @@ func (w Works) MediaTypeOf(ctx context.Context, workID int64) (string, error) {
 		return "", fmt.Errorf("library: media type of work %d: %w", workID, err)
 	}
 	return work.MediaType, nil
+}
+
+// SetManualField gives a work field a value of the user's own, which every provider's value gives way to; an empty
+// value returns the field to the providers'.
+func (w Works) SetManualField(ctx context.Context, at time.Time, workID int64, field, value string) error {
+	err := w.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if value == "" {
+			return queries.DeleteWorkFieldByProvider(ctx, librarydb.DeleteWorkFieldByProviderParams{WorkID: workID, Field: field, Provider: manualProvider})
+		}
+		return queries.SetWorkField(ctx, librarydb.SetWorkFieldParams{
+			WorkID: workID, Field: field, Provider: manualProvider, Value: sql.NullString{String: value, Valid: true}, FetchedAt: at.Unix(),
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set %s of work %d: %w", field, workID, err)
+	}
+	return nil
+}
+
+// ManualFields answers the work's fields the user set themselves, by field.
+func (w Works) ManualFields(ctx context.Context, workID int64) (map[string]string, error) {
+	fields, err := librarydb.New(w.store.Read()).ListWorkFields(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: fields of work %d: %w", workID, err)
+	}
+	manual := map[string]string{}
+	for _, field := range fields {
+		if field.Provider == manualProvider && field.Value.Valid {
+			manual[field.Field] = field.Value.String
+		}
+	}
+	return manual, nil
 }

@@ -651,11 +651,12 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorkDetail: adapters.WorkDetail{
 			Works: library.NewWorks(p.library), SearchStatus: p.searchStatus,
 			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
+			PartPosition: adapters.MediaTypes{Registry: p.media}.PartPosition,
 		},
 		WorksMonitor: p.worksMonitor(),
 		WorkEditor: adapters.WorkEdit{
 			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
-			Settings: p.cache,
+			Settings: p.cache, Facets: adapters.MediaTypes{Registry: p.media}.Facets,
 		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library)},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
@@ -751,8 +752,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ArtistActions: adapters.ArtistActions{
 			People: library.NewPeople(p.library), Monitor: p.worksMonitor(), Queue: p.queue,
 		},
-		AlbumRefresher: adapters.AlbumRefresher{Works: library.NewWorks(p.library), Queue: p.queue},
-		PersonRemover:  adapters.People{Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library)},
+		WorkRefresher: adapters.WorkRefresher{Works: library.NewWorks(p.library), Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf},
+		PersonRemover: adapters.People{Subscriptions: library.NewSubscriptions(p.library), People: library.NewPeople(p.library)},
 		Follower: adapters.Follow{
 			Service: p.followService(), People: library.NewPeople(p.library), Organisations: library.NewOrganisations(p.library),
 		},
@@ -867,6 +868,7 @@ func (p *process) worksMonitor() adapters.WorksMonitor {
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
 		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Fresh: p.freshWindow, Logger: p.logger,
 		Monitoring: adapters.MediaTypes{Registry: p.media}.MonitoringOf, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
+		Exclusions: library.NewExclusions(p.library), ScanHonoursExclusions: adapters.MediaTypes{Registry: p.media}.ScanHonoursExclusions,
 	}
 }
 

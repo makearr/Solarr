@@ -82,6 +82,35 @@ type Descriptor struct {
 	MonitorOptions []Choice
 	// SearchTerms are the words a person may search with instead of a work's own, when a type takes them.
 	SearchTerms []Choice
+	// WorkImage is the shape a work's picture has: an album's square cover, a series' tall poster.
+	WorkImage ImageShape
+	// ScanHonoursExclusions says the type's scan leaves an excluded work's files out, so a work removed and excluded
+	// can go although its files stay.
+	ScanHonoursExclusions bool
+}
+
+// ImageShape is the shape of an entity's picture.
+type ImageShape string
+
+// The shapes of a work's picture.
+const (
+	ImageCover  ImageShape = "cover"
+	ImagePoster ImageShape = "poster"
+)
+
+// Refreshing is the capability of a media type whose works are read again from their sources on request.
+type Refreshing interface {
+	// RefreshWork reads one work again; duplicate when a refresh of it was already on its way.
+	RefreshWork(ctx context.Context, workID int64) (duplicate bool, err error)
+}
+
+// ErrNotWired reports a capability whose module was built without what it needs.
+var ErrNotWired = errors.New("media: not wired in this build")
+
+// Numbering is the capability of a media type that places a part for a reader: a heading within its group, and
+// the number it is shown with ("Disc 2", "3"; "", "7").
+type Numbering interface {
+	PartPosition(ref string) (section, number string)
 }
 
 // Module is one media type. Its behaviour is in the capability interfaces it also implements.

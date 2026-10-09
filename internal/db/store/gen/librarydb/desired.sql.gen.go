@@ -963,6 +963,7 @@ func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncomp
 const listPartFilesForWork = `-- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
+       o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
                       ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
 FROM desired_item d
@@ -984,6 +985,12 @@ type ListPartFilesForWorkRow struct {
 	Lossless        sql.NullInt64
 	Languages       sql.NullString
 	LyricsLanguages sql.NullString
+	SizeBytes       int64
+	VideoBitrate    sql.NullInt64
+	Resolution      sql.NullString
+	Hdr             sql.NullString
+	AudioChannels   sql.NullString
+	Subtitles       sql.NullString
 	RelPath         string
 }
 
@@ -1010,6 +1017,12 @@ func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]Lis
 			&i.Lossless,
 			&i.Languages,
 			&i.LyricsLanguages,
+			&i.SizeBytes,
+			&i.VideoBitrate,
+			&i.Resolution,
+			&i.Hdr,
+			&i.AudioChannels,
+			&i.Subtitles,
 			&i.RelPath,
 		); err != nil {
 			return nil, err

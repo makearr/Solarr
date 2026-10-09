@@ -102,11 +102,20 @@ ORDER BY role, ord, person_id;
 -- the person's name, and a second round-trip per credit is not worth saving
 -- a join for.
 -- name: ListCreditsForWorkWithPerson :many
-SELECT c.person_id, c.role, c.ord, p.name AS person_name
+SELECT c.person_id, c.role, c.ord, p.name AS person_name, c.character,
+       CAST(COALESCE(json_extract(p.fields_json, '$.image_url'), '') AS TEXT) AS image_url
 FROM credit c
 JOIN person p ON p.id = c.person_id
 WHERE c.work_id = ? AND c.edition_id = 0 AND c.part_id = 0
 ORDER BY c.role, c.ord, p.sort_name COLLATE NOCASE;
+
+-- The credits of a page of parts: an episode's guest stars, director and writers.
+-- name: ListCreditsForParts :many
+SELECT c.part_id, c.person_id, c.role, c.character, p.name AS person_name
+FROM credit c
+JOIN person p ON p.id = c.person_id
+WHERE c.work_id = sqlc.arg(work_id) AND c.part_id IN (sqlc.slice('part_ids'))
+ORDER BY c.part_id, c.ord, p.sort_name COLLATE NOCASE, p.id;
 
 -- name: ListCreditsForEdition :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord

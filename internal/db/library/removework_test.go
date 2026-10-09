@@ -15,7 +15,7 @@ func TestRemoveWork_DeletesAWorkWithNoFiles(t *testing.T) {
 	opened, _ := newLibrary(t)
 	work := createWork(t, opened, "music", "Wanted Album")
 
-	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID)
+	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID, false)
 	if err != nil {
 		t.Fatalf("RemoveWork: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestRemoveWork_KeepsAWorkThatStillHasFiles(t *testing.T) {
 		t.Fatalf("LinkWorkFile: %v", err)
 	}
 
-	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID)
+	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID, false)
 	if err != nil {
 		t.Fatalf("RemoveWork: %v", err)
 	}
@@ -84,7 +84,7 @@ func TestRemoveWork_KeepsTheDownloadRecordOfAnAlbumItRemoves(t *testing.T) {
 		})
 	})
 
-	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID)
+	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID, false)
 	if err != nil {
 		t.Fatalf("RemoveWork: %v", err)
 	}
@@ -94,5 +94,26 @@ func TestRemoveWork_KeepsTheDownloadRecordOfAnAlbumItRemoves(t *testing.T) {
 	}
 	if !result.WorkDeleted || kept.DesiredItemID != nil || kept.CandidateTitle != "Artist-Downloaded.Album-FLAC" {
 		t.Errorf("result %+v, acquisition %+v; want the work gone and the record kept, detached", result, kept)
+	}
+}
+
+// A work whose type's scan leaves excluded works out goes although its files stay, as Sonarr's delete does.
+func TestRemoveWork_WithFilesDeletesTheWorkAndKeepsTheFiles(t *testing.T) {
+	opened, queries := newLibrary(t)
+	work := createWork(t, opened, "tv", "Series On Disk")
+	object := createObject(t, opened, "remove-with-files-1", 10)
+	addPath(t, opened, object.ID, 1, "Series/S01/e01.mkv")
+	if err := queries.LinkWorkFile(t.Context(), librarydb.LinkWorkFileParams{WorkID: work.ID, MediaObjectID: object.ID, FirstSeenAt: 100}); err != nil {
+		t.Fatalf("LinkWorkFile: %v", err)
+	}
+	result, err := library.NewIdentity(opened).RemoveWork(t.Context(), work.ID, true)
+	if err != nil || result != (library.RemoveWorkResult{WorkDeleted: true, FilesKept: 1}) {
+		t.Fatalf("RemoveWork = %+v, %v; want the work deleted, its one file kept", result, err)
+	}
+	if _, err := queries.GetWork(t.Context(), work.ID); err == nil {
+		t.Error("the work is still there")
+	}
+	if _, err := queries.GetMediaObject(t.Context(), object.ID); err != nil {
+		t.Errorf("the file's record went with the work: %v", err)
 	}
 }

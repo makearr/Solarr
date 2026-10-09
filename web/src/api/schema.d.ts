@@ -3742,7 +3742,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Stop wanting an album, and optionally delete its files. Administrator only.
+         * Stop wanting a work, optionally delete its files and keep it from being added back. Administrator only.
          * @description Deletes every desired item for the work, and the work itself only when the library holds no files for it -- with files on disk the next scan would recreate it, so deleting the row would be a lie. Files are kept unless delete_files says otherwise, and even then they go to recycle bin (section 10.8): nothing is ever deleted outright, so a mistaken delete stays recoverable for the retention window.
          */
         post: operations["removeWork"];
@@ -3824,7 +3824,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fetch the album's metadata again, past the cache -- credits, genres, description -- then rescan its folder as its library's "Rescan after refresh" says. Background; a second request while one runs is folded in. */
+        /** Read the work again from its sources, past the cache. An album is refreshed in the background (a second request while one runs is folded in); a series at once, adding new episodes. Request on its library. */
         post: operations["refreshWork"];
         delete?: never;
         options?: never;
@@ -4569,6 +4569,11 @@ export interface components {
                 key: string;
                 label: string;
             }[];
+            /**
+             * @description The shape of a work's picture: an album's square cover, a series' tall poster.
+             * @enum {string}
+             */
+            work_image: "cover" | "poster";
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -5796,6 +5801,8 @@ export interface components {
             column: boolean;
             sortable: boolean;
             filterable: boolean;
+            /** @description A person may set it on the work's Edit; their value wins over every source. */
+            editable?: boolean;
         };
         FollowOption: {
             key: string;
@@ -5958,6 +5965,21 @@ export interface components {
             /** Format: int64 */
             runtime_ms?: number;
             date?: string;
+            /**
+             * Format: date-time
+             * @description When the part is out (an episode's air time); absent when unknown.
+             */
+            available_at?: string;
+            /** @description The heading the part sits under within its group, as the type places it: "Disc 2"; empty for none. */
+            section?: string;
+            /** @description The number the part is shown with: a track's, an episode's. */
+            number?: string;
+            /** @description The part's numbers under other schemes, by scheme ("absolute"). */
+            alt_numbers?: {
+                [key: string]: string;
+            };
+            /** @description The part's own credits (an episode's guest stars, director, writers). */
+            credits?: components["schemas"]["Credit"][];
             monitored: boolean;
             /** @description This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count. */
             wanted?: components["schemas"]["Wanted"] | null;
@@ -5980,6 +6002,17 @@ export interface components {
              */
             bitrate_kbps: number;
             lossless: boolean;
+            /** Format: int64 */
+            size_bytes?: number;
+            resolution?: string;
+            hdr?: string;
+            audio_channels?: string;
+            /** Format: int64 */
+            video_bitrate_kbps?: number;
+            /** @description Language codes of the audio tracks the probe read. */
+            audio_languages?: string[];
+            /** @description Language codes of embedded and sidecar subtitles. */
+            subtitles?: string[];
             /** @description Codec, file type and bitrate match the library's target. Absent when it sets none. */
             meets_target?: boolean;
             /** @description Good enough that upgrades stop. Absent when the library sets neither target nor cutoff. */
@@ -5992,6 +6025,10 @@ export interface components {
             person_name: string;
             /** @example artist */
             role: string;
+            /** @description Who an actor played; absent for any other role. */
+            character?: string;
+            /** @description The person's photo at its provider. */
+            image_url?: string;
         };
         /** @description How many rows a bulk action (section 21.7) matched, and, unless it was a preview, changed. */
         BulkResult: {
@@ -6007,6 +6044,10 @@ export interface components {
             profile_id: number | null;
             /** @description Tags the user assigned, by name. */
             tags: string[];
+            /** @description The type's editable facets the user set, by facet key (a series' type); empty or absent is the sources' value. Saving names only the facets it changes. */
+            fields?: {
+                [key: string]: string;
+            };
         };
         /** @description The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge. */
         Wanted: {
@@ -6065,6 +6106,10 @@ export interface components {
              * @description The person the work is listed under (an album's artist).
              */
             lead_id?: number;
+            /** @description The work's pictures at their providers, by kind (poster, fanart, logo); a person's own choice first. */
+            pictures?: {
+                [key: string]: string;
+            };
             /** @description The media type's own fields of this work, by facet key. */
             facets?: {
                 [key: string]: string[];
@@ -13687,6 +13732,11 @@ export interface operations {
                      * @default false
                      */
                     delete_files?: boolean;
+                    /**
+                     * @description Do not add it back: follows and import lists leave it out, and so does the scan of a type whose scan honours exclusions (TV), which removes the work although its files stay.
+                     * @default false
+                     */
+                    exclude?: boolean;
                 };
             };
         };
@@ -13808,6 +13858,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     monitorPersonAll: {

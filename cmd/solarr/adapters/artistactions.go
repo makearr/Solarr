@@ -2,10 +2,12 @@ package adapters
 
 import (
 	"context"
+	"errors"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 )
 
@@ -65,20 +67,25 @@ func (a ArtistActions) MonitorAll(ctx context.Context, personID int64) (int64, e
 	return monitored, nil
 }
 
-// AlbumRefresher enqueues one album's refresh.
-type AlbumRefresher struct {
-	Works library.Works
-	Queue *jobs.Queue
+// WorkRefresher refreshes one work through its media type's Refreshing.
+type WorkRefresher struct {
+	Works      library.Works
+	Refreshing func(mediaType string) (media.Refreshing, bool)
 }
 
-// RefreshAlbum enqueues the album's refresh; a second while one runs is folded in.
-func (a AlbumRefresher) RefreshAlbum(ctx context.Context, workID int64) (bool, error) {
-	if _, err := a.Works.Detail(ctx, workID); err != nil {
-		return false, err
-	}
-	result, err := music.EnqueueRefreshAlbum(ctx, a.Queue, workID)
+// RefreshWork reads the work again; a type that cannot refresh answers apiserver.ErrNotRefreshable.
+func (a WorkRefresher) RefreshWork(ctx context.Context, workID int64) (bool, error) {
+	mediaType, err := a.Works.MediaTypeOf(ctx, workID)
 	if err != nil {
 		return false, err
 	}
-	return result.Duplicate, nil
+	refreshing, ok := a.Refreshing(mediaType)
+	if !ok {
+		return false, apiserver.ErrNotRefreshable
+	}
+	duplicate, err := refreshing.RefreshWork(ctx, workID)
+	if errors.Is(err, media.ErrNotWired) {
+		return false, apiserver.ErrNotRefreshable
+	}
+	return duplicate, err
 }

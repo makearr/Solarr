@@ -55,6 +55,8 @@ type Facet struct {
 	Column     bool
 	Sortable   bool
 	Filterable bool
+	// Editable lets a person set it on the work's Edit; their value wins over every source.
+	Editable bool
 }
 
 // workColumns are the base columns of a work a facet may read; a facet never adds one.
@@ -74,6 +76,9 @@ func checkFacet(facet Facet) error {
 		}
 	default:
 		return fmt.Errorf("facet %s has an unknown source %q", facet.Key, facet.Source.Kind)
+	}
+	if facet.Editable && facet.Source.Kind != SourceField {
+		return fmt.Errorf("facet %s is editable but not a field", facet.Key)
 	}
 	if facet.Kind == FacetEnum && len(facet.Choices) == 0 {
 		return fmt.Errorf("facet %s is an enum without choices", facet.Key)

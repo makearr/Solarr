@@ -422,6 +422,8 @@ type Querier interface {
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
+	// Every other number of a page of parts, one per scheme: the first provider's.
+	ListAltNumbersForParts(ctx context.Context, partIds []int64) ([]ListAltNumbersForPartsRow, error)
 	// A part's number under one other scheme ("absolute" for anime), for a whole work.
 	ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersForWorkParams) ([]ListAltNumbersForWorkRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
@@ -462,6 +464,8 @@ type Querier interface {
 	// Per-track performers and composers, which is what classical and various-artists
 	// releases need and what a work-level credit cannot express.
 	ListCreditsForPart(ctx context.Context, partID int64) ([]Credit, error)
+	// The credits of a page of parts: an episode's guest stars, director and writers.
+	ListCreditsForParts(ctx context.Context, arg ListCreditsForPartsParams) ([]ListCreditsForPartsRow, error)
 	// The work itself only. A narrator credited on one audiobook edition, or a soloist
 	// on one track, is not a credit on the work and must not appear here.
 	ListCreditsForWork(ctx context.Context, workID int64) ([]Credit, error)

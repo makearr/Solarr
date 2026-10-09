@@ -339,7 +339,7 @@ func TestBulkSetWorkMonitored_UnreadableCategoryAnswers404(t *testing.T) {
 }
 
 func (f *fakeWorksMonitor) RemoveWork(
-	_ context.Context, workID int64, deleteFiles bool,
+	_ context.Context, workID int64, deleteFiles, _ bool,
 ) (apiserver.RemoveWorkResult, error) {
 	f.removeCalls++
 	f.removeWorkID = workID

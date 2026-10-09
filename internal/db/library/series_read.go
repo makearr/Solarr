@@ -100,7 +100,10 @@ type SeriesReader struct{ store *store.Store }
 func NewSeriesReader(opened *store.Store) SeriesReader { return SeriesReader{store: opened} }
 
 // fieldPriority orders whose value of a field wins: a person's own, then the providers in merge order.
-var fieldPriority = []string{"__manual__", "skyhook", "tvmaze"}
+var fieldPriority = []string{manualProvider, "skyhook", "tvmaze"}
+
+// manualProvider is the provider of a field the user set themselves; it wins over every source.
+const manualProvider = "__manual__"
 
 // List returns up to pageSize series of one category after the cursor, with counts as of now.
 func (r SeriesReader) List(ctx context.Context, categoryID int64, after SeriesCursor, pageSize int64, now time.Time) ([]SeriesSummary, error) {

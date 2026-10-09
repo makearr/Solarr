@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
@@ -80,7 +81,11 @@ func (p *process) musicModule() music.Module {
 		},
 	}
 	searching := music.Searching{Acquire: p.musicGrab(), Indexers: p.indexerConns, Clock: clock.NewSystem()}
-	return music.Module{Hunt: p.musicHunt, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	refresh := func(ctx context.Context, workID int64) (bool, error) {
+		result, err := music.EnqueueRefreshAlbum(ctx, p.queue, workID)
+		return result.Duplicate, err
+	}
+	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -120,6 +125,18 @@ func (p *process) tvModule() tv.Module {
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		Hunt: p.tvHunt,
+		// A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
+		Refresh: func(ctx context.Context, workID int64) (bool, error) {
+			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+			if err != nil {
+				return false, err
+			}
+			if len(libraries) == 0 {
+				return false, fmt.Errorf("series %d is in no library", workID)
+			}
+			_, err = p.seriesCatalog().Refresh(ctx, libraries[0], workID)
+			return false, err
+		},
 		Feed: tv.Feed{
 			Grab: p.tvGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.tvIndexerConns, Logger: p.logger,
 			Libraries: func() []int64 {

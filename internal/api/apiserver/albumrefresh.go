@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -9,9 +10,12 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 )
 
-// AlbumRefresher fetches one album's metadata again in the background: Radarr's per-item Refresh.
-type AlbumRefresher interface {
-	RefreshAlbum(ctx context.Context, workID int64) (duplicate bool, err error)
+// ErrNotRefreshable reports a work whose media type cannot be read again from its sources.
+var ErrNotRefreshable = errors.New("apiserver: this media type cannot refresh a work")
+
+// WorkRefresher reads one work again from its sources: Radarr's per-item Refresh, for every media type.
+type WorkRefresher interface {
+	RefreshWork(ctx context.Context, workID int64) (duplicate bool, err error)
 }
 
 func (s *Server) routeRefreshWork(w http.ResponseWriter, r *http.Request) {
@@ -20,21 +24,25 @@ func (s *Server) routeRefreshWork(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// RefreshWork is an album's "Refresh metadata"; anyone who may see the album, like the artist's.
+// RefreshWork is a work's "Refresh"; request on its library, since a series' refresh also adds its new episodes.
 func (s *Server) RefreshWork(w http.ResponseWriter, r *http.Request, id int64) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	if s.albumRefresher == nil {
-		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "album refresh is not available")
+	if s.workRefresher == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "refresh is not available")
 		return
 	}
-	if !s.workPermitted(w, r, access, id, settings.PermissionRead) {
+	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
-	duplicate, err := s.albumRefresher.RefreshAlbum(r.Context(), id)
+	duplicate, err := s.workRefresher.RefreshWork(r.Context(), id)
+	if errors.Is(err, ErrNotRefreshable) {
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not refreshable", "this kind of work has no source to refresh from")
+		return
+	}
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

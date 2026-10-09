@@ -54,7 +54,9 @@
       "id": 1,
       "media_ref": "disc1:track1",
       "monitored": true,
+      "number": "1",
       "runtime_ms": 200000,
+      "section": "Disc 1",
       "sort_key": "d0001t0001",
       "title": "First Light",
       "wanted": null
@@ -65,7 +67,9 @@
       "id": 2,
       "media_ref": "disc1:track2",
       "monitored": true,
+      "number": "2",
       "runtime_ms": 200000,
+      "section": "Disc 1",
       "sort_key": "d0001t0002",
       "title": "Low Tide",
       "wanted": null
@@ -76,7 +80,9 @@
       "id": 3,
       "media_ref": "disc1:track3",
       "monitored": true,
+      "number": "3",
       "runtime_ms": 200000,
+      "section": "Disc 1",
       "sort_key": "d0001t0003",
       "title": "Harbour Bells",
       "wanted": null

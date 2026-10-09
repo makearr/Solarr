@@ -581,11 +581,6 @@ type RemoveWorkResult struct {
 	FilesKept   int64
 }
 
-// RemoveWork drops the intent to have an album -- every desired_item for the
-// work -- and deletes the work itself only when the library holds no files
-// for it. Files are never touched either way: removing an album is about no
-// longer wanting it, and deleting bytes goes through the recycle bin (section
-// 10.8), never through here.
 // WorkFiles answers every media object the work has on disk, for a caller
 // deleting an album's files along with it (2026-09-19).
 func (i Identity) WorkFiles(ctx context.Context, workID int64) ([]int64, error) {
@@ -596,7 +591,9 @@ func (i Identity) WorkFiles(ctx context.Context, workID int64) ([]int64, error) 
 	return files, nil
 }
 
-func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResult, error) {
+// RemoveWork drops every desired item of a work, and the work itself when it has no files or withFiles says its
+// type's scan will not add it back; files are never touched (deleting bytes is the recycle bin's, section 10.8).
+func (i Identity) RemoveWork(ctx context.Context, workID int64, withFiles bool) (RemoveWorkResult, error) {
 	var result RemoveWorkResult
 	err := i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -616,7 +613,7 @@ func (i Identity) RemoveWork(ctx context.Context, workID int64) (RemoveWorkResul
 			return fmt.Errorf("delete desired items: %w", err)
 		}
 		result.FilesKept = files
-		if files > 0 {
+		if files > 0 && !withFiles {
 			return members.refresh(ctx, queries)
 		}
 		if err := queries.DetachImportUnitsFromWork(ctx, sql.NullInt64{Int64: workID, Valid: true}); err != nil {

@@ -1,6 +1,23 @@
 {
   "items": [
     {
+      "alt_numbers": {
+        "date": "2020-02-03"
+      },
+      "available_at": "2020-02-03T20:00:00Z",
+      "credits": [
+        {
+          "person_id": 6,
+          "person_name": "Hal Brandt",
+          "role": "director"
+        },
+        {
+          "character": "The Pilot",
+          "person_id": 5,
+          "person_name": "Odile Renn",
+          "role": "guest_star"
+        }
+      ],
       "date": "2020-02-03",
       "external_ids": [
         {
@@ -12,17 +29,23 @@
         "bitrate_kbps": 0,
         "extension": "mkv",
         "lossless": false,
-        "media_object_id": 3
+        "media_object_id": 3,
+        "size_bytes": 900000000
       },
       "id": 4,
       "media_ref": "s01:e01",
       "monitored": true,
+      "number": "1",
       "runtime_ms": 2700000,
       "sort_key": "s0001e0001",
       "title": "Slack Water",
       "wanted": null
     },
     {
+      "alt_numbers": {
+        "date": "2020-02-10"
+      },
+      "available_at": "2020-02-10T20:00:00Z",
       "date": "2020-02-10",
       "external_ids": [
         {
@@ -34,17 +57,23 @@
         "bitrate_kbps": 0,
         "extension": "mkv",
         "lossless": false,
-        "media_object_id": 4
+        "media_object_id": 4,
+        "size_bytes": 880000000
       },
       "id": 5,
       "media_ref": "s01:e02",
       "monitored": true,
+      "number": "2",
       "runtime_ms": 2700000,
       "sort_key": "s0001e0002",
       "title": "The Long Pier",
       "wanted": null
     },
     {
+      "alt_numbers": {
+        "date": "2020-02-17"
+      },
+      "available_at": "2020-02-17T20:00:00Z",
       "date": "2020-02-17",
       "external_ids": [
         {
@@ -56,6 +85,7 @@
       "id": 6,
       "media_ref": "s01:e03",
       "monitored": true,
+      "number": "3",
       "runtime_ms": 2700000,
       "sort_key": "s0001e0003",
       "title": "Signals",

@@ -1,6 +1,23 @@
 {
   "items": [
     {
+      "alt_numbers": {
+        "date": "2020-02-03"
+      },
+      "available_at": "2020-02-03T20:00:00Z",
+      "credits": [
+        {
+          "person_id": 6,
+          "person_name": "Hal Brandt",
+          "role": "director"
+        },
+        {
+          "character": "The Pilot",
+          "person_id": 5,
+          "person_name": "Odile Renn",
+          "role": "guest_star"
+        }
+      ],
       "date": "2020-02-03",
       "external_ids": [
         {
@@ -12,11 +29,13 @@
         "bitrate_kbps": 0,
         "extension": "mkv",
         "lossless": false,
-        "media_object_id": 3
+        "media_object_id": 3,
+        "size_bytes": 900000000
       },
       "id": 4,
       "media_ref": "s01:e01",
       "monitored": true,
+      "number": "1",
       "runtime_ms": 2700000,
       "sort_key": "s0001e0001",
       "title": "Slack Water",

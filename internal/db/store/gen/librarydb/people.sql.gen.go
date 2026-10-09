@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const addCredit = `-- name: AddCredit :exec
@@ -918,6 +919,68 @@ func (q *Queries) ListCreditsForPart(ctx context.Context, partID int64) ([]Credi
 	return items, nil
 }
 
+const listCreditsForParts = `-- name: ListCreditsForParts :many
+SELECT c.part_id, c.person_id, c.role, c.character, p.name AS person_name
+FROM credit c
+JOIN person p ON p.id = c.person_id
+WHERE c.work_id = ?1 AND c.part_id IN (/*SLICE:part_ids*/?)
+ORDER BY c.part_id, c.ord, p.sort_name COLLATE NOCASE, p.id
+`
+
+type ListCreditsForPartsParams struct {
+	WorkID  int64
+	PartIds []int64
+}
+
+type ListCreditsForPartsRow struct {
+	PartID     int64
+	PersonID   int64
+	Role       string
+	Character  string
+	PersonName string
+}
+
+// The credits of a page of parts: an episode's guest stars, director and writers.
+func (q *Queries) ListCreditsForParts(ctx context.Context, arg ListCreditsForPartsParams) ([]ListCreditsForPartsRow, error) {
+	query := listCreditsForParts
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.WorkID)
+	if len(arg.PartIds) > 0 {
+		for _, v := range arg.PartIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", strings.Repeat(",?", len(arg.PartIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreditsForPartsRow{}
+	for rows.Next() {
+		var i ListCreditsForPartsRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.PersonID,
+			&i.Role,
+			&i.Character,
+			&i.PersonName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCreditsForWork = `-- name: ListCreditsForWork :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
 FROM credit
@@ -959,7 +1022,8 @@ func (q *Queries) ListCreditsForWork(ctx context.Context, workID int64) ([]Credi
 }
 
 const listCreditsForWorkWithPerson = `-- name: ListCreditsForWorkWithPerson :many
-SELECT c.person_id, c.role, c.ord, p.name AS person_name
+SELECT c.person_id, c.role, c.ord, p.name AS person_name, c.character,
+       CAST(COALESCE(json_extract(p.fields_json, '$.image_url'), '') AS TEXT) AS image_url
 FROM credit c
 JOIN person p ON p.id = c.person_id
 WHERE c.work_id = ? AND c.edition_id = 0 AND c.part_id = 0
@@ -971,6 +1035,8 @@ type ListCreditsForWorkWithPersonRow struct {
 	Role       string
 	Ord        sql.NullInt64
 	PersonName string
+	Character  string
+	ImageUrl   string
 }
 
 // The work detail page's own need: a credit is not useful to display without
@@ -990,6 +1056,8 @@ func (q *Queries) ListCreditsForWorkWithPerson(ctx context.Context, workID int64
 			&i.Role,
 			&i.Ord,
 			&i.PersonName,
+			&i.Character,
+			&i.ImageUrl,
 		); err != nil {
 			return nil, err
 		}

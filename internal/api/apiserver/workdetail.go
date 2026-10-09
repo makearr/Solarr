@@ -73,6 +73,12 @@ type PartRow struct {
 	Wanted *WantedRow
 	// File is what is on disk for this part, nil when nothing is.
 	File *PartFileRow
+	// AvailableAt is when the part is out, zero when unknown.
+	AvailableAt time.Time
+	// Section and Number place the part as its type does: "Disc 2", "3".
+	Section, Number string
+	AltNumbers      map[string]string
+	Credits         []CreditRow
 }
 
 // PartFileRow is the file covering one part, and what probing measured.
@@ -84,6 +90,11 @@ type PartFileRow struct {
 	BitrateKbps   int64
 	Lossless      bool
 	Extension     string
+	SizeBytes     int64
+	// What the probe measured of a video; empty for a field it did not read.
+	Resolution, HDR, AudioChannels string
+	VideoBitrateKbps               int64
+	AudioLanguages, Subtitles      []string
 }
 
 // CreditRow is one work-level credit, the person's own name included so a
@@ -92,6 +103,8 @@ type CreditRow struct {
 	PersonID   int64
 	PersonName string
 	Role       string
+	Character  string
+	ImageURL   string
 }
 
 // WantedRow is the work's own album-level SET desired_item, when one exists.
@@ -135,6 +148,8 @@ type WorkDetailRow struct {
 	LeadID int64
 	Facets map[string][]string
 	Groups []GroupRow
+	// Pictures are the work's provider pictures by kind (poster, fanart, logo).
+	Pictures map[string]string
 }
 
 // BulkSelection is a selection as a query (section 21.7): every work visible under RootFolderIDs or CategoryIDs
@@ -168,7 +183,7 @@ type WorksMonitor interface {
 	// missing work id with an error wrapping sql.ErrNoRows.
 	// RemoveWork stops wanting an album. deleteFiles also puts its files
 	// into the recycle bin (section 10.8 -- never a direct delete).
-	RemoveWork(ctx context.Context, workID int64, deleteFiles bool) (RemoveWorkResult, error)
+	RemoveWork(ctx context.Context, workID int64, deleteFiles, exclude bool) (RemoveWorkResult, error)
 	// RemovePart stops wanting one track; deleteFiles also recycles its file.
 	// Answers a part outside the work with an error wrapping sql.ErrNoRows.
 	RemovePart(ctx context.Context, workID, partID int64, deleteFiles bool) (RemovePartResult, error)
@@ -580,7 +595,17 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		groups[index] = groupView(group)
 	}
 	view.Facets, view.Groups = &facets, &groups
+	if len(row.Pictures) > 0 {
+		view.Pictures = &row.Pictures
+	}
 	return view
+}
+
+func nonEmptyStrings(values []string) *[]string {
+	if len(values) == 0 {
+		return nil
+	}
+	return &values
 }
 
 // ListWorkParts answers one page of a work's parts, the work seen as GetWork sees it.
@@ -663,7 +688,10 @@ func (s *Server) routeListWorkParts(w http.ResponseWriter, r *http.Request) {
 func buildCreditViews(rows []CreditRow) []gen.Credit {
 	views := make([]gen.Credit, len(rows))
 	for index, row := range rows {
-		views[index] = gen.Credit{PersonId: row.PersonID, PersonName: row.PersonName, Role: row.Role}
+		views[index] = gen.Credit{
+			PersonId: row.PersonID, PersonName: row.PersonName, Role: row.Role,
+			Character: strPtr(row.Character), ImageUrl: strPtr(row.ImageURL),
+		}
 	}
 	return views
 }
@@ -707,8 +735,27 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 				MediaObjectId: row.File.MediaObjectID, AudioCodec: strPtr(row.File.AudioCodec),
 				VideoCodec: strPtr(row.File.VideoCodec), Container: strPtr(row.File.Container),
 				BitrateKbps: row.File.BitrateKbps, Lossless: row.File.Lossless,
-				Extension: strPtr(row.File.Extension),
+				Extension: strPtr(row.File.Extension), Resolution: strPtr(row.File.Resolution), Hdr: strPtr(row.File.HDR),
+				AudioChannels: strPtr(row.File.AudioChannels), AudioLanguages: nonEmptyStrings(row.File.AudioLanguages),
+				Subtitles: nonEmptyStrings(row.File.Subtitles),
 			}
+			if row.File.SizeBytes > 0 {
+				views[index].File.SizeBytes = &row.File.SizeBytes
+			}
+			if row.File.VideoBitrateKbps > 0 {
+				views[index].File.VideoBitrateKbps = &row.File.VideoBitrateKbps
+			}
+		}
+		if !row.AvailableAt.IsZero() {
+			views[index].AvailableAt = &row.AvailableAt
+		}
+		views[index].Section, views[index].Number = strPtr(row.Section), strPtr(row.Number)
+		if len(row.AltNumbers) > 0 {
+			views[index].AltNumbers = &row.AltNumbers
+		}
+		if len(row.Credits) > 0 {
+			credits := buildCreditViews(row.Credits)
+			views[index].Credits = &credits
 		}
 	}
 	return views
@@ -740,12 +787,13 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	// endpoint has always done, so an old caller is unchanged.
 	var body struct {
 		DeleteFiles bool `json:"delete_files"`
+		Exclude     bool `json:"exclude"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body)
 	}
 
-	result, err := s.worksMonitor.RemoveWork(r.Context(), id, body.DeleteFiles)
+	result, err := s.worksMonitor.RemoveWork(r.Context(), id, body.DeleteFiles, body.Exclude)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")

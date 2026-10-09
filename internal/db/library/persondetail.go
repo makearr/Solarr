@@ -165,23 +165,34 @@ type workImage struct {
 // Posters answers each work's poster from its stored provider pictures, the user's own choice first; a work with
 // none is left out.
 func (w Works) Posters(ctx context.Context, workIDs []int64) (map[int64]string, error) {
-	queries := librarydb.New(w.store.Read())
 	posters := make(map[int64]string, len(workIDs))
 	for _, id := range unique(workIDs) {
-		fields, err := queries.ListWorkFields(ctx, id)
+		pictures, err := w.Pictures(ctx, id)
 		if err != nil {
-			return nil, fmt.Errorf("library: pictures of work %d: %w", id, err)
+			return nil, err
 		}
-		var images []workImage
-		if json.Unmarshal([]byte(mergeFields(fields)["images"]), &images) != nil {
-			continue
-		}
-		for _, image := range images {
-			if image.Kind == "poster" {
-				posters[id] = image.URL
-				break
-			}
+		if poster, ok := pictures["poster"]; ok {
+			posters[id] = poster
 		}
 	}
 	return posters, nil
+}
+
+// Pictures answers a work's stored provider pictures, the first of each kind (poster, fanart, logo).
+func (w Works) Pictures(ctx context.Context, workID int64) (map[string]string, error) {
+	fields, err := librarydb.New(w.store.Read()).ListWorkFields(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("library: pictures of work %d: %w", workID, err)
+	}
+	pictures := map[string]string{}
+	var images []workImage
+	if raw := mergeFields(fields)["images"]; raw == "" || json.Unmarshal([]byte(raw), &images) != nil {
+		return pictures, nil //nolint:nilerr // A work with no pictures, or unreadable ones, shows none.
+	}
+	for _, image := range images {
+		if _, have := pictures[image.Kind]; !have && image.URL != "" {
+			pictures[image.Kind] = image.URL
+		}
+	}
+	return pictures, nil
 }

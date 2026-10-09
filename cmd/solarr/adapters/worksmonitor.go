@@ -35,6 +35,10 @@ type WorksMonitor struct {
 	Monitoring func(mediaType string) (media.Monitoring, bool)
 	// GroupLabel names a group of a media type's work; nil names it by its ref.
 	GroupLabel func(mediaType, ref string) string
+	// Exclusions remember a work removed with "do not add it back".
+	Exclusions library.Exclusions
+	// ScanHonoursExclusions says a media type's scan leaves an excluded work out; nil says none does.
+	ScanHonoursExclusions func(mediaType string) bool
 	// Clock resolves the Fresh filter of a bulk selection.
 	Clock  clock.Clock
 	Fresh  FreshWindow
@@ -334,10 +338,10 @@ func boolToInt64(value bool) int64 {
 	return 0
 }
 
-// RemoveWork stops wanting an album. The work is looked up first so a missing
-// id answers sql.ErrNoRows rather than silently succeeding on nothing.
+// RemoveWork stops wanting a work and, with exclude, keeps follows, import lists and a type's scan that honours it from
+// adding it back. A missing id answers sql.ErrNoRows rather than silently succeeding on nothing.
 func (a WorksMonitor) RemoveWork(
-	ctx context.Context, workID int64, deleteFiles bool,
+	ctx context.Context, workID int64, deleteFiles, exclude bool,
 ) (apiserver.RemoveWorkResult, error) {
 	detail, err := a.Works.Detail(ctx, workID)
 	if err != nil {
@@ -362,7 +366,18 @@ func (a WorksMonitor) RemoveWork(
 		}
 	}
 
-	result, err := a.Identity.RemoveWork(ctx, workID)
+	withFiles := false
+	if exclude {
+		ids := make([]library.ExternalIDWrite, len(detail.ExternalIDs))
+		for i, external := range detail.ExternalIDs {
+			ids[i] = library.ExternalIDWrite{Provider: external.Provider, ExternalID: external.ExternalID}
+		}
+		if err := a.Exclusions.Exclude(ctx, a.Clock.Now(), detail.Work.MediaType, detail.Work.CanonicalTitle, ids); err != nil {
+			return apiserver.RemoveWorkResult{}, err
+		}
+		withFiles = a.ScanHonoursExclusions != nil && a.ScanHonoursExclusions(detail.Work.MediaType)
+	}
+	result, err := a.Identity.RemoveWork(ctx, workID, withFiles)
 	if err != nil {
 		return apiserver.RemoveWorkResult{}, err
 	}

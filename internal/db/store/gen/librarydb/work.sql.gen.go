@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const addAltNumbering = `-- name: AddAltNumbering :exec
@@ -1034,6 +1035,52 @@ func (q *Queries) LinkWorkPartExternalID(ctx context.Context, arg LinkWorkPartEx
 		arg.Confidence,
 	)
 	return err
+}
+
+const listAltNumbersForParts = `-- name: ListAltNumbersForParts :many
+SELECT part_id, scheme, alt_ref FROM alt_numbering
+WHERE part_id IN (/*SLICE:part_ids*/?)
+ORDER BY part_id, scheme, provider
+`
+
+type ListAltNumbersForPartsRow struct {
+	PartID int64
+	Scheme string
+	AltRef string
+}
+
+// Every other number of a page of parts, one per scheme: the first provider's.
+func (q *Queries) ListAltNumbersForParts(ctx context.Context, partIds []int64) ([]ListAltNumbersForPartsRow, error) {
+	query := listAltNumbersForParts
+	var queryParams []interface{}
+	if len(partIds) > 0 {
+		for _, v := range partIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", strings.Repeat(",?", len(partIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAltNumbersForPartsRow{}
+	for rows.Next() {
+		var i ListAltNumbersForPartsRow
+		if err := rows.Scan(&i.PartID, &i.Scheme, &i.AltRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCalendarEntries = `-- name: ListCalendarEntries :many

@@ -19,6 +19,8 @@ type Module struct {
 	Sweep scan.Sweep
 	// Hunt searches for one wanted season and sends the best release; nil leaves TV unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Refresh reads one series again from its sources; nil leaves it unrefreshable.
+	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Feed is TV's part of the RSS sync.
 	Feed
 	// CutoffJob is TV's part of the cutoff check.
@@ -35,6 +37,14 @@ type Module struct {
 
 // ScanSweep implements media.Scanning.
 func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
+
+// RefreshWork implements media.Refreshing.
+func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
+	if m.Refresh == nil {
+		return false, media.ErrNotWired
+	}
+	return m.Refresh(ctx, workID)
+}
 
 // HuntSearch implements media.Hunting.
 func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
@@ -84,6 +94,9 @@ func (Module) Descriptor() media.Descriptor {
 		FollowOptions:  followOptions,
 		Facets:         facets,
 		MonitorOptions: monitorChoices,
+		WorkImage:      media.ImagePoster,
+		// The consumer refuses to add an excluded series (Service.excluded).
+		ScanHonoursExclusions: true,
 	}
 }
 
@@ -103,6 +116,15 @@ func (Module) NamingExamples(profile settings.NamingProfile) []media.NamingExamp
 		out = append(out, media.NamingExample{Label: example.Label, Path: example.Path})
 	}
 	return out
+}
+
+// PartPosition implements media.Numbering: "s03:e07" is episode 7, its season being the group.
+func (Module) PartPosition(ref string) (section, number string) {
+	var season, episode int
+	if _, err := fmt.Sscanf(ref, "s%d:e%d", &season, &episode); err != nil {
+		return "", ref
+	}
+	return "", strconv.Itoa(episode)
 }
 
 // GroupLabel implements media.Grouping: "s03" is "Season 3", "s00" the specials.

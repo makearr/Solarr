@@ -21,7 +21,7 @@ var facets = []media.Facet{
 		Key: "series_type", Label: "Series type", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
 		Source:  media.FacetSource{Kind: media.SourceField, Name: "series_type"},
 		Choices: []media.Choice{{Key: string(SeriesStandard), Label: "Standard"}, {Key: string(SeriesDaily), Label: "Daily"}, {Key: string(SeriesAnime), Label: "Anime"}},
-		Column:  true, Filterable: true,
+		Column:  true, Filterable: true, Editable: true,
 	},
 	{
 		Key: "network", Label: "Network", Entity: model.LevelEntityWork, Kind: media.FacetText,

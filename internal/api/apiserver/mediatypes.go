@@ -40,6 +40,8 @@ type MediaTypeInfo struct {
 	MonitorOptions []MediaChoice
 	// SearchTerms are the words a person may search with instead of a work's own.
 	SearchTerms []MediaChoice
+	// WorkImage is the shape of a work's picture: "cover" or "poster".
+	WorkImage string
 }
 
 // MediaChoice is one key a media type offers, with its label.
@@ -69,6 +71,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
+				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage),
 			})
 		}
 	}

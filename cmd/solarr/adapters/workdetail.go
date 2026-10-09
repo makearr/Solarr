@@ -18,6 +18,8 @@ type WorkDetail struct {
 	GroupLabel func(mediaType, ref string) string
 	// SearchStatus answers an album's last and next automatic search and why (F2); optional.
 	SearchStatus func(ctx context.Context, itemID int64) (apiserver.WantedRow, error)
+	// PartPosition places a part of a media type's work; nil numbers it by its ref.
+	PartPosition func(mediaType, ref string) (section, number string)
 }
 
 func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.WorkDetailRow, error) {
@@ -39,7 +41,7 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		UpdatedAt:     time.Unix(detail.Work.UpdatedAt, 0),
 		ExternalIDs:   externalIDs,
 		Editions:      editionRows(detail.Editions),
-		Parts:         partRows(detail.Parts),
+		Parts:         a.partRows(detail.Work.MediaType, detail.Parts),
 		Credits:       creditRows(detail.Credits),
 		Genres:        detail.Genres,
 		RootFolderIDs: detail.RootFolderIDs,
@@ -59,6 +61,9 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 	}
 	if detail.Work.PrimaryArtistID.Valid {
 		row.LeadID = detail.Work.PrimaryArtistID.Int64
+	}
+	if row.Pictures, err = a.Works.Pictures(ctx, id); err != nil {
+		return apiserver.WorkDetailRow{}, err
 	}
 	if a.Facets != nil {
 		values, err := a.Works.FacetValues(ctx, a.Facets(detail.Work.MediaType), []int64{id})
@@ -102,11 +107,15 @@ func (a WorkDetail) WorkPlaces(ctx context.Context, id int64) ([]int64, []int64,
 
 // ListWorkParts maps one page of a work's parts.
 func (a WorkDetail) ListWorkParts(ctx context.Context, id int64, group string, after paginate.TextCursor, limit int) ([]apiserver.PartRow, error) {
+	mediaType, err := a.Works.MediaTypeOf(ctx, id)
+	if err != nil {
+		return nil, err
+	}
 	parts, err := a.Works.Parts(ctx, id, group, library.PartCursor{SortKey: after.Sort, ID: after.ID}, limit)
 	if err != nil {
 		return nil, err
 	}
-	return partRows(parts), nil
+	return a.partRows(mediaType, parts), nil
 }
 
 func creditRows(from []library.Credit) []apiserver.CreditRow {
@@ -114,6 +123,7 @@ func creditRows(from []library.Credit) []apiserver.CreditRow {
 	for index, credit := range from {
 		rows[index] = apiserver.CreditRow{
 			PersonID: credit.PersonID, PersonName: credit.PersonName, Role: credit.Role,
+			Character: credit.Character, ImageURL: credit.ImageURL,
 		}
 	}
 	return rows
@@ -152,7 +162,7 @@ func editionRows(from []library.EditionDetail) []apiserver.EditionRow {
 	return rows
 }
 
-func partRows(from []library.PartDetail) []apiserver.PartRow {
+func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apiserver.PartRow {
 	rows := make([]apiserver.PartRow, len(from))
 	for index, detail := range from {
 		externalIDs := make([]apiserver.ExternalIDRow, len(detail.ExternalIDs))
@@ -163,7 +173,18 @@ func partRows(from []library.PartDetail) []apiserver.PartRow {
 		row := apiserver.PartRow{
 			ID: detail.Part.ID, MediaRef: detail.Part.MediaRef, SortKey: detail.Part.SortKey,
 			Monitored:   detail.Part.Monitored != 0,
-			ExternalIDs: externalIDs,
+			ExternalIDs: externalIDs, AltNumbers: detail.AltNumbers, Number: detail.Part.MediaRef,
+		}
+		if a.PartPosition != nil {
+			row.Section, row.Number = a.PartPosition(mediaType, detail.Part.MediaRef)
+		}
+		if detail.Part.AvailableAt.Valid {
+			row.AvailableAt = time.Unix(detail.Part.AvailableAt.Int64, 0)
+		}
+		for _, credit := range detail.Credits {
+			row.Credits = append(row.Credits, apiserver.CreditRow{
+				PersonID: credit.PersonID, PersonName: credit.PersonName, Role: credit.Role, Character: credit.Character,
+			})
 		}
 		if detail.Wanted != nil {
 			row.Wanted = &apiserver.WantedRow{
@@ -186,7 +207,9 @@ func partRows(from []library.PartDetail) []apiserver.PartRow {
 				MediaObjectID: detail.File.MediaObjectID, AudioCodec: detail.File.AudioCodec,
 				VideoCodec: detail.File.VideoCodec, Container: detail.File.Container,
 				BitrateKbps: detail.File.BitrateKbps, Lossless: detail.File.Lossless,
-				Extension: detail.File.Extension,
+				Extension: detail.File.Extension, SizeBytes: detail.File.SizeBytes, Resolution: detail.File.Resolution,
+				HDR: detail.File.HDR, AudioChannels: detail.File.AudioChannels, VideoBitrateKbps: detail.File.VideoBitrateKbps,
+				AudioLanguages: detail.File.AudioLanguages, Subtitles: detail.File.Subtitles,
 			}
 		}
 		rows[index] = row

@@ -35,6 +35,8 @@ type WorkEditRow struct {
 	Monitored bool
 	ProfileID *int64
 	Tags      []string
+	// Fields are the type's editable facets the user set, by facet key; "" returns one to its sources.
+	Fields map[string]string
 }
 
 // WorkEditor reads and writes the Edit dialog. Defined here and implemented by the caller.
@@ -104,7 +106,11 @@ func (s *Server) GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
 		s.writeWorkEditError(w, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, gen.WorkEdit{Monitored: row.Monitored, ProfileId: row.ProfileID, Tags: row.Tags})
+	view := gen.WorkEdit{Monitored: row.Monitored, ProfileId: row.ProfileID, Tags: row.Tags}
+	if len(row.Fields) > 0 {
+		view.Fields = &row.Fields
+	}
+	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
 // SaveWorkEdit applies an album's Edit dialog in one call.
@@ -126,7 +132,7 @@ func (s *Server) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) 
 	if !s.workPermitted(w, r, access, id, settings.PermissionRequest) {
 		return
 	}
-	edit := WorkEditRow{Monitored: body.Monitored, ProfileID: body.ProfileId, Tags: body.Tags}
+	edit := WorkEditRow{Monitored: body.Monitored, ProfileID: body.ProfileId, Tags: body.Tags, Fields: derefOr(body.Fields, nil)}
 	if err := s.workEditor.SaveWorkEdit(r.Context(), id, edit); err != nil {
 		s.writeWorkEditError(w, err)
 		return

@@ -293,6 +293,12 @@ VALUES (?, ?, ?, ?)
 ON CONFLICT (part_id, scheme, provider) DO UPDATE SET
   alt_ref = excluded.alt_ref;
 
+-- Every other number of a page of parts, one per scheme: the first provider's.
+-- name: ListAltNumbersForParts :many
+SELECT part_id, scheme, alt_ref FROM alt_numbering
+WHERE part_id IN (sqlc.slice('part_ids'))
+ORDER BY part_id, scheme, provider;
+
 -- Anime absolute numbering: episode 137 of a series resolves to the part that
 -- aired numbers do not name (ADR-41). Scoped to the work, or two series collide.
 -- name: FindPartByAltNumber :one

@@ -149,7 +149,7 @@ func TestAnArtistIsInTheLibraryTheirAlbumIsWantedIn(t *testing.T) {
 		t.Errorf("merged artist's albums = %d, err = %v; want 2", works, err)
 	}
 
-	if _, err := identity.RemoveWork(t.Context(), first); err != nil {
+	if _, err := identity.RemoveWork(t.Context(), first, false); err != nil {
 		t.Fatal(err)
 	}
 	assertRollupsCurrent(t, opened, "one album removed")

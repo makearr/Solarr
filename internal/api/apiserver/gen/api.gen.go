@@ -418,6 +418,12 @@ const (
 	MediaTypeYoutube   MediaType = "youtube"
 )
 
+// Defines values for MediaTypeInfoWorkImage.
+const (
+	MediaTypeInfoWorkImageCover  MediaTypeInfoWorkImage = "cover"
+	MediaTypeInfoWorkImagePoster MediaTypeInfoWorkImage = "poster"
+)
+
 // Defines values for MetadataSettingsCoverSources.
 const (
 	MetadataSettingsCoverSourcesCoverartarchive MetadataSettingsCoverSources = "coverartarchive"
@@ -1540,9 +1546,14 @@ type CreatedAPIKey struct {
 
 // Credit One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it.
 type Credit struct {
-	PersonId   int64  `json:"person_id"`
-	PersonName string `json:"person_name"`
-	Role       string `json:"role"`
+	// Character Who an actor played; absent for any other role.
+	Character *string `json:"character,omitempty"`
+
+	// ImageUrl The person's photo at its provider.
+	ImageUrl   *string `json:"image_url,omitempty"`
+	PersonId   int64   `json:"person_id"`
+	PersonName string  `json:"person_name"`
+	Role       string  `json:"role"`
 }
 
 // DashboardSummary defines model for DashboardSummary.
@@ -1857,7 +1868,10 @@ type Facet struct {
 		Key   string `json:"key"`
 		Label string `json:"label"`
 	} `json:"choices,omitempty"`
-	Column     bool        `json:"column"`
+	Column bool `json:"column"`
+
+	// Editable A person may set it on the work's Edit; their value wins over every source.
+	Editable   *bool       `json:"editable,omitempty"`
 	Entity     FacetEntity `json:"entity"`
 	Filterable bool        `json:"filterable"`
 	Key        string      `json:"key"`
@@ -2807,7 +2821,13 @@ type MediaTypeInfo struct {
 		Label string `json:"label"`
 	} `json:"search_terms"`
 	Work MediaTerm `json:"work"`
+
+	// WorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
+	WorkImage MediaTypeInfoWorkImage `json:"work_image"`
 }
+
+// MediaTypeInfoWorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
+type MediaTypeInfoWorkImage string
 
 // MetadataSettings The metadata providers' own settings.
 type MetadataSettings struct {
@@ -3077,7 +3097,11 @@ type ParsedTitle struct {
 
 // PartFile The file covering one part, and what probing measured of it.
 type PartFile struct {
-	AudioCodec *string `json:"audio_codec,omitempty"`
+	AudioChannels *string `json:"audio_channels,omitempty"`
+	AudioCodec    *string `json:"audio_codec,omitempty"`
+
+	// AudioLanguages Language codes of the audio tracks the probe read.
+	AudioLanguages *[]string `json:"audio_languages,omitempty"`
 
 	// BitrateKbps 0 when the attribute probe has not measured this file yet.
 	BitrateKbps int64   `json:"bitrate_kbps"`
@@ -3085,6 +3109,7 @@ type PartFile struct {
 
 	// Extension The file's own type, "m4a" -- container is ffprobe's demuxer list.
 	Extension     *string `json:"extension,omitempty"`
+	Hdr           *string `json:"hdr,omitempty"`
 	Lossless      bool    `json:"lossless"`
 	MediaObjectId int64   `json:"media_object_id"`
 
@@ -3093,7 +3118,13 @@ type PartFile struct {
 
 	// MeetsTarget Codec, file type and bitrate match the library's target. Absent when it sets none.
 	MeetsTarget *bool   `json:"meets_target,omitempty"`
-	VideoCodec  *string `json:"video_codec,omitempty"`
+	Resolution  *string `json:"resolution,omitempty"`
+	SizeBytes   *int64  `json:"size_bytes,omitempty"`
+
+	// Subtitles Language codes of embedded and sidecar subtitles.
+	Subtitles        *[]string `json:"subtitles,omitempty"`
+	VideoBitrateKbps *int64    `json:"video_bitrate_kbps,omitempty"`
+	VideoCodec       *string   `json:"video_codec,omitempty"`
 }
 
 // PathEntry defines model for PathEntry.
@@ -4332,12 +4363,15 @@ type WorkDetail struct {
 	MediaType  string   `json:"media_type"`
 
 	// OnDisk Whether this work is linked to any root folder at all. The coarsest possible "is there really a file for this" signal -- per-track presence needs a media_object-to-work_part link this project does not have yet.
-	OnDisk    bool       `json:"on_disk"`
-	Parts     []WorkPart `json:"parts"`
-	RuntimeMs *int64     `json:"runtime_ms,omitempty"`
-	SortTitle string     `json:"sort_title"`
-	Title     string     `json:"title"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	OnDisk bool       `json:"on_disk"`
+	Parts  []WorkPart `json:"parts"`
+
+	// Pictures The work's pictures at their providers, by kind (poster, fanart, logo); a person's own choice first.
+	Pictures  *map[string]string `json:"pictures,omitempty"`
+	RuntimeMs *int64             `json:"runtime_ms,omitempty"`
+	SortTitle string             `json:"sort_title"`
+	Title     string             `json:"title"`
+	UpdatedAt time.Time          `json:"updated_at"`
 
 	// Wanted Null when nothing has ever wanted this album -- no scan, no subscription, no request.
 	Wanted *Wanted `json:"wanted"`
@@ -4346,7 +4380,9 @@ type WorkDetail struct {
 
 // WorkEdit defines model for WorkEdit.
 type WorkEdit struct {
-	Monitored bool `json:"monitored"`
+	// Fields The type's editable facets the user set, by facet key (a series' type); empty or absent is the sources' value. Saving names only the facets it changes.
+	Fields    *map[string]string `json:"fields,omitempty"`
+	Monitored bool               `json:"monitored"`
 
 	// ProfileId The album's own quality profile; null is its library's.
 	ProfileId *int64 `json:"profile_id"`
@@ -4384,6 +4420,14 @@ type WorkPage struct {
 
 // WorkPart defines model for WorkPart.
 type WorkPart struct {
+	// AltNumbers The part's numbers under other schemes, by scheme ("absolute").
+	AltNumbers *map[string]string `json:"alt_numbers,omitempty"`
+
+	// AvailableAt When the part is out (an episode's air time); absent when unknown.
+	AvailableAt *time.Time `json:"available_at,omitempty"`
+
+	// Credits The part's own credits (an episode's guest stars, director, writers).
+	Credits     *[]Credit    `json:"credits,omitempty"`
 	Date        *string      `json:"date,omitempty"`
 	ExternalIds []ExternalID `json:"external_ids"`
 
@@ -4392,9 +4436,15 @@ type WorkPart struct {
 	Id        int64     `json:"id"`
 	MediaRef  string    `json:"media_ref"`
 	Monitored bool      `json:"monitored"`
-	RuntimeMs *int64    `json:"runtime_ms,omitempty"`
-	SortKey   string    `json:"sort_key"`
-	Title     *string   `json:"title,omitempty"`
+
+	// Number The number the part is shown with: a track's, an episode's.
+	Number    *string `json:"number,omitempty"`
+	RuntimeMs *int64  `json:"runtime_ms,omitempty"`
+
+	// Section The heading the part sits under within its group, as the type places it: "Disc 2"; empty for none.
+	Section *string `json:"section,omitempty"`
+	SortKey string  `json:"sort_key"`
+	Title   *string `json:"title,omitempty"`
 
 	// Wanted This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count.
 	Wanted *Wanted `json:"wanted"`
@@ -5216,6 +5266,9 @@ type SetTrackWantedJSONBody struct {
 type RemoveWorkJSONBody struct {
 	// DeleteFiles Also move every file of this album into the recycle bin.
 	DeleteFiles *bool `json:"delete_files,omitempty"`
+
+	// Exclude Do not add it back: follows and import lists leave it out, and so does the scan of a type whose scan honours exclusions (TV), which removes the work although its files stay.
+	Exclude *bool `json:"exclude,omitempty"`
 }
 
 // SearchWorkJSONBody defines parameters for SearchWork.
@@ -6240,10 +6293,10 @@ type ServerInterface interface {
 	// Want (or stop wanting) this one track on its own, independent of the album (section 19.6's track-level SINGLE, todo 4.4).
 	// (POST /works/{id}/parts/{partId}/wanted)
 	SetTrackWanted(w http.ResponseWriter, r *http.Request, id int64, partId int64)
-	// Fetch the album's metadata again, past the cache -- credits, genres, description -- then rescan its folder as its library's "Rescan after refresh" says. Background; a second request while one runs is folded in.
+	// Read the work again from its sources, past the cache. An album is refreshed in the background (a second request while one runs is folded in); a series at once, adding new episodes. Request on its library.
 	// (POST /works/{id}/refresh)
 	RefreshWork(w http.ResponseWriter, r *http.Request, id int64)
-	// Stop wanting an album, and optionally delete its files. Administrator only.
+	// Stop wanting a work, optionally delete its files and keep it from being added back. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
 	// Interactive search: ask every enabled indexer for what the scope names (the work's own item, one group, or one part of a group) and record a decision per release. Nothing is sent. With a body, searches those terms instead, keyed by the media type's search_terms; a release matching them counts as matching the work.
@@ -7719,13 +7772,13 @@ func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Fetch the album's metadata again, past the cache -- credits, genres, description -- then rescan its folder as its library's "Rescan after refresh" says. Background; a second request while one runs is folded in.
+// Read the work again from its sources, past the cache. An album is refreshed in the background (a second request while one runs is folded in); a series at once, adding new episodes. Request on its library.
 // (POST /works/{id}/refresh)
 func (_ Unimplemented) RefreshWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Stop wanting an album, and optionally delete its files. Administrator only.
+// Stop wanting a work, optionally delete its files and keep it from being added back. Administrator only.
 // (POST /works/{id}/remove)
 func (_ Unimplemented) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)

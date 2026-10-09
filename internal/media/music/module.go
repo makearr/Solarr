@@ -3,6 +3,8 @@ package music
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strconv"
 
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -20,6 +22,8 @@ type Module struct {
 	Sweep scan.Sweep
 	// Hunt searches for one wanted album and sends the best release; nil leaves music unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Refresh reads one album again from its sources; nil leaves it unrefreshable.
+	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Rename is what renaming a music library needs; nil leaves music without a rename.
 	Rename *RenameConfig
 	// Feed is music's part of the RSS sync.
@@ -30,6 +34,14 @@ type Module struct {
 	Following
 	// Searching is music's part of a search a person asks for.
 	Searching
+}
+
+// RefreshWork implements media.Refreshing.
+func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
+	if m.Refresh == nil {
+		return false, media.ErrNotWired
+	}
+	return m.Refresh(ctx, workID)
 }
 
 // HuntSearch implements media.Hunting.
@@ -70,7 +82,17 @@ func (Module) Descriptor() media.Descriptor {
 		FollowOptions: followOptions,
 		Facets:        facets,
 		SearchTerms:   termChoices,
+		WorkImage:     media.ImageCover,
 	}
+}
+
+// PartPosition implements media.Numbering: "disc2:track3" is track 3 under "Disc 2", as Lidarr heads a release's discs.
+func (Module) PartPosition(ref string) (section, number string) {
+	var disc, track int
+	if _, err := fmt.Sscanf(ref, "disc%d:track%d", &disc, &track); err != nil {
+		return "", ref
+	}
+	return "Disc " + strconv.Itoa(disc), strconv.Itoa(track)
 }
 
 // NamingScheme implements media.Naming.

@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 )
 
 // WorkEdit satisfies apiserver.WorkEditor: an album's monitoring, own quality profile and tags in one place.
@@ -19,14 +20,45 @@ type WorkEdit struct {
 	Desired  library.Desired
 	People   library.People
 	Settings *settings.Cache
+	// Facets answers a media type's facets; the editable ones are the dialog's fields. Nil edits none.
+	Facets func(mediaType string) []media.Facet
+}
+
+// editable answers the editable facets of a work's media type.
+func (a WorkEdit) editable(mediaType string) []media.Facet {
+	if a.Facets == nil {
+		return nil
+	}
+	var editable []media.Facet
+	for _, facet := range a.Facets(mediaType) {
+		if facet.Editable {
+			editable = append(editable, facet)
+		}
+	}
+	return editable
 }
 
 // GetWorkEdit answers what the dialog opens with; an album nothing ever wanted reads as unmonitored.
 func (a WorkEdit) GetWorkEdit(ctx context.Context, workID int64) (apiserver.WorkEditRow, error) {
-	if _, err := a.Monitor.Works.Detail(ctx, workID); err != nil {
+	mediaType, err := a.Monitor.Works.MediaTypeOf(ctx, workID)
+	if err != nil {
 		return apiserver.WorkEditRow{}, err
 	}
 	row := apiserver.WorkEditRow{Tags: []string{}}
+	if editable := a.editable(mediaType); len(editable) > 0 {
+		manual, err := a.Monitor.Works.ManualFields(ctx, workID)
+		if err != nil {
+			return apiserver.WorkEditRow{}, err
+		}
+		for _, facet := range editable {
+			if value, set := manual[facet.Source.Name]; set {
+				if row.Fields == nil {
+					row.Fields = map[string]string{}
+				}
+				row.Fields[facet.Key] = value
+			}
+		}
+	}
 	items, err := a.Desired.AlbumItemsForWork(ctx, workID)
 	if err != nil {
 		return apiserver.WorkEditRow{}, err
@@ -53,10 +85,19 @@ func (a WorkEdit) GetWorkEdit(ctx context.Context, workID int64) (apiserver.Work
 
 // SaveWorkEdit applies the whole dialog; a profile that does not exist is refused before anything is written.
 func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver.WorkEditRow) error {
+	mediaType, err := a.Monitor.Works.MediaTypeOf(ctx, workID)
+	if err != nil {
+		return err
+	}
 	if edit.ProfileID != nil {
-		if _, found := a.Settings.Snapshot().QualityProfile(*edit.ProfileID); !found {
-			return fmt.Errorf("quality profile %d: %w", *edit.ProfileID, apiserver.ErrInvalidWorkEdit)
+		profile, found := a.Settings.Snapshot().QualityProfile(*edit.ProfileID)
+		if !found || profile.MediaType != mediaType {
+			return fmt.Errorf("quality profile %d is not a %s profile: %w", *edit.ProfileID, mediaType, apiserver.ErrInvalidWorkEdit)
 		}
+	}
+	fields, err := a.fieldWrites(mediaType, edit.Fields)
+	if err != nil {
+		return err
 	}
 	names := make([]string, 0, len(edit.Tags))
 	for _, name := range edit.Tags {
@@ -73,7 +114,34 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			return err
 		}
 	}
-	return a.People.SetUserTags(ctx, workID, names)
+	if err := a.People.SetUserTags(ctx, workID, names); err != nil {
+		return err
+	}
+	for field, value := range fields {
+		if err := a.Monitor.Works.SetManualField(ctx, a.Monitor.Clock.Now(), workID, field, value); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fieldWrites checks the edited facets and answers the work fields they set; a value outside an enum's choices or a
+// facet that is not editable is refused before anything is written.
+func (a WorkEdit) fieldWrites(mediaType string, edited map[string]string) (map[string]string, error) {
+	writes := map[string]string{}
+	editable := a.editable(mediaType)
+	for key, value := range edited {
+		index := slices.IndexFunc(editable, func(facet media.Facet) bool { return facet.Key == key })
+		if index < 0 {
+			return nil, fmt.Errorf("%s is not an editable field of a %s: %w", key, mediaType, apiserver.ErrInvalidWorkEdit)
+		}
+		facet := editable[index]
+		if value != "" && facet.Kind == media.FacetEnum && !slices.ContainsFunc(facet.Choices, func(choice media.Choice) bool { return choice.Key == value }) {
+			return nil, fmt.Errorf("%q is not a choice of %s: %w", value, key, apiserver.ErrInvalidWorkEdit)
+		}
+		writes[facet.Source.Name] = value
+	}
+	return writes, nil
 }
 
 // ListTags answers every tag name.

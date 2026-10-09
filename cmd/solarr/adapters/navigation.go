@@ -41,6 +41,16 @@ func (m MediaTypes) ProfilingIn(categories interface {
 	}
 }
 
+// Facets answers a media type's declared facets.
+func (m MediaTypes) Facets(mediaType string) []media.Facet {
+	for _, descriptor := range m.Registry.Descriptors() {
+		if string(descriptor.Key) == mediaType {
+			return descriptor.Facets
+		}
+	}
+	return nil
+}
+
 // WorkFacets answers a media type's work facets as the works list reads them; "" is every type's, once per key.
 func (m MediaTypes) WorkFacets(mediaType string) []library.WorkFacet {
 	var out []library.WorkFacet
@@ -79,6 +89,29 @@ func (m MediaTypes) GroupLabel(mediaType, ref string) string {
 // MonitoringOf answers a media type as one with monitor options, when it is.
 func (m MediaTypes) MonitoringOf(mediaType string) (media.Monitoring, bool) {
 	return media.Capability[media.Monitoring](m.Registry, media.Key(mediaType))
+}
+
+// PartPosition places a part of a media type's work: its section and number, the ref itself without Numbering.
+func (m MediaTypes) PartPosition(mediaType, ref string) (section, number string) {
+	if numbering, ok := media.Capability[media.Numbering](m.Registry, media.Key(mediaType)); ok {
+		return numbering.PartPosition(ref)
+	}
+	return "", ref
+}
+
+// ScanHonoursExclusions says whether a media type's scan leaves an excluded work out.
+func (m MediaTypes) ScanHonoursExclusions(mediaType string) bool {
+	for _, descriptor := range m.Registry.Descriptors() {
+		if string(descriptor.Key) == mediaType {
+			return descriptor.ScanHonoursExclusions
+		}
+	}
+	return false
+}
+
+// RefreshingOf answers a media type's refresh of one work.
+func (m MediaTypes) RefreshingOf(mediaType string) (media.Refreshing, bool) {
+	return media.Capability[media.Refreshing](m.Registry, media.Key(mediaType))
 }
 
 // SearchingOf answers a media type's search a person asks for.
@@ -128,6 +161,10 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		for _, option := range descriptor.MonitorOptions {
 			info.MonitorOptions = append(info.MonitorOptions, apiserver.MediaChoice{Key: option.Key, Label: option.Label})
 		}
+		info.WorkImage = string(descriptor.WorkImage)
+		if info.WorkImage == "" {
+			info.WorkImage = string(media.ImageCover)
+		}
 		for _, term := range descriptor.SearchTerms {
 			info.SearchTerms = append(info.SearchTerms, apiserver.MediaChoice{Key: term.Key, Label: term.Label})
 		}
@@ -147,6 +184,9 @@ func facetView(facet media.Facet) gen.Facet {
 	view := gen.Facet{
 		Key: facet.Key, Label: facet.Label, Entity: gen.FacetEntity(facet.Entity), Kind: gen.FacetKind(facet.Kind),
 		Column: facet.Column, Sortable: facet.Sortable, Filterable: facet.Filterable,
+	}
+	if facet.Editable {
+		view.Editable = &facet.Editable
 	}
 	if len(facet.Choices) > 0 {
 		choices := make([]struct {

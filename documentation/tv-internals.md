@@ -64,11 +64,14 @@ planner. `PUT /series/{id}/quality` gives every season of a series its own quali
 
 ## Deleting, series type, pictures
 
-`DELETE /series/{id}` removes a series with its episodes, credits and desired items; `delete_files` sends its files to the recycle
-bin (never deleted directly) and `exclude` writes every id the series carries to `work_exclusion` (generic over media types), so the scan (files left
-alone, not queued), a follow and an import list leave it out; adding it by hand lifts the exclusion. **Series type** (`series_type`
+`POST /works/{id}/remove` removes a work of any type; `delete_files` sends its files to the recycle bin (never deleted directly)
+and `exclude` writes every id the work carries to `work_exclusion`, so a follow and an import list leave it out. TV declares
+`ScanHonoursExclusions` (the scan leaves an excluded series' files alone, not queued), so an excluded series goes with its
+episodes, credits and desired items although its files stay; an album with files stays. Adding it by hand lifts the exclusion.
+`POST /works/{id}/refresh` reads a work again through its type's `media.Refreshing` (a series at once, an album in the
+background). **Series type** (`series_type`
 field) is detected on every add and refresh (anime: Japanese and listed by AniList, AniDB or MyAnimeList; daily: a talk, news, soap
-or game show) and the user's own choice (`__manual__`) wins; naming reads it, and an anime season is also searched by absolute
+or game show) and the user's own choice (`__manual__`, set as the editable `series_type` facet through `PUT /works/{id}/edit`'s `fields`) wins; naming reads it, and an anime season is also searched by absolute
 number ("Title 062", up to five missing episodes) with absolute-only releases matched to their episode. Provider pictures are
 served by `GET /images/remote` from `internal/platform/remoteimage`: fetched once from an allow-listed https image host, resized
 to the three cover sizes and stored in the flat `cache/images` directory (so the budget evicts them), and the browser never

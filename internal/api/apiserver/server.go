@@ -127,8 +127,8 @@ type Config struct {
 
 	// ArtistActions are the artist page's bulk verbs. Optional: nil answers 503.
 	ArtistActions ArtistActions
-	// AlbumRefresher is an album's Refresh. Optional: nil answers 503.
-	AlbumRefresher AlbumRefresher
+	// WorkRefresher is a work's Refresh. Optional: nil answers 503.
+	WorkRefresher WorkRefresher
 	// ArrConnections reads a connection's indexers and download clients. Optional: nil answers 503.
 	ArrConnections ArrConnections
 	// BlockedContent lists and removes ADR-53 part 2's hash blocks. Optional:
@@ -277,7 +277,7 @@ type Server struct {
 	duplicateResolver       DuplicateResolver
 	links                   LinkManager
 	incompleteDiscographies IncompleteDiscographies
-	albumRefresher          AlbumRefresher
+	workRefresher           WorkRefresher
 	arrConnections          ArrConnections
 	blockedContent          BlockedContentLister
 	packs                   PackLister
@@ -382,7 +382,7 @@ func New(config Config) (*Server, error) {
 		duplicateResolver:       config.DuplicateResolver,
 		links:                   config.Links,
 		incompleteDiscographies: config.IncompleteDiscographies,
-		albumRefresher:          config.AlbumRefresher,
+		workRefresher:           config.WorkRefresher,
 		arrConnections:          config.ArrConnections,
 		blockedContent:          config.BlockedContent,
 		packs:                   config.Packs,

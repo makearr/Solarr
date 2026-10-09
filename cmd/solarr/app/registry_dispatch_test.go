@@ -129,8 +129,14 @@ func TestLeadName_IsTheCreditOfTheTypesLeadRole(t *testing.T) {
 // post sends one JSON POST as the open-access administrator and answers the status and body.
 func (g goldenServer) post(t *testing.T, target, body string) (int, string) {
 	t.Helper()
+	return g.send(t, http.MethodPost, target, body)
+}
+
+// send is post with any method.
+func (g goldenServer) send(t *testing.T, method, target, body string) (int, string) {
+	t.Helper()
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/api/v1"+target, strings.NewReader(body))
+	request := httptest.NewRequestWithContext(t.Context(), method, "/api/v1"+target, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	g.handler.ServeHTTP(recorder, request)
 	return recorder.Code, recorder.Body.String()

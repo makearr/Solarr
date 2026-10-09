@@ -186,7 +186,8 @@
     "work": {
       "many": "Albums",
       "one": "Album"
-    }
+    },
+    "work_image": "cover"
   },
   {
     "facets": [
@@ -238,6 +239,7 @@
           }
         ],
         "column": true,
+        "editable": true,
         "entity": "work",
         "filterable": true,
         "key": "series_type",
@@ -447,6 +449,7 @@
     "work": {
       "many": "Series",
       "one": "Series"
-    }
+    },
+    "work_image": "poster"
   }
 ]
