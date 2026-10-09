@@ -19,3 +19,12 @@ type History struct {
 	Detail        string
 	EventID       int64
 }
+
+type StatRollup struct {
+	Metric     string
+	Dimension  string
+	Period     int64
+	Value      float64
+	Count      int64
+	ComputedAt int64
+}

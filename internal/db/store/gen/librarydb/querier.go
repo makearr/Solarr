@@ -422,6 +422,8 @@ type Querier interface {
 	// Every credit anywhere under a work, at any scope. Coverage counts use this;
 	// the work-level listing above deliberately does not.
 	ListAllCreditsUnderWork(ctx context.Context, workID int64) ([]Credit, error)
+	// What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
+	ListAllStatRollup(ctx context.Context) ([]StatRollup, error)
 	// Every other number of a page of parts, one per scheme: the first provider's.
 	ListAltNumbersForParts(ctx context.Context, partIds []int64) ([]ListAltNumbersForPartsRow, error)
 	// A part's number under one other scheme ("absolute" for anime), for a whole work.

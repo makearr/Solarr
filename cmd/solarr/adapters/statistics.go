@@ -7,16 +7,17 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 )
 
 // IncompleteDiscographies satisfies apiserver.IncompleteDiscographies: the rollup's rows, named from the people store.
 type IncompleteDiscographies struct {
-	Statistics library.Statistics
-	People     library.People
+	Coverage statistics.Rollup
+	People   library.People
 }
 
 func (d IncompleteDiscographies) IncompleteDiscographies(ctx context.Context, categoryID int64, limit int) ([]apiserver.IncompleteDiscographyRow, error) {
-	rows, err := d.Statistics.IncompleteDiscographies(ctx, categoryID, limit)
+	rows, err := d.Coverage.IncompleteDiscographies(ctx, categoryID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -33,8 +34,8 @@ func (d IncompleteDiscographies) IncompleteDiscographies(ctx context.Context, ca
 	return out, nil
 }
 
-// Statistics satisfies apiserver.StatisticsReader over library.Statistics.
-type Statistics struct{ Statistics library.Statistics }
+// Statistics satisfies apiserver.StatisticsReader over the rollup in statistics.db.
+type Statistics struct{ Rollup statistics.Rollup }
 
 func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (apiserver.StatisticsView, error) {
 	view := apiserver.StatisticsView{WindowDays: library.StatisticsWindowDays}
@@ -56,7 +57,7 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 		{library.StatGrowthByMonth, &view.GrowthByMonth},
 		{library.StatDecisionsByOutcome, &view.DecisionsByOutcome},
 	} {
-		figures, err := s.Statistics.ForCategory(ctx, metric.name, categoryID)
+		figures, err := s.Rollup.ForCategory(ctx, metric.name, categoryID)
 		if err != nil {
 			return apiserver.StatisticsView{}, err
 		}

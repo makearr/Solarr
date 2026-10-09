@@ -111,6 +111,12 @@ ON CONFLICT (metric, dimension, period) DO UPDATE SET
   count = excluded.count,
   computed_at = excluded.computed_at;
 
+-- What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
+-- name: ListAllStatRollup :many
+SELECT metric, dimension, period, value, count, computed_at
+FROM stat_rollup
+ORDER BY metric, dimension, period;
+
 -- Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 -- name: ListStatRollup :many
 SELECT metric, dimension, period, value, count, computed_at

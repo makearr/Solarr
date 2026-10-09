@@ -12,9 +12,15 @@ type Querier interface {
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)
 	// An event already copied is left as it is.
 	CopyHistoryEvent(ctx context.Context, arg CopyHistoryEventParams) error
+	CountStatRollup(ctx context.Context) (int64, error)
+	DeleteStatRollupMetric(ctx context.Context, metric string) error
+	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	LastCopiedHistoryEvent(ctx context.Context) (int64, error)
 	// One page of history, newest first, of one work or of every one with work_id 0.
 	ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error)
+	// One library's current figures of a metric.
+	ListStatRollupForCategory(ctx context.Context, arg ListStatRollupForCategoryParams) ([]StatRollup, error)
+	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 }
 
 var _ Querier = (*Queries)(nil)

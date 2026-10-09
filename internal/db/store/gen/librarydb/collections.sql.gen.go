@@ -245,6 +245,43 @@ func (q *Queries) GetGroupReputation(ctx context.Context, releaseGroup string) (
 	return i, err
 }
 
+const listAllStatRollup = `-- name: ListAllStatRollup :many
+SELECT metric, dimension, period, value, count, computed_at
+FROM stat_rollup
+ORDER BY metric, dimension, period
+`
+
+// What statistics.db's first start copies over (revision 2, D7); every chart reads statistics.db now.
+func (q *Queries) ListAllStatRollup(ctx context.Context) ([]StatRollup, error) {
+	rows, err := q.db.QueryContext(ctx, listAllStatRollup)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []StatRollup{}
+	for rows.Next() {
+		var i StatRollup
+		if err := rows.Scan(
+			&i.Metric,
+			&i.Dimension,
+			&i.Period,
+			&i.Value,
+			&i.Count,
+			&i.ComputedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArtworkForSubject = `-- name: ListArtworkForSubject :many
 SELECT id, subject_type, subject_id, kind, source_url, cache_key, width, height, fetched_at
 FROM artwork WHERE subject_type = ? AND subject_id = ? ORDER BY kind

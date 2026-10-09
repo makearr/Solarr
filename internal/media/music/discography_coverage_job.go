@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -30,7 +31,9 @@ type DiscographyProvider interface {
 // DiscographyCoverageConfig is what the job needs.
 type DiscographyCoverageConfig struct {
 	Statistics library.Statistics
-	Provider   DiscographyProvider
+	// Coverage keeps what the comparison found, in statistics.db.
+	Coverage statistics.Rollup
+	Provider DiscographyProvider
 	// Categories lists the music libraries to compare.
 	Categories func() []int64
 	Clock      clock.Clock
@@ -58,7 +61,7 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 			return err
 		}
 		job.Progress.SetTotal(int64(len(artists)))
-		rows := make([]library.DiscographyCoverage, 0, len(artists))
+		rows := make([]statistics.DiscographyCoverage, 0, len(artists))
 		failed := 0
 		for _, artist := range artists {
 			if err := ctx.Err(); err != nil {
@@ -81,9 +84,9 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 					held++
 				}
 			}
-			rows = append(rows, library.DiscographyCoverage{PersonID: artist.PersonID, Held: held, Total: total})
+			rows = append(rows, statistics.DiscographyCoverage{PersonID: artist.PersonID, Held: held, Total: total})
 		}
-		if err := j.config.Statistics.SetDiscographyCoverage(ctx, categoryID, rows, j.config.Clock.Now().Unix()); err != nil {
+		if err := j.config.Coverage.SetDiscographyCoverage(ctx, categoryID, rows, j.config.Clock.Now().Unix()); err != nil {
 			return fmt.Errorf("music: discography coverage: %w", err)
 		}
 		j.config.Logger.Info("music: discography coverage done", "category_id", categoryID, "artists", len(rows), "skipped", failed)

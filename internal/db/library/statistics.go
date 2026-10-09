@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -54,56 +52,63 @@ type Statistics struct{ store *store.Store }
 // NewStatistics builds it over an open library store.
 func NewStatistics(opened *store.Store) Statistics { return Statistics{store: opened} }
 
-// StatFigure is one rollup row, for one library.
-type StatFigure struct {
-	Key        string
-	Value      float64
-	Count      int64
-	ComputedAt int64
+// StatRow is one figure the rollup stores in statistics.db: a metric's value for a dimension "<category id>|<key>".
+type StatRow struct {
+	Metric, Dimension string
+	Value             float64
+	Count             int64
 }
 
-// Compute rebuilds every metric. categoryOfRoot says which library each root folder belongs to (settings.db owns
-// that, so the caller composes it); a root in none is left out.
-func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64, now int64) error {
+// ComputedMetrics are the metrics Figures answers, which a rollup replaces whole.
+var ComputedMetrics = []string{
+	StatSeriesSize, StatSeriesGaps, StatSizePerHour, StatVideoBitrate, StatFilesByCodec, StatFilesByVideoCodec,
+	StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth,
+	StatDecisionsByOutcome,
+}
+
+// Figures measures every computed metric from library.db; the caller stores them in statistics.db. categoryOfRoot
+// says which library each root folder belongs to (settings.db owns that, so the caller composes it); a root in none
+// is left out.
+func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64, now int64) ([]StatRow, error) {
 	reader := librarydb.New(s.store.Read())
 	codecs, err := reader.AggregateFilesByRootAndCodec(ctx)
 	if err != nil {
-		return fmt.Errorf("library: statistics: files: %w", err)
+		return nil, fmt.Errorf("library: statistics: files: %w", err)
 	}
 	albums, err := reader.AggregateAlbumsByCategoryAndState(ctx)
 	if err != nil {
-		return fmt.Errorf("library: statistics: albums: %w", err)
+		return nil, fmt.Errorf("library: statistics: albums: %w", err)
 	}
 	downloads, err := reader.AggregateAcquisitionsByCategoryAndState(ctx, now-StatisticsWindowDays*86_400)
 	if err != nil {
-		return fmt.Errorf("library: statistics: downloads: %w", err)
+		return nil, fmt.Errorf("library: statistics: downloads: %w", err)
 	}
 
 	added, err := reader.AggregateFilesAddedByRootAndMonth(ctx)
 	if err != nil {
-		return fmt.Errorf("library: statistics: growth: %w", err)
+		return nil, fmt.Errorf("library: statistics: growth: %w", err)
 	}
 	decisions, err := reader.AggregateDecisionsByCategoryAndOutcome(ctx, now-StatisticsWindowDays*86_400)
 	if err != nil {
-		return fmt.Errorf("library: statistics: decisions: %w", err)
+		return nil, fmt.Errorf("library: statistics: decisions: %w", err)
 	}
 
 	video, err := reader.AggregateFilesByRootAndVideo(ctx)
 	if err != nil {
-		return fmt.Errorf("library: statistics: video: %w", err)
+		return nil, fmt.Errorf("library: statistics: video: %w", err)
 	}
 
 	seriesSize, err := reader.AggregateSeriesSize(ctx)
 	if err != nil {
-		return fmt.Errorf("library: statistics: series size: %w", err)
+		return nil, fmt.Errorf("library: statistics: series size: %w", err)
 	}
 	seriesGaps, err := reader.AggregateSeriesGaps(ctx, sql.NullString{String: time.Unix(now, 0).UTC().Format("2006-01-02"), Valid: true})
 	if err != nil {
-		return fmt.Errorf("library: statistics: series gaps: %w", err)
+		return nil, fmt.Errorf("library: statistics: series gaps: %w", err)
 	}
 	perHour, err := reader.AggregateSizePerHour(ctx)
 	if err != nil {
-		return fmt.Errorf("library: statistics: size per hour: %w", err)
+		return nil, fmt.Errorf("library: statistics: size per hour: %w", err)
 	}
 
 	type figure struct {
@@ -221,53 +226,37 @@ func (s Statistics) Compute(ctx context.Context, categoryOfRoot map[int64]int64,
 		figures = append(figures, figure{StatDownloadsByState, dimensionOf(row.CategoryID, row.State), float64(row.Downloads), row.Downloads})
 	}
 
-	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		for _, metric := range []string{StatSeriesSize, StatSeriesGaps, StatSizePerHour, StatVideoBitrate, StatFilesByCodec, StatFilesByVideoCodec, StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth, StatDecisionsByOutcome} {
-			if err := queries.DeleteStatRollupMetric(ctx, metric); err != nil {
-				return err
-			}
-		}
-		for _, one := range figures {
-			if err := queries.SetStatRollup(ctx, librarydb.SetStatRollupParams{
-				Metric: one.metric, Dimension: one.dimension, Period: 0, Value: one.value,
-				Count: sql.NullInt64{Int64: one.count, Valid: true}, ComputedAt: now,
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
+	rows := make([]StatRow, len(figures))
+	for i, one := range figures {
+		rows[i] = StatRow{Metric: one.metric, Dimension: one.dimension, Value: one.value, Count: one.count}
+	}
+	return rows, nil
 }
 
 func dimensionOf(categoryID int64, key string) string {
 	return strconv.FormatInt(categoryID, 10) + "|" + key
 }
 
-// ForCategory answers a metric's current figures for one library, largest first; empty before the first rollup.
-func (s Statistics) ForCategory(ctx context.Context, metric string, categoryID int64) ([]StatFigure, error) {
-	rows, err := librarydb.New(s.store.Read()).ListStatRollup(ctx, librarydb.ListStatRollupParams{
-		Metric: metric, Since: 0, PageSize: 10_000,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("library: statistics: %s: %w", metric, err)
-	}
-	prefix := strconv.FormatInt(categoryID, 10) + "|"
-	var figures []StatFigure
-	for _, row := range rows {
-		if row.Period != 0 || !strings.HasPrefix(row.Dimension, prefix) {
-			continue
-		}
-		figures = append(figures, StatFigure{
-			Key: strings.TrimPrefix(row.Dimension, prefix), Value: row.Value, Count: row.Count.Int64, ComputedAt: row.ComputedAt,
-		})
-	}
-	return figures, nil
+// StoredRow is one row of library.db's own rollup, kept until statistics.db has taken it over (revision 2, D7).
+type StoredRow struct {
+	StatRow
+	ComputedAt int64
 }
 
-// StatDiscographyCoverage is the artists' coverage metric: dimension "<category id>|<person id>", value the albums
-// held, count the albums their discography has under the default filters.
-const StatDiscographyCoverage = "discography_coverage"
+// StoredRollup answers every current figure library.db's rollup holds, for statistics.db's first start to copy.
+func (s Statistics) StoredRollup(ctx context.Context) ([]StoredRow, error) {
+	rows, err := librarydb.New(s.store.Read()).ListAllStatRollup(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: stored rollup: %w", err)
+	}
+	var stored []StoredRow
+	for _, row := range rows {
+		if row.Period == 0 {
+			stored = append(stored, StoredRow{StatRow{row.Metric, row.Dimension, row.Value, row.Count.Int64}, row.ComputedAt})
+		}
+	}
+	return stored, nil
+}
 
 // ArtistHeld is an artist with something held in a library: their MusicBrainz id and the release groups held.
 type ArtistHeld struct {
@@ -294,54 +283,4 @@ func (s Statistics) ArtistsHeld(ctx context.Context, categoryID int64) ([]Artist
 		}
 	}
 	return artists, nil
-}
-
-// DiscographyCoverage is one artist's held albums against their discography.
-type DiscographyCoverage struct {
-	PersonID    int64
-	Held, Total int64
-}
-
-// SetDiscographyCoverage replaces a library's coverage rows.
-func (s Statistics) SetDiscographyCoverage(ctx context.Context, categoryID int64, rows []DiscographyCoverage, now int64) error {
-	return s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		if err := queries.DeleteStatRollupMetricForCategory(ctx, librarydb.DeleteStatRollupMetricForCategoryParams{
-			Metric: StatDiscographyCoverage, Prefix: strconv.FormatInt(categoryID, 10) + "|",
-		}); err != nil {
-			return err
-		}
-		for _, row := range rows {
-			if err := queries.SetStatRollup(ctx, librarydb.SetStatRollupParams{
-				Metric: StatDiscographyCoverage, Dimension: dimensionOf(categoryID, strconv.FormatInt(row.PersonID, 10)),
-				Period: 0, Value: float64(row.Held), Count: sql.NullInt64{Int64: row.Total, Valid: true}, ComputedAt: now,
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-}
-
-// IncompleteDiscographies lists a library's artists whose discography has albums not held, most missing first.
-func (s Statistics) IncompleteDiscographies(ctx context.Context, categoryID int64, limit int) ([]DiscographyCoverage, error) {
-	figures, err := s.ForCategory(ctx, StatDiscographyCoverage, categoryID)
-	if err != nil {
-		return nil, err
-	}
-	var rows []DiscographyCoverage
-	for _, figure := range figures {
-		personID, err := strconv.ParseInt(figure.Key, 10, 64)
-		if err != nil || figure.Count <= int64(figure.Value) {
-			continue
-		}
-		rows = append(rows, DiscographyCoverage{PersonID: personID, Held: int64(figure.Value), Total: figure.Count})
-	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		return rows[i].Total-rows[i].Held > rows[j].Total-rows[j].Held
-	})
-	if limit > 0 && len(rows) > limit {
-		rows = rows[:limit]
-	}
-	return rows, nil
 }

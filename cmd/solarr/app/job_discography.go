@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -14,7 +15,7 @@ func (p *process) registerDiscographyCoverageJob(registry *jobs.Registry, execut
 		return err
 	}
 	executor.Handle(music.DiscographyCoverageJobType, music.NewDiscographyCoverageJob(music.DiscographyCoverageConfig{
-		Statistics: library.NewStatistics(p.library), Provider: p.musicBrainzProvider(),
+		Statistics: library.NewStatistics(p.library), Coverage: statistics.NewRollup(p.statistics), Provider: p.musicBrainzProvider(),
 		Categories: func() []int64 {
 			var ids []int64
 			for _, category := range p.cache.Snapshot().Categories() {

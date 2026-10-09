@@ -10,8 +10,8 @@ Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `s
 | `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
 | `statistics.db` | What was seen and done: download history, and (moving there) candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
 
-`statistics.db` is being filled in steps (revision 2, D7): download history lives there; until the
-decisions move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
+`statistics.db` is being filled in steps (revision 2, D7): download history and the statistics rollup live there;
+until the decisions move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
 aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the
 aged record. `event_log` sits in `jobs.db`, whose profile it shares: high churn,
 retention-bounded, and not authoritative for library correctness. Under ADR-3's one writer per
@@ -47,7 +47,8 @@ Everything else is `library.db`. Applying that test:
 `library_path`, `media_attributes`), desired state (`desired_item`, `desired_item_file`,
 `hunt_queue`, `counter`), acquisition (`candidate`, `acquisition`, `blocklisted_release`,
 `recycleBin`), people and organisations (`person`, `credit`, `organisation`), tags,
-subscriptions, collections, `artwork`, `stat_rollup` and learned reputation.
+subscriptions, collections, `artwork` and learned reputation. The statistics page's figures (`stat_rollup`, and the
+discography coverage in it) are measured from `library.db` by the statistics job and stored in `statistics.db`.
 
 People, credits, tags, collections, counters and reputation are **library data, not settings**.
 `credit` alone runs to hundreds of thousands of rows at the ADR-22 design scale, and `counter`

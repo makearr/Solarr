@@ -306,6 +306,9 @@ func (p *process) openDatabases(ctx context.Context) error {
 	if err := p.copyDownloadHistory(ctx); err != nil {
 		p.logger.Warn("download history not moved to statistics.db yet", slog.Any("error", err))
 	}
+	if err := p.copyStatRollup(ctx); err != nil {
+		p.logger.Warn("statistics not moved to statistics.db yet", slog.Any("error", err))
+	}
 
 	return p.reconcileRestore(ctx, wall, restored)
 }
@@ -727,7 +730,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ArtworkChoices: adapters.ArtworkChoices{
 			Works: library.NewWorks(p.library), Picturing: adapters.MediaTypes{Registry: p.media}.PicturingOf, People: p.musicPictures(),
 		},
-		Statistics: adapters.Statistics{Statistics: library.NewStatistics(p.library)},
+		Statistics: adapters.Statistics{Rollup: statistics.NewRollup(p.statistics)},
 		Duplicates: adapters.Duplicates{
 			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,
 		},
@@ -737,7 +740,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Recycler: p.fileRemover(), Settings: p.cache,
 		},
 		IncompleteDiscographies: adapters.IncompleteDiscographies{
-			Statistics: library.NewStatistics(p.library), People: library.NewPeople(p.library),
+			Coverage: statistics.NewRollup(p.statistics), People: library.NewPeople(p.library),
 		},
 		FS:         p.fsys,
 		ImagesDir:  filepath.Join(p.config.Paths.CacheDir, "images"),

@@ -224,7 +224,7 @@ var allowedInternalImports = map[string][]string{
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.
 	"internal/acquiring/cutoff":   {"internal/db/library", "internal/db/settings", "internal/jobs"},
 	"internal/acquiring/dispatch": {"internal/acquiring/download", "internal/db/library", "internal/identify/model", "internal/identify/priority"},
-	"internal/media/music": {"internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
+	"internal/media/music": {"internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/acquiring/judge", "internal/platform/parallel",
 		"internal/media", "internal/acquiring/plan", "internal/acquiring/dispatch",
 		"internal/acquiring/indexer", "internal/acquiring/download", "internal/identify/priority",
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
