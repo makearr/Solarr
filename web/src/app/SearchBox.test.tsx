@@ -197,10 +197,13 @@ test("artists and albums not in the library are offered, to add in a library the
     if (path === "/libraries") {
       return Promise.resolve({ data: [{ id: 3, media_type: "music", name: "Music", permission: "manage" }], error: undefined });
     }
-    if (path === "/discover/search") {
+    if (path === "/mediatypes") {
+      return Promise.resolve({ data: [{ key: "music", add_kinds: [{ key: "album", label: "Album" }, { key: "artist", label: "Artist" }] }], error: undefined });
+    }
+    if (path === "/works/lookup") {
       const kind = options?.params.query.kind;
       return Promise.resolve({
-        data: [{ provider: "p", external_id: kind!, title: kind === "artist" ? "Katupoken" : "KI Pecezinu", artist: "Katupoken" }],
+        data: [{ kind, provider: "p", external_id: kind!, title: kind === "artist" ? "Katupoken" : "KI Pecezinu", subtitle: "Katupoken" }],
         error: undefined,
       });
     }

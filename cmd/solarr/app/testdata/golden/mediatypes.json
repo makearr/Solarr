@@ -1,5 +1,15 @@
 [
   {
+    "add_kinds": [
+      {
+        "key": "album",
+        "label": "Albums"
+      },
+      {
+        "key": "artist",
+        "label": "Artists"
+      }
+    ],
     "facets": [
       {
         "column": true,
@@ -191,6 +201,12 @@
     "work_image": "cover"
   },
   {
+    "add_kinds": [
+      {
+        "key": "series",
+        "label": "Series"
+      }
+    ],
     "facets": [
       {
         "column": true,

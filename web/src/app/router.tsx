@@ -16,7 +16,6 @@ import { Notifications } from "./Notifications";
 import { Statistics } from "./Statistics";
 import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
-import { Discover } from "./Discover";
 import { DownloadFolders } from "./DownloadFolders";
 import { Downloaders } from "./Downloaders";
 import { Indexers } from "./Indexers";
@@ -28,7 +27,6 @@ import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
 import { LibraryLevelList } from "./LibraryLevelList";
-import { AddSeries } from "./AddSeries";
 import { SeasonPass } from "./SeasonPass";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
@@ -50,6 +48,7 @@ import { Shell } from "./Shell";
 import { defaultLevelKey } from "./Sidebar";
 import { Unidentified } from "./Unidentified";
 import { UserSettings } from "./Users";
+import { AddWork } from "./work/AddWork";
 import { WantedPage } from "./work/WantedPage";
 import { UnidentifiedReview } from "./UnidentifiedReview";
 import { WorkIndex } from "./work/WorkIndex";
@@ -67,11 +66,6 @@ async function redirectToLibrary(categoryId: string) {
 }
 
 /** Search-and-add is a per-media-type screen: series for a TV library, albums and artists for music. */
-function DiscoverForLibrary() {
-  const { categoryId } = useParams({ strict: false }) as { categoryId: string };
-  const library = useLibrary(categoryId);
-  return library?.media_type === "tv" ? <AddSeries /> : <Discover />;
-}
 
 /** Wanted is per media type: missing episodes for a TV library, albums for music. */
 
@@ -162,7 +156,8 @@ const routes = [
   }),
   // Registered ahead of the $level catch-all below, or these would each
   // resolve as an (invalid) level key instead of their own screen.
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: DiscoverForLibrary }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: AddWork }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/add", component: AddWork }),
   // Overview removed 2026-09-13 (the user's own word: it showed nothing the
   // level views do not). Redirected rather than 404ing, the same courtesy the
   // old flat /library got.

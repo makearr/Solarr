@@ -13,7 +13,7 @@ import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { workLink } from "@/lib/workLink";
 
-import { AddPanel } from "./AddSeries";
+import { AddToLibrary } from "./work/AddWork";
 import { ChooseImage } from "./ChooseImage";
 import { CoverArt } from "./CoverArt";
 import { FollowPanel } from "./FollowPanel";
@@ -451,7 +451,7 @@ function KnownForTile({ title, categoryId }: { title: KnownFor; categoryId: numb
         Add to Solarr
       </button>
       {adding && (
-        <AddPanel
+        <AddToLibrary
           candidate={{ provider: title.provider, external_id: title.external_id, title: title.title }}
           categoryId={String(categoryId)}
           onDone={() => setAdding(false)}

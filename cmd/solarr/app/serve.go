@@ -27,7 +27,6 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media"
-	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
@@ -45,7 +44,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/secrets"
-	"github.com/makearr/Solarr/internal/service/follow"
 	"github.com/makearr/Solarr/migrations"
 )
 
@@ -671,23 +669,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			FS: p.fsys, Directory: p.config.Paths.BackupDir,
 			Stores: []*store.Store{p.library, p.jobs, p.settings},
 		},
-		Discover: adapters.Discover{
-			Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
-			Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
-			Categories:       adapters.Categories{Cache: p.cache},
-			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
-			// A failed enqueue is logged by enqueueEnrichment; the hourly sweep still picks the album up.
-			Enrich: func(ctx context.Context) { _, _ = p.enqueueEnrichment(ctx) },
-			SearchAlbum: func(ctx context.Context, categoryID, itemID int64) {
-				if _, err := music.EnqueueSearchItems(ctx, p.queue, categoryID, []int64{itemID}); err != nil {
-					p.logger.Warn("search added album", slog.Any("error", err))
-				}
-			},
-			ExpandArtist: func(ctx context.Context, subscriptionID int64, search bool) {
-				if _, err := follow.Enqueue(ctx, p.queue, subscriptionID, search); err != nil {
-					p.logger.Warn("add artist's albums", slog.Any("error", err))
-				}
-			},
+		WorkAdder: adapters.WorkAdding{
+			Categories: adapters.Categories{Cache: p.cache},
+			Adding:     adapters.MediaTypes{Registry: p.media}.AddingOf, AddKinds: adapters.MediaTypes{Registry: p.media}.AddKinds,
 		},
 		ArrSync: adapters.ArrSync{
 			Progress: adapters.NewArrProgress(),

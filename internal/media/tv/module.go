@@ -19,6 +19,8 @@ type Module struct {
 	Sweep scan.Sweep
 	// Hunt searches for one wanted season and sends the best release; nil leaves TV unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Adder looks a work up and adds it; nil leaves the type without an add.
+	Adder media.Adding
 	// Refresh reads one series again from its sources; nil leaves it unrefreshable.
 	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Feed is TV's part of the RSS sync.
@@ -37,6 +39,22 @@ type Module struct {
 
 // ScanSweep implements media.Scanning.
 func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
+
+// LookupWorks implements media.Adding.
+func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
+	if m.Adder == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Adder.LookupWorks(ctx, lookup)
+}
+
+// AddWork implements media.Adding.
+func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	if m.Adder == nil {
+		return media.AddResult{}, media.ErrNotWired
+	}
+	return m.Adder.AddWork(ctx, request)
+}
 
 // RefreshWork implements media.Refreshing.
 func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
@@ -96,6 +114,7 @@ func (Module) Descriptor() media.Descriptor {
 		MonitorOptions: monitorChoices,
 		WorkImage:      media.ImagePoster,
 		WantedGrain:    media.WantedParts,
+		AddKinds:       []media.Choice{{Key: "series", Label: "Series"}},
 		// The consumer refuses to add an excluded series (Service.excluded).
 		ScanHonoursExclusions: true,
 	}

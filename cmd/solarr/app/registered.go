@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
+	"github.com/makearr/Solarr/internal/service/follow"
 )
 
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
@@ -85,7 +86,7 @@ func (p *process) musicModule() music.Module {
 		result, err := music.EnqueueRefreshAlbum(ctx, p.queue, workID)
 		return result.Duplicate, err
 	}
-	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -124,7 +125,8 @@ func (p *process) tvModule() tv.Module {
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Hunt: p.tvHunt,
+		Hunt:  p.tvHunt,
+		Adder: p.seriesCatalog(),
 		// A series is read again at once, as Sonarr's Refresh: it is one work and a handful of requests.
 		Refresh: func(ctx context.Context, workID int64) (bool, error) {
 			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
@@ -207,4 +209,26 @@ func (p *process) tvHunt(ctx context.Context, itemID int64) (plan.Outcome, error
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 	}
 	return plan.OutcomeSearched, nil
+}
+
+// musicAdder is music's lookup and add: albums become wanted, artists followed.
+func (p *process) musicAdder() adapters.Discover {
+	return adapters.Discover{
+		Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
+		Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
+		Categories:       adapters.Categories{Cache: p.cache},
+		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
+		// A failed enqueue is logged by enqueueEnrichment; the hourly sweep still picks the album up.
+		Enrich: func(ctx context.Context) { _, _ = p.enqueueEnrichment(ctx) },
+		SearchAlbum: func(ctx context.Context, categoryID, itemID int64) {
+			if _, err := music.EnqueueSearchItems(ctx, p.queue, categoryID, []int64{itemID}); err != nil {
+				p.logger.Warn("search added album", slog.Any("error", err))
+			}
+		},
+		ExpandArtist: func(ctx context.Context, subscriptionID int64, search bool) {
+			if _, err := follow.Enqueue(ctx, p.queue, subscriptionID, search); err != nil {
+				p.logger.Warn("add artist's albums", slog.Any("error", err))
+			}
+		},
+	}
 }

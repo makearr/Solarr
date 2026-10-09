@@ -84,6 +84,8 @@ type Descriptor struct {
 	SearchTerms []Choice
 	// WorkImage is the shape a work's picture has: an album's square cover, a series' tall poster.
 	WorkImage ImageShape
+	// AddKinds are what a person looks up and adds to a library of the type: albums and artists, series.
+	AddKinds []Choice
 	// WantedGrain is what Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes).
 	WantedGrain WantedGrain
 	// ScanHonoursExclusions says the type's scan leaves an excluded work's files out, so a work removed and excluded
@@ -108,6 +110,49 @@ const (
 	ImageCover  ImageShape = "cover"
 	ImagePoster ImageShape = "poster"
 )
+
+// Adding is the capability of a media type whose works a person looks up at its sources and adds to a library.
+type Adding interface {
+	LookupWorks(ctx context.Context, lookup AddLookup) ([]AddCandidate, error)
+	AddWork(ctx context.Context, request AddRequest) (AddResult, error)
+}
+
+// AddLookup is one search of a type's sources for something to add, of one of its AddKinds.
+type AddLookup struct {
+	CategoryID  int64
+	Kind, Query string
+	Limit       int
+}
+
+// AddCandidate is one thing a lookup found.
+type AddCandidate struct {
+	Kind, Provider, ExternalID, Title string
+	// Subtitle tells candidates apart: an album's artist, an artist's disambiguation, a series' network.
+	Subtitle, Overview, PosterURL, Status string
+	Year                                  int64
+	// LibraryID is the work or person already held for it, 0 when it is new.
+	LibraryID int64
+}
+
+// AddRequest is one add a person asked for.
+type AddRequest struct {
+	CategoryID, UserID         int64
+	Kind, Provider, ExternalID string
+	Monitored                  bool
+	// Option is one of the type's monitor options, empty for its default; Specials adds its specials group.
+	Option    string
+	Specials  bool
+	ProfileID *int64
+	Search    bool
+}
+
+// AddResult is what an add stored.
+type AddResult struct {
+	Kind             string
+	WorkID, PersonID int64
+	// Searching says the type started looking for what was added; false leaves a search of the work to the caller.
+	Searching bool
+}
 
 // Refreshing is the capability of a media type whose works are read again from their sources on request.
 type Refreshing interface {

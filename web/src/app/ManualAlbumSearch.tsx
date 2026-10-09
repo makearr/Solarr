@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
-type DiscoverResult = components["schemas"]["DiscoverResult"];
+type AddCandidate = components["schemas"]["AddCandidate"];
 
 const MINIMUM_QUERY_LENGTH = 2;
 
@@ -30,7 +30,7 @@ export function ManualAlbumSearch({
   busy,
 }: {
   relPath: string;
-  onChoose: (result: DiscoverResult) => void;
+  onChoose: (result: AddCandidate) => void;
   busy: boolean;
 }) {
   const [draft, setDraft] = useState(() => queryFromPath(relPath));
@@ -50,7 +50,7 @@ export function ManualAlbumSearch({
   const results = useQuery({
     queryKey: ["discover-search", categoryId, "album", query],
     queryFn: async () => {
-      const { data, error } = await api.GET("/discover/search", {
+      const { data, error } = await api.GET("/works/lookup", {
         params: { query: { category_id: categoryId as number, q: query, kind: "album", limit: 20 } },
       });
       if (error) throw error;
@@ -94,9 +94,8 @@ export function ManualAlbumSearch({
             <li key={`${result.provider}:${result.external_id}`} className="flex items-center gap-3 py-1.5">
               <span className="min-w-0 flex-1">
                 <span className="text-ink">{result.title}</span>
-                {result.artist && <span className="text-ink-muted"> · {result.artist}</span>}
+                {result.subtitle && <span className="text-ink-muted"> · {result.subtitle}</span>}
                 {result.year !== undefined && <span className="text-ink-muted"> · {result.year}</span>}
-                {result.disambiguation && <span className="text-ink-muted"> ({result.disambiguation})</span>}
               </span>
               <button
                 type="button"

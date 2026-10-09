@@ -192,10 +192,8 @@ type Config struct {
 	// clear (todo 4.19). Optional: without it, the cache endpoints answer
 	// 503.
 	CacheManager CacheManager
-	// Discover searches a category's own metadata provider and adds a result
-	// as intent (todo 4.17, ADR-56). Optional: without it, the discover
-	// endpoints answer 503.
-	Discover Discover
+	// WorkAdder looks works up and adds them (ADR-56). Optional: nil answers 503.
+	WorkAdder WorkAdder
 
 	// SystemHealth supplies the health checks that need more than the settings
 	// snapshot. Optional: nil means only the settings-derived checks are run.
@@ -303,7 +301,7 @@ type Server struct {
 	downloadRoots           DownloadFolderChecker
 	scheduler               Scheduler
 	cacheManager            CacheManager
-	discover                Discover
+	workAdder               WorkAdder
 	arrSync                 ArrSync
 	libraryHealth           LibraryHealth
 	systemHealth            SystemHealthSource
@@ -410,7 +408,7 @@ func New(config Config) (*Server, error) {
 		downloadRoots:           config.DownloadRoots,
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
-		discover:                config.Discover,
+		workAdder:               config.WorkAdder,
 		arrSync:                 config.ArrSync,
 		libraryHealth:           config.LibraryHealth,
 		systemHealth:            config.SystemHealth,
@@ -526,10 +524,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/grab", server.routeGrabWork)
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Get("/series", server.routeListSeries)
-			secured.Post("/series", server.AddSeries)
 			secured.Get("/wanted/parts", server.routeListWantedParts)
 			secured.Get("/images/remote", server.routeGetRemoteImage)
-			secured.Get("/series/lookup", server.routeLookupSeries)
 			secured.Get("/works/exclusions", server.routeListWorkExclusions)
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Delete("/series/{id}", server.routeDeleteSeries)
@@ -539,8 +535,8 @@ func New(config Config) (*Server, error) {
 			secured.Put("/series/{id}/type", server.routeSetSeriesType)
 			secured.Get("/series/{id}/posters", server.routeGetSeriesPosters)
 			secured.Put("/series/{id}/poster", server.routeSetSeriesPoster)
-			secured.Get("/discover/search", server.routeDiscoverSearch)
-			secured.Post("/discover/add", server.DiscoverAdd)
+			secured.Get("/works/lookup", server.routeLookupWorks)
+			secured.Post("/works", server.AddWork)
 			secured.Get("/arr/instances", server.ListArrInstances)
 			secured.Post("/arr/instances", server.AddArrInstance)
 			secured.Patch("/arr/instances/{id}", server.routeUpdateArrInstance)

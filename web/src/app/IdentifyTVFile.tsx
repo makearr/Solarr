@@ -46,7 +46,7 @@ export function IdentifyTVFile({
     queryKey: ["series-lookup", categoryId, query],
     enabled: query.length >= 2,
     queryFn: async () => {
-      const { data, error } = await api.GET("/series/lookup", { params: { query: { category_id: categoryId, q: query, limit: 8 } } });
+      const { data, error } = await api.GET("/works/lookup", { params: { query: { category_id: categoryId, q: query, limit: 8 } } });
       if (error) throw error;
       return data;
     },
@@ -90,7 +90,7 @@ export function IdentifyTVFile({
                 {candidate.poster_url && <img src={remoteImage(candidate.poster_url, "thumb")} alt="" className="h-10 w-7 rounded object-cover" />}
                 <span className="flex-1 truncate">
                   {candidate.title}
-                  <span className="ml-2 text-xs text-ink-muted">{[candidate.year, candidate.network].filter(Boolean).join(" · ")}</span>
+                  <span className="ml-2 text-xs text-ink-muted">{[candidate.year, candidate.subtitle].filter(Boolean).join(" · ")}</span>
                 </span>
               </button>
             </li>

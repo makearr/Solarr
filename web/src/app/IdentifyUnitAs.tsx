@@ -28,7 +28,7 @@ export function IdentifyUnitAs({
     queryKey: ["identify-as-search", categoryId, query],
     enabled: query.length >= 2,
     queryFn: async () => {
-      const { data, error } = await api.GET("/discover/search", {
+      const { data, error } = await api.GET("/works/lookup", {
         params: { query: { category_id: categoryId, q: query, kind: "album", limit: 15 } },
       });
       if (error) throw error;
@@ -86,7 +86,7 @@ export function IdentifyUnitAs({
                 >
                   <span className="font-medium">{result.title}</span>
                   <span className="text-xs text-ink-muted">
-                    {[result.artist, result.year].filter(Boolean).join(" · ")}
+                    {[result.subtitle, result.year].filter(Boolean).join(" · ")}
                     {result.library_id != null ? " · already in the library" : ""}
                   </span>
                 </button>

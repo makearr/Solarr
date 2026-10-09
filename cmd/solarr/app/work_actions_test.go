@@ -100,3 +100,24 @@ func TestWorks_SortByAFacetAndListTheExcluded(t *testing.T) {
 		t.Errorf("after allowing it again, excluded series = %s", got)
 	}
 }
+
+// Each library adds what its type declares: a series is no album, an artist no series; a query under the floor is
+// refused before any source is asked.
+func TestLookupWorks_TakesTheKindsOfTheLibrarysType(t *testing.T) {
+	server := newGoldenServer(t)
+	ids := server.seedLibraries(t)
+	for target, want := range map[string]int{
+		fmt.Sprintf("/works/lookup?category_id=%d&q=marble&kind=album", ids.tv):     http.StatusBadRequest,
+		fmt.Sprintf("/works/lookup?category_id=%d&q=marble&kind=series", ids.music): http.StatusBadRequest,
+		fmt.Sprintf("/works/lookup?category_id=%d&q=m", ids.tv):                     http.StatusBadRequest,
+		fmt.Sprintf("/works/lookup?category_id=%d&q=m&kind=artist", ids.music):      http.StatusBadRequest,
+	} {
+		if status, body := server.send(t, http.MethodGet, target, ""); status != want {
+			t.Errorf("GET %s: %d %s, want %d", target, status, body, want)
+		}
+	}
+	body := fmt.Sprintf(`{"category_id":%d,"kind":"album","provider":"tvdb","external_id":"1"}`, ids.tv)
+	if status, answer := server.post(t, "/works", body); status != http.StatusBadRequest {
+		t.Errorf("adding an album to a TV library: %d %s, want 400", status, answer)
+	}
+}

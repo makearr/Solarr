@@ -34,8 +34,6 @@ type SeriesCatalog interface {
 	// List returns up to limit+1 series after the cursor, so the caller can tell whether a page follows.
 	List(ctx context.Context, categoryID int64, after paginate.TextCursor, limit int) ([]gen.SeriesSummary, error)
 	Get(ctx context.Context, categoryID, seriesID int64) (gen.SeriesDetail, error)
-	Lookup(ctx context.Context, categoryID int64, query string, limit int) ([]gen.SeriesCandidate, error)
-	Add(ctx context.Context, userID int64, request gen.AddSeriesRequest) (gen.AddSeriesResult, error)
 	Refresh(ctx context.Context, categoryID, seriesID int64) (gen.AddSeriesResult, error)
 	// Delete removes a series; deleteFiles sends its files to the recycle bin, exclude remembers it so it is not added back.
 	Delete(ctx context.Context, categoryID, seriesID int64, deleteFiles, exclude bool) error
@@ -118,65 +116,6 @@ func (s *Server) ListSeries(w http.ResponseWriter, r *http.Request, params gen.L
 		page.NextCursor = &next
 	}
 	writeJSON(w, s.logger, http.StatusOK, page)
-}
-
-func (s *Server) routeLookupSeries(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query()
-	categoryID, err := strconv.ParseInt(query.Get("category_id"), 10, 64)
-	if err != nil || query.Get("q") == "" {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "category_id and q are required")
-		return
-	}
-	params := gen.LookupSeriesParams{CategoryId: categoryID, Q: query.Get("q")}
-	if raw := query.Get("limit"); raw != "" {
-		limit, err := strconv.Atoi(raw)
-		if err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "limit must be a number")
-			return
-		}
-		params.Limit = &limit
-	}
-	s.LookupSeries(w, r, params)
-}
-
-// LookupSeries searches the metadata sources for a series to add.
-func (s *Server) LookupSeries(w http.ResponseWriter, r *http.Request, params gen.LookupSeriesParams) {
-	if _, ok := s.seriesAccess(w, r, params.CategoryId, settings.PermissionRead); !ok {
-		return
-	}
-	if len([]rune(params.Q)) < 2 {
-		writeError(w, s.logger, ErrQueryTooShort)
-		return
-	}
-	candidates, err := s.series.Lookup(r.Context(), params.CategoryId, params.Q, min(derefOr(params.Limit, 20), 50))
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	writeJSON(w, s.logger, http.StatusOK, candidates)
-}
-
-// AddSeries adds a series to a TV library; adding one the library holds refreshes it.
-func (s *Server) AddSeries(w http.ResponseWriter, r *http.Request) {
-	var body gen.AddSeriesRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
-		return
-	}
-	if body.ExternalId == "" {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "external_id is required")
-		return
-	}
-	access, ok := s.seriesAccess(w, r, body.CategoryId, settings.PermissionManage)
-	if !ok {
-		return
-	}
-	result, err := s.series.Add(r.Context(), access.UserID(), body)
-	if err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
-	writeJSON(w, s.logger, http.StatusOK, result)
 }
 
 // seriesPath reads the series id and the library from a request that carries both.

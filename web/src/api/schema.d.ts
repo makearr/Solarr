@@ -1290,24 +1290,8 @@ export interface paths {
          */
         get: operations["listWorks"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/discover/search": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built. */
-        get: operations["discoverSearch"];
-        put?: never;
-        post?: never;
+        /** Add a looked-up candidate to a library as intent, never a download (ADR-56): an album or a series becomes wanted with the chosen monitoring, an artist is followed. Manage on the library. */
+        post: operations["addWork"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1328,23 +1312,6 @@ export interface paths {
         get: operations["listIncompleteDiscographies"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/discover/add": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id. */
-        post: operations["discoverAdd"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1753,6 +1720,23 @@ export interface paths {
         };
         /** Wanted at the grain of a part (Sonarr's episodes) for a library whose type declares it: missing (monitored, out, no file; newest first) or cutoff (held, measured, and below the library's target or cutoff). */
         get: operations["listWantedParts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search one library's media type's sources for something to add (ADR-56's per-library half): albums or artists for music, series for TV. Each result is marked when the library already holds it. */
+        get: operations["lookupWorks"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3219,24 +3203,6 @@ export interface paths {
         /** A page of one TV library's series, ordered by sort title. */
         get: operations["listSeries"];
         put?: never;
-        /** Add a series to a library (Sonarr's add dialog). */
-        post: operations["addSeries"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/series/lookup": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Search the metadata sources for a series to add. */
-        get: operations["lookupSeries"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -4574,6 +4540,11 @@ export interface components {
              * @enum {string}
              */
             work_image: "cover" | "poster";
+            /** @description What GET /works/lookup and POST /works add for the type, the first being the default. */
+            add_kinds: {
+                key: string;
+                label: string;
+            }[];
             /**
              * @description What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
              * @enum {string}
@@ -5080,66 +5051,6 @@ export interface components {
             link?: string;
         };
         /**
-         * @description What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
-         * @enum {string}
-         */
-        DiscoverKind: "album" | "artist";
-        /** @description One candidate a search found (ADR-56) -- not yet in the library. */
-        DiscoverResult: {
-            /** @description Absent means album, which is what search returned before artists were searchable. */
-            kind?: components["schemas"]["DiscoverKind"];
-            /** @description MusicBrainz's own short note telling two same-named artists apart. */
-            disambiguation?: string;
-            /** @example musicbrainz:release-group */
-            provider: string;
-            external_id: string;
-            title: string;
-            artist?: string;
-            /** Format: int64 */
-            year?: number;
-            /**
-             * Format: int64
-             * @description Already in the library: the work (an album) or the person (an artist) it is. Absent when it is new.
-             */
-            library_id?: number;
-        };
-        DiscoverAddRequest: {
-            /** Format: int64 */
-            category_id: number;
-            provider: string;
-            external_id: string;
-            /** @default true */
-            monitored: boolean;
-            /**
-             * @description Lidarr's "Start search for missing albums": an album is searched at once, an artist's albums are added now and then searched. Ignored when monitored is false.
-             * @default false
-             */
-            search: boolean;
-        };
-        /** @description What an add produced. kind says which ids are populated: an album carries work_id and desired_item_id, an artist person_id and subscription_id. */
-        DiscoverAddResult: {
-            kind: components["schemas"]["DiscoverKind"];
-            /** Format: int64 */
-            work_id?: number;
-            /** Format: int64 */
-            desired_item_id?: number;
-            /**
-             * Format: int64
-             * @description The monitored person, for an artist add.
-             */
-            person_id?: number;
-            /**
-             * Format: int64
-             * @description The subscription whose expansion brings the discography in.
-             */
-            subscription_id?: number;
-            /**
-             * Format: int64
-             * @description ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
-             */
-            priority: number;
-        };
-        /**
          * @description Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
          * @enum {string}
          */
@@ -5603,6 +5514,64 @@ export interface components {
             /** @description Cast and crew of the whole series, and guest stars and episode crew by episode. */
             credits?: components["schemas"]["SeriesCredit"][];
         };
+        AddCandidate: {
+            /** @description One of the type's add_kinds. */
+            kind: string;
+            provider: string;
+            external_id: string;
+            title: string;
+            /** @description Tells candidates apart: an album's artist, an artist's disambiguation, a series' network. */
+            subtitle?: string;
+            overview?: string;
+            poster_url?: string;
+            status?: string;
+            /** Format: int64 */
+            year?: number;
+            /**
+             * Format: int64
+             * @description The work or person the library already holds for it.
+             */
+            library_id?: number;
+        };
+        AddWorkRequest: {
+            /** Format: int64 */
+            category_id: number;
+            /** @description One of the type's add_kinds; the first when absent. */
+            kind?: string;
+            provider: string;
+            external_id: string;
+            /** @default true */
+            monitored: boolean;
+            /** @description One of the type's monitor_options; its default when absent. */
+            monitor_option?: string;
+            /**
+             * @description Also monitor the specials group.
+             * @default false
+             */
+            specials: boolean;
+            /**
+             * Format: int64
+             * @description The library's default when absent.
+             */
+            quality_profile_id?: number;
+            /**
+             * @description Start looking for what was added.
+             * @default false
+             */
+            search: boolean;
+        };
+        AddWorkResult: {
+            kind: string;
+            /** Format: int64 */
+            work_id?: number;
+            /**
+             * Format: int64
+             * @description The followed person
+             */
+            person_id?: number;
+            /** @description The type started the search; false leaves POST /works/{id}/grab to the caller. */
+            searching: boolean;
+        };
         WantedPart: {
             /** Format: int64 */
             part_id: number;
@@ -5659,46 +5628,6 @@ export interface components {
              * @description The part id of an episode-scoped credit; absent for the whole series.
              */
             episode_id?: number;
-        };
-        SeriesCandidate: {
-            /** @example tvdb */
-            provider: string;
-            external_id: string;
-            title: string;
-            /** Format: int64 */
-            year?: number;
-            network?: string;
-            /** @enum {string} */
-            status?: "continuing" | "ended" | "upcoming";
-            overview?: string;
-            poster_url?: string;
-            /**
-             * Format: int64
-             * @description The series when the library already holds it.
-             */
-            library_id?: number;
-        };
-        AddSeriesRequest: {
-            /** Format: int64 */
-            category_id: number;
-            /**
-             * @default tvdb
-             * @enum {string}
-             */
-            provider: "tvdb" | "tmdb";
-            external_id: string;
-            /**
-             * @default all
-             * @enum {string}
-             */
-            monitor: "all" | "future" | "missing" | "existing" | "recent" | "pilot" | "first_season" | "last_season" | "none";
-            /** @default false */
-            monitor_specials: boolean;
-            /**
-             * Format: int64
-             * @description The library's default when absent.
-             */
-            quality_profile_id?: number;
         };
         AddSeriesResult: {
             /** Format: int64 */
@@ -9406,35 +9335,33 @@ export interface operations {
             404: components["responses"]["Problem"];
         };
     };
-    discoverSearch: {
+    addWork: {
         parameters: {
-            query: {
-                category_id: number;
-                /** @description At least 2 characters (section 21.5's own floor). */
-                q: string;
-                /** @description What to search for. Defaults to album, which is what this endpoint searched before artists became searchable. */
-                kind?: components["schemas"]["DiscoverKind"];
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddWorkRequest"];
+            };
+        };
         responses: {
-            /** @description Up to limit candidates, ranked by the provider. */
+            /** @description What was stored. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DiscoverResult"][];
+                    "application/json": components["schemas"]["AddWorkResult"];
                 };
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            /** @description category_id does not exist, or the caller cannot read it. */
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
         };
     };
     listIncompleteDiscographies: {
@@ -9460,35 +9387,6 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-        };
-    };
-    discoverAdd: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DiscoverAddRequest"];
-            };
-        };
-        responses: {
-            /** @description The work and desired_item, and the priority the item will get. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscoverAddResult"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            /** @description category_id does not exist, or the caller cannot read it. */
             404: components["responses"]["Problem"];
         };
     };
@@ -10239,6 +10137,37 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    lookupWorks: {
+        parameters: {
+            query: {
+                category_id: number;
+                /** @description At least 2 characters (section 21.5's floor). */
+                q: string;
+                /** @description One of the type's add_kinds; the first when absent. */
+                kind?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Candidates, best first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AddCandidate"][];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            502: components["responses"]["Problem"];
         };
     };
     listWorkExclusions: {
@@ -12832,63 +12761,6 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
-        };
-    };
-    addSeries: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AddSeriesRequest"];
-            };
-        };
-        responses: {
-            /** @description What was stored. Adding a series the library already holds refreshes it. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AddSeriesResult"];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            403: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
-        };
-    };
-    lookupSeries: {
-        parameters: {
-            query: {
-                category_id: number;
-                q: string;
-                limit?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Candidates, best first, each marked when the library already holds it. */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SeriesCandidate"][];
-                };
-            };
-            400: components["responses"]["Problem"];
-            401: components["responses"]["Problem"];
-            404: components["responses"]["Problem"];
-            502: components["responses"]["Problem"];
         };
     };
     getSeries: {

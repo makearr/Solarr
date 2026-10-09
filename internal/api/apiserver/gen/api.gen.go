@@ -33,25 +33,6 @@ const (
 	AddDownloaderRequestProtocolUsenet  AddDownloaderRequestProtocol = "usenet"
 )
 
-// Defines values for AddSeriesRequestMonitor.
-const (
-	AddSeriesRequestMonitorAll         AddSeriesRequestMonitor = "all"
-	AddSeriesRequestMonitorExisting    AddSeriesRequestMonitor = "existing"
-	AddSeriesRequestMonitorFirstSeason AddSeriesRequestMonitor = "first_season"
-	AddSeriesRequestMonitorFuture      AddSeriesRequestMonitor = "future"
-	AddSeriesRequestMonitorLastSeason  AddSeriesRequestMonitor = "last_season"
-	AddSeriesRequestMonitorMissing     AddSeriesRequestMonitor = "missing"
-	AddSeriesRequestMonitorNone        AddSeriesRequestMonitor = "none"
-	AddSeriesRequestMonitorPilot       AddSeriesRequestMonitor = "pilot"
-	AddSeriesRequestMonitorRecent      AddSeriesRequestMonitor = "recent"
-)
-
-// Defines values for AddSeriesRequestProvider.
-const (
-	AddSeriesRequestProviderTmdb AddSeriesRequestProvider = "tmdb"
-	AddSeriesRequestProviderTvdb AddSeriesRequestProvider = "tvdb"
-)
-
 // Defines values for ArrApp.
 const (
 	ArrAppLidarr   ArrApp = "lidarr"
@@ -167,12 +148,6 @@ const (
 	DecisionOutcomeACCEPT DecisionOutcome = "ACCEPT"
 	DecisionOutcomeDEFER  DecisionOutcome = "DEFER"
 	DecisionOutcomeREJECT DecisionOutcome = "REJECT"
-)
-
-// Defines values for DiscoverKind.
-const (
-	DiscoverKindAlbum  DiscoverKind = "album"
-	DiscoverKindArtist DiscoverKind = "artist"
 )
 
 // Defines values for DownloaderProtocol.
@@ -632,13 +607,6 @@ const (
 	ScheduleTierNormal   ScheduleTier = "normal"
 )
 
-// Defines values for SeriesCandidateStatus.
-const (
-	SeriesCandidateStatusContinuing SeriesCandidateStatus = "continuing"
-	SeriesCandidateStatusEnded      SeriesCandidateStatus = "ended"
-	SeriesCandidateStatusUpcoming   SeriesCandidateStatus = "upcoming"
-)
-
 // Defines values for SeriesEpisodeAirConfidence.
 const (
 	SeriesEpisodeAirConfidenceHigh    SeriesEpisodeAirConfidence = "high"
@@ -972,6 +940,26 @@ type AddArrInstanceRequest struct {
 	Name       string `json:"name"`
 }
 
+// AddCandidate defines model for AddCandidate.
+type AddCandidate struct {
+	ExternalId string `json:"external_id"`
+
+	// Kind One of the type's add_kinds.
+	Kind string `json:"kind"`
+
+	// LibraryId The work or person the library already holds for it.
+	LibraryId *int64  `json:"library_id,omitempty"`
+	Overview  *string `json:"overview,omitempty"`
+	PosterUrl *string `json:"poster_url,omitempty"`
+	Provider  string  `json:"provider"`
+	Status    *string `json:"status,omitempty"`
+
+	// Subtitle Tells candidates apart: an album's artist, an artist's disambiguation, a series' network.
+	Subtitle *string `json:"subtitle,omitempty"`
+	Title    string  `json:"title"`
+	Year     *int64  `json:"year,omitempty"`
+}
+
 // AddDownloaderRequest defines model for AddDownloaderRequest.
 type AddDownloaderRequest struct {
 	BaseUrl     string  `json:"base_url"`
@@ -1005,30 +993,47 @@ type AddIndexerRequest struct {
 	Priority *int64 `json:"priority,omitempty"`
 }
 
-// AddSeriesRequest defines model for AddSeriesRequest.
-type AddSeriesRequest struct {
-	CategoryId      int64                     `json:"category_id"`
-	ExternalId      string                    `json:"external_id"`
-	Monitor         *AddSeriesRequestMonitor  `json:"monitor,omitempty"`
-	MonitorSpecials *bool                     `json:"monitor_specials,omitempty"`
-	Provider        *AddSeriesRequestProvider `json:"provider,omitempty"`
-
-	// QualityProfileId The library's default when absent.
-	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
-}
-
-// AddSeriesRequestMonitor defines model for AddSeriesRequest.Monitor.
-type AddSeriesRequestMonitor string
-
-// AddSeriesRequestProvider defines model for AddSeriesRequest.Provider.
-type AddSeriesRequestProvider string
-
 // AddSeriesResult defines model for AddSeriesResult.
 type AddSeriesResult struct {
 	Created  bool  `json:"created"`
 	Episodes int   `json:"episodes"`
 	Seasons  int   `json:"seasons"`
 	SeriesId int64 `json:"series_id"`
+}
+
+// AddWorkRequest defines model for AddWorkRequest.
+type AddWorkRequest struct {
+	CategoryId int64  `json:"category_id"`
+	ExternalId string `json:"external_id"`
+
+	// Kind One of the type's add_kinds; the first when absent.
+	Kind *string `json:"kind,omitempty"`
+
+	// MonitorOption One of the type's monitor_options; its default when absent.
+	MonitorOption *string `json:"monitor_option,omitempty"`
+	Monitored     *bool   `json:"monitored,omitempty"`
+	Provider      string  `json:"provider"`
+
+	// QualityProfileId The library's default when absent.
+	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+
+	// Search Start looking for what was added.
+	Search *bool `json:"search,omitempty"`
+
+	// Specials Also monitor the specials group.
+	Specials *bool `json:"specials,omitempty"`
+}
+
+// AddWorkResult defines model for AddWorkResult.
+type AddWorkResult struct {
+	Kind string `json:"kind"`
+
+	// PersonId The followed person
+	PersonId *int64 `json:"person_id,omitempty"`
+
+	// Searching The type started the search; false leaves POST /works/{id}/grab to the caller.
+	Searching bool   `json:"searching"`
+	WorkId    *int64 `json:"work_id,omitempty"`
 }
 
 // ArrApp Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
@@ -1576,56 +1581,6 @@ type DecisionOutcome string
 // Deferral A reason this candidate is not actionable yet.
 type Deferral struct {
 	Reason string `json:"reason"`
-}
-
-// DiscoverAddRequest defines model for DiscoverAddRequest.
-type DiscoverAddRequest struct {
-	CategoryId int64  `json:"category_id"`
-	ExternalId string `json:"external_id"`
-	Monitored  *bool  `json:"monitored,omitempty"`
-	Provider   string `json:"provider"`
-
-	// Search Lidarr's "Start search for missing albums": an album is searched at once, an artist's albums are added now and then searched. Ignored when monitored is false.
-	Search *bool `json:"search,omitempty"`
-}
-
-// DiscoverAddResult What an add produced. kind says which ids are populated: an album carries work_id and desired_item_id, an artist person_id and subscription_id.
-type DiscoverAddResult struct {
-	DesiredItemId *int64 `json:"desired_item_id,omitempty"`
-
-	// Kind What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
-	Kind DiscoverKind `json:"kind"`
-
-	// PersonId The monitored person, for an artist add.
-	PersonId *int64 `json:"person_id,omitempty"`
-
-	// Priority ADR-36's composite score, computed against the user_request trigger. There is no populated hunt_queue yet (stage 5/6), so this is the score alone, not a position within it.
-	Priority int64 `json:"priority"`
-
-	// SubscriptionId The subscription whose expansion brings the discography in.
-	SubscriptionId *int64 `json:"subscription_id,omitempty"`
-	WorkId         *int64 `json:"work_id,omitempty"`
-}
-
-// DiscoverKind What a discover result is. An album is added as a monitored desired item; an artist is added as a monitored person with a subscription, whose albums arrive when the subscription expands.
-type DiscoverKind string
-
-// DiscoverResult One candidate a search found (ADR-56) -- not yet in the library.
-type DiscoverResult struct {
-	Artist *string `json:"artist,omitempty"`
-
-	// Disambiguation MusicBrainz's own short note telling two same-named artists apart.
-	Disambiguation *string `json:"disambiguation,omitempty"`
-	ExternalId     string  `json:"external_id"`
-
-	// Kind Absent means album, which is what search returned before artists were searchable.
-	Kind *DiscoverKind `json:"kind,omitempty"`
-
-	// LibraryId Already in the library: the work (an album) or the person (an artist) it is. Absent when it is new.
-	LibraryId *int64 `json:"library_id,omitempty"`
-	Provider  string `json:"provider"`
-	Title     string `json:"title"`
-	Year      *int64 `json:"year,omitempty"`
 }
 
 // DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.
@@ -2783,6 +2738,12 @@ type MediaType string
 
 // MediaTypeInfo defines model for MediaTypeInfo.
 type MediaTypeInfo struct {
+	// AddKinds What GET /works/lookup and POST /works add for the type, the first being the default.
+	AddKinds []struct {
+		Key   string `json:"key"`
+		Label string `json:"label"`
+	} `json:"add_kinds"`
+
 	// Facets The type's own fields of its entities beyond the base ones, as lists and pages show them.
 	Facets []Facet `json:"facets"`
 
@@ -3770,24 +3731,6 @@ type SecretMask struct {
 	Masked *string `json:"masked,omitempty"`
 }
 
-// SeriesCandidate defines model for SeriesCandidate.
-type SeriesCandidate struct {
-	ExternalId string `json:"external_id"`
-
-	// LibraryId The series when the library already holds it.
-	LibraryId *int64                 `json:"library_id,omitempty"`
-	Network   *string                `json:"network,omitempty"`
-	Overview  *string                `json:"overview,omitempty"`
-	PosterUrl *string                `json:"poster_url,omitempty"`
-	Provider  string                 `json:"provider"`
-	Status    *SeriesCandidateStatus `json:"status,omitempty"`
-	Title     string                 `json:"title"`
-	Year      *int64                 `json:"year,omitempty"`
-}
-
-// SeriesCandidateStatus defines model for SeriesCandidate.Status.
-type SeriesCandidateStatus string
-
 // SeriesCounts Episode counts of one series or season. present counts monitored episodes with a file.
 type SeriesCounts struct {
 	// AiredMissing Monitored episodes that have aired and have no file.
@@ -4579,18 +4522,6 @@ type ListIncompleteDiscographiesParams struct {
 	Limit      *int  `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// DiscoverSearchParams defines parameters for DiscoverSearch.
-type DiscoverSearchParams struct {
-	CategoryId int64 `form:"category_id" json:"category_id"`
-
-	// Q At least 2 characters (section 21.5's own floor).
-	Q string `form:"q" json:"q"`
-
-	// Kind What to search for. Defaults to album, which is what this endpoint searched before artists became searchable.
-	Kind  *DiscoverKind `form:"kind,omitempty" json:"kind,omitempty"`
-	Limit *int          `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
 // SetDownloaderCredentialsJSONBody defines parameters for SetDownloaderCredentials.
 type SetDownloaderCredentialsJSONBody struct {
 	Credentials *string `json:"credentials,omitempty"`
@@ -4961,13 +4892,6 @@ type ListSeriesParams struct {
 	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
-// LookupSeriesParams defines parameters for LookupSeries.
-type LookupSeriesParams struct {
-	CategoryId int64  `form:"category_id" json:"category_id"`
-	Q          string `form:"q" json:"q"`
-	Limit      *int   `form:"limit,omitempty" json:"limit,omitempty"`
-}
-
 // DeleteSeriesParams defines parameters for DeleteSeries.
 type DeleteSeriesParams struct {
 	// DeleteFiles Send the series' files to the recycle bin; never deleted directly.
@@ -5188,6 +5112,18 @@ type ListWorkExclusionsParams struct {
 	MediaType string `form:"media_type" json:"media_type"`
 }
 
+// LookupWorksParams defines parameters for LookupWorks.
+type LookupWorksParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+
+	// Q At least 2 characters (section 21.5's floor).
+	Q string `form:"q" json:"q"`
+
+	// Kind One of the type's add_kinds; the first when absent.
+	Kind  *string `form:"kind,omitempty" json:"kind,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.
 type GetWorkArtworkParams struct {
 	Size *GetWorkArtworkParamsSize `form:"size,omitempty" json:"size,omitempty"`
@@ -5345,9 +5281,6 @@ type SearchCategoryJSONRequestBody SearchCategoryJSONBody
 // SetLibraryTaggingJSONRequestBody defines body for SetLibraryTagging for application/json ContentType.
 type SetLibraryTaggingJSONRequestBody = Tagging
 
-// DiscoverAddJSONRequestBody defines body for DiscoverAdd for application/json ContentType.
-type DiscoverAddJSONRequestBody = DiscoverAddRequest
-
 // AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
 type AddDownloaderJSONRequestBody = AddDownloaderRequest
 
@@ -5504,9 +5437,6 @@ type UpdateScheduleJSONRequestBody UpdateScheduleJSONBody
 // SimulateScoreJSONRequestBody defines body for SimulateScore for application/json ContentType.
 type SimulateScoreJSONRequestBody SimulateScoreJSONBody
 
-// AddSeriesJSONRequestBody defines body for AddSeries for application/json ContentType.
-type AddSeriesJSONRequestBody = AddSeriesRequest
-
 // SetSeriesPosterJSONRequestBody defines body for SetSeriesPoster for application/json ContentType.
 type SetSeriesPosterJSONRequestBody = ImagePick
 
@@ -5539,6 +5469,9 @@ type UpdateUserJSONRequestBody UpdateUserJSONBody
 
 // SetUserAccessJSONRequestBody defines body for SetUserAccess for application/json ContentType.
 type SetUserAccessJSONRequestBody SetUserAccessJSONBody
+
+// AddWorkJSONRequestBody defines body for AddWork for application/json ContentType.
+type AddWorkJSONRequestBody = AddWorkRequest
 
 // BulkEditWorksJSONRequestBody defines body for BulkEditWorks for application/json ContentType.
 type BulkEditWorksJSONRequestBody BulkEditWorksJSONBody
@@ -5725,15 +5658,9 @@ type ServerInterface interface {
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
-	// Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id.
-	// (POST /discover/add)
-	DiscoverAdd(w http.ResponseWriter, r *http.Request)
 	// Artists in a library whose discography has albums the library does not hold.
 	// (GET /discover/incomplete)
 	ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams)
-	// Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built.
-	// (GET /discover/search)
-	DiscoverSearch(w http.ResponseWriter, r *http.Request, params DiscoverSearchParams)
 	// Every configured download client connection (stage 5, ADR-46/57).
 	// (GET /downloaders)
 	ListDownloaders(w http.ResponseWriter, r *http.Request)
@@ -6133,12 +6060,6 @@ type ServerInterface interface {
 	// A page of one TV library's series, ordered by sort title.
 	// (GET /series)
 	ListSeries(w http.ResponseWriter, r *http.Request, params ListSeriesParams)
-	// Add a series to a library (Sonarr's add dialog).
-	// (POST /series)
-	AddSeries(w http.ResponseWriter, r *http.Request)
-	// Search the metadata sources for a series to add.
-	// (GET /series/lookup)
-	LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams)
 	// Remove a series from the library, with its files in the recycle bin when asked.
 	// (DELETE /series/{id})
 	DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams)
@@ -6247,6 +6168,9 @@ type ServerInterface interface {
 	// A page of the library the caller may see (ADR-27).
 	// (GET /works)
 	ListWorks(w http.ResponseWriter, r *http.Request, params ListWorksParams)
+	// Add a looked-up candidate to a library as intent, never a download (ADR-56): an album or a series becomes wanted with the chosen monitoring, an artist is followed. Manage on the library.
+	// (POST /works)
+	AddWork(w http.ResponseWriter, r *http.Request)
 	// Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
 	// (POST /works/bulk/edit)
 	BulkEditWorks(w http.ResponseWriter, r *http.Request)
@@ -6259,6 +6183,9 @@ type ServerInterface interface {
 	// The works of one media type that were removed and must not be added again. Administrator only.
 	// (GET /works/exclusions)
 	ListWorkExclusions(w http.ResponseWriter, r *http.Request, params ListWorkExclusionsParams)
+	// Search one library's media type's sources for something to add (ADR-56's per-library half): albums or artists for music, series for TV. Each result is marked when the library already holds it.
+	// (GET /works/lookup)
+	LookupWorks(w http.ResponseWriter, r *http.Request, params LookupWorksParams)
 	// A work's full structural detail: its own fields, editions, parts, and every level's external ids.
 	// (GET /works/{id})
 	GetWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -6628,21 +6555,9 @@ func (_ Unimplemented) GetDashboard(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Add a search result as intent: resolves or creates the work and ensures a monitored album-level desired_item for it -- never a download (ADR-56). Administrator or a manage grant on category_id.
-// (POST /discover/add)
-func (_ Unimplemented) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Artists in a library whose discography has albums the library does not hold.
 // (GET /discover/incomplete)
 func (_ Unimplemented) ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request, params ListIncompleteDiscographiesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Search one category's own metadata provider for something not in the library yet (ADR-56's per-library half). The global, cross-media-type half with its destination-suggestion ladder is not built.
-// (GET /discover/search)
-func (_ Unimplemented) DiscoverSearch(w http.ResponseWriter, r *http.Request, params DiscoverSearchParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -7444,18 +7359,6 @@ func (_ Unimplemented) ListSeries(w http.ResponseWriter, r *http.Request, params
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Add a series to a library (Sonarr's add dialog).
-// (POST /series)
-func (_ Unimplemented) AddSeries(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
-// Search the metadata sources for a series to add.
-// (GET /series/lookup)
-func (_ Unimplemented) LookupSeries(w http.ResponseWriter, r *http.Request, params LookupSeriesParams) {
-	w.WriteHeader(http.StatusNotImplemented)
-}
-
 // Remove a series from the library, with its files in the recycle bin when asked.
 // (DELETE /series/{id})
 func (_ Unimplemented) DeleteSeries(w http.ResponseWriter, r *http.Request, id int64, params DeleteSeriesParams) {
@@ -7672,6 +7575,12 @@ func (_ Unimplemented) ListWorks(w http.ResponseWriter, r *http.Request, params 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Add a looked-up candidate to a library as intent, never a download (ADR-56): an album or a series becomes wanted with the chosen monitoring, an artist is followed. Manage on the library.
+// (POST /works)
+func (_ Unimplemented) AddWork(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Change monitoring, quality profile and tags of every work matching a selection (Radarr's Edit selected).
 // (POST /works/bulk/edit)
 func (_ Unimplemented) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
@@ -7693,6 +7602,12 @@ func (_ Unimplemented) RemoveWorkExclusion(w http.ResponseWriter, r *http.Reques
 // The works of one media type that were removed and must not be added again. Administrator only.
 // (GET /works/exclusions)
 func (_ Unimplemented) ListWorkExclusions(w http.ResponseWriter, r *http.Request, params ListWorkExclusionsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Search one library's media type's sources for something to add (ADR-56's per-library half): albums or artists for music, series for TV. Each result is marked when the library already holds it.
+// (GET /works/lookup)
+func (_ Unimplemented) LookupWorks(w http.ResponseWriter, r *http.Request, params LookupWorksParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9451,28 +9366,6 @@ func (siw *ServerInterfaceWrapper) GetDashboard(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
-// DiscoverAdd operation middleware
-func (siw *ServerInterfaceWrapper) DiscoverAdd(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DiscoverAdd(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // ListIncompleteDiscographies operation middleware
 func (siw *ServerInterfaceWrapper) ListIncompleteDiscographies(w http.ResponseWriter, r *http.Request) {
 
@@ -9514,79 +9407,6 @@ func (siw *ServerInterfaceWrapper) ListIncompleteDiscographies(w http.ResponseWr
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListIncompleteDiscographies(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// DiscoverSearch operation middleware
-func (siw *ServerInterfaceWrapper) DiscoverSearch(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params DiscoverSearchParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "q" -------------
-
-	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "kind" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.DiscoverSearch(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -13889,93 +13709,6 @@ func (siw *ServerInterfaceWrapper) ListSeries(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
-// AddSeries operation middleware
-func (siw *ServerInterfaceWrapper) AddSeries(w http.ResponseWriter, r *http.Request) {
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.AddSeries(w, r)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
-// LookupSeries operation middleware
-func (siw *ServerInterfaceWrapper) LookupSeries(w http.ResponseWriter, r *http.Request) {
-
-	var err error
-
-	ctx := r.Context()
-
-	ctx = context.WithValue(ctx, SessionScopes, []string{})
-
-	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
-
-	r = r.WithContext(ctx)
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params LookupSeriesParams
-
-	// ------------- Required query parameter "category_id" -------------
-
-	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
-		return
-	}
-
-	// ------------- Required query parameter "q" -------------
-
-	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
-
-	} else {
-		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
-		return
-	}
-
-	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
-		return
-	}
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
-		return
-	}
-
-	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.LookupSeries(w, r, params)
-	}))
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		handler = middleware(handler)
-	}
-
-	handler.ServeHTTP(w, r)
-}
-
 // DeleteSeries operation middleware
 func (siw *ServerInterfaceWrapper) DeleteSeries(w http.ResponseWriter, r *http.Request) {
 
@@ -15189,6 +14922,28 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// AddWork operation middleware
+func (siw *ServerInterfaceWrapper) AddWork(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddWork(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // BulkEditWorks operation middleware
 func (siw *ServerInterfaceWrapper) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 
@@ -15338,6 +15093,79 @@ func (siw *ServerInterfaceWrapper) ListWorkExclusions(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListWorkExclusions(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LookupWorks operation middleware
+func (siw *ServerInterfaceWrapper) LookupWorks(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params LookupWorksParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	// ------------- Required query parameter "q" -------------
+
+	if paramValue := r.URL.Query().Get("q"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "q"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "kind" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "kind", r.URL.Query(), &params.Kind)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "kind", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "limit", r.URL.Query(), &params.Limit)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "limit", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LookupWorks(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16347,13 +16175,7 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/discover/add", wrapper.DiscoverAdd)
-	})
-	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/discover/incomplete", wrapper.ListIncompleteDiscographies)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/discover/search", wrapper.DiscoverSearch)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloaders", wrapper.ListDownloaders)
@@ -16755,12 +16577,6 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/series", wrapper.ListSeries)
 	})
 	r.Group(func(r chi.Router) {
-		r.Post(options.BaseURL+"/series", wrapper.AddSeries)
-	})
-	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/series/lookup", wrapper.LookupSeries)
-	})
-	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/series/{id}", wrapper.DeleteSeries)
 	})
 	r.Group(func(r chi.Router) {
@@ -16869,6 +16685,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/works", wrapper.ListWorks)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works", wrapper.AddWork)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/bulk/edit", wrapper.BulkEditWorks)
 	})
 	r.Group(func(r chi.Router) {
@@ -16879,6 +16698,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/exclusions", wrapper.ListWorkExclusions)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/lookup", wrapper.LookupWorks)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}", wrapper.GetWork)

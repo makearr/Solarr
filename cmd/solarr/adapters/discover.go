@@ -9,17 +9,14 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/identify/priority"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// Discover satisfies apiserver.Discover over musicbrainz.Provider and
-// library.Identity/Desired -- ADR-56's per-library half only (todo 4.17): a
-// media type with no configured provider answers
-// apiserver.ErrDiscoverUnsupportedMediaType, never a guess. Music is the only
-// one wired today.
+// Discover is music's media.Adding over musicbrainz.Provider and library.Identity/Desired: albums become wanted
+// items, artists followed people (ADR-56's per-library half).
 type Discover struct {
 	Provider         musicbrainz.Provider
 	Identity         library.Identity
@@ -35,39 +32,31 @@ type Discover struct {
 	ExpandArtist func(ctx context.Context, subscriptionID int64, search bool)
 }
 
-// Search resolves categoryID to its media type and, for music, runs a
-// free-text MusicBrainz release-group search (PriorityInteractive: a user is
-// looking at this right now, ADR-29's own top priority).
-func (a Discover) Search(
-	ctx context.Context, categoryID int64, kind apiserver.DiscoverKind, query string, limit int,
-) ([]apiserver.DiscoverResult, error) {
-	if len([]rune(query)) < 2 {
+// LookupWorks implements media.Adding: a free-text MusicBrainz search of release groups or artists
+// (PriorityInteractive: a person is looking at this right now, ADR-29's own top priority).
+func (a Discover) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
+	if len([]rune(lookup.Query)) < 2 {
 		return nil, apiserver.ErrQueryTooShort
 	}
-	category, ok := a.Categories.Category(categoryID)
-	if !ok || category.MediaType != "music" {
-		return nil, apiserver.ErrDiscoverUnsupportedMediaType
+	if lookup.Kind == "artist" {
+		return a.searchArtists(ctx, lookup.Query, lookup.Limit)
 	}
-	if kind == apiserver.DiscoverArtist {
-		return a.searchArtists(ctx, query, limit)
-	}
-
-	matches, err := a.Provider.SearchByQuery(ctx, musicbrainz.PriorityInteractive, query, limit)
+	matches, err := a.Provider.SearchByQuery(ctx, musicbrainz.PriorityInteractive, lookup.Query, lookup.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("musicbrainz: %w", err)
 	}
-	results := make([]apiserver.DiscoverResult, len(matches))
+	results := make([]media.AddCandidate, len(matches))
 	for i, match := range matches {
-		results[i] = apiserver.DiscoverResult{
-			Kind: apiserver.DiscoverAlbum, Provider: music.ProviderReleaseGroup, ExternalID: match.MBID,
-			Title: match.Title, Artist: match.ArtistCredit, Year: releaseYear(match.FirstReleaseDate),
+		results[i] = media.AddCandidate{
+			Kind: "album", Provider: music.ProviderReleaseGroup, ExternalID: match.MBID,
+			Title: match.Title, Subtitle: match.ArtistCredit, Year: releaseYear(match.FirstReleaseDate),
 		}
 		workID, found, err := a.Identity.WorkByExternalID(ctx, music.ProviderReleaseGroup, match.MBID)
 		if err != nil {
 			return nil, err
 		}
 		if found {
-			results[i].LibraryID = &workID
+			results[i].LibraryID = workID
 		}
 	}
 	return results, nil
@@ -95,51 +84,43 @@ func (a Discover) creditArtists(ctx context.Context, now time.Time, workID int64
 	}
 }
 
-// searchArtists is Search's artist half (revision 7.1). The disambiguation
-// comes through because two artists sharing a name is the normal case, not an
-// edge one, and the name alone cannot tell them apart.
-func (a Discover) searchArtists(ctx context.Context, query string, limit int) ([]apiserver.DiscoverResult, error) {
+// searchArtists is LookupWorks' artist half (revision 7.1). The disambiguation comes through because two artists
+// sharing a name is the normal case, and the name alone cannot tell them apart.
+func (a Discover) searchArtists(ctx context.Context, query string, limit int) ([]media.AddCandidate, error) {
 	matches, err := a.Provider.SearchArtists(ctx, musicbrainz.PriorityInteractive, query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("musicbrainz: %w", err)
 	}
-	results := make([]apiserver.DiscoverResult, len(matches))
+	results := make([]media.AddCandidate, len(matches))
 	for i, match := range matches {
-		results[i] = apiserver.DiscoverResult{
-			Kind: apiserver.DiscoverArtist, Provider: music.ProviderArtist, ExternalID: match.MBID,
-			Title: match.Name, Disambiguation: match.Disambiguation,
-			Year: releaseYear(match.Born),
+		results[i] = media.AddCandidate{
+			Kind: "artist", Provider: music.ProviderArtist, ExternalID: match.MBID,
+			Title: match.Name, Subtitle: match.Disambiguation, Year: releaseYear(match.Born),
 		}
 		personID, found, err := a.People.FindByExternalID(ctx, music.ProviderArtist, match.MBID)
 		if err != nil {
 			return nil, err
 		}
 		if found {
-			results[i].LibraryID = &personID
+			results[i].LibraryID = personID
 		}
 	}
 	return results, nil
 }
 
-// Add resolves-or-creates the work behind (provider, externalID) and ensures
-// a monitored album-level desired_item for it -- library.Identity.ResolveWorks
-// and library.Desired.EnsureAlbumItem, the exact primitives
-// music.SubscriptionExpandJob's own ensureItemFor already uses for a work
-// with no file and no edition yet. No edition is created here either, the
-// same accepted gap subscription-discovered works already carry (no
-// enrichment or artwork until something else gives one an edition).
-func (a Discover) Add(
-	ctx context.Context, categoryID, userID int64, provider, externalID string, monitored, search bool,
-) (apiserver.DiscoverAddResult, error) {
-	category, ok := a.Categories.Category(categoryID)
-	if !ok || category.MediaType != "music" {
-		return apiserver.DiscoverAddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
+// AddWork implements media.Adding: an album is resolved or created and gets a wanted item, without an edition yet
+// (enrichment chooses one); an artist is followed.
+func (a Discover) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	category, ok := a.Categories.Category(request.CategoryID)
+	if !ok {
+		return media.AddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
 	}
-	if provider == music.ProviderArtist {
+	userID, externalID, monitored, search := request.UserID, request.ExternalID, request.Monitored, request.Search
+	if request.Provider == music.ProviderArtist {
 		return a.addArtist(ctx, category, userID, externalID, monitored, search)
 	}
-	if provider != music.ProviderReleaseGroup {
-		return apiserver.DiscoverAddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
+	if request.Provider != music.ProviderReleaseGroup {
+		return media.AddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
 	}
 
 	// Re-fetched from the provider, never trusted from the request: an
@@ -147,7 +128,7 @@ func (a Discover) Add(
 	// provider's to say, not the caller's.
 	releaseGroup, _, err := a.Provider.Album(ctx, musicbrainz.PriorityInteractive, externalID, "")
 	if err != nil {
-		return apiserver.DiscoverAddResult{}, fmt.Errorf("musicbrainz: %w", err)
+		return media.AddResult{}, fmt.Errorf("musicbrainz: %w", err)
 	}
 
 	now := a.Clock.Now()
@@ -158,7 +139,7 @@ func (a Discover) Add(
 		},
 	}})
 	if err != nil {
-		return apiserver.DiscoverAddResult{}, fmt.Errorf("resolve work: %w", err)
+		return media.AddResult{}, fmt.Errorf("resolve work: %w", err)
 	}
 
 	a.creditArtists(ctx, now, workIDs[0], releaseGroup.ArtistCredit)
@@ -167,25 +148,23 @@ func (a Discover) Add(
 	if category.QualityProfileID != nil {
 		profileID = *category.QualityProfileID
 	}
+	if request.ProfileID != nil {
+		profileID = *request.ProfileID
+	}
 	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
 		WorkID: workIDs[0], CategoryID: category.ID, ProfileID: profileID, Monitored: monitored, AddedBy: &userID,
 	})
 	if err != nil {
-		return apiserver.DiscoverAddResult{}, fmt.Errorf("ensure album item: %w", err)
+		return media.AddResult{}, fmt.Errorf("ensure album item: %w", err)
 	}
-
-	score := priority.Compute(priority.DefaultWeights(), priority.Input{
-		Trigger: priority.TriggerUserRequest, CategoryRank: category.PriorityRank, QueuedSince: now,
-	}, now)
 	if a.Enrich != nil {
 		a.Enrich(ctx)
 	}
-	if monitored && search && a.SearchAlbum != nil {
+	searching := monitored && search && a.SearchAlbum != nil
+	if searching {
 		a.SearchAlbum(ctx, category.ID, item.ID)
 	}
-	return apiserver.DiscoverAddResult{
-		Kind: apiserver.DiscoverAlbum, WorkID: workIDs[0], DesiredItemID: item.ID, Priority: score,
-	}, nil
+	return media.AddResult{Kind: "album", WorkID: workIDs[0], Searching: searching}, nil
 }
 
 // addArtist creates or reuses the person behind an artist MBID and subscribes
@@ -196,12 +175,12 @@ func (a Discover) Add(
 // Subscribe returns an existing subscription's id (Invariant 80).
 func (a Discover) addArtist(
 	ctx context.Context, category settings.Category, userID int64, externalID string, monitored, search bool,
-) (apiserver.DiscoverAddResult, error) {
+) (media.AddResult, error) {
 	// Re-fetched rather than trusted from the request, the same rule the album
 	// path follows: an external id names identity, the provider says the rest.
 	artist, err := a.Provider.Artist(ctx, musicbrainz.PriorityInteractive, externalID)
 	if err != nil {
-		return apiserver.DiscoverAddResult{}, fmt.Errorf("musicbrainz: %w", err)
+		return media.AddResult{}, fmt.Errorf("musicbrainz: %w", err)
 	}
 
 	now := a.Clock.Now()
@@ -214,7 +193,7 @@ func (a Discover) addArtist(
 		},
 	})
 	if err != nil {
-		return apiserver.DiscoverAddResult{}, fmt.Errorf("resolve person: %w", err)
+		return media.AddResult{}, fmt.Errorf("resolve person: %w", err)
 	}
 
 	// Not monitored means "have them in the library without watching them", so
@@ -223,39 +202,30 @@ func (a Discover) addArtist(
 	if monitored {
 		filtersJSON, err := monitorFiltersFor(category)
 		if err != nil {
-			return apiserver.DiscoverAddResult{}, err
+			return media.AddResult{}, err
 		}
 		subscriptionID, err = a.People.Subscribe(ctx, now, personID, userID, library.SubscriptionRequest{
 			MediaTypes: []string{"music"}, MonitorBackCatalogue: true,
 			CategoryID: category.ID, FiltersJSON: filtersJSON,
 		})
 		if err != nil {
-			return apiserver.DiscoverAddResult{}, fmt.Errorf("subscribe: %w", err)
+			return media.AddResult{}, fmt.Errorf("subscribe: %w", err)
 		}
 		if a.ExpandArtist != nil {
 			a.ExpandArtist(ctx, subscriptionID, search)
 		}
 	}
 
-	score := priority.Compute(priority.DefaultWeights(), priority.Input{
-		Trigger: priority.TriggerUserRequest, CategoryRank: category.PriorityRank, QueuedSince: now,
-	}, now)
-	return apiserver.DiscoverAddResult{
-		Kind: apiserver.DiscoverArtist, PersonID: personID, SubscriptionID: subscriptionID,
-		Priority: score,
-	}, nil
+	return media.AddResult{Kind: "artist", PersonID: personID, Searching: monitored && search}, nil
 }
 
 // releaseYear reads only the leading year off a MusicBrainz partial date
 // ("1978", "1978-01", "1978-01-12") -- Discover's result list shows a year
 // for context, not the day precision todo 4.20's own FreshSince cares about.
-func releaseYear(date string) *int64 {
+func releaseYear(date string) int64 {
 	if len(date) < 4 {
-		return nil
+		return 0
 	}
-	year, err := strconv.ParseInt(date[:4], 10, 64)
-	if err != nil {
-		return nil
-	}
-	return &year
+	year, _ := strconv.ParseInt(date[:4], 10, 64)
+	return year
 }

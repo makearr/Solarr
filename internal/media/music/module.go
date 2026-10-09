@@ -22,6 +22,8 @@ type Module struct {
 	Sweep scan.Sweep
 	// Hunt searches for one wanted album and sends the best release; nil leaves music unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Adder looks a work up and adds it; nil leaves the type without an add.
+	Adder media.Adding
 	// Refresh reads one album again from its sources; nil leaves it unrefreshable.
 	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
 	// Rename is what renaming a music library needs; nil leaves music without a rename.
@@ -34,6 +36,22 @@ type Module struct {
 	Following
 	// Searching is music's part of a search a person asks for.
 	Searching
+}
+
+// LookupWorks implements media.Adding.
+func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
+	if m.Adder == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Adder.LookupWorks(ctx, lookup)
+}
+
+// AddWork implements media.Adding.
+func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	if m.Adder == nil {
+		return media.AddResult{}, media.ErrNotWired
+	}
+	return m.Adder.AddWork(ctx, request)
 }
 
 // RefreshWork implements media.Refreshing.
@@ -83,6 +101,7 @@ func (Module) Descriptor() media.Descriptor {
 		Facets:        facets,
 		SearchTerms:   termChoices,
 		WorkImage:     media.ImageCover,
+		AddKinds:      []media.Choice{{Key: "album", Label: "Albums"}, {Key: "artist", Label: "Artists"}},
 	}
 }
 

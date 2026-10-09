@@ -1966,48 +1966,28 @@ paths:
           $ref: "#/components/responses/Problem"
           description: category_id does not exist, or the caller cannot read it.
 
-  /discover/search:
-    get:
-      operationId: discoverSearch
+    post:
+      operationId: addWork
       tags: [library]
       summary: >-
-        Search one category's own metadata provider for something not in the
-        library yet (ADR-56's per-library half). The global, cross-media-type
-        half with its destination-suggestion ladder is not built.
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-        - name: q
-          in: query
-          required: true
-          description: At least 2 characters (section 21.5's own floor).
-          schema: { type: string }
-        - name: kind
-          in: query
-          description: >-
-            What to search for. Defaults to album, which is what this endpoint
-            searched before artists became searchable.
-          schema:
-            allOf: [{ $ref: "#/components/schemas/DiscoverKind" }]
-            default: album
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        Add a looked-up candidate to a library as intent, never a download (ADR-56): an album or a series becomes
+        wanted with the chosen monitoring, an artist is followed. Manage on the library.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddWorkRequest" }
       responses:
         "200":
-          description: Up to limit candidates, ranked by the provider.
+          description: What was stored.
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/DiscoverResult" }
+              schema: { $ref: "#/components/schemas/AddWorkResult" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
-        "404":
-          $ref: "#/components/responses/Problem"
-          description: category_id does not exist, or the caller cannot read it.
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
 
   /discover/incomplete:
     get:
@@ -2037,32 +2017,6 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
-
-  /discover/add:
-    post:
-      operationId: discoverAdd
-      tags: [library]
-      summary: >-
-        Add a search result as intent: resolves or creates the work and
-        ensures a monitored album-level desired_item for it -- never a
-        download (ADR-56). Administrator or a manage grant on category_id.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/DiscoverAddRequest" }
-      responses:
-        "200":
-          description: The work and desired_item, and the priority the item will get.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/DiscoverAddResult" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404":
-          $ref: "#/components/responses/Problem"
-          description: category_id does not exist, or the caller cannot read it.
 
   /arr/instances:
     get:
@@ -2739,6 +2693,43 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /works/lookup:
+    get:
+      operationId: lookupWorks
+      tags: [library]
+      summary: >-
+        Search one library's media type's sources for something to add (ADR-56's per-library half): albums or
+        artists for music, series for TV. Each result is marked when the library already holds it.
+      parameters:
+        - name: category_id
+          in: query
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: q
+          in: query
+          required: true
+          description: At least 2 characters (section 21.5's floor).
+          schema: { type: string }
+        - name: kind
+          in: query
+          description: One of the type's add_kinds; the first when absent.
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Candidates, best first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AddCandidate" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
 
   /works/exclusions:
     get:
@@ -5172,57 +5163,6 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
-    post:
-      operationId: addSeries
-      tags: [series]
-      summary: Add a series to a library (Sonarr's add dialog).
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/AddSeriesRequest" }
-      responses:
-        "200":
-          description: What was stored. Adding a series the library already holds refreshes it.
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/AddSeriesResult" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "502": { $ref: "#/components/responses/Problem" }
-
-  /series/lookup:
-    get:
-      operationId: lookupSeries
-      tags: [series]
-      summary: Search the metadata sources for a series to add.
-      parameters:
-        - name: category_id
-          in: query
-          required: true
-          schema: { type: integer, format: int64 }
-        - name: q
-          in: query
-          required: true
-          schema: { type: string }
-        - name: limit
-          in: query
-          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
-      responses:
-        "200":
-          description: Candidates, best first, each marked when the library already holds it.
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/SeriesCandidate" }
-        "400": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "502": { $ref: "#/components/responses/Problem" }
-
   /series/{id}:
     parameters:
       - name: category_id
@@ -7109,7 +7049,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -7148,6 +7088,15 @@ components:
               key: { type: string }
               label: { type: string }
         work_image: { type: string, enum: [cover, poster], description: "The shape of a work's picture: an album's square cover, a series' tall poster." }
+        add_kinds:
+          type: array
+          description: What GET /works/lookup and POST /works add for the type, the first being the default.
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
         wanted_grain: { type: string, enum: [work, part], description: "What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts)." }
 
     MediaType:
@@ -7797,79 +7746,6 @@ components:
           type: string
           description: Where in the interface to fix it, when there is one place.
 
-    DiscoverKind:
-      type: string
-      description: >-
-        What a discover result is. An album is added as a monitored desired
-        item; an artist is added as a monitored person with a subscription,
-        whose albums arrive when the subscription expands.
-      enum: [album, artist]
-
-    DiscoverResult:
-      type: object
-      description: One candidate a search found (ADR-56) -- not yet in the library.
-      required: [provider, external_id, title]
-      properties:
-        kind:
-          allOf: [{ $ref: "#/components/schemas/DiscoverKind" }]
-          description: Absent means album, which is what search returned before artists were searchable.
-        disambiguation:
-          type: string
-          description: MusicBrainz's own short note telling two same-named artists apart.
-        provider: { type: string, example: "musicbrainz:release-group" }
-        external_id: { type: string }
-        title: { type: string }
-        artist: { type: string }
-        year: { type: integer, format: int64 }
-        library_id:
-          type: integer
-          format: int64
-          description: >-
-            Already in the library: the work (an album) or the person (an artist) it is. Absent
-            when it is new.
-
-    DiscoverAddRequest:
-      type: object
-      required: [category_id, provider, external_id]
-      properties:
-        category_id: { type: integer, format: int64 }
-        provider: { type: string }
-        external_id: { type: string }
-        monitored: { type: boolean, default: true }
-        search:
-          type: boolean
-          default: false
-          description: >-
-            Lidarr's "Start search for missing albums": an album is searched at once, an artist's
-            albums are added now and then searched. Ignored when monitored is false.
-
-    DiscoverAddResult:
-      type: object
-      description: >-
-        What an add produced. kind says which ids are populated: an album
-        carries work_id and desired_item_id, an artist person_id and
-        subscription_id.
-      required: [kind, priority]
-      properties:
-        kind: { $ref: "#/components/schemas/DiscoverKind" }
-        work_id: { type: integer, format: int64 }
-        desired_item_id: { type: integer, format: int64 }
-        person_id:
-          type: integer
-          format: int64
-          description: The monitored person, for an artist add.
-        subscription_id:
-          type: integer
-          format: int64
-          description: The subscription whose expansion brings the discography in.
-        priority:
-          type: integer
-          format: int64
-          description: >-
-            ADR-36's composite score, computed against the user_request
-            trigger. There is no populated hunt_queue yet (stage 5/6), so this
-            is the score alone, not a position within it.
-
     ArrApp:
       type: string
       enum: [lidarr, sonarr, radarr, readarr, whisparr, prowlarr]
@@ -8387,6 +8263,44 @@ components:
           description: Cast and crew of the whole series, and guest stars and episode crew by episode.
           items: { $ref: "#/components/schemas/SeriesCredit" }
 
+    AddCandidate:
+      type: object
+      required: [kind, provider, external_id, title]
+      properties:
+        kind: { type: string, description: One of the type's add_kinds. }
+        provider: { type: string }
+        external_id: { type: string }
+        title: { type: string }
+        subtitle: { type: string, description: "Tells candidates apart: an album's artist, an artist's disambiguation, a series' network." }
+        overview: { type: string }
+        poster_url: { type: string }
+        status: { type: string }
+        year: { type: integer, format: int64 }
+        library_id: { type: integer, format: int64, description: The work or person the library already holds for it. }
+
+    AddWorkRequest:
+      type: object
+      required: [category_id, provider, external_id]
+      properties:
+        category_id: { type: integer, format: int64 }
+        kind: { type: string, description: One of the type's add_kinds; the first when absent. }
+        provider: { type: string }
+        external_id: { type: string }
+        monitored: { type: boolean, default: true }
+        monitor_option: { type: string, description: One of the type's monitor_options; its default when absent. }
+        specials: { type: boolean, default: false, description: Also monitor the specials group. }
+        quality_profile_id: { type: integer, format: int64, description: The library's default when absent. }
+        search: { type: boolean, default: false, description: Start looking for what was added. }
+
+    AddWorkResult:
+      type: object
+      required: [kind, searching]
+      properties:
+        kind: { type: string }
+        work_id: { type: integer, format: int64 }
+        person_id: { type: integer, format: int64, description: The followed person, for an artist. }
+        searching: { type: boolean, description: "The type started the search; false leaves POST /works/{id}/grab to the caller." }
+
     WantedPart:
       type: object
       required: [part_id, work_id, work_title, group_ref, group_label, number]
@@ -8444,34 +8358,6 @@ components:
         character: { type: string }
         order: { type: integer }
         episode_id: { type: integer, format: int64, description: The part id of an episode-scoped credit; absent for the whole series. }
-
-    SeriesCandidate:
-      type: object
-      required: [provider, external_id, title]
-      properties:
-        provider: { type: string, example: "tvdb" }
-        external_id: { type: string }
-        title: { type: string }
-        year: { type: integer, format: int64 }
-        network: { type: string }
-        status: { type: string, enum: [continuing, ended, upcoming] }
-        overview: { type: string }
-        poster_url: { type: string }
-        library_id: { type: integer, format: int64, description: The series when the library already holds it. }
-
-    AddSeriesRequest:
-      type: object
-      required: [category_id, external_id]
-      properties:
-        category_id: { type: integer, format: int64 }
-        provider: { type: string, enum: [tvdb, tmdb], default: tvdb }
-        external_id: { type: string }
-        monitor:
-          type: string
-          enum: [all, future, missing, existing, recent, pilot, first_season, last_season, none]
-          default: all
-        monitor_specials: { type: boolean, default: false }
-        quality_profile_id: { type: integer, format: int64, description: The library's default when absent. }
 
     AddSeriesResult:
       type: object

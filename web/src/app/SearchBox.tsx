@@ -7,16 +7,15 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { isSearchShortcut } from "@/lib/searchShortcut";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { CoverArt } from "./CoverArt";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 type SearchResult = components["schemas"]["SearchResult"];
-type DiscoverResult = components["schemas"]["DiscoverResult"];
+type AddCandidate = components["schemas"]["AddCandidate"];
 type Library = components["schemas"]["Library"];
 
-// Media types Discover can search a provider for; music only until TV (stage 8).
-const DISCOVERABLE = new Set(["music"]);
 const NEW_PER_KIND = 5;
 
 // Mirrors library.ErrQueryTooShort's floor (section 21.5), so a one-character keystroke
@@ -83,23 +82,24 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
       return data;
     },
   });
+  const mediaTypes = useMediaTypes();
+  const kindsOf = (library: Library) => mediaTypes.find((info) => info.key === library.media_type)?.add_kinds ?? [];
   const addable = (libraries.data ?? []).filter(
-    (library: Library) =>
-      DISCOVERABLE.has(library.media_type) && (library.permission === "request" || library.permission === "manage"),
+    (library: Library) => kindsOf(library).length > 0 && (library.permission === "request" || library.permission === "manage"),
   );
   const [chosenLibrary, setChosenLibrary] = useState<number | undefined>();
   const destination = addable.find((library) => library.id === chosenLibrary) ?? addable[0];
   const discovered = useQuery({
     queryKey: ["search-new", destination?.id, debounced],
     queryFn: async () => {
-      const found: DiscoverResult[] = [];
-      for (const kind of ["artist", "album"] as const) {
-        const { data, error } = await api.GET("/discover/search", {
-          params: { query: { category_id: destination!.id, q: debounced, kind, limit: NEW_PER_KIND } },
+      const found: AddCandidate[] = [];
+      for (const kind of kindsOf(destination!)) {
+        const { data, error } = await api.GET("/works/lookup", {
+          params: { query: { category_id: destination!.id, q: debounced, kind: kind.key, limit: NEW_PER_KIND } },
         });
         if (error) throw error;
         // What the library already has is listed above it, not offered again (found 2026-09-30).
-        found.push(...data.filter((result) => result.library_id == null).map((result) => ({ ...result, kind })));
+        found.push(...data.filter((result) => result.library_id == null));
       }
       return found;
     },
@@ -202,7 +202,13 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
           {destination && discovered.data?.length === 0 && <li className="px-3 py-2 text-ink-muted">Nothing new found.</li>}
           {destination &&
             discovered.data?.map((result) => (
-              <NewResultRow key={`${result.kind}-${result.external_id}`} result={result} libraryId={destination.id} query={debounced} />
+              <NewResultRow
+                key={`${result.kind}-${result.external_id}`}
+                result={result}
+                kindLabel={kindsOf(destination).find((kind) => kind.key === result.kind)?.label ?? result.kind}
+                libraryId={destination.id}
+                query={debounced}
+              />
             ))}
         </ul>
       )}
@@ -232,14 +238,13 @@ function ResultRow({ result }: { result: SearchResult }) {
 }
 
 /** Something to add: opens the library's Discover with the search filled in, where the add options live. */
-function NewResultRow({ result, libraryId, query }: { result: DiscoverResult; libraryId: number; query: string }) {
-  const artist = result.kind === "artist";
+function NewResultRow({ result, kindLabel, libraryId, query }: { result: AddCandidate; kindLabel: string; libraryId: number; query: string }) {
   return (
     <li className="border-b border-border-subtle last:border-b-0">
       <Link
         to="/library/$categoryId/discover"
         params={{ categoryId: String(libraryId) }}
-        search={{ q: query, kind: result.kind ?? "album" }}
+        search={{ q: query, kind: result.kind }}
         className="flex items-center gap-2 px-3 py-1.5 hover:bg-canvas
                    focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
       >
@@ -247,10 +252,8 @@ function NewResultRow({ result, libraryId, query }: { result: DiscoverResult; li
           <Plus aria-hidden className="size-3.5" />
         </span>
         <span className="truncate font-medium">{result.title}</span>
-        <span className="truncate text-ink-muted">
-          {artist ? (result.disambiguation ?? "") : [result.artist, result.year].filter(Boolean).join(" · ")}
-        </span>
-        <span className="ml-auto shrink-0 text-xs text-ink-muted">{artist ? "Artist" : "Album"} · Add</span>
+        <span className="truncate text-ink-muted">{[result.subtitle, result.year].filter(Boolean).join(" · ")}</span>
+        <span className="ml-auto shrink-0 text-xs text-ink-muted">{kindLabel} · Add</span>
       </Link>
     </li>
   );

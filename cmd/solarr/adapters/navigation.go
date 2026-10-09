@@ -109,6 +109,21 @@ func (m MediaTypes) ScanHonoursExclusions(mediaType string) bool {
 	return false
 }
 
+// AddingOf answers a media type's lookup and add.
+func (m MediaTypes) AddingOf(mediaType string) (media.Adding, bool) {
+	return media.Capability[media.Adding](m.Registry, media.Key(mediaType))
+}
+
+// AddKinds answers what a media type adds, the first being its default.
+func (m MediaTypes) AddKinds(mediaType string) []media.Choice {
+	for _, descriptor := range m.Registry.Descriptors() {
+		if string(descriptor.Key) == mediaType {
+			return descriptor.AddKinds
+		}
+	}
+	return nil
+}
+
 // RefreshingOf answers a media type's refresh of one work.
 func (m MediaTypes) RefreshingOf(mediaType string) (media.Refreshing, bool) {
 	return media.Capability[media.Refreshing](m.Registry, media.Key(mediaType))
@@ -160,6 +175,9 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		}
 		for _, option := range descriptor.MonitorOptions {
 			info.MonitorOptions = append(info.MonitorOptions, apiserver.MediaChoice{Key: option.Key, Label: option.Label})
+		}
+		for _, kind := range descriptor.AddKinds {
+			info.AddKinds = append(info.AddKinds, apiserver.MediaChoice{Key: kind.Key, Label: kind.Label})
 		}
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {

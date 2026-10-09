@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/paginate"
@@ -124,77 +125,72 @@ func episodeView(episode library.SeriesEpisode, now time.Time) gen.SeriesEpisode
 	return view
 }
 
-// Lookup searches the sources and marks what the library already holds.
-func (c SeriesCatalog) Lookup(ctx context.Context, _ int64, query string, limit int) ([]gen.SeriesCandidate, error) {
-	found, err := c.Service.Search(ctx, query, limit)
+// LookupWorks implements media.Adding for TV: the sources' series, each marked when the library already holds it.
+func (c SeriesCatalog) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
+	if len([]rune(lookup.Query)) < 2 {
+		return nil, apiserver.ErrQueryTooShort
+	}
+	found, err := c.Service.Search(ctx, lookup.Query, lookup.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
 	}
-	views := make([]gen.SeriesCandidate, len(found))
-	for i, candidate := range found {
-		view := gen.SeriesCandidate{Provider: tv.ProviderTVDB, ExternalId: strconv.FormatInt(candidate.TVDBID, 10), Title: candidate.Title}
-		if candidate.TVDBID == 0 {
-			view.Provider, view.ExternalId = tv.ProviderTMDB, strconv.FormatInt(candidate.TMDBID, 10)
+	candidates := make([]media.AddCandidate, len(found))
+	for i, series := range found {
+		candidate := media.AddCandidate{
+			Kind: "series", Provider: tv.ProviderTVDB, ExternalID: strconv.FormatInt(series.TVDBID, 10), Title: series.Title,
+			Subtitle: series.Network, Overview: series.Overview, PosterURL: series.Poster, Status: string(series.Status), Year: int64(series.Year),
 		}
-		if candidate.Year > 0 {
-			year := int64(candidate.Year)
-			view.Year = &year
+		if series.TVDBID == 0 {
+			candidate.Provider, candidate.ExternalID = tv.ProviderTMDB, strconv.FormatInt(series.TMDBID, 10)
 		}
-		setString(&view.Network, candidate.Network)
-		setString(&view.Overview, candidate.Overview)
-		setString(&view.PosterUrl, candidate.Poster)
-		if candidate.Status != "" {
-			status := gen.SeriesCandidateStatus(candidate.Status)
-			view.Status = &status
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, candidate.Provider, candidate.ExternalID); err == nil && held {
+			candidate.LibraryID = id
 		}
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, view.Provider, view.ExternalId); err == nil && held {
-			view.LibraryId = &id
-		}
-		views[i] = view
+		candidates[i] = candidate
 	}
-	return views, nil
+	return candidates, nil
 }
 
-// Add stores a series in a library with the chosen monitoring.
-func (c SeriesCatalog) Add(ctx context.Context, userID int64, request gen.AddSeriesRequest) (gen.AddSeriesResult, error) {
-	category, ok := c.Categories.Category(request.CategoryId)
+// AddWork implements media.Adding for TV: the series with the chosen monitoring, Sonarr's add dialog. It starts no
+// search; the caller searches the series when asked to.
+func (c SeriesCatalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	category, ok := c.Categories.Category(request.CategoryID)
 	if !ok {
-		return gen.AddSeriesResult{}, apiserver.ErrSeriesNotFound
+		return media.AddResult{}, apiserver.ErrSeriesNotFound
 	}
-	provider := tv.ProviderTVDB
-	if request.Provider != nil {
-		provider = string(*request.Provider)
-	}
-	id, valid := tv.ParseID(request.ExternalId)
-	if (provider != tv.ProviderTVDB && provider != tv.ProviderTMDB) || !valid {
-		return gen.AddSeriesResult{}, fmt.Errorf("%w: only a numeric tvdb or tmdb id can be added", apiserver.ErrDiscoverUnsupportedMediaType)
+	id, valid := tv.ParseID(request.ExternalID)
+	if (request.Provider != tv.ProviderTVDB && request.Provider != tv.ProviderTMDB) || !valid {
+		return media.AddResult{}, fmt.Errorf("%w: only a numeric tvdb or tmdb id can be added", apiserver.ErrDiscoverUnsupportedMediaType)
 	}
 	ids := tv.IDs{TVDB: id}
-	if provider == tv.ProviderTMDB {
+	if request.Provider == tv.ProviderTMDB {
 		ids = tv.IDs{TMDB: id}
 	}
 	monitor := tv.MonitorAll
-	if request.Monitor != nil {
-		monitor = tv.MonitorOption(*request.Monitor)
+	if request.Option != "" {
+		monitor = tv.MonitorOption(request.Option)
+	}
+	if !request.Monitored {
+		monitor = tv.MonitorNone
 	}
 	profile := c.Categories.ProfileFor(category, c.DefaultProfileID)
-	if request.QualityProfileId != nil {
-		profile = *request.QualityProfileId
+	if request.ProfileID != nil {
+		profile = *request.ProfileID
 	}
-	if err := (WorkExclusions{Exclusions: c.Service.Exclusions}).Allow(ctx, tv.MediaType, provider, request.ExternalId); err != nil {
-		return gen.AddSeriesResult{}, err
+	if err := (WorkExclusions{Exclusions: c.Service.Exclusions}).Allow(ctx, tv.MediaType, request.Provider, request.ExternalID); err != nil {
+		return media.AddResult{}, err
 	}
+	userID := request.UserID
 	result, err := c.Service.Add(ctx, tv.AddRequest{
-		IDs: ids, CategoryID: request.CategoryId, ProfileID: profile, Monitor: monitor,
-		Specials: request.MonitorSpecials != nil && *request.MonitorSpecials, AddedBy: &userID,
+		IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, Specials: request.Specials, AddedBy: &userID,
 	})
-	if err != nil {
-		if errors.Is(err, tv.ErrNoSource) {
-			return gen.AddSeriesResult{}, fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
-		}
-		return gen.AddSeriesResult{}, err
+	if errors.Is(err, tv.ErrNoSource) {
+		return media.AddResult{}, fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
 	}
-	return gen.AddSeriesResult{SeriesId: result.WorkID, Created: result.Created, Episodes: result.Episodes, Seasons: result.Seasons}, nil
+	if err != nil {
+		return media.AddResult{}, err
+	}
+	return media.AddResult{Kind: "series", WorkID: result.WorkID}, nil
 }
 
 // Refresh re-reads one series from the sources; monitoring and season items stay as they are.
