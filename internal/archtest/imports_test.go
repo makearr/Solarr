@@ -27,7 +27,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
-		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings",
+		"internal/api/webui", "internal/db/library", "internal/db/recovery", "internal/db/settings", "internal/db/statistics",
 		"internal/db/store", "internal/identify/priority", "internal/identify/score", "internal/importing/unpack", "internal/importing/arrimport",
 		"internal/importing/downloadwatch", "internal/importing/importjob", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/importing/batch", "internal/media/music", "internal/media/tv", "internal/identify/quality", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/tvdb", "internal/metadata/anilist", "internal/metadata/metacache",
@@ -40,7 +40,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
 	"cmd/solarr/adapters": {
-		"internal/platform/parallel", "internal/service/follow", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
+		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
 		"internal/media", "internal/scanning/scan", "internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
@@ -301,6 +301,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/db/store/gen/settingsdb":   {},
 	"internal/db/store/gen/jobsdb":       {},
 	"internal/db/store/gen/statisticsdb": {},
+	"internal/db/statistics":             {"internal/db/store", "internal/db/store/gen/statisticsdb"},
 	"internal/db/store/gen/librarydb":    {},
 	"internal/db/store/gen/metadatadb":   {},
 	// cache/metadata.db (ADR-2, ADR-29): deliberately generic, so every metadata

@@ -10,18 +10,19 @@ Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `s
 | `jobs.db` | The work queue and the append-only event log | Churns; retention-bounded |
 | `statistics.db` | What was seen and done: download history, and (moving there) candidates, decisions and rollups | Append-mostly; **`library.db` is correct with it empty**: nothing that decides what to download, import, replace or delete reads it |
 
-`statistics.db` is being filled in steps (revision 2, D7): the file and its `history` table exist; until the
-writers move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
+`statistics.db` is being filled in steps (revision 2, D7): download history lives there; until the
+decisions move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
 aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the
 aged record. `event_log` sits in `jobs.db`, whose profile it shares: high churn,
 retention-bounded, and not authoritative for library correctness. Under ADR-3's one writer per
 file, putting the event log in `library.db` would queue every append against a library commit,
 and an event is lossy notification data (ADR-9) that must never block one.
 
-Download history is `event_log` rows of kind `download.grabbed`, `download.imported`,
-`download.failed` and `download.removed` (taken out of the queue by a person), subject `work`, with `download.HistoryData` as the payload: album, artist,
-release, indexer and client as they were at the time. Activity → History and an album's page
-read them; the library each belongs to is in the payload, and the API filters on it.
+Download history is `statistics.db`'s `history` table: one row per grab, import, failure and removal (taken out of
+the queue by a person), with the library, work, acquisition, release, indexer and client, and the work's title and
+lead as they were then, so a row outlives its work. Activity → History and a work's History tab read it, newest
+first by id; the API filters on the library. It used to be `event_log` rows in `jobs.db`, which is pruned; the first
+start after the move copies them over once (`event_id` remembers each, so an interrupted copy resumes).
 Activity → Queue is not stored: `GET /queue` joins the in-flight `acquisition` rows to each
 download client's live answer on every request, as Lidarr's queue does.
 

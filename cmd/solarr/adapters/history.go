@@ -2,47 +2,33 @@ package adapters
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"time"
 
-	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/api/apiserver"
-	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/db/statistics"
 )
 
-// History satisfies apiserver.History over the durable event log in jobs.db.
+// History satisfies apiserver.History over the download history in statistics.db.
 type History struct {
-	Log jobs.History
+	History statistics.History
 }
 
 func (a History) List(ctx context.Context, workID, beforeID int64, limit int) ([]apiserver.HistoryRow, error) {
-	kinds := make([]string, len(download.HistoryKinds))
-	for i, kind := range download.HistoryKinds {
-		kinds[i] = string(kind)
-	}
-	query := jobs.HistoryQuery{Kinds: kinds, BeforeID: beforeID, Limit: limit}
-	if workID != 0 {
-		query.SubjectType, query.SubjectID = "work", workID
-	}
-	events, err := a.Log.List(ctx, query)
+	entries, err := a.History.List(ctx, workID, beforeID, limit)
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]apiserver.HistoryRow, len(events))
-	for i, event := range events {
-		var data download.HistoryData
-		// An unreadable payload still says what happened and when.
-		_ = json.Unmarshal([]byte(event.Data), &data)
+	rows := make([]apiserver.HistoryRow, len(entries))
+	for i, entry := range entries {
 		row := apiserver.HistoryRow{
-			ID: event.ID, At: time.Unix(event.At, 0).UTC(),
-			Kind:       strings.TrimPrefix(event.Kind, "download."),
-			CategoryID: data.CategoryID, Album: data.Album, Artist: data.Artist, ReleaseTitle: data.ReleaseTitle,
-			Indexer: data.Indexer, Client: data.Client, Detail: data.Detail,
+			ID: entry.ID, At: time.Unix(entry.At, 0).UTC(), Kind: strings.TrimPrefix(entry.Kind, "download."),
+			CategoryID: entry.CategoryID, Album: entry.WorkTitle, Artist: entry.LeadName, ReleaseTitle: entry.ReleaseTitle,
+			Indexer: entry.Indexer, Client: entry.Client, Detail: entry.Detail,
 		}
-		if event.SubjectType == "work" {
-			subjectID := event.SubjectID
-			row.WorkID = &subjectID
+		if entry.WorkID != 0 {
+			workID := entry.WorkID
+			row.WorkID = &workID
 		}
 		rows[i] = row
 	}

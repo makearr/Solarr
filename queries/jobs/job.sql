@@ -181,6 +181,14 @@ WHERE kind IN (SELECT value FROM json_each(CAST(sqlc.arg(kinds) AS TEXT)))
 ORDER BY id DESC
 LIMIT sqlc.arg(page_size);
 
+-- Events of some kinds after an id, oldest first: what a resumable copy reads next.
+-- name: ListEventsOfKindsAfter :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE kind IN (SELECT value FROM json_each(CAST(sqlc.arg(kinds) AS TEXT))) AND id > sqlc.arg(after_id)
+ORDER BY id
+LIMIT sqlc.arg(page_size);
+
 -- Pruning is bounded per pass and resumable, so retention never becomes one enormous
 -- transaction (Invariant 2).
 -- name: PruneEventsBefore :execrows

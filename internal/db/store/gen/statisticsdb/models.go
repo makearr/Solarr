@@ -17,4 +17,5 @@ type History struct {
 	Indexer       string
 	Client        string
 	Detail        string
+	EventID       int64
 }

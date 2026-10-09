@@ -102,6 +102,28 @@ func (h History) List(ctx context.Context, query HistoryQuery) ([]StoredEvent, e
 	return events, nil
 }
 
+// ListAfter reads events of some kinds after afterID, oldest first: what a resumable copy reads next.
+func (h History) ListAfter(ctx context.Context, kinds []string, afterID int64, limit int) ([]StoredEvent, error) {
+	encoded, err := json.Marshal(kinds)
+	if err != nil {
+		return nil, fmt.Errorf("jobs: list history after: %w", err)
+	}
+	rows, err := jobsdb.New(h.store.Read()).ListEventsOfKindsAfter(ctx, jobsdb.ListEventsOfKindsAfterParams{
+		Kinds: string(encoded), AfterID: afterID, PageSize: int64(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("jobs: list history after: %w", err)
+	}
+	events := make([]StoredEvent, len(rows))
+	for i, row := range rows {
+		events[i] = StoredEvent{
+			ID: row.ID, At: row.At, Kind: row.Kind, SubjectType: row.SubjectType.String,
+			SubjectID: row.SubjectID.Int64, Data: row.DataJson,
+		}
+	}
+	return events, nil
+}
+
 // FailUnfinished fails every job that has not reached a terminal state, in batches.
 // It is a recovery operation: it runs before workers start, so nothing it fails is
 // running (ADR-15).

@@ -38,6 +38,8 @@ type Querier interface {
 	// History and an album's page: several kinds, optionally one subject. json_each keeps the kind
 	// list one parameter.
 	ListEventsOfKinds(ctx context.Context, arg ListEventsOfKindsParams) ([]EventLog, error)
+	// Events of some kinds after an id, oldest first: what a resumable copy reads next.
+	ListEventsOfKindsAfter(ctx context.Context, arg ListEventsOfKindsAfterParams) ([]EventLog, error)
 	// Cursor pagination, never OFFSET (Invariant 32). The id tie-break is not optional:
 	// updated_at is not unique. A zero cursor is the start, hence the guarded comparison.
 	ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]Job, error)

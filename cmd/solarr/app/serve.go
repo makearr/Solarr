@@ -23,6 +23,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/recovery"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
@@ -300,6 +301,10 @@ func (p *process) openDatabases(ctx context.Context) error {
 	}
 	if err := store.Migrate(ctx, metadataStore, backupDir, metadataOwner); err != nil {
 		return err
+	}
+	// The next start resumes a copy that stopped; History shows what was copied meanwhile.
+	if err := p.copyDownloadHistory(ctx); err != nil {
+		p.logger.Warn("download history not moved to statistics.db yet", slog.Any("error", err))
 	}
 
 	return p.reconcileRestore(ctx, wall, restored)
@@ -665,7 +670,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library)},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
-		History:      adapters.History{Log: jobs.NewHistory(p.jobs, clock.NewSystem())},
+		History:      adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
 			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library), Candidates: library.NewCandidates(p.library),
 			Describe: p.describeAcquisition, Clock: clock.NewSystem(),

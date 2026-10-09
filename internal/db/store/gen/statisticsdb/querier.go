@@ -10,6 +10,11 @@ import (
 
 type Querier interface {
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)
+	// An event already copied is left as it is.
+	CopyHistoryEvent(ctx context.Context, arg CopyHistoryEventParams) error
+	LastCopiedHistoryEvent(ctx context.Context) (int64, error)
+	// One page of history, newest first, of one work or of every one with work_id 0.
+	ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error)
 }
 
 var _ Querier = (*Queries)(nil)

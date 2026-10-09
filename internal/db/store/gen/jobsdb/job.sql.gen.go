@@ -644,6 +644,53 @@ func (q *Queries) ListEventsOfKinds(ctx context.Context, arg ListEventsOfKindsPa
 	return items, nil
 }
 
+const listEventsOfKindsAfter = `-- name: ListEventsOfKindsAfter :many
+SELECT id, at, kind, subject_type, subject_id, user_id, correlation_id, data_json
+FROM event_log
+WHERE kind IN (SELECT value FROM json_each(CAST(?1 AS TEXT))) AND id > ?2
+ORDER BY id
+LIMIT ?3
+`
+
+type ListEventsOfKindsAfterParams struct {
+	Kinds    string
+	AfterID  int64
+	PageSize int64
+}
+
+// Events of some kinds after an id, oldest first: what a resumable copy reads next.
+func (q *Queries) ListEventsOfKindsAfter(ctx context.Context, arg ListEventsOfKindsAfterParams) ([]EventLog, error) {
+	rows, err := q.db.QueryContext(ctx, listEventsOfKindsAfter, arg.Kinds, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventLog{}
+	for rows.Next() {
+		var i EventLog
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.Kind,
+			&i.SubjectType,
+			&i.SubjectID,
+			&i.UserID,
+			&i.CorrelationID,
+			&i.DataJson,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobsPage = `-- name: ListJobsPage :many
 
 SELECT id, type, pool, action_key, priority, payload_json, state, mutating,

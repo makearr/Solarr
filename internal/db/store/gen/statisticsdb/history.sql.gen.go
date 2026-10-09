@@ -10,8 +10,8 @@ import (
 )
 
 const appendHistory = `-- name: AppendHistory :one
-INSERT INTO history (at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO history (at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -27,6 +27,7 @@ type AppendHistoryParams struct {
 	Indexer       string
 	Client        string
 	Detail        string
+	EventID       int64
 }
 
 func (q *Queries) AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error) {
@@ -42,8 +43,112 @@ func (q *Queries) AppendHistory(ctx context.Context, arg AppendHistoryParams) (i
 		arg.Indexer,
 		arg.Client,
 		arg.Detail,
+		arg.EventID,
 	)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const copyHistoryEvent = `-- name: CopyHistoryEvent :exec
+INSERT OR IGNORE INTO history (at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type CopyHistoryEventParams struct {
+	At            int64
+	Kind          string
+	CategoryID    int64
+	WorkID        int64
+	AcquisitionID int64
+	ReleaseTitle  string
+	WorkTitle     string
+	LeadName      string
+	Indexer       string
+	Client        string
+	Detail        string
+	EventID       int64
+}
+
+// An event already copied is left as it is.
+func (q *Queries) CopyHistoryEvent(ctx context.Context, arg CopyHistoryEventParams) error {
+	_, err := q.db.ExecContext(ctx, copyHistoryEvent,
+		arg.At,
+		arg.Kind,
+		arg.CategoryID,
+		arg.WorkID,
+		arg.AcquisitionID,
+		arg.ReleaseTitle,
+		arg.WorkTitle,
+		arg.LeadName,
+		arg.Indexer,
+		arg.Client,
+		arg.Detail,
+		arg.EventID,
+	)
+	return err
+}
+
+const lastCopiedHistoryEvent = `-- name: LastCopiedHistoryEvent :one
+SELECT CAST(COALESCE(MAX(event_id), 0) AS INTEGER) AS event_id FROM history
+`
+
+func (q *Queries) LastCopiedHistoryEvent(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, lastCopiedHistoryEvent)
+	var event_id int64
+	err := row.Scan(&event_id)
+	return event_id, err
+}
+
+const listHistory = `-- name: ListHistory :many
+SELECT id, at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id
+FROM history
+WHERE (CAST(?1 AS INTEGER) = 0 OR work_id = ?1)
+  AND (CAST(?2 AS INTEGER) = 0 OR id < ?2)
+ORDER BY id DESC
+LIMIT ?3
+`
+
+type ListHistoryParams struct {
+	WorkID   int64
+	BeforeID int64
+	PageSize int64
+}
+
+// One page of history, newest first, of one work or of every one with work_id 0.
+func (q *Queries) ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error) {
+	rows, err := q.db.QueryContext(ctx, listHistory, arg.WorkID, arg.BeforeID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []History{}
+	for rows.Next() {
+		var i History
+		if err := rows.Scan(
+			&i.ID,
+			&i.At,
+			&i.Kind,
+			&i.CategoryID,
+			&i.WorkID,
+			&i.AcquisitionID,
+			&i.ReleaseTitle,
+			&i.WorkTitle,
+			&i.LeadName,
+			&i.Indexer,
+			&i.Client,
+			&i.Detail,
+			&i.EventID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
