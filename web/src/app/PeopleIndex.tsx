@@ -140,7 +140,8 @@ export function PeopleIndex() {
     categoryId
       ? { to: "/library/$categoryId/people/$personId" as const, params: { categoryId, personId: String(person.id) } }
       : { to: "/people/$id" as const, params: { id: String(person.id) } };
-  const what = (person: Person) => person.character ?? person.roles.map(label).join(", ");
+  // What someone does across the list's works; a character name says nothing outside the one work it belongs to.
+  const what = (person: Person) => person.roles.map(label).join(", ") || person.character || "";
   const count = (person: Person) => `${person.works} ${person.works === 1 ? workOne : works}`;
   const setFilter = (key: string, value: string) => view.setQuery({ ...view.query, filters: { ...view.query.filters, [key]: value } });
   const monitored = view.query.filters.monitored ?? "";

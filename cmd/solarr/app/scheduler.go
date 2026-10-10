@@ -40,7 +40,7 @@ const (
 	cutoffScheduleCron             = "40 2 * * *"    // daily at 02:40, after the probe measured the night's files
 	rssScheduleCron                = "*/15 * * * *"  // every 15 minutes, as Lidarr's RSS Sync
 	huntScheduleCron               = "*/15 * * * *"  // every 15 minutes, within the hourly budget
-	bridgeScheduleCron             = "50 3 * * *"    // daily at 03:50; 60 people a run, after the night's refreshes
+	bridgeScheduleCron             = "50 3 * * *"    // daily at 03:50; 300 people a run, after the night's refreshes
 	tvRetryScheduleCron            = "30 4 * * *"    // daily at 04:30: providers learn new series and fix old data overnight
 )
 

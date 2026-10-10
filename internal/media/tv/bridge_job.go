@@ -23,8 +23,8 @@ var BridgeDefinition = jobs.Definition{
 	Type: BridgeJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 3,
 }
 
-// bridgePerRun bounds one sweep to what TMDB's shared bucket can take beside the other metadata work.
-const bridgePerRun = 60
+// bridgePerRun bounds one sweep; the shared TMDB bucket paces it, so a larger batch takes longer, never bursts.
+const bridgePerRun = 300
 
 // BridgeSource is the TMDB client as the bridge needs it.
 type BridgeSource interface {
