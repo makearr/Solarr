@@ -60,9 +60,9 @@ export function About() {
             )}
 
             {about.data && (
-              <dl className="mt-3 grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-xs">
+              <dl className="mt-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1.5 text-xs">
                 <dt className="text-ink-muted">Version</dt>
-                <dd className="font-mono">
+                <dd className="font-mono break-all">
                   {about.data.version}
                   {about.data.milestone && (
                     <span className="ml-2 text-ink-muted">"{about.data.milestone}"</span>
@@ -70,16 +70,16 @@ export function About() {
                 </dd>
 
                 <dt className="text-ink-muted">Commit</dt>
-                <dd className="font-mono">{about.data.commit}</dd>
+                <dd className="font-mono break-all">{about.data.commit}</dd>
 
                 <dt className="text-ink-muted">Built</dt>
-                <dd className="font-mono">{about.data.build_date}</dd>
+                <dd className="font-mono break-all">{about.data.build_date}</dd>
 
                 <dt className="text-ink-muted">SQLite driver</dt>
-                <dd className="font-mono">{about.data.sqlite_driver}</dd>
+                <dd className="font-mono break-all">{about.data.sqlite_driver}</dd>
 
                 <dt className="text-ink-muted">Server time</dt>
-                <dd className="font-mono">
+                <dd className="font-mono break-all">
                   {about.data.server_time}
                   {about.data.timezone && (
                     <span className="ml-1.5 text-ink-muted">{about.data.timezone}</span>
@@ -87,7 +87,7 @@ export function About() {
                 </dd>
 
                 <dt className="text-ink-muted">Licence</dt>
-                <dd className="font-mono">{about.data.license}</dd>
+                <dd className="font-mono break-all">{about.data.license}</dd>
 
                 <dt className="text-ink-muted">Corresponding source</dt>
                 <dd>
@@ -95,7 +95,7 @@ export function About() {
                     href={about.data.source_url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="font-mono text-accent hover:underline"
+                    className="font-mono break-all text-accent hover:underline"
                   >
                     {about.data.source_url}
                   </a>

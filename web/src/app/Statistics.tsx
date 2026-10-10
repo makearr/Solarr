@@ -46,13 +46,13 @@ function Breakdown({ title, note, rows }: { title: string; note: string; rows: F
           .sort((a, b) => b.bytes - a.bytes)
           .map((row) => (
             <li key={row.key} className="flex items-center gap-3 text-sm">
-              <span className="w-28 shrink-0 truncate uppercase" title={row.key}>
+              <span className="w-20 shrink-0 truncate uppercase sm:w-28" title={row.key}>
                 {row.key}
               </span>
-              <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+              <span className="relative h-3 min-w-8 flex-1 overflow-hidden rounded-full bg-canvas">
                 <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${total > 0 ? Math.max(1, Math.round((row.bytes / total) * 100)) : 0}%` }} />
               </span>
-              <span className="w-44 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+              <span className="shrink-0 text-right text-xs tabular-nums text-ink-muted sm:w-44">
                 {row.files} files · {formatBytes(row.bytes)}
               </span>
             </li>
@@ -76,14 +76,14 @@ function WorkList({ title, note, rows, categoryId, gaps }: { title: string; note
         {rows.map((row) => {
           const value = gaps ? (row.missing ?? 0) : (row.bytes ?? 0);
           return (
-            <li key={row.series_id} className="flex items-center gap-3 text-sm">
-              <Link to="/library/$categoryId/works/$workId" params={{ categoryId, workId: String(row.series_id) }} className="w-56 shrink-0 truncate hover:underline" title={row.title}>
+            <li key={row.series_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:flex-nowrap">
+              <Link to="/library/$categoryId/works/$workId" params={{ categoryId, workId: String(row.series_id) }} className="w-full shrink-0 truncate hover:underline sm:w-56" title={row.title}>
                 {row.title}
               </Link>
-              <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+              <span className="relative h-3 min-w-8 flex-1 overflow-hidden rounded-full bg-canvas">
                 <span className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${Math.max(1, Math.round((value / largest) * 100))}%` }} />
               </span>
-              <span className="w-52 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+              <span className="shrink-0 text-right text-xs tabular-nums text-ink-muted sm:w-52">
                 {gaps
                   ? `${row.missing ?? 0} missing${(row.unaired ?? 0) > 0 ? ` · ${row.unaired} to come` : ""}`
                   : `${row.files ?? 0} files · ${formatBytes(row.bytes ?? 0)}`}
@@ -217,13 +217,13 @@ export function Statistics() {
               {[...data.files_by_codec].sort((a, b) => b.bytes - a.bytes).map((row) => (
                 <li key={row.key} className="flex items-center gap-3 text-sm">
                   <span className="w-20 shrink-0 uppercase">{row.key}</span>
-                  <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+                  <span className="relative h-3 min-w-8 flex-1 overflow-hidden rounded-full bg-canvas">
                     <span
                       className="absolute inset-y-0 left-0 rounded-full bg-accent"
                       style={{ width: `${totalBytes > 0 ? Math.max(1, Math.round((row.bytes / totalBytes) * 100)) : 0}%` }}
                     />
                   </span>
-                  <span className="w-44 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+                  <span className="shrink-0 text-right text-xs tabular-nums text-ink-muted sm:w-44">
                     {row.files} files · {formatBytes(row.bytes)}
                   </span>
                 </li>
@@ -241,13 +241,13 @@ export function Statistics() {
               {growth.map((row) => (
                 <li key={row.key} className="flex items-center gap-3 text-sm">
                   <span className="w-20 shrink-0 tabular-nums">{row.key}</span>
-                  <span className="relative h-3 flex-1 overflow-hidden rounded-full bg-canvas">
+                  <span className="relative h-3 min-w-8 flex-1 overflow-hidden rounded-full bg-canvas">
                     <span
                       className="absolute inset-y-0 left-0 rounded-full bg-accent"
                       style={{ width: `${Math.max(1, Math.round((row.bytes / largestMonth) * 100))}%` }}
                     />
                   </span>
-                  <span className="w-44 shrink-0 text-right text-xs tabular-nums text-ink-muted">
+                  <span className="shrink-0 text-right text-xs tabular-nums text-ink-muted sm:w-44">
                     {row.files} files · {formatBytes(row.bytes)}
                   </span>
                 </li>

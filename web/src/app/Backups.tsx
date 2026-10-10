@@ -90,8 +90,8 @@ function BackupGroup({ group }: { group: { database: string; files: BackupFile[]
       </div>
       <ul className="flex flex-col gap-1">
         {shown.map((file) => (
-          <li key={file.name} className="flex items-center gap-3 rounded-md border border-border-subtle px-3 py-1.5 text-xs">
-            <span className="min-w-0 flex-1 truncate font-mono">{file.name}</span>
+          <li key={file.name} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-border-subtle px-3 py-1.5 text-xs sm:flex-nowrap">
+            <span className="w-full min-w-0 truncate font-mono sm:w-auto sm:flex-1">{file.name}</span>
             {file.pre_migration === true && <span className="shrink-0 text-ink-muted">before a migration</span>}
             <span className="shrink-0 text-ink-muted">{formatSize(file.size_bytes)}</span>
             <span className="shrink-0 text-ink-muted">{new Date(file.taken_at).toLocaleString()}</span>

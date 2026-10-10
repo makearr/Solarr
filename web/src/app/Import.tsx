@@ -105,7 +105,7 @@ export function Import() {
       </section>
 
       <h2 className="text-sm font-semibold">Imports</h2>
-      <div className="flex items-start gap-4">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start">
         <SessionList
           selectedId={selectedSessionId}
           onSelect={setSelectedSessionId}
@@ -811,7 +811,7 @@ function SessionList({
   });
 
   return (
-    <div className="sticky top-0 flex max-h-[75vh] w-96 shrink-0 flex-col gap-2 overflow-y-auto">
+    <div className="flex max-h-[75vh] w-full shrink-0 flex-col gap-2 overflow-y-auto md:sticky md:top-0 md:w-96">
       {sessions.isLoading && <Message>Loading sessions…</Message>}
       {sessions.error !== null && <Message>Sessions could not be read.</Message>}
       {sessions.data && sessions.data.length === 0 && (

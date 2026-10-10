@@ -71,7 +71,7 @@ export function StatusBar() {
   return (
     <footer className="relative shrink-0 border-t border-border-subtle bg-surface">
       {open && recent.length > 0 && (
-        <ul className="absolute bottom-full left-0 max-h-64 w-96 overflow-y-auto border border-b-0
+        <ul className="absolute bottom-full left-0 max-h-64 w-96 max-w-full overflow-y-auto border border-b-0
                        border-border-subtle bg-surface text-xs shadow-lg">
           {recent.map((event) => (
             <li
@@ -88,7 +88,7 @@ export function StatusBar() {
       )}
 
       {jobsOpen && running.length > 0 && (
-        <ul className="absolute bottom-full left-1/3 w-[28rem] border border-b-0 border-border-subtle bg-surface
+        <ul className="absolute bottom-full left-0 w-[28rem] max-w-full border sm:left-1/3 border-b-0 border-border-subtle bg-surface
                        text-xs shadow-lg">
           {running.map((job) => (
             <li key={job.job_id} className="border-b border-border-subtle px-3 py-1.5 last:border-b-0">
@@ -143,7 +143,7 @@ export function StatusBar() {
         <div className="ml-auto flex shrink-0 items-center gap-3 text-ink-muted">
           {egress.data?.public_ip && (
             <span
-              className="flex items-center gap-1.5 font-mono"
+              className="hidden items-center gap-1.5 font-mono sm:flex"
               title={
                 `Address this host connects out from, via ${egress.data.source ?? "the configured check"}.` +
                 (egress.data.error ? ` Last check failed: ${egress.data.error}` : "")
@@ -162,7 +162,7 @@ export function StatusBar() {
           {clock.time && (
             <span className="font-mono tabular-nums">
               {clock.time}
-              <span className="ml-1.5 text-ink-muted/70">{clock.timezone}</span>
+              <span className="ml-1.5 hidden text-ink-muted/70 sm:inline">{clock.timezone}</span>
             </span>
           )}
           {about.data?.version && (

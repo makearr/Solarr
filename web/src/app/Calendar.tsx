@@ -5,6 +5,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import { API_PREFIX, api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useNarrow } from "@/list/useNarrow";
 import { addDays, DayView, DaysView, entryKey, entryTarget, isoDate, MonthView, parseIso, weekStart } from "./CalendarViews";
 
 type CalendarEntry = components["schemas"]["CalendarEntry"];
@@ -34,7 +35,9 @@ type View = (typeof VIEWS)[number][0];
 export function Calendar() {
   const search = useSearch({ strict: false }) as { view?: string; year?: string; date?: string };
   const requested = search.view === "list" ? "agenda" : search.view;
-  const view: View = VIEWS.some(([id]) => id === requested) ? (requested as View) : "month";
+  // A phone opens on the agenda, as Sonarr's does: a month grid that narrow shows one letter per release.
+  const fallback: View = useNarrow() ? "agenda" : "month";
+  const view: View = VIEWS.some(([id]) => id === requested) ? (requested as View) : fallback;
   const year = Number(search.year) || new Date().getFullYear();
   const today = isoDate(new Date());
   const anchor = parseIso(search.date);
@@ -90,7 +93,7 @@ export function Calendar() {
           </div>
         )}
         <span className="text-sm tabular-nums">{heading}</span>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex flex-wrap gap-1">
           {VIEWS.map(([id, label]) => (
             <Link
               key={id}
@@ -483,16 +486,16 @@ function ReleaseList({ entries }: { entries: readonly CalendarEntry[] }) {
             {releases.map((release) => (
               <li
                 key={entryKey(release)}
-                className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm"
+                className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm sm:flex-nowrap"
               >
                 <Link
                   {...entryTarget(release)}
-                  className="min-w-0 flex-1 truncate hover:underline"
+                  className="min-w-0 basis-full truncate hover:underline sm:flex-1 sm:basis-0"
                 >
                   {release.title}
                 </Link>
                 {release.artist != null && release.artist !== "" && (
-                  <span className="shrink-0 truncate text-xs text-ink-muted">{release.artist}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink-muted sm:flex-none sm:shrink-0">{release.artist}</span>
                 )}
                 {release.primary_type != null && (
                   <span className="shrink-0 text-xs text-ink-muted">{release.primary_type}</span>

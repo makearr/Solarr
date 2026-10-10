@@ -203,7 +203,7 @@ function LibraryQualityEditor() {
           <select
             value=""
             onChange={(event) => setOrder([...order, Number(event.target.value)])}
-            className={`${inputStyle} self-start`}
+            className={`${inputStyle} max-w-full self-start`}
           >
             <option value="">+ Add a profile</option>
             {unused.map((profile) => (
@@ -233,7 +233,7 @@ function LibraryQualityEditor() {
           disabled={!upgrades}
           value={cutoff ?? ""}
           onChange={(event) => setCutoff(event.target.value === "" ? undefined : Number(event.target.value))}
-          className={`${inputStyle} self-start`}
+          className={`${inputStyle} max-w-full self-start`}
         >
           <option value="">No cutoff: always upgrade to the first profile</option>
           {order.map((profileId) => (
@@ -289,7 +289,7 @@ function LibraryQualityEditor() {
         <select
           value={targetId ?? ""}
           onChange={(event) => setTargetId(event.target.value === "" ? undefined : Number(event.target.value))}
-          className={`${inputStyle} self-start`}
+          className={`${inputStyle} max-w-full self-start`}
         >
           <option value="">Nothing in particular: the first profile decides</option>
           {(quality.data.available_targets ?? []).map((target) => (
