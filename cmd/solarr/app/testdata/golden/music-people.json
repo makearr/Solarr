@@ -11,6 +11,7 @@
       "latest": 2019,
       "monitored": false,
       "name": "Amber Lanterns",
+      "no_artwork": true,
       "roles": [
         "artist"
       ],
@@ -27,6 +28,7 @@
       "latest": 2020,
       "monitored": false,
       "name": "Hal Brandt",
+      "no_artwork": true,
       "roles": [
         "director"
       ],
@@ -44,6 +46,7 @@
       "latest": 2020,
       "monitored": false,
       "name": "Iris Calder",
+      "no_artwork": true,
       "roles": [
         "actor"
       ],
@@ -60,6 +63,7 @@
       "latest": 2020,
       "monitored": false,
       "name": "Mara Voss",
+      "no_artwork": true,
       "roles": [
         "creator"
       ],
@@ -77,6 +81,7 @@
       "latest": 2020,
       "monitored": false,
       "name": "Odile Renn",
+      "no_artwork": true,
       "roles": [
         "guest_star"
       ],
@@ -94,6 +99,7 @@
       "latest": 2020,
       "monitored": false,
       "name": "Tom Aske",
+      "no_artwork": true,
       "roles": [
         "actor"
       ],

@@ -439,3 +439,33 @@ func TestListPeople_SortByWorksPagesMostFirst(t *testing.T) {
 		}
 	}
 }
+
+// R2.0 finding 13: a person with no cached picture says so, so the grid shows their initial without asking.
+func TestListPeople_NoArtworkWhenNoPictureIsCached(t *testing.T) {
+	opened, queries := newLibrary(t)
+	people := library.NewPeople(opened)
+	pictured := resolvePersonNamed(t, people, "artist-1", "Katupoken")
+	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
+	looked := resolvePersonNamed(t, people, "artist-3", "Bokaru")
+	// A row with no cache key records that a picture was looked for and none found.
+	for _, artwork := range []librarydb.UpsertArtworkParams{
+		{SubjectType: "person", SubjectID: pictured, Kind: "photo", CacheKey: "k"},
+		{SubjectType: "person", SubjectID: looked, Kind: "cover", CacheKey: ""},
+	} {
+		if err := queries.UpsertArtwork(t.Context(), artwork); err != nil {
+			t.Fatalf("UpsertArtwork: %v", err)
+		}
+	}
+
+	got, err := people.List(t.Context(), library.PeopleFilter{}, library.PeopleCursor{}, 50)
+	if err != nil {
+		t.Fatalf("ListPeople: %v", err)
+	}
+	none := map[string]bool{}
+	for _, person := range got {
+		none[person.Name] = person.NoArtwork
+	}
+	if want := map[string]bool{"Bokaru": true, "Katupoken": false, "Vutu Doci": true}; fmt.Sprint(none) != fmt.Sprint(want) {
+		t.Errorf("no artwork = %v, want %v", none, want)
+	}
+}

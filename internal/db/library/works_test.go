@@ -885,3 +885,46 @@ func TestWorksList_CustomFilterConditions(t *testing.T) {
 		}
 	}
 }
+
+// R2.0 finding 13: a grid asks for no picture the server knows it lacks; a work's own cover or its lead's image is one.
+func TestListWorks_NoArtworkWhenNeitherTheWorkNorItsLeadHasAPicture(t *testing.T) {
+	opened, queries := newLibrary(t)
+	works := library.NewWorks(opened)
+	people := library.NewPeople(opened)
+	pictured := resolvePersonNamed(t, people, "artist-1", "Katupoken")
+	bare := resolvePersonNamed(t, people, "artist-2", "Lovimeno")
+	lead := func(title string, personID int64) librarydb.Work {
+		work := createWork(t, opened, "music", title)
+		if err := queries.SetWorkLeadPerson(t.Context(), librarydb.SetWorkLeadPersonParams{
+			LeadPersonID: sql.NullInt64{Int64: personID, Valid: true}, ID: work.ID,
+		}); err != nil {
+			t.Fatalf("SetWorkLeadPerson: %v", err)
+		}
+		return work
+	}
+	covered := lead("Aretimok", bare)
+	lead("Bafu", pictured)
+	lead("Cesoge", bare)
+	createWork(t, opened, "music", "Dumu")
+	for _, artwork := range []librarydb.UpsertArtworkParams{
+		{SubjectType: "work", SubjectID: covered.ID, Kind: "cover", CacheKey: "k1"},
+		{SubjectType: "person", SubjectID: pictured, Kind: "photo", CacheKey: "k2"},
+	} {
+		if err := queries.UpsertArtwork(t.Context(), artwork); err != nil {
+			t.Fatalf("UpsertArtwork: %v", err)
+		}
+	}
+
+	page, err := works.List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 10)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	got := map[string]bool{}
+	for _, row := range page {
+		got[row.CanonicalTitle] = row.NoArtwork
+	}
+	want := map[string]bool{"Aretimok": false, "Bafu": false, "Cesoge": true, "Dumu": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("no artwork = %v, want %v", got, want)
+	}
+}

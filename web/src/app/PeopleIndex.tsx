@@ -271,6 +271,10 @@ export function PeopleIndex() {
                       <span className="block size-16 shrink-0 overflow-hidden rounded-full border border-border-subtle bg-surface">
                         {person.image_url ? (
                           <img src={remoteImage(person.image_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
+                        ) : person.no_artwork ? (
+                          <span className="flex size-full items-center justify-center text-xl text-ink-muted">
+                            {person.name.trim().charAt(0).toUpperCase() || "?"}
+                          </span>
                         ) : (
                           <CoverArt subject="people" workId={person.id} title={person.name} size="small" className="size-full object-cover" />
                         )}
@@ -301,7 +305,7 @@ export function PeopleIndex() {
             renderPoster={(person) => (
               <Poster
                 subject="people"
-                imageId={person.image_url ? null : person.id}
+                imageId={person.image_url || person.no_artwork ? null : person.id}
                 imageSrc={person.image_url ? remoteImage(person.image_url, "small") : undefined}
                 title={person.name}
                 subtitle={[what(person), count(person)].filter(Boolean).join(" · ")}

@@ -134,7 +134,7 @@ export function Dashboard() {
                 <li key={work.id}>
                   <Poster
                     subject="works"
-                    imageId={work.id}
+                    imageId={work.no_artwork && !work.poster_url ? null : work.id}
                     title={work.title}
                     subtitle={[work.artist ?? mediaTypeName(work.media_type), work.year].filter(Boolean).join(" · ")}
                     link={{ to: "/works/$id", params: { id: String(work.id) } }}

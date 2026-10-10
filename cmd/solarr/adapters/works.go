@@ -116,6 +116,7 @@ func (a Works) ListWorks(
 		view.ArrivedAt = row.ArrivedAt
 		view.SortNumber, view.SortText = row.SortNumber, row.SortText
 		view.ArtistCover = row.ArtistCover
+		view.NoArtwork = row.NoArtwork
 		view.Monitored, view.Description, view.SizeBytes = row.Monitored, row.Description, row.SizeBytes
 		if row.LastSearchedAt != 0 {
 			at := time.Unix(row.LastSearchedAt, 0).UTC()

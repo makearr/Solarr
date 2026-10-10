@@ -290,7 +290,7 @@ function buildColumns(info: MediaTypeInfo | undefined, categoryId: string, hidde
             shape={info?.work_image === "poster" ? "poster" : "cover"}
             title={work.title}
             src={workEntry(work, categoryId, info).imageSrc}
-            artwork={work.poster_url ? undefined : { subject: "works", id: work.id, size: "thumb" }}
+            artwork={work.poster_url || work.no_artwork ? undefined : { subject: "works", id: work.id, size: "thumb" }}
           />
         </div>
       ),

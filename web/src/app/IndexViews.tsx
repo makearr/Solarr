@@ -49,7 +49,8 @@ export function workEntry(work: Work, categoryId?: string, info?: MediaTypeInfo)
     subtitle: [work.artist, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
     year: work.year, status: work.status, presentCount: work.present_count, requiredCount: work.required_count,
     monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
-    image: { subject: "works", id: work.id },
+    // Nothing to ask for when neither the work, its lead nor a provider poster has a picture.
+    image: work.no_artwork && !work.poster_url ? null : { subject: "works", id: work.id },
     imageSrc: work.poster_url ? remoteImage(work.poster_url, "small") : undefined,
     portrait: info?.work_image === "poster",
     partsLabel: info?.part.many.toLowerCase() || undefined,

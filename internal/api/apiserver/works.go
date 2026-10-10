@@ -134,6 +134,8 @@ type WorkRow struct {
 	SortText   string
 	// ArtistCover is an album shown by its artist's image, having no cover of its own.
 	ArtistCover bool
+	// NoArtwork says no cached picture answers for it; a provider poster may still.
+	NoArtwork   bool
 	Monitored   bool
 	Description string
 	SizeBytes   int64
@@ -303,6 +305,9 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.
 		}
 		if row.ArtistCover {
 			views[index].ArtistCover = &row.ArtistCover
+		}
+		if row.NoArtwork {
+			views[index].NoArtwork = &row.NoArtwork
 		}
 		// What Radarr's poster, overview and table show (2026-09-30); status is the poster wall's own colour.
 		status := gen.WorkStatus(albumStatus(PersonWorkRow{

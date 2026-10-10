@@ -3150,6 +3150,9 @@ type PersonEntry struct {
 	Monitored bool   `json:"monitored"`
 	Name      string `json:"name"`
 
+	// NoArtwork No picture is cached for them, so /people/{id}/artwork would answer 404. Absent means not known.
+	NoArtwork *bool `json:"no_artwork,omitempty"`
+
 	// Roles Their roles in the libraries listed.
 	Roles    []string `json:"roles"`
 	SortName string   `json:"sort_name"`
@@ -4025,6 +4028,9 @@ type Work struct {
 	LeadId    *int64 `json:"lead_id,omitempty"`
 	MediaType string `json:"media_type"`
 	Monitored *bool  `json:"monitored,omitempty"`
+
+	// NoArtwork Neither the work nor its lead has a cached picture; only poster_url, if set, has one. Absent means not known.
+	NoArtwork *bool `json:"no_artwork,omitempty"`
 
 	// Overview The album's description, cut to a paragraph, for the Overview view.
 	Overview *string `json:"overview,omitempty"`

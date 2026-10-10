@@ -7182,6 +7182,11 @@ components:
           description: >-
             No cover of its own: its artwork is the primary artist's image, and a poster marks it.
             Absent means false.
+        no_artwork:
+          type: boolean
+          description: >-
+            Neither the work nor its lead has a cached picture; only poster_url, if set, has one. Absent means not
+            known.
         status:
           type: string
           enum: [complete, incomplete, downloading, unreleased, unverified]
@@ -8089,6 +8094,7 @@ components:
           required: [roles, works, wanted, complete, downloading]
           properties:
             image_url: { type: string, description: "A provider's photo, when one is known." }
+            no_artwork: { type: boolean, description: "No picture is cached for them, so /people/{id}/artwork would answer 404. Absent means not known." }
             roles:
               type: array
               items: { type: string }

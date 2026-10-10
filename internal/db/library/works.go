@@ -169,6 +169,8 @@ type WorkListRow struct {
 	SortText   string
 	// ArtistCover is an album with no cover of its own, shown by its primary artist's image instead.
 	ArtistCover bool
+	// NoArtwork says neither the work nor its lead has a cached picture, so a grid need not ask for one.
+	NoArtwork bool
 	// Monitored, Description and SizeBytes are what Radarr's poster, overview and table show (2026-09-30).
 	Monitored   bool
 	Description string
@@ -271,7 +273,11 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       " + unverifiedColumn + " AS unverified" +
 		",\n       COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = work.id), 0) AS arrived_at" +
 		",\n       (work.lead_person_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM artwork aw" +
-		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id)) AS artist_cover" +
+		" WHERE aw.subject_type = 'work' AND aw.subject_id = work.id AND aw.cache_key <> '')) AS artist_cover" +
+		",\n       (NOT EXISTS (SELECT 1 FROM artwork own WHERE own.subject_type = 'work' AND own.subject_id = work.id AND own.cache_key <> '')" +
+		" AND NOT EXISTS (SELECT 1 FROM artwork lead WHERE lead.subject_type = 'person' AND lead.subject_id = work.lead_person_id" +
+		" AND lead.cache_key <> ''))" +
+		" AS no_artwork" +
 		",\n       EXISTS (SELECT 1 FROM desired_item mon WHERE mon.work_id = work.id AND mon.monitored = 1" +
 		" AND mon.satisfaction_kind = 'SET') AS monitored" +
 		",\n       COALESCE(work.description, '') AS description" +
@@ -462,7 +468,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.OriginalLanguage, &work.Year, &work.RuntimeMs, &work.AddedAt,
 			&work.UpdatedAt, &work.AddedBy, &work.Artist, &work.WantedState,
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
-			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover,
+			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover, &work.NoArtwork,
 			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes,
 			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable, &work.LeadPersonID); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)

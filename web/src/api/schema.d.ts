@@ -4599,6 +4599,8 @@ export interface components {
             unverified?: boolean;
             /** @description No cover of its own: its artwork is the primary artist's image, and a poster marks it. Absent means false. */
             artist_cover?: boolean;
+            /** @description Neither the work nor its lead has a cached picture; only poster_url, if set, has one. Absent means not known. */
+            no_artwork?: boolean;
             /**
              * @description The poster wall's colour, PersonWork.status' own vocabulary.
              * @enum {string}
@@ -5387,6 +5389,8 @@ export interface components {
         PersonEntry: components["schemas"]["Person"] & {
             /** @description A provider's photo, when one is known. */
             image_url?: string;
+            /** @description No picture is cached for them, so /people/{id}/artwork would answer 404. Absent means not known. */
+            no_artwork?: boolean;
             /** @description Their roles in the libraries listed. */
             roles: string[];
             /**

@@ -16,6 +16,7 @@
       "lead_id": 1,
       "media_type": "music",
       "monitored": true,
+      "no_artwork": true,
       "present_count": 0,
       "required_count": 3,
       "size_bytes": 59000000,

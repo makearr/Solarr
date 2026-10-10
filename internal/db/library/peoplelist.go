@@ -78,6 +78,8 @@ type PersonEntry struct {
 	Wanted      int64
 	Complete    int64
 	Downloading bool
+	// NoArtwork says no picture is cached for them, so a grid need not ask for one.
+	NoArtwork bool
 }
 
 // sqlPart is a fragment of SQL with its positional arguments.
@@ -198,7 +200,7 @@ func (q peopleQuery) condition(condition listfilter.Condition) sqlPart {
 		return sqlPart{fragment, arguments}
 	case "photo":
 		fragment, arguments := condition.SQL(listfilter.Bool,
-			"(COALESCE(json_extract(p.fields_json, '$.image_url'), '') <> '' OR EXISTS (SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id))")
+			"(COALESCE(json_extract(p.fields_json, '$.image_url'), '') <> '' OR EXISTS (SELECT 1 FROM artwork a WHERE a.subject_type = 'person' AND a.subject_id = p.id AND a.cache_key <> ''))")
 		return sqlPart{fragment, arguments}
 	case "works", "wanted", "complete":
 		expression := q.works
@@ -281,6 +283,7 @@ func composePeople(filter PeopleFilter, after PeopleCursor, pageSize int) (strin
 		{sql: "EXISTS (SELECT 1 FROM credit c JOIN desired_item di ON di.work_id = c.work_id AND " + downloadScope.sql +
 			" JOIN acquisition a ON a.desired_item_id = di.id WHERE c.person_id = p.id" +
 			" AND a.state NOT IN ('IMPORTED', 'CLEANED', 'FAILED', 'CANCELLED'))", args: downloadScope.args},
+		{sql: "NOT EXISTS (SELECT 1 FROM artwork aw WHERE aw.subject_type = 'person' AND aw.subject_id = p.id AND aw.cache_key <> '')"},
 	}
 	var selectList []string
 	var arguments []any
@@ -307,7 +310,7 @@ func (p People) List(ctx context.Context, filter PeopleFilter, after PeopleCurso
 		var monitored int64
 		var roles string
 		if err := rows.Scan(&entry.ID, &entry.Name, &entry.SortName, &entry.Disambiguation, &entry.Kind, &entry.Country, &entry.Born, &entry.Died, &entry.ImageURL, &monitored, &entry.AddedAt,
-			&roles, &entry.Works, &entry.Latest, &entry.Character, &entry.Wanted, &entry.Complete, &entry.Downloading); err != nil {
+			&roles, &entry.Works, &entry.Latest, &entry.Character, &entry.Wanted, &entry.Complete, &entry.Downloading, &entry.NoArtwork); err != nil {
 			return nil, fmt.Errorf("library: scan person: %w", err)
 		}
 		entry.Monitored = monitored == 1

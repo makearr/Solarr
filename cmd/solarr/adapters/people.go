@@ -97,6 +97,9 @@ func (a People) ListPeople(ctx context.Context, query apiserver.PeopleQuery, aft
 		setString(&view.Died, row.Died)
 		setString(&view.ImageUrl, row.ImageURL)
 		setString(&view.Character, row.Character)
+		if row.NoArtwork {
+			view.NoArtwork = &row.NoArtwork
+		}
 		views[i] = view
 	}
 	return views, nil
