@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 
 import { isSearchShortcut } from "@/lib/searchShortcut";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
 import { CoverArt } from "./CoverArt";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -229,7 +230,7 @@ function ResultRow({ result }: { result: SearchResult }) {
         <CoverArt workId={work.id} title={work.title} size="thumb" className="size-7 shrink-0 rounded object-cover" />
         <span className="truncate font-medium">{work.title}</span>
         <span className="ml-auto shrink-0 text-ink-muted">
-          {work.media_type}
+          {mediaTypeName(work.media_type)}
           {work.year ? ` · ${work.year}` : ""}
         </span>
       </Link>

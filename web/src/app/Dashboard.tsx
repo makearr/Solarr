@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Plus, XCircle } from "lucide-react";
 
 import { api } from "@/api/client";
-import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
+import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
@@ -135,7 +135,7 @@ export function Dashboard() {
                     subject="works"
                     imageId={work.id}
                     title={work.title}
-                    subtitle={[work.artist ?? work.media_type, work.year].filter(Boolean).join(" · ")}
+                    subtitle={[work.artist ?? mediaTypeName(work.media_type), work.year].filter(Boolean).join(" · ")}
                     link={{ to: "/works/$id", params: { id: String(work.id) } }}
                     badge={work.artist_cover ? <ArtistCoverMark /> : undefined}
                   />
@@ -201,7 +201,7 @@ function LibraryCard({ library }: { library: LibraryEntry }) {
         <span className="truncate font-medium">{library.name}</span>
       </span>
       <span className="text-xs text-ink-muted">
-        {library.media_type}
+        {mediaTypeName(library.media_type)}
         {primaryLevel?.count != null && ` · ${primaryLevel.count.toLocaleString()} ${primaryLevel.label.toLowerCase()}`}
       </span>
     </>

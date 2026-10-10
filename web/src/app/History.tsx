@@ -11,11 +11,11 @@ const COLUMNS: readonly Column<HistoryEntry>[] = [
   { key: "kind", header: "Event", width: "6rem", render: (entry) => <HistoryKind kind={entry.kind} /> },
   {
     key: "album",
-    header: "Album",
+    header: "Title",
     render: (entry) =>
       entry.work_id != null ? (
         <Link to="/works/$id" params={{ id: String(entry.work_id) }} className="hover:underline">
-          {[entry.artist, entry.album].filter(Boolean).join(" — ") || "Album"}
+          {[entry.artist, entry.album].filter(Boolean).join(" — ") || "Untitled"}
         </Link>
       ) : (
         (entry.album ?? "")

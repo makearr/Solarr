@@ -5,6 +5,7 @@ import { Trash2 } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
@@ -150,7 +151,7 @@ function Row({
       <span className="text-sm font-medium">{category.name}</span>
       <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem]
                        text-ink-muted">
-        {category.media_type}
+        {mediaTypeName(category.media_type)}
       </span>
       {category.works != null && (
         <span className="ml-auto shrink-0 text-xs text-ink-muted">{category.works} works</span>

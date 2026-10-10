@@ -646,7 +646,7 @@ function AddRootFolder({
         >
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name} ({category.media_type})
+              {category.name} ({mediaTypeName(category.media_type)})
             </option>
           ))}
           <option value={NEW_LIBRARY}>+ New library…</option>

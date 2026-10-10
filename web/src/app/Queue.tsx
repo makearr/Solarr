@@ -29,7 +29,7 @@ export function Queue() {
           <>
             <ClientList clients={queue.data.clients} items={queue.data.items} />
             {queue.data.items.length === 0 ? (
-              <Message>Nothing is downloading. Albums sent to a download client appear here until imported.</Message>
+              <Message>Nothing is downloading. What is sent to a download client appears here until imported.</Message>
             ) : (
               <QueueTable items={queue.data.items} />
             )}
@@ -41,7 +41,7 @@ export function Queue() {
   );
 }
 
-/** The queue, or one album's part of it. */
+/** The queue, or one work's part of it. */
 export function useQueue(workId?: number) {
   return useQuery({
     queryKey: ["queue", workId],
@@ -159,7 +159,7 @@ function QueueRow({ item }: { item: QueueItem }) {
       <td className="px-2 py-2">
         {item.work_id != null ? (
           <Link to="/works/$id" params={{ id: String(item.work_id) }} className="text-ink hover:underline">
-            {[item.artist, item.album].filter(Boolean).join(" — ") || "Album"}
+            {[item.artist, item.album].filter(Boolean).join(" — ") || "Untitled"}
           </Link>
         ) : (
           (item.album ?? "")
@@ -243,7 +243,7 @@ function HeldList({ held }: { held: readonly HeldRelease[] }) {
       </h3>
       <p className="text-xs text-ink-muted">
         Releases found while the client already had as many as its &ldquo;Downloads at once&rdquo;. They are sent
-        in this order as downloads finish: your own grabs first, then RSS, then new albums, then older ones.
+        in this order as downloads finish: your own grabs first, then RSS, then new releases, then older ones.
       </p>
       {held.length === 0 ? (
         <Message>Nothing is waiting.</Message>
@@ -267,7 +267,7 @@ function HeldList({ held }: { held: readonly HeldRelease[] }) {
                 <td className="px-2 py-1.5">
                   {release.work_id != null ? (
                     <Link to="/works/$id" params={{ id: String(release.work_id) }} className="text-ink hover:underline">
-                      {[release.artist, release.album].filter(Boolean).join(" — ") || "Album"}
+                      {[release.artist, release.album].filter(Boolean).join(" — ") || "Untitled"}
                     </Link>
                   ) : (
                     (release.album ?? "")

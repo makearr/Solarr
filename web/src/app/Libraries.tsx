@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 
 import { api } from "@/api/client";
-import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
+import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
@@ -63,7 +63,7 @@ function LibraryCard({ library }: { library: LibraryEntry }) {
       <span className="flex items-center gap-2">
         <Icon aria-hidden className="size-5 shrink-0 text-accent" />
         <span className="truncate font-medium">{library.name}</span>
-        <span className="ml-auto shrink-0 text-xs uppercase tracking-wide text-ink-muted">{library.media_type}</span>
+        <span className="ml-auto shrink-0 text-xs uppercase tracking-wide text-ink-muted">{mediaTypeName(library.media_type)}</span>
       </span>
       <span className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-muted">
         {library.levels.map((entry) => (

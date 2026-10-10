@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
+import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
 type ExclusionPattern = components["schemas"]["ExclusionPattern"];
 type ExclusionAction = ExclusionPattern["action"];
@@ -130,7 +131,7 @@ function PatternRow({
       {pattern.media_type && (
         <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem]
                          text-ink-muted">
-          {pattern.media_type}
+          {mediaTypeName(pattern.media_type)}
         </span>
       )}
       {pattern.builtin && (

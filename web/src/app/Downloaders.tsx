@@ -419,14 +419,14 @@ function OptionFields({
       </label>
       <label
         className="flex items-center gap-2 pb-2 text-ink-muted"
-        title="An album's Search, a release you pick, or a request goes to the client even when it is full"
+        title="A Search you start, a release you pick, or a request goes to the client even when it is full"
       >
         <input type="checkbox" checked={sendUser} onChange={(event) => onSendUser(event.target.checked)} />
         Always send my grabs
       </label>
       <label
         className="flex items-center gap-2 pb-2 text-ink-muted"
-        title="A release RSS finds for a wanted album goes to the client even when it is full"
+        title="A release RSS finds for something wanted goes to the client even when it is full"
       >
         <input type="checkbox" checked={sendRSS} onChange={(event) => onSendRSS(event.target.checked)} />
         Always send RSS grabs
