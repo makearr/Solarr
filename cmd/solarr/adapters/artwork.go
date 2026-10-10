@@ -10,18 +10,29 @@ import (
 	"github.com/makearr/Solarr/internal/media/music"
 )
 
-// Artwork satisfies apiserver.ArtworkReader over library.Artworks.
-type Artwork struct{ Artworks library.Artworks }
+// Artwork satisfies apiserver.ArtworkReader over library.Artworks, with the provider poster of a work without a cover.
+type Artwork struct {
+	Artworks library.Artworks
+	Works    library.Works
+}
 
 func (a Artwork) GetWorkArtwork(ctx context.Context, workID int64) (apiserver.WorkArtworkRow, error) {
 	found, err := a.Artworks.GetForWork(ctx, workID)
 	if err != nil {
 		return apiserver.WorkArtworkRow{}, err
 	}
-	return apiserver.WorkArtworkRow{
+	row := apiserver.WorkArtworkRow{
 		CacheKey: found.CacheKey, Found: found.Found, RootFolderIDs: found.RootFolderIDs,
 		CategoryIDs: found.CategoryIDs, LeadPersonID: found.LeadPersonID,
-	}, nil
+	}
+	if !found.Found {
+		pictures, err := a.Works.Pictures(ctx, workID)
+		if err != nil {
+			return apiserver.WorkArtworkRow{}, err
+		}
+		row.PosterURL = pictures["poster"]
+	}
+	return row, nil
 }
 
 func (a Artwork) GetPersonArtwork(ctx context.Context, personID int64) (apiserver.PersonArtworkRow, error) {

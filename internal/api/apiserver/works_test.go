@@ -66,6 +66,7 @@ type worksFixture struct {
 	unidentified         *fakeUnidentifiedReader
 	unidentifiedResolver *fakeUnidentifiedResolver
 	artwork              *fakeArtworkReader
+	remoteImages         *fakeRemoteImages
 	people               *fakePeopleReader
 	subscriber           *fakePeopleSubscriber
 	artistActions        *fakeArtistActions
@@ -232,6 +233,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	unidentified := &fakeUnidentifiedReader{}
 	unidentifiedResolver := &fakeUnidentifiedResolver{}
 	artwork := &fakeArtworkReader{}
+	remoteImages := &fakeRemoteImages{keys: map[string]string{}}
 	people := &fakePeopleReader{}
 	subscriber := &fakePeopleSubscriber{}
 	artistActions := &fakeArtistActions{}
@@ -274,6 +276,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Unidentified:         unidentified,
 		UnidentifiedResolver: unidentifiedResolver,
 		Artwork:              artwork,
+		RemoteImages:         remoteImages,
 		People:               people,
 		PersonRemover:        subscriber,
 		Follower:             follower,
@@ -325,7 +328,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
 		wantedParts: wantedParts,
 		search:      search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
-		artwork: artwork, people: people, subscriber: subscriber, artistActions: artistActions,
+		artwork: artwork, remoteImages: remoteImages, people: people, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
 		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,

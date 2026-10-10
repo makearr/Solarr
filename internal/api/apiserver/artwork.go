@@ -30,7 +30,9 @@ type WorkArtworkRow struct {
 	Found         bool
 	RootFolderIDs []int64
 	CategoryIDs   []int64
-	LeadPersonID  *int64
+	// PosterURL is the provider's poster for a work with no cover of its own, as a TV series has.
+	PosterURL    string
+	LeadPersonID *int64
 }
 
 // PersonArtworkRow is what ArtworkReader answers for a person: the cache key
@@ -85,7 +87,7 @@ func (s *Server) routeGetWorkArtwork(w http.ResponseWriter, r *http.Request) {
 // GetWorkArtwork streams a work's cached cover art straight off disk -- never
 // fetched live, never re-encoded per request. A work the caller cannot see
 // answers 404. A work the caller can see but with no cover of its own falls
-// back to its primary artist's image (2026-09-11's own album-falls-back-to-
+// back to its provider poster, then its lead's image (2026-09-11's own album-falls-back-to-
 // artist chain) before answering 404 too -- indistinguishable by design from
 // "no cover recorded yet" either way (ADR-27, Invariant 37).
 func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64, params gen.GetWorkArtworkParams) {
@@ -120,6 +122,11 @@ func (s *Server) GetWorkArtwork(w http.ResponseWriter, r *http.Request, id int64
 	}
 
 	cacheKey := row.CacheKey
+	if !row.Found && row.PosterURL != "" && s.remoteImages != nil {
+		if key, err := s.remoteImages.Ensure(r.Context(), row.PosterURL); err == nil {
+			cacheKey, row.Found = key, true
+		}
+	}
 	if !row.Found {
 		if row.LeadPersonID == nil {
 			writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no cover art for this work")

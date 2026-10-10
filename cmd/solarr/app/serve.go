@@ -734,7 +734,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Unidentified: library.NewUnidentified(p.library), Attempts: library.NewAttempts(p.library), Cache: p.cache,
 			PlacingFiles: adapters.MediaTypes{Registry: p.media}.PlacingFilesOf, Clock: clock.NewSystem(),
 		},
-		Artwork: adapters.Artwork{Artworks: library.NewArtworks(p.library)},
+		Artwork: adapters.Artwork{Artworks: library.NewArtworks(p.library), Works: library.NewWorks(p.library)},
 		ArtworkChoices: adapters.ArtworkChoices{
 			Works: library.NewWorks(p.library), Picturing: adapters.MediaTypes{Registry: p.media}.PicturingOf, People: p.musicPictures(),
 		},

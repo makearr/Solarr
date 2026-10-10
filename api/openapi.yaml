@@ -3157,7 +3157,9 @@ paths:
       summary: A work's cached cover art (section 21.6), if any has been fetched yet.
       description: >-
         WebP bytes straight from the on-disk cache ArtworkJob wrote -- never
-        fetched live, never re-encoded per request. 404 both when the work is
+        re-encoded per request. A work with no cover of its own serves its
+        provider poster (fetched once into the same cache), else its lead's
+        image. 404 both when the work is
         not visible to the caller (ADR-27, indistinguishable from missing) and
         when no cover has been recorded yet; a client cannot and need not tell
         the two apart.
