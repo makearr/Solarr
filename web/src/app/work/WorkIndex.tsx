@@ -283,14 +283,16 @@ function buildColumns(info: MediaTypeInfo | undefined, categoryId: string, hidde
       key: "cover",
       header: "",
       width: "3rem",
+      // Sized to fit the 44 px row: a 2:3 poster 28 px wide, a square cover 36 px.
       render: (work) => (
-        <Image
-          shape={info?.work_image === "poster" ? "poster" : "cover"}
-          title={work.title}
-          src={workEntry(work, categoryId, info).imageSrc}
-          artwork={work.poster_url ? undefined : { subject: "works", id: work.id, size: "thumb" }}
-          className="w-8 rounded"
-        />
+        <div className={info?.work_image === "poster" ? "w-7" : "w-9"}>
+          <Image
+            shape={info?.work_image === "poster" ? "poster" : "cover"}
+            title={work.title}
+            src={workEntry(work, categoryId, info).imageSrc}
+            artwork={work.poster_url ? undefined : { subject: "works", id: work.id, size: "thumb" }}
+          />
+        </div>
       ),
     },
     {

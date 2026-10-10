@@ -302,18 +302,25 @@ function LibraryNode({
 
       {!collapsed && isOpen && (
         <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
-          {library.levels.map((level) => (
-            <li key={level.key}>
-              <Link
-                to="/library/$categoryId/$level"
-                params={{ categoryId, level: level.key }}
-                className={sectionLinkClass(isActive && activeLevel === level.key, false)}
-              >
-                <span className="truncate" title={level.label}>{level.label}</span>
-                {level.count != null && <span className="ml-auto shrink-0 text-xs text-ink-muted">{level.count}</span>}
-              </Link>
-            </li>
-          ))}
+          {library.levels.map((level) => {
+            const here = isActive && activeLevel === level.key;
+            return (
+              <li key={level.key}>
+                <Link
+                  to="/library/$categoryId/$level"
+                  params={{ categoryId, level: level.key }}
+                  className={sectionLinkClass(here, false)}
+                >
+                  <span className="truncate" title={level.label}>{level.label}</span>
+                  {level.count != null && (
+                    <span className={`ml-auto shrink-0 text-xs tabular-nums ${here ? "text-accent-ink/80" : "text-ink-muted"}`}>
+                      {level.count.toLocaleString()}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
           {/* After its own levels every library has the same four entries, each with tabs (2026-10-04). */}
           {librarySections(categoryId).map((section) => {
             const tab = entryTab(section, { tier, administrator });
