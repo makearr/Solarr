@@ -7,6 +7,8 @@ import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { useSetMyTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
+import { Card } from "./SettingsCard";
+
 type UserAccount = components["schemas"]["UserAccount"];
 type Role = components["schemas"]["Role"];
 type Tier = components["schemas"]["Me"]["tier"];
@@ -46,9 +48,7 @@ export function UserSettings() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-6 p-6">
-        <header className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold">User</h1>
-        </header>
+        <h1 className="text-base font-semibold">User</h1>
 
         {me.data && <MyTierSection tier={me.data.tier} tierMax={me.data.tier_max} />}
         <APIKeysSection />
@@ -68,43 +68,37 @@ function MyTierSection({ tier, tierMax }: { tier: Tier; tierMax: Tier }) {
   const setTier = useSetMyTier();
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">
-        Interface level
-      </h2>
-      <div className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
-        <p className="text-xs text-ink-muted">
-          How much of the interface you see -- each level includes the ones below it. Purely a
-          display preference: it never changes what Solarr does.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {TIERS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              title={option.blurb}
-              disabled={setTier.isPending || TIER_RANK[option.id] > TIER_RANK[tierMax]}
-              aria-pressed={tier === option.id}
-              onClick={() => setTier.mutate(option.id)}
-              className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-50 ${
-                tier === option.id
-                  ? "border-accent bg-accent/10 text-accent"
-                  : "border-border-subtle text-ink-muted hover:text-ink"
-              }`}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-        {tierMax !== "expert" && (
-          <p className="text-xs text-ink-muted">
-            An administrator allows this account up to{" "}
-            {TIERS.find((option) => option.id === tierMax)?.label}.
-          </p>
-        )}
-        {setTier.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+    <Card
+      title="Interface level"
+      help="How much of the interface you see; each level includes the ones below it. A display preference only: it never changes what Solarr does."
+    >
+      <div className="flex flex-wrap gap-2">
+        {TIERS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            title={option.blurb}
+            disabled={setTier.isPending || TIER_RANK[option.id] > TIER_RANK[tierMax]}
+            aria-pressed={tier === option.id}
+            onClick={() => setTier.mutate(option.id)}
+            className={`rounded-md border px-2.5 py-1 text-xs disabled:opacity-50 ${
+              tier === option.id
+                ? "border-accent bg-accent/10 text-accent"
+                : "border-border-subtle text-ink-muted hover:text-ink"
+            }`}
+          >
+            {option.label}
+          </button>
+        ))}
       </div>
-    </section>
+      {tierMax !== "expert" && (
+        <p className="text-xs text-ink-muted">
+          An administrator allows this account up to{" "}
+          {TIERS.find((option) => option.id === tierMax)?.label}.
+        </p>
+      )}
+      {setTier.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+    </Card>
   );
 }
 
@@ -151,93 +145,88 @@ function APIKeysSection() {
   });
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">API keys</h2>
-      <div className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
-        <p className="text-xs text-ink-muted">
-          For an upstream app that authenticates as you (an *Arr-style X-Api-Key or Bearer
-          header) rather than a person signing in. Shown once, at creation -- store it there.
-        </p>
-
-        {justCreated && (
-          <div className="flex flex-col gap-1.5 rounded-md border border-accent bg-accent/10 p-2.5">
-            <span className="text-xs text-ink-muted">
-              "{justCreated.name}" -- copy this now, it will not be shown again:
-            </span>
-            <div className="flex items-center gap-1.5">
-              <code className="min-w-0 flex-1 truncate rounded bg-canvas px-2 py-1 font-mono text-xs">
-                {justCreated.key}
-              </code>
-              <button
-                type="button"
-                aria-label="Copy key"
-                onClick={() => {
-                  navigator.clipboard?.writeText(justCreated.key).catch(() => {});
-                }}
-                className="shrink-0 rounded-md border border-border-subtle p-1.5 text-ink-muted
-                           hover:text-ink"
-              >
-                <Copy aria-hidden className="size-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setJustCreated(null)}
-                className="shrink-0 rounded-md border border-border-subtle px-2 py-1.5 text-xs
-                           text-ink-muted hover:text-ink"
-              >
-                Done
-              </button>
-            </div>
+    <Card
+      title="API keys"
+      help="For an upstream app that authenticates as you (an *Arr-style X-Api-Key or Bearer header) rather than a person signing in. A key is shown once, when it is made: store it there."
+    >
+      {justCreated && (
+        <div className="flex flex-col gap-1.5 rounded-md border border-accent bg-accent/10 p-2.5">
+          <span className="text-xs text-ink-muted">
+            "{justCreated.name}" -- copy this now, it will not be shown again:
+          </span>
+          <div className="flex items-center gap-1.5">
+            <code className="min-w-0 flex-1 truncate rounded bg-canvas px-2 py-1 font-mono text-xs">
+              {justCreated.key}
+            </code>
+            <button
+              type="button"
+              aria-label="Copy key"
+              onClick={() => {
+                navigator.clipboard?.writeText(justCreated.key).catch(() => {});
+              }}
+              className="shrink-0 rounded-md border border-border-subtle p-1.5 text-ink-muted
+                         hover:text-ink"
+            >
+              <Copy aria-hidden className="size-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setJustCreated(null)}
+              className="shrink-0 rounded-md border border-border-subtle px-2 py-1.5 text-xs
+                         text-ink-muted hover:text-ink"
+            >
+              Done
+            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {(keys.data ?? []).length > 0 && (
-          <ul className="flex flex-col divide-y divide-border-subtle">
-            {(keys.data ?? []).map((key) => (
-              <APIKeyRow
-                key={key.id}
-                apiKey={key}
-                busy={revoke.isPending}
-                onRevoke={() => revoke.mutate(key.id)}
-              />
-            ))}
-          </ul>
-        )}
-
-        {(create.isError || revoke.isError) && (
-          <p className="text-xs text-danger">That could not be saved.</p>
-        )}
-
-        <form
-          className="flex items-end gap-2"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (name.trim() !== "") create.mutate();
-          }}
-        >
-          <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
-            Name
-            <input
-              className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm
-                         text-ink focus-visible:outline-2 focus-visible:outline-offset-2
-                         focus-visible:outline-accent"
-              value={name}
-              placeholder="Prowlarr"
-              autoComplete="off"
-              onChange={(event) => setName(event.target.value)}
+      {(keys.data ?? []).length > 0 && (
+        <ul className="flex flex-col divide-y divide-border-subtle">
+          {(keys.data ?? []).map((key) => (
+            <APIKeyRow
+              key={key.id}
+              apiKey={key}
+              busy={revoke.isPending}
+              onRevoke={() => revoke.mutate(key.id)}
             />
-          </label>
-          <button
-            type="submit"
-            disabled={name.trim() === "" || create.isPending}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            {create.isPending ? "Creating…" : "New key"}
-          </button>
-        </form>
-      </div>
-    </section>
+          ))}
+        </ul>
+      )}
+
+      {(create.isError || revoke.isError) && (
+        <p className="text-xs text-danger">That could not be saved.</p>
+      )}
+
+      <form
+        className="flex items-end gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (name.trim() !== "") create.mutate();
+        }}
+      >
+        <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
+          Name
+          <input
+            className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm
+                       text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                       focus-visible:outline-accent"
+            value={name}
+            placeholder="Prowlarr"
+            autoComplete="off"
+            onChange={(event) => setName(event.target.value)}
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={name.trim() === "" || create.isPending}
+          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {create.isPending ? "Creating…" : "New key"}
+        </button>
+      </form>
+    </Card>
   );
 }
 
@@ -294,74 +283,67 @@ function AccessSection() {
   const needsPassword = !required && !policy.data.can_sign_in;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">Access</h2>
-      <div
-        className={`flex flex-col gap-3 rounded-lg border bg-surface p-3 ${
-          required ? "border-border-subtle" : "border-warn"
-        }`}
-      >
-        <div className="flex items-start gap-2.5">
-          {required ? (
-            <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ok" />
-          ) : (
-            <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warn" />
-          )}
-          <div className="flex flex-col gap-1">
-            <span className="text-sm font-medium">
-              {required ? "A login is required" : "No login is required"}
-            </span>
-            <span className="text-xs text-ink-muted">
-              {required
-                ? `Callers authenticate by ${policy.data.configured_mode}, set in config.yml.`
-                : "Every request is served as the administrator. Only appropriate where " +
-                  "something else already controls who can reach the port."}
-            </span>
-          </div>
+    <Card title="Access" help="Whether anyone reaching Solarr's port must sign in." tone={required ? "plain" : "warn"}>
+      <div className="flex items-start gap-2.5">
+        {required ? (
+          <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-ok" />
+        ) : (
+          <ShieldAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warn" />
+        )}
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium">
+            {required ? "A login is required" : "No login is required"}
+          </span>
+          <span className="text-xs text-ink-muted">
+            {required
+              ? `Callers authenticate by ${policy.data.configured_mode}, set in config.yml.`
+              : "Every request is served as the administrator. Only appropriate where " +
+                "something else already controls who can reach the port."}
+          </span>
         </div>
-
-        {needsPassword && (
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            Password for{" "}
-            <span className="font-mono text-ink">{policy.data.administrator ?? "the administrator"}</span>
-            <input
-              type="password"
-              value={password}
-              autoComplete="new-password"
-              onChange={(event) => setPassword(event.target.value)}
-              className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm
-                         text-ink focus-visible:outline-2 focus-visible:outline-offset-2
-                         focus-visible:outline-accent"
-            />
-          </label>
-        )}
-
-        {change.isError && (
-          <p className="text-xs text-danger">That could not be saved.</p>
-        )}
-
-        <button
-          type="button"
-          onClick={() =>
-            change.mutate({
-              authRequired: !required,
-              password: needsPassword ? password : undefined,
-            })
-          }
-          disabled={change.isPending || (needsPassword && password === "")}
-          className="self-start rounded-md border border-border-subtle px-2.5 py-1 text-xs
-                     text-ink-muted hover:text-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2
-                     focus-visible:outline-accent"
-        >
-          {change.isPending
-            ? "Saving…"
-            : required
-              ? "Stop requiring a login"
-              : "Require a login"}
-        </button>
       </div>
-    </section>
+
+      {needsPassword && (
+        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          Password for{" "}
+          <span className="font-mono text-ink">{policy.data.administrator ?? "the administrator"}</span>
+          <input
+            type="password"
+            value={password}
+            autoComplete="new-password"
+            onChange={(event) => setPassword(event.target.value)}
+            className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm
+                       text-ink focus-visible:outline-2 focus-visible:outline-offset-2
+                       focus-visible:outline-accent"
+          />
+        </label>
+      )}
+
+      {change.isError && (
+        <p className="text-xs text-danger">That could not be saved.</p>
+      )}
+
+      <button
+        type="button"
+        onClick={() =>
+          change.mutate({
+            authRequired: !required,
+            password: needsPassword ? password : undefined,
+          })
+        }
+        disabled={change.isPending || (needsPassword && password === "")}
+        className="self-start rounded-md border border-border-subtle px-2.5 py-1 text-xs
+                   text-ink-muted hover:text-ink disabled:opacity-50
+                   focus-visible:outline-2 focus-visible:outline-offset-2
+                   focus-visible:outline-accent"
+      >
+        {change.isPending
+          ? "Saving…"
+          : required
+            ? "Stop requiring a login"
+            : "Require a login"}
+      </button>
+    </Card>
   );
 }
 
@@ -431,9 +413,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   const libraries = categories.data ?? [];
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">Users</h2>
-
+    <Card title="Users" help="Who may sign in: what each may change, which libraries each sees, and how much of the interface each may choose.">
       <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
         {(users.data ?? []).map((user) => (
           <Row
@@ -460,7 +440,7 @@ export function Users({ currentUserId }: { currentUserId: number }) {
 
       <AddUser libraries={libraries} onAdded={invalidate} />
       <NewLibraryDefault />
-    </section>
+    </Card>
   );
 }
 

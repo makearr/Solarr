@@ -5,15 +5,18 @@ export function Card({
   title,
   help,
   toggle,
+  tone = "plain",
   children,
 }: {
   title: string;
   help: string;
   toggle?: ReactNode;
+  /** "warn" borders a group whose current setting deserves a second look. */
+  tone?: "plain" | "warn";
   children: ReactNode;
 }) {
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
+    <section className={`flex flex-col gap-3 rounded-lg border bg-surface p-4 ${tone === "warn" ? "border-warn" : "border-border-subtle"}`}>
       <div className="flex items-start gap-4">
         <div className="flex flex-1 flex-col gap-0.5">
           <h2 className="text-sm font-medium">{title}</h2>
