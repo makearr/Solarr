@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 
+import { Card } from "./SettingsCard";
+
 /** Section 10.11's failure memory, read and reversible. A release lands here
  *  when it fails; an automatic entry ages out on its own, a manual one stays
  *  until someone removes it. Removing one only allows it to be grabbed
@@ -27,13 +29,10 @@ export function Blocklist() {
   });
 
   return (
-    <div className="flex h-full flex-col gap-4 p-4">
-      <h2 className="text-sm font-medium">Blocklist</h2>
-      <p className="max-w-2xl text-xs text-ink-muted">
-        Releases that failed and will not be grabbed again. Removing an entry allows it to be
-        chosen next time something searches — it does not download anything now.
-      </p>
-
+    <Card
+      title="Failed releases"
+      help="Releases that failed and will not be grabbed again. Removing an entry lets the next search choose it; it downloads nothing now."
+    >
       {entries.isLoading && <Message>Loading…</Message>}
       {entries.error !== null && <Message>The blocklist could not be read.</Message>}
       {entries.data && entries.data.items.length === 0 && (
@@ -71,7 +70,7 @@ export function Blocklist() {
       )}
 
       {remove.isError && <p className="text-xs text-danger">That could not be removed.</p>}
-    </div>
+    </Card>
   );
 }
 

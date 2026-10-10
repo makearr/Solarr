@@ -4,6 +4,8 @@ import { useState } from "react";
 import { api } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 
+import { Card } from "./SettingsCard";
+
 /** The tags made from an album's Edit dialog: how many albums carry each, renamed or deleted here. A provider's
  *  genres are not listed; they are the provider's to change. */
 export function Tags() {
@@ -43,11 +45,10 @@ export function Tags() {
 
   const button = "rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted enabled:hover:text-ink disabled:opacity-50";
   return (
-    <div className="flex flex-col gap-3 p-4">
-      <p className="max-w-2xl text-xs text-ink-muted">
-        Tags you gave albums in their Edit dialog. Deleting one takes it off every album; the albums themselves are not touched.
-      </p>
-      {tags.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
+    <Card
+      title="Every tag"
+      help="Tags given in an Edit dialog. Deleting one takes it off everything it is on; nothing else is touched."
+    >      {tags.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {tags.error !== null && !tags.isLoading && <p className="text-sm text-danger">The tags could not be read.</p>}
       {tags.data && tags.data.length === 0 && (
         <p className="text-sm text-ink-muted">No tags yet. Add one from an album's Edit dialog.</p>
@@ -113,6 +114,6 @@ export function Tags() {
         </p>
       )}
       {remove.isError && <p className="text-xs text-danger">That could not be deleted.</p>}
-    </div>
+    </Card>
   );
 }

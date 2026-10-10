@@ -6,6 +6,8 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
+import { Card } from "./SettingsCard";
+
 type ExclusionPattern = components["schemas"]["ExclusionPattern"];
 type ExclusionAction = ExclusionPattern["action"];
 type BlockedContentEntry = components["schemas"]["BlockedContentEntry"];
@@ -69,15 +71,10 @@ function ExclusionPatterns() {
   if (patterns.error !== null) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">
-        Unwanted files
-      </h2>
-      <p className="text-xs text-ink-muted">
-        A file shaped like this is not media -- by name or extension, never by content. Shipped
-        defaults stay editable and removable, the same as anything added here.
-      </p>
-
+    <Card
+      title="Unwanted files"
+      help="A file shaped like this is not media: by name or extension, never by content. Shipped defaults stay editable and removable, the same as anything added here."
+    >
       {patterns.data && patterns.data.length > 0 ? (
         <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
           {patterns.data.map((pattern) => (
@@ -101,7 +98,7 @@ function ExclusionPatterns() {
       )}
 
       <AddPattern onAdded={invalidate} />
-    </section>
+    </Card>
   );
 }
 
@@ -268,15 +265,10 @@ function BlockedContent() {
   if (blocked.error !== null) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">
-        Blocked content
-      </h2>
-      <p className="text-xs text-ink-muted">
-        Bytes that never enter the library again, keyed on content hashes, never on a filename.
-        Created by the "remove and block" action on a specific file.
-      </p>
-
+    <Card
+      title="Blocked content"
+      help={'Bytes that never enter the library again, keyed on content hashes, never on a filename. Made by "Remove and block" on a file.'}
+    >
       {blocked.data && blocked.data.length > 0 ? (
         <ul className="divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
           {blocked.data.map((entry) => (
@@ -295,7 +287,7 @@ function BlockedContent() {
       )}
 
       {remove.isError && <p className="text-xs text-danger">That block could not be removed.</p>}
-    </section>
+    </Card>
   );
 }
 

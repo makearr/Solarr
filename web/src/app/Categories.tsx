@@ -7,6 +7,8 @@ import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
+import { Card } from "./SettingsCard";
+
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
 type MediaType = components["schemas"]["MediaType"];
@@ -80,9 +82,7 @@ export function Categories() {
   if (categories.error !== null) return null;
 
   return (
-    <section className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold text-ink">Libraries</h2>
-
+    <Card title="Every library" help="Each library holds one kind of media in its own root folders; its quality, naming and searching are set inside it.">
       {categories.data && categories.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
           {categories.data.map((category) =>
@@ -125,7 +125,7 @@ export function Categories() {
       )}
 
       <AddCategory onAdded={invalidate} />
-    </section>
+    </Card>
   );
 }
 
