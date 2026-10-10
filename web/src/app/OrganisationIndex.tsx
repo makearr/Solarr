@@ -53,7 +53,7 @@ export function OrganisationIndex() {
   return (
     <div ref={frameRef} className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">{type?.organisation.many || "Organisations"}</h2>
+        <h1 className="text-sm font-medium">{type?.organisation.many || "Organisations"}</h1>
         <div className="ml-auto">
           <PosterOptionsMenu options={options} onChange={setOptions} />
         </div>

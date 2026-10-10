@@ -19,9 +19,8 @@ export function Queue() {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">Queue</h2>
-      </div>
+      {/* The section tab already names the page on screen. */}
+      <h1 className="sr-only">Queue</h1>
       <div className="flex flex-col gap-4 p-4">
         {queue.isLoading && <Message>Loading the queue…</Message>}
         {queue.error !== null && <Message>The queue could not be read.</Message>}

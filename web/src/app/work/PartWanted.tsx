@@ -88,7 +88,7 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <h1 className="mr-2 text-base font-semibold">Wanted</h1>
+        <h1 className="mr-2 text-sm font-medium">Wanted</h1>
         {(["missing", "cutoff"] as const).map((key) => (
           <button
             key={key}

@@ -107,7 +107,7 @@ export function Unidentified() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">Unidentified</h2>
+        <h1 className="text-sm font-medium">Unidentified</h1>
         <span className="text-xs text-ink-muted">
           Files a scan found but could not confidently match to a work
         </span>

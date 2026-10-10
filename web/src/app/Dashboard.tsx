@@ -67,6 +67,7 @@ export function Dashboard() {
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-8 p-6">
+        <h1 className="sr-only">Dashboard</h1>
         <section className="flex flex-col gap-3">
           <SearchBox variant="hero" />
           <div className="flex flex-wrap gap-2">

@@ -301,6 +301,13 @@ const routes = [
       },
     }),
   ),
+  // About lives outside the router (App answers it signed out too), so only a full load reaches it.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/settings/about",
+    beforeLoad: () => window.location.replace("/about"),
+    component: () => null,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/libraries", component: LibrariesSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/blocklists", component: BlocklistsSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/tags", component: TagsSettings }),

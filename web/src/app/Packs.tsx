@@ -28,7 +28,7 @@ export function Packs() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
       <div className="flex items-center gap-3">
-        <h2 className="text-sm font-medium">Packs</h2>
+        <h1 className="text-sm font-medium">Packs</h1>
         <span className="text-xs text-ink-muted">
           One source, many works -- a discography, box set, anthology or compilation
         </span>

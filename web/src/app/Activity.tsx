@@ -54,7 +54,7 @@ export function Activity() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">Jobs</h2>
+        <h1 className="text-sm font-medium">Jobs</h1>
 
         <select
           aria-label="Filter by state"

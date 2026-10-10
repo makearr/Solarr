@@ -64,7 +64,7 @@ export function Calendar() {
   return (
     <div className="flex h-full flex-col gap-3 overflow-y-auto p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-medium">Calendar</h2>
+        <h1 className="text-sm font-medium">Calendar</h1>
         {stepped && (
           <div className="flex items-center gap-1">
             <Link

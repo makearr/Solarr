@@ -60,9 +60,8 @@ export function History() {
 
   return (
     <div className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">History</h2>
-      </div>
+      {/* The section tab already names the page on screen. */}
+      <h1 className="sr-only">History</h1>
       <div className="min-h-0 flex-1">
         {list.isLoading && <Message>Loading history…</Message>}
         {list.error !== null && <Message>History could not be read.</Message>}

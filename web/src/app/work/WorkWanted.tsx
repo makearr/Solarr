@@ -146,7 +146,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
   return (
     <div className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h2 className="text-sm font-medium">Wanted</h2>
+        <h1 className="text-sm font-medium">Wanted</h1>
         <div className="flex gap-1" role="group" aria-label={`Which wanted ${words.works}`}>
           {(["missing", "cutoff"] as const).map((option) => (
             <button

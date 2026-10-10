@@ -169,7 +169,7 @@ export function PeopleIndex() {
   return (
     <div ref={frameRef} className="flex h-full flex-col">
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
-        <h2 className="mr-2 text-sm font-medium">{title}</h2>
+        <h1 className="mr-2 text-sm font-medium">{title}</h1>
         {roles.length > 1 &&
           [...roles.map((entry) => ({ key: entry.key, label: entry.label })), { key: EVERYONE, label: "Everyone" }].map((entry) => (
             <button

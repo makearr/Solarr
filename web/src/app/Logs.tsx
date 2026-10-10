@@ -36,7 +36,7 @@ export function Logs() {
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-sm font-medium">Logs</h2>
+        <h1 className="text-sm font-medium">Logs</h1>
         <div className="flex gap-1">
           {LEVELS.map((option) => (
             <button
