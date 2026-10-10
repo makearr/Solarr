@@ -145,23 +145,48 @@ func (g DuplicateGroup) ExtraBytes() int64 {
 	return total - largest
 }
 
-// normaliseTrackText folds a title or artist to what identifies it: lower case, bracketed notes ("(Remastered 2011)",
-// "[Live]") dropped, everything but letters and digits collapsed.
+// normaliseTrackText folds a title or artist to what identifies it: lower case, everything but letters and digits
+// collapsed, and bracketed notes dropped ("(Remastered 2011)") unless they name another recording ("(Dub Mix)").
 func normaliseTrackText(text string) string {
-	var out strings.Builder
+	var out, note strings.Builder
 	depth := 0
 	for _, r := range strings.ToLower(text) {
 		switch {
 		case r == '(' || r == '[':
+			if depth == 0 {
+				note.Reset()
+			}
 			depth++
 		case r == ')' || r == ']':
 			depth = max(depth-1, 0)
+			if depth == 0 && namesAnotherRecording(note.String()) {
+				out.WriteString(" " + note.String() + " ")
+			}
+		case !unicode.IsLetter(r) && !unicode.IsDigit(r):
+			if depth > 0 {
+				note.WriteRune(' ')
+			} else {
+				out.WriteRune(' ')
+			}
 		case depth > 0:
-		case unicode.IsLetter(r) || unicode.IsDigit(r):
-			out.WriteRune(r)
+			note.WriteRune(r)
 		default:
-			out.WriteRune(' ')
+			out.WriteRune(r)
 		}
 	}
 	return strings.Join(strings.Fields(out.String()), " ")
+}
+
+// recordingWords mark a bracketed note as another recording of the song, not another release of the same one.
+var recordingWords = []string{
+	"mix", "remix", "dub", "instrumental", "live", "acoustic", "demo", "cappella", "karaoke", "extended", "reprise", "unplugged",
+}
+
+func namesAnotherRecording(note string) bool {
+	for _, word := range strings.Fields(note) {
+		if slices.Contains(recordingWords, word) {
+			return true
+		}
+	}
+	return false
 }

@@ -26,6 +26,10 @@ func TestDuplicates_FindsTheSameTrackInDifferentFormatsAndLeavesDifferentOnesAlo
 		{"Album", "Other", "flac", 180_000, 900_000, "Album/02.flac"},
 		{"Compilation", "Other", "mp3", 240_000, 96_000, "Comp/08.mp3"}, // a different length: another recording
 		{"Compilation", "Song", "mp3", 0, 96_000, "Comp/09.mp3"},        // no measured length: cannot be told apart
+		// Three takes of one length are three recordings: a bracketed mix or instrumental is not a release note.
+		{"Single", "Lantern (12\" Version)", "flac", 380_000, 900_000, "Single/01.flac"},
+		{"Single", "Lantern (Dub Mix)", "flac", 382_000, 900_000, "Single/03.flac"},
+		{"Single", "Lantern [Instrumental]", "flac", 379_000, 900_000, "Single/04.flac"},
 	}
 	works := map[string]int64{}
 	items := map[string]int64{}
