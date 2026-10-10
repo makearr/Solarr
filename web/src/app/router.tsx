@@ -8,6 +8,8 @@ import {
 } from "@tanstack/react-router";
 
 import { api } from "@/api/client";
+import { t } from "@/lib/i18n";
+import { EmptyState } from "@/ui/EmptyState";
 
 import { Activity } from "./Activity";
 import { History } from "./History";
@@ -70,11 +72,14 @@ async function redirectToLibrary(categoryId: string) {
 function LevelForLibrary() {
   const { categoryId, level } = useParams({ strict: false }) as { categoryId: string; level: string };
   const library = useLibrary(categoryId);
-  const entity = library?.levels.find((entry) => entry.key === level)?.entity;
+  // Nothing until the library is known: a guess would ask the server for a list this level does not have.
+  if (!library) return null;
+  const entity = library.levels.find((entry) => entry.key === level)?.entity;
   if (entity === "person") return <PeopleIndex />;
   if (entity === "organisation") return <OrganisationIndex />;
   if (entity === "work") return <WorkIndex />;
-  return <LibraryLevelList />;
+  if (entity === "work_part") return <LibraryLevelList />;
+  return <EmptyState title={t("level.notFound")} />;
 }
 
 const rootRoute = createRootRoute({

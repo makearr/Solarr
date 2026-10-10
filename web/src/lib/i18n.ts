@@ -19,6 +19,7 @@ const catalogue = {
   "tab.history": "History",
   "tab.search": "Search",
   "work.notFound": "This {work} could not be found.",
+  "level.notFound": "This library has no such list.",
   "work.loading": "Loading…",
   "work.partsOnDisk": "{present} of {required} {parts} on disk",
   "work.partsPresent": "{present} {parts} on disk",
