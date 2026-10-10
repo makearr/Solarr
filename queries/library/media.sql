@@ -31,15 +31,15 @@ INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           claimed_attributes_id, measured_attributes_id,
                           attribute_mismatch_json, duration_ms, width, height,
                           video_bitrate, audio_bitrate, overall_bitrate,
-                          probe_json, first_seen_at, verified_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                          probe_json, first_seen_at, verified_at, kind)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetMediaObject :one
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object WHERE id = ?;
 
 -- The cheap identity check an incremental scan runs before reading a file.
@@ -48,7 +48,7 @@ SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object WHERE quick_hash = ?;
 
 -- oshash is exact identity: the same bytes, with no decoding (ADR-35).
@@ -57,7 +57,7 @@ SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object WHERE oshash = ?;
 
 -- Measured attributes replace claimed ones after probing; the claim is kept so a
@@ -92,7 +92,7 @@ SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object
 WHERE fingerprinted_at IS NULL AND id > sqlc.arg(after_id)
 ORDER BY id
@@ -140,9 +140,7 @@ FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
 WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
-  AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
-       OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
-       OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')
+  AND o.kind = 'video'
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
@@ -234,3 +232,15 @@ DELETE FROM media_object WHERE id = ?;
 -- name: CountLibraryPathsByRootFolder :many
 SELECT root_folder_id, CAST(count(*) AS INTEGER) AS total
 FROM library_path GROUP BY root_folder_id ORDER BY root_folder_id;
+
+-- Media objects not yet given a kind, oldest first, each with its primary path: what the start-up pass classifies.
+-- name: ListUnclassifiedMediaObjects :many
+SELECT o.id, CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
+                            ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
+FROM media_object o
+WHERE o.kind IS NULL AND o.id > sqlc.arg(after_id)
+ORDER BY o.id
+LIMIT sqlc.arg(page_size);
+
+-- name: SetMediaObjectKind :exec
+UPDATE media_object SET kind = ? WHERE id = ?;

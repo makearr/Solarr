@@ -14,20 +14,14 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
-// VideoExtensions are the containers a TV scan reads.
-var VideoExtensions = []string{".mkv", ".mp4", ".m4v", ".avi", ".ts", ".m2ts", ".mov", ".wmv", ".webm", ".mpg", ".mpeg", ".flv", ".ogm", ".iso"}
-
 // IsVideo reports a path worth probing as an episode: a video file that is not a sample or an extra.
 func IsVideo(relPath string) bool {
-	lowered := strings.ToLower(relPath)
-	if !slices.ContainsFunc(VideoExtensions, func(extension string) bool { return strings.HasSuffix(lowered, extension) }) {
-		return false
-	}
-	return !isExtra(lowered)
+	return filekind.Of(relPath) == filekind.Video && !isExtra(strings.ToLower(relPath))
 }
 
 // extraFolders are the folder names Sonarr, Plex and Jellyfin keep non-episode video in.

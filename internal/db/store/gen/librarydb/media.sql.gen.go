@@ -125,8 +125,8 @@ INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           claimed_attributes_id, measured_attributes_id,
                           attribute_mismatch_json, duration_ms, width, height,
                           video_bitrate, audio_bitrate, overall_bitrate,
-                          probe_json, first_seen_at, verified_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          probe_json, first_seen_at, verified_at, kind)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateMediaObjectParams struct {
@@ -150,6 +150,7 @@ type CreateMediaObjectParams struct {
 	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
+	Kind                  sql.NullString
 }
 
 // Returning the row costs four times the insert itself at import scale, so this is
@@ -176,6 +177,7 @@ func (q *Queries) CreateMediaObject(ctx context.Context, arg CreateMediaObjectPa
 		arg.ProbeJson,
 		arg.FirstSeenAt,
 		arg.VerifiedAt,
+		arg.Kind,
 	)
 	if err != nil {
 		return 0, err
@@ -206,7 +208,7 @@ SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object WHERE quick_hash = ?
 `
 
@@ -242,6 +244,7 @@ func (q *Queries) FindMediaObjectsByQuickHash(ctx context.Context, quickHash str
 			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -305,7 +308,7 @@ SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object WHERE id = ?
 `
 
@@ -334,6 +337,7 @@ func (q *Queries) GetMediaObject(ctx context.Context, id int64) (MediaObject, er
 		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -343,7 +347,7 @@ SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object WHERE oshash = ?
 `
 
@@ -373,6 +377,7 @@ func (q *Queries) GetMediaObjectByOshash(ctx context.Context, oshash sql.NullStr
 		&i.ProbeJson,
 		&i.FirstSeenAt,
 		&i.VerifiedAt,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -747,9 +752,7 @@ FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
 WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
-  AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
-       OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
-       OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')
+  AND o.kind = 'video'
 ORDER BY o.id
 LIMIT ?3
 `
@@ -797,12 +800,55 @@ func (q *Queries) ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoPr
 	return items, nil
 }
 
+const listUnclassifiedMediaObjects = `-- name: ListUnclassifiedMediaObjects :many
+SELECT o.id, CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
+                            ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
+FROM media_object o
+WHERE o.kind IS NULL AND o.id > ?1
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListUnclassifiedMediaObjectsParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListUnclassifiedMediaObjectsRow struct {
+	ID      int64
+	RelPath string
+}
+
+// Media objects not yet given a kind, oldest first, each with its primary path: what the start-up pass classifies.
+func (q *Queries) ListUnclassifiedMediaObjects(ctx context.Context, arg ListUnclassifiedMediaObjectsParams) ([]ListUnclassifiedMediaObjectsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnclassifiedMediaObjects, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnclassifiedMediaObjectsRow{}
+	for rows.Next() {
+		var i ListUnclassifiedMediaObjectsRow
+		if err := rows.Scan(&i.ID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnfingerprinted = `-- name: ListUnfingerprinted :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
        measured_attributes_id, attribute_mismatch_json, duration_ms, width,
        height, video_bitrate, audio_bitrate, overall_bitrate, probe_json,
-       first_seen_at, verified_at
+       first_seen_at, verified_at, kind
 FROM media_object
 WHERE fingerprinted_at IS NULL AND id > ?1
 ORDER BY id
@@ -847,6 +893,7 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 			&i.ProbeJson,
 			&i.FirstSeenAt,
 			&i.VerifiedAt,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -1061,6 +1108,20 @@ func (q *Queries) SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttr
 		arg.VerifiedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const setMediaObjectKind = `-- name: SetMediaObjectKind :exec
+UPDATE media_object SET kind = ? WHERE id = ?
+`
+
+type SetMediaObjectKindParams struct {
+	Kind sql.NullString
+	ID   int64
+}
+
+func (q *Queries) SetMediaObjectKind(ctx context.Context, arg SetMediaObjectKindParams) error {
+	_, err := q.db.ExecContext(ctx, setMediaObjectKind, arg.Kind, arg.ID)
 	return err
 }
 

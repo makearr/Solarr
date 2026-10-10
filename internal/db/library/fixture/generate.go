@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/filekind"
 )
 
 // baseEpoch is fixed, so two runs of the same spec produce identical rows.
@@ -303,6 +304,7 @@ func insertFiles(ctx context.Context, opened *store.Store, plans []*workPlan, at
 				OverallBitrate:       number(128_000 + serial%1_000_000),
 				FirstSeenAt:          baseEpoch,
 				VerifiedAt:           number(baseEpoch),
+				Kind:                 text(string(filekind.Of(relativePath(plan, part)))),
 			})
 			if err != nil {
 				return err

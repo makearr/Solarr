@@ -642,6 +642,8 @@ type Querier interface {
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
+	// Media objects not yet given a kind, oldest first, each with its primary path: what the start-up pass classifies.
+	ListUnclassifiedMediaObjects(ctx context.Context, arg ListUnclassifiedMediaObjectsParams) ([]ListUnclassifiedMediaObjectsRow, error)
 	// Fingerprint generation is the lowest-priority background work and resumable,
 	// so it asks for the next unfingerprinted rows rather than scanning (ADR-35).
 	ListUnfingerprinted(ctx context.Context, arg ListUnfingerprintedParams) ([]MediaObject, error)
@@ -905,6 +907,7 @@ type Querier interface {
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	SetMediaObjectKind(ctx context.Context, arg SetMediaObjectKindParams) error
 	// What the probe read of one file, replacing an earlier probe.
 	SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) error
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error

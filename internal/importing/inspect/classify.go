@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/makearr/Solarr/internal/platform/filekind"
 )
 
 // Class is what role one file plays in an import (ADR-48's classify stage).
@@ -28,32 +30,13 @@ const (
 // guards against.
 const DefaultMediaSizeFloorBytes = 64 * 1024
 
-// mediaExtensions is deliberately audio-and-video-only at this stage: books,
-// comics, ROMs and every other media type add their own vocabulary when their own
-// stage wires a caller into this package (ADR-23 -- growing this list is not
-// scope creep, it is exactly the extension point working as intended).
-var mediaExtensions = map[string]bool{
-	".flac": true, ".mp3": true, ".m4a": true, ".aac": true, ".ogg": true, ".opus": true,
-	".wav": true, ".aiff": true, ".aif": true, ".ape": true, ".wv": true, ".alac": true,
-	".dsf": true, ".dff": true,
-	".mp4": true, ".mkv": true, ".avi": true, ".mov": true, ".m4v": true, ".ts": true, ".webm": true,
-}
-
 var archiveExtensions = map[string]bool{
 	".zip": true, ".rar": true, ".7z": true, ".tar": true, ".gz": true, ".bz2": true,
 	".xz": true, ".cbz": true, ".cbr": true,
 }
 
-var artworkExtensions = map[string]bool{
-	".jpg": true, ".jpeg": true, ".png": true, ".webp": true, ".bmp": true, ".gif": true,
-}
-
 var sidecarExtensions = map[string]bool{
 	".cue": true, ".nfo": true, ".m3u": true, ".m3u8": true, ".log": true,
-}
-
-var subtitleExtensions = map[string]bool{
-	".srt": true, ".vtt": true, ".ass": true, ".ssa": true, ".sub": true, ".idx": true,
 }
 
 // junkNames matches case-insensitively against the whole filename (not just the
@@ -89,19 +72,20 @@ func Classify(relPath string, sizeBytes, floor int64) Class {
 		return ClassArchive
 	}
 	ext := strings.ToLower(path.Ext(name))
+	kind := filekind.Of(name)
 	switch {
-	case mediaExtensions[ext]:
+	case kind == filekind.Audio || kind == filekind.Video:
 		if sizeBytes < floor {
 			return ClassJunk
 		}
 		return ClassMedia
 	case archiveExtensions[ext]:
 		return ClassArchive
-	case artworkExtensions[ext]:
+	case kind == filekind.Image:
 		return ClassArtwork
 	case sidecarExtensions[ext]:
 		return ClassSidecar
-	case subtitleExtensions[ext]:
+	case kind == filekind.Subtitle:
 		return ClassSubtitle
 	case ext == "":
 		return ClassUnknown

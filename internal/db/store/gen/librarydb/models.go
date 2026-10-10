@@ -462,6 +462,7 @@ type MediaObject struct {
 	ProbeJson             sql.NullString
 	FirstSeenAt           int64
 	VerifiedAt            sql.NullInt64
+	Kind                  sql.NullString
 }
 
 type MediaProbe struct {

@@ -312,6 +312,11 @@ func (p *process) openDatabases(ctx context.Context) error {
 	if err := p.copyDecisions(ctx); err != nil {
 		p.logger.Warn("decisions not moved to statistics.db yet", slog.Any("error", err))
 	}
+	if classified, err := library.NewPhysical(p.library).ClassifyKinds(ctx); err != nil {
+		p.logger.Warn("media objects not all classified yet", slog.Any("error", err))
+	} else if classified > 0 {
+		p.logger.Info("media objects classified by kind", slog.Int("files", classified))
+	}
 
 	return p.reconcileRestore(ctx, wall, restored)
 }

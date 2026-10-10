@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
@@ -153,12 +154,45 @@ func findOrCreateObject(ctx context.Context, queries *librarydb.Queries, file Ph
 
 	created, err := queries.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
 		SizeBytes: file.SizeBytes, QuickHash: file.QuickHash,
-		FirstSeenAt: file.FirstSeenAt.Unix(),
+		FirstSeenAt: file.FirstSeenAt.Unix(), Kind: sql.NullString{String: string(filekind.Of(file.RelPath)), Valid: true},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("create media object: %w", err)
 	}
 	return created, nil
+}
+
+// classifyPage is how many media objects one transaction of ClassifyKinds sets (Invariant 2).
+const classifyPage = 200
+
+// ClassifyKinds gives every media object still without a kind the kind of its path, a page per transaction, and
+// answers how many it set: the rows registered before media_object had a kind (revision 2, D3).
+func (p Physical) ClassifyKinds(ctx context.Context) (int, error) {
+	classified := 0
+	var after int64
+	for {
+		rows, err := librarydb.New(p.store.Read()).ListUnclassifiedMediaObjects(ctx, librarydb.ListUnclassifiedMediaObjectsParams{
+			AfterID: after, PageSize: classifyPage,
+		})
+		if err != nil || len(rows) == 0 {
+			return classified, err
+		}
+		err = p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := librarydb.New(tx)
+			for _, row := range rows {
+				if err := queries.SetMediaObjectKind(ctx, librarydb.SetMediaObjectKindParams{
+					Kind: sql.NullString{String: string(filekind.Of(row.RelPath)), Valid: true}, ID: row.ID,
+				}); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return classified, fmt.Errorf("library: classify media objects: %w", err)
+		}
+		after, classified = rows[len(rows)-1].ID, classified+len(rows)
+	}
 }
 
 // UnmeasuredFile is one media_object still waiting for ADR-39's measured half,

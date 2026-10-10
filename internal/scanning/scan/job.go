@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
@@ -334,21 +335,9 @@ func (j *Job) observe(ctx context.Context, root settings.RootFolder, consumer Co
 	return consumer.Observe(ctx, root, categoryID, observed)
 }
 
-// AudioExtensions are the containers stage 3 reads. It is an Include function rather
-// than a constant list in the sweep, because a media type decides what its own files
-// look like (ADR-23) and the sweep has no opinion.
-var AudioExtensions = []string{".flac", ".mp3", ".m4a", ".ogg", ".opus", ".wav", ".aiff", ".wma", ".ape"}
-
-// IsAudio reports a path worth probing as music.
-func IsAudio(relPath string) bool {
-	lowered := strings.ToLower(relPath)
-	for _, extension := range AudioExtensions {
-		if strings.HasSuffix(lowered, extension) {
-			return true
-		}
-	}
-	return false
-}
+// IsAudio reports a path worth probing as music: an Include function rather than a list in the sweep, because a media
+// type decides what its own files look like (ADR-23); the kinds themselves are filekind's one table.
+func IsAudio(relPath string) bool { return filekind.Of(relPath) == filekind.Audio }
 
 // EnqueueDirectories submits a rescan of only these directories of one root.
 // Its action key names the directories rather than the root: it never touches

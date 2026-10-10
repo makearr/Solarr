@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
@@ -383,5 +384,88 @@ func TestFilesDifferingOnlyInDurationShareOneAttributeRow(t *testing.T) {
 	}
 	if len(durations) != 3 {
 		t.Errorf("the three rips report %d distinct durations, want 3", len(durations))
+	}
+}
+
+// Revision 2, D3: a scan registers each file with its kind, and the rows from before the column get theirs once.
+func TestClassifyKinds_GivesEveryUnclassifiedObjectTheKindOfItsPath(t *testing.T) {
+	opened, queries := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Show/S01E01.mkv", SizeBytes: 10, QuickHash: "registered", FirstSeenAt: time.Unix(1, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	unclassified := map[string]string{"A/01.flac": "audio", "B/film.mp4": "video", "B/film.en.srt": "subtitle", "A/cover.jpg": "image", "A/notes.nfo": "other"}
+	ids := map[string]int64{}
+	for relPath := range unclassified {
+		object := createObject(t, opened, "quick-"+relPath, 1)
+		ids[relPath] = object.ID
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			_, err := q.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: object.ID, RootFolderID: 1, RelPath: relPath, LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+			})
+			return err
+		})
+	}
+
+	classified, err := physical.ClassifyKinds(t.Context())
+	if err != nil || classified != len(unclassified) {
+		t.Fatalf("ClassifyKinds = %d, %v; want %d", classified, err, len(unclassified))
+	}
+	got := map[string]string{}
+	for relPath, id := range ids {
+		object, err := queries.GetMediaObject(t.Context(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got[relPath] = object.Kind.String
+	}
+	if fmt.Sprint(got) != fmt.Sprint(unclassified) {
+		t.Errorf("kinds = %v, want %v", got, unclassified)
+	}
+	object, err := queries.GetMediaObject(t.Context(), registered[0].MediaObjectID)
+	if err != nil || object.Kind != (sql.NullString{String: "video", Valid: true}) {
+		t.Errorf("registered kind = %+v, %v; want video", object.Kind, err)
+	}
+	if again, err := physical.ClassifyKinds(t.Context()); again != 0 || err != nil {
+		t.Errorf("a second pass = %d, %v; want 0", again, err)
+	}
+}
+
+// Revision 2, D3: the video re-probe picks its files by kind, so a stale audio probe is left alone.
+func TestListStaleVideoProbes_FindsOnlyVideo(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	registered, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Show/S01E01.mkv", SizeBytes: 10, QuickHash: "video", FirstSeenAt: time.Unix(1, 0)},
+		{RelPath: "Artist/01.flac", SizeBytes: 10, QuickHash: "audio", FirstSeenAt: time.Unix(1, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	attributes := intern(t, opened, "hash-measured", "")
+	err = opened.Write(t.Context(), store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		for _, file := range registered {
+			if _, err := tx.ExecContext(ctx, `UPDATE media_object SET measured_attributes_id = ? WHERE id = ?`, attributes.ID, file.MediaObjectID); err != nil {
+				return err
+			}
+			if err := librarydb.New(tx).SetMediaProbe(ctx, librarydb.SetMediaProbeParams{
+				MediaObjectID: file.MediaObjectID, ProbeVersion: library.ProbeVersionLyrics, ProbedAt: 1, Json: "{}",
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stale, err := physical.ListStaleVideoProbes(t.Context(), 0, 10)
+	want := []library.UnmeasuredFile{{MediaObjectID: registered[0].MediaObjectID, RootFolderID: 1, RelPath: "Show/S01E01.mkv"}}
+	if err != nil || fmt.Sprint(stale) != fmt.Sprint(want) {
+		t.Errorf("ListStaleVideoProbes = %+v, %v; want %+v", stale, err, want)
 	}
 }

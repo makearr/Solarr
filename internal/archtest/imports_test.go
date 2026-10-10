@@ -89,7 +89,7 @@ var allowedInternalImports = map[string][]string{
 	// Field-level provider merge (ADR-8): no I/O, the caller fetches rows and
 	// priority order.
 	"internal/metadata/metaresolve": {"internal/platform/parallel"},
-	"internal/db/library/fixture": {
+	"internal/db/library/fixture": {"internal/platform/filekind",
 		"internal/platform/clock", "internal/platform/fsx", "internal/db/store",
 		"internal/db/store/gen/librarydb", "migrations",
 	},
@@ -98,7 +98,7 @@ var allowedInternalImports = map[string][]string{
 	// touches the filesystem. model is F29's queue entry shape (model.Identification,
 	// the ADR-24 chain's own candidate type) -- model has no dependencies of its own,
 	// so this stays a downward arrow like every other entry here.
-	"internal/db/library": {
+	"internal/db/library": {"internal/platform/filekind",
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/pack",
 		"internal/identify/model", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/librarydb",
 		"internal/platform/listfilter", "internal/metadata/metaresolve",
@@ -145,7 +145,7 @@ var allowedInternalImports = map[string][]string{
 	// segment plausibility are both injected functions, so this never
 	// imports internal/platform/mediatool, internal/identify/parse or internal/media/music. fsx is
 	// the one dependency, for the walk itself.
-	"internal/importing/inspect": {"internal/platform/fsx"},
+	"internal/importing/inspect": {"internal/platform/filekind", "internal/platform/fsx"},
 	"internal/importing/unpack":  {"internal/importing/inspect", "internal/platform/archive", "internal/platform/fsx"},
 	// Watches download folders: lists, checks an entry has settled, enqueues an import.
 	"internal/importing/downloadwatch": {
@@ -242,7 +242,7 @@ var allowedInternalImports = map[string][]string{
 	// What it finds is persisted by the caller, so it touches no database.
 	// The sweep itself walks only the fsx seam; the job handler beside it composes
 	// the pieces a scan needs, the way internal/db/recovery does.
-	"internal/scanning/scan": {
+	"internal/scanning/scan": {"internal/platform/filekind",
 		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library",
 		"internal/platform/mediatool", "internal/db/settings",
 	},
@@ -301,6 +301,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/db/store/gen/settingsdb":      {},
 	"internal/db/store/gen/jobsdb":          {},
 	"internal/db/store/gen/statisticsdb":    {},
+	"internal/platform/filekind":            {},
 	"internal/db/statistics/statisticstest": {"internal/db/store", "internal/platform/clock", "internal/platform/fsx", "migrations"},
 	"internal/db/statistics":                {"internal/db/library", "internal/db/store", "internal/db/store/gen/statisticsdb"},
 	"internal/db/store/gen/librarydb":       {},
@@ -327,7 +328,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/parallel": {},
 	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
 	"internal/media":             {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/mover", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
-	"internal/media/tv":          {"internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/metaresolve", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
+	"internal/media/tv":          {"internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/metaresolve", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// Sonarr's TheTVDB proxy (T4): the preferred TV source, never required.
 	"internal/metadata/skyhook": {"internal/platform/httpx"},
 	// Generated by oapi-codegen from api/openapi.yaml (ADR-31).

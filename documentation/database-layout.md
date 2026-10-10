@@ -85,6 +85,11 @@ language, 3 also a video's picture, subtitle tracks and encoder's CRF (`library.
 before what the probe reads now is found by number (`probe_version < 2` for any file, `< 3` for a video) and read
 once more by the background probe. `media_object.probe_json` is no longer written and goes in a later migration.
 
+`media_object.kind` is what the file is by its extension -- `audio`, `video`, `subtitle`, `image` or `other` -- set
+when the file is registered, from the one table in `internal/platform/filekind` that the scan, the import classifier
+and the TV consumer all read. "A video" above is `kind = 'video'`. Rows registered before the column (migration 0071)
+are classified once at startup.
+
 ## Interned attributes against per-file measurements
 
 `media_attributes` is interned: one row per distinct combination, referenced by many files.
