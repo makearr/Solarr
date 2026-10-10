@@ -189,9 +189,20 @@ func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize in
 	return files, nil
 }
 
-// ListStaleProbes pages through the files measured before the probe read lyrics languages, oldest id first.
+// The probe versions: what a probe read of a file, kept beside it in media_probe so a stale one is found by number.
+const (
+	// ProbeVersionLyrics read the lyrics language too.
+	ProbeVersionLyrics = 2
+	// ProbeVersionVideo read a video's picture, subtitle tracks and encoder's CRF too; what the probe reads now.
+	ProbeVersionVideo   = 3
+	ProbeVersionCurrent = ProbeVersionVideo
+)
+
+// ListStaleProbes pages through the files probed before the probe read lyrics languages, oldest id first.
 func (p Physical) ListStaleProbes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
-	rows, err := librarydb.New(p.store.Read()).ListStaleProbes(ctx, librarydb.ListStaleProbesParams{AfterID: afterID, PageSize: pageSize})
+	rows, err := librarydb.New(p.store.Read()).ListStaleProbes(ctx, librarydb.ListStaleProbesParams{
+		BelowVersion: ProbeVersionLyrics, AfterID: afterID, PageSize: pageSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list stale probes: %w", err)
 	}
@@ -202,9 +213,11 @@ func (p Physical) ListStaleProbes(ctx context.Context, afterID int64, pageSize i
 	return files, nil
 }
 
-// ListStaleVideoProbes pages through the video files measured before the probe read the picture and subtitle tracks.
+// ListStaleVideoProbes pages through the video files probed before the probe read the picture and subtitle tracks.
 func (p Physical) ListStaleVideoProbes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
-	rows, err := librarydb.New(p.store.Read()).ListStaleVideoProbes(ctx, librarydb.ListStaleVideoProbesParams{AfterID: afterID, PageSize: pageSize})
+	rows, err := librarydb.New(p.store.Read()).ListStaleVideoProbes(ctx, librarydb.ListStaleVideoProbesParams{
+		BelowVersion: ProbeVersionVideo, AfterID: afterID, PageSize: pageSize,
+	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list stale video probes: %w", err)
 	}
@@ -371,7 +384,9 @@ type MeasuredScalars struct {
 	DurationMs                                 int64
 	Width, Height                              int
 	VideoBitrate, AudioBitrate, OverallBitrate int64
-	ProbeJSON                                  string
+	// ProbeJSON is what the probe read, kept in media_probe under ProbeVersion.
+	ProbeJSON    string
+	ProbeVersion int64
 }
 
 // RecordMeasured writes ADR-39's measured half for one file: interning claim
@@ -390,6 +405,13 @@ func (p Physical) RecordMeasured(
 		if err != nil {
 			return fmt.Errorf("intern measured attributes: %w", err)
 		}
+		if scalars.ProbeJSON != "" {
+			if err := queries.SetMediaProbe(ctx, librarydb.SetMediaProbeParams{
+				MediaObjectID: mediaObjectID, ProbeVersion: scalars.ProbeVersion, ProbedAt: verifiedAt, Json: scalars.ProbeJSON,
+			}); err != nil {
+				return fmt.Errorf("record probe: %w", err)
+			}
+		}
 		return queries.SetMeasuredAttributes(ctx, librarydb.SetMeasuredAttributesParams{
 			MeasuredAttributesID:  sql.NullInt64{Int64: attrRow.ID, Valid: true},
 			AttributeMismatchJson: nullString(mismatchJSON),
@@ -399,7 +421,6 @@ func (p Physical) RecordMeasured(
 			VideoBitrate:          sql.NullInt64{Int64: scalars.VideoBitrate, Valid: scalars.VideoBitrate > 0},
 			AudioBitrate:          sql.NullInt64{Int64: scalars.AudioBitrate, Valid: scalars.AudioBitrate > 0},
 			OverallBitrate:        sql.NullInt64{Int64: scalars.OverallBitrate, Valid: scalars.OverallBitrate > 0},
-			ProbeJson:             nullString(scalars.ProbeJSON),
 			VerifiedAt:            sql.NullInt64{Int64: verifiedAt, Valid: true},
 			ID:                    mediaObjectID,
 		})

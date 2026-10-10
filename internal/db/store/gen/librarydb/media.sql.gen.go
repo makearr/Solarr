@@ -691,17 +691,18 @@ func (q *Queries) ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHas
 
 const listStaleProbes = `-- name: ListStaleProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
-FROM media_object o
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
-WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
-  AND o.probe_json NOT LIKE '%"LyricsLanguages"%' AND o.id > ?1
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
 ORDER BY o.id
-LIMIT ?2
+LIMIT ?3
 `
 
 type ListStaleProbesParams struct {
-	AfterID  int64
-	PageSize int64
+	BelowVersion int64
+	AfterID      int64
+	PageSize     int64
 }
 
 type ListStaleProbesRow struct {
@@ -711,9 +712,9 @@ type ListStaleProbesRow struct {
 	RelPath      string
 }
 
-// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
+// Files whose probe predates what the probe now reads of every file (below_version), read once more.
 func (q *Queries) ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStaleProbes, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listStaleProbes, arg.BelowVersion, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -742,20 +743,21 @@ func (q *Queries) ListStaleProbes(ctx context.Context, arg ListStaleProbesParams
 
 const listStaleVideoProbes = `-- name: ListStaleVideoProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
-FROM media_object o
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
-WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
-  AND (o.probe_json NOT LIKE '%"SubtitleLanguages"%' OR o.probe_json NOT LIKE '%"CRF"%') AND o.id > ?1
+WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
   AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
        OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
        OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')
 ORDER BY o.id
-LIMIT ?2
+LIMIT ?3
 `
 
 type ListStaleVideoProbesParams struct {
-	AfterID  int64
-	PageSize int64
+	BelowVersion int64
+	AfterID      int64
+	PageSize     int64
 }
 
 type ListStaleVideoProbesRow struct {
@@ -765,9 +767,10 @@ type ListStaleVideoProbesRow struct {
 	RelPath      string
 }
 
-// Video files measured before the probe read the picture (resolution, HDR, frame rate), the subtitle tracks and the encoder's CRF.
+// Video files whose probe predates what the probe now reads of a video (below_version): the picture, the subtitle
+// tracks and the encoder's CRF.
 func (q *Queries) ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listStaleVideoProbes, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listStaleVideoProbes, arg.BelowVersion, arg.AfterID, arg.PageSize)
 	if err != nil {
 		return nil, err
 	}
@@ -1025,7 +1028,7 @@ UPDATE media_object
 SET measured_attributes_id = ?, attribute_mismatch_json = ?,
     duration_ms = ?, width = ?, height = ?,
     video_bitrate = ?, audio_bitrate = ?, overall_bitrate = ?,
-    probe_json = ?, verified_at = ?
+    probe_json = NULL, verified_at = ?
 WHERE id = ?
 `
 
@@ -1038,7 +1041,6 @@ type SetMeasuredAttributesParams struct {
 	VideoBitrate          sql.NullInt64
 	AudioBitrate          sql.NullInt64
 	OverallBitrate        sql.NullInt64
-	ProbeJson             sql.NullString
 	VerifiedAt            sql.NullInt64
 	ID                    int64
 }
@@ -1056,9 +1058,32 @@ func (q *Queries) SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttr
 		arg.VideoBitrate,
 		arg.AudioBitrate,
 		arg.OverallBitrate,
-		arg.ProbeJson,
 		arg.VerifiedAt,
 		arg.ID,
+	)
+	return err
+}
+
+const setMediaProbe = `-- name: SetMediaProbe :exec
+INSERT INTO media_probe (media_object_id, probe_version, probed_at, json) VALUES (?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  probe_version = excluded.probe_version, probed_at = excluded.probed_at, json = excluded.json
+`
+
+type SetMediaProbeParams struct {
+	MediaObjectID int64
+	ProbeVersion  int64
+	ProbedAt      int64
+	Json          string
+}
+
+// What the probe read of one file, replacing an earlier probe.
+func (q *Queries) SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) error {
+	_, err := q.db.ExecContext(ctx, setMediaProbe,
+		arg.MediaObjectID,
+		arg.ProbeVersion,
+		arg.ProbedAt,
+		arg.Json,
 	)
 	return err
 }

@@ -68,8 +68,14 @@ UPDATE media_object
 SET measured_attributes_id = ?, attribute_mismatch_json = ?,
     duration_ms = ?, width = ?, height = ?,
     video_bitrate = ?, audio_bitrate = ?, overall_bitrate = ?,
-    probe_json = ?, verified_at = ?
+    probe_json = NULL, verified_at = ?
 WHERE id = ?;
+
+-- What the probe read of one file, replacing an earlier probe.
+-- name: SetMediaProbe :exec
+INSERT INTO media_probe (media_object_id, probe_version, probed_at, json) VALUES (?, ?, ?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET
+  probe_version = excluded.probe_version, probed_at = excluded.probed_at, json = excluded.json;
 
 -- The claimed half (todo 4.2): derived once per release folder at scan time,
 -- from the release name rather than the file's own bytes, so it needs no
@@ -116,23 +122,24 @@ WHERE o.measured_attributes_id IS NULL AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
--- Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
+-- Files whose probe predates what the probe now reads of every file (below_version), read once more.
 -- name: ListStaleProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
-FROM media_object o
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
-WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
-  AND o.probe_json NOT LIKE '%"LyricsLanguages"%' AND o.id > sqlc.arg(after_id)
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
--- Video files measured before the probe read the picture (resolution, HDR, frame rate), the subtitle tracks and the encoder's CRF.
+-- Video files whose probe predates what the probe now reads of a video (below_version): the picture, the subtitle
+-- tracks and the encoder's CRF.
 -- name: ListStaleVideoProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
-FROM media_object o
+FROM media_probe mp
+JOIN media_object o ON o.id = mp.media_object_id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
-WHERE o.measured_attributes_id IS NOT NULL AND o.probe_json IS NOT NULL
-  AND (o.probe_json NOT LIKE '%"SubtitleLanguages"%' OR o.probe_json NOT LIKE '%"CRF"%') AND o.id > sqlc.arg(after_id)
+WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
   AND (lp.rel_path LIKE '%.mkv' OR lp.rel_path LIKE '%.mp4' OR lp.rel_path LIKE '%.avi' OR lp.rel_path LIKE '%.m4v'
        OR lp.rel_path LIKE '%.ts' OR lp.rel_path LIKE '%.mov' OR lp.rel_path LIKE '%.wmv' OR lp.rel_path LIKE '%.webm'
        OR lp.rel_path LIKE '%.mpg' OR lp.rel_path LIKE '%.mpeg' OR lp.rel_path LIKE '%.flv' OR lp.rel_path LIKE '%.m2ts')

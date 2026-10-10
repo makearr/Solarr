@@ -621,9 +621,10 @@ type Querier interface {
 	ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
-	// Files measured before the probe read the lyrics language: their stored probe has no such key, so they are read once more.
+	// Files whose probe predates what the probe now reads of every file (below_version), read once more.
 	ListStaleProbes(ctx context.Context, arg ListStaleProbesParams) ([]ListStaleProbesRow, error)
-	// Video files measured before the probe read the picture (resolution, HDR, frame rate), the subtitle tracks and the encoder's CRF.
+	// Video files whose probe predates what the probe now reads of a video (below_version): the picture, the subtitle
+	// tracks and the encoder's CRF.
 	ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error)
 	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
 	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
@@ -904,6 +905,8 @@ type Querier interface {
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
 	// interned row, because they are unique per file.
 	SetMeasuredAttributes(ctx context.Context, arg SetMeasuredAttributesParams) error
+	// What the probe read of one file, replacing an earlier probe.
+	SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) error
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
 	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error

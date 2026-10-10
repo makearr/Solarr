@@ -464,6 +464,13 @@ type MediaObject struct {
 	VerifiedAt            sql.NullInt64
 }
 
+type MediaProbe struct {
+	MediaObjectID int64
+	ProbeVersion  int64
+	ProbedAt      int64
+	Json          string
+}
+
 type MoveItem struct {
 	MoveJobID     int64
 	MediaObjectID int64

@@ -78,6 +78,13 @@ value the label or NULL for none, so each album is asked once.
 applies its provider priority when it fetches and merges its sources, so what it stored last is its current answer;
 the list's SQL orders by the same rule (`metaresolve.OrderSQL`).
 
+## What the probe read
+
+`media_probe` keeps each file's full probe (`json`) and its `probe_version`: 1 read the streams, 2 also the lyrics
+language, 3 also a video's picture, subtitle tracks and encoder's CRF (`library.ProbeVersion*`). A file probed
+before what the probe reads now is found by number (`probe_version < 2` for any file, `< 3` for a video) and read
+once more by the background probe. `media_object.probe_json` is no longer written and goes in a later migration.
+
 ## Interned attributes against per-file measurements
 
 `media_attributes` is interned: one row per distinct combination, referenced by many files.

@@ -222,6 +222,7 @@ func (j *Job) record(ctx context.Context, file library.UnmeasuredFile, absolute 
 		AudioBitrate:   measured.AudioBitrate,
 		OverallBitrate: measured.OverallBitrate,
 		ProbeJSON:      string(probeJSON),
+		ProbeVersion:   library.ProbeVersionCurrent,
 	}, mismatchJSON, j.clock.Now().Unix())
 }
 
