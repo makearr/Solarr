@@ -116,7 +116,7 @@ func (c Candidates) DecisionsByOutcome(ctx context.Context, since int64) ([]Figu
 	figures := make([]Figure, len(rows))
 	for i, row := range rows {
 		figures[i] = Figure{
-			Metric: "decisions_by_outcome", Dimension: Dimension(row.CategoryID, row.Outcome),
+			Metric: library.StatDecisionsByOutcome, Dimension: Dimension(row.CategoryID, row.Outcome),
 			Value: float64(row.Decisions), Count: row.Decisions,
 		}
 	}

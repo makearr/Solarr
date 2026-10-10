@@ -13,8 +13,13 @@ Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `s
 Whether an item is fresh because RSS showed it (ADR-55) is `rss_sighting` in `library.db`, written when a decision
 on an RSS-found release is recorded; the planner and the Fresh filter read it, not the candidates.
 
-`statistics.db` is being filled in steps (revision 2, D7): download history and the statistics rollup live there;
-until the decisions move, what follows is still true. There is no `history.db`. `decision_rollup` sits in `library.db` beside the decisions it
+`statistics.db` holds download history, the statistics rollup, and every release a search found (`candidate`) with
+what was decided about it (`candidate_decision`, `decision_rollup`), copied there from `library.db` with their ids.
+The planner, dispatch and Wanted never read them: a held release and an acquisition carry their own release, and
+freshness reads `rss_sighting`. Interactive search and a person's send read the decisions from `statistics.db`;
+`library.db`'s old candidate tables are no longer written and are dropped a release later.
+
+Before revision 2 the paragraph below was true. There is no `history.db`. `decision_rollup` sat in `library.db` beside the decisions it
 aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the
 aged record. `event_log` sits in `jobs.db`, whose profile it shares: high churn,
 retention-bounded, and not authoritative for library correctness. Under ADR-3's one writer per

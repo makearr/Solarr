@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/match"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -77,7 +78,7 @@ type ItemSearchResult = judge.Result
 type Search struct {
 	Works      library.Works
 	Desired    library.Desired
-	Candidates library.Candidates
+	Candidates statistics.Candidates
 	Settings   *settings.Cache
 	Clock      clock.Clock
 	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
@@ -192,7 +193,7 @@ func (s Search) SearchItemWithTerms(
 
 // pipeline is the shared search over this type's stores.
 func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
+	return judge.Pipeline{Candidates: s.Candidates, Desired: s.Desired, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
 }
 
 // yardstick is what one album's releases are measured against: who and what it is, and the library's quality rules.

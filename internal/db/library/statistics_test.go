@@ -94,8 +94,8 @@ func TestStatistics_ArtistsHeldWithTheirReleaseGroups(t *testing.T) {
 	}
 }
 
-// Growth is the files first seen per month, summed over a library's roots; decisions are the last window's, by outcome.
-func TestStatistics_GrowthByMonthAndDecisionsByOutcome(t *testing.T) {
+// Growth is the files first seen per month, summed over a library's roots.
+func TestStatistics_GrowthByMonth(t *testing.T) {
 	opened, _ := newLibrary(t)
 	statistics := library.NewStatistics(opened)
 	const september, october = 1_788_220_800, 1_790_812_800 // 2026-09-01, 2026-10-01
@@ -147,14 +147,6 @@ func TestStatistics_GrowthByMonthAndDecisionsByOutcome(t *testing.T) {
 	}
 	if want := (map[string][2]float64{"2026-09": {150, 2}, "2026-10": {10, 1}}); !reflect.DeepEqual(got, want) {
 		t.Errorf("library 1 growth = %v, want %v (library 2's file left out)", got, want)
-	}
-	decisions := figuresOf(t, statistics, roots, now, library.StatDecisionsByOutcome, 1)
-	counts := map[string]int64{}
-	for _, figure := range decisions {
-		counts[figure.Key] = figure.Count
-	}
-	if want := (map[string]int64{"REJECT": 2, "ACCEPT": 1}); !reflect.DeepEqual(counts, want) {
-		t.Errorf("decisions = %v, want %v (the old DEFER is outside the window)", counts, want)
 	}
 }
 

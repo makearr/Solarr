@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
@@ -40,7 +41,7 @@ type IndexerError = judge.IndexerError
 type Search struct {
 	Desired    library.Desired
 	Series     library.SeriesReader
-	Candidates library.Candidates
+	Candidates statistics.Candidates
 	Settings   *settings.Cache
 	Clock      clock.Clock
 	Blocklist  *library.BlocklistStore
@@ -296,7 +297,7 @@ func (s Search) SearchEpisode(ctx context.Context, itemID int64, episode int, co
 
 // pipeline is the shared search over this type's stores.
 func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
+	return judge.Pipeline{Candidates: s.Candidates, Desired: s.Desired, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
 }
 
 // yardstick judges a release against what the season wants and the library's rules.

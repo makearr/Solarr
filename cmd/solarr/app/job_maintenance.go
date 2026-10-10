@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -37,7 +38,7 @@ var maintenanceDefinitions = []jobs.Definition{
 // decisionRetentionJob ages search decisions past retention.decisions_full into the daily rollup and deletes the
 // expired releases nothing refers to any more (section 5.7); without it both tables only grow.
 type decisionRetentionJob struct {
-	candidates library.Candidates
+	candidates statistics.Candidates
 	keepFull   time.Duration
 	clock      clock.Clock
 	logger     *slog.Logger
@@ -179,7 +180,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), cache: p.cache, logger: p.logger,
 	})
 	executor.Handle(decisionRetentionJobType, decisionRetentionJob{
-		candidates: library.NewCandidates(p.library), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
+		candidates: statistics.NewCandidates(p.statistics), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
 		clock: clock.NewSystem(), logger: p.logger,
 	})
 	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})

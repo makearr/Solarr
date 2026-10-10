@@ -199,9 +199,9 @@ func TestHeld_AHeldUserGrabGoesBeforeAnAutomaticOne(t *testing.T) {
 	}
 }
 
-// A held release carries what sending it needs: it goes even after its candidate and decisions are gone, as they will
-// be once they live in statistics.db (revision 2, D7).
-func TestHeld_AHeldReleaseGoesWithoutItsCandidateOrDecision(t *testing.T) {
+// A held release carries what sending it needs: it goes with statistics.db emptied, which nothing that decides may
+// need (revision 2, D7's invariant).
+func TestHeld_AHeldReleaseGoesWithStatisticsEmpty(t *testing.T) {
 	e := newHeldEnv(t, true)
 	sent := e.grabItem(t, e.first.ID).Sent
 	if sent == nil {
@@ -210,9 +210,9 @@ func TestHeld_AHeldReleaseGoesWithoutItsCandidateOrDecision(t *testing.T) {
 	if result := e.grabItem(t, e.second.ID); !result.Held {
 		t.Fatal("the second album was not held")
 	}
-	for _, statement := range []string{"DELETE FROM candidate_decision", "UPDATE acquisition SET candidate_id = NULL", "DELETE FROM candidate"} {
-		if _, err := e.library.WriteDB().ExecContext(t.Context(), statement); err != nil {
-			t.Fatalf("%s: %v", statement, err)
+	for _, table := range []string{"candidate_decision", "candidate", "decision_rollup", "history", "stat_rollup"} {
+		if _, err := e.statistics.WriteDB().ExecContext(t.Context(), "DELETE FROM "+table); err != nil {
+			t.Fatalf("empty %s: %v", table, err)
 		}
 	}
 	if err := e.acquisitions.SetState(t.Context(), sent.ID, "COMPLETED", "", 2); err != nil {

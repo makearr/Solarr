@@ -18,6 +18,8 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
+	"github.com/makearr/Solarr/internal/db/statistics/statisticstest"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
@@ -30,12 +32,14 @@ import (
 // the candidate pipeline needs both, unlike most of this package's other
 // tests.
 type searchTestEnv struct {
-	library      *store.Store
-	settings     *settings.Cache
-	clock        *clock.Fake
-	works        library.Works
-	desired      library.Desired
-	candidates   library.Candidates
+	library    *store.Store
+	settings   *settings.Cache
+	clock      *clock.Fake
+	works      library.Works
+	desired    library.Desired
+	candidates statistics.Candidates
+	// statistics is the statistics.db the candidates live in.
+	statistics   *store.Store
 	acquisitions library.Acquisitions
 }
 
@@ -85,10 +89,11 @@ func newSearchTestEnv(t *testing.T) *searchTestEnv {
 		t.Fatalf("NewCache: %v", err)
 	}
 
+	statisticsStore := statisticstest.Open(t)
 	return &searchTestEnv{
 		library: libraryStore, settings: cache, clock: fake,
 		works: library.NewWorks(libraryStore), desired: library.NewDesired(libraryStore),
-		candidates: library.NewCandidates(libraryStore), acquisitions: library.NewAcquisitions(libraryStore),
+		candidates: statistics.NewCandidates(statisticsStore), statistics: statisticsStore, acquisitions: library.NewAcquisitions(libraryStore),
 	}
 }
 

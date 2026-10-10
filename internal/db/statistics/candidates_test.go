@@ -55,6 +55,9 @@ func TestCandidates_RecordAndList(t *testing.T) {
 	if !reflect.DeepEqual(figures, want) {
 		t.Errorf("decisions by outcome = %+v, want %+v", figures, want)
 	}
+	if recent, err := candidates.DecisionsByOutcome(ctx, 101); err != nil || len(recent) != 1 || recent[0].Dimension != "3|ACCEPT" {
+		t.Errorf("decisions since 101 = %+v, %v; want only the ACCEPT decided at 101", recent, err)
+	}
 }
 
 // Aged decisions are counted into the rollup and go; an expired release goes once no decision names it.

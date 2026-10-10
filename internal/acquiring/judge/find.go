@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/identify/model"
 )
 
@@ -136,7 +137,8 @@ func (d ProtocolDelay) Apply(finds []Find) {
 
 // Persist upserts the release and records the decision against itemID; a release RSS showed is also a sighting.
 func Persist(
-	ctx context.Context, candidates library.Candidates, sightings *library.Sightings, itemID int64, find Find, source string, at time.Time,
+	ctx context.Context, candidates statistics.Candidates, sightings *library.Sightings, itemID, categoryID int64, find Find,
+	source string, at time.Time,
 ) (library.DecisionDetail, error) {
 	var sizeBytes *int64
 	if find.Raw.SizeBytes > 0 {
@@ -174,7 +176,7 @@ func Persist(
 		matchConfidence = 1 - find.Distance
 	}
 	decision, err := candidates.RecordDecision(ctx, library.NewDecision{
-		CandidateID: candidate.ID, DesiredItemID: itemID, Outcome: string(find.Decision.Outcome),
+		CandidateID: candidate.ID, DesiredItemID: itemID, CategoryID: categoryID, Outcome: string(find.Decision.Outcome),
 		Score:           find.Decision.Score(),
 		ComponentsJSON:  jsonOrEmptyArray(find.Decision.Components),
 		RejectionsJSON:  jsonOrEmptyArray(find.Decision.Rejections),

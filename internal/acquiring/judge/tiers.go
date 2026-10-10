@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 )
 
 // GroupDeadline bounds one tier's fan-out to every indexer (ADR-37's default), whatever each indexer's own timeout.
@@ -37,7 +38,10 @@ type Evaluate func(raws []indexer.RawItem, conn Conn) []Find
 
 // Pipeline is the search every media type shares: ask, drop what is blocklisted, let the type evaluate, record.
 type Pipeline struct {
-	Candidates library.Candidates
+	// Candidates record what was found and decided, in statistics.db: nothing that decides reads them back.
+	Candidates statistics.Candidates
+	// Desired names the item's library, kept beside each decision.
+	Desired library.Desired
 	// Sightings, when set, remember when RSS showed a release for an item: what "fresh" reads (ADR-55).
 	Sightings *library.Sightings
 	// Blocklist, when set, keeps a blocklisted release out before it is evaluated (section 10.11).
@@ -114,11 +118,18 @@ func (p Pipeline) withoutBlocklisted(ctx context.Context, indexerID int64, raws 
 
 // decide keeps one row per release, ranks them best first and records each decision against itemID.
 func (p Pipeline) decide(ctx context.Context, itemID int64, finds []Find, source string, at time.Time) ([]library.DecisionDetail, error) {
+	if len(finds) == 0 {
+		return nil, nil
+	}
+	item, err := p.Desired.Get(ctx, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("persist: %w", err)
+	}
 	finds = WithoutCrossIndexerDuplicates(finds)
 	SortBestFirst(finds)
 	decisions := make([]library.DecisionDetail, 0, len(finds))
 	for _, find := range finds {
-		detail, err := Persist(ctx, p.Candidates, p.Sightings, itemID, find, source, at)
+		detail, err := Persist(ctx, p.Candidates, p.Sightings, item.ID, item.CategoryID, find, source, at)
 		if err != nil {
 			return decisions, fmt.Errorf("persist: %w", err)
 		}

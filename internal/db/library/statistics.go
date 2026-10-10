@@ -36,7 +36,8 @@ const (
 	StatDownloadsByState = "downloads_by_state"
 	// StatGrowthByMonth: value bytes, count files first seen in the month, key "YYYY-MM".
 	StatGrowthByMonth = "growth_by_month"
-	// StatDecisionsByOutcome: value and count the release decisions of the last 30 days, key ACCEPT, REJECT or DEFER.
+	// StatDecisionsByOutcome: value and count the release decisions of the last 30 days, key ACCEPT, REJECT or DEFER;
+	// counted in statistics.db, where the decisions are.
 	StatDecisionsByOutcome = "decisions_by_outcome"
 )
 
@@ -63,7 +64,6 @@ type StatRow struct {
 var ComputedMetrics = []string{
 	StatSeriesSize, StatSeriesGaps, StatSizePerHour, StatVideoBitrate, StatFilesByCodec, StatFilesByVideoCodec,
 	StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth,
-	StatDecisionsByOutcome,
 }
 
 // Figures measures every computed metric from library.db; the caller stores them in statistics.db. categoryOfRoot
@@ -87,10 +87,6 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 	added, err := reader.AggregateFilesAddedByRootAndMonth(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("library: statistics: growth: %w", err)
-	}
-	decisions, err := reader.AggregateDecisionsByCategoryAndOutcome(ctx, now-StatisticsWindowDays*86_400)
-	if err != nil {
-		return nil, fmt.Errorf("library: statistics: decisions: %w", err)
 	}
 
 	video, err := reader.AggregateFilesByRootAndVideo(ctx)
@@ -215,9 +211,6 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 	}
 	for _, one := range byMonth {
 		figures = append(figures, *one)
-	}
-	for _, row := range decisions {
-		figures = append(figures, figure{StatDecisionsByOutcome, dimensionOf(row.CategoryID, row.Outcome), float64(row.Decisions), row.Decisions})
 	}
 	for _, row := range albums {
 		figures = append(figures, figure{StatAlbumsByState, dimensionOf(row.CategoryID, row.State), float64(row.Albums), row.Albums})

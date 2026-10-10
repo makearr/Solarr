@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 )
 
 // ErrDecisionNotFound reports a decision id that does not belong to the
@@ -85,7 +86,8 @@ type DownloaderSource func(ctx context.Context) ([]DownloaderConn, error)
 // own explicit action, ADR-12's own "user request: never paused" job class,
 // since nothing automatic (stage 6's planner) calls this yet.
 type Dispatch struct {
-	Candidates   library.Candidates
+	// Candidates are read only to send what a person picked by its decision.
+	Candidates   statistics.Candidates
 	Acquisitions library.Acquisitions
 	Desired      library.Desired
 	Downloaders  DownloaderSource

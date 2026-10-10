@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
@@ -24,6 +25,7 @@ func (p *process) registerStatisticsJob(registry *jobs.Registry, executor *jobs.
 		return err
 	}
 	measure, rollup := library.NewStatistics(p.library), statistics.NewRollup(p.statistics)
+	decisions := statistics.NewCandidates(p.statistics)
 	executor.Handle(statisticsJobType, jobs.HandlerFunc(func(ctx context.Context, _ jobs.Job) error {
 		categoryOfRoot := make(map[int64]int64)
 		for _, attached := range p.cache.Snapshot().CategoryRoots() {
@@ -34,7 +36,12 @@ func (p *process) registerStatisticsJob(registry *jobs.Registry, executor *jobs.
 		if err != nil {
 			return fmt.Errorf("statistics: %w", err)
 		}
-		if err := rollup.Replace(ctx, library.ComputedMetrics, statFigures(rows), now); err != nil {
+		decided, err := decisions.DecisionsByOutcome(ctx, now-library.StatisticsWindowDays*86_400)
+		if err != nil {
+			return fmt.Errorf("statistics: %w", err)
+		}
+		metrics := append(slices.Clone(library.ComputedMetrics), library.StatDecisionsByOutcome)
+		if err := rollup.Replace(ctx, metrics, append(statFigures(rows), decided...), now); err != nil {
 			return err
 		}
 		p.logger.Info("statistics computed", slog.Int("roots", len(categoryOfRoot)))

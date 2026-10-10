@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -80,7 +81,7 @@ func (p *process) tvGrab() tv.Grab {
 	return tv.Grab{
 		Search: tv.Search{
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
-			Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
+			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
 			Sightings: &sightings,
 		},
 		Dispatch: p.dispatchFor("tv"),
@@ -92,7 +93,7 @@ func (p *process) musicSearch() music.Search {
 	blocklist, sightings := library.NewBlocklistStore(p.library), library.NewSightings(p.library)
 	return music.Search{
 		Works: library.NewWorks(p.library), Desired: library.NewDesired(p.library),
-		Candidates: library.NewCandidates(p.library), Settings: p.cache, Clock: clock.NewSystem(),
+		Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(),
 		Blocklist: &blocklist, Sightings: &sightings,
 	}
 }
@@ -145,7 +146,7 @@ func (p *process) dispatchFor(mediaType string) music.Dispatch {
 	ready := library.NewReadyQueue(p.library)
 	blocklist := library.NewBlocklistStore(p.library)
 	return music.Dispatch{
-		Candidates: library.NewCandidates(p.library), Acquisitions: library.NewAcquisitions(p.library),
+		Candidates: statistics.NewCandidates(p.statistics), Acquisitions: library.NewAcquisitions(p.library),
 		Desired:     library.NewDesired(p.library),
 		Downloaders: func(ctx context.Context) ([]music.DownloaderConn, error) { return p.downloaderConnsFor(ctx, mediaType) },
 		Fetch:       p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
