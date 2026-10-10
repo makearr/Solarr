@@ -151,7 +151,11 @@ func (s *Server) RenameLibrary(w http.ResponseWriter, r *http.Request, id int64)
 			return
 		}
 	}
-	renames, err := s.renameStarter.StartLibraryRename(r.Context(), id, body.Preview != nil && *body.Preview)
+	var workID int64
+	if body.WorkId != nil {
+		workID = *body.WorkId
+	}
+	renames, err := s.renameStarter.StartLibraryRename(r.Context(), id, workID, body.Preview != nil && *body.Preview)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

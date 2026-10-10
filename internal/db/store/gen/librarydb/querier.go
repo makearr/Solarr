@@ -696,6 +696,8 @@ type Querier interface {
 	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
 	// One page of a work's parts, in one group (its parts "<group>:..."), or all of them with group ''.
 	ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPageParams) ([]WorkPart, error)
+	// One work's files on one root, each by its primary path: a rename scoped to one work.
+	ListWorkPathsOnRoot(ctx context.Context, arg ListWorkPathsOnRootParams) ([]ListWorkPathsOnRootRow, error)
 	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is

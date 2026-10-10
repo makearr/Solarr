@@ -179,8 +179,8 @@ func TestRenameLibrary_PassesTheLibraryAndPreview(t *testing.T) {
 		t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
 	}
 	starter := fixture.renameStarter
-	if starter.libraryCalls != 1 || starter.lastCategoryID != id || !starter.lastPreview {
-		t.Errorf("calls=%d category=%d preview=%v", starter.libraryCalls, starter.lastCategoryID, starter.lastPreview)
+	if starter.libraryCalls != 1 || starter.lastCategoryID != id || starter.lastWorkID != 0 || !starter.lastPreview {
+		t.Errorf("calls=%d category=%d work=%d preview=%v", starter.libraryCalls, starter.lastCategoryID, starter.lastWorkID, starter.lastPreview)
 	}
 	if !strings.Contains(recorder.Body.String(), `"root_folder_id":7`) {
 		t.Errorf("body = %s, want the one root's plan", recorder.Body)
@@ -189,5 +189,18 @@ func TestRenameLibrary_PassesTheLibraryAndPreview(t *testing.T) {
 	missing := fixture.do(authedPost(t, cookies, "/api/v1/categories/999/rename", `{"preview":true}`))
 	if missing.Code != http.StatusNotFound {
 		t.Errorf("unknown library: status = %d, want 404", missing.Code)
+	}
+}
+
+// R2.5: a work page's Rename preview is the library's rename narrowed to that work.
+func TestRenameLibrary_NarrowsToOneWork(t *testing.T) {
+	fixture, cookies, id := adminWithLibrary(t)
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories/"+strconv.FormatInt(id, 10)+"/rename", `{"preview":true,"work_id":42}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
+	}
+	if starter := fixture.renameStarter; starter.lastCategoryID != id || starter.lastWorkID != 42 || !starter.lastPreview {
+		t.Errorf("category=%d work=%d preview=%v; want %d, 42, true", starter.lastCategoryID, starter.lastWorkID, starter.lastPreview, id)
 	}
 }

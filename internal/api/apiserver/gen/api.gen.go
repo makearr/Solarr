@@ -4308,6 +4308,9 @@ type ResolveCategoryDuplicatesJSONBodyDropAction string
 // RenameLibraryJSONBody defines parameters for RenameLibrary.
 type RenameLibraryJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
+
+	// WorkId Only this work's files; a work of another library renames nothing.
+	WorkId *int64 `json:"work_id,omitempty"`
 }
 
 // AttachRootFolderToCategoryJSONBody defines parameters for AttachRootFolderToCategory.

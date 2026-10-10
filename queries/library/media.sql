@@ -200,6 +200,15 @@ WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND lp.is_primary = 1
 ORDER BY lp.media_object_id
 LIMIT sqlc.arg(page_size);
 
+-- One work's files on one root, each by its primary path: a rename scoped to one work.
+-- name: ListWorkPathsOnRoot :many
+SELECT lp.media_object_id, lp.rel_path, o.size_bytes
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.is_primary = 1
+JOIN media_object o ON o.id = f.media_object_id
+WHERE f.work_id = sqlc.arg(work_id) AND lp.root_folder_id = sqlc.arg(root_folder_id)
+ORDER BY lp.media_object_id;
+
 -- Re-observing a known path proves it is still present, and clears any earlier
 -- missing mark (section 10.4): a file coming back is exactly the case this exists
 -- for.

@@ -100,7 +100,7 @@ func (a Rename) renaming(categoryID int64) (media.Renaming, error) {
 
 // StartLibraryRename renames the library's works on each of its roots.
 func (a Rename) StartLibraryRename(
-	ctx context.Context, categoryID int64, preview bool,
+	ctx context.Context, categoryID, workID int64, preview bool,
 ) ([]apiserver.RootRename, error) {
 	renaming, err := a.renaming(categoryID)
 	if err != nil {
@@ -108,7 +108,7 @@ func (a Rename) StartLibraryRename(
 	}
 	var renames []apiserver.RootRename
 	for _, root := range a.Settings.Snapshot().RootFoldersForCategory(categoryID) {
-		plan, jobID, warnings, err := renaming.StartRename(ctx, root.ID, &categoryID, preview)
+		plan, jobID, warnings, err := renaming.StartRename(ctx, root.ID, media.RenameScope{CategoryID: categoryID, WorkID: workID}, preview)
 		if err != nil {
 			return nil, err
 		}
@@ -142,7 +142,7 @@ func (a Rename) StartRename(ctx context.Context, rootFolderID int64, preview boo
 	if renaming == nil {
 		return apiserver.DrainPlanResult{}, fmt.Errorf("%w: root folder %d belongs to no library", settings.ErrNotFound, rootFolderID)
 	}
-	plan, jobID, warnings, err := renaming.StartRename(ctx, rootFolderID, nil, preview)
+	plan, jobID, warnings, err := renaming.StartRename(ctx, rootFolderID, media.RenameScope{}, preview)
 	if err != nil {
 		return apiserver.DrainPlanResult{}, err
 	}

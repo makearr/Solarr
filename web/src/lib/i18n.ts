@@ -10,6 +10,7 @@ const catalogue = {
   "action.interactive": "Interactive search",
   "action.refresh": "Refresh",
   "action.edit": "Edit",
+  "action.renamePreview": "Rename preview",
   "action.remove": "Remove",
   "action.cancel": "Cancel",
   "action.close": "Close",

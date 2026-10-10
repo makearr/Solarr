@@ -3050,7 +3050,7 @@ export interface paths {
         put?: never;
         /**
          * Preview or apply the library's naming to its files, on every root it uses. Administrator only.
-         * @description Lidarr's "apply to library". One rename per root folder, each through the move engine (ADR-51), so read-only roots refuse unless they allow renaming. Only works in this library are touched.
+         * @description Lidarr's "apply to library", and with work_id its "preview rename" of one album or series. One rename per root folder, each through the move engine (ADR-51), so read-only roots refuse unless they allow renaming. Only works in this library are touched.
          */
         post: operations["renameLibrary"];
         delete?: never;
@@ -12250,6 +12250,11 @@ export interface operations {
                 "application/json": {
                     /** @default false */
                     preview?: boolean;
+                    /**
+                     * Format: int64
+                     * @description Only this work's files; a work of another library renames nothing.
+                     */
+                    work_id?: number;
                 };
             };
         };

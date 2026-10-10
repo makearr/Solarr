@@ -286,9 +286,15 @@ func (d Descriptor) LeadRole() (string, bool) {
 
 // Renaming is the capability of a media type that can rename a library's files to its naming formats.
 type Renaming interface {
-	// StartRename plans, and unless preview starts, the rename of one root's files; onlyCategoryID narrows it to
-	// one library. It answers the plan, the job started (0 for a preview) and warnings per media object.
-	StartRename(ctx context.Context, rootFolderID int64, onlyCategoryID *int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error)
+	// StartRename plans, and unless preview starts, the rename of one root's files within scope. It answers the plan,
+	// the job started (0 for a preview) and warnings per media object.
+	StartRename(ctx context.Context, rootFolderID int64, scope RenameScope, preview bool) (mover.MovePlan, int64, map[int64][]string, error)
+}
+
+// RenameScope narrows a rename: to one library's works, and to one work; zero means no narrowing.
+type RenameScope struct {
+	CategoryID int64
+	WorkID     int64
 }
 
 // Feeding is the capability of a media type whose wanted items are also filled from the indexers' feeds.

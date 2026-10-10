@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -31,6 +32,18 @@ type fakeRenameFiles map[int64][]library.FileOnRoot
 
 func (f fakeRenameFiles) PathsForRoot(_ context.Context, rootFolderID int64) ([]library.FileOnRoot, error) {
 	return f[rootFolderID], nil
+}
+
+// PathsForWorkOnRoot answers the root's files whose media object id is the work id times ten plus a digit, the
+// fixtures' own convention for which work a file belongs to.
+func (f fakeRenameFiles) PathsForWorkOnRoot(_ context.Context, rootFolderID, workID int64) ([]library.FileOnRoot, error) {
+	var files []library.FileOnRoot
+	for _, file := range f[rootFolderID] {
+		if file.MediaObjectID/10 == workID {
+			files = append(files, file)
+		}
+	}
+	return files, nil
 }
 
 type fakeRenameIdentities map[int64]library.FileIdentity
@@ -113,7 +126,7 @@ func TestRenamePreview_ListsChangedFilesOnly(t *testing.T) {
 		Works: fakeRenameWorks{1: renameWorkDetailFixture()},
 	}
 
-	targets, err := music.RenamePreview(t.Context(), cfg, 1, nil)
+	targets, err := music.RenamePreview(t.Context(), cfg, 1, media.RenameScope{})
 	if err != nil {
 		t.Fatalf("RenamePreview: %v", err)
 	}
@@ -130,7 +143,7 @@ func TestRenamePreview_SkipsFilesWithNoIdentity(t *testing.T) {
 		Works:      fakeRenameWorks{},
 	}
 
-	targets, err := music.RenamePreview(t.Context(), cfg, 1, nil)
+	targets, err := music.RenamePreview(t.Context(), cfg, 1, media.RenameScope{})
 	if err != nil {
 		t.Fatalf("RenamePreview: %v", err)
 	}
@@ -153,7 +166,7 @@ func TestRenameStart_PersistsAndEnqueuesWhenSomethingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, media.RenameScope{}, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -185,7 +198,7 @@ func TestRenameStart_PreviewComputesThePlanWithoutPersistingAnything(t *testing.
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, true)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, media.RenameScope{}, true)
 	if err != nil {
 		t.Fatalf("RenameStart: %v", err)
 	}
@@ -222,7 +235,7 @@ func TestRenameStart_ReturnsPathWarningsKeyedByMediaObjectID(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	_, _, warnings, err := music.RenameStart(t.Context(), cfg, 1, nil, true)
+	_, _, warnings, err := music.RenameStart(t.Context(), cfg, 1, media.RenameScope{}, true)
 	if err != nil {
 		t.Fatalf("RenameStart: %v", err)
 	}
@@ -245,7 +258,7 @@ func TestRenameStart_DoesNothingWhenNothingChanged(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, media.RenameScope{}, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -273,7 +286,7 @@ func TestRenameStart_DoesNothingForAnUnknownRootWithNothingToRename(t *testing.T
 		Works:      fakeRenameWorks{1: renameWorkDetailFixture()},
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 99, nil, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 99, media.RenameScope{}, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
@@ -296,11 +309,36 @@ func TestRenameStart_RefusesOnAReadOnlyRootWithoutAllowRename(t *testing.T) {
 		Clock:      clock.NewFakeAtEpoch(),
 	}
 
-	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, nil, false)
+	plan, jobID, _, err := music.RenameStart(t.Context(), cfg, 1, media.RenameScope{}, false)
 	if err != nil {
 		t.Fatalf("RenameCommit: %v", err)
 	}
 	if jobID != 0 || len(plan.Moves) != 0 || len(plan.Refused) != 1 {
 		t.Fatalf("plan/jobID = %+v/%d, want refused and nothing committed", plan, jobID)
+	}
+}
+
+// R2.5: a rename scoped to one work plans that work's files only, and reads only that work's files.
+func TestRenamePreview_ScopedToOneWork(t *testing.T) {
+	cfg := music.RenameConfig{
+		Roots: fakeRenameRoots{},
+		Files: fakeRenameFiles{1: {
+			{MediaObjectID: 11, RelPath: "Old/01.flac", SizeBytes: 100},
+			{MediaObjectID: 21, RelPath: "Other/01.flac", SizeBytes: 100},
+		}},
+		Identities: fakeRenameIdentities{
+			11: {WorkID: 1, MediaRef: "disc1:track1"},
+			21: {WorkID: 2, MediaRef: "disc1:track1"},
+		},
+		Works: fakeRenameWorks{1: renameWorkDetailFixture(), 2: renameWorkDetailFixture()},
+	}
+
+	all, err := music.RenamePreview(t.Context(), cfg, 1, media.RenameScope{})
+	if err != nil || len(all) != 2 {
+		t.Fatalf("unscoped preview = %+v, %v; want both files", all, err)
+	}
+	scoped, err := music.RenamePreview(t.Context(), cfg, 1, media.RenameScope{WorkID: 2})
+	if err != nil || len(scoped) != 1 || scoped[0].MediaObjectID != 21 {
+		t.Fatalf("scoped preview = %+v, %v; want only media object 21", scoped, err)
 	}
 }

@@ -44,13 +44,14 @@ type fakeRenameStarter struct {
 
 	libraryCalls   int
 	lastCategoryID int64
+	lastWorkID     int64
 }
 
 func (f *fakeRenameStarter) StartLibraryRename(
-	_ context.Context, categoryID int64, preview bool,
+	_ context.Context, categoryID, workID int64, preview bool,
 ) ([]apiserver.RootRename, error) {
 	f.libraryCalls++
-	f.lastCategoryID, f.lastPreview = categoryID, preview
+	f.lastCategoryID, f.lastWorkID, f.lastPreview = categoryID, workID, preview
 	return []apiserver.RootRename{{RootFolderID: 7, Plan: f.result}}, f.err
 }
 

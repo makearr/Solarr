@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
+import { FilePen, ListChecks, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -14,6 +14,7 @@ import { usePreference } from "@/lib/usePreference";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
 import { PageHeader } from "@/ui/PageHeader";
@@ -21,6 +22,7 @@ import { Tabs, type Tab } from "@/ui/Tabs";
 
 import { ChooseImage } from "../ChooseImage";
 import { InteractiveSearch, type SearchScope } from "../InteractiveSearch";
+import { RenamePlanner } from "../RenamePlanner";
 import { statusLabel, useQueue } from "../Queue";
 import { EditWork } from "./EditWork";
 import { grabNote } from "./grabNote";
@@ -74,7 +76,7 @@ function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaType
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
-        <WorkHeader work={work} info={info} words={words} categoryId={categoryId} lead={lead} />
+        <WorkHeader work={work} info={info} words={words} categoryId={categoryId} lead={lead} interactive={tabLink("search")} />
         <Tabs label={work.title} tabs={tabs} active={tab} />
         {tab === "overview" && <OverviewTab work={work} info={info} words={words} categoryId={categoryId} />}
         {tab === "files" && <FilesTab work={work} words={words} />}
@@ -85,7 +87,21 @@ function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaType
   );
 }
 
-function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info: MediaTypeInfo | undefined; words: Vocabulary; categoryId: string | undefined; lead: Credit | undefined }) {
+function WorkHeader({
+  work,
+  info,
+  words,
+  categoryId,
+  lead,
+  interactive,
+}: {
+  work: Work;
+  info: MediaTypeInfo | undefined;
+  words: Vocabulary;
+  categoryId: string | undefined;
+  lead: Credit | undefined;
+  interactive: Tab["link"];
+}) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const administrator = useIsAdministrator();
@@ -95,6 +111,7 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
   const [searchOnMonitor] = usePreference("discover.search_on_add", true);
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   const [removal, setRemoval] = useState({ deleteFiles: false, exclude: true });
   const [note, setNote] = useState<string>();
 
@@ -221,6 +238,11 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
                 {t("action.search")}
               </Button>
             )}
+            {work.can_request && groups.length > 0 && (
+              <Button icon={<ListChecks aria-hidden className="size-4" />} onClick={() => void navigate(interactive)}>
+                {t("action.interactive")}
+              </Button>
+            )}
             {work.can_request && (
               <Button busy={refresh.isPending} icon={<RefreshCw aria-hidden className={`size-4 ${refresh.isPending ? "animate-spin" : ""}`} />} onClick={() => refresh.mutate()}>
                 {t("action.refresh")}
@@ -229,6 +251,11 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
             {work.can_request && (
               <Button icon={<Pencil aria-hidden className="size-4" />} onClick={() => setEditing(true)}>
                 {t("action.edit")}
+              </Button>
+            )}
+            {administrator && categoryId !== undefined && (
+              <Button icon={<FilePen aria-hidden className="size-4" />} onClick={() => setRenaming(true)}>
+                {t("action.renamePreview")}
               </Button>
             )}
             {administrator && (
@@ -243,6 +270,11 @@ function WorkHeader({ work, info, words, categoryId, lead }: { work: Work; info:
         <p className="text-xs text-ink-muted">{refresh.isError ? "Refresh failed." : monitor.isError ? "That could not be changed." : note}</p>
       )}
       {editing && <EditWork work={work} info={info} onClose={() => setEditing(false)} />}
+      {renaming && categoryId !== undefined && (
+        <Dialog title={t("action.renamePreview")} description={work.title} width="wide" onClose={() => setRenaming(false)}>
+          <RenamePlanner categoryId={Number(categoryId)} workId={work.id} previewAtOnce />
+        </Dialog>
+      )}
       {removing && (
         <ConfirmDialog
           title={t("work.remove.title", { title: work.title })}

@@ -963,6 +963,50 @@ func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) 
 	return items, nil
 }
 
+const listWorkPathsOnRoot = `-- name: ListWorkPathsOnRoot :many
+SELECT lp.media_object_id, lp.rel_path, o.size_bytes
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.is_primary = 1
+JOIN media_object o ON o.id = f.media_object_id
+WHERE f.work_id = ?1 AND lp.root_folder_id = ?2
+ORDER BY lp.media_object_id
+`
+
+type ListWorkPathsOnRootParams struct {
+	WorkID       int64
+	RootFolderID int64
+}
+
+type ListWorkPathsOnRootRow struct {
+	MediaObjectID int64
+	RelPath       string
+	SizeBytes     int64
+}
+
+// One work's files on one root, each by its primary path: a rename scoped to one work.
+func (q *Queries) ListWorkPathsOnRoot(ctx context.Context, arg ListWorkPathsOnRootParams) ([]ListWorkPathsOnRootRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkPathsOnRoot, arg.WorkID, arg.RootFolderID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkPathsOnRootRow{}
+	for rows.Next() {
+		var i ListWorkPathsOnRootRow
+		if err := rows.Scan(&i.MediaObjectID, &i.RelPath, &i.SizeBytes); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markLibraryPathsMissing = `-- name: MarkLibraryPathsMissing :execrows
 UPDATE library_path SET missing_since = ?
 WHERE id IN (

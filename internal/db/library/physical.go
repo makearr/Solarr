@@ -303,6 +303,21 @@ func (p Physical) PathsForRoot(ctx context.Context, rootFolderID int64) ([]FileO
 	}
 }
 
+// PathsForWorkOnRoot returns one work's files on a root folder, size included: a rename of that work alone.
+func (p Physical) PathsForWorkOnRoot(ctx context.Context, rootFolderID, workID int64) ([]FileOnRoot, error) {
+	rows, err := librarydb.New(p.store.Read()).ListWorkPathsOnRoot(ctx, librarydb.ListWorkPathsOnRootParams{
+		WorkID: workID, RootFolderID: rootFolderID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: paths of work %d on root %d: %w", workID, rootFolderID, err)
+	}
+	files := make([]FileOnRoot, len(rows))
+	for i, row := range rows {
+		files[i] = FileOnRoot{MediaObjectID: row.MediaObjectID, RelPath: row.RelPath, SizeBytes: row.SizeBytes}
+	}
+	return files, nil
+}
+
 // Exists reports whether a media_object id is real -- an API layer's own
 // existence check before an action like RemoveAndBlock, which does not
 // itself fail on an unknown id (a Reopen-only or Block-only request simply

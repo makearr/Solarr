@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/moving/placement"
@@ -29,6 +30,7 @@ type RenameRoots interface {
 // the root. Satisfied directly by library.Physical.
 type RenameFiles interface {
 	PathsForRoot(ctx context.Context, rootFolderID int64) ([]library.FileOnRoot, error)
+	PathsForWorkOnRoot(ctx context.Context, rootFolderID, workID int64) ([]library.FileOnRoot, error)
 }
 
 // RenameIdentities resolves a file's editorial identity. Satisfied directly
@@ -73,11 +75,21 @@ type RenameConfig struct {
 // already apply elsewhere. A work's own WorkDetail is fetched at most once
 // per call, since every track on an album shares it.
 func RenamePreview(
-	ctx context.Context, cfg RenameConfig, rootFolderID int64, onlyCategoryID *int64,
+	ctx context.Context, cfg RenameConfig, rootFolderID int64, scope media.RenameScope,
 ) ([]RenameTarget, error) {
-	files, err := cfg.Files.PathsForRoot(ctx, rootFolderID)
+	var files []library.FileOnRoot
+	var err error
+	if scope.WorkID != 0 {
+		files, err = cfg.Files.PathsForWorkOnRoot(ctx, rootFolderID, scope.WorkID)
+	} else {
+		files, err = cfg.Files.PathsForRoot(ctx, rootFolderID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("music: list files on root %d: %w", rootFolderID, err)
+	}
+	var onlyCategoryID *int64
+	if scope.CategoryID != 0 {
+		onlyCategoryID = &scope.CategoryID
 	}
 
 	details := map[int64]library.WorkDetail{}
@@ -87,7 +99,7 @@ func RenamePreview(
 		if err != nil {
 			return nil, fmt.Errorf("music: identity for media object %d: %w", f.MediaObjectID, err)
 		}
-		if !found {
+		if !found || (scope.WorkID != 0 && identity.WorkID != scope.WorkID) {
 			continue
 		}
 		detail, cached := details[identity.WorkID]
@@ -126,9 +138,9 @@ func RenamePreview(
 // know what a naming warning is (ADR-23), so this stays a separate return
 // rather than a new field on mover.Move.
 func RenameStart(
-	ctx context.Context, cfg RenameConfig, rootFolderID int64, onlyCategoryID *int64, preview bool,
+	ctx context.Context, cfg RenameConfig, rootFolderID int64, scope media.RenameScope, preview bool,
 ) (mover.MovePlan, int64, map[int64][]string, error) {
-	targets, err := RenamePreview(ctx, cfg, rootFolderID, onlyCategoryID)
+	targets, err := RenamePreview(ctx, cfg, rootFolderID, scope)
 	if err != nil {
 		return mover.MovePlan{}, 0, nil, err
 	}
@@ -193,6 +205,10 @@ func RenameStart(
 	cl := cfg.Clock
 	if cl == nil {
 		cl = clock.NewSystem()
+	}
+	var onlyCategoryID *int64
+	if scope.CategoryID != 0 {
+		onlyCategoryID = &scope.CategoryID
 	}
 	jobID, err := cfg.MoveJobs.Create(ctx, library.NewMoveJob{
 		Reason: string(mover.ReasonRename), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,

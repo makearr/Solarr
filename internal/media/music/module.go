@@ -101,11 +101,11 @@ func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, err
 }
 
 // StartRename implements media.Renaming.
-func (m Module) StartRename(ctx context.Context, rootFolderID int64, onlyCategoryID *int64, preview bool) (mover.MovePlan, int64, map[int64][]string, error) {
+func (m Module) StartRename(ctx context.Context, rootFolderID int64, scope media.RenameScope, preview bool) (mover.MovePlan, int64, map[int64][]string, error) {
 	if m.Rename == nil {
 		return mover.MovePlan{}, 0, nil, errors.New("music: rename is not wired")
 	}
-	return RenameStart(ctx, *m.Rename, rootFolderID, onlyCategoryID, preview)
+	return RenameStart(ctx, *m.Rename, rootFolderID, scope, preview)
 }
 
 // ScanSweep implements media.Scanning.
