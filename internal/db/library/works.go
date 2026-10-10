@@ -243,12 +243,10 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 			"(arrival.arrived_at, arrival.work_id) "+operator+" (?, ?)", after.SortImported, after.ID)
 		orderBy = "arrival.arrived_at" + orderDirection + ", arrival.work_id" + orderDirection
 	case WorkSortArtist:
-		// Exactly the expression migration 0046 indexes, so the order stays indexed.
-		artist := "COALESCE(lead_person_sort_name, '') COLLATE NOCASE"
 		predicates.AddIf(after.ID != 0,
-			"("+artist+", work.sort_title, work.id) "+operator+" (?, ?, ?)",
+			"("+leadSortExpression+", work.sort_title, work.id) "+operator+" ("+leadSortCursor+", ?, ?)",
 			after.SortArtist, after.SortTitle, after.ID)
-		orderBy = artist + orderDirection + ", work.sort_title" + orderDirection +
+		orderBy = leadSortExpression + orderDirection + ", work.sort_title" + orderDirection +
 			", work.id" + orderDirection
 	case WorkSortSize, WorkSortProfile:
 		numberColumn = sortNumberColumn(filter.Sort)
@@ -285,6 +283,12 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
 }
+
+// leadSortExpression is the lead-person order, exactly as migration 0072 indexes it: a work without a lead sorts last.
+const leadSortExpression = "COALESCE(NULLIF(lead_person_sort_name, ''), char(1114111)) COLLATE NOCASE"
+
+// leadSortCursor compares a cursor's sort name the same way; the cursor carries "" for a work without a lead.
+const leadSortCursor = "COALESCE(NULLIF(?, ''), char(1114111))"
 
 // sortColumn maps a WorkSort to its SQL column and the cursor value to compare
 // it against. Qualified with "work." -- workArtistColumn's join makes "added_at"

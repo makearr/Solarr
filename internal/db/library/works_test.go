@@ -321,6 +321,7 @@ func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) 
 	pipoA := createWork(t, opened, "music", "Aretimok")
 	hekaA := createWork(t, opened, "music", "Dumucamoko")
 	unknown := createWork(t, opened, "music", "Zebra")
+	unknownFirst := createWork(t, opened, "music", "Abacus")
 	lower := createWork(t, opened, "music", "Tavel")
 	setArtist(lower.ID, "bokaru")
 	setArtist(pipoB.ID, "P!po")
@@ -344,8 +345,8 @@ func TestListWorks_SortByArtistGroupsThenOrdersByTitleAcrossPages(t *testing.T) 
 		cursor = library.WorkCursor{SortArtist: last.ArtistSortName, SortTitle: last.SortTitle, ID: last.ID}
 	}
 
-	// A work with no artist sorts first, as the Tracks view already orders it; case is ignored.
-	want := []int64{unknown.ID, lower.ID, hekaA.ID, hekaW.ID, pipoA.ID, pipoB.ID}
+	// A work with no artist sorts last (R2.0 finding 12), titles in order there too; case is ignored.
+	want := []int64{lower.ID, hekaA.ID, hekaW.ID, pipoA.ID, pipoB.ID, unknownFirst.ID, unknown.ID}
 	if !slices.Equal(seen, want) {
 		t.Errorf("order = %v, want %v", seen, want)
 	}

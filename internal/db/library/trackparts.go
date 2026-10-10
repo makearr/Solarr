@@ -65,14 +65,13 @@ func composeAlbumPage(filter TrackFilter, after TrackAlbumCursor, albumPageSize 
 	var predicates store.Predicates
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
 
-	// Matches the expression index (migration 0046) exactly; a work with no artist sorts first.
-	artistExpr := "COALESCE(lead_person_sort_name, '') COLLATE NOCASE"
+	artistExpr := leadSortExpression
 	operator, direction := ">", ""
 	if filter.Descending {
 		operator, direction = "<", " DESC"
 	}
 	predicates.AddIf(after.AlbumID != 0,
-		"("+artistExpr+" "+operator+" ? OR ("+artistExpr+" = ? AND (sort_title "+operator+" ? OR (sort_title = ? AND id "+operator+" ?))))",
+		"("+artistExpr+" "+operator+" "+leadSortCursor+" OR ("+artistExpr+" = "+leadSortCursor+" AND (sort_title "+operator+" ? OR (sort_title = ? AND id "+operator+" ?))))",
 		after.ArtistSortName, after.ArtistSortName, after.AlbumSortTitle, after.AlbumSortTitle, after.AlbumID)
 
 	query := "SELECT id, sort_title, canonical_title, year, lead_person_sort_name,\n" +
