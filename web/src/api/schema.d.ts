@@ -1977,7 +1977,7 @@ export interface paths {
         };
         /**
          * A work's cached cover art (section 21.6), if any has been fetched yet.
-         * @description WebP bytes straight from the on-disk cache ArtworkJob wrote -- never fetched live, never re-encoded per request. 404 both when the work is not visible to the caller (ADR-27, indistinguishable from missing) and when no cover has been recorded yet; a client cannot and need not tell the two apart.
+         * @description WebP bytes straight from the on-disk cache ArtworkJob wrote -- never re-encoded per request. A work with no cover of its own serves its provider poster (fetched once into the same cache), else its lead's image. 404 both when the work is not visible to the caller (ADR-27, indistinguishable from missing) and when no cover has been recorded yet; a client cannot and need not tell the two apart.
          */
         get: operations["getWorkArtwork"];
         /** Make one of the offered pictures this work's image; it is kept over later refreshes. */
@@ -6682,6 +6682,8 @@ export interface components {
             monitored: boolean;
         };
         DuplicateReport: {
+            /** @description True when the library holds more groups than one report shows; the ones with the most to free come first. */
+            limited: boolean;
             /**
              * Format: int64
              * @description What dropping every copy but the recommended one would free.

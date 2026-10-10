@@ -1673,6 +1673,9 @@ type DuplicateReport struct {
 		Title            string `json:"title"`
 	} `json:"groups"`
 
+	// Limited True when the library holds more groups than one report shows; the ones with the most to free come first.
+	Limited bool `json:"limited"`
+
 	// ReclaimableBytes What dropping every copy but the recommended one would free.
 	ReclaimableBytes int64 `json:"reclaimable_bytes"`
 }

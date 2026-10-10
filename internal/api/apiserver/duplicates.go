@@ -119,8 +119,9 @@ func (s *Server) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, i
 	}
 	report := struct {
 		ReclaimableBytes int64       `json:"reclaimable_bytes"`
+		Limited          bool        `json:"limited"`
 		Groups           []groupView `json:"groups"`
-	}{Groups: make([]groupView, 0, len(groups))}
+	}{Groups: make([]groupView, 0, len(groups)), Limited: len(groups) >= duplicateGroupLimit}
 	for _, group := range groups {
 		view := groupView{Artist: group.Artist, Title: group.Title, KeepReason: group.KeepReason}
 		for index, copy := range group.Copies {

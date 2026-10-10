@@ -1,7 +1,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -247,6 +247,31 @@ function GroupCard({ group, categoryId, words, onDone }: { group: Group; categor
 
 /** Parts this library holds more than once, not found by their bytes: for music by artist, title and length, so a flac
  *  and a 96 kbit mp3 of one song are one track twice; otherwise two files on one part. Choose the copy to keep. */
+/** How many groups are added each time the end of the list comes into view. */
+const GROUPS_PER_STEP = 20;
+
+/** Groups drawn a step at a time as the end comes into view; drawn cards stay mounted, so a choice or a result made in
+ *  one survives scrolling. */
+function GroupList({ groups, render }: { groups: Group[]; render: (group: Group) => React.ReactNode }) {
+  const [shown, setShown] = useState(GROUPS_PER_STEP);
+  const sentinel = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    const element = sentinel.current;
+    if (!element) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) setShown((count) => count + GROUPS_PER_STEP);
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [shown, groups.length]);
+  return (
+    <ul className="flex flex-col gap-2">
+      {groups.slice(0, shown).map(render)}
+      {shown < groups.length && <li ref={sentinel} className="h-8" aria-hidden />}
+    </ul>
+  );
+}
+
 export function Duplicates() {
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
   const library = useLibrary(categoryId);
@@ -283,11 +308,14 @@ export function Duplicates() {
       {data && data.groups.length > 0 && (
         <>
           <p className="text-sm">
-            {data.groups.length} {data.groups.length === 1 ? words.part : words.parts} held more than once; dropping the extra copies
-            would free <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
+            {data.limited
+              ? `More than ${data.groups.length} ${words.parts} are held more than once; these ${data.groups.length} have the most to free, and the rest show once some are dealt with.`
+              : `${data.groups.length} ${data.groups.length === 1 ? words.part : words.parts} held more than once.`}{" "}
+            Dropping the extra copies shown would free <span className="font-medium">{formatBytes(data.reclaimable_bytes)}</span>.
           </p>
-          <ul className="flex flex-col gap-2">
-            {data.groups.map((group) => (
+          <GroupList
+            groups={data.groups}
+            render={(group) => (
               <GroupCard
                 key={group.copies.map((copy) => copy.media_object_id).join("-")}
                 group={group}
@@ -295,8 +323,8 @@ export function Duplicates() {
                 words={words}
                 onDone={() => void queryClient.invalidateQueries({ queryKey: ["links", Number(categoryId)] })}
               />
-            ))}
-          </ul>
+            )}
+          />
         </>
       )}
     </div>

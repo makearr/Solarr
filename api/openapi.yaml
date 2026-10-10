@@ -9848,8 +9848,9 @@ components:
 
     DuplicateReport:
       type: object
-      required: [groups, reclaimable_bytes]
+      required: [groups, reclaimable_bytes, limited]
       properties:
+        limited: { type: boolean, description: "True when the library holds more groups than one report shows; the ones with the most to free come first." }
         reclaimable_bytes: { type: integer, format: int64, description: What dropping every copy but the recommended one would free. }
         groups:
           type: array

@@ -39,6 +39,7 @@ func TestCategoryDuplicates_RecommendsOneCopyAndCountsWhatTheOthersFree(t *testi
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories/1/duplicates"))
 	var body struct {
 		Reclaimable int64 `json:"reclaimable_bytes"`
+		Limited     bool  `json:"limited"`
 		Groups      []struct {
 			Title      string `json:"title"`
 			KeepReason string `json:"keep_reason"`
@@ -54,7 +55,7 @@ func TestCategoryDuplicates_RecommendsOneCopyAndCountsWhatTheOthersFree(t *testi
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
 		t.Fatal(err)
 	}
-	if body.Reclaimable != 100 || len(body.Groups) != 1 || !body.Groups[0].Copies[0].Keep || body.Groups[0].Copies[1].Keep ||
+	if body.Reclaimable != 100 || body.Limited || len(body.Groups) != 1 || !body.Groups[0].Copies[0].Keep || body.Groups[0].Copies[1].Keep ||
 		body.Groups[0].Copies[1].Paths[0] != "/media/music/B/01.mp3" || body.Groups[0].KeepReason == "" {
 		t.Errorf("report = %+v, want the flac kept, the mp3 (100 bytes) reclaimable, full paths", body)
 	}
