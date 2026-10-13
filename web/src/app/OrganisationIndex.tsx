@@ -35,7 +35,8 @@ export function OrganisationIndex() {
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const view = useRouteView(ORGANISATION_FILTER_KEYS);
   const sort = view.query.sort ?? "works";
-  const descending = (view.query.direction ?? (sort === "name" ? "asc" : "desc")) === "desc";
+  // The address carries a direction only beside a sort: unsorted is the default, most works first.
+  const descending = view.query.sort === null || view.query.direction === "desc";
   const setFilter = (key: string, value: string) => view.setQuery({ ...view.query, filters: { ...view.query.filters, [key]: value } });
   const works = (type?.work.many ?? "works").toLowerCase();
   const many = type?.organisation.many || "Organisations";
