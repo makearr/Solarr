@@ -145,7 +145,7 @@ test("a scan fills the artist wall with photos and the album wall with covers", 
   await page.getByLabel("Path").fill(MOUNTED_MUSIC);
   // Named explicitly: the form's default is the first library listed, which is not always Music.
   const form = page.locator("form").filter({ has: page.getByRole("button", { name: /add root folder/i }) });
-  await form.getByRole("combobox").selectOption({ label: "Music (music)" });
+  await form.getByRole("combobox").selectOption({ label: "Music (Music)" });
   await form.getByRole("button", { name: /add root folder/i }).click();
   await expect(page.getByText(MOUNTED_MUSIC).first()).toBeVisible();
 

@@ -1704,6 +1704,39 @@ func (f *goneSource) Album(context.Context, string, string) (musicbrainz.Release
 	return musicbrainz.ReleaseGroup{}, musicbrainz.Release{}, &httpx.StatusError{Provider: "fake", Status: http.StatusNotFound}
 }
 
+// arrivingSource creates one more placeholder the first time it is asked, as a scan does while a run is under way.
+type arrivingSource struct {
+	fakeSource
+	arrive func()
+	once   sync.Once
+}
+
+func (a *arrivingSource) Album(ctx context.Context, rg, release string) (musicbrainz.ReleaseGroup, musicbrainz.Release, error) {
+	a.once.Do(a.arrive)
+	group, found, err := a.fakeSource.Album(ctx, rg, release)
+	group.MBID, found.MBID = rg, release
+	return group, found, err
+}
+
+// A run that began while a scan was still adding albums stopped at its first short batch, and the scan's own request
+// at its end was dropped as a duplicate of that run: the albums waited for the next hourly pass (seen 2026-10-13).
+func TestEnrichJob_RefinesWhatArrivesWhileItRuns(t *testing.T) {
+	source := &arrivingSource{fakeSource: fakeSource{
+		rg:      musicbrainz.ReleaseGroup{Title: "KI Pecezinu", PrimaryType: "Album"},
+		release: musicbrainz.Release{Title: "KI Pecezinu", Status: "official"},
+	}}
+	job, opened, _ := newEnrichJob(t, source)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	source.arrive = func() { createPlaceholder(t, opened, "rg-2", "rel-2") }
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if left, err := library.NewIdentity(opened).CountPlaceholderEditions(t.Context()); err != nil || left != 0 {
+		t.Errorf("%d placeholders left, %v; want the one that arrived during the run refined too", left, err)
+	}
+}
+
 // M1f: an album whose release group exists nowhere any more goes back to Review instead of being
 // logged and left a placeholder forever.
 func TestEnrichJob_ReturnsAnAlbumWhoseReleaseGroupIsGoneToReview(t *testing.T) {

@@ -226,62 +226,73 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 	total, failed, batches := 0, 0, 0
 	var refinedWorkIDs []int64
 	var afterEditionID int64
-	for {
-		if err := ctx.Err(); err != nil {
-			return jobs.Retryablef("enrich.context", string(EnrichJobType), err)
-		}
+	// sweep refines every placeholder past the cursor until none is left: a short batch is not the end while a scan is
+	// still adding them (seen 2026-10-13: a run that began beside a scan stopped after its first six of 189).
+	sweep := func() error {
+		for {
+			if err := ctx.Err(); err != nil {
+				return jobs.Retryablef("enrich.context", string(EnrichJobType), err)
+			}
 
-		// The cursor, not the shrinking set: 20 editions failing for good once looped forever (2026-09-26).
-		batch, err := j.identity.PlaceholderEditions(ctx, afterEditionID, enrichBatchSize)
-		if err != nil {
-			return fmt.Errorf("music: enrich: %w", err)
-		}
-		if len(batch) == 0 {
-			break
-		}
+			// The cursor, not the shrinking set: 20 editions failing for good once looped forever (2026-09-26).
+			batch, err := j.identity.PlaceholderEditions(ctx, afterEditionID, enrichBatchSize)
+			if err != nil {
+				return fmt.Errorf("music: enrich: %w", err)
+			}
+			if len(batch) == 0 {
+				break
+			}
 
-		albums := make([]albumKey, len(batch))
-		for index, edition := range batch {
-			albums[index] = j.placeholderAlbum(ctx, edition)
-		}
-		answers := j.lookupAlbums(ctx, albums)
-		for index, edition := range batch {
-			afterEditionID = edition.EditionID
-			total++
-			job.Progress.Add(1)
-			err := j.enrichOne(ctx, edition, answers[index], artists)
-			if err == nil {
-				j.followMergedIDs(ctx, edition, albums[index], answers[index])
+			albums := make([]albumKey, len(batch))
+			for index, edition := range batch {
+				albums[index] = j.placeholderAlbum(ctx, edition)
 			}
-			if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(ctx, edition, albums[index], artists) {
-				err = nil
+			answers := j.lookupAlbums(ctx, albums)
+			for index, edition := range batch {
+				afterEditionID = edition.EditionID
+				total++
+				job.Progress.Add(1)
+				err := j.enrichOne(ctx, edition, answers[index], artists)
+				if err == nil {
+					j.followMergedIDs(ctx, edition, albums[index], answers[index])
+				}
+				if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(ctx, edition, albums[index], artists) {
+					err = nil
+				}
+				if err == nil {
+					refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
+					j.alignClaimed(ctx, edition.WorkID)
+				} else {
+					failed++
+					// One placeholder edition failing (no data at the provider, a
+					// transient network error) is not a reason to stop the sweep --
+					// it stays a placeholder, the cursor moves past it, and the next run retries it.
+					j.logger.WarnContext(ctx, "edition enrichment failed",
+						slog.Int64("edition_id", edition.EditionID), slog.Any("error", err))
+				}
 			}
-			if err == nil {
-				refinedWorkIDs = append(refinedWorkIDs, edition.WorkID)
-				j.alignClaimed(ctx, edition.WorkID)
-			} else {
-				failed++
-				// One placeholder edition failing (no data at the provider, a
-				// transient network error) is not a reason to stop the sweep --
-				// it stays a placeholder, the cursor moves past it, and the next run retries it.
-				j.logger.WarnContext(ctx, "edition enrichment failed",
-					slog.Int64("edition_id", edition.EditionID), slog.Any("error", err))
+			if batches++; batches%checkpointEvery == 0 {
+				j.handOn(ctx, refinedWorkIDs, payload.Manual)
+				refinedWorkIDs = nil
+				j.backfillPeople(ctx, &backfill, personBackfillBatchSize)
 			}
 		}
-		if len(batch) < enrichBatchSize {
-			break
-		}
-		if batches++; batches%checkpointEvery == 0 {
-			j.handOn(ctx, refinedWorkIDs, payload.Manual)
-			refinedWorkIDs = nil
-			j.backfillPeople(ctx, &backfill, personBackfillBatchSize)
-		}
+		return nil
+	}
+	if err := sweep(); err != nil {
+		return err
 	}
 	j.logger.Info("music enrichment finished", slog.Int("processed", total), slog.Int("failed", failed))
 
 	refinedWorkIDs = append(refinedWorkIDs, j.enrichEditionless(ctx, artists)...)
 	j.handOn(ctx, refinedWorkIDs, payload.Manual)
 	j.backfillPeople(ctx, &backfill, backfill.budget)
+	// A request made while this run was busy was dropped as its duplicate: what it asked for is looked at here.
+	refinedWorkIDs = nil
+	if err := sweep(); err != nil {
+		return err
+	}
+	j.handOn(ctx, refinedWorkIDs, payload.Manual)
 	// Labels after the albums: a release refined in this run is cached, so asking costs nothing.
 	j.backfillLabels(ctx, labelBackfillPerRun)
 	return nil
