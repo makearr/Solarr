@@ -6162,7 +6162,7 @@ export interface components {
             rename_on_import?: boolean;
             /** @description Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks. Off by default. Omitted leaves it alone. */
             extra_files?: boolean;
-            /** @description Extensions without the dot, such as lrc, cue, log, nfo (the default). A file named like a track follows the track's new name; any other keeps its own name in the album folder. Omitted leaves the list alone. */
+            /** @description Extensions without the dot, such as lrc, cue, log, nfo, srt (the default). A file named like a track follows the track's new name; any other keeps its own name in the album folder. In a TV library only a file named after an episode comes along (its subtitles), keeping what follows the name (".en.srt"). Omitted leaves the list alone. */
             extra_file_extensions?: string[];
         };
         /**

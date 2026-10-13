@@ -166,6 +166,9 @@ func (m ManualCommitter) placeHeld(
 	for index := range reconstructed.Media {
 		reconstructed.Media[index].RelPath = path.Join(unit.RelPath, reconstructed.Media[index].RelPath)
 	}
+	for index := range reconstructed.Other {
+		reconstructed.Other[index].RelPath = path.Join(unit.RelPath, reconstructed.Other[index].RelPath)
+	}
 	request := importbatch.HeldRequest{
 		SessionID: session.ID, CategoryID: *session.CategoryID, SourcePath: session.SourcePath, Unit: reconstructed, As: named,
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -231,5 +232,68 @@ func TestCommitHeldPlacesAUnitAsTheSeriesNamedAndRefusesWhatAddsNothing(t *testi
 	held.WorkID = placement.WorkID
 	if _, err := importer.CommitHeld(t.Context(), held); !errors.Is(err, batch.ErrNothingToPlace) {
 		t.Errorf("a second commit: %v, want batch.ErrNothingToPlace", err)
+	}
+}
+
+// Sonarr's "import extra files": a subtitle named after an episode comes along under the episode's new name.
+func TestImportBringsAlongTheSubtitlesNamedAfterAnEpisode(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	write := func(rel string, class inspect.Class) inspect.File {
+		abs := path.Join("/downloads", rel)
+		_ = fsys.MkdirAll(path.Dir(abs), 0o755)
+		file, err := fsys.Create(abs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = file.Write([]byte(rel))
+		_ = file.Close()
+		return inspect.File{RelPath: rel, SizeBytes: int64(len(rel)), Class: class}
+	}
+	_ = fsys.MkdirAll("/library", 0o755)
+	unit := inspect.Unit{
+		Directory: "Example.Show.S01",
+		Media: []inspect.File{
+			write("Example.Show.S01/Example.Show.S01E01.720p.mkv", inspect.ClassMedia),
+			write("Example.Show.S01/Example.Show.S01E01E02.720p.mkv", inspect.ClassMedia),
+		},
+		Other: []inspect.File{
+			write("Example.Show.S01/Example.Show.S01E01.720p.en.srt", inspect.ClassSubtitle),
+			write("Example.Show.S01/Example.Show.S01E01.720p.de.forced.srt", inspect.ClassSubtitle),
+			write("Example.Show.S01/Example.Show.S01E01.720p.nfo", inspect.ClassSidecar),
+			write("Example.Show.S01/notes.srt", inspect.ClassSubtitle),
+		},
+	}
+	free := int64(1 << 40)
+	reader := library.NewSeriesReader(opened)
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake, ExtraFiles: func() []string { return []string{"srt"} },
+	})
+	result, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{1}})
+	if err != nil || result.Placements[0] == nil {
+		t.Fatalf("import: %+v, %v", result.Decisions, err)
+	}
+	var extras []string
+	for _, extra := range result.Placements[0].Extras {
+		extras = append(extras, extra.RelPath)
+	}
+	slices.Sort(extras)
+	want := []string{
+		"Example Show/Season 1/Example Show - S01E01 - Episode.de.forced.srt",
+		"Example Show/Season 1/Example Show - S01E01 - Episode.en.srt",
+	}
+	if !slices.Equal(extras, want) {
+		t.Fatalf("extras = %v, want %v: the nfo is not a listed kind and notes.srt belongs to no episode", extras, want)
+	}
+	for _, rel := range want {
+		if _, err := fsys.Stat(path.Join("/library", rel)); err != nil {
+			t.Errorf("%s was not placed: %v", rel, err)
+		}
 	}
 }

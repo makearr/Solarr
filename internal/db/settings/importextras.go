@@ -18,8 +18,8 @@ const (
 	KeyImportExtraFileExtensions = "import.extra_file_extensions"
 )
 
-// DefaultImportExtraFileExtensions suits music: lyrics, cue sheets, rip logs, release notes.
-var DefaultImportExtraFileExtensions = []string{"lrc", "cue", "log", "nfo"}
+// DefaultImportExtraFileExtensions are lyrics, cue sheets, rip logs, release notes and subtitles.
+var DefaultImportExtraFileExtensions = []string{"lrc", "cue", "log", "nfo", "srt"}
 
 const maxImportExtraFileExtensions = 32
 

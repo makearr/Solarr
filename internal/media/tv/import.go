@@ -71,6 +71,8 @@ type ImporterConfig struct {
 	Clock          clock.Clock
 	Logger         *slog.Logger
 	TransferLadder func() []mover.PlaceMethod
+	// ExtraFiles lists the extensions of files brought along with the episode they are named after; nil brings none.
+	ExtraFiles     func() []string
 	RenameOnImport func() bool
 	GroupID        func(name string) (int, error)
 	// BelowCutoff says an owned file misses its library's cutoff, so a download may replace it; nil lets any owned
@@ -318,13 +320,58 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return undo(err)
 	}
 
-	placement := &library.Placement{WorkID: workID}
+	placement := &library.Placement{WorkID: workID, Extras: i.placeExtras(request.SourcePath, destRoot, unit, placed, methods)}
 	for index, p := range placed {
 		placement.MediaObjectIDs = append(placement.MediaObjectIDs, registered[index].MediaObjectID)
 		placement.LibraryPathIDs = append(placement.LibraryPathIDs, registered[index].LibraryPathID)
 		placement.TransferMethods = append(placement.TransferMethods, string(p.method))
 	}
 	return placement, nil
+}
+
+// placeExtras brings along the unit's other files that are named after a placed episode file, its subtitles above
+// all (Sonarr's rule): each keeps what follows the episode's name (".en.srt") under the episode's new name. A file
+// already there is left, and one that cannot be placed is logged, never the import's failure.
+func (i Importer) placeExtras(
+	sourceRoot string, destRoot settings.RootFolder, unit inspect.Unit, placed []placedEpisode, methods []mover.PlaceMethod,
+) []library.UnitExtra {
+	if i.config.ExtraFiles == nil {
+		return nil
+	}
+	wanted := map[string]bool{}
+	for _, extension := range i.config.ExtraFiles() {
+		wanted["."+strings.ToLower(extension)] = true
+	}
+	var extras []library.UnitExtra
+	for _, other := range unit.Other {
+		if !wanted[strings.ToLower(path.Ext(other.RelPath))] {
+			continue
+		}
+		var owner *placedEpisode
+		var suffix string
+		for index := range placed {
+			source := placed[index].file.media.RelPath
+			rest, named := strings.CutPrefix(other.RelPath, strings.TrimSuffix(source, path.Ext(source)))
+			// The episode named most exactly owns it: "S01E01E02.en.srt" is not the subtitle of "S01E01".
+			if named && strings.HasPrefix(rest, ".") && (owner == nil || len(rest) < len(suffix)) {
+				owner, suffix = &placed[index], rest
+			}
+		}
+		if owner == nil {
+			continue
+		}
+		destRel := strings.TrimSuffix(owner.rel, path.Ext(owner.rel)) + suffix
+		destAbs := path.Join(destRoot.Path, destRel)
+		if _, err := i.config.FS.Stat(destAbs); err == nil {
+			continue
+		}
+		if _, err := mover.PlaceOne(i.config.FS, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
+			i.logger.Warn("tv import: could not bring an extra file along", slog.String("file", other.RelPath), slog.Any("error", err))
+			continue
+		}
+		extras = append(extras, library.UnitExtra{RootFolderID: destRoot.ID, RelPath: destRel})
+	}
+	return extras
 }
 
 // freeName keeps an upgrade from landing on the file it replaces when both are named alike.

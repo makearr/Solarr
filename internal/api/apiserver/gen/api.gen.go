@@ -2214,7 +2214,7 @@ type ImportSettings struct {
 	// AutoCommitConfidence 0.75-0.95, the section 11.4 table's five named levels. Default 0.90.
 	AutoCommitConfidence float32 `json:"auto_commit_confidence"`
 
-	// ExtraFileExtensions Extensions without the dot, such as lrc, cue, log, nfo (the default). A file named like a track follows the track's new name; any other keeps its own name in the album folder. Omitted leaves the list alone.
+	// ExtraFileExtensions Extensions without the dot, such as lrc, cue, log, nfo, srt (the default). A file named like a track follows the track's new name; any other keeps its own name in the album folder. In a TV library only a file named after an episode comes along (its subtitles), keeping what follows the name (".en.srt"). Omitted leaves the list alone.
 	ExtraFileExtensions *[]string `json:"extra_file_extensions,omitempty"`
 
 	// ExtraFiles Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks. Off by default. Omitted leaves it alone.

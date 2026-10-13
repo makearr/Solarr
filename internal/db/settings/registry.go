@@ -199,14 +199,14 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyImportExtraFiles, Kind: KindBool, Tier: TierNormal,
 		Name:     "Import extra files",
-		HelpText: "Bring files with the listed extensions along with the tracks, as Lidarr does.",
+		HelpText: "Bring files with the listed extensions along with the tracks or episodes they are named after, as Lidarr and Sonarr do.",
 		Default:  "false",
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyImportExtraFileExtensions, Kind: KindStringList, Tier: TierNormal,
 		Name:     "Extra file extensions",
-		HelpText: "Comma separated, such as lrc,cue,log,nfo.",
-		Default:  `["lrc","cue","log","nfo"]`,
+		HelpText: "Comma separated, such as lrc,cue,log,nfo,srt.",
+		Default:  `["lrc","cue","log","nfo","srt"]`,
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyImportRenameOnImport, Kind: KindBool, Tier: TierNormal,

@@ -233,7 +233,7 @@ function ExtraFilesControl() {
               value={shown}
               disabled={update.isPending}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="lrc,cue,log,nfo"
+              placeholder="lrc,cue,log,nfo,srt"
               className="w-44 rounded-md border border-border-subtle bg-canvas px-1.5 py-1 font-mono text-xs text-ink
                          focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />

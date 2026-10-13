@@ -220,6 +220,9 @@ folder. Solarr works out what is in it.
   folder nothing could identify. Both need the session to have a library. In a TV library the episodes are
   read from the file names (`S01E02`, an air date, an absolute number); a series the library does not hold
   yet is added first, and a file for an episode the library already has is left where it is.
+- **Import extra files** (Storage > Import, off by default) brings files with the listed extensions along:
+  lyrics, cue sheets and logs beside an album, and in a TV library the subtitles named after an episode
+  (`Show.S01E02.en.srt` becomes `Show - S01E02 - Title.en.srt`). Nothing already there is overwritten.
 - Every import can be **reverted** from its session.
 
 Files a library scan could not identify wait under **Library → Music → Unidentified**.
