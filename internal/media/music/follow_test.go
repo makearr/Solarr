@@ -207,6 +207,16 @@ func TestFollowing_AnArtistWithoutAnIDCannotBeFollowedYet(t *testing.T) {
 	}
 }
 
+func TestFollowing_VariousArtistsCannotBeFollowed(t *testing.T) {
+	source := &fakeDiscographySource{groups: []musicbrainz.ReleaseGroup{{MBID: "rg-1", Title: "Every Compilation", PrimaryType: "Album"}}}
+	following, opened := newFollowing(t, source, fixedCategory{ID: 1, MediaType: "music"})
+	person := artistWithID(t, opened, "89ad4ac3-39f7-470e-963a-56509c546377")
+	_, err := following.FollowCandidates(t.Context(), media.Follow{SubjectType: "person", SubjectID: person, CategoryID: 1})
+	if !errors.Is(err, music.ErrNoDiscography) || source.calls != 0 {
+		t.Errorf("err = %v after %d provider calls, want music.ErrNoDiscography and none", err, source.calls)
+	}
+}
+
 type twoCategories struct{ first, second settings.Category }
 
 func (c twoCategories) CategoryForMediaType(mediaType string) (settings.Category, bool) {

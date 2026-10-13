@@ -21,6 +21,12 @@ var ErrFollowNotWired = errors.New("music: following is not wired")
 // ErrNoArtistID reports an artist with no MusicBrainz id yet: there is no discography to browse until one exists.
 var ErrNoArtistID = fmt.Errorf("%w: the artist has no MusicBrainz id yet", media.ErrNoFollowSource)
 
+// ErrNoDiscography reports MusicBrainz's "Various Artists": every compilation there is, not a body of work to follow.
+var ErrNoDiscography = fmt.Errorf("%w: Various Artists has no discography of its own", media.ErrNoFollowSource)
+
+// hasDiscography reports whether artistMBID names an artist whose release groups are theirs to complete.
+func hasDiscography(artistMBID string) bool { return artistMBID != variousArtistsMBID }
+
 // ErrNoLabelID reports a label known only by name: MusicBrainz is browsed by a label's id.
 var ErrNoLabelID = fmt.Errorf("%w: the label has no MusicBrainz id yet", media.ErrNoFollowSource)
 
@@ -123,6 +129,9 @@ func (f Following) releaseGroupsOf(ctx context.Context, follow media.Follow) ([]
 		}
 		if !ok {
 			return nil, "", ErrNoArtistID
+		}
+		if !hasDiscography(artistMBID) {
+			return nil, "", ErrNoDiscography
 		}
 		groups, err := f.Discography.ArtistReleaseGroups(ctx, musicbrainz.PriorityBackfill, artistMBID)
 		if err != nil {
