@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -593,5 +594,67 @@ func TestManualCommitter_CommitHeldAsPlacesTheNamedAlbumNotTheTopCandidate(t *te
 	}
 	if len(committer.calls) != 1 || committer.calls[0].externalID != chosen {
 		t.Fatalf("calls = %+v, want one placement as %s, not as the file's own %s", committer.calls, chosen, releaseGroupMBID)
+	}
+}
+
+// heldImporter is a media type's own importer that records what it is asked to place by hand.
+type heldImporter struct {
+	workID   int64
+	requests []batch.HeldRequest
+}
+
+func (h *heldImporter) ImportBatch(context.Context, batch.Request) (batch.Result, error) {
+	return batch.Result{}, errors.New("not used")
+}
+
+func (h *heldImporter) CommitHeld(_ context.Context, request batch.HeldRequest) (library.Placement, error) {
+	h.requests = append(h.requests, request)
+	return library.Placement{WorkID: h.workID}, nil
+}
+
+// A library whose type brings its own importer (TV) has its held units placed by that importer, never by music's.
+func TestManualCommitter_AHeldUnitOfALibraryWithItsOwnImporterGoesToThatImporter(t *testing.T) {
+	fx := newFixture(t)
+	writeFile(t, fx.fsys, filepath.Join(root, "Show/Season 1/Show S01E01.mkv"), 31<<20)
+	catID := int64(7)
+	if err := fx.run(t, fx.job(t, 0.99), importjob.Payload{
+		SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	sessions := fx.sessions()
+	done, _ := sessions.List(t.Context(), library.ImportDone, false)
+	units, err := sessions.ListUnits(t.Context(), done[0].ID)
+	if err != nil || len(units) != 1 || units[0].Decision != library.UnitQueue {
+		t.Fatalf("units = %+v, %v, want one QUEUE unit", units, err)
+	}
+
+	committer := &fakeCommitter{}
+	own := &heldImporter{workID: seedWork(t, fx)}
+	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store)).
+		WithImporters(func(categoryID int64) batch.Importer {
+			if categoryID != catID {
+				return nil
+			}
+			return own
+		})
+	if _, err := manual.CommitHeldAs(t.Context(), units[0].ID, "tvdb", "1234"); err != nil {
+		t.Fatalf("CommitHeldAs: %v", err)
+	}
+	if len(committer.calls) != 0 || len(own.requests) != 1 {
+		t.Fatalf("music's committer was called %d times and the own importer %d; want 0 and 1", len(committer.calls), len(own.requests))
+	}
+	request := own.requests[0]
+	paths := make([]string, len(request.Unit.Media))
+	for index, file := range request.Unit.Media {
+		paths[index] = file.RelPath
+	}
+	if request.SourcePath != root || request.CategoryID != catID || request.As == nil || *request.As != (batch.Named{Provider: "tvdb", ExternalID: "1234"}) ||
+		!slices.Equal(paths, []string{"Show/Season 1/Show S01E01.mkv"}) {
+		t.Errorf("request = %+v with files %v; want the named series and the file named from the session's source", request, paths)
+	}
+	updated, err := sessions.GetUnit(t.Context(), units[0].ID)
+	if err != nil || updated.Decision != library.UnitCommit || updated.WorkID == nil || *updated.WorkID != own.workID {
+		t.Errorf("unit = %+v, %v; want COMMIT on work %d", updated, err, own.workID)
 	}
 }

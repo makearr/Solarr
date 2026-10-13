@@ -2,6 +2,7 @@ package tv_test
 
 import (
 	"context"
+	"errors"
 	"path"
 	"testing"
 
@@ -176,5 +177,59 @@ func TestPreviewHoldsTheUnitForAPersonWithoutPlacingIt(t *testing.T) {
 	}
 	if d := result.Decisions[0]; d.Decision != library.UnitQueue || d.Reason != tv.ReasonPreview || result.Placements[0] != nil {
 		t.Errorf("decision = %+v", d)
+	}
+}
+
+// A unit nothing recognised (a folder named by hand) is placed as the series a person names, by Sonarr's Manual Import.
+func TestCommitHeldPlacesAUnitAsTheSeriesNamedAndRefusesWhatAddsNothing(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	for _, dir := range []string{"/downloads/keep", "/library"} {
+		if err := fsys.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	file, err := fsys.Create("/downloads/keep/S01E02.mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = file.Write([]byte("episode"))
+	_ = file.Close()
+	unit := inspect.Unit{Directory: "keep", Media: []inspect.File{{RelPath: "keep/S01E02.mkv", SizeBytes: 7, Class: inspect.ClassMedia}}}
+
+	free := int64(1 << 40)
+	reader := library.NewSeriesReader(opened)
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake,
+	})
+	held := batch.HeldRequest{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Unit: unit}
+
+	_, unresolved := importer.CommitHeld(t.Context(), held)
+	named := held
+	named.As = &batch.Named{Provider: tv.ProviderTVDB, ExternalID: "not-a-number"}
+	_, notAnID := importer.CommitHeld(t.Context(), named)
+	if !errors.Is(unresolved, batch.ErrUnresolved) || !errors.Is(notAnID, tv.ErrNotASeriesID) {
+		t.Fatalf("unresolved = %v, bad id = %v; want batch.ErrUnresolved and tv.ErrNotASeriesID", unresolved, notAnID)
+	}
+
+	named.As = &batch.Named{Provider: tv.ProviderTVDB, ExternalID: "1234"}
+	placement, err := importer.CommitHeld(t.Context(), named)
+	if err != nil || placement.WorkID == 0 || len(placement.MediaObjectIDs) != 1 {
+		t.Fatalf("placement = %+v, %v; want the one episode placed in the series added for it", placement, err)
+	}
+	if _, err := fsys.Stat("/library/Example Show/Season 1/Example Show - S01E02 - Episode.mkv"); err != nil {
+		t.Errorf("the episode was not placed under the series: %v", err)
+	}
+
+	// The same unit again resolves to the series it now belongs to, and brings nothing new.
+	held.WorkID = placement.WorkID
+	if _, err := importer.CommitHeld(t.Context(), held); !errors.Is(err, batch.ErrNothingToPlace) {
+		t.Errorf("a second commit: %v, want batch.ErrNothingToPlace", err)
 	}
 }

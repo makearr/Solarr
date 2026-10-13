@@ -55,7 +55,7 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		AcoustID:   p.acoustIDLookup(),
 		Committer:  p.importCommitter(),
 		Packs:      library.NewPacks(p.library),
-		Importers:  map[string]batch.Importer{"tv": p.tvImporter()},
+		Importers:  p.batchImporters(),
 		MediaTypeOf: func(categoryID int64) string {
 			if category, found := p.cache.Snapshot().Category(categoryID); found {
 				return category.MediaType
@@ -175,10 +175,22 @@ func (p *process) mediaTool() mediatool.Tool {
 // holds -- both are cheap, stateless wrappers over the same long-lived
 // dependencies, and importjob.Job keeps its own unexported.
 func (p *process) manualCommitter() importjob.ManualCommitter {
+	importers := p.batchImporters()
 	return importjob.NewManualCommitter(
 		p.fsys, p.mediaTool(), library.NewImportSessions(p.library), p.importCommitter(),
 		library.NewPacks(p.library),
-	)
+	).WithImporters(func(categoryID int64) batch.Importer {
+		category, found := p.cache.Snapshot().Category(categoryID)
+		if !found {
+			return nil
+		}
+		return importers[category.MediaType]
+	})
+}
+
+// batchImporters are the media types that identify and place an import in their own way, by type.
+func (p *process) batchImporters() map[string]batch.Importer {
+	return map[string]batch.Importer{tv.MediaType: p.tvImporter()}
 }
 
 // tvImporter is the TV module's batch importer: the same placement rules as music's commit, naming by the library's TV
@@ -195,6 +207,7 @@ func (p *process) tvImporter() tv.Importer {
 			DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
 		},
 		Categories: categories, BlockedContent: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID, BelowCutoff: p.belowCutoff,
 	})
 }

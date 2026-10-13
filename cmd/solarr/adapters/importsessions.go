@@ -5,15 +5,18 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/music"
+	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -212,6 +215,14 @@ func (a ImportSessions) CommitImportUnit(
 			return apiserver.ImportUnitRow{}, apiserver.ErrNoPlacement
 		case errors.Is(err, music.ErrBlockedContent):
 			return apiserver.ImportUnitRow{}, apiserver.ErrBlockedContent
+		case errors.Is(err, batch.ErrUnresolved):
+			return apiserver.ImportUnitRow{}, apiserver.ErrImportUnitHasNoCandidate
+		case errors.Is(err, importjob.ErrHeldCommitNotBuilt):
+			return apiserver.ImportUnitRow{}, apiserver.ErrNotBuiltForMediaType
+		case errors.Is(err, batch.ErrNothingToPlace):
+			return apiserver.ImportUnitRow{}, fmt.Errorf("%w: every episode in this folder is already in the library, or none is an episode of that series", apiserver.ErrInvalidChoice)
+		case errors.Is(err, tv.ErrNotASeriesID):
+			return apiserver.ImportUnitRow{}, fmt.Errorf("%w: that is not a series id", apiserver.ErrInvalidChoice)
 		default:
 			return apiserver.ImportUnitRow{}, err
 		}

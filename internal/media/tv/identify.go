@@ -73,22 +73,32 @@ func (i Identifier) Resolve(ctx context.Context, categoryID int64, entry library
 
 // series finds the work the ids name, or adds it with the library's own monitoring for a series a scan finds.
 func (i Identifier) series(ctx context.Context, categoryID int64, ids IDs) (int64, error) {
+	return findOrAddSeries(ctx, i.Service, i.Categories, i.DefaultProfileID, categoryID, ids)
+}
+
+// findOrAddSeries is the work the ids name: the one held, else added as a series a scan would have found.
+func findOrAddSeries(
+	ctx context.Context, service Service, categories interface {
+		Category(id int64) (settings.Category, bool)
+		ProfileFor(category settings.Category, fallback int64) int64
+	}, defaultProfileID, categoryID int64, ids IDs,
+) (int64, error) {
 	provider, external := ProviderTVDB, ids.TVDB
 	if external == 0 {
 		provider, external = ProviderTMDB, ids.TMDB
 	}
-	if id, held, err := i.Service.Series.WorkByProviderID(ctx, provider, strconv.FormatInt(external, 10)); err != nil {
+	if id, held, err := service.Series.WorkByProviderID(ctx, provider, strconv.FormatInt(external, 10)); err != nil {
 		return 0, err
 	} else if held {
 		return id, nil
 	}
-	profile := i.DefaultProfileID
+	profile := defaultProfileID
 	monitor := MonitorExisting
-	if category, found := i.Categories.Category(categoryID); found {
-		profile = i.Categories.ProfileFor(category, profile)
+	if category, found := categories.Category(categoryID); found {
+		profile = categories.ProfileFor(category, profile)
 		monitor = scanMonitor(category.TVMonitor)
 	}
-	added, err := i.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: categoryID, ProfileID: profile, Monitor: monitor})
+	added, err := service.Add(ctx, AddRequest{IDs: ids, CategoryID: categoryID, ProfileID: profile, Monitor: monitor})
 	if err != nil {
 		return 0, fmt.Errorf("tv: add the chosen series: %w", err)
 	}

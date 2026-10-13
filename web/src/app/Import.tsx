@@ -1215,12 +1215,12 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
             <span className="text-ink-muted">{describeTransfer(unit.transfer_methods!)}</span>
           )}
         </button>
-        {commitsHeld && unit.decision === "QUEUE" && (unit.candidates?.length ?? 0) > 0 && (
+        {commitsHeld && unit.decision === "QUEUE" && ((unit.candidates?.length ?? 0) > 0 || unit.work_id != null) && (
           <button
             type="button"
             onClick={() => commit.mutate()}
             disabled={commit.isPending}
-            title="Commit using the top-ranked candidate, overriding the threshold"
+            title="Place it as what it was matched to, although it was held"
             className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
                        disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1245,12 +1245,12 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
             categoryId={categoryId}
             guess={queryFromPath(`${unit.rel_path}/`)}
             busy={commit.isPending}
-            failed={commit.isError ? "That could not be placed. Pick another or try again." : null}
+            failed={commit.isError ? ((commit.error as { detail?: string }).detail ?? "That could not be placed. Pick another or try again.") : null}
             onPlace={(choice) => commit.mutate(choice)}
           />
         </Dialog>
       )}
-      {commit.isError && <span className="text-danger">That could not be committed.</span>}
+      {commit.isError && <span className="text-danger">{(commit.error as { detail?: string }).detail ?? "That could not be committed."}</span>}
       {expanded && (
         <div className="flex flex-col gap-1 rounded-md bg-canvas p-2 text-ink-muted">
           {unit.evidence?.signals && unit.evidence.signals.length > 0 ? (

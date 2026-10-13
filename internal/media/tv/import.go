@@ -64,6 +64,10 @@ type ImporterConfig struct {
 		Category(id int64) (settings.Category, bool)
 	}
 	BlockedContent BlockedContent
+	// Exclusions lifts a series' exclusion when a person names it for a held unit; nil lifts nothing.
+	Exclusions interface {
+		Allow(ctx context.Context, mediaType, provider, externalID string) error
+	}
 	Clock          clock.Clock
 	Logger         *slog.Logger
 	TransferLadder func() []mover.PlaceMethod
@@ -142,6 +146,49 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		}
 	}
 	return result, nil
+}
+
+var _ batch.HeldCommitter = Importer{}
+
+// ErrNotASeriesID is a named work whose id is not one of a series source.
+var ErrNotASeriesID = errors.New("tv: that is not a series id")
+
+// CommitHeld implements batch.HeldCommitter: the unit goes to the series named, else the one it resolved to.
+func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (library.Placement, error) {
+	workID := request.WorkID
+	if request.As != nil {
+		id, err := strconv.ParseInt(request.As.ExternalID, 10, 64)
+		if err != nil || id <= 0 {
+			return library.Placement{}, fmt.Errorf("%w: %q", ErrNotASeriesID, request.As.ExternalID)
+		}
+		ids := IDs{TVDB: id}
+		if request.As.Provider == ProviderTMDB {
+			ids = IDs{TMDB: id}
+		}
+		if i.config.Exclusions != nil {
+			if err := i.config.Exclusions.Allow(ctx, MediaType, request.As.Provider, request.As.ExternalID); err != nil {
+				return library.Placement{}, err
+			}
+		}
+		resolver := i.config.Resolver
+		workID, err = findOrAddSeries(ctx, resolver.Service, resolver.Categories, resolver.DefaultProfileID, request.CategoryID, ids)
+		if err != nil {
+			return library.Placement{}, err
+		}
+	}
+	if workID <= 0 {
+		return library.Placement{}, batch.ErrUnresolved
+	}
+	placed, err := i.placeUnit(ctx, batch.Request{
+		SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath,
+	}, request.Unit, workID, false)
+	if errors.Is(err, errNothingToPlace) {
+		return library.Placement{}, batch.ErrNothingToPlace
+	}
+	if err != nil {
+		return library.Placement{}, err
+	}
+	return *placed, nil
 }
 
 func firstMedia(unit inspect.Unit) string {

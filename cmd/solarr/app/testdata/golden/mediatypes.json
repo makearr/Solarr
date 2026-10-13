@@ -209,7 +209,7 @@
         "label": "Series"
       }
     ],
-    "commits_held_imports": false,
+    "commits_held_imports": true,
     "duplicates_by_name": false,
     "facets": [
       {

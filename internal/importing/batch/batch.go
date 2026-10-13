@@ -4,6 +4,7 @@ package batch
 
 import (
 	"context"
+	"errors"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/inspect"
@@ -36,4 +37,30 @@ type Result struct {
 // season or an album is (ADR-23).
 type Importer interface {
 	ImportBatch(ctx context.Context, request Request) (Result, error)
+}
+
+// Named is the work a person said a unit is, by a provider's id.
+type Named struct{ Provider, ExternalID string }
+
+// HeldRequest is one unit a session held for a person, to be placed by hand.
+type HeldRequest struct {
+	SessionID  int64
+	CategoryID int64
+	SourcePath string
+	Unit       inspect.Unit
+	// WorkID is what the import resolved the unit to, 0 when it found nothing.
+	WorkID int64
+	// As is the work a person named instead; nil places the unit as resolved.
+	As *Named
+}
+
+// ErrUnresolved is a held unit that resolved to no work and was given none.
+var ErrUnresolved = errors.New("batch: the unit was matched to nothing; say what it is")
+
+// ErrNothingToPlace is a held unit none of whose files adds anything to the work.
+var ErrNothingToPlace = errors.New("batch: none of the unit's files is something the library does not already hold")
+
+// HeldCommitter is an Importer whose held units a person commits by hand: as resolved, or as a work named.
+type HeldCommitter interface {
+	CommitHeld(ctx context.Context, request HeldRequest) (library.Placement, error)
 }

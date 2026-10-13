@@ -232,8 +232,9 @@ func TestResolveUnidentified_PlacesThroughTheLibrarysType(t *testing.T) {
 	}
 }
 
-// A held unit in a library whose type has no manual commit is refused, not placed by another type's committer.
-func TestCommitImportUnit_RefusesATypeWithoutManualCommits(t *testing.T) {
+// A held unit of a TV library goes to TV's own importer: with its folder gone it is refused as changed, where
+// music's committer would have looked for an album.
+func TestCommitImportUnit_ATVUnitWhoseFolderIsGoneIsRefusedAsChanged(t *testing.T) {
 	server := newGoldenServer(t)
 	ids := server.seedLibraries(t)
 	sessions := library.NewImportSessions(server.process.library)
@@ -245,12 +246,12 @@ func TestCommitImportUnit_RefusesATypeWithoutManualCommits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, target := range []string{
-		fmt.Sprintf("/import/sessions/%d/units/%d/commit", sessionID, units[0]),
-		fmt.Sprintf("/import/sessions/%d/commit", sessionID),
-	} {
-		if status, body := server.post(t, target, `{"provider":"tvdb","external_id":"9001"}`); status != http.StatusConflict {
-			t.Errorf("POST %s: %d %s, want 409", target, status, body)
-		}
+	status, body := server.post(t, fmt.Sprintf("/import/sessions/%d/units/%d/commit", sessionID, units[0]), `{"provider":"tvdb","external_id":"9001"}`)
+	if status != http.StatusConflict || !strings.Contains(body, "no longer match") {
+		t.Errorf("unit commit: %d %s, want 409 saying the files no longer match", status, body)
+	}
+	status, body = server.post(t, fmt.Sprintf("/import/sessions/%d/commit", sessionID), `{}`)
+	if status != http.StatusOK || !strings.Contains(body, `"units_committed":0`) || !strings.Contains(body, "its folder is gone") {
+		t.Errorf("commit all: %d %s, want 200 with nothing committed and the reason", status, body)
 	}
 }

@@ -216,9 +216,10 @@ folder. Solarr works out what is in it.
   becomes an album, named by its tags or folder and marked **Unverified**. It is not searched for;
   commit it from the review with the right candidate and its files move onto the real album.
 - A folder held for review has **Commit anyway** (its best match) and **Identify as…**: search for the
-  album the files are, pick it, and they are placed as that album, which is also the way out for a folder
-  nothing could identify. Both need the session to have a library, and a music one: a TV import's held
-  folders are not committed by hand yet, so neither button shows there.
+  album or series the files are, pick it, and they are placed as that, which is also the way out for a
+  folder nothing could identify. Both need the session to have a library. In a TV library the episodes are
+  read from the file names (`S01E02`, an air date, an absolute number); a series the library does not hold
+  yet is added first, and a file for an episode the library already has is left where it is.
 - Every import can be **reverted** from its session.
 
 Files a library scan could not identify wait under **Library → Music → Unidentified**.

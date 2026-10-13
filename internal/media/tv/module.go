@@ -146,6 +146,7 @@ func (Module) Descriptor() media.Descriptor {
 		WantedGrain:    media.WantedParts,
 		AddKinds:       []media.Choice{{Key: "series", Label: "Series"}},
 		// The consumer refuses to add an excluded series (Service.excluded).
+		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
 	}
 }
