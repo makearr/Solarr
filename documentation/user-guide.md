@@ -160,7 +160,7 @@ Three scheduled tasks (Settings → Scheduler) find what is missing without you 
   accepts. An album an RSS feed first showed a release for counts as newly arrived for the **RSS freshness
   window** (Settings → Libraries → Priority, advanced; default 48 hours), as one released within the
   **Freshness window** (default 7 days) does.
-- **Search for missing albums** (every 15 minutes) searches the most urgent wanted albums, within
+- **Search for what is missing** (every 15 minutes) searches the most urgent wanted albums, within
   **Automatic searches per hour** (Settings → Libraries → Priority, advanced; default 12, 0 turns it off). Each
   hour's searches are split 40% new releases, 40% older gaps and 20% **upgrades** (albums below the
   library's cutoff); a share one group leaves unused goes to the others. **Automatic search order**

@@ -17,7 +17,7 @@ const JobType = jobs.Type("acquire.plan")
 
 // Definition runs one pass at a time; the next scheduled pass is its retry.
 var Definition = jobs.Definition{
-	Name: "Planning wanted albums", Type: JobType, Pool: jobs.PoolSearch, Mutating: true, MaxAttempts: 1,
+	Name: "Planning what is wanted", Type: JobType, Pool: jobs.PoolSearch, Mutating: true, MaxAttempts: 1,
 }
 
 // dirtyBudget is section 9.1's items_per_tick; sweepSlices spreads the sweep over a day of 5-minute passes.

@@ -132,7 +132,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueuePoll,
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "plan", Name: "Plan wanted albums", DefaultCadence: planScheduleCron,
+		Key: "plan", Name: "Plan what is wanted", DefaultCadence: planScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryDownloads, Startup: jobs.StartupOn,
 		Enqueue: p.enqueuePlan,
 	})
@@ -147,7 +147,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueueRSS,
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "hunt", Name: "Search for missing albums", DefaultCadence: huntScheduleCron,
+		Key: "hunt", Name: "Search for what is missing", DefaultCadence: huntScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryDownloads, Startup: jobs.StartupOff,
 		Enqueue: p.enqueueHunt,
 	})

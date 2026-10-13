@@ -17,7 +17,7 @@ const HuntJobType = jobs.Type("acquire.hunt")
 
 // HuntDefinition runs one hunt at a time; the next scheduled run is its retry.
 var HuntDefinition = jobs.Definition{
-	Name: "Searching for missing albums", Type: HuntJobType, Pool: jobs.PoolSearch, Mutating: true, MaxAttempts: 1,
+	Name: "Searching for what is missing", Type: HuntJobType, Pool: jobs.PoolSearch, Mutating: true, MaxAttempts: 1,
 }
 
 // Outcome is what searching one item came to, as the hunt needs to know it.
