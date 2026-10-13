@@ -8357,6 +8357,8 @@ components:
         runtime_ms: { type: integer, format: int64 }
         date: { type: string }
         available_at: { type: string, format: date-time, description: When the part is out (an episode's air time); absent when unknown. }
+        available_basis: { type: string, description: "How that time is known, as its source said it: \"tvmaze airstamp tz=America/New_York\"; absent when nothing says." }
+        available_confidence: { type: string, enum: [unknown, low, medium, high], description: How sure the time is; a less sure one is waited out longer before the part counts as out. }
         section: { type: string, description: "The heading the part sits under within its group, as the type places it: \"Disc 2\"; empty for none." }
         number: { type: string, description: "The number the part is shown with: a track's, an episode's." }
         alt_numbers:

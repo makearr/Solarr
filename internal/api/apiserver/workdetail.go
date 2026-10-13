@@ -75,6 +75,8 @@ type PartRow struct {
 	File *PartFileRow
 	// AvailableAt is when the part is out, zero when unknown.
 	AvailableAt time.Time
+	// AvailableBasis and AvailableConfidence say how that time is known and how sure it is.
+	AvailableBasis, AvailableConfidence string
 	// Section and Number place the part as its type does: "Disc 2", "3".
 	Section, Number string
 	AltNumbers      map[string]string
@@ -733,6 +735,11 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 		}
 		if !row.AvailableAt.IsZero() {
 			views[index].AvailableAt = &row.AvailableAt
+		}
+		if row.AvailableBasis != "" {
+			views[index].AvailableBasis = &row.AvailableBasis
+			confidence := gen.WorkPartAvailableConfidence(row.AvailableConfidence)
+			views[index].AvailableConfidence = &confidence
 		}
 		views[index].Section, views[index].Number = strPtr(row.Section), strPtr(row.Number)
 		if len(row.AltNumbers) > 0 {

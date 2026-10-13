@@ -158,7 +158,11 @@ function WorkHeader({
 
   const poster = work.pictures?.poster;
   const shape = info?.work_image ?? "cover";
-  const counts = groups.reduce((sum, group) => ({ present: sum.present + group.present_count, required: sum.required + (group.required_count ?? 0) }), { present: 0, required: 0 });
+  // A file of a part that is not wanted is still held: it counts on both sides, never as more than there is.
+  const counts = groups.reduce(
+    (sum, group) => ({ present: sum.present + group.present_count, required: sum.required + Math.max(group.required_count ?? 0, group.present_count) }),
+    { present: 0, required: 0 },
+  );
   const facts = headerFacts(work, info);
   const genres = work.facets?.genre ?? work.genres;
   const links = externalLinks(work.external_ids);

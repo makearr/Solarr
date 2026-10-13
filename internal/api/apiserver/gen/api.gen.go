@@ -719,6 +719,14 @@ const (
 	WorkGroupStateUPGRADABLE WorkGroupState = "UPGRADABLE"
 )
 
+// Defines values for WorkPartAvailableConfidence.
+const (
+	WorkPartAvailableConfidenceHigh    WorkPartAvailableConfidence = "high"
+	WorkPartAvailableConfidenceLow     WorkPartAvailableConfidence = "low"
+	WorkPartAvailableConfidenceMedium  WorkPartAvailableConfidence = "medium"
+	WorkPartAvailableConfidenceUnknown WorkPartAvailableConfidence = "unknown"
+)
+
 // Defines values for ResolveCategoryDuplicatesJSONBodyDropAction.
 const (
 	ResolveCategoryDuplicatesJSONBodyDropActionLink    ResolveCategoryDuplicatesJSONBodyDropAction = "link"
@@ -4189,6 +4197,12 @@ type WorkPart struct {
 	// AvailableAt When the part is out (an episode's air time); absent when unknown.
 	AvailableAt *time.Time `json:"available_at,omitempty"`
 
+	// AvailableBasis How that time is known, as its source said it: "tvmaze airstamp tz=America/New_York"; absent when nothing says.
+	AvailableBasis *string `json:"available_basis,omitempty"`
+
+	// AvailableConfidence How sure the time is; a less sure one is waited out longer before the part counts as out.
+	AvailableConfidence *WorkPartAvailableConfidence `json:"available_confidence,omitempty"`
+
 	// Credits The part's own credits (an episode's guest stars, director, writers).
 	Credits     *[]Credit    `json:"credits,omitempty"`
 	Date        *string      `json:"date,omitempty"`
@@ -4212,6 +4226,9 @@ type WorkPart struct {
 	// Wanted This track's own SINGLE desired_item, when one exists -- distinct from monitored, which only affects the album's own required_count.
 	Wanted *Wanted `json:"wanted"`
 }
+
+// WorkPartAvailableConfidence How sure the time is; a less sure one is waited out longer before the part counts as out.
+type WorkPartAvailableConfidence string
 
 // WorkPartPage defines model for WorkPartPage.
 type WorkPartPage struct {

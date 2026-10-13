@@ -24,6 +24,8 @@ const catalogue = {
   "work.loading": "Loading…",
   "work.partsOnDisk": "{present} of {required} {parts} on disk",
   "work.partsPresent": "{present} {parts} on disk",
+  "work.outBasis": "Known from: {basis}. Counted as missing {hours} hours after.",
+  "work.outUnannounced": "No date announced yet.",
   "work.waitingForMetadata": "Waiting for metadata",
   "work.noParts": "No {parts} are known yet.",
   "work.notWanted": "Nothing of this {work} is wanted.",

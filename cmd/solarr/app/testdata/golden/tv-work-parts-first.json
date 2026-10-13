@@ -5,6 +5,8 @@
         "date": "2020-02-03"
       },
       "available_at": "2020-02-03T20:00:00Z",
+      "available_basis": "tvdb air time",
+      "available_confidence": "medium",
       "credits": [
         {
           "person_id": 6,

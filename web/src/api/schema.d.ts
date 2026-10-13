@@ -5616,6 +5616,13 @@ export interface components {
              * @description When the part is out (an episode's air time); absent when unknown.
              */
             available_at?: string;
+            /** @description How that time is known, as its source said it: "tvmaze airstamp tz=America/New_York"; absent when nothing says. */
+            available_basis?: string;
+            /**
+             * @description How sure the time is; a less sure one is waited out longer before the part counts as out.
+             * @enum {string}
+             */
+            available_confidence?: "unknown" | "low" | "medium" | "high";
             /** @description The heading the part sits under within its group, as the type places it: "Disc 2"; empty for none. */
             section?: string;
             /** @description The number the part is shown with: a track's, an episode's. */

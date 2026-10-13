@@ -181,6 +181,7 @@ func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apis
 		if detail.Part.AvailableAt.Valid {
 			row.AvailableAt = time.Unix(detail.Part.AvailableAt.Int64, 0)
 		}
+		row.AvailableBasis, row.AvailableConfidence = detail.Part.AvailableBasis, detail.Part.AvailableConfidence
 		for _, credit := range detail.Credits {
 			row.Credits = append(row.Credits, apiserver.CreditRow{
 				PersonID: credit.PersonID, PersonName: credit.PersonName, Role: credit.Role, Character: credit.Character,

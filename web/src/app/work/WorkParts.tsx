@@ -39,6 +39,16 @@ export function useAllParts(workId: number, group: string | undefined, enabled =
   return { parts: (parts.data?.pages ?? []).flatMap((page) => page.items), loading: parts.isLoading, error: parts.isError };
 }
 
+// How long a part is waited for after its time, by how sure the time is; the server's own table (library.PartOut).
+const GRACE_HOURS: Record<string, number> = { high: 2, medium: 12 };
+
+/** Where a part's time comes from and when it starts to count as missing, for the reader who doubts it. */
+function outNote(part: Part): string | undefined {
+  if (!part.available_basis) return undefined;
+  if (part.available_basis === "unannounced") return t("work.outUnannounced");
+  return t("work.outBasis", { basis: part.available_basis, hours: GRACE_HOURS[part.available_confidence ?? ""] ?? 36 });
+}
+
 const STATE: Record<PartState, { label: string; tone: string }> = {
   present: { label: "On disk", tone: "text-ok" },
   missing: { label: "Missing", tone: "text-danger" },
@@ -93,7 +103,7 @@ export function GroupSection({
           <span className="text-sm font-semibold">{group.label}</span>
           <span className="text-xs text-ink-muted">
             {group.present_count}
-            {group.required_count ? `/${group.required_count}` : ""}
+            {group.required_count ? `/${Math.max(group.required_count, group.present_count)}` : ""}
           </span>
         </button>
         {note && <span className="text-xs text-ink-muted">{note}</span>}
@@ -208,7 +218,10 @@ function PartRow({
       <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">
         {part.runtime_ms ? (part.runtime_ms >= 10 * 60_000 ? formatMinutes(part.runtime_ms) : formatDuration(part.runtime_ms)) : ""}
       </td>
-      <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted md:table-cell">{out ?? ""}</td>
+      <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted md:table-cell" title={outNote(part)}>
+        {out ?? ""}
+        {out && part.available_basis && part.available_confidence !== "high" && " ≈"}
+      </td>
       <td className="whitespace-nowrap py-1.5 pr-3 text-right text-xs">
         <span className={state.tone}>{state.label}</span>
         {group && actions.onGrab && (
