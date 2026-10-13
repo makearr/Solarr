@@ -486,6 +486,15 @@ func (q *Queries) DeleteEdition(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteEditionCredits = `-- name: DeleteEditionCredits :exec
+DELETE FROM credit WHERE edition_id = ?
+`
+
+func (q *Queries) DeleteEditionCredits(ctx context.Context, editionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEditionCredits, editionID)
+	return err
+}
+
 const deleteWork = `-- name: DeleteWork :exec
 DELETE FROM work WHERE id = ?
 `
@@ -527,6 +536,28 @@ DELETE FROM desired_item_file WHERE desired_item_id IN (SELECT id FROM desired_i
 func (q *Queries) DetachDesiredFilesForWork(ctx context.Context, workID int64) error {
 	_, err := q.db.ExecContext(ctx, detachDesiredFilesForWork, workID)
 	return err
+}
+
+const findEditionTwin = `-- name: FindEditionTwin :one
+SELECT twin.id FROM edition placeholder
+JOIN edition twin ON twin.work_id = placeholder.work_id AND twin.label = placeholder.label
+                 AND twin.id != placeholder.id
+WHERE placeholder.id = ?1 AND twin.kind = ?2
+ORDER BY twin.id LIMIT 1
+`
+
+type FindEditionTwinParams struct {
+	EditionID int64
+	Kind      string
+}
+
+// Another edition of the same work under the same label that already has the kind a placeholder
+// is about to take: the same release, reached by a second id.
+func (q *Queries) FindEditionTwin(ctx context.Context, arg FindEditionTwinParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, findEditionTwin, arg.EditionID, arg.Kind)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const findPartByAltNumber = `-- name: FindPartByAltNumber :one
@@ -958,6 +989,30 @@ func (q *Queries) GetWorkPart(ctx context.Context, id int64) (WorkPart, error) {
 		&i.AvailableBasis,
 	)
 	return i, err
+}
+
+const keepEditionAlias = `-- name: KeepEditionAlias :exec
+INSERT INTO edition_external_id (provider, external_id, edition_id, confidence)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING
+`
+
+type KeepEditionAliasParams struct {
+	Provider   string
+	ExternalID string
+	EditionID  int64
+	Confidence float64
+}
+
+// A merged release's old id still names its edition, or files tagged with it open a second one.
+func (q *Queries) KeepEditionAlias(ctx context.Context, arg KeepEditionAliasParams) error {
+	_, err := q.db.ExecContext(ctx, keepEditionAlias,
+		arg.Provider,
+		arg.ExternalID,
+		arg.EditionID,
+		arg.Confidence,
+	)
+	return err
 }
 
 const linkEditionExternalID = `-- name: LinkEditionExternalID :exec
@@ -1918,6 +1973,79 @@ func (q *Queries) ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle
 		return nil, err
 	}
 	return items, nil
+}
+
+const moveEditionCredits = `-- name: MoveEditionCredits :exec
+UPDATE OR IGNORE credit SET edition_id = ?1 WHERE edition_id = ?2
+`
+
+type MoveEditionCreditsParams struct {
+	ToID   int64
+	FromID int64
+}
+
+// A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
+func (q *Queries) MoveEditionCredits(ctx context.Context, arg MoveEditionCreditsParams) error {
+	_, err := q.db.ExecContext(ctx, moveEditionCredits, arg.ToID, arg.FromID)
+	return err
+}
+
+const moveEditionDesiredItems = `-- name: MoveEditionDesiredItems :exec
+UPDATE desired_item SET edition_id = ?1 WHERE edition_id = ?2
+`
+
+type MoveEditionDesiredItemsParams struct {
+	ToID   sql.NullInt64
+	FromID sql.NullInt64
+}
+
+func (q *Queries) MoveEditionDesiredItems(ctx context.Context, arg MoveEditionDesiredItemsParams) error {
+	_, err := q.db.ExecContext(ctx, moveEditionDesiredItems, arg.ToID, arg.FromID)
+	return err
+}
+
+const moveEditionExternalIDs = `-- name: MoveEditionExternalIDs :exec
+UPDATE edition_external_id SET edition_id = ?1, confidence = ?2
+WHERE edition_id = ?3
+`
+
+type MoveEditionExternalIDsParams struct {
+	ToID       int64
+	Confidence float64
+	FromID     int64
+}
+
+func (q *Queries) MoveEditionExternalIDs(ctx context.Context, arg MoveEditionExternalIDsParams) error {
+	_, err := q.db.ExecContext(ctx, moveEditionExternalIDs, arg.ToID, arg.Confidence, arg.FromID)
+	return err
+}
+
+const moveEditionImportUnits = `-- name: MoveEditionImportUnits :exec
+UPDATE import_unit SET edition_id = ?1 WHERE edition_id = ?2
+`
+
+type MoveEditionImportUnitsParams struct {
+	ToID   sql.NullInt64
+	FromID sql.NullInt64
+}
+
+func (q *Queries) MoveEditionImportUnits(ctx context.Context, arg MoveEditionImportUnitsParams) error {
+	_, err := q.db.ExecContext(ctx, moveEditionImportUnits, arg.ToID, arg.FromID)
+	return err
+}
+
+const moveEditionPackItems = `-- name: MoveEditionPackItems :exec
+UPDATE pack_item SET edition_id = ?1 WHERE edition_id = ?2
+`
+
+type MoveEditionPackItemsParams struct {
+	ToID   sql.NullInt64
+	FromID sql.NullInt64
+}
+
+func (q *Queries) MoveEditionPackItems(ctx context.Context, arg MoveEditionPackItemsParams) error {
+	_, err := q.db.ExecContext(ctx, moveEditionPackItems, arg.ToID, arg.FromID)
+	return err
 }
 
 const repointEditionExternalID = `-- name: RepointEditionExternalID :execrows

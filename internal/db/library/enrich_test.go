@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -93,6 +94,62 @@ func TestRefineEdition_UpdatesTheEditionRow(t *testing.T) {
 	// must survive refinement -- it is still what the row is found by.
 	if edition.Label != "release-2" {
 		t.Errorf("Label = %q, changed by refinement -- it must not be", edition.Label)
+	}
+}
+
+// A release MusicBrainz merged is known by two ids; files still tagged with the old one open a placeholder
+// under the label the first edition already has (seen 2026-10-09: refused by UNIQUE every hour).
+func TestRefineEdition_APlaceholderThatIsAnExistingEditionFoldsIntoIt(t *testing.T) {
+	opened, queries := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	workID, first := createPlaceholderEdition(t, queries, identity, "rg-7", "release-old")
+	refinement := library.EditionRefinement{Kind: "official", Format: "CD"}
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), first, workID, nil, "", "", refinement, nil); err != nil {
+		t.Fatalf("RefineEdition, first: %v", err)
+	}
+	_, moved, err := identity.FollowMergedIDs(t.Context(), library.MergedIDs{
+		EditionID: first, EditionProvider: "musicbrainz:release", OldEditionID: "release-old", NewEditionID: "release-new",
+	})
+	if err != nil || !moved {
+		t.Fatalf("FollowMergedIDs: moved %v, %v; want moved", moved, err)
+	}
+	resolve := func(externalID string) int64 {
+		t.Helper()
+		edition, err := queries.GetEditionByExternalID(t.Context(), librarydb.GetEditionByExternalIDParams{
+			Provider: "musicbrainz:release", ExternalID: externalID,
+		})
+		if err != nil {
+			t.Fatalf("%s resolves to nothing: %v", externalID, err)
+		}
+		return edition.ID
+	}
+	if got := [2]int64{resolve("release-old"), resolve("release-new")}; got != [2]int64{first, first} {
+		t.Fatalf("old and new id resolve to %v, want both the first edition %d", got, first)
+	}
+
+	// What the live library held before the alias existed: a second placeholder under the same label.
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		second, err := q.CreateEdition(ctx, librarydb.CreateEditionParams{WorkID: workID, Kind: "unknown", Label: "release-old"})
+		if err != nil {
+			return err
+		}
+		return q.LinkEditionExternalID(ctx, librarydb.LinkEditionExternalIDParams{
+			Provider: "musicbrainz:release", ExternalID: "release-old", EditionID: second.ID, Confidence: 1,
+		})
+	})
+	second := resolve("release-old")
+	if second == first {
+		t.Fatal("the fixture did not create a second placeholder")
+	}
+	if err := identity.RefineEdition(t.Context(), firstSeen.Unix(), second, workID, nil, "", "", refinement, nil); err != nil {
+		t.Fatalf("RefineEdition, twin: %v", err)
+	}
+	editions, err := queries.ListEditions(t.Context(), workID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(editions) != 1 || editions[0].ID != first || resolve("release-old") != first || resolve("release-new") != first {
+		t.Errorf("editions = %+v; want only the first, reached by both ids", editions)
 	}
 }
 

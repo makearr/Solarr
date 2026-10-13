@@ -405,6 +405,41 @@ WHERE edition_external_id.provider = sqlc.arg(provider) AND edition_external_id.
   AND NOT EXISTS (SELECT 1 FROM edition_external_id held
                   WHERE held.provider = sqlc.arg(provider) AND held.external_id = sqlc.arg(new_id));
 
+-- A merged release's old id still names its edition, or files tagged with it open a second one.
+-- name: KeepEditionAlias :exec
+INSERT INTO edition_external_id (provider, external_id, edition_id, confidence)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING;
+
+-- Another edition of the same work under the same label that already has the kind a placeholder
+-- is about to take: the same release, reached by a second id.
+-- name: FindEditionTwin :one
+SELECT twin.id FROM edition placeholder
+JOIN edition twin ON twin.work_id = placeholder.work_id AND twin.label = placeholder.label
+                 AND twin.id != placeholder.id
+WHERE placeholder.id = sqlc.arg(edition_id) AND twin.kind = sqlc.arg(kind)
+ORDER BY twin.id LIMIT 1;
+
+-- name: MoveEditionExternalIDs :exec
+UPDATE edition_external_id SET edition_id = sqlc.arg(to_id), confidence = sqlc.arg(confidence)
+WHERE edition_id = sqlc.arg(from_id);
+
+-- name: MoveEditionDesiredItems :exec
+UPDATE desired_item SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(from_id);
+
+-- name: MoveEditionImportUnits :exec
+UPDATE import_unit SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(from_id);
+
+-- name: MoveEditionPackItems :exec
+UPDATE pack_item SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(from_id);
+
+-- A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
+-- name: MoveEditionCredits :exec
+UPDATE OR IGNORE credit SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(from_id);
+
+-- name: DeleteEditionCredits :exec
+DELETE FROM credit WHERE edition_id = ?;
+
 -- Every path of every file of one work, for returning the files to the identification queue.
 -- name: ListWorkFilePaths :many
 SELECT f.media_object_id, lp.root_folder_id, lp.rel_path

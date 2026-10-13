@@ -21,7 +21,7 @@ SELECT lp.media_object_id, lp.root_folder_id, lp.rel_path, wf.work_id,
     ORDER BY we.confidence DESC LIMIT 1), '') AS TEXT) AS work_external_id,
   CAST(COALESCE((SELECT ee.external_id FROM edition e
     JOIN edition_external_id ee ON ee.edition_id = e.id AND ee.provider = sqlc.arg(edition_provider)
-    WHERE e.work_id = wf.work_id ORDER BY e.is_default DESC, e.id LIMIT 1), '') AS TEXT) AS edition_external_id,
+    WHERE e.work_id = wf.work_id ORDER BY e.is_default DESC, e.id, ee.confidence DESC LIMIT 1), '') AS TEXT) AS edition_external_id,
   CAST(COALESCE((SELECT pe.external_id FROM work_part_external_id pe
     WHERE pe.part_id = wp.id AND pe.provider = sqlc.arg(part_provider) LIMIT 1), '') AS TEXT) AS part_external_id,
   CAST(COALESCE((SELECT px.external_id FROM person_external_id px

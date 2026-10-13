@@ -218,6 +218,7 @@ type Querier interface {
 	// every import_unit referencing it has been cleared (ClearImportUnitPlacement) --
 	// edition_external_id cascades; import_unit.edition_id does not.
 	DeleteEdition(ctx context.Context, id int64) error
+	DeleteEditionCredits(ctx context.Context, editionID int64) error
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteImportUnitExtras(ctx context.Context, unitID int64) error
@@ -283,6 +284,9 @@ type Querier interface {
 	// fingerprinting exists -- a fuzzy hit is never folded into this exact check
 	// (architecture.md section 5.8's own "never treated as an exact one" rule).
 	FindBlockedContentByExactHash(ctx context.Context, arg FindBlockedContentByExactHashParams) ([]BlockedContent, error)
+	// Another edition of the same work under the same label that already has the kind a placeholder
+	// is about to take: the same release, reached by a second id.
+	FindEditionTwin(ctx context.Context, arg FindEditionTwinParams) (int64, error)
 	// The same by a MusicBrainz alias: an artist renamed upstream is still found by its old folder name.
 	FindIdentifiedPeopleByAlias(ctx context.Context, name string) ([]int64, error)
 	// A provider-identified person by this name, ignoring case: an unverified album's folder artist joins them.
@@ -391,6 +395,8 @@ type Querier interface {
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
 	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
+	// A merged release's old id still names its edition, or files tagged with it open a second one.
+	KeepEditionAlias(ctx context.Context, arg KeepEditionAliasParams) error
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
@@ -751,6 +757,12 @@ type Querier interface {
 	MergeMonitoredInto(ctx context.Context, arg MergeMonitoredIntoParams) error
 	MergeSubscriptionsInto(ctx context.Context, arg MergeSubscriptionsIntoParams) error
 	MergeTagAssignmentsInto(ctx context.Context, arg MergeTagAssignmentsIntoParams) error
+	// A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
+	MoveEditionCredits(ctx context.Context, arg MoveEditionCreditsParams) error
+	MoveEditionDesiredItems(ctx context.Context, arg MoveEditionDesiredItemsParams) error
+	MoveEditionExternalIDs(ctx context.Context, arg MoveEditionExternalIDsParams) error
+	MoveEditionImportUnits(ctx context.Context, arg MoveEditionImportUnitsParams) error
+	MoveEditionPackItems(ctx context.Context, arg MoveEditionPackItemsParams) error
 	// newest_release.
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// newest_searched.

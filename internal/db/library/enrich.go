@@ -106,6 +106,14 @@ func (i Identity) FollowMergedIDs(ctx context.Context, merged MergedIDs) (workMo
 				return err
 			}
 			editionMoved = rows > 0
+			if editionMoved {
+				if err := queries.KeepEditionAlias(ctx, librarydb.KeepEditionAliasParams{
+					Provider: merged.EditionProvider, ExternalID: merged.OldEditionID,
+					EditionID: merged.EditionID, Confidence: aliasConfidence,
+				}); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	})
@@ -114,6 +122,9 @@ func (i Identity) FollowMergedIDs(ctx context.Context, merged MergedIDs) (workMo
 	}
 	return workMoved, editionMoved, nil
 }
+
+// aliasConfidence ranks an id that still resolves to an edition below the id the provider now uses.
+const aliasConfidence = 0.5
 
 // MergedIDs is one enrichment's asked-for and answered ids; an empty pair is left alone.
 type MergedIDs struct {
@@ -201,14 +212,24 @@ func (i Identity) RefineEdition(
 	return i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 
-		if err := queries.UpdateEdition(ctx, librarydb.UpdateEditionParams{
-			ID: editionID, Kind: refinement.Kind, Year: nullInt64(refinement.Year),
-			Format:          nullString(refinement.Format),
-			CatalogueNumber: nullString(refinement.CatalogueNumber),
-			Barcode:         nullString(refinement.Barcode),
-			RuntimeMs:       nullInt64(refinement.RuntimeMs),
-		}); err != nil {
-			return fmt.Errorf("update edition: %w", err)
+		twin, err := queries.FindEditionTwin(ctx, librarydb.FindEditionTwinParams{EditionID: editionID, Kind: refinement.Kind})
+		switch {
+		case err == nil:
+			if err := foldEdition(ctx, queries, editionID, twin); err != nil {
+				return fmt.Errorf("fold edition into %d: %w", twin, err)
+			}
+		case errors.Is(err, sql.ErrNoRows):
+			if err := queries.UpdateEdition(ctx, librarydb.UpdateEditionParams{
+				ID: editionID, Kind: refinement.Kind, Year: nullInt64(refinement.Year),
+				Format:          nullString(refinement.Format),
+				CatalogueNumber: nullString(refinement.CatalogueNumber),
+				Barcode:         nullString(refinement.Barcode),
+				RuntimeMs:       nullInt64(refinement.RuntimeMs),
+			}); err != nil {
+				return fmt.Errorf("update edition: %w", err)
+			}
+		default:
+			return fmt.Errorf("find edition twin: %w", err)
 		}
 
 		if err := refineWork(ctx, queries, at, workID, workYear, workReleaseDate, workPrimaryType); err != nil {
@@ -222,6 +243,33 @@ func (i Identity) RefineEdition(
 		}
 		return nil
 	})
+}
+
+// foldEdition makes a placeholder that turned out to be twin disappear into it: its ids become twin's
+// aliases and everything that pointed at it points at twin.
+func foldEdition(ctx context.Context, queries *librarydb.Queries, placeholder, twin int64) error {
+	from, to := sql.NullInt64{Int64: placeholder, Valid: true}, sql.NullInt64{Int64: twin, Valid: true}
+	if err := queries.MoveEditionExternalIDs(ctx, librarydb.MoveEditionExternalIDsParams{
+		ToID: twin, Confidence: aliasConfidence, FromID: placeholder,
+	}); err != nil {
+		return err
+	}
+	if err := queries.MoveEditionDesiredItems(ctx, librarydb.MoveEditionDesiredItemsParams{ToID: to, FromID: from}); err != nil {
+		return err
+	}
+	if err := queries.MoveEditionImportUnits(ctx, librarydb.MoveEditionImportUnitsParams{ToID: to, FromID: from}); err != nil {
+		return err
+	}
+	if err := queries.MoveEditionPackItems(ctx, librarydb.MoveEditionPackItemsParams{ToID: to, FromID: from}); err != nil {
+		return err
+	}
+	if err := queries.MoveEditionCredits(ctx, librarydb.MoveEditionCreditsParams{ToID: twin, FromID: placeholder}); err != nil {
+		return err
+	}
+	if err := queries.DeleteEditionCredits(ctx, placeholder); err != nil {
+		return err
+	}
+	return queries.DeleteEdition(ctx, placeholder)
 }
 
 // RefineWork is RefineEdition's work-level half alone, for a work identified

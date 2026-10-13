@@ -12,6 +12,10 @@ A scan batch is one directory's files. Each pass only sees what the previous one
    per folder (cached; enrichment needs it anyway): a merged id is stored as the group it was
    merged into; a retired one, 404 at every source, is recorded `retired` and the files go on to
    album matching like untagged ones. An unreachable source trusts the tags.
+   A merged *release* id is followed by enrichment instead: the edition takes the new id and keeps the
+   old one as a lower-confidence alias, so files still tagged with it resolve to the same edition
+   (tag write-back writes the new one). A placeholder that turns out to be an edition the work
+   already has is folded into it (`foldEdition`).
 2. **Album matching** (a release the files name -- their album tag as written, else their
    folder -- beats one they do not, whatever its release type): the remaining files, grouped by album tag, scored together against
    whole release tracklists. A group that fits nothing as a whole while its track numbers
