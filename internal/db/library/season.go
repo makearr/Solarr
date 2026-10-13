@@ -40,7 +40,7 @@ func (d Desired) EnsureSeasonItem(ctx context.Context, request SeasonRequest) (l
 		for _, candidate := range existing {
 			if candidate.SatisfactionKind == "SET" && candidate.MediaRef == request.MediaRef {
 				item = candidate
-				return recomputeAlbumTx(ctx, queries, item.ID, request.WorkID)
+				return recomputeAlbumTx(ctx, queries, item.ID, request.WorkID, d.store.Now())
 			}
 		}
 		created, err := createDesiredItem(ctx, queries, librarydb.CreateDesiredItemParams{
@@ -51,7 +51,7 @@ func (d Desired) EnsureSeasonItem(ctx context.Context, request SeasonRequest) (l
 		if err != nil {
 			return fmt.Errorf("create: %w", err)
 		}
-		if err := recomputeAlbumTx(ctx, queries, created.ID, request.WorkID); err != nil {
+		if err := recomputeAlbumTx(ctx, queries, created.ID, request.WorkID, d.store.Now()); err != nil {
 			return fmt.Errorf("derive required count: %w", err)
 		}
 		item, err = queries.GetDesiredItem(ctx, created.ID)
@@ -86,7 +86,7 @@ func (d Desired) SetSeasonMonitored(ctx context.Context, workID int64, seasonRef
 			if err := queries.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{Monitored: boolToInt(monitored), ID: item.ID}); err != nil {
 				return fmt.Errorf("set item: %w", err)
 			}
-			return recomputeAlbumTx(ctx, queries, item.ID, workID)
+			return recomputeAlbumTx(ctx, queries, item.ID, workID, d.store.Now())
 		}
 		return nil
 	})
@@ -135,7 +135,7 @@ func (d Desired) ApplyPartMonitoring(ctx context.Context, workID int64, wanted m
 			if err := queries.SetDesiredItemMonitored(ctx, librarydb.SetDesiredItemMonitoredParams{Monitored: boolToInt(monitored > 0), ID: item.ID}); err != nil {
 				return fmt.Errorf("set item: %w", err)
 			}
-			return recomputeAlbumTx(ctx, queries, item.ID, workID)
+			return recomputeAlbumTx(ctx, queries, item.ID, workID, d.store.Now())
 		})
 		if err != nil {
 			return fmt.Errorf("library: apply monitoring to %s: %w", item.MediaRef, err)

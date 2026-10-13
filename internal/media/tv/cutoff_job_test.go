@@ -191,8 +191,9 @@ func TestSearchOfAnUpgradableSeasonOnlyAcceptsAReleaseThatBeatsTheOwnedFile(t *t
 	}
 }
 
-// A season that is partial only because episodes have yet to air still upgrades the ones it has.
-func TestSearchOfAPartialSeasonWithNothingAiredMissingUpgradesItsEpisodes(t *testing.T) {
+// A season whose other episodes have yet to air is complete, so the cutoff check finds the episode it has below the
+// cutoff and the search upgrades it without waiting for the season to end.
+func TestSearchOfASeasonStillAiringUpgradesTheEpisodesItHas(t *testing.T) {
 	fixture := upgradeSeries(t, "1080p", "")
 	items, _ := library.NewDesired(fixture.opened).AlbumItemsForWork(t.Context(), fixture.workID)
 	var season2 int64
@@ -214,6 +215,10 @@ func TestSearchOfAPartialSeasonWithNothingAiredMissingUpgradesItsEpisodes(t *tes
 	if _, err := library.NewSeries(fixture.opened).AttachFiles(t.Context(), addNow.Add(-72*time.Hour), fixture.workID, 1, links); err != nil {
 		t.Fatal(err)
 	}
+	if airing, err := library.NewDesired(fixture.opened).Get(t.Context(), season2); err != nil || airing.State != "COMPLETE" || airing.RequiredCount.Int64 != 1 {
+		t.Fatalf("season 2 = %+v, %v; want COMPLETE with the one aired episode required", airing, err)
+	}
+	fixture.run(t, map[int64]bool{})
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"tvsearch": {
 		{Title: "Example.Show.S02E01.720p.HDTV.x264-GRP", GUID: "same", Link: "https://example.test/same"},
 		{Title: "Example.Show.S02E01.1080p.WEB-DL.DDP5.1.H.264-GRP", GUID: "better", Link: "https://example.test/better"},

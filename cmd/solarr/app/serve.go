@@ -474,6 +474,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerFreshCountsJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerComingOutJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerProbeJob(registry, executor); err != nil {
 		return err
 	}

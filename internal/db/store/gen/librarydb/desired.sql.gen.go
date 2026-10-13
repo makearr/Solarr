@@ -960,6 +960,63 @@ func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncomp
 	return items, nil
 }
 
+const listItemsWithPartsComingOut = `-- name: ListItemsWithPartsComingOut :many
+SELECT DISTINCT d.id, d.work_id
+FROM desired_item d
+JOIN work_part p ON p.work_id = d.work_id
+WHERE d.satisfaction_kind = 'SET' AND d.id > ?1 AND p.monitored = 1
+  AND ((p.available_at IS NOT NULL AND p.available_at > ?2 AND p.available_at <= ?3)
+       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date > ?4 AND p.date <= ?5))
+ORDER BY d.id
+LIMIT ?6
+`
+
+type ListItemsWithPartsComingOutParams struct {
+	AfterID   int64
+	Since     sql.NullInt64
+	Now       sql.NullInt64
+	SinceDate sql.NullString
+	Today     sql.NullString
+	PageSize  int64
+}
+
+type ListItemsWithPartsComingOutRow struct {
+	ID     int64
+	WorkID int64
+}
+
+// The SET items of works with a monitored part whose time or day fell inside a window: what a
+// season owes may have changed without anything being written to it.
+func (q *Queries) ListItemsWithPartsComingOut(ctx context.Context, arg ListItemsWithPartsComingOutParams) ([]ListItemsWithPartsComingOutRow, error) {
+	rows, err := q.db.QueryContext(ctx, listItemsWithPartsComingOut,
+		arg.AfterID,
+		arg.Since,
+		arg.Now,
+		arg.SinceDate,
+		arg.Today,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListItemsWithPartsComingOutRow{}
+	for rows.Next() {
+		var i ListItemsWithPartsComingOutRow
+		if err := rows.Scan(&i.ID, &i.WorkID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPartFilesForWork = `-- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,

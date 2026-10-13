@@ -26,7 +26,8 @@ func newLibrary(t *testing.T) *store.Store {
 	if err := os.MkdirAll(backups, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	opened, err := store.Open(t.Context(), clock.NewFakeAtEpoch(), store.Config{
+	// The library's own clock decides which episodes are out, so it reads the hour the tests add at.
+	opened, err := store.Open(t.Context(), clock.NewFake(addNow), store.Config{
 		Name: "library", Path: filepath.Join(directory, "library.db"), Logger: slog.New(slog.DiscardHandler),
 	})
 	if err != nil {
@@ -128,7 +129,8 @@ func TestAddStoresTheSeriesWithASeasonItemEach(t *testing.T) {
 	for _, item := range items {
 		byRef[item.MediaRef] = item
 	}
-	if byRef["s01"].RequiredCount.Int64 != 2 || byRef["s02"].RequiredCount.Int64 != 3 || byRef["s00"].Monitored != 0 {
+	// Season 2 owes only the episode that has aired; the two still to come are not missing.
+	if byRef["s01"].RequiredCount.Int64 != 2 || byRef["s02"].RequiredCount.Int64 != 1 || byRef["s00"].Monitored != 0 {
 		t.Errorf("seasons = %+v", byRef)
 	}
 	if byRef["s01"].CategoryID != 7 || byRef["s01"].SatisfactionKind != "SET" {

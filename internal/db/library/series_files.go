@@ -94,7 +94,7 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 			}
 		}
 		for itemID := range touched {
-			if err := recomputeAlbumTx(ctx, queries, itemID, workID); err != nil {
+			if err := recomputeAlbumTx(ctx, queries, itemID, workID, s.store.Now()); err != nil {
 				return err
 			}
 		}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -78,7 +79,7 @@ func (d Desired) EnsureAlbumItem(ctx context.Context, request AlbumRequest) (lib
 		if err != nil {
 			return fmt.Errorf("create: %w", err)
 		}
-		if err := recomputeAlbumTx(ctx, queries, created.ID, request.WorkID); err != nil {
+		if err := recomputeAlbumTx(ctx, queries, created.ID, request.WorkID, d.store.Now()); err != nil {
 			return fmt.Errorf("derive required count: %w", err)
 		}
 		item, err = queries.GetDesiredItem(ctx, created.ID)
@@ -273,7 +274,7 @@ func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, mon
 					return err
 				}
 			}
-			if err := recomputeAlbumTx(ctx, queries, item.ID, workID); err != nil {
+			if err := recomputeAlbumTx(ctx, queries, item.ID, workID, d.store.Now()); err != nil {
 				return err
 			}
 		}
@@ -384,7 +385,7 @@ func (d Desired) RecordAlignment(ctx context.Context, itemID, workID int64, file
 				return fmt.Errorf("attach media object %d: %w", file.MediaObjectID, err)
 			}
 		}
-		return recomputeAlbumTx(ctx, queries, itemID, workID)
+		return recomputeAlbumTx(ctx, queries, itemID, workID, d.store.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("library: record alignment: %w", err)
@@ -583,7 +584,7 @@ func (d Desired) DetachAndRecompute(ctx context.Context, itemID, workID, mediaOb
 				return fmt.Errorf("detach role %q: %w", role, err)
 			}
 		}
-		return recomputeAlbumTx(ctx, queries, itemID, workID)
+		return recomputeAlbumTx(ctx, queries, itemID, workID, d.store.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("library: detach file %d from item %d: %w", mediaObjectID, itemID, err)
@@ -599,7 +600,7 @@ func (d Desired) DetachAndRecompute(ctx context.Context, itemID, workID, mediaOb
 // shape CategoryCounters and Reconciler already use.
 func (d Desired) RecomputeAlbum(ctx context.Context, itemID, workID int64) error {
 	err := d.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return recomputeAlbumTx(ctx, librarydb.New(tx), itemID, workID)
+		return recomputeAlbumTx(ctx, librarydb.New(tx), itemID, workID, d.store.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("library: recompute album: %w", err)
@@ -607,7 +608,7 @@ func (d Desired) RecomputeAlbum(ctx context.Context, itemID, workID int64) error
 	return nil
 }
 
-func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, workID int64) error {
+func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, workID int64, now time.Time) error {
 	item, err := queries.GetDesiredItem(ctx, itemID)
 	if err != nil {
 		return fmt.Errorf("get item: %w", err)
@@ -616,23 +617,7 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 	if err != nil {
 		return fmt.Errorf("list parts: %w", err)
 	}
-	var required sql.NullInt64
-	var scoped, monitored int64
-	for _, part := range parts {
-		if !partInScope(part.MediaRef, item.MediaRef) {
-			continue
-		}
-		scoped++
-		if part.Monitored == 1 {
-			monitored++
-		}
-	}
-	if scoped > 0 {
-		required = sql.NullInt64{Int64: monitored, Valid: true}
-	} else {
-		// A work without parts keeps what its type said it needs.
-		required = item.RequiredCount
-	}
+	required := requiredOf(item, parts, now)
 	if err := queries.SetDesiredItemRequiredCount(ctx,
 		librarydb.SetDesiredItemRequiredCountParams{RequiredCount: required, ID: itemID}); err != nil {
 		return fmt.Errorf("set required count: %w", err)
@@ -647,6 +632,69 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 	return queries.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
 		State: albumState(item.RequiredCount, item.PresentCount), PresentCount: item.PresentCount, ID: itemID,
 	})
+}
+
+// requiredOf is what a SET item owes at now: its monitored parts that are out. A part not out yet is not owed, so a
+// season still airing is complete between its episodes; a work without parts keeps what its type said it needs.
+func requiredOf(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time.Time) sql.NullInt64 {
+	var scoped, owed int64
+	for _, part := range parts {
+		if !partInScope(part.MediaRef, item.MediaRef) {
+			continue
+		}
+		scoped++
+		if part.Monitored == 1 && PartOut(part.AvailableAt.Int64, part.AvailableConfidence, part.Date.String, part.AvailableBasis, now) {
+			owed++
+		}
+	}
+	if scoped == 0 {
+		return item.RequiredCount
+	}
+	return sql.NullInt64{Int64: owed, Valid: true}
+}
+
+// recountWindow reaches back past the longest grace, so a part is seen coming out even after a missed run or two.
+const recountWindow = 72 * time.Hour
+
+// RecountComingOut re-counts the items of works with a part that came out lately and answers how many changed: time
+// passing writes nothing, so a season would otherwise stay as complete as when its next episode had not aired.
+func (d Desired) RecountComingOut(ctx context.Context) (int, error) {
+	now := d.store.Now()
+	since := now.Add(-recountWindow)
+	read := librarydb.New(d.store.Read())
+	changed := 0
+	var afterID int64
+	for {
+		page, err := read.ListItemsWithPartsComingOut(ctx, librarydb.ListItemsWithPartsComingOutParams{
+			AfterID: afterID, Since: sql.NullInt64{Int64: since.Unix(), Valid: true}, Now: sql.NullInt64{Int64: now.Unix(), Valid: true},
+			SinceDate: sql.NullString{String: since.UTC().Format("2006-01-02"), Valid: true},
+			Today:     sql.NullString{String: now.UTC().Format("2006-01-02"), Valid: true}, PageSize: 200,
+		})
+		if err != nil {
+			return changed, fmt.Errorf("library: items with parts coming out: %w", err)
+		}
+		for _, row := range page {
+			afterID = row.ID
+			item, err := read.GetDesiredItem(ctx, row.ID)
+			if err != nil {
+				return changed, fmt.Errorf("library: get item %d: %w", row.ID, err)
+			}
+			parts, err := read.ListWorkParts(ctx, row.WorkID)
+			if err != nil {
+				return changed, fmt.Errorf("library: list parts of work %d: %w", row.WorkID, err)
+			}
+			if requiredOf(item, parts, now) == item.RequiredCount {
+				continue
+			}
+			if err := d.RecomputeAlbum(ctx, row.ID, row.WorkID); err != nil {
+				return changed, err
+			}
+			changed++
+		}
+		if len(page) < 200 {
+			return changed, nil
+		}
+	}
 }
 
 // IncompleteItem is one monitored desired_item still short of its own

@@ -92,7 +92,6 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		tvdb: detail.IDs[ProviderTVDB], year: detail.Summary.Year, absolute: map[int]int{},
 		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
 	}
-	today := now.UTC().Format("2006-01-02")
 	var runtimeSum, runtimeCount int64
 	for _, episode := range detail.Episodes {
 		if episode.Season != season {
@@ -105,7 +104,9 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		if absolute, err := strconv.Atoi(episode.Absolute); err == nil && absolute > 0 {
 			w.absolute[absolute] = episode.Number
 		}
-		aired := (episode.AvailableAt > 0 && episode.AvailableAt <= now.Unix()) || (episode.AvailableAt == 0 && episode.Date != "" && episode.Date <= today)
+		// An episode with neither a time nor a date is not asked for, whatever its row says of being announced.
+		aired := (episode.AvailableAt > 0 || episode.Date != "") &&
+			library.PartOut(episode.AvailableAt, episode.AvailableConfidence, episode.Date, "", now)
 		switch {
 		case only > 0:
 			if episode.Number == only {

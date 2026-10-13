@@ -553,6 +553,9 @@ type Querier interface {
 	// that item already has everything it needs, just not at the quality
 	// wanted, a different report from "missing" entirely.
 	ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error)
+	// The SET items of works with a monitored part whose time or day fell inside a window: what a
+	// season owes may have changed without anything being written to it.
+	ListItemsWithPartsComingOut(ctx context.Context, arg ListItemsWithPartsComingOutParams) ([]ListItemsWithPartsComingOutRow, error)
 	// Which of a batch's files a person already identified; ids is a JSON array.
 	ListManuallyIdentified(ctx context.Context, mediaObjectIds string) ([]int64, error)
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set

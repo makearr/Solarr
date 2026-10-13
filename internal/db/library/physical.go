@@ -536,7 +536,7 @@ func (p Physical) RecomputeWorkItems(ctx context.Context, workID int64) error {
 		}
 		for _, item := range items {
 			if item.SatisfactionKind == "SET" {
-				if err := recomputeAlbumTx(ctx, queries, item.ID, workID); err != nil {
+				if err := recomputeAlbumTx(ctx, queries, item.ID, workID, p.store.Now()); err != nil {
 					return err
 				}
 				continue

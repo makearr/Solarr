@@ -217,6 +217,9 @@ func partWrite(episode Episode, monitored bool) library.SeriesPartWrite {
 	if !episode.AirUTC.IsZero() {
 		at := episode.AirUTC.Unix()
 		part.AvailableAt = &at
+	} else if episode.AirDate == "" {
+		// Listed with no date: coming, and not owed until it has one.
+		part.AvailableBasis = library.AvailabilityUnannounced
 	}
 	if episode.Absolute > 0 {
 		part.AltNumbers = append(part.AltNumbers, library.AltNumberWrite{Scheme: "absolute", Provider: ProviderTVDB, Ref: strconv.Itoa(episode.Absolute)})

@@ -17,13 +17,18 @@ import (
 
 func newLibrary(t *testing.T) (*store.Store, *librarydb.Queries) {
 	t.Helper()
+	return newLibraryAt(t, clock.NewFakeAtEpoch())
+}
+
+// newLibraryAt is a migrated library whose own clock the test holds, for what depends on the hour it is.
+func newLibraryAt(t *testing.T, fake clock.Clock) (*store.Store, *librarydb.Queries) {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
 		t.Fatalf("create backup directory: %v", err)
 	}
 
-	fake := clock.NewFakeAtEpoch()
 	opened, err := store.Open(t.Context(), fake, store.Config{
 		Name: "library", Path: filepath.Join(directory, "library.db"),
 		Logger: slog.New(slog.DiscardHandler),

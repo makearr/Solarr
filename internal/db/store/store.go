@@ -226,6 +226,9 @@ func Open(ctx context.Context, c clock.Clock, config Config) (*Store, error) {
 // Name reports which database this is.
 func (s *Store) Name() string { return s.config.Name }
 
+// Now is the store's clock, for a derived value that depends on the time it is written at.
+func (s *Store) Now() time.Time { return s.clock.Now() }
+
 // Read exposes the read pool.
 func (s *Store) Read() *sql.DB { return s.read }
 

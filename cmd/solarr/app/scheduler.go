@@ -25,6 +25,7 @@ const (
 	statisticsScheduleCron         = "15 6 * * *"    // daily, after the counters; the statistics page reads what it wrote
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
+	comingOutScheduleCron          = "*/15 * * * *"  // every 15 minutes
 	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
 	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
 	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
@@ -105,6 +106,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "fresh_counts", Name: "Fresh works counter", DefaultCadence: freshCountsScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueFreshCounts,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "coming_out", Name: "Count what has come out", DefaultCadence: comingOutScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueComingOut,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "probe", Name: "Attribute probe", DefaultCadence: probeScheduleCron,

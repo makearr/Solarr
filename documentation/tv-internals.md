@@ -64,6 +64,25 @@ planner. `PUT /works/{id}/edit` gives every season of a series its own quality p
 season-by-season choice; `POST /works/bulk/edit` applies a monitor option, the profile, tags and the series type to a
 selection, which replaced the Season pass screen.
 
+## When an episode counts as missing (`library.PartOut`, `Desired.RecountComingOut`)
+
+A season owes its monitored episodes that are **out**, not all of them, so a season still airing is Complete
+between episodes instead of Partial until its finale. The rule is the core's, on `work_part`'s availability columns,
+and holds for any media type whose parts come out one at a time:
+
+| What the part has | Out when |
+|---|---|
+| A time (`available_at`) | that time plus a grace by confidence: high 2 h, medium 12 h, low or unknown 36 h |
+| A day only (`date`) | 36 h after the day begins (UTC): the whole day in an unknown zone |
+| Neither, and announced (`available_basis = unannounced`, what TV writes for an episode without a date) | never, until it gets one |
+| Neither (a track) | always |
+
+Nothing is written when an episode airs, so the registered task **Count what has come out** (every 15 minutes)
+re-counts the season items of works with a part whose time or day fell within the last three days, writing only
+those whose count changed; the planner sees them as dirty. The season search asks for an episode by the same rule,
+grace included. Wanted > Missing lists an episode from its time or day without the grace. An episode stored before
+this rule with neither time nor date counts as owed until the series is next refreshed.
+
 ## Deleting, series type, pictures
 
 `POST /works/{id}/remove` removes a work of any type; `delete_files` sends its files to the recycle bin (never deleted directly)
