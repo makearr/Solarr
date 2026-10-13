@@ -1034,7 +1034,7 @@ export interface paths {
         head?: never;
         /**
          * Change the commit line or the transfer ladder. Administrator only.
-         * @description Applies to every entry point (manual import, watched folder, post-download import and bulk adoption alike): read once when each import.inspect run starts, so a session already INSPECTING keeps the threshold it was recorded with (ImportSession.threshold) until it next resumes, not retroactively (todo 4.9's own five named levels: 0.95 "Only what was proven" down to 0.75 "Permissive", 0.90 "Confident" the shipped default). Validated on write (ADR-44).
+         * @description Applies to every entry point (manual import, watched folder, post-download import and bulk adoption alike): read once when each import.inspect run starts, so a session already INSPECTING keeps the threshold it was recorded with (ImportSession.threshold) until it next resumes, not retroactively (todo 4.9's own five named levels: 0.95 "Only what was proven" down to 0.75 "Permissive", 0.90 "Confident" the shipped default). Validated on write (ADR-44). A field left out is left as it is, the threshold included.
          */
         patch: operations["updateImportSettings"];
         trace?: never;

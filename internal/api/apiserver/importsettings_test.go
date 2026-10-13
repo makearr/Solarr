@@ -78,6 +78,25 @@ func TestUpdateImportSettings_ChangesTheThreshold(t *testing.T) {
 	}
 }
 
+// A change of one setting that says nothing of the threshold used to set it to 0: every import committed.
+func TestUpdateImportSettings_LeavesTheThresholdAloneWhenItIsNotSent(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	if recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"auto_commit_confidence":0.85}`)); recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"extra_files":true}`))
+	var body importSettingsBody
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, %v, body = %s", recorder.Code, err, recorder.Body)
+	}
+	if body.AutoCommitConfidence != 0.85 {
+		t.Errorf("AutoCommitConfidence = %v after a change that did not name it, want 0.85 still", body.AutoCommitConfidence)
+	}
+}
+
 func TestUpdateImportSettings_RejectsAnOutOfRangeConfidence(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)

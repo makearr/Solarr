@@ -3,6 +3,7 @@ package apiserver
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -31,10 +32,14 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	raw, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxSetupBody))
 	var body gen.UpdateImportSettingsJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
-		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-			"Bad request", "expected auto_commit_confidence")
+	// The threshold decodes to 0 when absent, which would commit everything: its presence is read apart.
+	var sent struct {
+		AutoCommitConfidence *float64 `json:"auto_commit_confidence"`
+	}
+	if err != nil || json.Unmarshal(raw, &body) != nil || json.Unmarshal(raw, &sent) != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the import settings could not be read")
 		return
 	}
 
@@ -43,9 +48,11 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
-	if err := s.auth.Settings.SetImportAutoCommitConfidence(r.Context(), clock.NewSystem(), float64(body.AutoCommitConfidence)); err != nil {
-		s.writeImportSettingsError(w, err)
-		return
+	if sent.AutoCommitConfidence != nil {
+		if err := s.auth.Settings.SetImportAutoCommitConfidence(r.Context(), clock.NewSystem(), *sent.AutoCommitConfidence); err != nil {
+			s.writeImportSettingsError(w, err)
+			return
+		}
 	}
 	// Absent means "say nothing about the ladder", so an older client that
 	// only knows the commit line cannot silently reset the order.
