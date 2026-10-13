@@ -248,6 +248,33 @@ func (u Unidentified) List(ctx context.Context, rootFolderIDs []int64, after pag
 	return views, nil
 }
 
+// UnitCandidates reads an import unit's ranked suggestions back, whichever way they were stored: the import job
+// keeps identifications whole, a media type's own importer the compact form of CandidatesJSON.
+func UnitCandidates(stored string) ([]model.Identification, error) {
+	if stored == "" {
+		return nil, nil
+	}
+	var whole []model.Identification
+	var compact []Candidate
+	if err := json.Unmarshal([]byte(stored), &whole); err != nil {
+		return nil, fmt.Errorf("library: decode candidates: %w", err)
+	}
+	// The compact form only adds what the whole one lacks; unreadable as compact, there is nothing to add.
+	_ = json.Unmarshal([]byte(stored), &compact)
+	if len(compact) != len(whole) {
+		return whole, nil
+	}
+	for index, candidate := range compact {
+		if whole[index].ExternalID == nil && candidate.ExternalID != "" {
+			whole[index].ExternalID = &model.ExternalID{Provider: candidate.Provider, ExternalID: candidate.ExternalID, Confidence: candidate.Confidence}
+		}
+		if len(whole[index].Evidence) == 0 && candidate.Title != "" {
+			whole[index].Evidence = []model.MatchEvidence{{Kind: "parse", Detail: candidate.Title}}
+		}
+	}
+	return whole, nil
+}
+
 // CandidatesJSON is how a unit's ranked suggestions are stored, "[]" when there are none.
 func CandidatesJSON(candidates []model.Identification) string {
 	encoded, err := encodeCandidates(candidates)

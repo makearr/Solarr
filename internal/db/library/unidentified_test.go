@@ -1,11 +1,13 @@
 package library_test
 
 import (
+	"encoding/json"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // "Not media" takes a file out of the queue, and a later scan recording it again does not bring it back.
@@ -80,5 +82,28 @@ func TestUnidentified_AFileBelongingToAWorkIsNeverQueued(t *testing.T) {
 	}
 	if count, err := queue.Count(t.Context()); err != nil || count != 0 {
 		t.Errorf("queued %d, %v; want the resolved file left alone", count, err)
+	}
+}
+
+// The import job stores identifications whole and a type's own importer the compact form; both read back alike.
+func TestUnitCandidates_ReadsBothStoredForms(t *testing.T) {
+	guess := model.Identification{
+		Strategy: "parse", Confidence: 0.6,
+		ExternalID: &model.ExternalID{Provider: "tvdb", ExternalID: "77", Confidence: 0.6},
+		Evidence:   []model.MatchEvidence{{Kind: "parse", Detail: "Marble Hill"}},
+	}
+	whole, err := json.Marshal([]model.Identification{guess})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, stored := range map[string]string{"whole": string(whole), "compact": library.CandidatesJSON([]model.Identification{guess})} {
+		read, err := library.UnitCandidates(stored)
+		if err != nil || len(read) != 1 || read[0].ExternalID == nil || *read[0].ExternalID != *guess.ExternalID ||
+			len(read[0].Evidence) != 1 || read[0].Evidence[0] != guess.Evidence[0] || read[0].Confidence != 0.6 {
+			t.Errorf("%s: read %+v, %v; want the guess with its id and title", name, read, err)
+		}
+	}
+	if none, err := library.UnitCandidates(""); err != nil || none != nil {
+		t.Errorf("nothing stored: %+v, %v; want none", none, err)
 	}
 }

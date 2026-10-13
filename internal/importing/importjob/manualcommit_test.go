@@ -638,13 +638,32 @@ func TestManualCommitter_AHeldUnitOfALibraryWithItsOwnImporterGoesToThatImporter
 			}
 			return own
 		})
+	// Commit anyway on a unit matched to no work names its top-ranked candidate.
+	guesses := library.CandidatesJSON([]model.Identification{
+		{Strategy: "parse", ExternalID: &model.ExternalID{Provider: "tvdb", ExternalID: "77"}, Confidence: 0.6},
+		{Strategy: "parse", ExternalID: &model.ExternalID{Provider: "tvdb", ExternalID: "78"}, Confidence: 0.5},
+	})
+	requeue := func() {
+		t.Helper()
+		if err := sessions.SetUnitDecisions(t.Context(), done[0].ID, []library.UnitDecision{{UnitID: units[0].ID, Decision: library.UnitQueue, CandidatesJSON: guesses}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requeue()
+	if _, err := manual.CommitHeld(t.Context(), units[0].ID); err != nil {
+		t.Fatalf("CommitHeld: %v", err)
+	}
+	requeue()
 	if _, err := manual.CommitHeldAs(t.Context(), units[0].ID, "tvdb", "1234"); err != nil {
 		t.Fatalf("CommitHeldAs: %v", err)
 	}
-	if len(committer.calls) != 0 || len(own.requests) != 1 {
-		t.Fatalf("music's committer was called %d times and the own importer %d; want 0 and 1", len(committer.calls), len(own.requests))
+	if len(committer.calls) != 0 || len(own.requests) != 2 {
+		t.Fatalf("music's committer was called %d times and the own importer %d; want 0 and 2", len(committer.calls), len(own.requests))
 	}
-	request := own.requests[0]
+	if guessed := own.requests[0].As; guessed == nil || *guessed != (batch.Named{Provider: "tvdb", ExternalID: "77"}) {
+		t.Errorf("commit anyway asked for %+v, want the top candidate tvdb 77", guessed)
+	}
+	request := own.requests[1]
 	paths := make([]string, len(request.Unit.Media))
 	for index, file := range request.Unit.Media {
 		paths[index] = file.RelPath

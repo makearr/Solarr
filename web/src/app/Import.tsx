@@ -1220,7 +1220,7 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
             type="button"
             onClick={() => commit.mutate()}
             disabled={commit.isPending}
-            title="Place it as what it was matched to, although it was held"
+            title="Place it as its best match, although it was held"
             className="shrink-0 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink
                        disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
           >
@@ -1280,7 +1280,8 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
 // What the unit was matched to, visible without expanding: a preview that hides the album is no preview (2026-09-29).
 function matchedAlbum(unit: ImportUnit): string | undefined {
   const facts = factsOf(unit.candidates?.[0]?.evidence);
-  return [facts.artist, facts.title].filter(Boolean).join(" — ") || undefined;
+  // A series guess is named by the title its search read (kind "parse").
+  return [facts.artist, facts.title].filter(Boolean).join(" — ") || facts.parse || undefined;
 }
 
 function StateBadge({ state }: { state: ImportSession["state"] }) {

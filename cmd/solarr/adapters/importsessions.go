@@ -294,11 +294,8 @@ func importUnitRow(u library.Unit) apiserver.ImportUnitRow {
 	if u.EvidenceJSON != "" && json.Unmarshal([]byte(u.EvidenceJSON), &evidence) == nil {
 		row.Evidence = importEvidenceFrom(evidence)
 	}
-	if u.CandidatesJSON != "" {
-		var candidates []model.Identification
-		if json.Unmarshal([]byte(u.CandidatesJSON), &candidates) == nil {
-			row.Candidates = importCandidatesFrom(candidates)
-		}
+	if candidates, err := library.UnitCandidates(u.CandidatesJSON); err == nil && len(candidates) > 0 {
+		row.Candidates = importCandidatesFrom(candidates)
 	}
 	return row
 }

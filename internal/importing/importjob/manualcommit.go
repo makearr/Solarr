@@ -2,7 +2,6 @@ package importjob
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -172,6 +171,11 @@ func (m ManualCommitter) placeHeld(
 	}
 	if unit.WorkID != nil {
 		request.WorkID = *unit.WorkID
+	} else if named == nil {
+		// Commit anyway means the best guess for every type: here the top-ranked candidate's own id.
+		if best, err := topCandidate(unit); err == nil && best.ExternalID != nil {
+			request.As = &importbatch.Named{Provider: best.ExternalID.Provider, ExternalID: best.ExternalID.ExternalID}
+		}
 	}
 	placement, err := committer.CommitHeld(ctx, request)
 	if err != nil {
@@ -318,8 +322,8 @@ func topCandidate(unit library.Unit) (model.Identification, error) {
 	if unit.CandidatesJSON == "" {
 		return model.Identification{}, fmt.Errorf("importjob: unit %d: %w", unit.ID, ErrNoCandidate)
 	}
-	var candidates []model.Identification
-	if err := json.Unmarshal([]byte(unit.CandidatesJSON), &candidates); err != nil {
+	candidates, err := library.UnitCandidates(unit.CandidatesJSON)
+	if err != nil {
 		return model.Identification{}, fmt.Errorf("importjob: decode candidates for unit %d: %w", unit.ID, err)
 	}
 	if len(candidates) == 0 {
