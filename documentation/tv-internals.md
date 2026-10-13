@@ -78,8 +78,8 @@ and holds for any media type whose parts come out one at a time:
 | Neither (a track) | always |
 
 Nothing is written when an episode airs, so the registered task **Count what has come out** (every 15 minutes)
-re-counts the season items of works with a part whose time or day fell within the last three days, writing only
-those whose count changed; the planner sees them as dirty. The season search asks for an episode by the same rule,
+re-counts the season items of works with a part whose time or day is within the last three days or still ahead,
+writing only those whose count changed; the planner sees them as dirty. The season search asks for an episode by the same rule,
 grace included. Wanted > Missing lists an episode from its time or day without the grace. An episode stored before
 this rule with neither time nor date counts as owed until the series is next refreshed.
 

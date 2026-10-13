@@ -451,14 +451,14 @@ ORDER BY wf.media_object_id;
 INSERT INTO rss_sighting (desired_item_id, seen_at) VALUES (?, ?)
 ON CONFLICT (desired_item_id) DO UPDATE SET seen_at = MAX(rss_sighting.seen_at, excluded.seen_at);
 
--- The SET items of works with a monitored part whose time or day fell inside a window: what a
--- season owes may have changed without anything being written to it.
+-- The SET items of works with a monitored part whose time or day is recent or still ahead: what a
+-- season owes may change, or have changed, without anything being written to it.
 -- name: ListItemsWithPartsComingOut :many
 SELECT DISTINCT d.id, d.work_id
 FROM desired_item d
 JOIN work_part p ON p.work_id = d.work_id
 WHERE d.satisfaction_kind = 'SET' AND d.id > sqlc.arg(after_id) AND p.monitored = 1
-  AND ((p.available_at IS NOT NULL AND p.available_at > sqlc.arg(since) AND p.available_at <= sqlc.arg(now))
-       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date > sqlc.arg(since_date) AND p.date <= sqlc.arg(today)))
+  AND ((p.available_at IS NOT NULL AND p.available_at > sqlc.arg(since))
+       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date > sqlc.arg(since_date)))
 ORDER BY d.id
 LIMIT sqlc.arg(page_size);

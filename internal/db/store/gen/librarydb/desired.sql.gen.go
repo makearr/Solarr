@@ -965,18 +965,16 @@ SELECT DISTINCT d.id, d.work_id
 FROM desired_item d
 JOIN work_part p ON p.work_id = d.work_id
 WHERE d.satisfaction_kind = 'SET' AND d.id > ?1 AND p.monitored = 1
-  AND ((p.available_at IS NOT NULL AND p.available_at > ?2 AND p.available_at <= ?3)
-       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date > ?4 AND p.date <= ?5))
+  AND ((p.available_at IS NOT NULL AND p.available_at > ?2)
+       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date > ?3))
 ORDER BY d.id
-LIMIT ?6
+LIMIT ?4
 `
 
 type ListItemsWithPartsComingOutParams struct {
 	AfterID   int64
 	Since     sql.NullInt64
-	Now       sql.NullInt64
 	SinceDate sql.NullString
-	Today     sql.NullString
 	PageSize  int64
 }
 
@@ -985,15 +983,13 @@ type ListItemsWithPartsComingOutRow struct {
 	WorkID int64
 }
 
-// The SET items of works with a monitored part whose time or day fell inside a window: what a
-// season owes may have changed without anything being written to it.
+// The SET items of works with a monitored part whose time or day is recent or still ahead: what a
+// season owes may change, or have changed, without anything being written to it.
 func (q *Queries) ListItemsWithPartsComingOut(ctx context.Context, arg ListItemsWithPartsComingOutParams) ([]ListItemsWithPartsComingOutRow, error) {
 	rows, err := q.db.QueryContext(ctx, listItemsWithPartsComingOut,
 		arg.AfterID,
 		arg.Since,
-		arg.Now,
 		arg.SinceDate,
-		arg.Today,
 		arg.PageSize,
 	)
 	if err != nil {

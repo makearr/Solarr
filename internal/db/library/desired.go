@@ -656,8 +656,8 @@ func requiredOf(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time
 // recountWindow reaches back past the longest grace, so a part is seen coming out even after a missed run or two.
 const recountWindow = 72 * time.Hour
 
-// RecountComingOut re-counts the items of works with a part that came out lately and answers how many changed: time
-// passing writes nothing, so a season would otherwise stay as complete as when its next episode had not aired.
+// RecountComingOut re-counts the items of works with a part that came out lately or is still to come, and answers how
+// many changed: time passing writes nothing, so a season would stay as complete as before its next episode aired.
 func (d Desired) RecountComingOut(ctx context.Context) (int, error) {
 	now := d.store.Now()
 	since := now.Add(-recountWindow)
@@ -666,9 +666,8 @@ func (d Desired) RecountComingOut(ctx context.Context) (int, error) {
 	var afterID int64
 	for {
 		page, err := read.ListItemsWithPartsComingOut(ctx, librarydb.ListItemsWithPartsComingOutParams{
-			AfterID: afterID, Since: sql.NullInt64{Int64: since.Unix(), Valid: true}, Now: sql.NullInt64{Int64: now.Unix(), Valid: true},
-			SinceDate: sql.NullString{String: since.UTC().Format("2006-01-02"), Valid: true},
-			Today:     sql.NullString{String: now.UTC().Format("2006-01-02"), Valid: true}, PageSize: 200,
+			AfterID: afterID, Since: sql.NullInt64{Int64: since.Unix(), Valid: true},
+			SinceDate: sql.NullString{String: since.UTC().Format("2006-01-02"), Valid: true}, PageSize: 200,
 		})
 		if err != nil {
 			return changed, fmt.Errorf("library: items with parts coming out: %w", err)
