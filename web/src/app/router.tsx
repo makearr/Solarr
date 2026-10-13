@@ -201,8 +201,29 @@ const routes = [
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/people/$personId", component: PersonPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/organisations/$organisationId", component: OrganisationPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/networks/$networkId", component: OrganisationPage }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/organisations/$id", component: OrganisationPage }),
+  // Networks had their own address until R1.4; old links land on the organisation page.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/networks/$networkId",
+    beforeLoad: ({ params }) => {
+      const { categoryId, networkId } = params as { categoryId: string; networkId: string };
+      throw redirect({ to: "/library/$categoryId/organisations/$organisationId", params: { categoryId, organisationId: networkId } });
+    },
+  }),
+  // An organisation linked without its library opens inside the first library that lists it.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/organisations/$id",
+    beforeLoad: async ({ params }) => {
+      const id = (params as { id: string }).id;
+      const { data } = await api.GET("/organisations/{id}", { params: { path: { id: Number(id) } } });
+      const library = data?.libraries[0]?.category_id;
+      if (library !== undefined) {
+        throw redirect({ to: "/library/$categoryId/organisations/$organisationId", params: { categoryId: String(library), organisationId: id } });
+      }
+    },
+    component: OrganisationPage,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/$level", component: LevelForLibrary }),
   // A work linked without its library (queue, history, search) opens inside the first library that lists it.
   createRoute({
@@ -216,7 +237,19 @@ const routes = [
     },
     component: WorkPage,
   }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/works/$id/$tab", component: WorkPage }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/works/$id/$tab",
+    beforeLoad: async ({ params }) => {
+      const { id, tab } = params as { id: string; tab: string };
+      const { data } = await api.GET("/works/{id}", { params: { path: { id: Number(id) } } });
+      const library = data?.library_ids?.[0];
+      if (library !== undefined) {
+        throw redirect({ to: "/library/$categoryId/works/$workId/$tab", params: { categoryId: String(library), workId: id, tab } });
+      }
+    },
+    component: WorkPage,
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people", component: PeopleIndex }),
   createRoute({ getParentRoute: () => rootRoute, path: "/people/$id", component: PersonPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/unidentified", component: Unidentified }),

@@ -1,7 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -11,7 +10,7 @@ import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
-import type { FilterField } from "@/list/customFilter";
+import { whereWithTitle, type FilterField } from "@/list/customFilter";
 import { ListTable, type Column } from "@/list/ListTable";
 import { PosterGrid } from "@/list/PosterGrid";
 import type { SelectionRequest } from "@/list/selection";
@@ -24,6 +23,7 @@ import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
+import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSort } from "@/ui/Toolbar";
 
 import { CustomFilterMenu } from "../CustomFilterMenu";
 import { STATUS_CHOICES } from "../filterFields";
@@ -38,7 +38,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "where"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -99,7 +99,7 @@ function selectionBody(request: SelectionRequest) {
     category_id: categoryId ? Number(categoryId) : undefined,
     excluded_ids: request.excluded,
     fresh: request.filters.fresh === "1" ? true : undefined,
-    where: request.filters.where || undefined,
+    where: whereWithTitle(request.filters.where, request.filters.q),
   };
 }
 
@@ -160,7 +160,7 @@ export function WorkIndex() {
             query: {
               cursor, limit: 100, category_id: Number(categoryId),
               fresh: query.filters.fresh === "1" ? true : undefined,
-              where: query.filters.where || undefined,
+              where: whereWithTitle(query.filters.where, query.filters.q),
               sort: query.sort ?? defaultSort,
               dir: query.direction === "desc" ? "desc" : undefined,
             },
@@ -181,66 +181,51 @@ export function WorkIndex() {
 
   return (
     <div ref={frameRef} className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2 text-xs">
-        <h1 className="text-sm font-medium">{levelLabel}</h1>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Button
-            variant={routeView.query.filters.fresh === "1" ? "primary" : "secondary"}
-            aria-pressed={routeView.query.filters.fresh === "1"}
-            title="Out within the last week"
-            onClick={() => setFilter("fresh", routeView.query.filters.fresh === "1" ? "" : "1")}
-          >
-            Fresh
-          </Button>
-          <CustomFilterMenu
-            fields={filterFieldsOf(info)}
-            storageKey={`${categoryId}.${level}`}
-            where={routeView.query.filters.where ?? ""}
-            onChange={(where) => setFilter("where", where)}
-          />
-          <Button onClick={list.selectAllMatching}>Select all matching</Button>
-          <label className="flex items-center gap-1 text-ink-muted">
-            Sort
-            <select value={sort} onChange={(event) => setQuery({ sort: event.target.value })} className="rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink">
-              {sortChoicesOf(info).map(([key, label]) => (
-                <option key={key} value={key}>
-                  {label}
-                </option>
+      <Toolbar title={levelLabel}>
+        <Button
+          variant={routeView.query.filters.fresh === "1" ? "primary" : "secondary"}
+          aria-pressed={routeView.query.filters.fresh === "1"}
+          title="Out within the last week"
+          onClick={() => setFilter("fresh", routeView.query.filters.fresh === "1" ? "" : "1")}
+        >
+          Fresh
+        </Button>
+        <ToolbarSearch value={routeView.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Title contains…" label={`Filter ${words.works} by title`} />
+        <CustomFilterMenu
+          fields={filterFieldsOf(info)}
+          storageKey={`${categoryId}.${level}`}
+          where={routeView.query.filters.where ?? ""}
+          onChange={(where) => setFilter("where", where)}
+        />
+        <ToolbarSort
+          sort={sort}
+          descending={routeView.query.direction === "desc"}
+          choices={sortChoicesOf(info)}
+          onSort={(next) => setQuery({ sort: next })}
+          onTurn={() => setQuery({ sort, direction: routeView.query.direction === "desc" ? "asc" : "desc" })}
+        />
+        <Button onClick={list.selectAllMatching}>Select all matching</Button>
+        {view === "list" && (
+          <details className="relative">
+            <summary className="cursor-pointer list-none rounded-md border border-border-subtle px-3 py-1.5 text-sm">Columns</summary>
+            <div className="absolute right-0 top-full z-10 mt-1 flex flex-col gap-1 rounded-md border border-border-subtle bg-surface p-2 shadow-lg">
+              {choosable.map((column) => (
+                <label key={column.key} className="flex items-center gap-1.5 whitespace-nowrap px-1 py-0.5">
+                  <input
+                    type="checkbox"
+                    checked={!hidden.includes(column.key)}
+                    onChange={() => setHidden(hidden.includes(column.key) ? hidden.filter((key) => key !== column.key) : [...hidden, column.key])}
+                  />
+                  {column.header}
+                </label>
               ))}
-            </select>
-          </label>
-          <Button title="Reverse the order" onClick={() => setQuery({ sort, direction: routeView.query.direction === "desc" ? "asc" : "desc" })}>
-            {routeView.query.direction === "desc" ? "Descending" : "Ascending"}
-          </Button>
-          {view === "list" && (
-            <details className="relative">
-              <summary className="cursor-pointer list-none rounded-md border border-border-subtle px-3 py-1.5 text-sm">Columns</summary>
-              <div className="absolute right-0 top-full z-10 mt-1 flex flex-col gap-1 rounded-md border border-border-subtle bg-surface p-2 shadow-lg">
-                {choosable.map((column) => (
-                  <label key={column.key} className="flex items-center gap-1.5 whitespace-nowrap px-1 py-0.5">
-                    <input
-                      type="checkbox"
-                      checked={!hidden.includes(column.key)}
-                      onChange={() => setHidden(hidden.includes(column.key) ? hidden.filter((key) => key !== column.key) : [...hidden, column.key])}
-                    />
-                    {column.header}
-                  </label>
-                ))}
-              </div>
-            </details>
-          )}
-          {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
-          <IndexViewToggle view={view} onChange={setView} />
-          <Link
-            to="/library/$categoryId/discover"
-            params={{ categoryId }}
-            className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-          >
-            <Plus aria-hidden className="size-3.5" />
-            Add new
-          </Link>
-        </div>
-      </div>
+            </div>
+          </details>
+        )}
+        {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
+        <IndexViewToggle view={view} onChange={setView} />
+        <ToolbarAdd categoryId={categoryId} />
+      </Toolbar>
       {!list.selectionIsEmpty && list.selectionRequest && (
         <BulkBar
           request={list.selectionRequest}
@@ -257,7 +242,7 @@ export function WorkIndex() {
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { Plus, Search, User } from "lucide-react";
+import { User } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -15,6 +15,7 @@ import { PosterGrid } from "@/list/PosterGrid";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
+import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 
 import {
   DEFAULT_POSTER_OPTIONS, IndexViewToggle, OVERVIEW_ROW_HEIGHT, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight,
@@ -76,14 +77,6 @@ export function PeopleIndex() {
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const works = categoryId ? (type?.work.many ?? "works").toLowerCase() : "works";
   const workOne = categoryId ? (type?.work.one ?? "work").toLowerCase() : "work";
-
-  const [typed, setTyped] = useState(view.query.filters.q ?? "");
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (typed.trim() !== (view.query.filters.q ?? "")) view.setQuery({ ...view.query, filters: { ...view.query.filters, q: typed.trim() } });
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [typed, view]);
 
   const filterFields = useMemo<readonly FilterField[]>(
     () => [
@@ -169,9 +162,10 @@ export function PeopleIndex() {
 
   return (
     <div ref={frameRef} className="flex h-full flex-col">
-      <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
-        <h1 className="mr-2 text-sm font-medium">{title}</h1>
-        {roles.length > 1 &&
+      <Toolbar
+        title={title}
+        chips={
+          roles.length > 1 &&
           [...roles.map((entry) => ({ key: entry.key, label: entry.label })), { key: EVERYONE, label: "Everyone" }].map((entry) => (
             <button
               key={entry.key}
@@ -184,68 +178,27 @@ export function PeopleIndex() {
             >
               {entry.label}
             </button>
-          ))}
-        <div className="ml-auto flex flex-wrap items-center gap-2 text-xs">
-          {canAdd && (
-            <Link
-              to="/library/$categoryId/discover"
-              params={{ categoryId }}
-              className="flex items-center gap-1 rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink"
-            >
-              <Plus aria-hidden className="size-3.5" />
-              Add
-            </Link>
-          )}
-          <label className="flex items-center gap-1 text-ink-muted">
-            Show
-            <select
-              value={monitored}
-              onChange={(event) => setFilter("monitored", event.target.value)}
-              className="rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink"
-            >
-              <option value="">Everyone</option>
-              <option value="true">Followed</option>
-              <option value="false">Not followed</option>
-            </select>
-          </label>
-          <label className="flex items-center gap-1.5 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-ink-muted">
-            <Search aria-hidden className="size-3.5" />
-            <input
-              value={typed}
-              onChange={(event) => setTyped(event.target.value)}
-              placeholder="Name starts with…"
-              aria-label="Filter people by name"
-              className="w-40 bg-transparent text-ink outline-none"
-            />
-          </label>
-          <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
-          <label className="flex items-center gap-1 text-ink-muted">
-            Sort
-            <select
-              value={sort}
-              onChange={(event) => view.setQuery({ ...view.query, sort: event.target.value, direction: event.target.value === "name" ? "asc" : "desc" })}
-              className="rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink"
-            >
-              {(Object.keys(SORT_LABEL) as SortKey[]).map((key) => (
-                <option key={key} value={key}>
-                  {key === "works" ? (type?.work.many ?? SORT_LABEL[key]) : SORT_LABEL[key]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            aria-label={direction === "asc" ? "Ascending: turn round" : "Descending: turn round"}
-            title="Turn the order round"
-            onClick={() => view.setQuery({ ...view.query, sort, direction: direction === "asc" ? "desc" : "asc" })}
-            className="rounded-md border border-border-subtle px-1.5 py-1 text-ink-muted hover:text-ink"
-          >
-            {direction === "asc" ? "▲" : "▼"}
-          </button>
-          <IndexViewToggle view={mode} onChange={setMode} />
-          {mode === "poster" && <PosterOptionsMenu options={options} onChange={setOptions} />}
-        </div>
-      </div>
+          ))
+        }
+      >
+        <ToolbarSelect label="Show" value={monitored} onChange={(value) => setFilter("monitored", value)}>
+          <option value="">Everyone</option>
+          <option value="true">Followed</option>
+          <option value="false">Not followed</option>
+        </ToolbarSelect>
+        <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name starts with…" label="Filter people by name" />
+        <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
+        <ToolbarSort
+          sort={sort}
+          descending={direction === "desc"}
+          choices={(Object.keys(SORT_LABEL) as SortKey[]).map((key) => [key, key === "works" ? (type?.work.many ?? SORT_LABEL[key]) : SORT_LABEL[key]] as const)}
+          onSort={(next) => view.setQuery({ ...view.query, sort: next, direction: next === "name" ? "asc" : "desc" })}
+          onTurn={() => view.setQuery({ ...view.query, sort, direction: direction === "asc" ? "desc" : "asc" })}
+        />
+        {mode === "poster" && <PosterOptionsMenu options={options} onChange={setOptions} />}
+        <IndexViewToggle view={mode} onChange={setMode} />
+        {canAdd && <ToolbarAdd categoryId={categoryId} />}
+      </Toolbar>
       <div className="min-h-0 flex-1">
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
         {list.error !== null && <p className="p-4 text-sm text-danger">The people could not be loaded.</p>}

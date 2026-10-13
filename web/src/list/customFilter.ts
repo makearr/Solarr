@@ -48,6 +48,13 @@ export function toWhere(conditions: readonly Condition[]): string {
   return conditions.length === 0 ? "" : JSON.stringify(conditions.map(({ field, op, value }) => ({ field, op, value })));
 }
 
+/** The saved filter plus what the toolbar's search box holds, as the one condition list the server reads. */
+export function whereWithTitle(where: string | undefined, title: string | undefined): string | undefined {
+  const conditions = parseWhere(where);
+  if (title) conditions.push({ field: "title", op: "contains", value: title });
+  return toWhere(conditions) || undefined;
+}
+
 /** A condition that holds of a value the list reads from an item; a text field may have several values (genres). */
 export function holds(condition: Condition, kind: FilterKind, values: readonly (string | number | boolean | undefined | null)[]): boolean {
   const have = values.filter((value): value is string | number | boolean => value !== undefined && value !== null);

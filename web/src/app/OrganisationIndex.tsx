@@ -13,6 +13,7 @@ import { PosterGrid } from "@/list/PosterGrid";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
+import { Toolbar, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 
 import { DEFAULT_POSTER_OPTIONS, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight, type PosterOptions } from "./IndexViews";
 import { CreditTile } from "./PersonPage";
@@ -20,6 +21,8 @@ import { FollowPanel } from "./FollowPanel";
 import { Poster } from "./Poster";
 
 type Organisation = components["schemas"]["OrganisationEntry"];
+
+const ORGANISATION_FILTER_KEYS: readonly string[] = ["q", "monitored"];
 
 /** A library's organisations (networks, labels, studios): most works first, on the same wall as every other level. */
 export function OrganisationIndex() {
@@ -30,17 +33,31 @@ export function OrganisationIndex() {
   const options = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
   const frameRef = useRef<HTMLDivElement>(null);
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
-  const view = useRouteView([]);
+  const view = useRouteView(ORGANISATION_FILTER_KEYS);
+  const sort = view.query.sort ?? "works";
+  const descending = (view.query.direction ?? (sort === "name" ? "asc" : "desc")) === "desc";
+  const setFilter = (key: string, value: string) => view.setQuery({ ...view.query, filters: { ...view.query.filters, [key]: value } });
   const works = (type?.work.many ?? "works").toLowerCase();
+  const many = type?.organisation.many || "Organisations";
   const list = useLibraryList<Organisation>(
     {
       name: `organisations-${categoryId}`,
       idOf: (organisation) => organisation.id,
       rowHeight: posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
       itemsPerRow: metrics.columns,
-      fetchPage: async ({ cursor, signal }) => {
+      fetchPage: async ({ cursor, query, signal }) => {
         const { data, error } = await api.GET("/organisations", {
-          params: { query: { category: Number(categoryId), sort: "works", dir: "desc", cursor, limit: 100 } },
+          params: {
+            query: {
+              category: Number(categoryId),
+              q: query.filters.q || undefined,
+              monitored: query.filters.monitored ? query.filters.monitored === "true" : undefined,
+              sort: sort as "name" | "works" | "latest",
+              dir: descending ? "desc" : "asc",
+              cursor,
+              limit: 100,
+            },
+          },
           signal,
         });
         if (error) throw error;
@@ -52,17 +69,29 @@ export function OrganisationIndex() {
 
   return (
     <div ref={frameRef} className="flex h-full flex-col">
-      <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
-        <h1 className="text-sm font-medium">{type?.organisation.many || "Organisations"}</h1>
-        <div className="ml-auto">
-          <PosterOptionsMenu options={options} onChange={setOptions} />
-        </div>
-      </div>
+      <Toolbar title={many}>
+        <ToolbarSelect label="Show" value={view.query.filters.monitored ?? ""} onChange={(value) => setFilter("monitored", value)}>
+          <option value="">All</option>
+          <option value="true">Followed</option>
+          <option value="false">Not followed</option>
+        </ToolbarSelect>
+        <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name starts with…" label={`Filter ${many.toLowerCase()} by name`} />
+        <ToolbarSort
+          sort={sort}
+          descending={descending}
+          choices={[["works", type?.work.many ?? "Works"], ["name", "Name"], ["latest", "Newest"]]}
+          onSort={(next) => view.setQuery({ ...view.query, sort: next, direction: next === "name" ? "asc" : "desc" })}
+          onTurn={() => view.setQuery({ ...view.query, sort, direction: descending ? "asc" : "desc" })}
+        />
+        <PosterOptionsMenu options={options} onChange={setOptions} />
+      </Toolbar>
       <div className="min-h-0 flex-1">
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
         {list.error !== null && <p className="p-4 text-sm text-danger">These could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
-          <p className="p-4 text-sm text-ink-muted">None known yet: they arrive with the {works}' metadata.</p>
+          <p className="p-4 text-sm text-ink-muted">
+            {view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
+          </p>
         )}
         {list.items.length > 0 && (
           <PosterGrid
@@ -89,8 +118,8 @@ export function OrganisationIndex() {
 
 /** One organisation, with its works in every library the viewer may read and its follow. */
 export function OrganisationPage() {
-  const params = useParams({ strict: false }) as { id?: string; organisationId?: string; networkId?: string; categoryId?: string };
-  const id = Number(params.organisationId ?? params.networkId ?? params.id);
+  const params = useParams({ strict: false }) as { id?: string; organisationId?: string; categoryId?: string };
+  const id = Number(params.organisationId ?? params.id);
   const from = params.categoryId;
   const types = useMediaTypes();
   const detail = useQuery({

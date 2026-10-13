@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowDown, ArrowUp, Check, Columns3, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, Check, Columns3 } from "lucide-react";
 
 import { api } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
@@ -11,6 +11,7 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { PosterGrid } from "@/list/PosterGrid";
 import { useRouteView } from "@/list/useRouteView";
+import { Toolbar, ToolbarAdd, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
 import { LEVEL_FILTER_FIELDS } from "./filterFields";
@@ -57,36 +58,11 @@ const SORTS: Record<SortKey, SortEntry> = {
   added: { label: "Recently added", dir: "desc", levels: ["albums"] },
 };
 
-function SortPicker({
-  level,
-  sort,
-  onChange,
-}: {
-  level: string | undefined;
-  sort: SortKey;
-  onChange: (sort: SortKey) => void;
-}) {
-  const available = (Object.entries(SORTS) as [SortKey, SortEntry][]).filter(
-    ([, entry]) => entry.levels == null || (level != null && entry.levels.includes(level)),
-  );
-  if (available.length < 2) return null;
-  return (
-    <label className="flex items-center gap-1 text-xs text-ink-muted">
-      Sort
-      <select
-        value={sort}
-        onChange={(event) => onChange(event.target.value as SortKey)}
-        className="rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        {available.map(([key, entry]) => (
-          <option key={key} value={key}>
-            {entry.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  );
+/** The orders one level offers, as the toolbar's choices. */
+function sortChoices(level: string | undefined): [SortKey, string][] {
+  return (Object.entries(SORTS) as [SortKey, SortEntry][])
+    .filter(([, entry]) => entry.levels == null || (level != null && entry.levels.includes(level)))
+    .map(([key, entry]) => [key, entry.label]);
 }
 
 type ViewMode = IndexView;
@@ -203,53 +179,34 @@ export function LibraryLevelList() {
 
   return (
     <div ref={frameRef} className="flex h-full flex-col">
-      <div className="flex flex-wrap items-center gap-2 border-b border-border-subtle px-4 py-2">
-        <h1 className="text-sm font-semibold capitalize tracking-tight">{level ?? "Library"}</h1>
-        <div className="ml-auto flex items-center gap-2">
-          {level === "artists" && (
-            <label className="flex items-center gap-1 text-xs text-ink-muted">
-              Show
-              <select
-                value={list.query.filters.monitored ?? ""}
-                onChange={(event) => list.filterBy("monitored", event.target.value)}
-                className="rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink"
-              >
-                <option value="">All artists</option>
-                <option value="true">Monitored</option>
-                <option value="false">Unmonitored</option>
-              </select>
-            </label>
-          )}
-          {level && LEVEL_FILTER_FIELDS[level] && (
-            <CustomFilterMenu
-              fields={LEVEL_FILTER_FIELDS[level]}
-              storageKey={`${categoryId ?? ""}.${level}`}
-              where={list.query.filters.where ?? ""}
-              onChange={(where) => list.filterBy("where", where)}
-            />
-          )}
-          {view === "list" ? (
-            <ColumnChooser level={level} hidden={hidden} onChange={setHidden} />
-          ) : (
-            <>
-              <SortPicker level={level} sort={sort} onChange={sortBy} />
-              {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
-            </>
-          )}
-          <IndexViewToggle view={view} onChange={setView} />
-          {categoryId && (
-            <Link
-              to="/library/$categoryId/discover"
-              params={{ categoryId }}
-              className="ml-2 flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink
-                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            >
-              <Plus aria-hidden className="size-4" />
-              Add new
-            </Link>
-          )}
-        </div>
-      </div>
+      <Toolbar title={<span className="capitalize">{level ?? "Library"}</span>}>
+        {level === "artists" && (
+          <ToolbarSelect label="Show" value={list.query.filters.monitored ?? ""} onChange={(value) => list.filterBy("monitored", value)}>
+            <option value="">All artists</option>
+            <option value="true">Monitored</option>
+            <option value="false">Unmonitored</option>
+          </ToolbarSelect>
+        )}
+        {level && LEVEL_FILTER_FIELDS[level] && (
+          <CustomFilterMenu
+            fields={LEVEL_FILTER_FIELDS[level]}
+            storageKey={`${categoryId ?? ""}.${level}`}
+            where={list.query.filters.where ?? ""}
+            onChange={(where) => list.filterBy("where", where)}
+          />
+        )}
+        <ToolbarSort
+          sort={sort}
+          descending={dir === "desc"}
+          choices={sortChoices(level)}
+          onSort={(next) => sortBy(next as SortKey)}
+          onTurn={() => sortBy(sort)}
+        />
+        {view === "list" && <ColumnChooser level={level} hidden={hidden} onChange={setHidden} />}
+        {isPoster && <PosterOptionsMenu options={options} onChange={setOptions} />}
+        <IndexViewToggle view={view} onChange={setView} />
+        {categoryId && <ToolbarAdd categoryId={categoryId} />}
+      </Toolbar>
 
       {list.isLoading && <Message>Loading…</Message>}
       {list.error !== null && (

@@ -1,6 +1,6 @@
 import { describe as suite, expect, test } from "vitest";
 
-import { holds, parseWhere, passes, toWhere, type FilterField } from "./customFilter";
+import { holds, parseWhere, passes, toWhere, whereWithTitle, type FilterField } from "./customFilter";
 
 const fields: FilterField[] = [
   { key: "title", label: "Title", kind: "text" },
@@ -16,6 +16,16 @@ suite("custom filters", () => {
     expect(parseWhere("not json")).toEqual([]);
     expect(parseWhere('{"a":1}')).toEqual([]);
     expect(toWhere([])).toBe("");
+  });
+
+  test("the search box adds a title condition to the saved filter and nothing when empty", () => {
+    const saved = toWhere([{ field: "year", op: "gt", value: "2010" }]);
+    expect([parseWhere(whereWithTitle(saved, "blue")), whereWithTitle(saved, ""), whereWithTitle("", ""), parseWhere(whereWithTitle(undefined, "blue"))]).toEqual([
+      [{ field: "year", op: "gt", value: "2010" }, { field: "title", op: "contains", value: "blue" }],
+      saved,
+      undefined,
+      [{ field: "title", op: "contains", value: "blue" }],
+    ]);
   });
 
   test("text conditions compare case-insensitively against any of several values", () => {
