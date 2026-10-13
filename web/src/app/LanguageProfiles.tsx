@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { LanguagePicker } from "./LanguagePicker";
+import { Card } from "./SettingsCard";
 
 type LanguageProfile = components["schemas"]["LanguageProfile"];
 
@@ -15,7 +16,7 @@ type LanguageProfile = components["schemas"]["LanguageProfile"];
  *  for (todo 4.3, 2026-09-12). Each language list is chosen from a drop-down
  *  of languages, stored by two-letter code. Global, not per-library, same as
  *  QualityProfiles' own doc comment explains. */
-export function LanguageProfiles({ embedded = false }: { embedded?: boolean }) {
+export function LanguageProfiles() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
@@ -40,13 +41,10 @@ export function LanguageProfiles({ embedded = false }: { embedded?: boolean }) {
   });
 
   return (
-    <div className={embedded ? "flex flex-col gap-3" : "mx-auto flex max-w-3xl flex-col gap-3 p-6"}>
-      {embedded ? <h2 className="text-sm font-medium">Language profiles</h2> : <h1 className="text-lg font-semibold">Language profiles</h1>}
-      <p className="text-sm leading-relaxed text-ink-muted">
-        A required list means at least one listed
-        language must be present, evaluated from the probe, never the release name. An empty
-        profile carries no language policy at all.
-      </p>
+    <Card
+      title="Language profiles"
+      help="A required list means at least one listed language must be present, evaluated from the probe, never the release name. An empty profile carries no language policy at all."
+    >
       {remove.isError && (
         <p className="text-xs text-danger">
           {(remove.error as { detail?: string }).detail ?? "That profile could not be removed."}
@@ -140,7 +138,7 @@ export function LanguageProfiles({ embedded = false }: { embedded?: boolean }) {
           New language profile
         </button>
       )}
-    </div>
+    </Card>
   );
 }
 

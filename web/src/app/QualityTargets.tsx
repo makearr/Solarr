@@ -8,6 +8,7 @@ import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { LanguagePicker } from "./LanguagePicker";
+import { Card } from "./SettingsCard";
 
 type QualityTarget = components["schemas"]["QualityTarget"];
 
@@ -276,17 +277,16 @@ export function QualityTargetsSection() {
     (group) => group.targets.length > 0,
   );
   return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center gap-3">
-        <h2 className="text-sm font-medium">Target qualities</h2>
-        <button type="button" onClick={() => setEditing("new")} className="ml-auto flex items-center gap-1 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">
+    <Card
+      title="Target qualities"
+      help="The one quality you would pick if you could choose freely. A library picks one of these under its own Quality page; a file meets it when every part named matches what the probe measured."
+      toggle={
+        <button type="button" onClick={() => setEditing("new")} className="flex shrink-0 items-center gap-1 rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">
           <Plus aria-hidden className="size-4" />
           New target
         </button>
-      </div>
-      <p className="text-xs text-ink-muted">
-        The one quality you would pick if you could choose freely. A library picks one of these under its own Quality page; a file meets it when every part named matches what the probe measured.
-      </p>
+      }
+    >
       {remove.isError && <p className="text-xs text-danger">{(remove.error as { detail?: string }).detail ?? "That target could not be removed."}</p>}
       {editing === "new" && <TargetForm onDone={done} onCancel={() => setEditing(null)} />}
       {targets.data && groups.length === 0 && editing !== "new" && <p className="text-xs text-ink-muted">No targets yet.</p>}
@@ -323,6 +323,6 @@ export function QualityTargetsSection() {
           </ul>
         </div>
       ))}
-    </section>
+    </Card>
   );
 }
