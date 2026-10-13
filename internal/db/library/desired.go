@@ -286,6 +286,33 @@ func (d Desired) SetPartMonitored(ctx context.Context, workID, partID int64, mon
 	return nil
 }
 
+// UnmonitorPartsLosingFiles unmonitors the parts of categoryID whose only files, on rootFolderID, were marked missing
+// at missingSince (Sonarr's "Unmonitor Deleted Episodes": a file deleted on purpose is not fetched again), and answers
+// how many.
+func (d Desired) UnmonitorPartsLosingFiles(ctx context.Context, categoryID, rootFolderID, missingSince int64) (int, error) {
+	total := 0
+	var afterID int64
+	for {
+		page, err := librarydb.New(d.store.Read()).ListMonitoredPartsLosingFiles(ctx, librarydb.ListMonitoredPartsLosingFilesParams{
+			CategoryID: categoryID, RootFolderID: rootFolderID,
+			MissingSince: sql.NullInt64{Int64: missingSince, Valid: true}, AfterID: afterID, PageSize: dirtyBatchSize,
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: parts losing files: %w", err)
+		}
+		for _, row := range page {
+			afterID = row.PartID
+			if err := d.SetPartMonitored(ctx, row.WorkID, row.PartID, false); err != nil {
+				return total, err
+			}
+			total++
+		}
+		if len(page) < dirtyBatchSize {
+			return total, nil
+		}
+	}
+}
+
 // syncSeasonMonitoring makes a season item monitored exactly when one of its episodes is, so wanting one episode of an
 // unmonitored season is not silently ignored.
 func syncSeasonMonitoring(ctx context.Context, queries *librarydb.Queries, workID int64, item librarydb.DesiredItem) error {

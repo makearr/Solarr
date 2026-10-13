@@ -135,6 +135,9 @@ func (p *process) tvModule() tv.Module {
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+			Housekeeping: tv.Housekeeping{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library), Logger: p.logger,
+			},
 		},
 		Hunt:     p.tvHunt,
 		Adder:    p.seriesCatalog(),

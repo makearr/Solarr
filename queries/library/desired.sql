@@ -462,3 +462,20 @@ WHERE d.satisfaction_kind = 'SET' AND d.id > sqlc.arg(after_id) AND p.monitored 
        OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date > sqlc.arg(since_date)))
 ORDER BY d.id
 LIMIT sqlc.arg(page_size);
+
+-- The monitored parts covered only by files a full scan just found gone: deleted on purpose, by
+-- a library's "Unmonitor deleted" for a type whose parts are wanted one by one.
+-- name: ListMonitoredPartsLosingFiles :many
+SELECT DISTINCT wp.id AS part_id, di.work_id
+FROM desired_item di
+JOIN desired_item_file dif ON dif.desired_item_id = di.id
+JOIN library_path p ON p.media_object_id = dif.media_object_id
+JOIN work_part wp ON wp.work_id = di.work_id AND wp.media_ref = dif.media_ref
+WHERE di.category_id = sqlc.arg(category_id) AND p.root_folder_id = sqlc.arg(root_folder_id)
+  AND p.missing_since = sqlc.arg(missing_since) AND wp.monitored = 1 AND wp.id > sqlc.arg(after_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM desired_item_file other
+    JOIN library_path held ON held.media_object_id = other.media_object_id
+    WHERE other.desired_item_id = di.id AND other.media_ref = dif.media_ref AND held.missing_since IS NULL)
+ORDER BY wp.id
+LIMIT sqlc.arg(page_size);

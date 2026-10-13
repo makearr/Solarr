@@ -83,8 +83,12 @@ export function LibraryFileManagement() {
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">File Management</h2>
         <Toggle
-          label="Unmonitor Deleted Tracks"
-          help="An album with a track deleted from disk is automatically unmonitored."
+          label={isTV ? "Unmonitor Deleted Episodes" : "Unmonitor Deleted Tracks"}
+          help={
+            isTV
+              ? "An episode whose file is deleted from disk is unmonitored instead of being fetched again."
+              : "An album with a track deleted from disk is automatically unmonitored."
+          }
           checked={draft.unmonitor_deleted}
           onChange={(checked) => set({ unmonitor_deleted: checked })}
         />

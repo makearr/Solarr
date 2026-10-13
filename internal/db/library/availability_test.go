@@ -77,3 +77,67 @@ func TestRecountComingOut_ASeasonOwesAnEpisodeOnceItIsOut(t *testing.T) {
 		t.Errorf("changed and owed after each step = %v, want %v", owed, want)
 	}
 }
+
+// Sonarr's "Unmonitor Deleted Episodes": the episode whose file a full scan found gone, not its whole season.
+func TestUnmonitorPartsLosingFiles_UnmonitorsOnlyTheEpisodeWhoseFileIsGone(t *testing.T) {
+	seen := time.Date(2026, 3, 20, 12, 0, 0, 0, time.UTC)
+	opened, queries := newLibraryAt(t, clock.NewFake(seen))
+	write := sampleSeries()
+	write.Parts = []library.SeriesPartWrite{
+		{MediaRef: "s01:e01", SortKey: "s01:e01", MonitoredIfNew: true, Date: "2026-03-03"},
+		{MediaRef: "s01:e02", SortKey: "s01:e02", MonitoredIfNew: true, Date: "2026-03-10"},
+	}
+	series := library.NewSeries(opened)
+	result, err := series.Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := library.NewDesired(opened)
+	season, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{
+		WorkID: result.WorkID, MediaRef: "s01", SortKey: "s01", CategoryID: 1, ProfileID: 1, Monitored: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	physical := library.NewPhysical(opened)
+	files := []library.PhysicalFile{
+		{RelPath: "Show/Season 1/e01.mkv", SizeBytes: 1, QuickHash: "one", FirstSeenAt: seen},
+		{RelPath: "Show/Season 1/e02.mkv", SizeBytes: 1, QuickHash: "two", FirstSeenAt: seen},
+	}
+	registered, err := physical.RegisterBatch(t.Context(), 1, files)
+	if err != nil {
+		t.Fatal(err)
+	}
+	links := []library.SeriesFileLink{
+		{MediaObjectID: registered[0].MediaObjectID, Parts: []library.PartKey{{MediaRef: "s01:e01"}}},
+		{MediaObjectID: registered[1].MediaObjectID, Parts: []library.PartKey{{MediaRef: "s01:e02"}}},
+	}
+	if _, err := series.AttachFiles(t.Context(), seen, result.WorkID, 1, links); err != nil {
+		t.Fatal(err)
+	}
+	// The next full sweep sees the first file again and not the second.
+	files[0].FirstSeenAt = seen.Add(2 * time.Hour)
+	if _, err := physical.RegisterBatch(t.Context(), 1, files[:1]); err != nil {
+		t.Fatal(err)
+	}
+	gone := seen.Add(time.Hour)
+	if marked, err := physical.MarkMissing(t.Context(), 1, gone); err != nil || marked != 1 {
+		t.Fatalf("marked %d missing, %v; want the second file", marked, err)
+	}
+
+	unmonitored, err := desired.UnmonitorPartsLosingFiles(t.Context(), 1, 1, gone.Unix())
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts, err := queries.ListWorkParts(t.Context(), result.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := queries.GetDesiredItem(t.Context(), season.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := []int64{int64(unmonitored), parts[0].Monitored, parts[1].Monitored, item.Monitored, item.RequiredCount.Int64}; !slices.Equal(got, []int64{1, 1, 0, 1, 1}) {
+		t.Errorf("unmonitored, e01, e02, season monitored, season required = %v; want 1, 1, 0, 1, 1", got)
+	}
+}

@@ -1013,6 +1013,66 @@ func (q *Queries) ListItemsWithPartsComingOut(ctx context.Context, arg ListItems
 	return items, nil
 }
 
+const listMonitoredPartsLosingFiles = `-- name: ListMonitoredPartsLosingFiles :many
+SELECT DISTINCT wp.id AS part_id, di.work_id
+FROM desired_item di
+JOIN desired_item_file dif ON dif.desired_item_id = di.id
+JOIN library_path p ON p.media_object_id = dif.media_object_id
+JOIN work_part wp ON wp.work_id = di.work_id AND wp.media_ref = dif.media_ref
+WHERE di.category_id = ?1 AND p.root_folder_id = ?2
+  AND p.missing_since = ?3 AND wp.monitored = 1 AND wp.id > ?4
+  AND NOT EXISTS (
+    SELECT 1 FROM desired_item_file other
+    JOIN library_path held ON held.media_object_id = other.media_object_id
+    WHERE other.desired_item_id = di.id AND other.media_ref = dif.media_ref AND held.missing_since IS NULL)
+ORDER BY wp.id
+LIMIT ?5
+`
+
+type ListMonitoredPartsLosingFilesParams struct {
+	CategoryID   int64
+	RootFolderID int64
+	MissingSince sql.NullInt64
+	AfterID      int64
+	PageSize     int64
+}
+
+type ListMonitoredPartsLosingFilesRow struct {
+	PartID int64
+	WorkID int64
+}
+
+// The monitored parts covered only by files a full scan just found gone: deleted on purpose, by
+// a library's "Unmonitor deleted" for a type whose parts are wanted one by one.
+func (q *Queries) ListMonitoredPartsLosingFiles(ctx context.Context, arg ListMonitoredPartsLosingFilesParams) ([]ListMonitoredPartsLosingFilesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMonitoredPartsLosingFiles,
+		arg.CategoryID,
+		arg.RootFolderID,
+		arg.MissingSince,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMonitoredPartsLosingFilesRow{}
+	for rows.Next() {
+		var i ListMonitoredPartsLosingFilesRow
+		if err := rows.Scan(&i.PartID, &i.WorkID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPartFilesForWork = `-- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
