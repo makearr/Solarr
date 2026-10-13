@@ -310,9 +310,9 @@ func (j *EnrichJob) handOn(ctx context.Context, refinedWorkIDs []int64, manual b
 // an edition, which choosing is not this pass's call. Walked by work id within
 // a run and bounded by editionlessBudget.
 func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (withEdition []int64) {
-	enriched, failed := 0, 0
+	enriched, failed, retired := 0, 0, 0
 	var afterWorkID int64
-	for enriched+failed < editionlessBudget {
+	for enriched+failed+retired < editionlessBudget {
 		if ctx.Err() != nil {
 			return withEdition
 		}
@@ -324,7 +324,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 		if len(batch) == 0 {
 			break
 		}
-		batch = batch[:min(len(batch), editionlessBudget-enriched-failed)]
+		batch = batch[:min(len(batch), editionlessBudget-enriched-failed-retired)]
 		albums := make([]albumKey, len(batch))
 		for index, work := range batch {
 			albums[index] = albumKey{releaseGroup: work.ReleaseGroupMBID}
@@ -333,6 +333,12 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 		for index, work := range batch {
 			afterWorkID = work.WorkID
 			rg, err := answers[index].rg, answers[index].err
+			if errors.Is(err, musicbrainz.ErrNotFound) {
+				// Asked again every run it would fail every run; its files are identified afresh instead.
+				retired++
+				j.returnRetiredToReview(ctx, work.WorkID, work.ReleaseGroupMBID)
+				continue
+			}
 			if err != nil {
 				failed++
 				j.logger.WarnContext(ctx, "editionless work enrichment failed",
@@ -360,9 +366,9 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 			break
 		}
 	}
-	if enriched+failed > 0 {
+	if enriched+failed+retired > 0 {
 		j.logger.Info("editionless enrichment finished", slog.Int("enriched", enriched), slog.Int("failed", failed),
-			slog.Int("editions_chosen", len(withEdition)))
+			slog.Int("retired", retired), slog.Int("editions_chosen", len(withEdition)))
 	}
 	return withEdition
 }
@@ -450,6 +456,12 @@ func (j *EnrichJob) chooseEdition(
 	}})
 	if err != nil || len(resolutions) != 1 || resolutions[0].EditionID == nil {
 		j.logger.WarnContext(ctx, "edition choice resolve failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+		return false
+	}
+	if owner, err := j.identity.EditionWork(ctx, *resolutions[0].EditionID); err != nil || owner != work.WorkID {
+		// Refining it would enrich the other album and leave this one without an edition, every run.
+		j.logger.InfoContext(ctx, "edition choice: the release fitting the files is another album's; the two are one album held twice",
+			slog.Int64("work_id", work.WorkID), slog.Int64("other_work_id", owner), slog.Any("error", err))
 		return false
 	}
 	chosen := albumKey{releaseGroup: work.ReleaseGroupMBID, release: release.MBID}

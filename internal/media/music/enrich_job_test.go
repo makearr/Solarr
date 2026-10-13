@@ -1738,6 +1738,38 @@ func TestEnrichJob_ReturnsAnAlbumWhoseReleaseGroupIsGoneToReview(t *testing.T) {
 	}
 }
 
+// The same for an album a text search matched (no edition): asked again each run, it failed each run (seen
+// 2026-10-13: three albums an hour, for good).
+func TestEnrichJob_ReturnsAnEditionlessAlbumWhoseReleaseGroupIsGoneToReview(t *testing.T) {
+	job, opened, queries := newEnrichJobRealigning(t, &goneSource{}, nil, &fakeRealigner{}, fakeTags{})
+	registered, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Heka/Detisisu Binip (1991)/01.m4a", SizeBytes: 1, QuickHash: "h1", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	if _, err := library.NewIdentity(opened).ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-gone", Confidence: 1, RootFolderID: 1,
+		Work:          library.WorkIdentity{MediaType: "music", CanonicalTitle: "Detisisu Binip", SortTitle: "detisisu binip"},
+		MediaObjectID: registered[0].MediaObjectID,
+	}}); err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	entry, err := queries.GetUnidentified(t.Context(), registered[0].MediaObjectID)
+	if err != nil || !strings.Contains(entry.CandidatesJson, `"external_id":"rg-gone"`) {
+		t.Fatalf("queue entry = %+v, %v; want the file back in Review with the gone release group as a hint", entry, err)
+	}
+	if _, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{
+		Provider: music.ProviderReleaseGroup, ExternalID: "rg-gone",
+	}); err == nil {
+		t.Error("the album nobody asked for is still in the library")
+	}
+}
+
 // An album's label comes with its release: linked as the work's label organisation, and "[no label]" links none.
 func TestEnrichJob_LinksTheReleasesLabel(t *testing.T) {
 	for _, tc := range []struct {

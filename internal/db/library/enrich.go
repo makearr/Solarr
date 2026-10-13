@@ -336,6 +336,15 @@ func (i Identity) EditionlessWorks(ctx context.Context, afterWorkID, pageSize in
 	return works, nil
 }
 
+// EditionWork answers the work an edition belongs to.
+func (i Identity) EditionWork(ctx context.Context, editionID int64) (int64, error) {
+	edition, err := librarydb.New(i.store.Read()).GetEdition(ctx, editionID)
+	if err != nil {
+		return 0, fmt.Errorf("library: edition %d: %w", editionID, err)
+	}
+	return edition.WorkID, nil
+}
+
 // SetWorkDescription writes a work's free-text description, unconditionally
 // (unlike the year in RefineEdition, nothing else writes this column yet, so
 // there is no earlier value to protect). A separate method, not folded into
