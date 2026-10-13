@@ -165,7 +165,9 @@ api:        ## Regenerate Go server + TS client from api/openapi.yaml
 	$(RUN_GO) gofmt -w internal/api/apiserver/gen
 
 ## ---- web ----
+## Old bundles are cleared first: vite keeps the folder (for its .gitkeep), and go:embed takes everything in it.
 web:        ## Production build, embedded via embed.FS. Lints and tests first.
+	@rm -rf internal/api/webui/dist/assets
 	$(RUN_NODE) npm ci && $(RUN_NODE) npm run build
 
 e2e:        ## One-shot smoke run: builds the image, drives a throwaway instance, removes it
