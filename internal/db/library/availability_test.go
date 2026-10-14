@@ -141,3 +141,41 @@ func TestUnmonitorPartsLosingFiles_UnmonitorsOnlyTheEpisodeWhoseFileIsGone(t *te
 		t.Errorf("unmonitored, e01, e02, season monitored, season required = %v; want 1, 1, 0, 1, 1", got)
 	}
 }
+
+// A season none of whose episodes is out owes nothing and says when the first comes ("Not out yet"); once one is
+// owed, the time goes.
+func TestRecountComingOut_ASeasonNotOutYetCarriesItsFirstAirTime(t *testing.T) {
+	airs := time.Date(2026, 3, 10, 20, 0, 0, 0, time.UTC)
+	fake := clock.NewFake(airs.Add(-24 * time.Hour))
+	opened, queries := newLibraryAt(t, fake)
+	write := sampleSeries()
+	at := airs.Unix()
+	write.Parts = []library.SeriesPartWrite{
+		{MediaRef: "s02:e01", SortKey: "s02:e01", MonitoredIfNew: true, Date: "2026-03-10", AvailableAt: &at, AvailableConfidence: "high"},
+		{MediaRef: "s02:e02", SortKey: "s02:e02", MonitoredIfNew: true, Date: "2026-03-17"},
+	}
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := library.NewDesired(opened)
+	season, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{
+		WorkID: result.WorkID, MediaRef: "s02", SortKey: "s02", CategoryID: 1, ProfileID: 1, Monitored: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	item, err := queries.GetDesiredItem(t.Context(), season.ID)
+	if err != nil || item.RequiredCount.Int64 != 0 || item.AvailableFrom.Int64 != at {
+		t.Fatalf("before it airs: owed %d, next out %d, %v; want 0 and the first air time %d", item.RequiredCount.Int64, item.AvailableFrom.Int64, err, at)
+	}
+
+	fake.Set(airs.Add(3 * time.Hour))
+	if _, err := desired.RecountComingOut(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	item, err = queries.GetDesiredItem(t.Context(), season.ID)
+	if err != nil || item.RequiredCount.Int64 != 1 || item.AvailableFrom.Valid {
+		t.Errorf("after it aired: owed %d, next out %+v, %v; want 1 and none", item.RequiredCount.Int64, item.AvailableFrom, err)
+	}
+}

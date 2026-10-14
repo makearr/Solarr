@@ -649,6 +649,9 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 		librarydb.SetDesiredItemRequiredCountParams{RequiredCount: required, ID: itemID}); err != nil {
 		return fmt.Errorf("set required count: %w", err)
 	}
+	if err := stampComingOut(ctx, queries, item, required, nextOut(item, parts, now)); err != nil {
+		return fmt.Errorf("set coming out: %w", err)
+	}
 	if err := queries.RecomputePresentCount(ctx, itemID); err != nil {
 		return fmt.Errorf("recompute present count: %w", err)
 	}
@@ -678,6 +681,49 @@ func requiredOf(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time
 		return item.RequiredCount
 	}
 	return sql.NullInt64{Int64: owed, Valid: true}
+}
+
+// availableFromParts marks an item's available_from as the next part out, kept only while the item owes nothing.
+const availableFromParts = "parts"
+
+// nextOut is when the earliest monitored part of the item not out yet comes out; zero when none has a time.
+func nextOut(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time.Time) int64 {
+	var next int64
+	for _, part := range parts {
+		if part.Monitored != 1 || !partInScope(part.MediaRef, item.MediaRef) ||
+			PartOut(part.AvailableAt.Int64, part.AvailableConfidence, part.Date.String, part.AvailableBasis, now) {
+			continue
+		}
+		at := part.AvailableAt.Int64
+		if at == 0 {
+			if day, err := time.Parse("2006-01-02", part.Date.String); err == nil {
+				at = day.Unix()
+			}
+		}
+		if at > 0 && (next == 0 || at < next) {
+			next = at
+		}
+	}
+	return next
+}
+
+// stampComingOut gives an item that owes nothing yet the time its next part comes out ("Not out yet"), and takes it
+// away once something is owed; a time set any other way is left alone.
+func stampComingOut(ctx context.Context, queries *librarydb.Queries, item librarydb.DesiredItem, required sql.NullInt64, next int64) error {
+	owesNothing := required.Valid && required.Int64 == 0
+	switch {
+	case owesNothing && next > 0:
+		if item.AvailableFrom.Int64 == next && item.AvailableBasis.String == availableFromParts {
+			return nil
+		}
+		return queries.SetDesiredItemAvailability(ctx, librarydb.SetDesiredItemAvailabilityParams{
+			AvailableFrom: sql.NullInt64{Int64: next, Valid: true}, AvailableBasis: sql.NullString{String: availableFromParts, Valid: true},
+			ID: item.ID,
+		})
+	case item.AvailableBasis.String == availableFromParts:
+		return queries.SetDesiredItemAvailability(ctx, librarydb.SetDesiredItemAvailabilityParams{ID: item.ID})
+	}
+	return nil
 }
 
 // recountWindow reaches back past the longest grace, so a part is seen coming out even after a missed run or two.

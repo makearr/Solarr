@@ -5844,6 +5844,11 @@ export interface components {
             state: "MISSING" | "PARTIAL" | "COMPLETE" | "UPGRADABLE";
             /** Format: date-time */
             last_searched_at?: string;
+            /**
+             * Format: date-time
+             * @description When the group's next monitored part comes out, while nothing of it is owed yet ("Not out yet"); absent otherwise.
+             */
+            next_out?: string;
         };
         WorkPartPage: {
             items: components["schemas"]["WorkPart"][];

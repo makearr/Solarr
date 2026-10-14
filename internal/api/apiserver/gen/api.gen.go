@@ -4176,7 +4176,10 @@ type WorkGroup struct {
 	Label          string     `json:"label"`
 	LastSearchedAt *time.Time `json:"last_searched_at,omitempty"`
 	Monitored      bool       `json:"monitored"`
-	PresentCount   int64      `json:"present_count"`
+
+	// NextOut When the group's next monitored part comes out, while nothing of it is owed yet ("Not out yet"); absent otherwise.
+	NextOut      *time.Time `json:"next_out,omitempty"`
+	PresentCount int64      `json:"present_count"`
 
 	// Ref Empty for a group of the whole work; else its parts are "<ref>:...".
 	Ref           string         `json:"ref"`

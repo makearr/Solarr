@@ -66,15 +66,21 @@ export function LibraryFileManagement() {
 
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Folders</h2>
-        <Toggle
-          label="Create Empty Artist Folders"
-          help="Create missing artist folders for monitored artists during disk scan."
-          checked={draft.create_empty_artist_folders}
-          onChange={(checked) => set({ create_empty_artist_folders: checked })}
-        />
+        {!isTV && (
+          <Toggle
+            label="Create Empty Artist Folders"
+            help="Create missing artist folders for monitored artists during disk scan."
+            checked={draft.create_empty_artist_folders}
+            onChange={(checked) => set({ create_empty_artist_folders: checked })}
+          />
+        )}
         <Toggle
           label="Delete Empty Folders"
-          help="Delete empty artist and album folders during disk scan and when track files are deleted."
+          help={
+            isTV
+              ? "Delete a series or season folder left empty when episode files are deleted."
+              : "Delete empty artist and album folders during disk scan and when track files are deleted."
+          }
           checked={draft.delete_empty_folders}
           onChange={(checked) => set({ delete_empty_folders: checked })}
         />
@@ -92,12 +98,14 @@ export function LibraryFileManagement() {
           checked={draft.unmonitor_deleted}
           onChange={(checked) => set({ unmonitor_deleted: checked })}
         />
+        {!isTV && (
         <Toggle
           label="Merge Artists Stored Under Several Names"
           help="After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are."
           checked={draft.merge_artist_aliases}
           onChange={(checked) => set({ merge_artist_aliases: checked })}
         />
+        )}
         {advanced && (
         <>
         <Choice
@@ -111,6 +119,7 @@ export function LibraryFileManagement() {
           ]}
           onChange={(value) => set({ propers_repacks: value as FileManagement["propers_repacks"] })}
         />
+        {!isTV && (
         <Choice
           label="Rescan Artist Folder after Refresh"
           help={
@@ -126,6 +135,7 @@ export function LibraryFileManagement() {
           ]}
           onChange={(value) => set({ rescan_after_refresh: value as FileManagement["rescan_after_refresh"] })}
         />
+        )}
         <Choice
           label="Change File Date"
           help="Change the file date on import and rescan."

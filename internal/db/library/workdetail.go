@@ -92,6 +92,8 @@ type DesiredItemStatus struct {
 	// LastSearchedAt is the hunt queue's own record, 0 when this item has
 	// never been searched for.
 	LastSearchedAt int64
+	// AvailableFrom is when the item's next part comes out while it owes nothing yet; 0 otherwise.
+	AvailableFrom int64
 }
 
 // WorkDetail is a work's own fields, its editions, its parts, its credits and
@@ -241,7 +243,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		}
 		group := GroupStatus{Ref: item.MediaRef, SortKey: item.MediaSortKey, DesiredItemStatus: DesiredItemStatus{
 			ID: item.ID, Monitored: item.Monitored == 1, PresentCount: item.PresentCount, State: item.State,
-			LastSearchedAt: lastSearched[item.ID],
+			LastSearchedAt: lastSearched[item.ID], AvailableFrom: item.AvailableFrom.Int64,
 		}}
 		if item.RequiredCount.Valid {
 			group.RequiredCount = &item.RequiredCount.Int64

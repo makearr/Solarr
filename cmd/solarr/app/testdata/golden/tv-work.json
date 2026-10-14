@@ -68,6 +68,7 @@
       "desired_item_id": 3,
       "label": "Season 2",
       "monitored": true,
+      "next_out": "2099-01-05T20:00:00Z",
       "present_count": 0,
       "ref": "s02",
       "required_count": 0,

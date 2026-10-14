@@ -106,6 +106,11 @@ export function GroupSection({
             {group.required_count ? `/${Math.max(group.required_count, group.present_count)}` : ""}
           </span>
         </button>
+        {group.next_out && group.present_count === 0 && (
+          <span className="rounded-full border border-warn px-1.5 py-px text-[0.6875rem] text-warn">
+            {t("work.notOutUntil", { date: new Date(group.next_out).toLocaleDateString(undefined, { dateStyle: "medium" }) })}
+          </span>
+        )}
         {note && <span className="text-xs text-ink-muted">{note}</span>}
         {onGroupGrab && (
           <Button variant="icon" title={`Search ${group.label} and send the best release`} aria-label={`${t("action.search")} ${group.label}`} onClick={onGroupGrab}>

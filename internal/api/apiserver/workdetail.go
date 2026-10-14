@@ -122,6 +122,8 @@ type WantedRow struct {
 	// NextSearchAt and AutomaticSearch are set for an album only (F2); zero and empty otherwise.
 	NextSearchAt    int64
 	AutomaticSearch string
+	// AvailableFrom is when the next part comes out while nothing is owed yet; 0 otherwise.
+	AvailableFrom int64
 }
 
 // WorkDetailRow is a work's full detail. RootFolderIDs and CategoryIDs are not
@@ -881,6 +883,10 @@ func groupView(group GroupRow) gen.WorkGroup {
 	if group.Wanted.LastSearchedAt != 0 {
 		at := time.Unix(group.Wanted.LastSearchedAt, 0).UTC()
 		view.LastSearchedAt = &at
+	}
+	if group.Wanted.AvailableFrom != 0 {
+		at := time.Unix(group.Wanted.AvailableFrom, 0).UTC()
+		view.NextOut = &at
 	}
 	return view
 }

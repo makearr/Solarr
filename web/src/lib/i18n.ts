@@ -27,6 +27,7 @@ const catalogue = {
   "work.outBasis": "Known from: {basis}. Counted as missing {hours} hours after.",
   "work.outUnannounced": "No date announced yet.",
   "work.waitingForMetadata": "Waiting for metadata",
+  "work.notOutUntil": "Not out yet · {date}",
   "work.noParts": "No {parts} are known yet.",
   "work.notWanted": "Nothing of this {work} is wanted.",
   "work.remove.title": "Remove {title}",

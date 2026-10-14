@@ -79,7 +79,7 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		}
 		row.Groups = append(row.Groups, apiserver.GroupRow{Ref: group.Ref, Label: label, Wanted: apiserver.WantedRow{
 			ID: group.ID, Monitored: group.Monitored, RequiredCount: group.RequiredCount, PresentCount: group.PresentCount,
-			State: group.State, LastSearchedAt: group.LastSearchedAt,
+			State: group.State, LastSearchedAt: group.LastSearchedAt, AvailableFrom: group.AvailableFrom,
 		}})
 	}
 	if detail.Wanted != nil {
