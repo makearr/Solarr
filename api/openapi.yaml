@@ -5748,6 +5748,61 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/merge-suggestion:
+    get:
+      operationId: getWorkMergeSuggestion
+      tags: [library]
+      summary: The work this one was found to be (an album held twice), if any. Administrator only.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: The suggestion.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkMergeSuggestion" }
+        "204": { description: Nothing suggested. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/merge:
+    post:
+      operationId: mergeWork
+      tags: [library]
+      summary: Fold this work into another of its type. Administrator only.
+      description: >-
+        Its files, wanted state, downloads, imports, requests, tags and history move onto the other work, its ids
+        and title become the other's aliases, and it is deleted. With preview nothing changes and the answer says
+        what would move.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [into]
+              properties:
+                into: { type: integer, format: int64 }
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: What moved, or would move.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkMerge" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/remove:
     post:
       operationId: removeWork
@@ -7162,6 +7217,27 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    WorkMergeSuggestion:
+      type: object
+      required: [into_work_id, title]
+      properties:
+        into_work_id: { type: integer, format: int64 }
+        title: { type: string }
+        lead_name: { type: string }
+
+    WorkMerge:
+      type: object
+      required: [drop_id, keep_id, drop_title, keep_title, files, wanted_items, acquisitions, import_units]
+      properties:
+        drop_id: { type: integer, format: int64 }
+        keep_id: { type: integer, format: int64 }
+        drop_title: { type: string }
+        keep_title: { type: string }
+        files: { type: integer, format: int64 }
+        wanted_items: { type: integer, format: int64 }
+        acquisitions: { type: integer, format: int64 }
+        import_units: { type: integer, format: int64 }
 
     Work:
       type: object

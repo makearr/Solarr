@@ -77,11 +77,80 @@ function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaType
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-4 p-4">
         <WorkHeader work={work} info={info} words={words} categoryId={categoryId} lead={lead} interactive={tabLink("search")} />
+        <MergeSuggestion work={work} words={words} categoryId={categoryId} />
         <Tabs label={work.title} tabs={tabs} active={tab} />
         {tab === "overview" && <OverviewTab work={work} info={info} words={words} categoryId={categoryId} />}
         {tab === "files" && <FilesTab work={work} words={words} />}
         {tab === "history" && <HistoryTab workId={work.id} />}
         {tab === "search" && <WorkSearchTab work={work} info={info} words={words} lead={lead?.person_name ?? ""} />}
+      </div>
+    </div>
+  );
+}
+
+// An album held twice (enrichment found its release is another album's): an administrator previews and merges it.
+function MergeSuggestion({ work, words, categoryId }: { work: Work; words: Vocabulary; categoryId: string | undefined }) {
+  const administrator = useIsAdministrator();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const suggestion = useQuery({
+    queryKey: ["work-merge", work.id],
+    enabled: administrator,
+    queryFn: async () => {
+      const { data, error, response } = await api.GET("/works/{id}/merge-suggestion", { params: { path: { id: work.id } } });
+      if (error) throw error;
+      return response.status === 204 ? null : (data ?? null);
+    },
+  });
+  const merge = useMutation({
+    mutationFn: async (preview: boolean) => {
+      const into = suggestion.data?.into_work_id ?? 0;
+      const { data, error } = await api.POST("/works/{id}/merge", { params: { path: { id: work.id } }, body: { into, preview } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (result, preview) => {
+      if (preview || !result) return;
+      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      void navigate(
+        categoryId
+          ? { to: "/library/$categoryId/works/$workId/$tab", params: { categoryId, workId: String(result.keep_id), tab: "overview" } }
+          : { to: "/works/$id/$tab", params: { id: String(result.keep_id), tab: "overview" } },
+      );
+    },
+  });
+  const other = suggestion.data;
+  if (!other) return null;
+  const otherName = other.lead_name ? `${other.title} (${other.lead_name})` : other.title;
+  const otherLink = categoryId
+    ? ({ to: "/library/$categoryId/works/$workId/$tab", params: { categoryId, workId: String(other.into_work_id), tab: "overview" } } as const)
+    : ({ to: "/works/$id/$tab", params: { id: String(other.into_work_id), tab: "overview" } } as const);
+  const preview = merge.variables === true ? merge.data : undefined;
+  return (
+    <div role="alert" className="flex flex-col gap-2 rounded-md border border-warn/40 bg-warn/10 p-3 text-sm">
+      <p>
+        {t("work.merge.heldTwice", words)}{" "}
+        <Link {...otherLink} className="font-medium underline">
+          {otherName}
+        </Link>{" "}
+        {t("work.merge.sameRelease")}
+      </p>
+      {preview && (
+        <p className="text-ink-muted">
+          {t("work.merge.preview", { ...words, files: preview.files, downloads: preview.acquisitions, other: otherName })}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {preview ? (
+          <Button variant="danger" busy={merge.isPending} onClick={() => merge.mutate(false)}>
+            {t("work.merge.confirm")}
+          </Button>
+        ) : (
+          <Button busy={merge.isPending} onClick={() => merge.mutate(true)}>
+            {t("work.merge.review")}
+          </Button>
+        )}
+        {merge.isError && <span className="text-xs text-danger">{t("work.merge.failed")}</span>}
       </div>
     </div>
   );

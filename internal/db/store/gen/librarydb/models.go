@@ -801,6 +801,12 @@ type WorkFile struct {
 	FirstSeenAt   int64
 }
 
+type WorkMergeSuggestion struct {
+	WorkID     int64
+	IntoWorkID int64
+	FoundAt    int64
+}
+
 type WorkOrganisation struct {
 	WorkID         int64
 	OrganisationID int64

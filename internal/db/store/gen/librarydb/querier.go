@@ -155,6 +155,9 @@ type Querier interface {
 	// deletes the work row only when this is zero: with files on disk the work
 	// would be recreated by the next scan, so deleting it would be a lie.
 	CountWorkFiles(ctx context.Context, workID int64) (int64, error)
+	// One work folded into another of its type: everything that pointed at the dropped work points at the kept one.
+	// Each statement moves one kind of row; Identity.MergeWork runs them in one transaction.
+	CountWorkMerge(ctx context.Context, dropID int64) (CountWorkMergeRow, error)
 	// The "parts" count for one category (ADR-54's work_part-entity navigation levels,
 	// e.g. music's Tracks): every work_part belonging to a work visible to the
 	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
@@ -251,8 +254,10 @@ type Querier interface {
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
+	DeleteWorkMergeSuggestion(ctx context.Context, workID int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
+	DeleteWorkTags(ctx context.Context, subjectID int64) error
 	DeleteWorkTitlesBySource(ctx context.Context, arg DeleteWorkTitlesBySourceParams) error
 	DequeueReady(ctx context.Context, candidateID int64) error
 	// One held release per album: a later decision replaces the earlier one.
@@ -275,6 +280,7 @@ type Querier interface {
 	// so a run in progress cannot be dismissed out from under itself. :execrows
 	// distinguishes "no such session, or still running" from "now hidden".
 	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
+	DropUnplacedItemFiles(ctx context.Context, arg DropUnplacedItemFilesParams) error
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
 	FillOrganisationDetails(ctx context.Context, arg FillOrganisationDetailsParams) error
@@ -287,6 +293,7 @@ type Querier interface {
 	// fingerprinting exists -- a fuzzy hit is never folded into this exact check
 	// (architecture.md section 5.8's own "never treated as an exact one" rule).
 	FindBlockedContentByExactHash(ctx context.Context, arg FindBlockedContentByExactHashParams) ([]BlockedContent, error)
+	FindEditionByLabel(ctx context.Context, arg FindEditionByLabelParams) (int64, error)
 	// Another edition of the same work under the same label that already has the kind a placeholder
 	// is about to take: the same release, reached by a second id.
 	FindEditionTwin(ctx context.Context, arg FindEditionTwinParams) (int64, error)
@@ -374,6 +381,7 @@ type Querier interface {
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
+	GetWorkMergeSuggestion(ctx context.Context, workID int64) (GetWorkMergeSuggestionRow, error)
 	// An import names an album it already knows by the canonical title and artist, never the tags.
 	GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
@@ -767,17 +775,33 @@ type Querier interface {
 	MergeAliasesInto(ctx context.Context, arg MergeAliasesIntoParams) error
 	MergeArtworkInto(ctx context.Context, arg MergeArtworkIntoParams) error
 	MergeCreditsInto(ctx context.Context, arg MergeCreditsIntoParams) error
+	// A file keeps covering a part only where the kept work has that part; the media type places the rest again.
+	MergeDesiredItemFiles(ctx context.Context, arg MergeDesiredItemFilesParams) error
 	MergeExternalIDsInto(ctx context.Context, arg MergeExternalIDsIntoParams) error
 	MergeLeadPersonInto(ctx context.Context, arg MergeLeadPersonIntoParams) error
 	MergeMonitoredInto(ctx context.Context, arg MergeMonitoredIntoParams) error
 	MergeSubscriptionsInto(ctx context.Context, arg MergeSubscriptionsIntoParams) error
 	MergeTagAssignmentsInto(ctx context.Context, arg MergeTagAssignmentsIntoParams) error
+	MergeWorkArrImportItems(ctx context.Context, arg MergeWorkArrImportItemsParams) error
+	// The dropped work's ids keep resolving, to the kept work, as aliases.
+	MergeWorkExternalIDs(ctx context.Context, arg MergeWorkExternalIDsParams) error
+	MergeWorkFiles(ctx context.Context, arg MergeWorkFilesParams) error
+	MergeWorkImportUnits(ctx context.Context, arg MergeWorkImportUnitsParams) error
+	MergeWorkManualIdentifications(ctx context.Context, arg MergeWorkManualIdentificationsParams) error
+	MergeWorkPackItems(ctx context.Context, arg MergeWorkPackItemsParams) error
+	MergeWorkRequests(ctx context.Context, arg MergeWorkRequestsParams) error
+	MergeWorkRootFolders(ctx context.Context, arg MergeWorkRootFoldersParams) error
+	MergeWorkTags(ctx context.Context, arg MergeWorkTagsParams) error
+	MoveAcquisitionsToItem(ctx context.Context, arg MoveAcquisitionsToItemParams) error
+	// An item the kept work has no counterpart for moves over whole, without the dropped work's edition.
+	MoveDesiredItemToWork(ctx context.Context, arg MoveDesiredItemToWorkParams) error
 	// A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
 	MoveEditionCredits(ctx context.Context, arg MoveEditionCreditsParams) error
 	MoveEditionDesiredItems(ctx context.Context, arg MoveEditionDesiredItemsParams) error
 	MoveEditionExternalIDs(ctx context.Context, arg MoveEditionExternalIDsParams) error
 	MoveEditionImportUnits(ctx context.Context, arg MoveEditionImportUnitsParams) error
 	MoveEditionPackItems(ctx context.Context, arg MoveEditionPackItemsParams) error
+	MoveEditionToWork(ctx context.Context, arg MoveEditionToWorkParams) error
 	// newest_release.
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// newest_searched.
@@ -969,6 +993,7 @@ type Querier interface {
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error
+	SuggestWorkMerge(ctx context.Context, arg SuggestWorkMergeParams) error
 	// The global counterpart to RecycledBytesForRoot, for the config.max_bytes
 	// guard (section 10.8) -- a budget across every root, not one at a time.
 	SumRecycledBytes(ctx context.Context) (int64, error)

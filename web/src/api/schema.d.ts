@@ -3574,6 +3574,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/merge-suggestion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The work this one was found to be (an album held twice), if any. Administrator only. */
+        get: operations["getWorkMergeSuggestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fold this work into another of its type. Administrator only.
+         * @description Its files, wanted state, downloads, imports, requests, tags and history move onto the other work, its ids and title become the other's aliases, and it is deleted. With preview nothing changes and the answer says what would move.
+         */
+        post: operations["mergeWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/remove": {
         parameters: {
             query?: never;
@@ -4579,6 +4616,28 @@ export interface components {
             items: components["schemas"]["Job"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        WorkMergeSuggestion: {
+            /** Format: int64 */
+            into_work_id: number;
+            title: string;
+            lead_name?: string;
+        };
+        WorkMerge: {
+            /** Format: int64 */
+            drop_id: number;
+            /** Format: int64 */
+            keep_id: number;
+            drop_title: string;
+            keep_title: string;
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            wanted_items: number;
+            /** Format: int64 */
+            acquisitions: number;
+            /** Format: int64 */
+            import_units: number;
         };
         Work: {
             /** @description The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover). */
@@ -13158,6 +13217,72 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getWorkMergeSuggestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The suggestion. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkMergeSuggestion"];
+                };
+            };
+            /** @description Nothing suggested. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    mergeWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    into: number;
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What moved, or would move. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkMerge"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     removeWork: {

@@ -97,7 +97,10 @@ func (p *process) musicModule() music.Module {
 		},
 		PicturesPass: p.artworkPass,
 	}
-	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Adder: p.musicAdder(), Pictures: p.musicPictures(), Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	realign := func(ctx context.Context, workID int64) error {
+		return music.AlignClaimedFiles(ctx, &desired, clock.NewSystem(), workID)
+	}
+	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Realign: realign, Adder: p.musicAdder(), Pictures: p.musicPictures(), Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{

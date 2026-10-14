@@ -4184,6 +4184,25 @@ type WorkGroup struct {
 // WorkGroupState defines model for WorkGroup.State.
 type WorkGroupState string
 
+// WorkMerge defines model for WorkMerge.
+type WorkMerge struct {
+	Acquisitions int64  `json:"acquisitions"`
+	DropId       int64  `json:"drop_id"`
+	DropTitle    string `json:"drop_title"`
+	Files        int64  `json:"files"`
+	ImportUnits  int64  `json:"import_units"`
+	KeepId       int64  `json:"keep_id"`
+	KeepTitle    string `json:"keep_title"`
+	WantedItems  int64  `json:"wanted_items"`
+}
+
+// WorkMergeSuggestion defines model for WorkMergeSuggestion.
+type WorkMergeSuggestion struct {
+	IntoWorkId int64   `json:"into_work_id"`
+	LeadName   *string `json:"lead_name,omitempty"`
+	Title      string  `json:"title"`
+}
+
 // WorkPage defines model for WorkPage.
 type WorkPage struct {
 	Items []Work `json:"items"`
@@ -4949,6 +4968,12 @@ type GrabWorkParams struct {
 	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
 }
 
+// MergeWorkJSONBody defines parameters for MergeWork.
+type MergeWorkJSONBody struct {
+	Into    int64 `json:"into"`
+	Preview *bool `json:"preview,omitempty"`
+}
+
 // SetWorkMonitoredJSONBody defines parameters for SetWorkMonitored.
 type SetWorkMonitoredJSONBody struct {
 	// Group A group's ref ("s03"); "" is a work's single group.
@@ -5256,6 +5281,9 @@ type ChooseWorkArtworkJSONRequestBody = ImagePick
 
 // SaveWorkEditJSONRequestBody defines body for SaveWorkEdit for application/json ContentType.
 type SaveWorkEditJSONRequestBody = WorkEdit
+
+// MergeWorkJSONRequestBody defines body for MergeWork for application/json ContentType.
+type MergeWorkJSONRequestBody MergeWorkJSONBody
 
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
@@ -5967,6 +5995,12 @@ type ServerInterface interface {
 	// Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 	// (POST /works/{id}/grab)
 	GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams)
+	// Fold this work into another of its type. Administrator only.
+	// (POST /works/{id}/merge)
+	MergeWork(w http.ResponseWriter, r *http.Request, id int64)
+	// The work this one was found to be (an album held twice), if any. Administrator only.
+	// (GET /works/{id}/merge-suggestion)
+	GetWorkMergeSuggestion(w http.ResponseWriter, r *http.Request, id int64)
 	// Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
@@ -7377,6 +7411,18 @@ func (_ Unimplemented) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id i
 // Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 // (POST /works/{id}/grab)
 func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fold this work into another of its type. Administrator only.
+// (POST /works/{id}/merge)
+func (_ Unimplemented) MergeWork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The work this one was found to be (an album held twice), if any. Administrator only.
+// (GET /works/{id}/merge-suggestion)
+func (_ Unimplemented) GetWorkMergeSuggestion(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14921,6 +14967,72 @@ func (siw *ServerInterfaceWrapper) GrabWork(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// MergeWork operation middleware
+func (siw *ServerInterfaceWrapper) MergeWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeWork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetWorkMergeSuggestion operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkMergeSuggestion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkMergeSuggestion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetWorkMonitored operation middleware
 func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -16021,6 +16133,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/grab", wrapper.GrabWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/merge", wrapper.MergeWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/merge-suggestion", wrapper.GetWorkMergeSuggestion)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)

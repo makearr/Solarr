@@ -98,3 +98,14 @@ func appendParams(entry HistoryEntry) statisticsdb.AppendHistoryParams {
 		Client: entry.Client, Detail: entry.Detail, EventID: entry.EventID,
 	}
 }
+
+// MoveWork gives one work's history to another, for a work merged into it.
+func (h History) MoveWork(ctx context.Context, fromWorkID, toWorkID int64) error {
+	err := h.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		return statisticsdb.New(tx).MoveHistoryToWork(ctx, statisticsdb.MoveHistoryToWorkParams{ToWorkID: toWorkID, FromWorkID: fromWorkID})
+	})
+	if err != nil {
+		return fmt.Errorf("statistics: move history of work %d to %d: %w", fromWorkID, toWorkID, err)
+	}
+	return nil
+}

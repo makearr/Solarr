@@ -157,6 +157,8 @@ type Config struct {
 	// DrainStarter starts and stops ADR-51's own drain. Optional: without
 	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
 	DrainStarter DrainStarter
+	// WorkMerger folds an album held twice into one. Optional: without it, MergeWork answers 503.
+	WorkMerger WorkMerger
 	// VanishedFiles reports and accepts a mass vanish a full scan held back. Optional: without it, roots report none
 	// and AcceptVanishedFiles answers 503.
 	VanishedFiles VanishedFiles
@@ -290,6 +292,7 @@ type Server struct {
 	fingerprintRetrier      FingerprintRetrier
 	drainStarter            DrainStarter
 	vanishedFiles           VanishedFiles
+	workMerger              WorkMerger
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
 	namingSchemes           NamingSchemes
@@ -396,6 +399,7 @@ func New(config Config) (*Server, error) {
 		fingerprintRetrier:      config.FingerprintRetrier,
 		drainStarter:            config.DrainStarter,
 		vanishedFiles:           config.VanishedFiles,
+		workMerger:              config.WorkMerger,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
 		namingSchemes:           config.NamingSchemes,
@@ -498,6 +502,10 @@ func New(config Config) (*Server, error) {
 			secured.Put("/tags/{id}", server.routeRenameTag)
 			secured.Delete("/tags/{id}", server.routeDeleteTag)
 			secured.Post("/works/{id}/remove", server.routeRemoveWork)
+			secured.Get("/works/{id}/merge-suggestion", func(w http.ResponseWriter, r *http.Request) {
+				server.routeWorkID(w, r, server.GetWorkMergeSuggestion)
+			})
+			secured.Post("/works/{id}/merge", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.MergeWork) })
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)
 			secured.Get("/categories/{id}/quality", server.routeGetLibraryQuality)
 			secured.Put("/categories/{id}/quality", server.routeSetLibraryQuality)

@@ -19,3 +19,6 @@ WHERE (CAST(sqlc.arg(work_id) AS INTEGER) = 0 OR work_id = sqlc.arg(work_id))
   AND (CAST(sqlc.arg(before_id) AS INTEGER) = 0 OR id < sqlc.arg(before_id))
 ORDER BY id DESC
 LIMIT sqlc.arg(page_size);
+
+-- name: MoveHistoryToWork :exec
+UPDATE history SET work_id = sqlc.arg(to_work_id) WHERE work_id = sqlc.arg(from_work_id);

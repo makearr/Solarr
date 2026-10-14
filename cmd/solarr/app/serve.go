@@ -797,7 +797,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			},
 			Cache: p.cache,
 		},
-		VanishedFiles:  p.vanishedFiles(),
+		VanishedFiles: p.vanishedFiles(),
+		WorkMerger: adapters.WorkMerger{
+			Identity: library.NewIdentity(p.library), History: statistics.NewHistory(p.statistics), Registry: p.media, Logger: p.logger,
+		},
 		MoveJobs:       adapters.MoveJobs{MoveJobs: library.NewMoveJobs(p.library)},
 		Navigation:     adapters.MediaTypes{Registry: p.media},
 		MediaTypes:     adapters.MediaTypes{Registry: p.media},

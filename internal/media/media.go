@@ -165,6 +165,12 @@ type Refreshing interface {
 	RefreshWork(ctx context.Context, workID int64) (duplicate bool, err error)
 }
 
+// Merging is the capability of a media type that places files again on a work that took another's over.
+type Merging interface {
+	// AfterMerge places the files the kept work took over on its own parts.
+	AfterMerge(ctx context.Context, keepID int64) error
+}
+
 // ImageOption is one picture a provider offers for a work or a person.
 type ImageOption struct {
 	URL, ThumbURL, Source, Label string

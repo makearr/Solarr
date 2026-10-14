@@ -473,6 +473,11 @@ func (j *EnrichJob) chooseEdition(
 		// Refining it would enrich the other album and leave this one without an edition, every run.
 		j.logger.InfoContext(ctx, "edition choice: the release fitting the files is another album's; the two are one album held twice",
 			slog.Int64("work_id", work.WorkID), slog.Int64("other_work_id", owner), slog.Any("error", err))
+		if err == nil {
+			if err := j.identity.SuggestWorkMerge(ctx, work.WorkID, owner); err != nil {
+				j.logger.WarnContext(ctx, "merge suggestion failed", slog.Int64("work_id", work.WorkID), slog.Any("error", err))
+			}
+		}
 		return false
 	}
 	chosen := albumKey{releaseGroup: work.ReleaseGroupMBID, release: release.MBID}

@@ -39,6 +39,7 @@ type Querier interface {
 	ListHistory(ctx context.Context, arg ListHistoryParams) ([]History, error)
 	// One library's current figures of a metric.
 	ListStatRollupForCategory(ctx context.Context, arg ListStatRollupForCategoryParams) ([]StatRollup, error)
+	MoveHistoryToWork(ctx context.Context, arg MoveHistoryToWorkParams) error
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error

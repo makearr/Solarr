@@ -152,3 +152,17 @@ func (q *Queries) ListHistory(ctx context.Context, arg ListHistoryParams) ([]His
 	}
 	return items, nil
 }
+
+const moveHistoryToWork = `-- name: MoveHistoryToWork :exec
+UPDATE history SET work_id = ?1 WHERE work_id = ?2
+`
+
+type MoveHistoryToWorkParams struct {
+	ToWorkID   int64
+	FromWorkID int64
+}
+
+func (q *Queries) MoveHistoryToWork(ctx context.Context, arg MoveHistoryToWorkParams) error {
+	_, err := q.db.ExecContext(ctx, moveHistoryToWork, arg.ToWorkID, arg.FromWorkID)
+	return err
+}

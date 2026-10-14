@@ -30,6 +30,8 @@ type Module struct {
 	Pictures media.Picturing
 	// Refresh reads one album again from its sources; nil leaves it unrefreshable.
 	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
+	// Realign places an album's claimed files on its tracks; nil leaves merged files where they were.
+	Realign func(ctx context.Context, workID int64) error
 	// Rename is what renaming a music library needs; nil leaves music without a rename.
 	Rename *RenameConfig
 	// Feed is music's part of the RSS sync.
@@ -90,6 +92,14 @@ func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
 		return false, media.ErrNotWired
 	}
 	return m.Refresh(ctx, workID)
+}
+
+// AfterMerge implements media.Merging: the files an album took over are placed on its own tracklist.
+func (m Module) AfterMerge(ctx context.Context, keepID int64) error {
+	if m.Realign == nil {
+		return nil
+	}
+	return m.Realign(ctx, keepID)
 }
 
 // HuntSearch implements media.Hunting.

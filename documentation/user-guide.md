@@ -232,6 +232,9 @@ Files a library scan could not identify wait under **Library → Music → Unide
 - **Storage → Root folders** groups the roots under their library; a root folder belongs to at most one.
   Each card carries the policy (read only, allow rename, reserve), capacity, and **Preview rename / drain**
   to move files off a disk.
+- **An album held twice** (the same release found under two albums, for example after MusicBrainz merged two release
+  groups) shows a warning on its page naming the other one. **Merge into it…** shows what moves; **Merge** moves its files,
+  wanted state, downloads and history onto the other album, keeps its name and old ids as the other's aliases, and removes it.
 - **A file you delete** is noticed by the next **full** scan: its album or season is missing again and searched for, unless
   the library unmonitors deleted files. If a full scan finds a great many files of a root gone at once (more than 50 and
   more than one in twenty), it marks none of them and the bell says so: a disk that was not mounted is not a deleted
