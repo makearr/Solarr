@@ -789,7 +789,7 @@ func TestCommitUnit_KeepsTheSourceFileNameWhenRenamingIsOff(t *testing.T) {
 // album-wide one keeps its name in the album folder, and nothing already there is overwritten.
 func TestCommitUnit_BringsListedExtraFilesAlong(t *testing.T) {
 	committer, _, fsys := newCommitterWith(t, true, func(config *music.CommitterConfig) {
-		config.ExtraFiles = func() []string { return []string{"lrc", "cue"} }
+		config.ExtraFiles = func(int64) []string { return []string{"lrc", "cue"} }
 	})
 
 	track := []byte("airbag bytes")

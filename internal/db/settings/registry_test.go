@@ -103,7 +103,6 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyBackupRetention, settings.KeyBackupKeepCount, settings.KeyBackupKeepDays,
 		settings.KeyImportAutoCommitConfidence, settings.KeyImportTransferLadder,
 		settings.KeyImportRenameOnImport,
-		settings.KeyImportExtraFiles, settings.KeyImportExtraFileExtensions,
 		settings.KeyNetworkPort, settings.KeyNetworkProxyEnabled, settings.KeyNetworkProxyURL,
 		settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRsEnabled, settings.KeyNetworkAllowCIDRs,
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,

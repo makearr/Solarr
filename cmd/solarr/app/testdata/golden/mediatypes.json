@@ -10,6 +10,7 @@
         "label": "Artists"
       }
     ],
+    "commit_guess_floor": 0,
     "commits_held_imports": true,
     "duplicates_by_name": true,
     "facets": [
@@ -209,6 +210,7 @@
         "label": "Series"
       }
     ],
+    "commit_guess_floor": 0.75,
     "commits_held_imports": true,
     "duplicates_by_name": false,
     "facets": [

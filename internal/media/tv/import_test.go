@@ -220,6 +220,11 @@ func TestCommitHeldPlacesAUnitAsTheSeriesNamedAndRefusesWhatAddsNothing(t *testi
 	}
 
 	named.As = &batch.Named{Provider: tv.ProviderTVDB, ExternalID: "1234"}
+	guessed := named
+	guessed.Guess = tv.GuessFloor - 0.01
+	if _, err := importer.CommitHeld(t.Context(), guessed); !errors.Is(err, batch.ErrGuessTooWeak) {
+		t.Fatalf("a guess below the floor: %v, want batch.ErrGuessTooWeak", err)
+	}
 	placement, err := importer.CommitHeld(t.Context(), named)
 	if err != nil || placement.WorkID == 0 || len(placement.MediaObjectIDs) != 1 {
 		t.Fatalf("placement = %+v, %v; want the one episode placed in the series added for it", placement, err)
@@ -273,7 +278,7 @@ func TestImportBringsAlongTheSubtitlesNamedAfterAnEpisode(t *testing.T) {
 		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
 		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
 		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
-		Categories: categories{}, Clock: fake, ExtraFiles: func() []string { return []string{"srt"} },
+		Categories: categories{}, Clock: fake, ExtraFiles: func(int64) []string { return []string{"srt"} },
 	})
 	result, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{1}})
 	if err != nil || result.Placements[0] == nil {

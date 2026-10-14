@@ -155,6 +155,36 @@ export function LibraryFileManagement() {
         )}
       </section>
 
+      <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
+        <h2 className="text-sm font-medium">Importing</h2>
+        <Toggle
+          label="Import Extra Files"
+          help={
+            isTV
+              ? "Bring files named after an episode along with it, such as its subtitles, under the episode's new name."
+              : "Bring matching files along with the tracks: lyrics, cue sheets, rip logs."
+          }
+          checked={draft.import_extra_files ?? false}
+          onChange={(checked) => set({ import_extra_files: checked })}
+        />
+        {draft.import_extra_files && (
+          <SettingRow
+            label="Extra File Extensions"
+            help={
+              isTV
+                ? "Comma separated, such as srt,ass. A subtitle keeps what follows the episode's name (.en.srt)."
+                : "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs."
+            }
+          >
+            <input
+              value={(draft.extra_file_extensions ?? []).join(",")}
+              onChange={(event) => set({ extra_file_extensions: event.target.value.split(",") })}
+              className={`${inputStyle} w-44 font-mono`}
+            />
+          </SettingRow>
+        )}
+      </section>
+
       {advanced && (
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Permissions</h2>

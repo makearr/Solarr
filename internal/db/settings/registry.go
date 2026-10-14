@@ -197,18 +197,6 @@ func NewDefaultRegistry() *Registry {
 		Default: `["reflink","hardlink","move","copy"]`,
 	})
 	registry.MustRegister(SettingDef{
-		Key: KeyImportExtraFiles, Kind: KindBool, Tier: TierNormal,
-		Name:     "Import extra files",
-		HelpText: "Bring files with the listed extensions along with the tracks or episodes they are named after, as Lidarr and Sonarr do.",
-		Default:  "false",
-	})
-	registry.MustRegister(SettingDef{
-		Key: KeyImportExtraFileExtensions, Kind: KindStringList, Tier: TierNormal,
-		Name:     "Extra file extensions",
-		HelpText: "Comma separated, such as lrc,cue,log,nfo,srt.",
-		Default:  `["lrc","cue","log","nfo","srt"]`,
-	})
-	registry.MustRegister(SettingDef{
 		Key: KeyImportRenameOnImport, Kind: KindBool, Tier: TierNormal,
 		Name: "Rename on import",
 		HelpText: "On, an imported file is named by the library's own template; " +

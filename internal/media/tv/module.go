@@ -148,8 +148,15 @@ func (Module) Descriptor() media.Descriptor {
 		// The consumer refuses to add an excluded series (Service.excluded).
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
+		// Sonarr brings subtitles along; a hand-named folder guessed below this is named by a person instead.
+		ExtraFiles: media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
+		GuessFloor: GuessFloor,
 	}
 }
+
+// GuessFloor is the least confidence a held folder's guessed series is placed at by "Commit anyway": a folder named by
+// hand guesses wrongly at 60% (seen: "my recordings" took a series with "Recordings" in its name).
+const GuessFloor = 0.75
 
 // NamingScheme implements media.Naming.
 func (Module) NamingScheme() naming.Scheme { return NamingScheme }

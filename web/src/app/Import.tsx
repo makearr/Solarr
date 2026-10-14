@@ -99,7 +99,6 @@ export function Import() {
           <TransferLadderControl />
           <div className="flex flex-col gap-6">
             <RenameOnImportControl />
-            <ExtraFilesControl />
           </div>
         </div>
       </section>
@@ -172,88 +171,6 @@ function RenameOnImportControl() {
         </span>
       </label>
       {update.isError && <p className="text-danger">That could not be changed.</p>}
-    </fieldset>
-  );
-}
-
-/** Lidarr's "Import Extra Files" and its extension list: sidecars travel with the tracks. */
-function ExtraFilesControl() {
-  const queryClient = useQueryClient();
-  const settings = useQuery({
-    queryKey: ["import-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
-  const [draft, setDraft] = useState<string | null>(null);
-
-  const update = useMutation({
-    mutationFn: async (body: { extra_files?: boolean; extra_file_extensions?: string[] }) => {
-      const { error } = await api.PATCH("/import/settings", {
-        body: { auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9, ...body },
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      setDraft(null);
-      void queryClient.invalidateQueries({ queryKey: ["import-settings"] });
-    },
-  });
-
-  if (!settings.data) return null;
-  const enabled = settings.data.extra_files ?? false;
-  const saved = (settings.data.extra_file_extensions ?? []).join(",");
-  const shown = draft ?? saved;
-
-  return (
-    <fieldset className="flex flex-col gap-1.5 border-0 p-0 text-xs">
-      <legend className="mb-1 p-0 text-sm font-medium text-ink">Extra files</legend>
-      <label className="flex items-start gap-2">
-        <input
-          type="checkbox"
-          className="mt-0.5"
-          checked={enabled}
-          disabled={update.isPending}
-          onChange={(event) => update.mutate({ extra_files: event.target.checked })}
-        />
-        <span className="flex flex-col">
-          <span className="text-ink">Import extra files</span>
-          <span className="text-[0.6875rem] text-ink-muted">
-            Bring matching files along with the tracks: lyrics, cue sheets, rip logs.
-          </span>
-        </span>
-      </label>
-      {enabled && (
-        <label className="flex flex-col gap-1">
-          <span className="text-ink">Extensions</span>
-          <span className="flex items-center gap-1.5">
-            <input
-              value={shown}
-              disabled={update.isPending}
-              onChange={(event) => setDraft(event.target.value)}
-              placeholder="lrc,cue,log,nfo,srt"
-              className="w-44 rounded-md border border-border-subtle bg-canvas px-1.5 py-1 font-mono text-xs text-ink
-                         focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-            />
-            {draft !== null && draft !== saved && (
-              <button
-                type="button"
-                disabled={update.isPending}
-                onClick={() => update.mutate({ extra_file_extensions: draft.split(",") })}
-                className="rounded-md bg-accent px-2 py-0.5 text-accent-ink disabled:opacity-50"
-              >
-                Save
-              </button>
-            )}
-          </span>
-          <span className="text-[0.6875rem] text-ink-muted">
-            Comma separated. A file named like a track takes the track&apos;s new name; others keep theirs.
-          </span>
-        </label>
-      )}
-      {update.isError && <p className="text-danger">Refused: extensions are letters and digits, such as lrc.</p>}
     </fieldset>
   );
 }
@@ -1173,7 +1090,11 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
   const queryClient = useQueryClient();
   const library = useLibrary(categoryId === null ? undefined : String(categoryId));
   // Only a type whose held units are committed by hand offers Commit anyway and Identify as.
-  const commitsHeld = useMediaTypes().find((type) => type.key === library?.media_type)?.commits_held_imports === true;
+  const mediaType = useMediaTypes().find((type) => type.key === library?.media_type);
+  const commitsHeld = mediaType?.commits_held_imports === true;
+  // Below the type's floor a guess is named by a person (Identify as), never placed as it stands.
+  const topGuess = Math.max(0, ...(unit.candidates ?? []).map((candidate) => candidate.confidence));
+  const guessPlaceable = unit.work_id != null || topGuess >= (mediaType?.commit_guess_floor ?? 0);
 
   const commit = useMutation({
     mutationFn: async (as?: IdentityChoice) => {
@@ -1215,7 +1136,7 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
             <span className="text-ink-muted">{describeTransfer(unit.transfer_methods!)}</span>
           )}
         </button>
-        {commitsHeld && unit.decision === "QUEUE" && ((unit.candidates?.length ?? 0) > 0 || unit.work_id != null) && (
+        {commitsHeld && unit.decision === "QUEUE" && ((unit.candidates?.length ?? 0) > 0 || unit.work_id != null) && guessPlaceable && (
           <button
             type="button"
             onClick={() => commit.mutate()}

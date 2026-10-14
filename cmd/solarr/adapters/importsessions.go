@@ -221,6 +221,8 @@ func (a ImportSessions) CommitImportUnit(
 			return apiserver.ImportUnitRow{}, apiserver.ErrNotBuiltForMediaType
 		case errors.Is(err, batch.ErrNothingToPlace):
 			return apiserver.ImportUnitRow{}, fmt.Errorf("%w: every episode in this folder is already in the library, or none is an episode of that series", apiserver.ErrInvalidChoice)
+		case errors.Is(err, batch.ErrGuessTooWeak):
+			return apiserver.ImportUnitRow{}, fmt.Errorf("%w: the best guess is too weak to place on its own; say what it is with Identify as", apiserver.ErrInvalidChoice)
 		case errors.Is(err, tv.ErrNotASeriesID):
 			return apiserver.ImportUnitRow{}, fmt.Errorf("%w: that is not a series id", apiserver.ErrInvalidChoice)
 		default:

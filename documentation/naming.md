@@ -44,7 +44,8 @@ screen's rename checkbox can only turn renaming off for one import, never overri
 
 ## Extra files
 
-Lidarr's "Import Extra Files", on the Import screen: off by default, extensions `lrc,cue,log,nfo`.
+Lidarr's and Sonarr's "Import Extra Files", per library under File management -> Importing: each media type
+declares its own default (`media.Descriptor.ExtraFiles`): music off with `lrc,cue,log,nfo`, TV on with `srt`.
 Only files inspect did not class as media are considered. A file whose name matches a track's
 (case-insensitive, without extension) takes that track's new name with its own extension; any
 other goes to the folder the tracks beside it went to, under its own name. An existing file is

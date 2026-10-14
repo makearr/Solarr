@@ -6998,6 +6998,10 @@ components:
               label: { type: string }
         wanted_grain: { type: string, enum: [work, part], description: "What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts)." }
         commits_held_imports: { type: boolean, description: "A held import unit is committed by hand, anyway or as a work named (Identify as)." }
+        commit_guess_floor:
+          type: number
+          format: double
+          description: The least confidence "Commit anyway" places a held unit's best guess at; below it the unit is named with Identify as. 0 takes any.
         duplicates_by_name: { type: boolean, description: "A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part." }
 
     MediaType:
@@ -9149,6 +9153,19 @@ components:
                  delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
                  merge_artist_aliases, set_permissions, chmod_folder, chown_group]
       properties:
+        import_extra_files:
+          type: boolean
+          description: >-
+            Sonarr's and Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks or
+            episodes they are named after. Each library starts with its media type's choice (TV on, for subtitles).
+            Omitted on a save keeps what is stored.
+        extra_file_extensions:
+          type: array
+          description: >-
+            Extensions without the dot, such as srt. A file named like a track follows the track's new name; any other
+            keeps its own name in the album folder. In a TV library only a file named after an episode comes along,
+            keeping what follows the name (".en.srt"). Omitted on a save keeps what is stored.
+          items: { type: string }
         propers_repacks:
           type: string
           enum: [prefer_and_upgrade, do_not_upgrade, do_not_prefer]
@@ -9229,20 +9246,6 @@ components:
             (on, the default) or keeps the name it arrived with. The folder
             structure comes from the template either way. Omitted on a PATCH
             leaves the stored value alone.
-        extra_files:
-          type: boolean
-          description: >-
-            Lidarr's "Import Extra Files": bring files with the listed extensions
-            along with the tracks. Off by default. Omitted leaves it alone.
-        extra_file_extensions:
-          type: array
-          description: >-
-            Extensions without the dot, such as lrc, cue, log, nfo, srt (the default).
-            A file named like a track follows the track's new name; any other keeps
-            its own name in the album folder. In a TV library only a file named after
-            an episode comes along (its subtitles), keeping what follows the name
-            (".en.srt"). Omitted leaves the list alone.
-          items: { type: string }
 
     TransferMethod:
       type: string

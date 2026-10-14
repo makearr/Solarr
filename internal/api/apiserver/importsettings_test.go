@@ -87,7 +87,7 @@ func TestUpdateImportSettings_LeavesTheThresholdAloneWhenItIsNotSent(t *testing.
 	if recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"auto_commit_confidence":0.85}`)); recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
-	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"extra_files":true}`))
+	recorder := fixture.do(authedPatch(t, cookies, "/api/v1/import/settings", `{"rename_on_import":false}`))
 	var body importSettingsBody
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil || recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, %v, body = %s", recorder.Code, err, recorder.Body)

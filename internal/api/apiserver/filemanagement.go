@@ -32,7 +32,7 @@ func (s *Server) GetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, fileManagementView(category.FileManagement))
+	writeJSON(w, s.logger, http.StatusOK, s.fileManagementView(category))
 }
 
 // SetLibraryFileManagement saves them; every problem is reported at once and nothing is saved.
@@ -56,6 +56,13 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		DeleteEmptyFolders: body.DeleteEmptyFolders, CreateEmptyArtistFolders: body.CreateEmptyArtistFolders,
 		UnmonitorDeleted: body.UnmonitorDeleted, MergeArtistAliases: body.MergeArtistAliases, SetPermissions: body.SetPermissions,
 		ChmodFolder: body.ChmodFolder, ChownGroup: body.ChownGroup, Tagging: category.FileManagement.Tagging,
+		ExtraFiles: category.FileManagement.ExtraFiles,
+	}
+	if body.ImportExtraFiles != nil {
+		wanted.ExtraFiles.Import = body.ImportExtraFiles
+	}
+	if body.ExtraFileExtensions != nil {
+		wanted.ExtraFiles.Extensions = *body.ExtraFileExtensions
 	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
 		var problems config.Problems
@@ -67,11 +74,22 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, fileManagementView(wanted))
+	category.FileManagement = wanted
+	writeJSON(w, s.logger, http.StatusOK, s.fileManagementView(category))
 }
 
-func fileManagementView(f settings.FileManagement) gen.FileManagement {
+func (s *Server) fileManagementView(category settings.Category) gen.FileManagement {
+	f := category.FileManagement
+	var defaults settings.ExtraFiles
+	if info, found := s.mediaTypeInfo(category.MediaType); found {
+		defaults = info.ExtraFiles
+	}
+	extrasOn, extensions := f.ExtraFiles.Resolve(defaults.Import != nil && *defaults.Import, defaults.Extensions)
+	if extensions == nil {
+		extensions = []string{}
+	}
 	return gen.FileManagement{
+		ImportExtraFiles: &extrasOn, ExtraFileExtensions: &extensions,
 		PropersRepacks:     gen.FileManagementPropersRepacks(f.PropersRepacks),
 		RescanAfterRefresh: gen.FileManagementRescanAfterRefresh(f.RescanAfterRefresh),
 		ChangeFileDate:     gen.FileManagementChangeFileDate(f.ChangeFileDate), RecycleRetentionDays: f.RecycleRetentionDays,

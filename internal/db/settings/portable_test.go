@@ -694,10 +694,12 @@ func TestDocument_RoundTrips_IncludesFileManagement(t *testing.T) {
 	cache, _ := newCache(t)
 	music := mustCategory(t, cache, "music", "Music", 10)
 	mustCategory(t, cache, "music", "Untouched", 20)
+	extrasOn := true
 	wanted := settings.FileManagement{
 		PropersRepacks: settings.PropersDoNotPrefer, RescanAfterRefresh: settings.RescanNever,
 		ChangeFileDate: settings.FileDateReleaseDate, RecycleRetentionDays: 30, DeleteEmptyFolders: true,
 		CreateEmptyArtistFolders: true, UnmonitorDeleted: true, SetPermissions: true, ChmodFolder: "775", ChownGroup: "media",
+		ExtraFiles: settings.ExtraFiles{Import: &extrasOn, Extensions: []string{"srt", "ass"}},
 	}
 	if err := cache.SetCategoryFileManagement(t.Context(), music.ID, wanted); err != nil {
 		t.Fatalf("SetCategoryFileManagement: %v", err)
@@ -726,7 +728,7 @@ func TestDocument_RoundTrips_IncludesFileManagement(t *testing.T) {
 		if category.Name == "Music" {
 			want = wanted
 		}
-		if category.FileManagement != want {
+		if !reflect.DeepEqual(category.FileManagement, want) {
 			t.Errorf("%s after restore = %+v, want %+v", category.Name, category.FileManagement, want)
 		}
 	}

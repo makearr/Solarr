@@ -130,6 +130,20 @@ func (m MediaTypes) CommitsHeldImports(mediaType string) bool {
 	return ok && module.Descriptor().CommitsHeldImports
 }
 
+// ExtraFileExtensions answers what import brings along into a library, none while its switch is off.
+func (m MediaTypes) ExtraFileExtensions(category settings.Category) []string {
+	module, ok := m.Registry.Module(media.Key(category.MediaType))
+	if !ok {
+		return nil
+	}
+	defaults := module.Descriptor().ExtraFiles
+	on, extensions := category.FileManagement.ExtraFiles.Resolve(defaults.Import, defaults.Extensions)
+	if !on {
+		return nil
+	}
+	return extensions
+}
+
 // DuplicatesByName says whether a library's type matches duplicates by name.
 func (m MediaTypes) DuplicatesByName(mediaType string) bool {
 	module, ok := m.Registry.Module(media.Key(mediaType))
@@ -203,6 +217,8 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		}
 		info.CommitsHeldImports = descriptor.CommitsHeldImports
 		info.DuplicatesByName = descriptor.DuplicatesByName
+		info.ExtraFiles = settings.ExtraFiles{Import: &descriptor.ExtraFiles.Import, Extensions: descriptor.ExtraFiles.Extensions}
+		info.GuessFloor = descriptor.GuessFloor
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {
 			info.WantedGrain = "part"

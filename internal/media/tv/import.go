@@ -71,8 +71,9 @@ type ImporterConfig struct {
 	Clock          clock.Clock
 	Logger         *slog.Logger
 	TransferLadder func() []mover.PlaceMethod
-	// ExtraFiles lists the extensions of files brought along with the episode they are named after; nil brings none.
-	ExtraFiles     func() []string
+	// ExtraFiles lists the extensions of files brought along into a library with the episode they are named after; nil
+	// brings none.
+	ExtraFiles     func(categoryID int64) []string
 	RenameOnImport func() bool
 	GroupID        func(name string) (int, error)
 	// BelowCutoff says an owned file misses its library's cutoff, so a download may replace it; nil lets any owned
@@ -158,6 +159,9 @@ var ErrNotASeriesID = errors.New("tv: that is not a series id")
 // CommitHeld implements batch.HeldCommitter: the unit goes to the series named, else the one it resolved to.
 func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (library.Placement, error) {
 	workID := request.WorkID
+	if request.As != nil && request.Guess > 0 && request.Guess < GuessFloor {
+		return library.Placement{}, batch.ErrGuessTooWeak
+	}
 	if request.As != nil {
 		id, err := strconv.ParseInt(request.As.ExternalID, 10, 64)
 		if err != nil || id <= 0 {
@@ -320,7 +324,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return undo(err)
 	}
 
-	placement := &library.Placement{WorkID: workID, Extras: i.placeExtras(request.SourcePath, destRoot, unit, placed, methods)}
+	placement := &library.Placement{WorkID: workID, Extras: i.placeExtras(request.CategoryID, request.SourcePath, destRoot, unit, placed, methods)}
 	for index, p := range placed {
 		placement.MediaObjectIDs = append(placement.MediaObjectIDs, registered[index].MediaObjectID)
 		placement.LibraryPathIDs = append(placement.LibraryPathIDs, registered[index].LibraryPathID)
@@ -333,13 +337,13 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 // all (Sonarr's rule): each keeps what follows the episode's name (".en.srt") under the episode's new name. A file
 // already there is left, and one that cannot be placed is logged, never the import's failure.
 func (i Importer) placeExtras(
-	sourceRoot string, destRoot settings.RootFolder, unit inspect.Unit, placed []placedEpisode, methods []mover.PlaceMethod,
+	categoryID int64, sourceRoot string, destRoot settings.RootFolder, unit inspect.Unit, placed []placedEpisode, methods []mover.PlaceMethod,
 ) []library.UnitExtra {
 	if i.config.ExtraFiles == nil {
 		return nil
 	}
 	wanted := map[string]bool{}
-	for _, extension := range i.config.ExtraFiles() {
+	for _, extension := range i.config.ExtraFiles(categoryID) {
 		wanted["."+strings.ToLower(extension)] = true
 	}
 	var extras []library.UnitExtra

@@ -85,6 +85,8 @@ type CategoryFileManagement struct {
 	EmbedCoverInTags         int64
 	MergeArtistAliases       int64
 	NavidromeProfile         int64
+	ImportExtraFiles         sql.NullInt64
+	ExtraFileExtensions      sql.NullString
 }
 
 type CategoryQualityProfile struct {

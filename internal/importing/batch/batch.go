@@ -52,7 +52,12 @@ type HeldRequest struct {
 	WorkID int64
 	// As is the work a person named instead; nil places the unit as resolved.
 	As *Named
+	// Guess is As's confidence when As is the import's own best guess ("Commit anyway"), not a person's; 0 otherwise.
+	Guess float64
 }
+
+// ErrGuessTooWeak is "Commit anyway" on a guess the media type will not place without a person naming the work.
+var ErrGuessTooWeak = errors.New("batch: the best guess is too weak to place; say what it is with Identify as")
 
 // ErrUnresolved is a held unit that resolved to no work and was given none.
 var ErrUnresolved = errors.New("batch: the unit was matched to nothing; say what it is")

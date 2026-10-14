@@ -4470,6 +4470,11 @@ export interface components {
             wanted_grain: "work" | "part";
             /** @description A held import unit is committed by hand, anyway or as a work named (Identify as). */
             commits_held_imports: boolean;
+            /**
+             * Format: double
+             * @description The least confidence "Commit anyway" places a held unit's best guess at; below it the unit is named with Identify as. 0 takes any.
+             */
+            commit_guess_floor?: number;
             /** @description A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part. */
             duplicates_by_name: boolean;
         };
@@ -6202,6 +6207,10 @@ export interface components {
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
+            /** @description Sonarr's and Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks or episodes they are named after. Each library starts with its media type's choice (TV on, for subtitles). Omitted on a save keeps what is stored. */
+            import_extra_files?: boolean;
+            /** @description Extensions without the dot, such as srt. A file named like a track follows the track's new name; any other keeps its own name in the album folder. In a TV library only a file named after an episode comes along, keeping what follows the name (".en.srt"). Omitted on a save keeps what is stored. */
+            extra_file_extensions?: string[];
             /** @enum {string} */
             propers_repacks: "prefer_and_upgrade" | "do_not_upgrade" | "do_not_prefer";
             /** @enum {string} */
@@ -6246,10 +6255,6 @@ export interface components {
             transfer_ladder?: components["schemas"]["TransferMethod"][];
             /** @description Whether a committed file is named by the library's own template (on, the default) or keeps the name it arrived with. The folder structure comes from the template either way. Omitted on a PATCH leaves the stored value alone. */
             rename_on_import?: boolean;
-            /** @description Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks. Off by default. Omitted leaves it alone. */
-            extra_files?: boolean;
-            /** @description Extensions without the dot, such as lrc, cue, log, nfo, srt (the default). A file named like a track follows the track's new name; any other keeps its own name in the album folder. In a TV library only a file named after an episode comes along (its subtitles), keeping what follows the name (".en.srt"). Omitted leaves the list alone. */
-            extra_file_extensions?: string[];
         };
         /**
          * @description How import gets a file into the library. reflink clones it copy-on-write, sharing disk blocks but presenting as an independent file; hardlink makes a second directory entry for the same bytes; move renames it, or copies and deletes the source when it cannot; copy writes independent bytes; symlink leaves the library pointing at the source. Only reflink and hardlink avoid using more disk space, only move removes the source, and only symlink leaves the library dependent on it.

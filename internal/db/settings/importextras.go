@@ -1,42 +1,36 @@
 package settings
 
 import (
-	"context"
+	"database/sql"
 	"encoding/json"
 	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
-
-// Lidarr's "Import Extra Files" and its extension list, off by default like Lidarr (2026-09-24).
-const (
-	KeyImportExtraFiles          = "import.extra_files"
-	KeyImportExtraFileExtensions = "import.extra_file_extensions"
-)
-
-// DefaultImportExtraFileExtensions are lyrics, cue sheets, rip logs, release notes and subtitles.
-var DefaultImportExtraFileExtensions = []string{"lrc", "cue", "log", "nfo", "srt"}
 
 const maxImportExtraFileExtensions = 32
 
 var extraFileExtensionPattern = regexp.MustCompile(`^[a-z0-9]{1,10}$`)
 
-// ImportExtraFiles is whether import brings sidecars along, and which.
-type ImportExtraFiles struct {
-	Enabled    bool
+// ExtraFiles is a library's "Import Extra Files" (Sonarr's, Lidarr's): whether import brings the files named after a
+// track or episode along, and which. A nil field takes its media type's default.
+type ExtraFiles struct {
+	Import     *bool
 	Extensions []string
 }
 
-// ImportExtraFiles reads the switch and the list; an absent list is the default one.
-func (s *Snapshot) ImportExtraFiles() ImportExtraFiles {
-	return ImportExtraFiles{
-		Enabled:    s.policyBool(KeyImportExtraFiles, false),
-		Extensions: s.policyStringListOr(KeyImportExtraFileExtensions, DefaultImportExtraFileExtensions),
+// Resolve answers the switch and the list, the media type's own where the library set none.
+func (e ExtraFiles) Resolve(defaultOn bool, defaultExtensions []string) (bool, []string) {
+	on, extensions := defaultOn, defaultExtensions
+	if e.Import != nil {
+		on = *e.Import
 	}
+	if e.Extensions != nil {
+		extensions = e.Extensions
+	}
+	return on, extensions
 }
 
 // NormaliseExtraFileExtensions turns "LRC, .cue" into [lrc cue], dropping blanks and repeats.
@@ -54,42 +48,46 @@ func NormaliseExtraFileExtensions(extensions []string) []string {
 	return normalised
 }
 
-func validateImportExtraFileExtensions(extensions []string) config.Problems {
+func validateExtraFileExtensions(extensions []string) config.Problems {
+	const path = "extra_file_extensions"
 	if len(extensions) > maxImportExtraFileExtensions {
-		return config.Problems{{Path: KeyImportExtraFileExtensions, Value: strconv.Itoa(len(extensions)),
-			Expectation: "at most 32 extensions"}}
+		return config.Problems{{Path: path, Value: strconv.Itoa(len(extensions)), Expectation: "at most 32 extensions"}}
 	}
 	var problems config.Problems
 	for _, extension := range extensions {
 		if !extraFileExtensionPattern.MatchString(extension) {
-			problems = append(problems, config.Problem{Path: KeyImportExtraFileExtensions, Value: extension,
-				Expectation: "an extension of letters and digits, such as lrc"})
+			problems = append(problems, config.Problem{Path: path, Value: extension,
+				Expectation: "an extension of letters and digits, such as srt"})
 		}
 	}
 	return problems
 }
 
-// SetImportExtraFiles writes both in one transaction (ADR-44: validated on write).
-func (c *Cache) SetImportExtraFiles(ctx context.Context, cl clock.Clock, extras ImportExtraFiles) error {
-	extensions := NormaliseExtraFileExtensions(extras.Extensions)
-	if problems := validateImportExtraFileExtensions(extensions); len(problems) > 0 {
-		return problems
+func encodeExtraFiles(e ExtraFiles) (onColumn sql.NullInt64, extensionsColumn sql.NullString, err error) {
+	if e.Import != nil {
+		onColumn = sql.NullInt64{Int64: boolToInt(*e.Import), Valid: true}
 	}
-	encoded, err := json.Marshal(extensions)
-	if err != nil {
-		return err
-	}
-	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		for key, value := range map[string]string{
-			KeyImportExtraFiles: boolPolicy(extras.Enabled), KeyImportExtraFileExtensions: string(encoded),
-		} {
-			err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
-				Key: key, ValueJson: value, UpdatedAt: cl.Now().Unix(),
-			})
-			if err != nil {
-				return err
-			}
+	if e.Extensions != nil {
+		encoded, err := json.Marshal(e.Extensions)
+		if err != nil {
+			return onColumn, extensionsColumn, err
 		}
-		return nil
-	})
+		extensionsColumn = sql.NullString{String: string(encoded), Valid: true}
+	}
+	return onColumn, extensionsColumn, nil
+}
+
+func decodeExtraFiles(onColumn sql.NullInt64, extensionsColumn sql.NullString) ExtraFiles {
+	var extras ExtraFiles
+	if onColumn.Valid {
+		on := onColumn.Int64 == 1
+		extras.Import = &on
+	}
+	if extensionsColumn.Valid {
+		var extensions []string
+		if json.Unmarshal([]byte(extensionsColumn.String), &extensions) == nil {
+			extras.Extensions = NormaliseExtraFileExtensions(extensions)
+		}
+	}
+	return extras
 }

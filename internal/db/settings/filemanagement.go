@@ -60,6 +60,8 @@ type FileManagement struct {
 	ChownGroup string
 	// Tagging is what the tag writer puts into this library's files; shown beside naming.
 	Tagging Tagging
+	// ExtraFiles is what import brings along with the files it places.
+	ExtraFiles ExtraFiles
 }
 
 // Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
@@ -87,6 +89,17 @@ var (
 	chmodPattern = regexp.MustCompile(`^0?[0-7]{3}$`)
 	groupPattern = regexp.MustCompile(`^([0-9]+|[a-z_][a-z0-9_.-]{0,31})$`)
 )
+
+// IsDefault reports a library still on Sonarr's defaults and its media type's extra files.
+func (f FileManagement) IsDefault() bool {
+	d := DefaultFileManagement
+	return f.PropersRepacks == d.PropersRepacks && f.RescanAfterRefresh == d.RescanAfterRefresh &&
+		f.ChangeFileDate == d.ChangeFileDate && f.RecycleRetentionDays == d.RecycleRetentionDays &&
+		f.DeleteEmptyFolders == d.DeleteEmptyFolders && f.CreateEmptyArtistFolders == d.CreateEmptyArtistFolders &&
+		f.UnmonitorDeleted == d.UnmonitorDeleted && f.MergeArtistAliases == d.MergeArtistAliases &&
+		f.SetPermissions == d.SetPermissions && f.ChmodFolder == d.ChmodFolder && f.ChownGroup == d.ChownGroup &&
+		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil
+}
 
 // FolderMode is ChmodFolder as a mode; FileMode drops the execute bits, as Sonarr does.
 func (f FileManagement) FolderMode() fs.FileMode {
@@ -135,13 +148,16 @@ func validateFileManagement(f FileManagement) config.Problems {
 		problems = append(problems, config.Problem{Path: "chown_group", Value: f.ChownGroup,
 			Expectation: "a group name or number"})
 	}
-	return problems
+	return append(problems, validateExtraFileExtensions(f.ExtraFiles.Extensions)...)
 }
 
 // SetCategoryFileManagement writes one library's file management (ADR-44: validated on write).
 func (c *Cache) SetCategoryFileManagement(ctx context.Context, categoryID int64, f FileManagement) error {
 	if _, found := c.Snapshot().Category(categoryID); !found {
 		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
+	}
+	if f.ExtraFiles.Extensions != nil {
+		f.ExtraFiles.Extensions = NormaliseExtraFileExtensions(f.ExtraFiles.Extensions)
 	}
 	if problems := validateFileManagement(f); len(problems) > 0 {
 		return problems
@@ -152,6 +168,10 @@ func (c *Cache) SetCategoryFileManagement(ctx context.Context, categoryID int64,
 }
 
 func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Queries, categoryID int64, f FileManagement) error {
+	extrasOn, extensions, err := encodeExtraFiles(f.ExtraFiles)
+	if err != nil {
+		return err
+	}
 	return queries.UpsertCategoryFileManagement(ctx, settingsdb.UpsertCategoryFileManagementParams{
 		CategoryID: categoryID, PropersRepacks: string(f.PropersRepacks),
 		RescanAfterRefresh: string(f.RescanAfterRefresh), ChangeFileDate: string(f.ChangeFileDate),
@@ -162,6 +182,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		WriteMetadataToTags: boolToInt(f.Tagging.WriteMetadata), EmbedCoverInTags: boolToInt(f.Tagging.EmbedCover),
 		NavidromeProfile:   boolToInt(f.Tagging.Navidrome),
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
+		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
 	})
 }
 
@@ -189,6 +210,7 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
 				Navidrome: row.NavidromeProfile != 0,
 			},
+			ExtraFiles: decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
 		}
 	}
 	return categories

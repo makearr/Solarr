@@ -150,6 +150,9 @@ func (m ManualCommitter) ownImporter(session library.Session) importbatch.Import
 	return m.importerFor(*session.CategoryID)
 }
 
+// minimumGuess keeps a guess of no confidence at all distinguishable from a person's naming.
+const minimumGuess = 0.001
+
 // placeHeld hands a held unit to its media type: re-walked as music's is, placed as the work named or resolved.
 func (m ManualCommitter) placeHeld(
 	ctx context.Context, session library.Session, unit library.Unit, importer importbatch.Importer, named *importbatch.Named,
@@ -178,6 +181,7 @@ func (m ManualCommitter) placeHeld(
 		// Commit anyway means the best guess for every type: here the top-ranked candidate's own id.
 		if best, err := topCandidate(unit); err == nil && best.ExternalID != nil {
 			request.As = &importbatch.Named{Provider: best.ExternalID.Provider, ExternalID: best.ExternalID.ExternalID}
+			request.Guess = max(best.Confidence, minimumGuess)
 		}
 	}
 	placement, err := committer.CommitHeld(ctx, request)

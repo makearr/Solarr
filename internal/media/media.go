@@ -96,6 +96,16 @@ type Descriptor struct {
 	// ScanHonoursExclusions says the type's scan leaves an excluded work's files out, so a work removed and excluded
 	// can go although its files stay.
 	ScanHonoursExclusions bool
+	// ExtraFiles is what import brings along with the files it places, until a library says otherwise.
+	ExtraFiles ExtraFilesDefault
+	// GuessFloor is the least confidence "Commit anyway" takes a held unit's best guess at; 0 takes any.
+	GuessFloor float64
+}
+
+// ExtraFilesDefault is a media type's "Import Extra Files" for a library that has not chosen.
+type ExtraFilesDefault struct {
+	Import     bool
+	Extensions []string
 }
 
 // ImageShape is the shape of an entity's picture.

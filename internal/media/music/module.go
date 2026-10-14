@@ -144,6 +144,8 @@ func (Module) Descriptor() media.Descriptor {
 		AddKinds:           []media.Choice{{Key: "album", Label: "Albums"}, {Key: "artist", Label: "Artists"}},
 		CommitsHeldImports: true,
 		DuplicatesByName:   true,
+		// Lidarr's: off, and when on lyrics, cue sheets, rip logs and release notes.
+		ExtraFiles: media.ExtraFilesDefault{Extensions: []string{"lrc", "cue", "log", "nfo"}},
 	}
 }
 

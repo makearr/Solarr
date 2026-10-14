@@ -144,12 +144,13 @@ func (p *process) renameOnImport() bool {
 	return p.cache.Snapshot().ImportRenameOnImport()
 }
 
-// extraFileExtensions answers the extensions to bring along, or none while the switch is off.
-func (p *process) extraFileExtensions() []string {
-	if extras := p.cache.Snapshot().ImportExtraFiles(); extras.Enabled {
-		return extras.Extensions
+// extraFileExtensions answers the extensions to bring along into a library, or none while its switch is off.
+func (p *process) extraFileExtensions(categoryID int64) []string {
+	category, found := p.cache.Snapshot().Category(categoryID)
+	if !found {
+		return nil
 	}
-	return nil
+	return adapters.MediaTypes{Registry: p.media}.ExtraFileExtensions(category)
 }
 
 // lookupGroupID resolves a library's "chown group" name in this container's own group database.

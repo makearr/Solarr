@@ -219,8 +219,11 @@ folder. Solarr works out what is in it.
   album or series the files are, pick it, and they are placed as that, which is also the way out for a
   folder nothing could identify. Both need the session to have a library. In a TV library the episodes are
   read from the file names (`S01E02`, an air date, an absolute number); a series the library does not hold
-  yet is added first, and a file for an episode the library already has is left where it is.
-- **Import extra files** (Storage > Import, off by default) brings files with the listed extensions along:
+  yet is added first, and a file for an episode the library already has is left where it is. **Commit anyway** on a
+  held TV folder places it as its best guess only when that guess is at least 75% sure; below that, name the series
+  with **Identify as…** (a folder named by hand is easily guessed wrong).
+- **Import extra files** (each library's **File management → Importing**; on for TV, off for music) brings files with
+  the listed extensions along:
   lyrics, cue sheets and logs beside an album, and in a TV library the subtitles named after an episode
   (`Show.S01E02.en.srt` becomes `Show - S01E02 - Title.en.srt`). Nothing already there is overwritten.
 - Every import can be **reverted** from its session.

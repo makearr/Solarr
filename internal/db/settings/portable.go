@@ -45,15 +45,12 @@ type ScalarSettingsEntry struct {
 	ImportAutoCommitConfidence float64  `yaml:"import_auto_commit_confidence"`
 	ImportTransferLadder       []string `yaml:"import_transfer_ladder,omitempty"`
 	ImportRenameOnImport       bool     `yaml:"import_rename_on_import"`
-	// ImportExtraFiles and its extensions; absent keeps what is stored.
-	ImportExtraFiles          *bool    `yaml:"import_extra_files,omitempty"`
-	ImportExtraFileExtensions []string `yaml:"import_extra_file_extensions,omitempty"`
-	NetworkPort               int      `yaml:"network_port,omitempty"`
-	NetworkProxyEnabled       bool     `yaml:"network_proxy_enabled"`
-	NetworkProxyURL           string   `yaml:"network_proxy_url,omitempty"`
-	NetworkProxyBypass        []string `yaml:"network_proxy_bypass,omitempty"`
-	NetworkAllowCIDRsEnabled  bool     `yaml:"network_allow_cidrs_enabled"`
-	NetworkAllowCIDRs         []string `yaml:"network_allow_cidrs,omitempty"`
+	NetworkPort                int      `yaml:"network_port,omitempty"`
+	NetworkProxyEnabled        bool     `yaml:"network_proxy_enabled"`
+	NetworkProxyURL            string   `yaml:"network_proxy_url,omitempty"`
+	NetworkProxyBypass         []string `yaml:"network_proxy_bypass,omitempty"`
+	NetworkAllowCIDRsEnabled   bool     `yaml:"network_allow_cidrs_enabled"`
+	NetworkAllowCIDRs          []string `yaml:"network_allow_cidrs,omitempty"`
 	// RecycleBinMaxBytes and its share of a root; absent keeps what is stored.
 	RecycleBinMaxBytes         *int64 `yaml:"recycle_bin_max_bytes,omitempty"`
 	RecycleBinMaxPercentOfRoot *int64 `yaml:"recycle_bin_max_percent_of_root,omitempty"`
@@ -225,6 +222,9 @@ type FileManagementEntry struct {
 	WriteMetadataToTags bool  `yaml:"write_metadata_to_tags,omitempty"`
 	EmbedCoverInTags    bool  `yaml:"embed_cover_in_tags,omitempty"`
 	NavidromeProfile    bool  `yaml:"navidrome_profile,omitempty"`
+	// ImportExtraFiles and ExtraFileExtensions are absent while the library takes its media type's own.
+	ImportExtraFiles    *bool    `yaml:"import_extra_files,omitempty"`
+	ExtraFileExtensions []string `yaml:"extra_file_extensions,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
@@ -238,6 +238,7 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 			WriteIDs: e.WriteIDsToTags == nil || *e.WriteIDsToTags, ReplaceIDs: e.ReplaceIDsInTags,
 			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile,
 		},
+		ExtraFiles: ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
 	}
 }
 
@@ -251,6 +252,7 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		SetPermissions:     f.SetPermissions, ChmodFolder: f.ChmodFolder, ChownGroup: f.ChownGroup, WriteIDsToTags: &writeIDs,
 		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
 		EmbedCoverInTags: f.Tagging.EmbedCover, NavidromeProfile: f.Tagging.Navidrome,
+		ImportExtraFiles: f.ExtraFiles.Import, ExtraFileExtensions: f.ExtraFiles.Extensions,
 	}
 }
 
@@ -387,15 +389,12 @@ func (c *Cache) Export() Document {
 	cacheBudget := snapshot.CacheBudget()
 	priority := snapshot.PrioritySettings()
 	metadata := snapshot.MetadataSettings()
-	extras := snapshot.ImportExtraFiles()
 	recycleBin := snapshot.RecycleBinLimits()
 	settingsEntry := ScalarSettingsEntry{
 		AuthRequired:                 snapshot.AuthRequired(),
 		ImportAutoCommitConfidence:   snapshot.ImportAutoCommitConfidence(),
 		ImportTransferLadder:         snapshot.ImportTransferLadder(),
 		ImportRenameOnImport:         snapshot.ImportRenameOnImport(),
-		ImportExtraFiles:             &extras.Enabled,
-		ImportExtraFileExtensions:    extras.Extensions,
 		NetworkPort:                  network.Port,
 		NetworkProxyEnabled:          network.ProxyEnabled,
 		NetworkProxyURL:              network.ProxyURL,
@@ -505,7 +504,7 @@ func (c *Cache) Export() Document {
 				ColonReplacement: category.Naming.ColonReplacement, Formats: category.Naming.Formats,
 			}
 		}
-		if category.FileManagement != DefaultFileManagement {
+		if !category.FileManagement.IsDefault() {
 			entry.FileManagement = &FileManagementEntry{}
 			*entry.FileManagement = fileManagementEntry(category.FileManagement)
 		}
@@ -670,10 +669,6 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 				BrainzMashUserAgent: DefaultBrainzMashUserAgent, TVSources: *sources}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
-		}
-		for _, problem := range validateImportExtraFileExtensions(
-			NormaliseExtraFileExtensions(d.Settings.ImportExtraFileExtensions)) {
-			problems = append(problems, prefixed("settings", problem))
 		}
 		if d.Settings.BackupRetention != "" {
 			for _, problem := range validateBackupRetention(BackupRetention{Mode: d.Settings.BackupRetention,
@@ -1291,16 +1286,6 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.RecycleBinMaxPercentOfRoot != nil {
 		values[KeyRecycleBinMaxPercentOfRoot] = strconv.FormatInt(*entry.RecycleBinMaxPercentOfRoot, 10)
-	}
-	if entry.ImportExtraFiles != nil {
-		values[KeyImportExtraFiles] = strconv.FormatBool(*entry.ImportExtraFiles)
-	}
-	if len(entry.ImportExtraFileExtensions) > 0 {
-		encoded, err := json.Marshal(NormaliseExtraFileExtensions(entry.ImportExtraFileExtensions))
-		if err != nil {
-			return fmt.Errorf("settings.import_extra_file_extensions: %w", err)
-		}
-		values[KeyImportExtraFileExtensions] = string(encoded)
 	}
 	if entry.BackupRetention != "" {
 		values[KeyBackupRetention] = string(entry.BackupRetention)

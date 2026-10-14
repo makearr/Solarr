@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // MediaTerm is one word of a media type's vocabulary.
@@ -50,6 +51,10 @@ type MediaTypeInfo struct {
 	CommitsHeldImports bool
 	// DuplicatesByName says a duplicate is one recording under any work, matched by name and length.
 	DuplicatesByName bool
+	// ExtraFiles is the type's "Import Extra Files" for a library that has not chosen; both fields are set.
+	ExtraFiles settings.ExtraFiles
+	// GuessFloor is the least confidence "Commit anyway" takes a held unit's best guess at; 0 takes any.
+	GuessFloor float64
 }
 
 // MediaChoice is one key a media type offers, with its label.
@@ -80,7 +85,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
 				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage), WantedGrain: gen.MediaTypeInfoWantedGrain(info.WantedGrain),
-				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports,
+				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports, CommitGuessFloor: &info.GuessFloor,
 				DuplicatesByName: info.DuplicatesByName,
 			})
 		}
@@ -126,4 +131,17 @@ func (s *Server) refuseUnknownMediaType(w http.ResponseWriter, mediaType string)
 	writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 		"The category has problems", "media_type "+mediaType+" is not available in this build. Nothing was created.")
 	return true
+}
+
+// mediaTypeInfo answers one media type's description; false when no module brings it.
+func (s *Server) mediaTypeInfo(key string) (MediaTypeInfo, bool) {
+	if s.mediaTypes == nil {
+		return MediaTypeInfo{}, false
+	}
+	for _, info := range s.mediaTypes.List() {
+		if info.Key == key {
+			return info, true
+		}
+	}
+	return MediaTypeInfo{}, false
 }

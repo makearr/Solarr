@@ -80,9 +80,9 @@ type TransferLadder func() []mover.PlaceMethod
 // TransferLadder is. A nil func means renaming, the shipped default.
 type RenameOnImport func() bool
 
-// ExtraFiles answers the extensions to bring along with the tracks (Lidarr's "Import Extra
-// Files"), read per commit; nil or empty means none.
-type ExtraFiles func() []string
+// ExtraFiles answers the extensions to bring along with the tracks into a library (Lidarr's "Import Extra Files"),
+// read per commit; nil or empty means none.
+type ExtraFiles func(categoryID int64) []string
 
 // GroupID resolves a group name for a library's "chown group"; nil accepts only numbers.
 type GroupID func(name string) (int, error)
@@ -472,7 +472,7 @@ func (c Committer) CommitMatchedUnit(
 
 	var extensions []string
 	if c.extraFiles != nil {
-		extensions = c.extraFiles()
+		extensions = c.extraFiles(categoryID)
 	}
 	extras, extrasSkipped := c.placeExtras(sourceRoot, destRoot.Path, unit, destRelPaths, extensions, methods)
 
