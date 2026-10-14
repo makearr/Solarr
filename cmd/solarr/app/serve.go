@@ -682,7 +682,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 			Settings: p.cache, Facets: adapters.MediaTypes{Registry: p.media}.Facets,
 		},
-		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library)},
+		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles()},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:      adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
@@ -797,6 +797,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			},
 			Cache: p.cache,
 		},
+		VanishedFiles:  p.vanishedFiles(),
 		MoveJobs:       adapters.MoveJobs{MoveJobs: library.NewMoveJobs(p.library)},
 		Navigation:     adapters.MediaTypes{Registry: p.media},
 		MediaTypes:     adapters.MediaTypes{Registry: p.media},
@@ -901,5 +902,13 @@ func (p *process) fileRemover() adapters.RemoveAndBlock {
 			adapters.RootFolderPath(p.cache),
 		),
 		Physical: library.NewPhysical(p.library), Clock: clock.NewSystem(),
+	}
+}
+
+// vanishedFiles is the one view of mass vanishes a full scan held back, for the root list and the health checks.
+func (p *process) vanishedFiles() adapters.VanishedFiles {
+	return adapters.VanishedFiles{
+		Scans: library.NewScans(p.library), Physical: library.NewPhysical(p.library),
+		Sweeps: adapters.MediaSweeps{Registry: p.media, Cache: p.cache}, Cache: p.cache, Logger: p.logger,
 	}
 }

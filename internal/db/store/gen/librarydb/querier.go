@@ -73,6 +73,7 @@ type Querier interface {
 	// A provider refresh removes only what that provider assigned, never a user's
 	// own curation (ADR-33).
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
+	ClearVanished(ctx context.Context, rootFolderID int64) error
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
@@ -143,6 +144,8 @@ type Querier interface {
 	// Library health's own "unmatched files" figure (todo 4.8) -- same filter
 	// shape as ListUnidentified below, a count rather than a page.
 	CountUnidentified(ctx context.Context, arg CountUnidentifiedParams) (int64, error)
+	// What a full sweep would mark missing, against everything the root holds, before it marks anything.
+	CountVanishingPaths(ctx context.Context, arg CountVanishingPathsParams) (CountVanishingPathsRow, error)
 	// The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 	// have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 	CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error)
@@ -171,7 +174,7 @@ type Querier interface {
 	// category (private/next.md's work_root_folder retirement). Distinct because a
 	// scanned, monitored work has rows on both sides and must count once.
 	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
-	// Which parts of a work have a file, by any item.
+	// Which parts of a work have a file still there, by any item.
 	CoveredPartRefs(ctx context.Context, workID int64) ([]string, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
 	// *Arr import runs (todo 4.13, ADR-52). Column lists follow table order.
@@ -376,6 +379,8 @@ type Querier interface {
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	// The ids a user's image picker asks the providers with.
 	GetWorkReleaseGroupMBID(ctx context.Context, workID int64) (string, error)
+	// A mass vanish is held, not marked: the count and the sweep start a later accept marks against.
+	HoldVanished(ctx context.Context, arg HoldVanishedParams) error
 	// What a library's downloads still on their way will take when they land, so the free-space gate
 	// does not count the same room twice between capacity measurements (ADR-12).
 	InFlightBytesForCategory(ctx context.Context, categoryID int64) (int64, error)
@@ -582,7 +587,7 @@ type Querier interface {
 	ListPacksPage(ctx context.Context, arg ListPacksPageParams) ([]Pack, error)
 	// Which part of a work has a file, and what that file measures. The same
 	// media_ref present_count is derived from, so the album detail and the
-	// artist overview cannot disagree about what is there.
+	// artist overview cannot disagree about what is there; a file a sweep found gone is not.
 	ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// ADR-51's drain: every real file to evacuate, with its size for
@@ -700,6 +705,8 @@ type Querier interface {
 	ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error)
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
+	// The works a file counts towards.
+	ListWorkIDsOfObject(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	ListWorkOrganisationIDsInRole(ctx context.Context, arg ListWorkOrganisationIDsInRoleParams) ([]int64, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWorkPartRefsRow, error)
@@ -736,6 +743,8 @@ type Querier interface {
 	// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
 	// that role from the asking provider. The edition label is the default (else first) edition's provider id.
 	ListWorksToAskOrganisation(ctx context.Context, arg ListWorksToAskOrganisationParams) ([]ListWorksToAskOrganisationRow, error)
+	// The works holding a file one sweep found gone, so their counts can follow.
+	ListWorksWithPathsMissingSince(ctx context.Context, arg ListWorksWithPathsMissingSinceParams) ([]int64, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
@@ -807,7 +816,7 @@ type Querier interface {
 	// the same drift-and-repair shape RecomputeImportSessionCounts already uses.
 	RecomputePackCounts(ctx context.Context, packID int64) error
 	// The reconciliation job compares this against present_count. Drift is
-	// inevitable, so the repair path is not optional.
+	// inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing.
 	RecomputePresentCount(ctx context.Context, id int64) error
 	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
 	RecordBlockedContentHit(ctx context.Context, arg RecordBlockedContentHitParams) error
@@ -1005,6 +1014,8 @@ type Querier interface {
 	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
 	// no longer a placeholder, so enrichment stops asking about it.
 	WithdrawEdition(ctx context.Context, id int64) error
+	// A work has files while one of them has a path no sweep found gone.
+	WorkHasLiveFile(ctx context.Context, workID int64) (int64, error)
 }
 
 var _ Querier = (*Queries)(nil)

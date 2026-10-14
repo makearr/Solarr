@@ -232,6 +232,10 @@ Files a library scan could not identify wait under **Library → Music → Unide
 - **Storage → Root folders** groups the roots under their library; a root folder belongs to at most one.
   Each card carries the policy (read only, allow rename, reserve), capacity, and **Preview rename / drain**
   to move files off a disk.
+- **A file you delete** is noticed by the next **full** scan: its album or season is missing again and searched for, unless
+  the library unmonitors deleted files. If a full scan finds a great many files of a root gone at once (more than 50 and
+  more than one in twenty), it marks none of them and the bell says so: a disk that was not mounted is not a deleted
+  library. Run a full scan once the disk is back, or press **Accept as gone** on the root's card.
 - **Library → Music → File management** (advanced): **Merge Artists Stored Under Several Names** folds
   duplicate artists into one after each disk scan; **Navidrome profile** (under naming → tags) also fills
   the track artist's tags and puts a `cover.jpg` in each album folder that has none.

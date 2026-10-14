@@ -88,7 +88,7 @@ func (p Physical) RegisterBatch(ctx context.Context, rootFolderID int64, files [
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		for index, file := range files {
-			result, err := registerOne(ctx, queries, rootFolderID, file)
+			result, err := registerOne(ctx, queries, rootFolderID, file, p.store.Now())
 			if err != nil {
 				return fmt.Errorf("library: register %s: %w", file.RelPath, err)
 			}
@@ -103,7 +103,7 @@ func (p Physical) RegisterBatch(ctx context.Context, rootFolderID int64, files [
 }
 
 func registerOne(
-	ctx context.Context, queries *librarydb.Queries, rootFolderID int64, file PhysicalFile,
+	ctx context.Context, queries *librarydb.Queries, rootFolderID int64, file PhysicalFile, now time.Time,
 ) (RegisteredFile, error) {
 	existing, err := queries.GetPathByLocation(ctx, librarydb.GetPathByLocationParams{
 		RootFolderID: rootFolderID, RelPath: file.RelPath,
@@ -115,6 +115,11 @@ func registerOne(
 			LastSeenAt: file.FirstSeenAt.Unix(), ID: existing.ID,
 		}); err != nil {
 			return RegisteredFile{}, fmt.Errorf("touch path: %w", err)
+		}
+		if existing.MissingSince.Valid {
+			if err := recomputeWorksOfObjectTx(ctx, queries, existing.MediaObjectID, now); err != nil {
+				return RegisteredFile{}, fmt.Errorf("file back: %w", err)
+			}
 		}
 		return RegisteredFile{MediaObjectID: existing.MediaObjectID, LibraryPathID: existing.ID}, nil
 	}
@@ -519,9 +524,48 @@ func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before ti
 		// Each batch narrows what the next one matches, so a batch that changes
 		// nothing means nothing is left to mark.
 		if changed == 0 {
-			return total, nil
+			break
 		}
 		total += int(changed)
+	}
+	if total == 0 {
+		return 0, nil
+	}
+	return total, p.recomputeWorksMissingSince(ctx, rootFolderID, beforeUnix)
+}
+
+// Vanishing answers how many of a root's paths a full sweep that started at before would mark missing, and how many
+// paths the root holds: the mass-vanish guard's two numbers.
+func (p Physical) Vanishing(ctx context.Context, rootFolderID int64, before time.Time) (vanishing, total int64, err error) {
+	row, err := librarydb.New(p.store.Read()).CountVanishingPaths(ctx, librarydb.CountVanishingPathsParams{
+		Before: before.Unix(), RootFolderID: rootFolderID,
+	})
+	if err != nil {
+		return 0, 0, fmt.Errorf("library: count vanishing paths of root %d: %w", rootFolderID, err)
+	}
+	return row.Vanishing, row.Total, nil
+}
+
+// recomputeWorksMissingSince brings the counts of every work that lost a file in one marking in line with it.
+func (p Physical) recomputeWorksMissingSince(ctx context.Context, rootFolderID, missingSince int64) error {
+	var afterID int64
+	for {
+		works, err := librarydb.New(p.store.Read()).ListWorksWithPathsMissingSince(ctx, librarydb.ListWorksWithPathsMissingSinceParams{
+			RootFolderID: rootFolderID, MissingSince: sql.NullInt64{Int64: missingSince, Valid: true},
+			AfterID: afterID, PageSize: dirtyBatchSize,
+		})
+		if err != nil {
+			return fmt.Errorf("library: works losing files: %w", err)
+		}
+		for _, workID := range works {
+			if err := p.RecomputeWorkItems(ctx, workID); err != nil {
+				return err
+			}
+		}
+		if len(works) < dirtyBatchSize {
+			return nil
+		}
+		afterID = works[len(works)-1]
 	}
 }
 
@@ -529,35 +573,52 @@ func (p Physical) MarkMissing(ctx context.Context, rootFolderID int64, before ti
 // removed (an import reverted): the counts are derived, and a deleted media_object takes its coverage rows with it.
 func (p Physical) RecomputeWorkItems(ctx context.Context, workID int64) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		items, err := queries.ListDesiredItemsForWork(ctx, workID)
-		if err != nil {
-			return err
-		}
-		for _, item := range items {
-			if item.SatisfactionKind == "SET" {
-				if err := recomputeAlbumTx(ctx, queries, item.ID, workID, p.store.Now()); err != nil {
-					return err
-				}
-				continue
-			}
-			if err := queries.RecomputePresentCount(ctx, item.ID); err != nil {
-				return err
-			}
-			fresh, err := queries.GetDesiredItem(ctx, item.ID)
-			if err != nil {
-				return err
-			}
-			if err := queries.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
-				State: albumState(fresh.RequiredCount, fresh.PresentCount), PresentCount: fresh.PresentCount, ID: item.ID,
-			}); err != nil {
-				return err
-			}
-		}
-		return nil
+		return recomputeWorkItemsTx(ctx, librarydb.New(tx), workID, p.store.Now())
 	})
 	if err != nil {
 		return fmt.Errorf("library: recompute items of work %d: %w", workID, err)
+	}
+	return nil
+}
+
+func recomputeWorkItemsTx(ctx context.Context, queries *librarydb.Queries, workID int64, now time.Time) error {
+	items, err := queries.ListDesiredItemsForWork(ctx, workID)
+	if err != nil {
+		return err
+	}
+	for _, item := range items {
+		if item.SatisfactionKind == "SET" {
+			if err := recomputeAlbumTx(ctx, queries, item.ID, workID, now); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := queries.RecomputePresentCount(ctx, item.ID); err != nil {
+			return err
+		}
+		fresh, err := queries.GetDesiredItem(ctx, item.ID)
+		if err != nil {
+			return err
+		}
+		if err := queries.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
+			State: albumState(fresh.RequiredCount, fresh.PresentCount), PresentCount: fresh.PresentCount, ID: item.ID,
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// recomputeWorksOfObjectTx re-counts every work holding a file that just came back.
+func recomputeWorksOfObjectTx(ctx context.Context, queries *librarydb.Queries, mediaObjectID int64, now time.Time) error {
+	works, err := queries.ListWorkIDsOfObject(ctx, mediaObjectID)
+	if err != nil {
+		return err
+	}
+	for _, workID := range works {
+		if err := recomputeWorkItemsTx(ctx, queries, workID, now); err != nil {
+			return err
+		}
 	}
 	return nil
 }

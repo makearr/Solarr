@@ -1141,7 +1141,8 @@ const listCalendarEntries = `-- name: ListCalendarEntries :many
 SELECT w.id, w.canonical_title, w.sort_title, w.subtype,
        COALESCE(pa.name, '') AS artist_name,
        MIN(wd.date) AS release_date,
-       EXISTS (SELECT 1 FROM work_file wf WHERE wf.work_id = w.id) AS on_disk
+       EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id
+               WHERE wf.work_id = w.id AND lp.missing_since IS NULL) AS on_disk
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
 LEFT JOIN person pa ON pa.id = w.lead_person_id
@@ -1227,7 +1228,9 @@ SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.da
        (SELECT MIN(d.category_id) FROM desired_item d WHERE d.work_id = w.id
           AND d.category_id IN (SELECT value FROM json_each(?1))) AS category_id,
        EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
-               WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary') AS on_disk
+               JOIN library_path lp ON lp.media_object_id = f.media_object_id
+               WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary'
+                 AND lp.missing_since IS NULL) AS on_disk
 FROM work_part p
 JOIN work w ON w.id = p.work_id
 WHERE w.media_type = 'tv' AND p.monitored = 1
@@ -2377,4 +2380,17 @@ UPDATE edition SET kind = 'withdrawn' WHERE id = ? AND kind = 'unknown'
 func (q *Queries) WithdrawEdition(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, withdrawEdition, id)
 	return err
+}
+
+const workHasLiveFile = `-- name: WorkHasLiveFile :one
+SELECT CAST(EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id
+                    WHERE wf.work_id = ? AND lp.missing_since IS NULL) AS INTEGER) AS present
+`
+
+// A work has files while one of them has a path no sweep found gone.
+func (q *Queries) WorkHasLiveFile(ctx context.Context, workID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, workHasLiveFile, workID)
+	var present int64
+	err := row.Scan(&present)
+	return present, err
 }

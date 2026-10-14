@@ -3,12 +3,12 @@
 
 -- name: GetScanState :one
 SELECT root_folder_id, swept_through, cursor, started_at, finished_at,
-       files_found, directories_read
+       files_found, directories_read, vanished_held, vanished_through
 FROM scan_state WHERE root_folder_id = ?;
 
 -- name: ListScanStates :many
 SELECT root_folder_id, swept_through, cursor, started_at, finished_at,
-       files_found, directories_read
+       files_found, directories_read, vanished_held, vanished_through
 FROM scan_state ORDER BY root_folder_id;
 
 -- A sweep that starts records only that it started: the watermark must not move
@@ -36,3 +36,10 @@ WHERE root_folder_id = sqlc.arg(root_folder_id);
 -- A root that is removed from configuration leaves no progress behind.
 -- name: DeleteScanState :exec
 DELETE FROM scan_state WHERE root_folder_id = ?;
+
+-- A mass vanish is held, not marked: the count and the sweep start a later accept marks against.
+-- name: HoldVanished :exec
+UPDATE scan_state SET vanished_held = ?, vanished_through = ? WHERE root_folder_id = ?;
+
+-- name: ClearVanished :exec
+UPDATE scan_state SET vanished_held = 0, vanished_through = 0 WHERE root_folder_id = ?;

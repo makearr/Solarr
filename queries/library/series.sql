@@ -82,12 +82,14 @@ LEFT JOIN desired_profile_override o ON o.desired_item_id = d.id
 WHERE d.work_id IN (sqlc.slice(work_ids)) AND d.satisfaction_kind = 'SET' AND d.media_ref <> ''
 ORDER BY d.work_id, d.media_sort_key;
 
--- Which parts of a work have a file, by any item.
+-- Which parts of a work have a file still there, by any item.
 -- name: CoveredPartRefs :many
 SELECT DISTINCT f.media_ref
 FROM desired_item_file f
 JOIN desired_item d ON d.id = f.desired_item_id
-WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> '';
+WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> ''
+  AND NOT (EXISTS (SELECT 1 FROM library_path gone WHERE gone.media_object_id = f.media_object_id AND gone.missing_since IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM library_path held WHERE held.media_object_id = f.media_object_id AND held.missing_since IS NULL));
 
 -- name: SetSeasonPartsMonitored :exec
 UPDATE work_part SET monitored = sqlc.arg(monitored) WHERE work_id = sqlc.arg(work_id) AND media_ref LIKE sqlc.arg(scope);

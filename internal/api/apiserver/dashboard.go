@@ -30,7 +30,7 @@ func (s *Server) GetDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	summary := gen.DashboardSummary{
-		RootFolders: s.rootFolderViews(),
+		RootFolders: s.rootFolderViews(r.Context()),
 		Jobs:        s.jobCounts(r.Context()),
 		Library:     s.libraryCounts(r.Context()),
 	}
@@ -39,11 +39,15 @@ func (s *Server) GetDashboard(w http.ResponseWriter, r *http.Request) {
 
 // rootFolderViews is shared with ListRootFolders so the dashboard and the
 // settings page can never disagree about whether a root is writable.
-func (s *Server) rootFolderViews() []gen.RootFolder {
+func (s *Server) rootFolderViews(ctx context.Context) []gen.RootFolder {
 	folders := s.auth.Settings.Snapshot().RootFolders()
+	held := s.heldVanished(ctx)
 	views := make([]gen.RootFolder, 0, len(folders))
 	for _, folder := range folders {
 		view := s.rootFolderView(folder)
+		if count, found := held[folder.ID]; found {
+			view.VanishedHeld = &count
+		}
 		if s.roots != nil {
 			err := s.roots.Writable(folder.Path)
 			writable := err == nil

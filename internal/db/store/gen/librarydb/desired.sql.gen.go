@@ -1084,6 +1084,8 @@ JOIN desired_item_file f ON f.desired_item_id = d.id
 JOIN media_object o ON o.id = f.media_object_id
 LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
 WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> ''
+  AND NOT (EXISTS (SELECT 1 FROM library_path gone WHERE gone.media_object_id = f.media_object_id AND gone.missing_since IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM library_path held WHERE held.media_object_id = f.media_object_id AND held.missing_since IS NULL))
 ORDER BY f.media_ref, f.media_object_id
 `
 
@@ -1111,7 +1113,7 @@ type ListPartFilesForWorkRow struct {
 
 // Which part of a work has a file, and what that file measures. The same
 // media_ref present_count is derived from, so the album detail and the
-// artist overview cannot disagree about what is there.
+// artist overview cannot disagree about what is there; a file a sweep found gone is not.
 func (q *Queries) ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPartFilesForWork, workID)
 	if err != nil {
@@ -1695,14 +1697,18 @@ func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOl
 const recomputePresentCount = `-- name: RecomputePresentCount :exec
 UPDATE desired_item
 SET present_count = (
-      SELECT COUNT(DISTINCT media_ref)
-      FROM desired_item_file
-      WHERE desired_item_id = desired_item.id AND role = 'primary')
-WHERE id = ?
+      SELECT COUNT(DISTINCT f.media_ref)
+      FROM desired_item_file f
+      WHERE f.desired_item_id = desired_item.id AND f.role = 'primary'
+        AND NOT (EXISTS (SELECT 1 FROM library_path gone WHERE gone.media_object_id = f.media_object_id
+                           AND gone.missing_since IS NOT NULL)
+                 AND NOT EXISTS (SELECT 1 FROM library_path held WHERE held.media_object_id = f.media_object_id
+                                   AND held.missing_since IS NULL)))
+WHERE desired_item.id = ?
 `
 
 // The reconciliation job compares this against present_count. Drift is
-// inevitable, so the repair path is not optional.
+// inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing.
 func (q *Queries) RecomputePresentCount(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, recomputePresentCount, id)
 	return err

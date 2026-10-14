@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"path"
@@ -521,6 +522,48 @@ func TestJob_FullSweepMarksStalePathsMissing(t *testing.T) {
 
 	if missing := fixture.missingSince(t, staleID); !missing.Valid {
 		t.Error("a path the full sweep never saw again was not marked missing")
+	}
+}
+
+// A failed mount looks like a deleted library: a full sweep that finds most of a root gone marks none of it and holds
+// the count for a person to accept.
+func TestJob_AMassVanishIsHeldNotMarked(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac")
+	var stale []int64
+	for index := range 60 {
+		stale = append(stale, fixture.stalePath(t, fmt.Sprintf("gone/%02d.flac", index), fixture.clock.Now().Unix()))
+	}
+	if err := fixture.run(t, fixture.job(t, scan.IsAudio), scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	for _, id := range stale {
+		if fixture.missingSince(t, id).Valid {
+			t.Fatalf("path %d was marked missing in a mass vanish", id)
+		}
+	}
+	progress, err := library.NewScans(fixture.store).Progress(t.Context(), 1)
+	if err != nil {
+		t.Fatalf("Progress: %v", err)
+	}
+	if progress.VanishedHeld != 60 || progress.VanishedThrough.IsZero() {
+		t.Errorf("held %d through %v, want 60 through the sweep's start", progress.VanishedHeld, progress.VanishedThrough)
+	}
+}
+
+func TestMassVanish(t *testing.T) {
+	for _, test := range []struct {
+		vanishing, total int64
+		want             bool
+	}{
+		{vanishing: 50, total: 60, want: false},
+		{vanishing: 51, total: 60, want: true},
+		{vanishing: 51, total: 1020, want: false},
+		{vanishing: 51, total: 1019, want: true},
+		{vanishing: 0, total: 0, want: false},
+	} {
+		if got := scan.MassVanish(test.vanishing, test.total); got != test.want {
+			t.Errorf("MassVanish(%d, %d) = %v, want %v", test.vanishing, test.total, got, test.want)
+		}
 	}
 }
 

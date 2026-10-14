@@ -96,7 +96,7 @@ func (s *Server) ListRootFolders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, s.logger, http.StatusOK, s.rootFolderViews())
+	writeJSON(w, s.logger, http.StatusOK, s.rootFolderViews(r.Context()))
 }
 
 // AddRootFolder accepts a library root, refusing an unusable path and flagging

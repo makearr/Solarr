@@ -590,6 +590,28 @@ export interface paths {
         patch: operations["setRootFolderOnline"];
         trace?: never;
     };
+    "/rootfolders/{id}/vanished/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept the files a full scan found gone as deleted (section 10.4). Administrator only.
+         * @description A full scan that finds a mass of a root's files gone marks none of them missing until this is called, so a failed mount never makes a library missing. Accepting marks every path not seen since that scan started: a file that came back meanwhile stays.
+         */
+        post: operations["acceptVanishedFiles"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/downloadfolders": {
         parameters: {
             query?: never;
@@ -3846,6 +3868,11 @@ export interface components {
             online: boolean;
             /** @description The filesystem under this root is mounted read only, found by trying to write; the root is then read only whatever its policy says. */
             read_only_detected?: boolean;
+            /**
+             * Format: int64
+             * @description Files the last full scan found gone and did not mark missing, too many at once to believe without a person; absent when none.
+             */
+            vanished_held?: number;
             /** @description Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and Solarr does not chown a library it did not create. Absent when it has not been probed. */
             writable?: boolean;
             /** @description Curated policy, not a probed fact: blocks new placement, upgrade-in-place and tag write-back, and blocks renaming unless allow_rename is also set (Invariant 69). */
@@ -7850,6 +7877,32 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    acceptVanishedFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Marked. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RootFolder"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listDownloadFolders: {

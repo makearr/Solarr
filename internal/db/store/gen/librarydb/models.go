@@ -659,6 +659,8 @@ type ScanState struct {
 	FinishedAt      sql.NullInt64
 	FilesFound      int64
 	DirectoriesRead int64
+	VanishedHeld    int64
+	VanishedThrough int64
 }
 
 type StatRollup struct {

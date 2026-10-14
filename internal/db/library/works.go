@@ -267,7 +267,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 
 	query := "SELECT " + workColumns + ",\n       " + workArtistColumn + ",\n       " + workStateColumn +
 		",\n       " + discographyStatusColumns +
-		",\n       EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS on_disk" +
+		",\n       EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id WHERE wf.work_id = work.id AND lp.missing_since IS NULL) AS on_disk" +
 		",\n       COALESCE(work.lead_person_sort_name, '') AS artist_sort" +
 		",\n       " + lastSearchedColumn + " AS last_searched" +
 		",\n       " + unverifiedColumn + " AS unverified" +

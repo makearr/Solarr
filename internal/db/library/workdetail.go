@@ -108,6 +108,8 @@ type WorkDetail struct {
 	Genres        []string
 	RootFolderIDs []int64
 	CategoryIDs   []int64
+	// HasFiles is whether one of its files is still on disk.
+	HasFiles bool
 	// Wanted is nil when nothing has ever wanted this album -- no scan, no
 	// subscription, no user request.
 	Wanted *DesiredItemStatus
@@ -128,10 +130,9 @@ type PartCursor struct {
 	ID      int64
 }
 
-// OnDisk reports whether this work is linked to any root folder at all
-// (work_root_folder, migration 0012's bridge). Per-part presence is
-// PartDetail.File, aligned through desired_item_file.media_ref.
-func (d WorkDetail) OnDisk() bool { return len(d.RootFolderIDs) > 0 }
+// OnDisk reports whether one of the work's files is still on disk. Per-part presence is PartDetail.File, aligned
+// through desired_item_file.media_ref.
+func (d WorkDetail) OnDisk() bool { return d.HasFiles }
 
 // Detail composes one work's full structural detail. A missing id surfaces
 // sql.ErrNoRows through GetWork, wrapped: callers use errors.Is to detect it.
@@ -248,11 +249,15 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		groups = append(groups, group)
 	}
 	slices.SortStableFunc(groups, func(a, b GroupStatus) int { return strings.Compare(a.SortKey, b.SortKey) })
+	hasFiles, err := queries.WorkHasLiveFile(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: files: %w", err)
+	}
 
 	return WorkDetail{
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
-		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups,
+		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups, HasFiles: hasFiles == 1,
 	}, nil
 }
 

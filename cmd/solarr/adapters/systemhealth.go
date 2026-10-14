@@ -20,6 +20,8 @@ type SystemHealth struct {
 	Acquisitions interface {
 		ListActive(ctx context.Context) ([]library.Acquisition, error)
 	}
+	// Vanished finds full scans that held a mass vanish back; nil skips that check.
+	Vanished apiserver.VanishedFiles
 }
 
 // Checks reports what is missing. Every probe is best-effort: a failure to
@@ -44,6 +46,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	}
 	checks = append(checks, a.waitingForReview(ctx)...)
 	snapshot := a.Cache.Snapshot()
+	checks = append(checks, a.vanishedHeld(ctx, snapshot)...)
 	hasTV := slices.ContainsFunc(snapshot.Categories(), func(category settings.Category) bool { return category.MediaType == "tv" })
 	checks = append(checks, tvKeyCheck(hasTV, snapshot.TMDBConfigured())...)
 	return append(checks, pausedForRoom(snapshot)...)
@@ -85,6 +88,32 @@ func (a SystemHealth) waitingForReview(ctx context.Context) []apiserver.HealthCh
 			waiting, plural(waiting, "album is", "albums are"), plural(waiting, "it", "them")),
 		Link: "/storage/import",
 	}}
+}
+
+// vanishedHeld names each root whose last full scan found too many files gone to mark them missing on its own.
+func (a SystemHealth) vanishedHeld(ctx context.Context, snapshot *settings.Snapshot) []apiserver.HealthCheck {
+	if a.Vanished == nil {
+		return nil
+	}
+	held, err := a.Vanished.Held(ctx)
+	if err != nil {
+		return nil
+	}
+	var checks []apiserver.HealthCheck
+	for _, root := range snapshot.RootFolders() {
+		count, found := held[root.ID]
+		if !found {
+			continue
+		}
+		checks = append(checks, apiserver.HealthCheck{
+			ID: fmt.Sprintf("vanished_held_%d", root.ID), Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("The last full scan of %s found %d %s gone. Nothing is marked missing or downloaded "+
+				"again until you look: if the disk is back, run a full scan; if you deleted them, accept it under Root folders.",
+				root.Path, count, plural(int(count), "file", "files")),
+			Link: "/storage/roots",
+		})
+	}
+	return checks
 }
 
 func plural(count int, one, many string) string {

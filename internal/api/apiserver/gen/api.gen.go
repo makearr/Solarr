@@ -3580,6 +3580,9 @@ type RootFolder struct {
 	ReadOnlyDetected *bool  `json:"read_only_detected,omitempty"`
 	TotalBytes       *int64 `json:"total_bytes,omitempty"`
 
+	// VanishedHeld Files the last full scan found gone and did not mark missing, too many at once to believe without a person; absent when none.
+	VanishedHeld *int64 `json:"vanished_held,omitempty"`
+
 	// Writable Whether this process can write here. False is reported, never enforced: ownership on the host is the operator's to decide, and Solarr does not chown a library it did not create. Absent when it has not been probed.
 	Writable *bool `json:"writable,omitempty"`
 }
@@ -5811,6 +5814,9 @@ type ServerInterface interface {
 	// Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
 	// (POST /rootfolders/{id}/rename)
 	RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64)
+	// Accept the files a full scan found gone as deleted (section 10.4). Administrator only.
+	// (POST /rootfolders/{id}/vanished/accept)
+	AcceptVanishedFiles(w http.ResponseWriter, r *http.Request, id int64)
 	// Every registered periodic task (ADR-59).
 	// (GET /schedules)
 	ListSchedules(w http.ResponseWriter, r *http.Request)
@@ -7065,6 +7071,12 @@ func (_ Unimplemented) SetRootFolderOnline(w http.ResponseWriter, r *http.Reques
 // Preview or apply the shipped naming template to a root's own already-identified files (section 11.8). Administrator only.
 // (POST /rootfolders/{id}/rename)
 func (_ Unimplemented) RenameRootFolder(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Accept the files a full scan found gone as deleted (section 10.4). Administrator only.
+// (POST /rootfolders/{id}/vanished/accept)
+func (_ Unimplemented) AcceptVanishedFiles(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13169,6 +13181,39 @@ func (siw *ServerInterfaceWrapper) RenameRootFolder(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// AcceptVanishedFiles operation middleware
+func (siw *ServerInterfaceWrapper) AcceptVanishedFiles(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AcceptVanishedFiles(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListSchedules operation middleware
 func (siw *ServerInterfaceWrapper) ListSchedules(w http.ResponseWriter, r *http.Request) {
 
@@ -15823,6 +15868,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders/{id}/rename", wrapper.RenameRootFolder)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/rootfolders/{id}/vanished/accept", wrapper.AcceptVanishedFiles)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/schedules", wrapper.ListSchedules)

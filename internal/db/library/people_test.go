@@ -128,9 +128,16 @@ func TestDiscography_ReportsAvailabilityWithoutPanicking(t *testing.T) {
 				return err
 			}
 		}
-		return q.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
-			WorkID: onDisk.ID, RootFolderID: 7, FirstSeenAt: firstSeen.Unix(),
-		})
+		return nil
+	})
+	ids, err := library.NewPhysical(opened).RegisterBatch(t.Context(), 7, []library.PhysicalFile{
+		{RelPath: "KI Pecezinu/01.flac", SizeBytes: 1, QuickHash: "one", FirstSeenAt: firstSeen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: onDisk.ID, MediaObjectID: ids[0].MediaObjectID, FirstSeenAt: firstSeen.Unix()})
 	})
 
 	desired := library.NewDesired(opened)

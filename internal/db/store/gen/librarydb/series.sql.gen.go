@@ -62,9 +62,11 @@ SELECT DISTINCT f.media_ref
 FROM desired_item_file f
 JOIN desired_item d ON d.id = f.desired_item_id
 WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref <> ''
+  AND NOT (EXISTS (SELECT 1 FROM library_path gone WHERE gone.media_object_id = f.media_object_id AND gone.missing_since IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM library_path held WHERE held.media_object_id = f.media_object_id AND held.missing_since IS NULL))
 `
 
-// Which parts of a work have a file, by any item.
+// Which parts of a work have a file still there, by any item.
 func (q *Queries) CoveredPartRefs(ctx context.Context, workID int64) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, coveredPartRefs, workID)
 	if err != nil {

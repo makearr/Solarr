@@ -10,6 +10,15 @@ import (
 	"database/sql"
 )
 
+const clearVanished = `-- name: ClearVanished :exec
+UPDATE scan_state SET vanished_held = 0, vanished_through = 0 WHERE root_folder_id = ?
+`
+
+func (q *Queries) ClearVanished(ctx context.Context, rootFolderID int64) error {
+	_, err := q.db.ExecContext(ctx, clearVanished, rootFolderID)
+	return err
+}
+
 const deleteScanState = `-- name: DeleteScanState :exec
 DELETE FROM scan_state WHERE root_folder_id = ?
 `
@@ -52,7 +61,7 @@ func (q *Queries) FinishScan(ctx context.Context, arg FinishScanParams) error {
 const getScanState = `-- name: GetScanState :one
 
 SELECT root_folder_id, swept_through, cursor, started_at, finished_at,
-       files_found, directories_read
+       files_found, directories_read, vanished_held, vanished_through
 FROM scan_state WHERE root_folder_id = ?
 `
 
@@ -69,13 +78,31 @@ func (q *Queries) GetScanState(ctx context.Context, rootFolderID int64) (ScanSta
 		&i.FinishedAt,
 		&i.FilesFound,
 		&i.DirectoriesRead,
+		&i.VanishedHeld,
+		&i.VanishedThrough,
 	)
 	return i, err
 }
 
+const holdVanished = `-- name: HoldVanished :exec
+UPDATE scan_state SET vanished_held = ?, vanished_through = ? WHERE root_folder_id = ?
+`
+
+type HoldVanishedParams struct {
+	VanishedHeld    int64
+	VanishedThrough int64
+	RootFolderID    int64
+}
+
+// A mass vanish is held, not marked: the count and the sweep start a later accept marks against.
+func (q *Queries) HoldVanished(ctx context.Context, arg HoldVanishedParams) error {
+	_, err := q.db.ExecContext(ctx, holdVanished, arg.VanishedHeld, arg.VanishedThrough, arg.RootFolderID)
+	return err
+}
+
 const listScanStates = `-- name: ListScanStates :many
 SELECT root_folder_id, swept_through, cursor, started_at, finished_at,
-       files_found, directories_read
+       files_found, directories_read, vanished_held, vanished_through
 FROM scan_state ORDER BY root_folder_id
 `
 
@@ -96,6 +123,8 @@ func (q *Queries) ListScanStates(ctx context.Context) ([]ScanState, error) {
 			&i.FinishedAt,
 			&i.FilesFound,
 			&i.DirectoriesRead,
+			&i.VanishedHeld,
+			&i.VanishedThrough,
 		); err != nil {
 			return nil, err
 		}

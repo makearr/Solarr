@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -136,32 +137,45 @@ func TestWorkDetail_IncludesCreditsAndGenres(t *testing.T) {
 	}
 }
 
-func TestWorkDetail_OnDiskReflectsRootFolderLinkage(t *testing.T) {
+// A work is on disk while one of its files is: a root folder link alone is not a file, and a file a full sweep found
+// gone is not on disk.
+func TestWorkDetail_OnDiskFollowsItsFiles(t *testing.T) {
 	opened, _ := newLibrary(t)
 	works := library.NewWorks(opened)
+	physical := library.NewPhysical(opened)
 	work := createWork(t, opened, "music", "KI Pecezinu")
-
-	unlinked, err := works.Detail(t.Context(), work.ID)
-	if err != nil {
-		t.Fatalf("Detail: %v", err)
+	onDisk := func(stage string, want bool) {
+		t.Helper()
+		detail, err := works.Detail(t.Context(), work.ID)
+		if err != nil {
+			t.Fatalf("Detail: %v", err)
+		}
+		if detail.OnDisk() != want {
+			t.Errorf("%s: OnDisk() = %v, want %v", stage, detail.OnDisk(), want)
+		}
 	}
-	if unlinked.OnDisk() {
-		t.Error("OnDisk() = true for a work with no root folder link at all")
-	}
-
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
 		return q.LinkWorkRootFolder(ctx, librarydb.LinkWorkRootFolderParams{
-			WorkID: work.ID, RootFolderID: 7, FirstSeenAt: firstSeen.Unix(),
+			WorkID: work.ID, RootFolderID: 1, FirstSeenAt: firstSeen.Unix(),
 		})
 	})
+	onDisk("a folder, no file", false)
 
-	linked, err := works.Detail(t.Context(), work.ID)
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "KI Pecezinu/01.flac", SizeBytes: 1, QuickHash: "one", FirstSeenAt: firstSeen},
+	})
 	if err != nil {
-		t.Fatalf("Detail: %v", err)
+		t.Fatalf("RegisterBatch: %v", err)
 	}
-	if !linked.OnDisk() {
-		t.Error("OnDisk() = false for a work linked to a root folder")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: work.ID, MediaObjectID: ids[0].MediaObjectID, FirstSeenAt: firstSeen.Unix()})
+	})
+	onDisk("a file", true)
+
+	if _, err := physical.MarkMissing(t.Context(), 1, firstSeen.Add(time.Hour)); err != nil {
+		t.Fatalf("MarkMissing: %v", err)
 	}
+	onDisk("its file gone", false)
 }
 
 func TestWorkDetail_WantedIsNilUntilSomethingWantsTheAlbum(t *testing.T) {

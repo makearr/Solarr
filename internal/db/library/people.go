@@ -360,7 +360,7 @@ const discographyStatusColumns = `(SELECT di.present_count FROM desired_item di
 func (p People) Discography(ctx context.Context, personID int64, role string) ([]DiscographyRow, error) {
 	query := `SELECT ` + workColumns + `, work.subtype,
        ` + workStateColumn + `,
-       CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
+       CAST(EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id WHERE wf.work_id = work.id AND lp.missing_since IS NULL) AS INTEGER) AS on_disk_count,
        ` + discographyStatusColumns + `,
        ` + unverifiedColumn + ` AS unverified
 FROM work

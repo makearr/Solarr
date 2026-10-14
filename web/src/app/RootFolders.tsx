@@ -300,6 +300,8 @@ function RootFolderCard({
         </span>
       </div>
 
+      {(root.vanished_held ?? 0) > 0 && <VanishedHeld root={root} />}
+
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="text-xs text-ink-muted">{attached.length === 1 ? "Library" : "Libraries"}</span>
         {attached.map((category) => (
@@ -704,6 +706,61 @@ function AddRootFolder({
         </p>
       )}
     </form>
+  );
+}
+
+// A full scan that found a mass of this root's files gone marked none of them: a failed mount must not look like a
+// deleted library. The person decides.
+function VanishedHeld({ root }: { root: RootFolder }) {
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState(false);
+  const accept = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/rootfolders/{id}/vanished/accept", { params: { path: { id: root.id } } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setConfirming(false);
+      void queryClient.invalidateQueries({ queryKey: ["rootfolders"] });
+      void queryClient.invalidateQueries({ queryKey: ["system-health"] });
+    },
+  });
+  const count = root.vanished_held ?? 0;
+  return (
+    <div role="alert" className="flex flex-col gap-2 rounded-md border border-warn/40 bg-warn/10 p-2.5 text-sm">
+      <p>
+        The last full scan found <strong>{count.toLocaleString()}</strong> {count === 1 ? "file" : "files"} of this root
+        gone and marked none of them missing. If the disk was not mounted, run a full scan once it is. If you deleted them,
+        accept it: their albums and seasons are then missing and searched for again, unless the library unmonitors
+        deleted files.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {confirming ? (
+          <>
+            <button
+              type="button"
+              onClick={() => accept.mutate()}
+              disabled={accept.isPending}
+              className="rounded-md bg-danger px-2.5 py-1 text-xs font-medium text-accent-ink disabled:opacity-50"
+            >
+              Mark {count.toLocaleString()} as gone
+            </button>
+            <button type="button" onClick={() => setConfirming(false)} className="text-xs text-ink-muted hover:text-ink">
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="rounded-md border border-border-subtle px-2.5 py-1 text-xs hover:border-accent"
+          >
+            Accept as gone…
+          </button>
+        )}
+        {accept.isError && <span className="text-xs text-danger">That was refused.</span>}
+      </div>
+    </div>
   );
 }
 

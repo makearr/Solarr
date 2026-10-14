@@ -872,6 +872,31 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /rootfolders/{id}/vanished/accept:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: acceptVanishedFiles
+      tags: [setup]
+      summary: Accept the files a full scan found gone as deleted (section 10.4). Administrator only.
+      description: >-
+        A full scan that finds a mass of a root's files gone marks none of them missing until this is called, so a
+        failed mount never makes a library missing. Accepting marks every path not seen since that scan started:
+        a file that came back meanwhile stays.
+      responses:
+        "200":
+          description: Marked.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RootFolder" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /downloadfolders:
     get:
       operationId: listDownloadFolders
@@ -6194,6 +6219,10 @@ components:
         read_only_detected:
           type: boolean
           description: The filesystem under this root is mounted read only, found by trying to write; the root is then read only whatever its policy says.
+        vanished_held:
+          type: integer
+          format: int64
+          description: Files the last full scan found gone and did not mark missing, too many at once to believe without a person; absent when none.
         writable:
           type: boolean
           description: >-

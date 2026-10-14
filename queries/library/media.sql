@@ -224,6 +224,23 @@ UPDATE library_path SET last_seen_at = ?, missing_since = NULL WHERE id = ?;
 UPDATE library_path SET root_folder_id = sqlc.arg(new_root_folder_id), rel_path = sqlc.arg(new_rel_path)
 WHERE root_folder_id = sqlc.arg(old_root_folder_id) AND rel_path = sqlc.arg(old_rel_path);
 
+-- What a full sweep would mark missing, against everything the root holds, before it marks anything.
+-- name: CountVanishingPaths :one
+SELECT CAST(COALESCE(SUM(CASE WHEN missing_since IS NULL AND last_seen_at < sqlc.arg(before) THEN 1 ELSE 0 END), 0) AS INTEGER) AS vanishing,
+       CAST(COUNT(*) AS INTEGER) AS total
+FROM library_path WHERE root_folder_id = sqlc.arg(root_folder_id);
+
+-- The works holding a file one sweep found gone, so their counts can follow.
+-- name: ListWorksWithPathsMissingSince :many
+SELECT DISTINCT di.work_id
+FROM library_path p
+JOIN desired_item_file f ON f.media_object_id = p.media_object_id
+JOIN desired_item di ON di.id = f.desired_item_id
+WHERE p.root_folder_id = sqlc.arg(root_folder_id) AND p.missing_since = sqlc.arg(missing_since)
+  AND di.work_id > sqlc.arg(after_id)
+ORDER BY di.work_id
+LIMIT sqlc.arg(page_size);
+
 -- Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 -- never one UPDATE over the whole root.
 -- name: MarkLibraryPathsMissing :execrows
@@ -253,3 +270,8 @@ LIMIT sqlc.arg(page_size);
 
 -- name: SetMediaObjectKind :exec
 UPDATE media_object SET kind = ? WHERE id = ?;
+
+-- The works a file counts towards.
+-- name: ListWorkIDsOfObject :many
+SELECT DISTINCT di.work_id FROM desired_item_file f JOIN desired_item di ON di.id = f.desired_item_id
+WHERE f.media_object_id = ? ORDER BY di.work_id;

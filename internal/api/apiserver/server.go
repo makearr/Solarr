@@ -157,6 +157,9 @@ type Config struct {
 	// DrainStarter starts and stops ADR-51's own drain. Optional: without
 	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
 	DrainStarter DrainStarter
+	// VanishedFiles reports and accepts a mass vanish a full scan held back. Optional: without it, roots report none
+	// and AcceptVanishedFiles answers 503.
+	VanishedFiles VanishedFiles
 	// MoveJobs lists ADR-51 move jobs. Optional: without it, ListMoveJobs
 	// answers 503.
 	MoveJobs MoveJobLister
@@ -286,6 +289,7 @@ type Server struct {
 	importInspector         ImportInspector
 	fingerprintRetrier      FingerprintRetrier
 	drainStarter            DrainStarter
+	vanishedFiles           VanishedFiles
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
 	namingSchemes           NamingSchemes
@@ -391,6 +395,7 @@ func New(config Config) (*Server, error) {
 		importInspector:         config.ImportInspector,
 		fingerprintRetrier:      config.FingerprintRetrier,
 		drainStarter:            config.DrainStarter,
+		vanishedFiles:           config.VanishedFiles,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
 		namingSchemes:           config.NamingSchemes,
@@ -626,6 +631,7 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/rootfolders/{id}", server.routeUpdateRootFolderPolicy)
 			secured.Delete("/rootfolders/{id}", server.routeDeleteRootFolder)
 			secured.Patch("/rootfolders/{id}/online", server.routeSetRootFolderOnline)
+			secured.Post("/rootfolders/{id}/vanished/accept", server.routeAcceptVanishedFiles)
 			secured.Get("/downloadfolders", server.ListDownloadFolders)
 			secured.Post("/downloadfolders", server.AddDownloadFolder)
 			secured.Patch("/downloadfolders/{id}", server.routeUpdateDownloadFolder)

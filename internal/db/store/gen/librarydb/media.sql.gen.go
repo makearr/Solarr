@@ -119,6 +119,30 @@ func (q *Queries) CountMeasuredByRootFolder(ctx context.Context) ([]CountMeasure
 	return items, nil
 }
 
+const countVanishingPaths = `-- name: CountVanishingPaths :one
+SELECT CAST(COALESCE(SUM(CASE WHEN missing_since IS NULL AND last_seen_at < ?1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS vanishing,
+       CAST(COUNT(*) AS INTEGER) AS total
+FROM library_path WHERE root_folder_id = ?2
+`
+
+type CountVanishingPathsParams struct {
+	Before       int64
+	RootFolderID int64
+}
+
+type CountVanishingPathsRow struct {
+	Vanishing int64
+	Total     int64
+}
+
+// What a full sweep would mark missing, against everything the root holds, before it marks anything.
+func (q *Queries) CountVanishingPaths(ctx context.Context, arg CountVanishingPathsParams) (CountVanishingPathsRow, error) {
+	row := q.db.QueryRowContext(ctx, countVanishingPaths, arg.Before, arg.RootFolderID)
+	var i CountVanishingPathsRow
+	err := row.Scan(&i.Vanishing, &i.Total)
+	return i, err
+}
+
 const createMediaObject = `-- name: CreateMediaObject :execlastid
 INSERT INTO media_object (size_bytes, quick_hash, content_hash, oshash, phash,
                           audio_fp, audio_fp_prefix, fingerprinted_at,
@@ -963,6 +987,35 @@ func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) 
 	return items, nil
 }
 
+const listWorkIDsOfObject = `-- name: ListWorkIDsOfObject :many
+SELECT DISTINCT di.work_id FROM desired_item_file f JOIN desired_item di ON di.id = f.desired_item_id
+WHERE f.media_object_id = ? ORDER BY di.work_id
+`
+
+// The works a file counts towards.
+func (q *Queries) ListWorkIDsOfObject(ctx context.Context, mediaObjectID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkIDsOfObject, mediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var work_id int64
+		if err := rows.Scan(&work_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkPathsOnRoot = `-- name: ListWorkPathsOnRoot :many
 SELECT lp.media_object_id, lp.rel_path, o.size_bytes
 FROM work_file f
@@ -997,6 +1050,53 @@ func (q *Queries) ListWorkPathsOnRoot(ctx context.Context, arg ListWorkPathsOnRo
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorksWithPathsMissingSince = `-- name: ListWorksWithPathsMissingSince :many
+SELECT DISTINCT di.work_id
+FROM library_path p
+JOIN desired_item_file f ON f.media_object_id = p.media_object_id
+JOIN desired_item di ON di.id = f.desired_item_id
+WHERE p.root_folder_id = ?1 AND p.missing_since = ?2
+  AND di.work_id > ?3
+ORDER BY di.work_id
+LIMIT ?4
+`
+
+type ListWorksWithPathsMissingSinceParams struct {
+	RootFolderID int64
+	MissingSince sql.NullInt64
+	AfterID      int64
+	PageSize     int64
+}
+
+// The works holding a file one sweep found gone, so their counts can follow.
+func (q *Queries) ListWorksWithPathsMissingSince(ctx context.Context, arg ListWorksWithPathsMissingSinceParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksWithPathsMissingSince,
+		arg.RootFolderID,
+		arg.MissingSince,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var work_id int64
+		if err := rows.Scan(&work_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -25,6 +25,10 @@ type ScanProgress struct {
 	FinishedAt      time.Time
 	FilesFound      int64
 	DirectoriesRead int64
+	// VanishedHeld is how many paths a full sweep found gone and did not mark, a mass vanish waiting to be accepted;
+	// VanishedThrough is that sweep's start, which accepting marks against.
+	VanishedHeld    int64
+	VanishedThrough time.Time
 }
 
 // Running reports a sweep that started and has not finished, which after a restart
@@ -120,6 +124,30 @@ type FinishedScan struct {
 	DirectoriesRead int64
 }
 
+// HoldVanished records a mass vanish a sweep did not mark; a later sweep that finds the files back clears it.
+func (s Scans) HoldVanished(ctx context.Context, rootFolderID, count int64, through time.Time) error {
+	err := s.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).HoldVanished(ctx, librarydb.HoldVanishedParams{
+			VanishedHeld: count, VanishedThrough: through.Unix(), RootFolderID: rootFolderID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("library: hold vanished files of root %d: %w", rootFolderID, err)
+	}
+	return nil
+}
+
+// ClearVanished forgets a held mass vanish: accepted, or the files came back.
+func (s Scans) ClearVanished(ctx context.Context, rootFolderID int64) error {
+	err := s.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).ClearVanished(ctx, rootFolderID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: clear vanished files of root %d: %w", rootFolderID, err)
+	}
+	return nil
+}
+
 // Forget removes a root's progress, for a root that has left the configuration.
 func (s Scans) Forget(ctx context.Context, rootFolderID int64) error {
 	err := s.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
@@ -140,6 +168,8 @@ func progressFrom(row librarydb.ScanState) ScanProgress {
 		FinishedAt:      unixOrZeroNullable(row.FinishedAt),
 		FilesFound:      row.FilesFound,
 		DirectoriesRead: row.DirectoriesRead,
+		VanishedHeld:    row.VanishedHeld,
+		VanishedThrough: unixOrZero(row.VanishedThrough),
 	}
 }
 

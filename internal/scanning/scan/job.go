@@ -238,8 +238,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	// incremental sweep skips directories whose mtime did not move and would
 	// wrongly mark their contents missing.
 	outcome := SweepOutcome{EmptyDirectories: result.EmptyDirectories}
-	if payload.Full {
-		j.markMissing(ctx, root, result.State.SweptThrough)
+	if payload.Full && j.markMissing(ctx, root, result.State.SweptThrough) {
 		outcome.MissingSince = result.State.SweptThrough
 	}
 	if sweep.Housekeeping != nil {
@@ -284,19 +283,50 @@ func (j *Job) rescanDirectories(
 	return nil
 }
 
-// markMissing is best-effort cleanup, not the sweep's core job: a failure here does
-// not undo an otherwise-successful sweep, so it is logged rather than returned.
-func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptThrough time.Time) {
+// A full sweep that would mark more than this many of a root's paths missing, and more than one in
+// massVanishShare of them, holds the marking back: a mount that failed for one sweep is not a deleted library.
+const (
+	massVanishFloor = 50
+	massVanishShare = 20
+)
+
+// MassVanish reports whether vanishing paths out of a root's total are too many to believe without a person.
+func MassVanish(vanishing, total int64) bool {
+	return vanishing > massVanishFloor && vanishing*massVanishShare > total
+}
+
+// markMissing answers whether it marked: best-effort cleanup, not the sweep's core job, so a failure is logged. A mass
+// vanish is held for someone to accept (Root folders) and nothing changes until then.
+func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptThrough time.Time) bool {
+	vanishing, total, err := j.physical.Vanishing(ctx, root.ID, sweptThrough)
+	if err != nil {
+		j.logger.Warn("mark missing failed", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+		return false
+	}
+	if MassVanish(vanishing, total) {
+		if err := j.scans.HoldVanished(ctx, root.ID, vanishing, sweptThrough); err != nil {
+			j.logger.Warn("hold vanished files failed", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+		}
+		j.logger.Error("a full scan found most of a root folder's files gone and marked none of them missing; "+
+			"if they were deleted on purpose, accept it under Storage -> Root folders",
+			slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
+			slog.Int64("vanished", vanishing), slog.Int64("of", total))
+		return false
+	}
+	if err := j.scans.ClearVanished(ctx, root.ID); err != nil {
+		j.logger.Warn("clear vanished files failed", slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
+	}
 	marked, err := j.physical.MarkMissing(ctx, root.ID, sweptThrough)
 	if err != nil {
 		j.logger.Warn("mark missing failed",
 			slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
 			slog.Any("error", err))
-		return
+		return false
 	}
 	j.logger.Info("library paths marked missing",
 		slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
 		slog.Int("marked", marked))
+	return true
 }
 
 // observe probes one batch in a single mediatool call and hands it to the consumer.

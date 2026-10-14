@@ -22,6 +22,15 @@ document (`categories[].file_management`).
 
 Rules worth knowing:
 
+- **A file a full scan found gone stops counting as held** (both types): its album or season turns partial or missing and
+  is searched for again, unless *Unmonitor deleted* is on. A file with another path still on disk counts; a file found
+  again counts again at once. **A mass vanish is held**: a full scan that would mark more than 50 of a root's files *and*
+  more than one in twenty of them marks none, says so under the bell, and waits. Run a full scan once the disk is back (an incremental one skips folders
+  whose date did not change, as a remounted one's does not), or
+  **Accept as gone** on Storage -> Root folders (`POST /rootfolders/{id}/vanished/accept`), which marks what that scan
+  missed and runs *Unmonitor deleted*. An offline root is never scanned, so nothing on it goes missing
+  (`scan.MassVanish`, `adapters.VanishedFiles`).
+
 - **The recycling bin is recycle bin** (section 10.8): there is no bin path. Removed files go to
   `<root>/recycleBin/<date>/` on the same filesystem. A file in two libraries is kept as long as
   either wants and its folders removed only when both say so.

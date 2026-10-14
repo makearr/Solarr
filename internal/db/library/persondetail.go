@@ -115,7 +115,7 @@ func (p People) Credits(ctx context.Context, id int64, visible []int64) ([]Perso
 	query := `SELECT DISTINCT d.category_id, c.role, c.character, COALESCE(pt.media_ref, ''), COALESCE(pt.sort_key, ''),
        ` + workColumns + `, work.subtype,
        ` + workStateColumn + `,
-       CAST((SELECT COUNT(*) FROM work_root_folder wrf WHERE wrf.work_id = work.id) AS INTEGER) AS on_disk_count,
+       CAST(EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id WHERE wf.work_id = work.id AND lp.missing_since IS NULL) AS INTEGER) AS on_disk_count,
        ` + discographyStatusColumns + `,
        ` + unverifiedColumn + ` AS unverified
 FROM credit c

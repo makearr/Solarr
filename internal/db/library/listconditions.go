@@ -73,7 +73,7 @@ func addWorkConditions(predicates *store.Predicates, conditions []listfilter.Con
 		case "size_mb":
 			fragment, arguments = condition.SQL(listfilter.Number, workSizeBytes+" / 1048576.0")
 		case "on_disk":
-			fragment, arguments = condition.SQL(listfilter.Bool, "EXISTS (SELECT 1 FROM work_root_folder wrf WHERE wrf.work_id = work.id)")
+			fragment, arguments = condition.SQL(listfilter.Bool, "EXISTS (SELECT 1 FROM work_file wf JOIN library_path lp ON lp.media_object_id = wf.media_object_id WHERE wf.work_id = work.id AND lp.missing_since IS NULL)")
 		case "verified":
 			fragment, arguments = condition.SQL(listfilter.Bool, "NOT "+unverifiedColumn)
 		default:
