@@ -72,14 +72,20 @@ and holds for any media type whose parts come out one at a time:
 
 | What the part has | Out when |
 |---|---|
-| A time (`available_at`) | that time plus a grace by confidence: high 2 h, medium 12 h, low or unknown 36 h |
-| A day only (`date`) | 36 h after the day begins (UTC): the whole day in an unknown zone |
+| A time (`available_at`) | that time plus the part's grace (`available_grace`): by confidence, high 2 h, medium 12 h, low or unknown 36 h by default |
+| A day only (`date`) | the low grace (36 h by default) after the day begins (UTC): the whole day in an unknown zone |
 | Neither, and announced (`available_basis = unannounced`, what TV writes for an episode without a date) | never, until it gets one |
 | Neither (a track) | always |
 
-Nothing is written when an episode airs, so the registered task **Count what has come out** (every 15 minutes)
-re-counts the season items of works with a part whose time or day is within the last three days or still ahead,
-writing only those whose count changed; the planner sees them as dirty. The season search asks for an episode by the same rule,
+The three graces are advanced settings (Settings -> Metadata -> Air times, `availability.grace_*_hours`, 0-336 h). The TV
+write stamps them on each part; a part stamped before keeps its value until **Count what has come out** (every 15
+minutes, and at once when the settings change) re-stamps every part whose grace differs (`Series.StampGrace`, 200 a batch),
+then re-counts the season items of works with a part whose time or day is within the longest grace plus 36 h or still
+ahead, writing only those whose count changed; the planner sees them as dirty. A season owing nothing yet carries its next
+episode's time as `desired_item.available_from` (basis `parts`): its header reads "Not out yet", lists "Not released yet".
+
+A series' **Air time zone** (Edit, an editable facet that refreshes the series) is the person's word over the providers':
+every dated episode then airs at the series' local air time in that zone (confidence medium, basis "series air time"). The season search asks for an episode by the same rule,
 grace included. Wanted > Missing lists an episode from its time or day without the grace. An episode stored before
 this rule with neither time nor date counts as owed until the series is next refreshed.
 

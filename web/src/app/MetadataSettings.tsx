@@ -250,6 +250,19 @@ export function MetadataSettings() {
         savingTVDB={saveTVDBKey.isPending}
         failedTVDB={saveTVDBKey.isError}
       />
+      {advanced && settings.availability_grace_hours && (
+        <Card
+          title="Air times"
+          help="How long after an episode airs it is waited for before it counts as missing and is searched for: releases need a while to appear."
+        >
+          <GraceForm
+            key={JSON.stringify(settings.availability_grace_hours)}
+            stored={settings.availability_grace_hours}
+            busy={patch.isPending}
+            onSave={(grace) => patch.mutate({ availability_grace_hours: grace })}
+          />
+        </Card>
+      )}
       {patch.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
   );
@@ -691,6 +704,61 @@ function UserAgentForm({
 }
 
 /** How many artists one enrichment run gives a photo and biography. */
+type Grace = { high: number; medium: number; low: number };
+
+const GRACE_FIELDS: readonly { key: keyof Grace; label: string; help: string }[] = [
+  { key: "high", label: "After an exact air time", help: "The provider states the minute it airs. Default 2 hours." },
+  { key: "medium", label: "After a likely air time", help: "A provider worked the time out from the network's schedule. Default 12 hours." },
+  { key: "low", label: "After an air date", help: "Only the day is known; counted from its start. Default 36 hours." },
+];
+
+function GraceForm({ stored, onSave, busy }: { stored: Grace; onSave: (grace: Grace) => void; busy: boolean }) {
+  const [draft, setDraft] = useState<Record<keyof Grace, string>>({
+    high: String(stored.high), medium: String(stored.medium), low: String(stored.low),
+  });
+  const values = { high: Number(draft.high), medium: Number(draft.medium), low: Number(draft.low) };
+  const valid = Object.values(values).every((hours) => Number.isInteger(hours) && hours >= 0 && hours <= 336);
+  const changed = values.high !== stored.high || values.medium !== stored.medium || values.low !== stored.low;
+  return (
+    <form
+      className="flex flex-col gap-3 text-xs text-ink-muted"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (valid) onSave(values);
+      }}
+    >
+      {GRACE_FIELDS.map((field) => (
+        <label key={field.key} className="flex flex-col gap-1">
+          {field.label}
+          <span className="flex items-center gap-1.5">
+            <input
+              type="number"
+              min={0}
+              max={336}
+              value={draft[field.key]}
+              disabled={busy}
+              onChange={(event) => setDraft({ ...draft, [field.key]: event.target.value })}
+              className={`${inputStyle} w-20`}
+            />
+            hours
+          </span>
+          <span className="text-[0.6875rem]">{field.help}</span>
+        </label>
+      ))}
+      {changed && (
+        <button
+          type="submit"
+          disabled={busy || !valid}
+          className="w-fit rounded-md bg-accent px-2 py-1 text-accent-ink disabled:opacity-50
+                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          Save
+        </button>
+      )}
+    </form>
+  );
+}
+
 function BackfillForm({
   stored,
   onSave,

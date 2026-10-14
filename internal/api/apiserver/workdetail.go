@@ -77,6 +77,8 @@ type PartRow struct {
 	AvailableAt time.Time
 	// AvailableBasis and AvailableConfidence say how that time is known and how sure it is.
 	AvailableBasis, AvailableConfidence string
+	// AvailableGrace is how long after that time the part is waited for before it counts as out.
+	AvailableGrace time.Duration
 	// Section and Number place the part as its type does: "Disc 2", "3".
 	Section, Number string
 	AltNumbers      map[string]string
@@ -742,6 +744,8 @@ func buildPartViews(rows []PartRow) []gen.WorkPart {
 			views[index].AvailableBasis = &row.AvailableBasis
 			confidence := gen.WorkPartAvailableConfidence(row.AvailableConfidence)
 			views[index].AvailableConfidence = &confidence
+			hours := int64(row.AvailableGrace / time.Hour)
+			views[index].OutGraceHours = &hours
 		}
 		views[index].Section, views[index].Number = strPtr(row.Section), strPtr(row.Number)
 		if len(row.AltNumbers) > 0 {

@@ -57,6 +57,8 @@ type Facet struct {
 	Filterable bool
 	// Editable lets a person set it on the work's Edit; their value wins over every source.
 	Editable bool
+	// RefreshesWork reads the work again when a person changes it: the type derives other data from it.
+	RefreshesWork bool
 }
 
 // workColumns are the base columns of a work a facet may read; a facet never adds one.

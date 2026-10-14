@@ -31,9 +31,11 @@ type SeriesPartWrite struct {
 	Date                                string
 	AvailableAt                         *int64
 	AvailableConfidence, AvailableBasis string
-	MonitoredIfNew                      bool
-	AltNumbers                          []AltNumberWrite
-	ExternalIDs                         []ExternalIDWrite
+	// AvailableGrace is the wait after its time or date, stamped from the settings; nil takes its confidence's default.
+	AvailableGrace *time.Duration
+	MonitoredIfNew bool
+	AltNumbers     []AltNumberWrite
+	ExternalIDs    []ExternalIDWrite
 }
 
 // SeriesFieldWrite is one provider's value of a field, kept beside the others for the field-level merge (ADR-8).
@@ -381,6 +383,7 @@ func upsertSeriesPart(ctx context.Context, queries *librarydb.Queries, workID in
 		WorkID: workID, MediaRef: part.MediaRef, SortKey: part.SortKey, Title: nullString(part.Title), RuntimeMs: nullInt64(part.RuntimeMs),
 		Date: nullString(part.Date), Monitored: boolInt(part.MonitoredIfNew), AvailableAt: nullInt64(part.AvailableAt),
 		AvailableConfidence: orDefault(part.AvailableConfidence, "unknown"), AvailableBasis: part.AvailableBasis,
+		AvailableGrace: graceSeconds(part.AvailableGrace),
 	})
 	if err != nil {
 		return 0, fmt.Errorf("library: upsert part %s: %w", part.MediaRef, err)
@@ -426,4 +429,35 @@ func (s Series) WorkByProviderID(ctx context.Context, provider, externalID strin
 		return 0, false, fmt.Errorf("library: look up work %s:%s: %w", provider, externalID, err)
 	}
 	return work.ID, true, nil
+}
+
+func graceSeconds(grace *time.Duration) sql.NullInt64 {
+	if grace == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*grace / time.Second), Valid: true}
+}
+
+// StampGrace gives every part with a time or a date the wait grace says for its confidence, a batch at a time, and
+// answers how many parts changed.
+func (s Series) StampGrace(ctx context.Context, grace AvailabilityGrace) (int, error) {
+	total := 0
+	for {
+		var changed int64
+		err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			var err error
+			changed, err = librarydb.New(tx).StampPartGrace(ctx, librarydb.StampPartGraceParams{
+				High: int64(grace.High / time.Second), Medium: int64(grace.Medium / time.Second),
+				Low: int64(grace.Low / time.Second), Limit: dirtyBatchSize,
+			})
+			return err
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: stamp part grace: %w", err)
+		}
+		if changed == 0 {
+			return total, nil
+		}
+		total += int(changed)
+	}
 }

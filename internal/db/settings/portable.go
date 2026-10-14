@@ -77,6 +77,8 @@ type ScalarSettingsEntry struct {
 	MetadataTheAudioDB   *bool     `yaml:"metadata_theaudiodb,omitempty"`
 	// MetadataPeopleBackfillPerRun is how many artists one run backfills; absent keeps the stored value.
 	MetadataPeopleBackfillPerRun *int64 `yaml:"metadata_people_backfill_per_run,omitempty"`
+	// AvailabilityGraceHours is the wait after a part's time by how sure it is; absent keeps the stored values.
+	AvailabilityGraceHours *AvailabilityGraceEntry `yaml:"availability_grace_hours,omitempty"`
 	// UsersNewLibraryPermission is what new accounts are granted on later libraries; empty keeps it.
 	UsersNewLibraryPermission Permission `yaml:"users_new_library_permission,omitempty"`
 	// Backup retention; an empty mode keeps all three as stored.
@@ -377,6 +379,13 @@ type ExclusionPatternEntry struct {
 	Enabled   bool   `yaml:"enabled"`
 }
 
+// AvailabilityGraceEntry is the wait after a part's time, in hours.
+type AvailabilityGraceEntry struct {
+	High   int64 `yaml:"high"`
+	Medium int64 `yaml:"medium"`
+	Low    int64 `yaml:"low"`
+}
+
 // DocumentVersion is the document's shape, not the product's version.
 const DocumentVersion = 1
 
@@ -426,6 +435,9 @@ func (c *Cache) Export() Document {
 		MetadataAcoustID:             metadata.AcoustID,
 		MetadataTheAudioDB:           metadata.TheAudioDB,
 		MetadataPeopleBackfillPerRun: metadata.PeopleBackfillPerRun,
+		AvailabilityGraceHours: &AvailabilityGraceEntry{
+			High: metadata.AvailabilityGrace.High, Medium: metadata.AvailabilityGrace.Medium, Low: metadata.AvailabilityGrace.Low,
+		},
 	}
 
 	roots := snapshot.RootFolders()
@@ -649,6 +661,12 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 			}
 			for _, problem := range validateMetadataSettings(MetadataSettings{
 				BrainzMashUserAgent: d.Settings.BrainzMashUserAgent, SourceOrder: order}) {
+				problems = append(problems, prefixed("settings", problem))
+			}
+		}
+		if grace := d.Settings.AvailabilityGraceHours; grace != nil {
+			for _, problem := range validateMetadataSettings(MetadataSettings{BrainzMashUserAgent: DefaultBrainzMashUserAgent,
+				AvailabilityGrace: &AvailabilityGraceHours{High: grace.High, Medium: grace.Medium, Low: grace.Low}}) {
 				problems = append(problems, prefixed("settings", problem))
 			}
 		}
@@ -1277,6 +1295,11 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	}
 	if entry.AutomaticSearchesPerHour != nil {
 		values[KeySearchesPerHour] = strconv.FormatInt(*entry.AutomaticSearchesPerHour, 10)
+	}
+	if grace := entry.AvailabilityGraceHours; grace != nil {
+		values[KeyAvailabilityGraceHigh] = strconv.FormatInt(grace.High, 10)
+		values[KeyAvailabilityGraceMedium] = strconv.FormatInt(grace.Medium, 10)
+		values[KeyAvailabilityGraceLow] = strconv.FormatInt(grace.Low, 10)
 	}
 	if entry.MetadataPeopleBackfillPerRun != nil {
 		values[KeyMetadataPeopleBackfillPerRun] = strconv.FormatInt(*entry.MetadataPeopleBackfillPerRun, 10)

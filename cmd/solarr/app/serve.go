@@ -681,6 +681,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorkEditor: adapters.WorkEdit{
 			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 			Settings: p.cache, Facets: adapters.MediaTypes{Registry: p.media}.Facets,
+			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf,
 		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles()},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},

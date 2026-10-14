@@ -24,6 +24,11 @@ var facets = []media.Facet{
 		Column:  true, Filterable: true, Editable: true,
 	},
 	{
+		Key: "air_time_zone", Label: "Air time zone", Entity: model.LevelEntityWork, Kind: media.FacetEnum,
+		Source:  media.FacetSource{Kind: media.SourceField, Name: FieldAirTimeZone},
+		Choices: zoneChoices(), Editable: true, RefreshesWork: true,
+	},
+	{
 		Key: "network", Label: "Network", Entity: model.LevelEntityWork, Kind: media.FacetText,
 		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Sortable: true, Filterable: true,
 	},

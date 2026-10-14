@@ -3,8 +3,8 @@
 -- A refresh never changes monitoring: monitored is left out of the update.
 -- name: UpsertWorkPart :one
 INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored,
-                       available_at, available_confidence, available_basis)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       available_at, available_confidence, available_basis, available_grace)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (work_id, media_ref) DO UPDATE SET
   sort_key = excluded.sort_key,
   title = excluded.title,
@@ -12,8 +12,9 @@ ON CONFLICT (work_id, media_ref) DO UPDATE SET
   date = excluded.date,
   available_at = excluded.available_at,
   available_confidence = excluded.available_confidence,
-  available_basis = excluded.available_basis
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis;
+  available_basis = excluded.available_basis,
+  available_grace = excluded.available_grace
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace;
 
 -- name: DeleteWorkTitlesBySource :exec
 DELETE FROM work_title WHERE work_id = ? AND source = ?;
@@ -139,3 +140,15 @@ WHERE p.work_id = sqlc.arg(work_id) AND a.scheme = sqlc.arg(scheme);
 
 -- name: DeleteWorkFieldByProvider :exec
 DELETE FROM work_field WHERE work_id = ? AND field = ? AND provider = ?;
+
+-- One batch of parts whose stamped wait differs from what the settings now say for their confidence.
+-- name: StampPartGrace :execrows
+UPDATE work_part SET available_grace = CASE available_confidence
+    WHEN 'high' THEN CAST(sqlc.arg(high) AS INTEGER) WHEN 'medium' THEN CAST(sqlc.arg(medium) AS INTEGER) ELSE CAST(sqlc.arg(low) AS INTEGER) END
+WHERE id IN (
+  SELECT p.id FROM work_part p
+  WHERE (p.available_at IS NOT NULL OR p.date IS NOT NULL)
+    AND p.available_grace IS NOT CASE p.available_confidence
+          WHEN 'high' THEN CAST(sqlc.arg(high) AS INTEGER) WHEN 'medium' THEN CAST(sqlc.arg(medium) AS INTEGER) ELSE CAST(sqlc.arg(low) AS INTEGER) END
+  LIMIT sqlc.arg(limit)
+);

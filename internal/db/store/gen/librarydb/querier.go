@@ -990,6 +990,8 @@ type Querier interface {
 	// so there is no earlier value worth protecting.
 	// A work is named after its release group once enrichment has it, not after whichever file came first.
 	SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) error
+	// One batch of parts whose stamped wait differs from what the settings now say for their confidence.
+	StampPartGrace(ctx context.Context, arg StampPartGraceParams) (int64, error)
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.
 	StartScan(ctx context.Context, arg StartScanParams) error

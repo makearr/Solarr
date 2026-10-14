@@ -74,7 +74,9 @@ type Service struct {
 	AniList AnimeSource
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
-	Series   library.Series
+	// Grace is the configured wait after an episode's time, read per write; nil leaves each part its default.
+	Grace  func() library.AvailabilityGrace
+	Series library.Series
 	// Exclusions are the works the user removed and asked not to see again.
 	Exclusions library.Exclusions
 	Reader     library.SeriesReader
@@ -395,7 +397,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, err
 	}
 	now := s.Clock.Now()
-	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Monitor: request.Monitor, Specials: request.Specials, Now: now}))
+	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Monitor: request.Monitor, Specials: request.Specials, Now: now, Grace: s.grace()}))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -500,6 +502,11 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	if err != nil {
 		return AddResult{}, err
 	}
+	manual, err := s.Reader.ManualFields(ctx, request.WorkID)
+	if err != nil {
+		return AddResult{}, err
+	}
+	applyAirTimeZone(&series, manual[FieldAirTimeZone])
 	monitored, err := s.Reader.SeasonMonitoring(ctx, request.WorkID)
 	if err != nil {
 		return AddResult{}, err
@@ -518,7 +525,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 		return seriesWanted
 	}
 	now := s.Clock.Now()
-	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{NewPart: wants, Now: now}))
+	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{NewPart: wants, Now: now, Grace: s.grace()}))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -658,4 +665,12 @@ var trailingBrackets = regexp.MustCompile(`\s*\([^)]*\)\s*$`)
 func ParseID(externalID string) (int64, bool) {
 	id, err := strconv.ParseInt(externalID, 10, 64)
 	return id, err == nil && id > 0
+}
+
+func (s Service) grace() *library.AvailabilityGrace {
+	if s.Grace == nil {
+		return nil
+	}
+	grace := s.Grace()
+	return &grace
 }

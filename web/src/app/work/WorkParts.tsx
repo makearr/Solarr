@@ -39,14 +39,11 @@ export function useAllParts(workId: number, group: string | undefined, enabled =
   return { parts: (parts.data?.pages ?? []).flatMap((page) => page.items), loading: parts.isLoading, error: parts.isError };
 }
 
-// How long a part is waited for after its time, by how sure the time is; the server's own table (library.PartOut).
-const GRACE_HOURS: Record<string, number> = { high: 2, medium: 12 };
-
 /** Where a part's time comes from and when it starts to count as missing, for the reader who doubts it. */
 function outNote(part: Part): string | undefined {
   if (!part.available_basis) return undefined;
   if (part.available_basis === "unannounced") return t("work.outUnannounced");
-  return t("work.outBasis", { basis: part.available_basis, hours: GRACE_HOURS[part.available_confidence ?? ""] ?? 36 });
+  return t("work.outBasis", { basis: part.available_basis, hours: part.out_grace_hours ?? 36 });
 }
 
 const STATE: Record<PartState, { label: string; tone: string }> = {

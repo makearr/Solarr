@@ -271,6 +271,122 @@
         "sortable": false
       },
       {
+        "choices": [
+          {
+            "key": "America/Mexico_City",
+            "label": "America/Mexico City"
+          },
+          {
+            "key": "America/New_York",
+            "label": "America/New York"
+          },
+          {
+            "key": "America/Sao_Paulo",
+            "label": "America/Sao Paulo"
+          },
+          {
+            "key": "America/Toronto",
+            "label": "America/Toronto"
+          },
+          {
+            "key": "Asia/Bangkok",
+            "label": "Asia/Bangkok"
+          },
+          {
+            "key": "Asia/Kolkata",
+            "label": "Asia/Kolkata"
+          },
+          {
+            "key": "Asia/Seoul",
+            "label": "Asia/Seoul"
+          },
+          {
+            "key": "Asia/Shanghai",
+            "label": "Asia/Shanghai"
+          },
+          {
+            "key": "Asia/Taipei",
+            "label": "Asia/Taipei"
+          },
+          {
+            "key": "Asia/Tokyo",
+            "label": "Asia/Tokyo"
+          },
+          {
+            "key": "Australia/Sydney",
+            "label": "Australia/Sydney"
+          },
+          {
+            "key": "Europe/Amsterdam",
+            "label": "Europe/Amsterdam"
+          },
+          {
+            "key": "Europe/Berlin",
+            "label": "Europe/Berlin"
+          },
+          {
+            "key": "Europe/Copenhagen",
+            "label": "Europe/Copenhagen"
+          },
+          {
+            "key": "Europe/Dublin",
+            "label": "Europe/Dublin"
+          },
+          {
+            "key": "Europe/Helsinki",
+            "label": "Europe/Helsinki"
+          },
+          {
+            "key": "Europe/London",
+            "label": "Europe/London"
+          },
+          {
+            "key": "Europe/Madrid",
+            "label": "Europe/Madrid"
+          },
+          {
+            "key": "Europe/Moscow",
+            "label": "Europe/Moscow"
+          },
+          {
+            "key": "Europe/Oslo",
+            "label": "Europe/Oslo"
+          },
+          {
+            "key": "Europe/Paris",
+            "label": "Europe/Paris"
+          },
+          {
+            "key": "Europe/Rome",
+            "label": "Europe/Rome"
+          },
+          {
+            "key": "Europe/Stockholm",
+            "label": "Europe/Stockholm"
+          },
+          {
+            "key": "Europe/Warsaw",
+            "label": "Europe/Warsaw"
+          },
+          {
+            "key": "Pacific/Auckland",
+            "label": "Pacific/Auckland"
+          },
+          {
+            "key": "UTC",
+            "label": "UTC"
+          }
+        ],
+        "column": false,
+        "editable": true,
+        "entity": "work",
+        "filterable": false,
+        "key": "air_time_zone",
+        "kind": "enum",
+        "label": "Air time zone",
+        "sortable": false
+      },
+      {
         "column": true,
         "entity": "work",
         "filterable": true,

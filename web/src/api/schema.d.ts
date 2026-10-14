@@ -5714,6 +5714,11 @@ export interface components {
              * @enum {string}
              */
             available_confidence?: "unknown" | "low" | "medium" | "high";
+            /**
+             * Format: int64
+             * @description Hours after its time (or the start of its date) it is waited for before it counts as out; set with available_confidence.
+             */
+            out_grace_hours?: number;
             /** @description The heading the part sits under within its group, as the type places it: "Disc 2"; empty for none. */
             section?: string;
             /** @description The number the part is shown with: a track's, an episode's. */
@@ -6209,6 +6214,15 @@ export interface components {
              * @description How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
              */
             people_backfill_per_run?: number;
+            /** @description How many hours after an episode's time it is waited for before it counts as missing and is searched for, by how sure the time is: stated exactly (default 2), worked out by a provider (12), a date alone (36). 0 to 336 each. Omitted on a PATCH leaves them alone. */
+            availability_grace_hours?: {
+                /** Format: int64 */
+                high: number;
+                /** Format: int64 */
+                medium: number;
+                /** Format: int64 */
+                low: number;
+            };
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {

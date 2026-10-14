@@ -64,6 +64,23 @@ const (
 	KeyMetadataPeopleBackfillPerRun = "metadata.people_backfill_per_run"
 )
 
+// How long after its time a part (an episode) is waited for before it is owed, by how sure that time is: an exact
+// time, a likely one, a date alone (section 19.2; settings since 2026-10-14).
+const (
+	KeyAvailabilityGraceHigh   = "availability.grace_high_hours"
+	KeyAvailabilityGraceMedium = "availability.grace_medium_hours"
+	KeyAvailabilityGraceLow    = "availability.grace_low_hours"
+)
+
+// DefaultAvailabilityGrace is the grace a library waits when none is set.
+var DefaultAvailabilityGrace = AvailabilityGraceHours{High: 2, Medium: 12, Low: 36}
+
+// maxAvailabilityGraceHours is two weeks: a part later than that is better marked by hand.
+const maxAvailabilityGraceHours = 336
+
+// AvailabilityGraceHours is the wait after a part's time, in hours, by how sure the time is.
+type AvailabilityGraceHours struct{ High, Medium, Low int64 }
+
 // DefaultPeopleBackfillPerRun suits BrainzMash's 10 req/s; the old 60 was sized for MusicBrainz's 1.
 const DefaultPeopleBackfillPerRun = 200
 
@@ -123,6 +140,8 @@ type MetadataSettings struct {
 	TheAudioDB *bool
 	// PeopleBackfillPerRun is how many artists one run backfills; nil on a write leaves it alone.
 	PeopleBackfillPerRun *int64
+	// AvailabilityGrace is the wait after a part's time before it is owed; nil on a write leaves it alone.
+	AvailabilityGrace *AvailabilityGraceHours
 }
 
 // MetadataSettings reads the configured policy; an absent or empty agent is the shipped default.
@@ -138,12 +157,22 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 	wikidata, acoustID := s.policyBool(KeyMetadataWikidata, true), s.policyBool(KeyMetadataAcoustID, true)
 	theAudioDB := s.policyBool(KeyMetadataTheAudioDB, true)
 	backfill := s.policyInt(KeyMetadataPeopleBackfillPerRun, DefaultPeopleBackfillPerRun)
+	grace := s.AvailabilityGrace()
 	return MetadataSettings{
 		BrainzMashUserAgent: agent, SourceOrder: order,
 		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
 		TVSources:    s.policyStringListOr(KeyMetadataTVSources, DefaultTVSources),
 		Wikidata:     &wikidata, AcoustID: &acoustID, TheAudioDB: &theAudioDB,
-		PeopleBackfillPerRun: &backfill,
+		PeopleBackfillPerRun: &backfill, AvailabilityGrace: &grace,
+	}
+}
+
+// AvailabilityGrace reads the wait after a part's time, the defaults where none is set.
+func (s *Snapshot) AvailabilityGrace() AvailabilityGraceHours {
+	return AvailabilityGraceHours{
+		High:   s.policyInt(KeyAvailabilityGraceHigh, DefaultAvailabilityGrace.High),
+		Medium: s.policyInt(KeyAvailabilityGraceMedium, DefaultAvailabilityGrace.Medium),
+		Low:    s.policyInt(KeyAvailabilityGraceLow, DefaultAvailabilityGrace.Low),
 	}
 }
 
@@ -187,6 +216,15 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 		if err := c.setPolicy(ctx, cl, KeyMetadataPeopleBackfillPerRun,
 			strconv.FormatInt(*ms.PeopleBackfillPerRun, 10)); err != nil {
 			return err
+		}
+	}
+	if grace := ms.AvailabilityGrace; grace != nil {
+		for key, hours := range map[string]int64{
+			KeyAvailabilityGraceHigh: grace.High, KeyAvailabilityGraceMedium: grace.Medium, KeyAvailabilityGraceLow: grace.Low,
+		} {
+			if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(hours, 10)); err != nil {
+				return err
+			}
 		}
 	}
 	if len(ms.SourceOrder) == 0 {
@@ -243,6 +281,16 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 			})
 		}
 		tvSeen[name] = true
+	}
+	if grace := ms.AvailabilityGrace; grace != nil {
+		for key, hours := range map[string]int64{
+			KeyAvailabilityGraceHigh: grace.High, KeyAvailabilityGraceMedium: grace.Medium, KeyAvailabilityGraceLow: grace.Low,
+		} {
+			if hours < 0 || hours > maxAvailabilityGraceHours {
+				problems = append(problems, config.Problem{Path: key, Value: strconv.FormatInt(hours, 10),
+					Expectation: "0 to " + strconv.Itoa(maxAvailabilityGraceHours) + " hours"})
+			}
+		}
 	}
 	if perRun := ms.PeopleBackfillPerRun; perRun != nil && (*perRun < 1 || *perRun > maxPeopleBackfillPerRun) {
 		problems = append(problems, config.Problem{

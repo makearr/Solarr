@@ -63,7 +63,9 @@ type SeriesEpisode struct {
 	Present             bool
 	AvailableAt         int64
 	AvailableConfidence string
-	Absolute            string
+	// AvailableGrace is how long after its time or date it is waited for.
+	AvailableGrace time.Duration
+	Absolute       string
 }
 
 // SeriesCreditRow is one person's credit on a series; PartID is the episode of an episode-scoped credit, 0 for the series.
@@ -164,6 +166,7 @@ func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now tim
 			PartID: part.ID, Season: season, Number: number, Absolute: absoluteOf[part.ID], Title: part.Title.String, Date: part.Date.String,
 			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
 			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,
+			AvailableGrace: PartGrace(part.AvailableGrace, part.AvailableConfidence),
 		})
 	}
 	return detail, nil
@@ -397,4 +400,9 @@ func (r SeriesReader) WantedSeasonItems(ctx context.Context, workIDs []int64) ([
 		wanted = append(wanted, byWork[workID]...)
 	}
 	return wanted, nil
+}
+
+// ManualFields answers the series' fields the user set themselves, by field.
+func (r SeriesReader) ManualFields(ctx context.Context, workID int64) (map[string]string, error) {
+	return Works(r).ManualFields(ctx, workID)
 }

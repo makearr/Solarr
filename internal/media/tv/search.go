@@ -106,7 +106,7 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 		}
 		// An episode with neither a time nor a date is not asked for, whatever its row says of being announced.
 		aired := (episode.AvailableAt > 0 || episode.Date != "") &&
-			library.PartOut(episode.AvailableAt, episode.AvailableConfidence, episode.Date, "", now)
+			library.PartOut(episode.AvailableAt, episode.AvailableGrace, episode.Date, "", now)
 		switch {
 		case only > 0:
 			if episode.Number == only {

@@ -39,7 +39,8 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 
 	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
 		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
-		settings.KeyMetadataTheAudioDB, settings.KeyMetadataPeopleBackfillPerRun); err != nil {
+		settings.KeyMetadataTheAudioDB, settings.KeyMetadataPeopleBackfillPerRun,
+		settings.KeyAvailabilityGraceHigh, settings.KeyAvailabilityGraceMedium, settings.KeyAvailabilityGraceLow); err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -60,6 +61,10 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 			wanted.TVSources = append(wanted.TVSources, string(source))
 		}
 	}
+	if grace := body.AvailabilityGraceHours; grace != nil {
+		wanted.AvailabilityGrace = &settings.AvailabilityGraceHours{High: grace.High, Medium: grace.Medium, Low: grace.Low}
+	}
+	wasGrace := s.auth.Settings.Snapshot().AvailabilityGrace()
 	wasAcoustID := *s.auth.Settings.Snapshot().MetadataSettings().AcoustID
 	// Absent leaves the stored order alone, so a client that only knows about
 	// the agent cannot silently reset it.
@@ -79,6 +84,12 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 		}
 		writeError(w, s.logger, err)
 		return
+	}
+	// A new wait counts at once: the re-count stamps it on every part.
+	if wanted.AvailabilityGrace != nil && *wanted.AvailabilityGrace != wasGrace && s.scheduler != nil {
+		if err := s.scheduler.RunNow(r.Context(), comingOutTaskKey, false); err != nil {
+			s.logger.Warn("could not re-count what has come out after the wait changed", "error", err)
+		}
 	}
 	// Switched back on with a key in place: what it skipped while off is identified now (D12).
 	if body.Acoustid != nil && *body.Acoustid && !wasAcoustID && s.fingerprintRetrier != nil &&
@@ -164,8 +175,16 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 		TmdbApiKey:           &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TMDBConfigured()},
 		TvdbApiKey:           &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().TVDBConfigured()},
 		PeopleBackfillPerRun: stored.PeopleBackfillPerRun,
+		AvailabilityGraceHours: &struct {
+			High   int64 `json:"high"`
+			Low    int64 `json:"low"`
+			Medium int64 `json:"medium"`
+		}{High: stored.AvailabilityGrace.High, Low: stored.AvailabilityGrace.Low, Medium: stored.AvailabilityGrace.Medium},
 	}
 }
+
+// comingOutTaskKey is the registered re-count of what has come out.
+const comingOutTaskKey = "coming_out"
 
 // SetTheAudioDBAPIKey replaces or clears an own TheAudioDB key. Administrator only.
 func (s *Server) SetTheAudioDBAPIKey(w http.ResponseWriter, r *http.Request) {

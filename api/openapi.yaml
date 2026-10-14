@@ -8469,6 +8469,7 @@ components:
         available_at: { type: string, format: date-time, description: When the part is out (an episode's air time); absent when unknown. }
         available_basis: { type: string, description: "How that time is known, as its source said it: \"tvmaze airstamp tz=America/New_York\"; absent when nothing says." }
         available_confidence: { type: string, enum: [unknown, low, medium, high], description: How sure the time is; a less sure one is waited out longer before the part counts as out. }
+        out_grace_hours: { type: integer, format: int64, description: "Hours after its time (or the start of its date) it is waited for before it counts as out; set with available_confidence." }
         section: { type: string, description: "The heading the part sits under within its group, as the type places it: \"Disc 2\"; empty for none." }
         number: { type: string, description: "The number the part is shown with: a track's, an episode's." }
         alt_numbers:
@@ -9146,6 +9147,17 @@ components:
           description: >-
             How many artists one enrichment run gives a photo and biography.
             Default 200. Omitted on a PATCH leaves it alone.
+        availability_grace_hours:
+          type: object
+          description: >-
+            How many hours after an episode's time it is waited for before it counts as missing and is searched for,
+            by how sure the time is: stated exactly (default 2), worked out by a provider (12), a date alone (36).
+            0 to 336 each. Omitted on a PATCH leaves them alone.
+          required: [high, medium, low]
+          properties:
+            high: { type: integer, format: int64, minimum: 0, maximum: 336 }
+            medium: { type: integer, format: int64, minimum: 0, maximum: 336 }
+            low: { type: integer, format: int64, minimum: 0, maximum: 336 }
 
     FileManagement:
       type: object

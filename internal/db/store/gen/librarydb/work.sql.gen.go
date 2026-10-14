@@ -433,7 +433,7 @@ func (q *Queries) CreateWork(ctx context.Context, arg CreateWorkParams) (Work, e
 const createWorkPart = `-- name: CreateWorkPart :one
 INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
 `
 
 type CreateWorkPartParams struct {
@@ -469,6 +469,7 @@ func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) 
 		&i.AvailableAt,
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
+		&i.AvailableGrace,
 	)
 	return i, err
 }
@@ -561,7 +562,7 @@ func (q *Queries) FindEditionTwin(ctx context.Context, arg FindEditionTwinParams
 }
 
 const findPartByAltNumber = `-- name: FindPartByAltNumber :one
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace
 FROM work_part p
 JOIN alt_numbering a ON a.part_id = p.id
 WHERE p.work_id = ?1
@@ -592,12 +593,13 @@ func (q *Queries) FindPartByAltNumber(ctx context.Context, arg FindPartByAltNumb
 		&i.AvailableAt,
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
+		&i.AvailableGrace,
 	)
 	return i, err
 }
 
 const findPartsByExternalID = `-- name: FindPartsByExternalID :many
-SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis
+SELECT p.id, p.work_id, p.media_ref, p.sort_key, p.title, p.runtime_ms, p.date, p.monitored, p.available_at, p.available_confidence, p.available_basis, p.available_grace
 FROM work_part p
 JOIN work_part_external_id e ON e.part_id = p.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -632,6 +634,7 @@ func (q *Queries) FindPartsByExternalID(ctx context.Context, arg FindPartsByExte
 			&i.AvailableAt,
 			&i.AvailableConfidence,
 			&i.AvailableBasis,
+			&i.AvailableGrace,
 		); err != nil {
 			return nil, err
 		}
@@ -647,7 +650,7 @@ func (q *Queries) FindPartsByExternalID(ctx context.Context, arg FindPartsByExte
 }
 
 const findWorkPart = `-- name: FindWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
 FROM work_part WHERE work_id = ? AND media_ref = ?
 `
 
@@ -671,6 +674,7 @@ func (q *Queries) FindWorkPart(ctx context.Context, arg FindWorkPartParams) (Wor
 		&i.AvailableAt,
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
+		&i.AvailableGrace,
 	)
 	return i, err
 }
@@ -968,7 +972,7 @@ func (q *Queries) GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNami
 }
 
 const getWorkPart = `-- name: GetWorkPart :one
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
 FROM work_part WHERE id = ?
 `
 
@@ -987,6 +991,7 @@ func (q *Queries) GetWorkPart(ctx context.Context, id int64) (WorkPart, error) {
 		&i.AvailableAt,
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
+		&i.AvailableGrace,
 	)
 	return i, err
 }
@@ -1843,7 +1848,7 @@ func (q *Queries) ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkP
 }
 
 const listWorkParts = `-- name: ListWorkParts :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
 FROM work_part WHERE work_id = ? ORDER BY sort_key, id
 `
 
@@ -1869,6 +1874,7 @@ func (q *Queries) ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, 
 			&i.AvailableAt,
 			&i.AvailableConfidence,
 			&i.AvailableBasis,
+			&i.AvailableGrace,
 		); err != nil {
 			return nil, err
 		}
@@ -1884,7 +1890,7 @@ func (q *Queries) ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, 
 }
 
 const listWorkPartsPage = `-- name: ListWorkPartsPage :many
-SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+SELECT id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
 FROM work_part
 WHERE work_id = ?1
   AND (CAST(?2 AS TEXT) = '' OR substr(media_ref, 1, length(CAST(?2 AS TEXT)) + 1) = CAST(?2 AS TEXT) || ':')
@@ -1928,6 +1934,7 @@ func (q *Queries) ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPagePa
 			&i.AvailableAt,
 			&i.AvailableConfidence,
 			&i.AvailableBasis,
+			&i.AvailableGrace,
 		); err != nil {
 			return nil, err
 		}

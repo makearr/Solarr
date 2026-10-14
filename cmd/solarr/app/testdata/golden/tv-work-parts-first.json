@@ -39,6 +39,7 @@
       "media_ref": "s01:e01",
       "monitored": true,
       "number": "1",
+      "out_grace_hours": 12,
       "runtime_ms": 2700000,
       "sort_key": "s0001e0001",
       "title": "Slack Water",

@@ -673,7 +673,7 @@ func requiredOf(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time
 			continue
 		}
 		scoped++
-		if part.Monitored == 1 && PartOut(part.AvailableAt.Int64, part.AvailableConfidence, part.Date.String, part.AvailableBasis, now) {
+		if part.Monitored == 1 && PartOut(part.AvailableAt.Int64, PartGrace(part.AvailableGrace, part.AvailableConfidence), part.Date.String, part.AvailableBasis, now) {
 			owed++
 		}
 	}
@@ -691,7 +691,7 @@ func nextOut(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time.Ti
 	var next int64
 	for _, part := range parts {
 		if part.Monitored != 1 || !partInScope(part.MediaRef, item.MediaRef) ||
-			PartOut(part.AvailableAt.Int64, part.AvailableConfidence, part.Date.String, part.AvailableBasis, now) {
+			PartOut(part.AvailableAt.Int64, PartGrace(part.AvailableGrace, part.AvailableConfidence), part.Date.String, part.AvailableBasis, now) {
 			continue
 		}
 		at := part.AvailableAt.Int64
@@ -726,14 +726,15 @@ func stampComingOut(ctx context.Context, queries *librarydb.Queries, item librar
 	return nil
 }
 
-// recountWindow reaches back past the longest grace, so a part is seen coming out even after a missed run or two.
-const recountWindow = 72 * time.Hour
+// recountMargin is how far past the longest grace a re-count looks, so a part is seen coming out after a missed run.
+const recountMargin = 36 * time.Hour
 
 // RecountComingOut re-counts the items of works with a part that came out lately or is still to come, and answers how
 // many changed: time passing writes nothing, so a season would stay as complete as before its next episode aired.
-func (d Desired) RecountComingOut(ctx context.Context) (int, error) {
+// longestGrace is the longest wait any part has.
+func (d Desired) RecountComingOut(ctx context.Context, longestGrace time.Duration) (int, error) {
 	now := d.store.Now()
-	since := now.Add(-recountWindow)
+	since := now.Add(-longestGrace - recountMargin)
 	read := librarydb.New(d.store.Read())
 	changed := 0
 	var afterID int64

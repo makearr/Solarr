@@ -590,6 +590,39 @@ func (q *Queries) SetWorkRating(ctx context.Context, arg SetWorkRatingParams) er
 	return err
 }
 
+const stampPartGrace = `-- name: StampPartGrace :execrows
+UPDATE work_part SET available_grace = CASE available_confidence
+    WHEN 'high' THEN CAST(?1 AS INTEGER) WHEN 'medium' THEN CAST(?2 AS INTEGER) ELSE CAST(?3 AS INTEGER) END
+WHERE id IN (
+  SELECT p.id FROM work_part p
+  WHERE (p.available_at IS NOT NULL OR p.date IS NOT NULL)
+    AND p.available_grace IS NOT CASE p.available_confidence
+          WHEN 'high' THEN CAST(?1 AS INTEGER) WHEN 'medium' THEN CAST(?2 AS INTEGER) ELSE CAST(?3 AS INTEGER) END
+  LIMIT ?4
+)
+`
+
+type StampPartGraceParams struct {
+	High   int64
+	Medium int64
+	Low    int64
+	Limit  int64
+}
+
+// One batch of parts whose stamped wait differs from what the settings now say for their confidence.
+func (q *Queries) StampPartGrace(ctx context.Context, arg StampPartGraceParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, stampPartGrace,
+		arg.High,
+		arg.Medium,
+		arg.Low,
+		arg.Limit,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const updateWorkSeriesDetails = `-- name: UpdateWorkSeriesDetails :exec
 UPDATE work SET original_language = COALESCE(original_language, ?1),
                 year = COALESCE(year, ?2),
@@ -624,8 +657,8 @@ func (q *Queries) UpdateWorkSeriesDetails(ctx context.Context, arg UpdateWorkSer
 const upsertWorkPart = `-- name: UpsertWorkPart :one
 
 INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored,
-                       available_at, available_confidence, available_basis)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       available_at, available_confidence, available_basis, available_grace)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (work_id, media_ref) DO UPDATE SET
   sort_key = excluded.sort_key,
   title = excluded.title,
@@ -633,8 +666,9 @@ ON CONFLICT (work_id, media_ref) DO UPDATE SET
   date = excluded.date,
   available_at = excluded.available_at,
   available_confidence = excluded.available_confidence,
-  available_basis = excluded.available_basis
-RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis
+  available_basis = excluded.available_basis,
+  available_grace = excluded.available_grace
+RETURNING id, work_id, media_ref, sort_key, title, runtime_ms, date, monitored, available_at, available_confidence, available_basis, available_grace
 `
 
 type UpsertWorkPartParams struct {
@@ -648,6 +682,7 @@ type UpsertWorkPartParams struct {
 	AvailableAt         sql.NullInt64
 	AvailableConfidence string
 	AvailableBasis      string
+	AvailableGrace      sql.NullInt64
 }
 
 // Series (TV works) refresh: provider data written without disturbing what a person set.
@@ -664,6 +699,7 @@ func (q *Queries) UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) 
 		arg.AvailableAt,
 		arg.AvailableConfidence,
 		arg.AvailableBasis,
+		arg.AvailableGrace,
 	)
 	var i WorkPart
 	err := row.Scan(
@@ -678,6 +714,7 @@ func (q *Queries) UpsertWorkPart(ctx context.Context, arg UpsertWorkPartParams) 
 		&i.AvailableAt,
 		&i.AvailableConfidence,
 		&i.AvailableBasis,
+		&i.AvailableGrace,
 	)
 	return i, err
 }

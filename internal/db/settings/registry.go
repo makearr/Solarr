@@ -367,6 +367,19 @@ func NewDefaultRegistry() *Registry {
 		HelpText: "Artist photos and biographies, and album covers, where other sources have none.",
 		Default:  "true",
 	})
+	for _, grace := range []struct {
+		key, name, help string
+		hours           int64
+	}{
+		{KeyAvailabilityGraceHigh, "Wait after an exact air time", "Hours after an episode's exact air time before it counts as missing and is searched for.", DefaultAvailabilityGrace.High},
+		{KeyAvailabilityGraceMedium, "Wait after a likely air time", "Hours after an air time a provider worked out (not stated) before the episode counts as missing.", DefaultAvailabilityGrace.Medium},
+		{KeyAvailabilityGraceLow, "Wait after an air date", "Hours after the start of an air date with no time before the episode counts as missing.", DefaultAvailabilityGrace.Low},
+	} {
+		registry.MustRegister(SettingDef{
+			Key: grace.key, Kind: KindInt, Tier: TierAdvanced, Name: grace.name, HelpText: grace.help,
+			Default: strconv.FormatInt(grace.hours, 10),
+		})
+	}
 	registry.MustRegister(SettingDef{
 		Key: KeyMetadataPeopleBackfillPerRun, Kind: KindInt, Tier: TierAdvanced,
 		Name:     "Artists filled per run",

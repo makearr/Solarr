@@ -126,6 +126,8 @@ type WriteOptions struct {
 	Now time.Time
 	// NewPart, when set, decides the monitoring of each part this write creates instead of Monitor.
 	NewPart func(Episode) bool
+	// Grace is the settings' wait after an episode's time, stamped on its part; nil leaves the default of its confidence.
+	Grace *library.AvailabilityGrace
 }
 
 // ToWrite turns a merged series into what the library stores.
@@ -188,7 +190,7 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		wants = options.NewPart
 	}
 	for _, episode := range series.Episodes {
-		write.Parts = append(write.Parts, partWrite(episode, wants(episode)))
+		write.Parts = append(write.Parts, partWrite(episode, wants(episode), options.Grace))
 	}
 	return write
 }
@@ -204,7 +206,7 @@ func creditWrite(credit Credit) library.SeriesCreditWrite {
 	return write
 }
 
-func partWrite(episode Episode, monitored bool) library.SeriesPartWrite {
+func partWrite(episode Episode, monitored bool, grace *library.AvailabilityGrace) library.SeriesPartWrite {
 	part := library.SeriesPartWrite{
 		MediaRef: MediaRef(episode.Season, episode.Number), SortKey: sortKey(episode.Season, episode.Number),
 		Title: episode.Title, Date: episode.AirDate, MonitoredIfNew: monitored,
@@ -220,6 +222,10 @@ func partWrite(episode Episode, monitored bool) library.SeriesPartWrite {
 	} else if episode.AirDate == "" {
 		// Listed with no date: coming, and not owed until it has one.
 		part.AvailableBasis = library.AvailabilityUnannounced
+	}
+	if grace != nil && (part.AvailableAt != nil || episode.AirDate != "") {
+		wait := grace.For(string(episode.AirConfidence))
+		part.AvailableGrace = &wait
 	}
 	if episode.Absolute > 0 {
 		part.AltNumbers = append(part.AltNumbers, library.AltNumberWrite{Scheme: "absolute", Provider: ProviderTVDB, Ref: strconv.Itoa(episode.Absolute)})

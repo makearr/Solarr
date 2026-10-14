@@ -2769,6 +2769,13 @@ type MetadataSettings struct {
 	// AcoustidApiKey Whether an AcoustID application key is stored. Read-only here and ignored on a PATCH; it is written through POST /metadata/acoustid/apikey. Never returned, not even masked -- saying whether one exists is all a screen asking for one needs, and decrypting it to render would be gratuitous (ADR-14).
 	AcoustidApiKey *SecretMask `json:"acoustid_api_key,omitempty"`
 
+	// AvailabilityGraceHours How many hours after an episode's time it is waited for before it counts as missing and is searched for, by how sure the time is: stated exactly (default 2), worked out by a provider (12), a date alone (36). 0 to 336 each. Omitted on a PATCH leaves them alone.
+	AvailabilityGraceHours *struct {
+		High   int64 `json:"high"`
+		Low    int64 `json:"low"`
+		Medium int64 `json:"medium"`
+	} `json:"availability_grace_hours,omitempty"`
+
 	// BrainzmashUserAgent Sent to BrainzMash, whose front door refuses agents not starting "Lidarr/". Printable ASCII, 1-256 characters. Default Lidarr/2.9.6.4552.
 	BrainzmashUserAgent string `json:"brainzmash_user_agent"`
 
@@ -4243,8 +4250,11 @@ type WorkPart struct {
 	Monitored bool      `json:"monitored"`
 
 	// Number The number the part is shown with: a track's, an episode's.
-	Number    *string `json:"number,omitempty"`
-	RuntimeMs *int64  `json:"runtime_ms,omitempty"`
+	Number *string `json:"number,omitempty"`
+
+	// OutGraceHours Hours after its time (or the start of its date) it is waited for before it counts as out; set with available_confidence.
+	OutGraceHours *int64 `json:"out_grace_hours,omitempty"`
+	RuntimeMs     *int64 `json:"runtime_ms,omitempty"`
 
 	// Section The heading the part sits under within its group, as the type places it: "Disc 2"; empty for none.
 	Section *string `json:"section,omitempty"`

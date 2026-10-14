@@ -28,7 +28,7 @@ func TestPartOut_WaitsOutTheGraceOfItsConfidence(t *testing.T) {
 		{"announced with no date", 0, "unknown", "", library.AvailabilityUnannounced, 0, false},
 		{"never had a time: a track", 0, "unknown", "", "", 0, true},
 	} {
-		if got := library.PartOut(tc.at, tc.confidence, tc.date, tc.basis, airs.Add(tc.after)); got != tc.want {
+		if got := library.PartOut(tc.at, library.DefaultAvailabilityGrace.For(tc.confidence), tc.date, tc.basis, airs.Add(tc.after)); got != tc.want {
 			t.Errorf("%s: out = %v, want %v", tc.name, got, tc.want)
 		}
 	}
@@ -62,7 +62,7 @@ func TestRecountComingOut_ASeasonOwesAnEpisodeOnceItIsOut(t *testing.T) {
 	var owed []int64
 	for _, after := range []time.Duration{time.Hour, 3 * time.Hour, 3*time.Hour + time.Minute, 9 * 24 * time.Hour} {
 		fake.Set(airs.Add(after))
-		changed, err := desired.RecountComingOut(t.Context())
+		changed, err := desired.RecountComingOut(t.Context(), library.DefaultAvailabilityGrace.Longest())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -171,11 +171,61 @@ func TestRecountComingOut_ASeasonNotOutYetCarriesItsFirstAirTime(t *testing.T) {
 	}
 
 	fake.Set(airs.Add(3 * time.Hour))
-	if _, err := desired.RecountComingOut(t.Context()); err != nil {
+	if _, err := desired.RecountComingOut(t.Context(), library.DefaultAvailabilityGrace.Longest()); err != nil {
 		t.Fatal(err)
 	}
 	item, err = queries.GetDesiredItem(t.Context(), season.ID)
 	if err != nil || item.RequiredCount.Int64 != 1 || item.AvailableFrom.Valid {
 		t.Errorf("after it aired: owed %d, next out %+v, %v; want 1 and none", item.RequiredCount.Int64, item.AvailableFrom, err)
+	}
+}
+
+// The wait is the settings', stamped on each part: five hours after an exact time is not two.
+func TestStampGrace_ALongerWaitKeepsAnEpisodeUnowedLonger(t *testing.T) {
+	airs := time.Date(2026, 3, 10, 20, 0, 0, 0, time.UTC)
+	fake := clock.NewFake(airs.Add(-time.Hour))
+	opened, queries := newLibraryAt(t, fake)
+	write := sampleSeries()
+	at := airs.Unix()
+	write.Parts = []library.SeriesPartWrite{
+		{MediaRef: "s01:e01", SortKey: "s01:e01", MonitoredIfNew: true, Date: "2026-03-10", AvailableAt: &at, AvailableConfidence: "high"},
+		{MediaRef: "s01:e02", SortKey: "s01:e02", MonitoredIfNew: true, AvailableBasis: library.AvailabilityUnannounced},
+	}
+	series := library.NewSeries(opened)
+	result, err := series.Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	desired := library.NewDesired(opened)
+	season, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{
+		WorkID: result.WorkID, MediaRef: "s01", SortKey: "s01", CategoryID: 1, ProfileID: 1, Monitored: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grace := library.AvailabilityGrace{High: 5 * time.Hour, Medium: 12 * time.Hour, Low: 36 * time.Hour}
+	if stamped, err := series.StampGrace(t.Context(), grace); err != nil || stamped != 1 {
+		t.Fatalf("stamped %d, %v; want the one part with a time", stamped, err)
+	}
+	if again, err := series.StampGrace(t.Context(), grace); err != nil || again != 0 {
+		t.Errorf("stamping again changed %d, %v; want 0", again, err)
+	}
+	owed := func(after time.Duration) int64 {
+		t.Helper()
+		fake.Set(airs.Add(after))
+		if _, err := desired.RecountComingOut(t.Context(), grace.Longest()); err != nil {
+			t.Fatal(err)
+		}
+		item, err := queries.GetDesiredItem(t.Context(), season.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return item.RequiredCount.Int64
+	}
+	if got := owed(3 * time.Hour); got != 0 {
+		t.Errorf("three hours after: owed %d, want 0 (the default two hours would owe it)", got)
+	}
+	if got := owed(5 * time.Hour); got != 1 {
+		t.Errorf("five hours after: owed %d, want 1", got)
 	}
 }

@@ -22,6 +22,8 @@ type WorkEdit struct {
 	Settings *settings.Cache
 	// Facets answers a media type's facets; the editable ones are the dialog's fields. Nil edits none.
 	Facets func(mediaType string) []media.Facet
+	// Refreshing answers a media type's refresh, for a field the type derives other data from; nil refreshes nothing.
+	Refreshing func(mediaType string) (media.Refreshing, bool)
 }
 
 // editable answers the editable facets of a work's media type.
@@ -133,12 +135,33 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 	if err := a.People.SetUserTags(ctx, workID, names); err != nil {
 		return err
 	}
+	refresh := false
+	manual, err := a.Monitor.Works.ManualFields(ctx, workID)
+	if err != nil {
+		return err
+	}
 	for field, value := range fields {
+		if manual[field] == value {
+			continue
+		}
 		if err := a.Monitor.Works.SetManualField(ctx, a.Monitor.Clock.Now(), workID, field, value); err != nil {
 			return err
 		}
+		refresh = refresh || a.refreshesWork(mediaType, field)
+	}
+	if refresh && a.Refreshing != nil {
+		if refreshing, ok := a.Refreshing(mediaType); ok {
+			if _, err := refreshing.RefreshWork(ctx, workID); err != nil {
+				a.Monitor.Logger.Warn("refresh after an edit failed", slog.Int64("work_id", workID), slog.Any("error", err))
+			}
+		}
 	}
 	return nil
+}
+
+// refreshesWork says whether changing the work field reads the work again.
+func (a WorkEdit) refreshesWork(mediaType, field string) bool {
+	return slices.ContainsFunc(a.editable(mediaType), func(facet media.Facet) bool { return facet.Source.Name == field && facet.RefreshesWork })
 }
 
 // fieldWrites checks the edited facets and answers the work fields they set; a value outside an enum's choices or a
