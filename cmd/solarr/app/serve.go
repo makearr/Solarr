@@ -857,9 +857,14 @@ func (p *process) authConfig() (apiserver.AuthConfig, error) {
 	}
 
 	wall := clock.NewSystem()
+	transport, err := auth.NewTransport(key)
+	if err != nil {
+		return apiserver.AuthConfig{}, err
+	}
 	return apiserver.AuthConfig{
 		Mode:          apiserver.AuthMode(p.config.Security.AuthMode),
 		Sessions:      auth.NewSessions(key, wall, auth.DefaultSessionTTL),
+		Transport:     transport,
 		Settings:      p.cache,
 		Registry:      p.settingsRegistry,
 		Clock:         wall,

@@ -3,6 +3,13 @@ package apiserver_test
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/ecdh"
+	"crypto/hkdf"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -102,6 +109,7 @@ func newAuthFixture(t *testing.T, mode apiserver.AuthMode, networks ...netip.Pre
 		Auth: apiserver.AuthConfig{
 			Mode:          mode,
 			Sessions:      auth.NewSessions([]byte("0123456789abcdef0123456789abcdef"), fake, time.Hour),
+			Transport:     testTransport(t),
 			Settings:      cache,
 			Clock:         fake,
 			ProxyHeader:   "X-Remote-User",
@@ -630,5 +638,58 @@ func TestAuth_FailedLoginsFromOneAddressAreLimited(t *testing.T) {
 	fixture.clock.Advance(auth.LoginWindow)
 	if got := fixture.login(t, "avs", testPassword).Code; got != http.StatusOK {
 		t.Errorf("a minute later = %d, want 200", got)
+	}
+}
+
+func testTransport(t *testing.T) *auth.Transport {
+	t.Helper()
+	transport, err := auth.NewTransport([]byte("0123456789abcdef0123456789abcdef"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return transport
+}
+
+// seal encrypts a value for the server as the browser does (web/src/api/seal.ts).
+func seal(t *testing.T, serverPublic, plain string) string {
+	t.Helper()
+	ephemeral, err := ecdh.X25519().GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publicBytes, _ := base64.StdEncoding.DecodeString(serverPublic)
+	server, err := ecdh.X25519().NewPublicKey(publicBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, _ := ephemeral.ECDH(server)
+	key, _ := hkdf.Key(sha256.New, shared, nil, "solarr:transport-seal:v1", 32)
+	block, _ := aes.NewCipher(key)
+	aead, _ := cipher.NewGCM(block)
+	nonce := make([]byte, aead.NonceSize())
+	_, _ = rand.Read(nonce)
+	encode := base64.StdEncoding.EncodeToString
+	return auth.SealedPrefix + encode(ephemeral.PublicKey().Bytes()) + ":" + encode(nonce) + ":" + encode(aead.Seal(nil, nonce, []byte(plain), nil))
+}
+
+// A password sealed in the browser signs in like a plain one; a seal that does not open is refused, not passed on.
+func TestAuth_LoginAcceptsAPasswordSealedInTheBrowser(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	keyResponse := fixture.do(t, httptest.NewRequest(http.MethodGet, "/api/v1/auth/transport-key", nil))
+	var key struct {
+		PublicKey string `json:"public_key"`
+	}
+	if keyResponse.Code != http.StatusOK || json.Unmarshal(keyResponse.Body.Bytes(), &key) != nil || key.PublicKey == "" {
+		t.Fatalf("transport key = %d %s", keyResponse.Code, keyResponse.Body.String())
+	}
+	login := func(password string) int {
+		body, _ := json.Marshal(map[string]any{"username": "avs", "password": password, "remember": false})
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+		request.Header.Set("Content-Type", "application/json")
+		return fixture.do(t, request).Code
+	}
+	sealed := seal(t, key.PublicKey, testPassword)
+	if got := []int{login(sealed), login(sealed[:len(sealed)-6] + "AAAAAA"), login(testPassword)}; !slices.Equal(got, []int{200, 400, 200}) {
+		t.Errorf("sealed, tampered, plain = %v; want 200 400 200", got)
 	}
 }

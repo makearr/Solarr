@@ -1,5 +1,6 @@
 import createClient from "openapi-fetch";
 import type { paths } from "./schema";
+import { fromBase64, sealSecrets, sealWith } from "./seal";
 
 /** Every versioned endpoint lives under this prefix, and the paths in
  *  schema.d.ts are relative to it. Kept in step with `servers` in
@@ -19,3 +20,30 @@ export const api = createClient<paths>({
 // The stable part of the RFC 7807 contract: callers branch on this.
 export type ProblemType =
   paths["/me"]["get"]["responses"][401]["content"]["application/problem+json"]["type"];
+
+let transportKey: Promise<Uint8Array | null> | undefined;
+
+/** serverTransportKey fetches the key secrets are sealed with, once; without one they go as they are. */
+function serverTransportKey(): Promise<Uint8Array | null> {
+  transportKey ??= fetch(`${API_PREFIX}/auth/transport-key`, { credentials: "same-origin" })
+    .then(async (response) => (response.ok ? fromBase64(((await response.json()) as { public_key: string }).public_key) : null))
+    .catch(() => null);
+  return transportKey;
+}
+
+const SECRET_FIELD = /"(password|api_key|credentials|[a-z]+_api_key)"\s*:\s*"[^"]/;
+
+// Passwords and API keys are sealed for the server before they leave the browser (internal/api/auth/transport.go).
+api.use({
+  async onRequest({ request }) {
+    if (!["POST", "PUT", "PATCH"].includes(request.method) || !request.headers.get("Content-Type")?.includes("application/json")) {
+      return undefined;
+    }
+    const text = await request.clone().text();
+    if (!SECRET_FIELD.test(text)) return undefined;
+    const key = await serverTransportKey();
+    if (key === null) return undefined;
+    const sealed = sealSecrets(JSON.parse(text), (plain) => sealWith(key, plain));
+    return new Request(request, { body: JSON.stringify(sealed) });
+  },
+});

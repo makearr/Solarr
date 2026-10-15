@@ -450,6 +450,7 @@ func New(config Config) (*Server, error) {
 	router.NotFound(server.handleNotFound)
 	router.MethodNotAllowed(server.handleMethodNotAllowed)
 	router.Route(base+APIPrefix, func(api chi.Router) {
+		api.Use(server.openSealed)
 		// Unauthenticated by design: an orchestrator has no credentials, and
 		// AGPL section 13 obliges About to be reachable without logging in.
 		api.Get("/health", server.GetHealth)
@@ -459,6 +460,7 @@ func New(config Config) (*Server, error) {
 		api.Get("/about/attribution", server.GetAboutAttribution)
 		api.Post("/auth/login", server.Login)
 		api.Post("/auth/logout", server.Logout)
+		api.Get("/auth/transport-key", server.GetTransportKey)
 
 		// Unauthenticated because before the first account exists there is nobody to authenticate as
 		// (section 21.11).

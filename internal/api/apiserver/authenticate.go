@@ -38,7 +38,9 @@ const (
 type AuthConfig struct {
 	Mode     AuthMode
 	Sessions *auth.Sessions
-	Settings *settings.Cache
+	// Transport opens secrets the browser sealed; nil accepts only plain values.
+	Transport *auth.Transport
+	Settings  *settings.Cache
 	// Registry is ADR-26's settings registry (todo 4.14), reused here for
 	// every scalar setting Settings.Cache writes directly -- auth, network
 	// and import policy -- the same direct-Cache shape those handlers

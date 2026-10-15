@@ -447,6 +447,24 @@ paths:
           description: >-
             Five sign-ins from this address failed within a minute; Retry-After says how many seconds to wait.
 
+  /auth/transport-key:
+    get:
+      operationId: getTransportKey
+      tags: [auth]
+      security: []
+      summary: The key the browser seals secrets with before sending them.
+      description: >-
+        Any string field of a JSON request body may be sent sealed, as
+        `encv1:<ephemeral X25519 key>:<nonce>:<AES-256-GCM ciphertext>` (base64 each, the key derived by
+        HKDF-SHA256 from the X25519 shared secret). The server opens every sealed value before the request is
+        handled, so a password or API key never crosses plain HTTP in the clear; unsealed values are accepted as
+        they are. Unauthenticated: the sign-in form needs it.
+      responses:
+        "200":
+          description: The server's X25519 public key.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TransportKey" }
   /auth/logout:
     post:
       operationId: logout
@@ -7085,6 +7103,12 @@ components:
         finished_at: { type: string, format: date-time }
         error: { type: string }
 
+    TransportKey:
+      type: object
+      required: [scheme, public_key]
+      properties:
+        scheme: { type: string, enum: [encv1] }
+        public_key: { type: string, description: The server's X25519 public key, base64. }
     Identity:
       type: object
       required: [user_id, username, role]

@@ -344,6 +344,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/transport-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The key the browser seals secrets with before sending them.
+         * @description Any string field of a JSON request body may be sent sealed, as `encv1:<ephemeral X25519 key>:<nonce>:<AES-256-GCM ciphertext>` (base64 each, the key derived by HKDF-SHA256 from the X25519 shared secret). The server opens every sealed value before the request is handled, so a password or API key never crosses plain HTTP in the clear; unsealed values are accepted as they are. Unauthenticated: the sign-in form needs it.
+         */
+        get: operations["getTransportKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -4478,6 +4498,12 @@ export interface components {
             finished_at?: string;
             error?: string;
         };
+        TransportKey: {
+            /** @enum {string} */
+            scheme: "encv1";
+            /** @description The server's X25519 public key */
+            public_key: string;
+        };
         Identity: {
             /** Format: int64 */
             user_id: number;
@@ -7658,6 +7684,26 @@ export interface operations {
             403: components["responses"]["Problem"];
             /** @description Five sign-ins from this address failed within a minute; Retry-After says how many seconds to wait. */
             429: components["responses"]["Problem"];
+        };
+    };
+    getTransportKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The server's X25519 public key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransportKey"];
+                };
+            };
         };
     };
     logout: {

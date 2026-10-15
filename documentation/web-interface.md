@@ -133,6 +133,16 @@ escape and dismissal — not the styling. shadcn/ui was considered and declined:
 a styling layer, copied in as owned source, and that is a second set of conventions to reconcile
 and keep in step for a benefit this interface does not need.
 
+## Sealed secrets
+
+Every request the API client sends with a `password`, `api_key`, `credentials` or `*_api_key` field has those values
+sealed first (`src/api/seal.ts`, a middleware in `src/api/client.ts`): X25519 against the server's key from
+`GET /auth/transport-key`, a fresh key and nonce per value, HKDF-SHA256, AES-256-GCM, sent as `encv1:...`. The server
+opens every sealed string of a JSON body before any handler runs (`apiserver.openSealed`, `auth.Transport`), so
+handlers never see the difference, and a plain value is still accepted (curl, scripts). It defeats a passive listener
+on a plain-HTTP network, not an active one: TLS at a reverse proxy remains the real protection. The browser and server
+are pinned to one test vector (`seal.test.ts`, `transport_test.go`).
+
 ## Testing
 
 Two kinds. The pure logic — `query.ts`, `selection.ts`, the virtualisation window — is tested

@@ -674,6 +674,11 @@ const (
 	TransferMethodSymlink  TransferMethod = "symlink"
 )
 
+// Defines values for TransportKeyScheme.
+const (
+	TransportKeySchemeEncv1 TransportKeyScheme = "encv1"
+)
+
 // Defines values for UpdateDownloaderRequestProtocol.
 const (
 	UpdateDownloaderRequestProtocolDdl     UpdateDownloaderRequestProtocol = "ddl"
@@ -3977,6 +3982,16 @@ type TransferMethodCount struct {
 	Method TransferMethod `json:"method"`
 }
 
+// TransportKey defines model for TransportKey.
+type TransportKey struct {
+	// PublicKey The server's X25519 public key
+	PublicKey string             `json:"public_key"`
+	Scheme    TransportKeyScheme `json:"scheme"`
+}
+
+// TransportKeyScheme defines model for TransportKey.Scheme.
+type TransportKeyScheme string
+
 // UnidentifiedCandidate One ranked candidate the ADR-24 chain found but was not confident enough to resolve automatically -- RunChain's merged Candidates, best first. Empty on a file that matched nothing at all.
 type UnidentifiedCandidate struct {
 	Confidence float32 `json:"confidence"`
@@ -5520,6 +5535,9 @@ type ServerInterface interface {
 	// Clear the session cookie.
 	// (POST /auth/logout)
 	Logout(w http.ResponseWriter, r *http.Request)
+	// The key the browser seals secrets with before sending them.
+	// (GET /auth/transport-key)
+	GetTransportKey(w http.ResponseWriter, r *http.Request)
 	// Every blocked-by-hash entry (ADR-53 part 2).
 	// (GET /blocked)
 	ListBlockedContent(w http.ResponseWriter, r *http.Request, params ListBlockedContentParams)
@@ -6330,6 +6348,12 @@ func (_ Unimplemented) Login(w http.ResponseWriter, r *http.Request) {
 // Clear the session cookie.
 // (POST /auth/logout)
 func (_ Unimplemented) Logout(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The key the browser seals secrets with before sending them.
+// (GET /auth/transport-key)
+func (_ Unimplemented) GetTransportKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8217,6 +8241,20 @@ func (siw *ServerInterfaceWrapper) Logout(w http.ResponseWriter, r *http.Request
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.Logout(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetTransportKey operation middleware
+func (siw *ServerInterfaceWrapper) GetTransportKey(w http.ResponseWriter, r *http.Request) {
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetTransportKey(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16144,6 +16182,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/auth/logout", wrapper.Logout)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/auth/transport-key", wrapper.GetTransportKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/blocked", wrapper.ListBlockedContent)
