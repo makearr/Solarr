@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path"
 	"strings"
+	"time"
 )
 
 // DownloaderOptions are a download client's Lidarr-style options, carried in settings_json.
@@ -27,6 +28,59 @@ type DownloaderOptions struct {
 	// that long, whichever comes first; both unset removes it at once (2026-10-02, off by default).
 	SeedRatio   *float64 `json:"seed_ratio,omitempty"`
 	SeedMinutes *int     `json:"seed_minutes,omitempty"`
+	// StallCleanup removes and blocklists Solarr's own downloads that stop making progress (2026-10-15, off by default).
+	StallCleanup *StallCleanup `json:"stall_cleanup,omitempty"`
+}
+
+// StallCleanup is one client's stalled-download cleanup; an absent number takes its default.
+type StallCleanup struct {
+	Enabled bool `json:"enabled"`
+	// Strikes is how many checks in a row may find no progress before the download is removed.
+	Strikes *int `json:"strikes,omitempty"`
+	// CheckMinutes is how often a download's progress is compared.
+	CheckMinutes *int `json:"check_minutes,omitempty"`
+	// NoProgressHours removes a download that has not moved for this long, whatever the strikes.
+	NoProgressHours *int `json:"no_progress_hours,omitempty"`
+	// IgnoreAboveGB leaves bigger downloads alone; 0 is no limit.
+	IgnoreAboveGB *int `json:"ignore_above_gb,omitempty"`
+}
+
+// The stall cleanup's defaults (fillarr's Swaparr-style ones, user 2026-10-15).
+const (
+	DefaultStallStrikes         = 5
+	DefaultStallCheckMinutes    = 15
+	DefaultStallNoProgressHours = 2
+	DefaultStallIgnoreAboveGB   = 50
+)
+
+// StallRules is a client's stall cleanup with its defaults filled in.
+type StallRules struct {
+	Enabled          bool
+	Strikes          int
+	Check            time.Duration
+	NoProgress       time.Duration
+	IgnoreAboveBytes int64
+}
+
+// StallRules resolves the stall cleanup; absent is off.
+func (o DownloaderOptions) StallRules() StallRules {
+	cleanup := StallCleanup{}
+	if o.StallCleanup != nil {
+		cleanup = *o.StallCleanup
+	}
+	value := func(set *int, fallback int) int {
+		if set == nil {
+			return fallback
+		}
+		return *set
+	}
+	return StallRules{
+		Enabled:          cleanup.Enabled,
+		Strikes:          value(cleanup.Strikes, DefaultStallStrikes),
+		Check:            time.Duration(value(cleanup.CheckMinutes, DefaultStallCheckMinutes)) * time.Minute,
+		NoProgress:       time.Duration(value(cleanup.NoProgressHours, DefaultStallNoProgressHours)) * time.Hour,
+		IgnoreAboveBytes: int64(value(cleanup.IgnoreAboveGB, DefaultStallIgnoreAboveGB)) << 30,
+	}
 }
 
 // SeedGoal is the ratio and minutes an imported torrent seeds for; 0 is no limit of that kind, and both 0 means none.

@@ -1674,6 +1674,9 @@ type DownloaderOptions struct {
 
 	// SeedRatio Torrent clients: an imported torrent stays (and seeds) until it has shared this ratio or seeded for seed_minutes, whichever comes first, then it is removed with its files. Needs remove_completed. 0 or absent is no ratio limit.
 	SeedRatio *float64 `json:"seed_ratio,omitempty"`
+
+	// StallCleanup Stalled-download cleanup, off unless enabled: every check_minutes a running download of Solarr's own is compared with the last check; one that has not moved gets a strike, and after strikes in a row, or no_progress_hours without moving, it is removed from the client with its files, blocklisted and searched again. Queued and paused downloads never get strikes. Absent numbers take their defaults.
+	StallCleanup *StallCleanup `json:"stall_cleanup,omitempty"`
 }
 
 // DrainMove defines model for DrainMove.
@@ -3871,6 +3874,22 @@ type SetupStatus struct {
 
 	// NeedsAdministrator True while no account exists, which is the only time setup can be claimed.
 	NeedsAdministrator bool `json:"needs_administrator"`
+}
+
+// StallCleanup Stalled-download cleanup, off unless enabled: every check_minutes a running download of Solarr's own is compared with the last check; one that has not moved gets a strike, and after strikes in a row, or no_progress_hours without moving, it is removed from the client with its files, blocklisted and searched again. Queued and paused downloads never get strikes. Absent numbers take their defaults.
+type StallCleanup struct {
+	// CheckMinutes Absent means 15.
+	CheckMinutes *int `json:"check_minutes,omitempty"`
+	Enabled      bool `json:"enabled"`
+
+	// IgnoreAboveGb Bigger downloads are left alone; 0 is no limit. Absent means 50.
+	IgnoreAboveGb *int `json:"ignore_above_gb,omitempty"`
+
+	// NoProgressHours Absent means 2.
+	NoProgressHours *int `json:"no_progress_hours,omitempty"`
+
+	// Strikes Absent means 5.
+	Strikes *int `json:"strikes,omitempty"`
 }
 
 // StatisticsCount defines model for StatisticsCount.

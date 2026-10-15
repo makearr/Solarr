@@ -69,6 +69,7 @@ type env struct {
 	removeDone   bool
 	seedRatio    float64
 	seedMinutes  int
+	stall        poll.StallRules
 	imported     []string
 	searched     []int64
 	history      []string
@@ -112,7 +113,7 @@ func (e *env) job() *poll.Job {
 		Acquisitions: e.acquisitions, Sessions: e.sessions, Blocklist: e.blocklist, FS: e.fsys,
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
 			return map[int64]poll.Client{1: {Name: "Home SABnzbd", Client: e.client, RemoveCompleted: e.removeDone, SeedRatio: e.seedRatio, SeedMinutes: e.seedMinutes,
-				LocalPath: func(reported string) string { return reported }}}, nil
+				LocalPath: func(reported string) string { return reported }, Stall: e.stall}}, nil
 		},
 		DownloadFolders: func(context.Context) ([]string, error) { return []string{"/downloads"}, nil },
 		Import: func(_ context.Context, _ library.Acquisition, localPath string) error {
@@ -462,5 +463,105 @@ func TestPoll_AMassLossIsReportedOnceAndNamesWhatIsMissing(t *testing.T) {
 	run()
 	if got := strings.Count(logged.String(), "no longer has"); got != 2 {
 		t.Errorf("reported %d times after seven hours, want again", got)
+	}
+}
+
+// downloading reports one running download with this much left.
+func (e *env) downloading(ref string, left int64) {
+	e.client.downloads = []download.Download{{ClientRef: ref, Name: "Heka-Zanuvode", State: download.StateDownloading, SizeBytes: 1 << 30, SizeLeftBytes: left}}
+}
+
+// A running download that does not move for three checks in a row is failed like one the client failed: removed with its
+// files, blocklisted and searched again.
+func TestPoll_AStalledDownloadIsRemovedAfterItsStrikes(t *testing.T) {
+	e := newEnv(t)
+	e.stall = poll.StallRules{Enabled: true, Strikes: 3, Check: 15 * time.Minute, NoProgress: 24 * time.Hour}
+	sent := e.send(t, "nzo-1")
+	for check := range 3 {
+		e.downloading("nzo-1", 500)
+		e.run(t)
+		if got := e.state(t, sent.ID); got.State != poll.StateDownloading {
+			t.Fatalf("check %d: %s, want still downloading", check, got.State)
+		}
+		e.clock.Advance(15 * time.Minute)
+	}
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	got := e.state(t, sent.ID)
+	if got.State != poll.StateFailed || got.LastError != "stalled: no progress for 45m0s (3 checks)" {
+		t.Errorf("after three strikes: %s %q, want FAILED as stalled", got.State, got.LastError)
+	}
+	if !slices.Equal(e.client.removed, []string{"nzo-1+files"}) || !slices.Equal(e.searched, []int64{*sent.DesiredItemID}) {
+		t.Errorf("removed %v, searched %v; want removed with files and searched again", e.client.removed, e.searched)
+	}
+}
+
+// Progress between checks clears the strikes, however slow it is; checks between the interval count for nothing.
+func TestPoll_ADownloadThatMovesIsNeverStalled(t *testing.T) {
+	e := newEnv(t)
+	e.stall = poll.StallRules{Enabled: true, Strikes: 2, Check: 15 * time.Minute, NoProgress: 24 * time.Hour}
+	sent := e.send(t, "nzo-1")
+	left := int64(1000)
+	for range 8 {
+		e.downloading("nzo-1", left)
+		e.run(t)
+		e.clock.Advance(5 * time.Minute)
+		e.downloading("nzo-1", left)
+		e.run(t)
+		e.clock.Advance(10 * time.Minute)
+		left -= 10
+	}
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading {
+		t.Errorf("a slow download = %s %q, want still downloading", got.State, got.LastError)
+	}
+}
+
+// A download paused for hours is not stalled: its clock starts again once it runs, and a queued one waits its turn.
+func TestPoll_APausedDownloadIsNeverStruck(t *testing.T) {
+	e := newEnv(t)
+	e.stall = poll.StallRules{Enabled: true, Strikes: 2, Check: 15 * time.Minute, NoProgress: time.Hour}
+	sent := e.send(t, "nzo-1")
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	for _, state := range []download.State{download.StatePaused, download.StateQueued} {
+		e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: state, SizeBytes: 1 << 30, SizeLeftBytes: 500}}
+		for range 6 {
+			e.clock.Advance(30 * time.Minute)
+			e.run(t)
+		}
+	}
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	e.clock.Advance(15 * time.Minute)
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateDownloading {
+		t.Errorf("after six hours paused or queued and one check running: %s %q, want still downloading", got.State, got.LastError)
+	}
+}
+
+// No progress for the longest wait fails a download before its strikes run out; a client without the cleanup, or a
+// download above the size limit, is left alone.
+func TestPoll_TheStallLimitsAndTheSwitch(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		rules  poll.StallRules
+		failed bool
+	}{
+		{"an hour without progress", poll.StallRules{Enabled: true, Strikes: 50, Check: 15 * time.Minute, NoProgress: time.Hour}, true},
+		{"switched off", poll.StallRules{Strikes: 1, Check: time.Minute, NoProgress: time.Minute}, false},
+		{"too big to judge", poll.StallRules{Enabled: true, Strikes: 1, Check: time.Minute, NoProgress: time.Minute, IgnoreAboveBytes: 1 << 20}, false},
+	} {
+		e := newEnv(t)
+		e.stall = tc.rules
+		sent := e.send(t, "nzo-1")
+		for range 5 {
+			e.downloading("nzo-1", 500)
+			e.run(t)
+			e.clock.Advance(15 * time.Minute)
+		}
+		if got := e.state(t, sent.ID); (got.State == poll.StateFailed) != tc.failed {
+			t.Errorf("%s: %s %q, want failed %v", tc.name, got.State, got.LastError, tc.failed)
+		}
 	}
 }

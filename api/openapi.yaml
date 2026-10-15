@@ -8225,6 +8225,20 @@ components:
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
+    StallCleanup:
+      type: object
+      description: >-
+        Stalled-download cleanup, off unless enabled: every check_minutes a running download of Solarr's own is
+        compared with the last check; one that has not moved gets a strike, and after strikes in a row, or
+        no_progress_hours without moving, it is removed from the client with its files, blocklisted and searched
+        again. Queued and paused downloads never get strikes. Absent numbers take their defaults.
+      required: [enabled]
+      properties:
+        enabled: { type: boolean }
+        strikes: { type: integer, minimum: 1, maximum: 50, description: Absent means 5. }
+        check_minutes: { type: integer, minimum: 1, maximum: 1440, description: Absent means 15. }
+        no_progress_hours: { type: integer, minimum: 1, maximum: 168, description: Absent means 2. }
+        ignore_above_gb: { type: integer, minimum: 0, maximum: 100000, description: Bigger downloads are left alone; 0 is no limit. Absent means 50. }
     DownloaderOptions:
       type: object
       description: Lidarr's download client options.
@@ -8265,6 +8279,8 @@ components:
           type: integer
           minimum: 0
           description: "Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit."
+        stall_cleanup:
+          $ref: "#/components/schemas/StallCleanup"
 
     TestDownloaderRequest:
       type: object

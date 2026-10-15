@@ -5396,6 +5396,18 @@ export interface components {
             /** Format: date-time */
             updated_at: string;
         };
+        /** @description Stalled-download cleanup, off unless enabled: every check_minutes a running download of Solarr's own is compared with the last check; one that has not moved gets a strike, and after strikes in a row, or no_progress_hours without moving, it is removed from the client with its files, blocklisted and searched again. Queued and paused downloads never get strikes. Absent numbers take their defaults. */
+        StallCleanup: {
+            enabled: boolean;
+            /** @description Absent means 5. */
+            strikes?: number;
+            /** @description Absent means 15. */
+            check_minutes?: number;
+            /** @description Absent means 2. */
+            no_progress_hours?: number;
+            /** @description Bigger downloads are left alone; 0 is no limit. Absent means 50. */
+            ignore_above_gb?: number;
+        };
         /** @description Lidarr's download client options. */
         DownloaderOptions: {
             /** @description The client category downloads are sent under; empty means "music" for music. */
@@ -5419,6 +5431,7 @@ export interface components {
             seed_ratio?: number;
             /** @description Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit. */
             seed_minutes?: number;
+            stall_cleanup?: components["schemas"]["StallCleanup"];
         };
         TestDownloaderRequest: {
             impl: string;

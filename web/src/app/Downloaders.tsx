@@ -168,6 +168,7 @@ export function Downloaders() {
 }
 
 type DownloaderOptions = components["schemas"]["DownloaderOptions"];
+type StallCleanup = components["schemas"]["StallCleanup"];
 
 /** Lidarr's add dialog: a name already filled in, "Test" before "Add", and SABnzbd's own download
  *  folder offered as a download folder, at the path Solarr sees it if that differs. */
@@ -459,6 +460,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [sendRSS, setSendRSS] = useState(current.always_send_rss_grabs ?? true);
   const [seedRatio, setSeedRatio] = useState(current.seed_ratio ? String(current.seed_ratio) : "");
   const [seedMinutes, setSeedMinutes] = useState(current.seed_minutes ? String(current.seed_minutes) : "");
+  const [stall, setStall] = useState<StallCleanup>(current.stall_cleanup ?? { enabled: false });
   const torrent = downloader.impl === "qbittorrent";
   // The stored secret is never shown, so a new one is typed in full or left alone.
   const [signInUser, setSignInUser] = useState("");
@@ -504,6 +506,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
             seed_ratio: Number(seedRatio) > 0 ? Number(seedRatio) : undefined,
             seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
             remote_path: remotePath || undefined, local_path: localPath || undefined,
+            stall_cleanup: stall,
           },
         },
       });
@@ -526,6 +529,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
         onSendRSS={setSendRSS}
         seed={torrent ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
       />
+      <StallFields stall={stall} onChange={setStall} />
       <div className="flex flex-wrap items-end gap-3 text-xs">
         {torrent && (
           <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
@@ -595,7 +599,45 @@ function describeOptions(options: DownloaderOptions | undefined): string {
   parts.push(`${options?.max_queued ?? DEFAULT_MAX_QUEUED} at once`);
   if (options?.always_send_user_grabs === false) parts.push("holds your grabs when full");
   if (options?.always_send_rss_grabs === false) parts.push("holds RSS grabs when full");
+  if (options?.stall_cleanup?.enabled) parts.push(`removes stalled downloads after ${options.stall_cleanup.strikes ?? 5} checks`);
   return parts.join(" · ");
+}
+
+/** Stalled-download cleanup: off unless switched on; the numbers show what applies, defaults included. */
+function StallFields({ stall, onChange }: { stall: StallCleanup; onChange: (stall: StallCleanup) => void }) {
+  const number = (key: "strikes" | "check_minutes" | "no_progress_hours" | "ignore_above_gb", label: string, help: string) => (
+    <label className="flex w-36 flex-col gap-1 text-ink-muted" title={help}>
+      {label}
+      <input
+        className={inputStyle}
+        type="number"
+        min={key === "ignore_above_gb" ? 0 : 1}
+        value={stall[key] ?? ""}
+        disabled={!stall.enabled}
+        onChange={(event) => onChange({ ...stall, [key]: event.target.value === "" ? undefined : Math.round(Number(event.target.value)) })}
+      />
+    </label>
+  );
+  return (
+    <fieldset className="flex flex-col gap-2 rounded-md border border-border-subtle p-2 text-xs">
+      <label className="flex items-start gap-2">
+        <input type="checkbox" checked={stall.enabled} onChange={(event) => onChange({ ...stall, enabled: event.target.checked })} />
+        <span>
+          <span className="text-ink">Remove stalled downloads</span>
+          <span className="block text-ink-muted">
+            A download of Solarr's that stops moving gets a strike at each check; after the strikes, or the hours without
+            progress, it is removed with its files, blocklisted and searched for again. Queued and paused downloads are left alone.
+          </span>
+        </span>
+      </label>
+      <div className="flex flex-wrap gap-3">
+        {number("strikes", "Strikes", "Checks in a row that find no progress")}
+        {number("check_minutes", "Check every (min)", "How often progress is compared")}
+        {number("no_progress_hours", "Or after (hours)", "Removed after this long without progress, whatever the strikes")}
+        {number("ignore_above_gb", "Ignore above (GB)", "Bigger downloads are left alone; 0 is no limit")}
+      </div>
+    </fieldset>
+  );
 }
 
 const inputStyle =

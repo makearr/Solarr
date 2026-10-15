@@ -177,6 +177,15 @@ func (q *Queries) CreateAcquisition(ctx context.Context, arg CreateAcquisitionPa
 	return i, err
 }
 
+const deleteAcquisitionStall = `-- name: DeleteAcquisitionStall :exec
+DELETE FROM acquisition_stall WHERE acquisition_id = ?
+`
+
+func (q *Queries) DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteAcquisitionStall, acquisitionID)
+	return err
+}
+
 const deleteDecisionsByID = `-- name: DeleteDecisionsByID :execrows
 DELETE FROM candidate_decision WHERE id IN (SELECT value FROM json_each(?1))
 `
@@ -313,6 +322,23 @@ func (q *Queries) GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisit
 		&i.UpdatedAt,
 		&i.ContentHash,
 		&i.SizeBytes,
+	)
+	return i, err
+}
+
+const getAcquisitionStall = `-- name: GetAcquisitionStall :one
+SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at FROM acquisition_stall WHERE acquisition_id = ?
+`
+
+func (q *Queries) GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error) {
+	row := q.db.QueryRowContext(ctx, getAcquisitionStall, acquisitionID)
+	var i AcquisitionStall
+	err := row.Scan(
+		&i.AcquisitionID,
+		&i.Strikes,
+		&i.LeftBytes,
+		&i.ProgressAt,
+		&i.CheckedAt,
 	)
 	return i, err
 }
@@ -1545,6 +1571,32 @@ type SetAcquisitionPathParams struct {
 
 func (q *Queries) SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error {
 	_, err := q.db.ExecContext(ctx, setAcquisitionPath, arg.DownloadDir, arg.UpdatedAt, arg.ID)
+	return err
+}
+
+const setAcquisitionStall = `-- name: SetAcquisitionStall :exec
+INSERT INTO acquisition_stall (acquisition_id, strikes, left_bytes, progress_at, checked_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (acquisition_id) DO UPDATE SET
+  strikes = excluded.strikes, left_bytes = excluded.left_bytes,
+  progress_at = excluded.progress_at, checked_at = excluded.checked_at
+`
+
+type SetAcquisitionStallParams struct {
+	AcquisitionID int64
+	Strikes       int64
+	LeftBytes     int64
+	ProgressAt    int64
+	CheckedAt     int64
+}
+
+func (q *Queries) SetAcquisitionStall(ctx context.Context, arg SetAcquisitionStallParams) error {
+	_, err := q.db.ExecContext(ctx, setAcquisitionStall,
+		arg.AcquisitionID,
+		arg.Strikes,
+		arg.LeftBytes,
+		arg.ProgressAt,
+		arg.CheckedAt,
+	)
 	return err
 }
 

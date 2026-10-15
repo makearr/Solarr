@@ -42,6 +42,14 @@ type AcquisitionFile struct {
 	ImportedAt    sql.NullInt64
 }
 
+type AcquisitionStall struct {
+	AcquisitionID int64
+	Strikes       int64
+	LeftBytes     int64
+	ProgressAt    int64
+	CheckedAt     int64
+}
+
 type AltNumbering struct {
 	PartID   int64
 	Scheme   string

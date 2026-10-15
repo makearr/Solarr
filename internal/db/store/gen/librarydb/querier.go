@@ -219,6 +219,7 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
+	DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error
 	DeleteCollection(ctx context.Context, id int64) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
@@ -330,6 +331,7 @@ type Querier interface {
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
 	// Identity is the client reference; the path is re-read on every poll.
 	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
+	GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error)
 	// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
 	// rather than the acquisition_one_inflight unique index's own raw
 	// constraint error (Invariant 15) -- the same "check first" shape
@@ -942,6 +944,7 @@ type Querier interface {
 	// The client's own name and size, recorded when first seen (section 10.9's fingerprint).
 	SetAcquisitionFingerprint(ctx context.Context, arg SetAcquisitionFingerprintParams) error
 	SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPathParams) error
+	SetAcquisitionStall(ctx context.Context, arg SetAcquisitionStallParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
 	// The claimed half (todo 4.2): derived once per release folder at scan time,

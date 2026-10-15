@@ -77,3 +77,13 @@ goes without reading the search that found it; an acquisition likewise keeps its
 **Activity → Queue** lists the held releases below the downloads, in send order, with their size,
 who asked, the indexer and how long they have waited. The album page says "Waiting for room in
 the download client".
+
+## Stalled downloads are removed (per client, off by default)
+
+A client's Options can switch on **Remove stalled downloads**. Every *check* minutes (default 15) the poll compares a
+running download of Solarr's own with the last check (`poll.checkStall`, state in `acquisition_stall`): one that has not
+moved gets a strike, progress clears them. After *strikes* in a row (default 5), or *hours* without progress (default 2)
+whatever the strikes, the download takes the path of a download the client failed: removed with its files, its
+release blocklisted by guid and content for 30 days, the album or season searched again, History saying "stalled".
+Queued and paused downloads are never struck, and a paused one's clock starts again when it runs, so a person's pause
+is never undone; downloads over the size limit (default 50 GB, 0 none) and clients with the switch off are left alone.

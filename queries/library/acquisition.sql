@@ -313,3 +313,15 @@ DELETE FROM candidate WHERE id IN (
   ORDER BY expired.expires_at
   LIMIT sqlc.arg(page_size)
 );
+
+-- name: GetAcquisitionStall :one
+SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at FROM acquisition_stall WHERE acquisition_id = ?;
+
+-- name: SetAcquisitionStall :exec
+INSERT INTO acquisition_stall (acquisition_id, strikes, left_bytes, progress_at, checked_at) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT (acquisition_id) DO UPDATE SET
+  strikes = excluded.strikes, left_bytes = excluded.left_bytes,
+  progress_at = excluded.progress_at, checked_at = excluded.checked_at;
+
+-- name: DeleteAcquisitionStall :exec
+DELETE FROM acquisition_stall WHERE acquisition_id = ?;

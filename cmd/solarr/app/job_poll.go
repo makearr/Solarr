@@ -7,6 +7,7 @@ import (
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
@@ -76,6 +77,7 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 			RemoveCompleted: options.RemovesCompleted(),
 			SeedRatio:       seedRatio, SeedMinutes: seedMinutes,
 			LocalPath: options.LocalPathFor,
+			Stall:     pollStallRules(options.StallRules()),
 		}
 	}
 	return clients, nil
@@ -137,4 +139,12 @@ func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	}
 	_, err = hunting.HuntSearch(ctx, desiredItemID)
 	return err
+}
+
+// pollStallRules is a client's stall cleanup as the poll takes it.
+func pollStallRules(rules settings.StallRules) poll.StallRules {
+	return poll.StallRules{
+		Enabled: rules.Enabled, Strikes: rules.Strikes, Check: rules.Check, NoProgress: rules.NoProgress,
+		IgnoreAboveBytes: rules.IgnoreAboveBytes,
+	}
 }

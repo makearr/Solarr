@@ -239,6 +239,12 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs, SeedRatio: positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
 	}
+	if cleanup := options.StallCleanup; cleanup != nil {
+		stored.StallCleanup = &settings.StallCleanup{
+			Enabled: cleanup.Enabled, Strikes: cleanup.Strikes, CheckMinutes: cleanup.CheckMinutes,
+			NoProgressHours: cleanup.NoProgressHours, IgnoreAboveGB: cleanup.IgnoreAboveGb,
+		}
+	}
 	encoded, err := json.Marshal(stored)
 	if err != nil || string(encoded) == "{}" {
 		return ""
@@ -281,7 +287,14 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRssGrabs: options.AlwaysSendRSSGrabs,
 		SeedRatio:          positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
+		StallCleanup: stallCleanupView(options.StallRules()),
 	}
+}
+
+// stallCleanupView shows a client's stall cleanup with its defaults filled in, so the form shows what applies.
+func stallCleanupView(rules settings.StallRules) *gen.StallCleanup {
+	strikes, check, hours, ignore := rules.Strikes, int(rules.Check.Minutes()), int(rules.NoProgress.Hours()), int(rules.IgnoreAboveBytes>>30)
+	return &gen.StallCleanup{Enabled: rules.Enabled, Strikes: &strikes, CheckMinutes: &check, NoProgressHours: &hours, IgnoreAboveGb: &ignore}
 }
 
 // positiveFloat and positiveInt drop a zero limit: 0 means no limit, which is how it is stored.
@@ -306,10 +319,21 @@ func (s *Server) validOptions(w http.ResponseWriter, options *gen.DownloaderOpti
 			"Bad request", "seed_ratio and seed_minutes cannot be negative")
 		return false
 	}
+	if options != nil && options.StallCleanup != nil && !validStallCleanup(*options.StallCleanup) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request",
+			"stall cleanup: strikes 1-50, check_minutes 1-1440, no_progress_hours 1-168, ignore_above_gb 0-100000")
+		return false
+	}
 	if options != nil && options.MaxQueued != nil && (*options.MaxQueued < 1 || *options.MaxQueued > 1000) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"Bad request", "max_queued must be between 1 and 1000")
 		return false
 	}
 	return true
+}
+
+func validStallCleanup(cleanup gen.StallCleanup) bool {
+	within := func(value *int, low, high int) bool { return value == nil || (*value >= low && *value <= high) }
+	return within(cleanup.Strikes, 1, 50) && within(cleanup.CheckMinutes, 1, 1440) &&
+		within(cleanup.NoProgressHours, 1, 168) && within(cleanup.IgnoreAboveGb, 0, 100000)
 }

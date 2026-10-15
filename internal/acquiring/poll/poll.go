@@ -60,6 +60,20 @@ type Client struct {
 	SeedMinutes int
 	// LocalPath maps a path the client reports to where Solarr sees it.
 	LocalPath func(reported string) string
+	// Stall removes and blocklists downloads that stop making progress; the zero value is off.
+	Stall StallRules
+}
+
+// StallRules is one client's stalled-download cleanup (settings.StallRules, resolved).
+type StallRules struct {
+	Enabled bool
+	// Strikes is how many checks in a row may find no progress; Check how often they run.
+	Strikes int
+	Check   time.Duration
+	// NoProgress removes a download that has not moved for this long, whatever the strikes.
+	NoProgress time.Duration
+	// IgnoreAboveBytes leaves bigger downloads alone; 0 is no limit.
+	IgnoreAboveBytes int64
 }
 
 func (c Client) seeds() bool { return c.SeedRatio > 0 || c.SeedMinutes > 0 }
@@ -288,10 +302,57 @@ func (j *Job) advance(
 		return j.failed(ctx, client, acquisition, library.BlocklistDownloadFailed, entry.Error)
 	case download.StateDownloading, download.StateProcessing:
 		if acquisition.State == StateQueued {
-			return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateDownloading, "", now)
+			if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateDownloading, "", now); err != nil {
+				return err
+			}
 		}
+		if entry.State == download.StateDownloading {
+			return j.checkStall(ctx, client, acquisition, entry)
+		}
+	case download.StatePaused, download.StateQueued:
+		// Waiting is not stalling, and a download a person paused is theirs: its clock starts again once it runs.
+		if !client.Stall.Enabled {
+			return nil
+		}
+		if _, found, err := j.config.Acquisitions.Stall(ctx, acquisition.ID); err != nil || !found {
+			return err
+		}
+		return j.config.Acquisitions.ForgetStall(ctx, acquisition.ID)
 	}
 	return nil
+}
+
+// checkStall compares a running download's progress every Check: a check that finds it has not moved is a strike, and
+// Strikes in a row, or NoProgress without moving, fail it like a download the client failed (blocklisted, searched
+// again).
+func (j *Job) checkStall(ctx context.Context, client Client, acquisition library.Acquisition, entry download.Download) error {
+	rules := client.Stall
+	if !rules.Enabled || (rules.IgnoreAboveBytes > 0 && entry.SizeBytes > rules.IgnoreAboveBytes) {
+		return nil
+	}
+	now := j.config.Clock.Now().Unix()
+	state, found, err := j.config.Acquisitions.Stall(ctx, acquisition.ID)
+	if err != nil {
+		return err
+	}
+	switch {
+	case !found:
+		return j.config.Acquisitions.SetStall(ctx, acquisition.ID, library.StallState{LeftBytes: entry.SizeLeftBytes, ProgressAt: now, CheckedAt: now})
+	case now-state.CheckedAt < int64(rules.Check.Seconds()):
+		return nil
+	case entry.SizeLeftBytes < state.LeftBytes:
+		return j.config.Acquisitions.SetStall(ctx, acquisition.ID, library.StallState{LeftBytes: entry.SizeLeftBytes, ProgressAt: now, CheckedAt: now})
+	}
+	state.Strikes++
+	state.CheckedAt = now
+	still := time.Duration(now-state.ProgressAt) * time.Second
+	if state.Strikes < rules.Strikes && still < rules.NoProgress {
+		return j.config.Acquisitions.SetStall(ctx, acquisition.ID, state)
+	}
+	detail := fmt.Sprintf("stalled: no progress for %s (%d checks)", still.Round(time.Minute), state.Strikes)
+	j.config.Logger.Info("stalled download removed", slog.Int64("acquisition_id", acquisition.ID),
+		slog.String("release", acquisition.CandidateTitle), slog.String("client", client.Name), slog.String("detail", detail))
+	return j.failed(ctx, client, acquisition, library.BlocklistDownloadFailed, detail)
 }
 
 // checkFingerprint records the client's own name and size when a download is first seen; a
