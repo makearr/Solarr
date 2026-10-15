@@ -182,12 +182,21 @@ export function PosterOptionsMenu({ options, onChange }: { options: PosterOption
 }
 
 /** Radarr's three views, as a button group. */
-export function IndexViewToggle({ view, onChange }: { view: IndexView; onChange: (view: IndexView) => void }) {
+export function IndexViewToggle({
+  view,
+  onChange,
+  offered,
+}: {
+  view: IndexView;
+  onChange: (view: IndexView) => void;
+  /** The views this index has; all three when absent. */
+  offered?: readonly IndexView[];
+}) {
   const modes = [
     { mode: "poster" as const, icon: LayoutGrid, label: "Posters" },
     { mode: "overview" as const, icon: StretchHorizontal, label: "Overview" },
     { mode: "list" as const, icon: Rows3, label: "Table" },
-  ];
+  ].filter(({ mode }) => !offered || offered.includes(mode));
   return (
     <div className="flex items-center rounded-md border border-border-subtle">
       {modes.map(({ mode, icon: Icon, label }) => (

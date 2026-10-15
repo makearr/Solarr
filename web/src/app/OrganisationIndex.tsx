@@ -9,13 +9,17 @@ import { remoteImage } from "@/lib/remoteImage";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
+import { ListTable, type Column } from "@/list/ListTable";
 import { PosterGrid } from "@/list/PosterGrid";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { Toolbar, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 
-import { DEFAULT_POSTER_OPTIONS, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight, type PosterOptions } from "./IndexViews";
+import {
+  DEFAULT_POSTER_OPTIONS, IndexViewToggle, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight, type IndexView,
+  type PosterOptions,
+} from "./IndexViews";
 import { CreditTile } from "./PersonPage";
 import { FollowPanel } from "./FollowPanel";
 import { Poster } from "./Poster";
@@ -34,6 +38,8 @@ export function OrganisationIndex() {
   const frameRef = useRef<HTMLDivElement>(null);
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const view = useRouteView(ORGANISATION_FILTER_KEYS);
+  const [storedMode, setMode] = usePreference<IndexView>(`organisations.view.${categoryId}`, "poster");
+  const mode: IndexView = storedMode === "list" ? "list" : "poster";
   const sort = view.query.sort ?? "works";
   // The address carries a direction only beside a sort: unsorted is the default, most works first.
   const descending = view.query.sort === null || view.query.direction === "desc";
@@ -44,8 +50,8 @@ export function OrganisationIndex() {
     {
       name: `organisations-${categoryId}`,
       idOf: (organisation) => organisation.id,
-      rowHeight: posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
-      itemsPerRow: metrics.columns,
+      rowHeight: mode === "list" ? 44 : posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
+      itemsPerRow: mode === "list" ? 1 : metrics.columns,
       fetchPage: async ({ cursor, query, signal }) => {
         const { data, error } = await api.GET("/organisations", {
           params: {
@@ -68,6 +74,30 @@ export function OrganisationIndex() {
     view,
   );
 
+  const link = (organisation: Organisation) =>
+    ({ to: "/library/$categoryId/organisations/$organisationId", params: { categoryId, organisationId: String(organisation.id) } }) as const;
+  const columns: readonly Column<Organisation>[] = [
+    {
+      key: "name", header: type?.organisation.one || "Name", sortable: true, width: "minmax(12rem,2fr)",
+      render: (organisation) => (
+        <Link {...link(organisation)} className="flex items-center gap-2 hover:underline" onClick={(event) => event.stopPropagation()}>
+          <span className="flex h-7 w-12 shrink-0 items-center justify-center">
+            {organisation.logo_url ? (
+              <img src={remoteImage(organisation.logo_url, "thumb")} alt="" loading="lazy" className="max-h-7 max-w-12 object-contain" />
+            ) : (
+              <Building2 aria-hidden className="size-4 text-ink-muted" />
+            )}
+          </span>
+          {organisation.name}
+        </Link>
+      ),
+    },
+    { key: "country", header: "Country", width: "6rem", render: (organisation) => organisation.country?.toUpperCase() ?? "" },
+    { key: "works", header: type?.work.many ?? "Works", sortable: true, width: "6rem", render: (organisation) => organisation.works },
+    { key: "latest", header: "Newest", sortable: true, width: "6rem", render: (organisation) => organisation.latest ?? "" },
+    { key: "followed", header: "Followed", width: "6rem", render: (organisation) => (organisation.monitored ? "Yes" : "") },
+  ];
+
   return (
     <div ref={frameRef} className="flex h-full flex-col">
       <Toolbar title={many}>
@@ -84,7 +114,8 @@ export function OrganisationIndex() {
           onSort={(next) => view.setQuery({ ...view.query, sort: next, direction: next === "name" ? "asc" : "desc" })}
           onTurn={() => view.setQuery({ ...view.query, sort, direction: descending ? "asc" : "desc" })}
         />
-        <PosterOptionsMenu options={options} onChange={setOptions} />
+        {mode === "poster" && <PosterOptionsMenu options={options} onChange={setOptions} />}
+        <IndexViewToggle view={mode} onChange={setMode} offered={["poster", "list"]} />
       </Toolbar>
       <div className="min-h-0 flex-1">
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
@@ -94,7 +125,8 @@ export function OrganisationIndex() {
             {view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
           </p>
         )}
-        {list.items.length > 0 && (
+        {list.items.length > 0 && mode === "list" && <ListTable list={list} columns={columns} idOf={(organisation) => organisation.id} />}
+        {list.items.length > 0 && mode === "poster" && (
           <PosterGrid
             list={list}
             idOf={(organisation) => organisation.id}
@@ -106,7 +138,7 @@ export function OrganisationIndex() {
                 contain
                 title={organisation.name}
                 subtitle={`${organisation.works} ${organisation.works === 1 ? (type?.work.one ?? "work").toLowerCase() : works}`}
-                link={{ to: "/library/$categoryId/organisations/$organisationId", params: { categoryId, organisationId: String(organisation.id) } }}
+                link={link(organisation)}
                 showTitle={options.showTitle}
               />
             )}
