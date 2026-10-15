@@ -121,6 +121,7 @@ func (p *process) tvModule() tv.Module {
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		SharedFiles: p.enqueueSharedFiles,
 	})
 	retry := tv.NewRetryJob(tv.RetryConfig{
 		Unidentified: library.NewUnidentified(p.library), Consumer: consumer, FS: p.fsys, Logger: p.logger,
@@ -188,8 +189,8 @@ func (p *process) tvModule() tv.Module {
 		Retry: retry,
 		ServerFiles: &tv.ServerFilesJob{
 			Writer: tv.ServerFiles{
-				FS: p.fsys, Reader: library.NewSeriesReader(p.library), Roots: adapters.Roots{Cache: p.cache},
-				Picture: p.remoteImages().Original, Clock: clock.NewSystem(),
+				FS: p.fsys, Reader: library.NewSeriesReader(p.library), Crossovers: library.NewCrossovers(p.library),
+				Roots: adapters.Roots{Cache: p.cache}, Picture: p.remoteImages().Original, Clock: clock.NewSystem(),
 			},
 			Libraries: func() []settings.Category { return p.cache.Snapshot().Categories() },
 			RootsOf: func(categoryID int64) []settings.RootFolder {
@@ -197,6 +198,15 @@ func (p *process) tvModule() tv.Module {
 			},
 			Logger: p.logger,
 		},
+		SharedFiles: &tv.SharedFilesJob{Placer: tv.SharedFiles{
+			FS: p.fsys, Crossovers: library.NewCrossovers(p.library), Reader: library.NewSeriesReader(p.library),
+			Links: library.NewObjectLinks(p.library), Series: p.tvService().Series, Categories: adapters.Categories{Cache: p.cache},
+			Roots: adapters.Roots{Cache: p.cache},
+			RootsOf: func(categoryID int64) []settings.RootFolder {
+				return p.cache.Snapshot().RootFoldersForCategory(categoryID)
+			},
+			Clock: clock.NewSystem(), Logger: p.logger,
+		}},
 		Searching: tv.Searching{Acquire: p.tvGrab(), Conns: p.tvIndexerConns, Clock: clock.NewSystem()},
 		Following: tv.Following{
 			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,
@@ -280,6 +290,11 @@ func (p *process) musicFiles() adapters.MusicFiles {
 		Unidentified: library.NewUnidentified(p.library), Identity: library.NewIdentity(p.library),
 		Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 	}
+}
+
+// enqueueSharedFiles submits the pass placing episodes two series share into both.
+func (p *process) enqueueSharedFiles(ctx context.Context) error {
+	return tv.EnqueueSharedFiles(ctx, p.queue)
 }
 
 // enqueueServerFiles submits the pass writing Jellyfin and Kodi files.

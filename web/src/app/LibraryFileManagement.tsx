@@ -204,6 +204,16 @@ export function LibraryFileManagement() {
             checked={draft.media_server_files ?? false}
             onChange={(checked) => set({ media_server_files: checked })}
           />
+          <Choice
+            label="Shared episodes across disks"
+            help="An episode listed under two series (a crossover) is held once and linked into the second series' folder. When the two folders are on different disks no link can be made: keep a second copy, or put a symbolic link there."
+            value={draft.shared_file_fallback ?? "copy"}
+            options={[
+              ["copy", "Second copy"],
+              ["symlink", "Symbolic link"],
+            ]}
+            onChange={(value) => set({ shared_file_fallback: value as FileManagement["shared_file_fallback"] })}
+          />
         </section>
       )}
 

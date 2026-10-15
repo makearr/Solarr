@@ -607,7 +607,8 @@ type Querier interface {
 	ListPartCollectionMembers(ctx context.Context, collectionIds []int64) ([]ListPartCollectionMembersRow, error)
 	// Which part of a work has a file, and what that file measures. The same
 	// media_ref present_count is derived from, so the album detail and the
-	// artist overview cannot disagree about what is there; a file a sweep found gone is not.
+	// artist overview cannot disagree about what is there; a file a sweep found gone is not. A file at several paths (one
+	// broadcast under two series) shows the one in the same top folder as the work's other files.
 	ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error)
 	// Every part of a work with one provider's id of it, for matching a new numbering of the same parts.
 	ListPartIDs(ctx context.Context, arg ListPartIDsParams) ([]ListPartIDsRow, error)
@@ -657,6 +658,8 @@ type Querier interface {
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
+	// Every same-broadcast link of a media type, once from each side.
+	ListSameContentPairs(ctx context.Context, mediaType string) ([]ListSameContentPairsRow, error)
 	// The parts one part is the same broadcast as, either way round, with what a list shows of them.
 	ListSameContentParts(ctx context.Context, arg ListSameContentPartsParams) ([]ListSameContentPartsRow, error)
 	// Episodes of different works with the same title on the same day, not yet linked: likely one broadcast twice.

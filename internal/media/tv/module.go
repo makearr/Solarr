@@ -35,6 +35,8 @@ type Module struct {
 	Retry *RetryJob
 	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.
 	ServerFiles *ServerFilesJob
+	// SharedFiles places episodes two series share; nil leaves the job unregistered.
+	SharedFiles *SharedFilesJob
 	// Renumber numbers a series by another of TheTVDB's orderings; nil offers none.
 	Renumber media.Renumbering
 	// Following is TV's part of a follow.
@@ -139,6 +141,11 @@ func (Module) ReleaseLabel(releaseTitle, itemRef string, now time.Time) string {
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
 	if m.Retry != nil {
 		if err := register(RetryDefinition, m.Retry); err != nil {
+			return err
+		}
+	}
+	if m.SharedFiles != nil {
+		if err := register(SharedFilesDefinition, m.SharedFiles); err != nil {
 			return err
 		}
 	}

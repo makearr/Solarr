@@ -40,6 +40,15 @@ const (
 	FileDateReleaseDate ChangeFileDate = "release_date"
 )
 
+// SharedFileFallback is how a file one broadcast shares reaches the second series when no link can cross the filesystems.
+type SharedFileFallback string
+
+// A second copy (ADR-11's default) or a symbolic link.
+const (
+	SharedFileCopy    SharedFileFallback = "copy"
+	SharedFileSymlink SharedFileFallback = "symlink"
+)
+
 // FileManagement is Sonarr's File Management and Permissions for one library (2026-09-24).
 type FileManagement struct {
 	PropersRepacks     PropersRepacks
@@ -64,6 +73,8 @@ type FileManagement struct {
 	ExtraFiles ExtraFiles
 	// MediaServerFiles writes what Jellyfin and Kodi read beside the library's files (nfo, artwork), never over one.
 	MediaServerFiles bool
+	// SharedFileFallback places a same-broadcast file into this library's series across filesystems; empty is copy.
+	SharedFileFallback SharedFileFallback
 }
 
 // Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
@@ -84,7 +95,7 @@ type Tagging struct {
 // DefaultFileManagement is Sonarr's defaults, with Solarr's 7-day recycle bin as the bin.
 var DefaultFileManagement = FileManagement{
 	PropersRepacks: PropersPreferAndUpgrade, RescanAfterRefresh: RescanAlways, ChangeFileDate: FileDateNone,
-	RecycleRetentionDays: 7, ChmodFolder: "755", Tagging: Tagging{WriteIDs: true},
+	RecycleRetentionDays: 7, ChmodFolder: "755", Tagging: Tagging{WriteIDs: true}, SharedFileFallback: SharedFileCopy,
 }
 
 var (
@@ -101,7 +112,7 @@ func (f FileManagement) IsDefault() bool {
 		f.UnmonitorDeleted == d.UnmonitorDeleted && f.MergeArtistAliases == d.MergeArtistAliases &&
 		f.SetPermissions == d.SetPermissions && f.ChmodFolder == d.ChmodFolder && f.ChownGroup == d.ChownGroup &&
 		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil &&
-		f.MediaServerFiles == d.MediaServerFiles
+		f.MediaServerFiles == d.MediaServerFiles && f.SharedFileFallback == d.SharedFileFallback
 }
 
 // FolderMode is ChmodFolder as a mode; FileMode drops the execute bits, as Sonarr does.
@@ -131,6 +142,10 @@ func validateFileManagement(f FileManagement) config.Problems {
 	default:
 		problems = append(problems, config.Problem{Path: "rescan_after_refresh", Value: string(f.RescanAfterRefresh),
 			Expectation: "always, after_manual or never"})
+	}
+	if f.SharedFileFallback != "" && f.SharedFileFallback != SharedFileCopy && f.SharedFileFallback != SharedFileSymlink {
+		problems = append(problems, config.Problem{Path: "shared_file_fallback", Value: string(f.SharedFileFallback),
+			Expectation: "copy or symlink"})
 	}
 	if f.ChangeFileDate != FileDateNone && f.ChangeFileDate != FileDateReleaseDate {
 		problems = append(problems, config.Problem{Path: "change_file_date", Value: string(f.ChangeFileDate),
@@ -175,6 +190,9 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 	if err != nil {
 		return err
 	}
+	if f.SharedFileFallback == "" {
+		f.SharedFileFallback = SharedFileCopy
+	}
 	return queries.UpsertCategoryFileManagement(ctx, settingsdb.UpsertCategoryFileManagementParams{
 		CategoryID: categoryID, PropersRepacks: string(f.PropersRepacks),
 		RescanAfterRefresh: string(f.RescanAfterRefresh), ChangeFileDate: string(f.ChangeFileDate),
@@ -186,7 +204,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		NavidromeProfile:   boolToInt(f.Tagging.Navidrome),
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
-		MediaServerFiles: boolToInt(f.MediaServerFiles),
+		MediaServerFiles: boolToInt(f.MediaServerFiles), SharedFileFallback: string(f.SharedFileFallback),
 	})
 }
 
@@ -214,8 +232,9 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
 				Navidrome: row.NavidromeProfile != 0,
 			},
-			ExtraFiles:       decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
-			MediaServerFiles: row.MediaServerFiles != 0,
+			ExtraFiles:         decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
+			MediaServerFiles:   row.MediaServerFiles != 0,
+			SharedFileFallback: SharedFileFallback(row.SharedFileFallback),
 		}
 	}
 	return categories

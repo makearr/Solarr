@@ -227,7 +227,8 @@ func (c Crossovers) LinkSameContent(ctx context.Context, partID, otherPartID int
 		}); err != nil {
 			return err
 		}
-		return coverLinkedTx(ctx, queries, []int64{partID, otherPartID}, c.store.Now())
+		_, err := coverLinkedTx(ctx, queries, []int64{partID, otherPartID}, c.store.Now())
+		return err
 	})
 	if err != nil {
 		return fmt.Errorf("library: link parts %d and %d: %w", partID, otherPartID, err)
@@ -296,25 +297,49 @@ func (c Crossovers) Suggestions(ctx context.Context, mediaType string, categoryI
 	return suggestions, nil
 }
 
-// coverLinkedTx lets each of the parts' files cover every part it is the same broadcast as, and re-counts their works.
-func coverLinkedTx(ctx context.Context, queries *librarydb.Queries, partIDs []int64, now time.Time) error {
+// coverLinkedTx lets each of the parts' files cover every part it is the same broadcast as, re-counts their works, and
+// answers how many links it followed.
+func coverLinkedTx(ctx context.Context, queries *librarydb.Queries, partIDs []int64, now time.Time) (int, error) {
 	links, err := queries.ListSameContentParts(ctx, librarydb.ListSameContentPartsParams{PartIds: partIDs, PartIdsAgain: partIDs})
 	if err != nil || len(links) == 0 {
-		return err
+		return 0, err
 	}
 	works := map[int64]bool{}
 	for _, link := range links {
 		if err := queries.CoverPartLikeAnother(ctx, librarydb.CoverPartLikeAnotherParams{TargetPartID: link.OtherPartID, SourcePartID: link.PartID}); err != nil {
-			return err
+			return 0, err
 		}
 		works[link.OtherWorkID] = true
 	}
 	for workID := range works {
 		if err := recomputeWorkItemsTx(ctx, queries, workID, now); err != nil {
-			return err
+			return 0, err
 		}
 	}
-	return nil
+	return len(links), nil
+}
+
+// SameContentPair is one same-broadcast link seen from one side: a part, and the part of another work it also is.
+type SameContentPair struct {
+	PartID, WorkID           int64
+	MediaRef, Title, Date    string
+	OtherPartID, OtherWorkID int64
+	OtherRef                 string
+	// CategoryID is the library of the part's work.
+	CategoryID int64
+}
+
+// Pairs answers every same-broadcast link of a media type, once from each side.
+func (c Crossovers) Pairs(ctx context.Context, mediaType string) ([]SameContentPair, error) {
+	rows, err := librarydb.New(c.store.Read()).ListSameContentPairs(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: same-broadcast pairs: %w", err)
+	}
+	pairs := make([]SameContentPair, len(rows))
+	for i, row := range rows {
+		pairs[i] = SameContentPair(row)
+	}
+	return pairs, nil
 }
 
 // SameContentOfWork answers the same-broadcast links of every part of the work.

@@ -414,6 +414,7 @@ type PartPath struct {
 	RootFolderID          int64
 	RelPath               string
 	ExternalID            string
+	MediaObjectID         int64
 }
 
 // PartPaths answers the files of a work's parts still on disk, with provider's id of each part.

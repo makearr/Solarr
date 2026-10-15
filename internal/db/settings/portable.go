@@ -230,10 +230,12 @@ type FileManagementEntry struct {
 	ImportExtraFiles    *bool    `yaml:"import_extra_files,omitempty"`
 	ExtraFileExtensions []string `yaml:"extra_file_extensions,omitempty"`
 	MediaServerFiles    bool     `yaml:"media_server_files,omitempty"`
+	// SharedFileFallback is absent while it is the default, copy.
+	SharedFileFallback string `yaml:"shared_file_fallback,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
-	return FileManagement{
+	f := FileManagement{
 		PropersRepacks: e.PropersRepacks, RescanAfterRefresh: e.RescanAfterRefresh, ChangeFileDate: e.ChangeFileDate,
 		RecycleRetentionDays: e.RecycleRetentionDays, DeleteEmptyFolders: e.DeleteEmptyFolders,
 		CreateEmptyArtistFolders: e.CreateEmptyArtistFolders, UnmonitorDeleted: e.UnmonitorDeleted,
@@ -244,13 +246,17 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile,
 		},
 		ExtraFiles:       ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
-		MediaServerFiles: e.MediaServerFiles,
+		MediaServerFiles: e.MediaServerFiles, SharedFileFallback: SharedFileCopy,
 	}
+	if e.SharedFileFallback != "" {
+		f.SharedFileFallback = SharedFileFallback(e.SharedFileFallback)
+	}
+	return f
 }
 
 func fileManagementEntry(f FileManagement) FileManagementEntry {
 	writeIDs := f.Tagging.WriteIDs
-	return FileManagementEntry{
+	entry := FileManagementEntry{
 		PropersRepacks: f.PropersRepacks, RescanAfterRefresh: f.RescanAfterRefresh, ChangeFileDate: f.ChangeFileDate,
 		RecycleRetentionDays: f.RecycleRetentionDays, DeleteEmptyFolders: f.DeleteEmptyFolders,
 		CreateEmptyArtistFolders: f.CreateEmptyArtistFolders, UnmonitorDeleted: f.UnmonitorDeleted,
@@ -261,6 +267,10 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		ImportExtraFiles: f.ExtraFiles.Import, ExtraFileExtensions: f.ExtraFiles.Extensions,
 		MediaServerFiles: f.MediaServerFiles,
 	}
+	if f.SharedFileFallback != SharedFileCopy {
+		entry.SharedFileFallback = string(f.SharedFileFallback)
+	}
+	return entry
 }
 
 // QualityTargetRef is a library's choice of target: the name of one under quality_targets. A document written before

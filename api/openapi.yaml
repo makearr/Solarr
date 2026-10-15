@@ -9486,6 +9486,13 @@ components:
                  delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
                  merge_artist_aliases, set_permissions, chmod_folder, chown_group]
       properties:
+        shared_file_fallback:
+          type: string
+          enum: [copy, symlink]
+          description: >-
+            How a file one broadcast shares with another series reaches this library's series when the two are on
+            different filesystems and no link can be made: a second copy (the default) or a symbolic link. Omitted
+            on a save keeps what is stored.
         media_server_files:
           type: boolean
           description: >-

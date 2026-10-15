@@ -699,7 +699,8 @@ func TestDocument_RoundTrips_IncludesFileManagement(t *testing.T) {
 		PropersRepacks: settings.PropersDoNotPrefer, RescanAfterRefresh: settings.RescanNever,
 		ChangeFileDate: settings.FileDateReleaseDate, RecycleRetentionDays: 30, DeleteEmptyFolders: true,
 		CreateEmptyArtistFolders: true, UnmonitorDeleted: true, SetPermissions: true, ChmodFolder: "775", ChownGroup: "media",
-		ExtraFiles: settings.ExtraFiles{Import: &extrasOn, Extensions: []string{"srt", "ass"}},
+		ExtraFiles:         settings.ExtraFiles{Import: &extrasOn, Extensions: []string{"srt", "ass"}},
+		SharedFileFallback: settings.SharedFileSymlink,
 	}
 	if err := cache.SetCategoryFileManagement(t.Context(), music.ID, wanted); err != nil {
 		t.Fatalf("SetCategoryFileManagement: %v", err)

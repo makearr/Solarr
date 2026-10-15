@@ -14,6 +14,8 @@ import (
 type Crossovers struct {
 	Crossovers library.Crossovers
 	Desired    library.Desired
+	// SharedFiles asks for the pass placing a linked broadcast's file into both series; nil never asks.
+	SharedFiles func(ctx context.Context) error
 }
 
 // suggestionsShown bounds the likely one-broadcast pairs a library lists at once.
@@ -129,7 +131,13 @@ func (a Crossovers) ForWork(ctx context.Context, workID int64) ([]gen.Crossover,
 
 // Link implements apiserver.Crossovers.
 func (a Crossovers) Link(ctx context.Context, partID, otherPartID int64) error {
-	return a.Crossovers.LinkSameContent(ctx, partID, otherPartID)
+	if err := a.Crossovers.LinkSameContent(ctx, partID, otherPartID); err != nil {
+		return err
+	}
+	if a.SharedFiles == nil {
+		return nil
+	}
+	return a.SharedFiles(ctx)
 }
 
 // Unlink implements apiserver.Crossovers.

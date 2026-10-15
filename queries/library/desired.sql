@@ -85,13 +85,18 @@ FROM desired_item_file WHERE media_object_id = ? ORDER BY desired_item_id;
 
 -- Which part of a work has a file, and what that file measures. The same
 -- media_ref present_count is derived from, so the album detail and the
--- artist overview cannot disagree about what is there; a file a sweep found gone is not.
+-- artist overview cannot disagree about what is there; a file a sweep found gone is not. A file at several paths (one
+-- broadcast under two series) shows the one in the same top folder as the work's other files.
 -- name: ListPartFilesForWork :many
 SELECT f.media_ref, f.media_object_id, o.overall_bitrate, o.audio_bitrate,
        a.audio_codec, a.video_codec, a.container, a.lossless, a.languages, a.lyrics_languages,
        o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
        CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
-                      ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
+                      ORDER BY EXISTS (SELECT 1 FROM work_file wf JOIN library_path sib ON sib.media_object_id = wf.media_object_id
+                                       WHERE wf.work_id = d.work_id AND wf.media_object_id <> o.id
+                                         AND sib.root_folder_id = lp.root_folder_id AND instr(lp.rel_path, '/') > 0
+                                         AND substr(sib.rel_path, 1, instr(lp.rel_path, '/')) = substr(lp.rel_path, 1, instr(lp.rel_path, '/'))) DESC,
+                               lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
 FROM desired_item d
 JOIN desired_item_file f ON f.desired_item_id = d.id
 JOIN media_object o ON o.id = f.media_object_id

@@ -203,6 +203,11 @@ which can monitor every episode at once (`library.Crossovers`, `/crossovers`). *
 is a `relationship` (`part` -> `part`, kind `same_content`): a file covering either episode covers the other too, on
 linking and whenever files are attached (`AttachFiles` -> `coverLinkedTx`), so the episode counts as on disk in both. The
 library's **Crossovers** level (a `collection` level entity) lists the events and suggests pairs of episodes of two
-series with one title on one day; nothing is linked without a person. Not built yet: placing a hardlink of the file in
-the second series' folder (a media server still sees it under one series only), suggestions from file hashes or TMDB
-episode notes, and a release named after one series searched for the other's want.
+series with one title on one day; nothing is linked without a person. The job *Placing episodes shared by two series*
+(`tv.SharedFiles`, queued on linking and whenever an import or scan attaches a linked episode) puts the file into the
+other series' own folder (the folder of its unlinked episodes, else its rendered folder) under that series' episode name:
+reflink, then hardlink, else the library's `shared_file_fallback` (copy or symlink), recorded as a further
+`library_path` of the same `media_object` (Invariant 92). An episode with a file in its own series' folder is left
+alone, an existing name is never replaced, and the Jellyfin/Kodi pass skips a shared file outside the series' folders.
+Not built yet: suggestions from file hashes or TMDB episode notes, a release named after one series searched for the
+other's want, and a rename moving both paths.

@@ -158,7 +158,7 @@ WHERE id IN (
 SELECT wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title, CAST(COALESCE(wp.date, '') AS TEXT) AS date,
        CAST(COALESCE(wp.runtime_ms, 0) AS INTEGER) AS runtime_ms, lp.root_folder_id, lp.rel_path,
        CAST(COALESCE((SELECT x.external_id FROM work_part_external_id x WHERE x.part_id = wp.id AND x.provider = sqlc.arg(provider)
-                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id
+                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id, lp.media_object_id
 FROM work_part wp
 JOIN desired_item d ON d.work_id = wp.work_id
 JOIN desired_item_file f ON f.desired_item_id = d.id AND f.media_ref = wp.media_ref AND f.role = 'primary'

@@ -119,7 +119,8 @@ episodes move, apply; the files follow their episodes and keep their names until
 **Crossovers** (under a TV library) lists events across series and suggests episodes that look like one broadcast listed
 under two series. On a series page, an episode's link button adds it to an event (shown as "Event, 2 of 4" in every
 series it touches, with a page that monitors the whole event) or records it as the same broadcast as another series'
-episode, so one file holds both.
+episode, so one file holds both; that file is then linked into the other series' folder too (a second copy or a
+symbolic link when the two are on different disks, set under **File management → Shared episodes across disks**).
 **Edit → Series type** shows what was detected (anime, daily or standard) and lets you change it; anime seasons are also searched
 by absolute episode number. Posters and photos are fetched once and served by Solarr itself.
 

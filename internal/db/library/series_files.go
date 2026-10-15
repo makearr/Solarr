@@ -33,6 +33,8 @@ type FileAttachment struct {
 	Attached int
 	// Unresolved lists links with an episode the series does not have, by media object.
 	Unresolved []int64
+	// Shared counts the same-broadcast links the attached episodes have, whose other series may want the file placed.
+	Shared int
 }
 
 // AttachFiles records scanned files against a series: the file belongs to the work and its root, and covers each
@@ -101,7 +103,8 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 			}
 		}
 		// The same broadcast listed under another series is held by this file too (T23).
-		return coverLinkedTx(ctx, queries, attachedParts, s.store.Now())
+		result.Shared, err = coverLinkedTx(ctx, queries, attachedParts, s.store.Now())
+		return err
 	})
 	if err != nil {
 		return FileAttachment{}, fmt.Errorf("library: attach series files: %w", err)

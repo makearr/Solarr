@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -14,7 +15,31 @@ const (
 	LinkPrimary  = "primary"
 	LinkReflink  = "reflink"
 	LinkHardlink = "hardlink"
+	LinkSymlink  = "symlink"
 )
+
+// AddLinkedPath records a further path of a media object, placed as a link (or a copy, LinkPrimary) of one it has;
+// a path already recorded for the object is fine, one recorded for another object is an error.
+func (l ObjectLinks) AddLinkedPath(ctx context.Context, mediaObjectID, rootFolderID int64, relPath, kind string) error {
+	return l.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		existing, err := queries.GetPathByLocation(ctx, librarydb.GetPathByLocationParams{RootFolderID: rootFolderID, RelPath: relPath})
+		if err == nil {
+			if existing.MediaObjectID != mediaObjectID {
+				return fmt.Errorf("library: %s is already another file", relPath)
+			}
+			return nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("library: look up %s: %w", relPath, err)
+		}
+		now := l.store.Now().Unix()
+		_, err = queries.AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+			MediaObjectID: mediaObjectID, RootFolderID: rootFolderID, RelPath: relPath, LinkKind: kind, CreatedAt: now, LastSeenAt: now,
+		})
+		return err
+	})
+}
 
 // ObjectLinks reads the media objects that live at several paths and records the paths turned into links.
 type ObjectLinks struct{ store *store.Store }

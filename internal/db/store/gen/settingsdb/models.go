@@ -89,6 +89,7 @@ type CategoryFileManagement struct {
 	ImportExtraFiles         sql.NullInt64
 	ExtraFileExtensions      sql.NullString
 	MediaServerFiles         int64
+	SharedFileFallback       string
 }
 
 type CategoryQualityProfile struct {

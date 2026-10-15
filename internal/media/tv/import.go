@@ -79,6 +79,8 @@ type ImporterConfig struct {
 	// BelowCutoff says an owned file misses its library's cutoff, so a download may replace it; nil lets any owned
 	// file of an upgrading season be replaced.
 	BelowCutoff func(categoryID int64, file library.EpisodeFile) bool
+	// SharedFiles asks for the shared-broadcast pass after an imported episode turned out linked; nil never asks.
+	SharedFiles func(ctx context.Context) error
 }
 
 // Importer is the TV module's batch importer: it works out which episodes a folder of video files holds, names and
@@ -320,8 +322,14 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		}
 		links[index] = library.SeriesFileLink{MediaObjectID: registered[index].MediaObjectID, Parts: keys}
 	}
-	if _, err := i.config.Series.AttachFiles(ctx, now, workID, destRoot.ID, links); err != nil {
+	attachment, err := i.config.Series.AttachFiles(ctx, now, workID, destRoot.ID, links)
+	if err != nil {
 		return undo(err)
+	}
+	if attachment.Shared > 0 && i.config.SharedFiles != nil {
+		if err := i.config.SharedFiles(ctx); err != nil {
+			i.logger.Warn("tv import: shared episodes pass not queued", slog.Any("error", err))
+		}
 	}
 
 	placement := &library.Placement{WorkID: workID, Extras: i.placeExtras(request.CategoryID, request.SourcePath, destRoot, unit, placed, methods)}

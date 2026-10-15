@@ -45,7 +45,7 @@ func TestServerFilesWritesWhatIsMissingAndNothingElse(t *testing.T) {
 	root := settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true}
 	var asked []string
 	writer := tv.ServerFiles{
-		FS: fsys, Reader: library.NewSeriesReader(opened), Roots: oneRoot{root}, Clock: fake,
+		FS: fsys, Reader: library.NewSeriesReader(opened), Crossovers: library.NewCrossovers(opened), Roots: oneRoot{root}, Clock: fake,
 		Picture: func(_ context.Context, address string) ([]byte, error) {
 			asked = append(asked, address)
 			return []byte("picture"), nil

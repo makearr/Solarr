@@ -337,7 +337,7 @@ const listPartPaths = `-- name: ListPartPaths :many
 SELECT wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title, CAST(COALESCE(wp.date, '') AS TEXT) AS date,
        CAST(COALESCE(wp.runtime_ms, 0) AS INTEGER) AS runtime_ms, lp.root_folder_id, lp.rel_path,
        CAST(COALESCE((SELECT x.external_id FROM work_part_external_id x WHERE x.part_id = wp.id AND x.provider = ?1
-                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id
+                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id, lp.media_object_id
 FROM work_part wp
 JOIN desired_item d ON d.work_id = wp.work_id
 JOIN desired_item_file f ON f.desired_item_id = d.id AND f.media_ref = wp.media_ref AND f.role = 'primary'
@@ -352,13 +352,14 @@ type ListPartPathsParams struct {
 }
 
 type ListPartPathsRow struct {
-	MediaRef     string
-	Title        string
-	Date         string
-	RuntimeMs    int64
-	RootFolderID int64
-	RelPath      string
-	ExternalID   string
+	MediaRef      string
+	Title         string
+	Date          string
+	RuntimeMs     int64
+	RootFolderID  int64
+	RelPath       string
+	ExternalID    string
+	MediaObjectID int64
 }
 
 // The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
@@ -379,6 +380,7 @@ func (q *Queries) ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([
 			&i.RootFolderID,
 			&i.RelPath,
 			&i.ExternalID,
+			&i.MediaObjectID,
 		); err != nil {
 			return nil, err
 		}

@@ -12,6 +12,7 @@ import (
 	"log/slog"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -29,7 +30,9 @@ import (
 type ServerFiles struct {
 	FS     fsx.FS
 	Reader library.SeriesReader
-	Roots  interface {
+	// Crossovers tells a series' own files from those of a broadcast it shares, which stay the other series' business.
+	Crossovers library.Crossovers
+	Roots      interface {
 		RootFolder(id int64) (settings.RootFolder, bool)
 	}
 	// Picture answers a provider picture's bytes as the provider serves them; nil writes no artwork.
@@ -51,6 +54,10 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 		return 0, err
 	}
 	paths, err := w.Reader.PartPaths(ctx, workID, ProviderTVDB+":episode")
+	if err != nil {
+		return 0, err
+	}
+	paths, err = w.ownPaths(ctx, workID, paths)
 	if err != nil {
 		return 0, err
 	}
@@ -95,6 +102,27 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 		written += w.writeArtwork(ctx, folder, detail.Summary.Fields["images"])
 	}
 	return written, nil
+}
+
+// ownPaths drops the files of shared episodes that lie outside the series' own folders.
+func (w ServerFiles) ownPaths(ctx context.Context, workID int64, paths []library.PartPath) ([]library.PartPath, error) {
+	pairs, err := w.Crossovers.Pairs(ctx, MediaType)
+	if err != nil {
+		return nil, err
+	}
+	linked := map[string]bool{}
+	for _, pair := range pairs {
+		if pair.WorkID == workID {
+			linked[pair.MediaRef] = true
+		}
+	}
+	if len(linked) == 0 {
+		return paths, nil
+	}
+	homes := seriesHomes(paths, linked)
+	return slices.DeleteFunc(paths, func(file library.PartPath) bool {
+		return linked[file.MediaRef] && !slices.Contains(homes, seriesHome{file.RootFolderID, seriesFolderOf(file.RelPath)})
+	}), nil
 }
 
 // writeArtwork writes each kind of picture the series has and the folder lacks; a picture that cannot be had is

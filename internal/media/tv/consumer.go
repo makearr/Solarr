@@ -58,6 +58,8 @@ type ConsumerConfig struct {
 		Category(id int64) (settings.Category, bool)
 		ProfileFor(category settings.Category, fallback int64) int64
 	}
+	// SharedFiles asks for the shared-broadcast pass after files of a linked episode were found; nil never asks.
+	SharedFiles func(ctx context.Context) error
 }
 
 // Consumer is the TV module's scan.Consumer: it registers what a sweep found, reads episode numbers from the paths,
@@ -170,6 +172,11 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 			}
 			attached += result.Attached
 			matched += len(links) - len(result.Unresolved)
+			if result.Shared > 0 && c.config.SharedFiles != nil {
+				if err := c.config.SharedFiles(ctx); err != nil {
+					c.logger.Warn("tv: shared episodes pass not queued", slog.Any("error", err))
+				}
+			}
 			placed := make([]int64, 0, len(links))
 			for _, link := range links {
 				if !slices.Contains(result.Unresolved, link.MediaObjectID) {

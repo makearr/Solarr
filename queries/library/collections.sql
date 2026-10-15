@@ -300,3 +300,15 @@ WHERE a.date IS NOT NULL AND a.title IS NOT NULL AND LENGTH(a.title) > 3 AND wa.
                   AND ((r.from_id = a.id AND r.to_id = b.id) OR (r.from_id = b.id AND r.to_id = a.id)))
 ORDER BY a.date DESC
 LIMIT sqlc.arg(page_size);
+
+-- Every same-broadcast link of a media type, once from each side.
+-- name: ListSameContentPairs :many
+SELECT a.id AS part_id, a.work_id, a.media_ref, CAST(COALESCE(a.title, '') AS TEXT) AS title,
+       CAST(COALESCE(a.date, '') AS TEXT) AS date, b.id AS other_part_id, b.work_id AS other_work_id, b.media_ref AS other_ref,
+       CAST(COALESCE((SELECT d.category_id FROM desired_item d WHERE d.work_id = a.work_id ORDER BY d.id LIMIT 1), 0) AS INTEGER) AS category_id
+FROM relationship r
+JOIN work_part a ON a.id IN (r.from_id, r.to_id)
+JOIN work_part b ON b.id IN (r.from_id, r.to_id) AND b.id <> a.id
+JOIN work w ON w.id = a.work_id
+WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND w.media_type = sqlc.arg(media_type)
+ORDER BY a.work_id, a.sort_key, b.id;

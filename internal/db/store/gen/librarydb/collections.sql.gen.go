@@ -745,6 +745,64 @@ func (q *Queries) ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNe
 	return items, nil
 }
 
+const listSameContentPairs = `-- name: ListSameContentPairs :many
+SELECT a.id AS part_id, a.work_id, a.media_ref, CAST(COALESCE(a.title, '') AS TEXT) AS title,
+       CAST(COALESCE(a.date, '') AS TEXT) AS date, b.id AS other_part_id, b.work_id AS other_work_id, b.media_ref AS other_ref,
+       CAST(COALESCE((SELECT d.category_id FROM desired_item d WHERE d.work_id = a.work_id ORDER BY d.id LIMIT 1), 0) AS INTEGER) AS category_id
+FROM relationship r
+JOIN work_part a ON a.id IN (r.from_id, r.to_id)
+JOIN work_part b ON b.id IN (r.from_id, r.to_id) AND b.id <> a.id
+JOIN work w ON w.id = a.work_id
+WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND w.media_type = ?1
+ORDER BY a.work_id, a.sort_key, b.id
+`
+
+type ListSameContentPairsRow struct {
+	PartID      int64
+	WorkID      int64
+	MediaRef    string
+	Title       string
+	Date        string
+	OtherPartID int64
+	OtherWorkID int64
+	OtherRef    string
+	CategoryID  int64
+}
+
+// Every same-broadcast link of a media type, once from each side.
+func (q *Queries) ListSameContentPairs(ctx context.Context, mediaType string) ([]ListSameContentPairsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSameContentPairs, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSameContentPairsRow{}
+	for rows.Next() {
+		var i ListSameContentPairsRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.Title,
+			&i.Date,
+			&i.OtherPartID,
+			&i.OtherWorkID,
+			&i.OtherRef,
+			&i.CategoryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSameContentParts = `-- name: ListSameContentParts :many
 SELECT r.from_id AS part_id, wp.id AS other_part_id, wp.work_id AS other_work_id, wp.media_ref AS other_ref,
        w.canonical_title AS other_work_title

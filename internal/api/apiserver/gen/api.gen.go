@@ -216,6 +216,12 @@ const (
 	FileManagementRescanAfterRefreshNever       FileManagementRescanAfterRefresh = "never"
 )
 
+// Defines values for FileManagementSharedFileFallback.
+const (
+	FileManagementSharedFileFallbackCopy    FileManagementSharedFileFallback = "copy"
+	FileManagementSharedFileFallbackSymlink FileManagementSharedFileFallback = "symlink"
+)
+
 // Defines values for HealthCheckSeverity.
 const (
 	HealthCheckSeverityError   HealthCheckSeverity = "error"
@@ -1863,6 +1869,9 @@ type FileManagement struct {
 	RescanAfterRefresh   FileManagementRescanAfterRefresh `json:"rescan_after_refresh"`
 	SetPermissions       bool                             `json:"set_permissions"`
 
+	// SharedFileFallback How a file one broadcast shares with another series reaches this library's series when the two are on different filesystems and no link can be made: a second copy (the default) or a symbolic link. Omitted on a save keeps what is stored.
+	SharedFileFallback *FileManagementSharedFileFallback `json:"shared_file_fallback,omitempty"`
+
 	// UnmonitorDeleted Lidarr's "Ignore Deleted Tracks" -- an album losing a file is unmonitored.
 	UnmonitorDeleted bool `json:"unmonitor_deleted"`
 }
@@ -1875,6 +1884,9 @@ type FileManagementPropersRepacks string
 
 // FileManagementRescanAfterRefresh defines model for FileManagement.RescanAfterRefresh.
 type FileManagementRescanAfterRefresh string
+
+// FileManagementSharedFileFallback How a file one broadcast shares with another series reaches this library's series when the two are on different filesystems and no link can be made: a second copy (the default) or a symbolic link. Omitted on a save keeps what is stored.
+type FileManagementSharedFileFallback string
 
 // Follow The caller's follow of a person or organisation in one library.
 type Follow struct {
