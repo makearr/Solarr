@@ -181,7 +181,7 @@ func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress)
 			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
 		}
 
-		batch, err := j.artworks.NeedingEmbeddedArtwork(ctx, afterWorkID, artworkBatchSize)
+		batch, err := j.artworks.NeedingEmbeddedArtwork(ctx, string(MediaType), afterWorkID, artworkBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: artwork: %w", err)
 		}

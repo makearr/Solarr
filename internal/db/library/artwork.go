@@ -72,11 +72,11 @@ type EmbeddedArtworkCandidate struct {
 	RelPath      string
 }
 
-// NeedingEmbeddedArtwork returns up to pageSize works after afterWorkID still
+// NeedingEmbeddedArtwork returns up to pageSize works of the media type after afterWorkID still
 // without a cover that have a file recorded by work_file.
-func (a Artworks) NeedingEmbeddedArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]EmbeddedArtworkCandidate, error) {
+func (a Artworks) NeedingEmbeddedArtwork(ctx context.Context, mediaType string, afterWorkID, pageSize int64) ([]EmbeddedArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingEmbeddedArtwork(ctx,
-		librarydb.ListWorksNeedingEmbeddedArtworkParams{AfterID: afterWorkID, PageSize: pageSize})
+		librarydb.ListWorksNeedingEmbeddedArtworkParams{AfterID: afterWorkID, MediaType: mediaType, PageSize: pageSize})
 	if err != nil {
 		return nil, fmt.Errorf("library: works needing embedded artwork: %w", err)
 	}

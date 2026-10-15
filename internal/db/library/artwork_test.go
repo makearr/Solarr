@@ -322,7 +322,7 @@ func TestNeedingEmbeddedArtwork_NamesTheFileTheWorkWasResolvedFrom(t *testing.T)
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 
-	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestNeedingEmbeddedArtwork_CoversWorksResolvedByImport(t *testing.T) {
 		t.Fatalf("ResolveWorksDetailed: %v", err)
 	}
 
-	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestNeedingEmbeddedArtwork_ExcludesAWorkWithACover(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -448,11 +448,32 @@ func TestWorkFileLocations_AnswersEveryFolderAWorkWasResolvedFrom(t *testing.T) 
 		t.Errorf("WorkFileLocations = %+v, want both folders %+v", got, want)
 	}
 
-	candidates, err := library.NewArtworks(opened).NeedingEmbeddedArtwork(t.Context(), 0, 10)
+	candidates, err := library.NewArtworks(opened).NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
 	if len(candidates) != 1 || candidates[0].RelPath != "P!po/Kebilegev Bibihi (1)/01.m4a" {
 		t.Errorf("NeedingEmbeddedArtwork = %+v, want one candidate, the work's first file", candidates)
+	}
+}
+
+// A series has no embedded cover: the music sweep never reads its files (found 2026-10-15, one failure per series).
+func TestNeedingEmbeddedArtwork_AsksOnlyForItsOwnMediaType(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	artworks := library.NewArtworks(opened)
+	mediaObjectID := registerFileForArtwork(t, library.NewPhysical(opened), 3, "Invented Show/Season 1/e1.mkv", "q1")
+	if _, err := identity.ResolveWorks(t.Context(), firstSeen, []library.WorkLink{{
+		Provider: "tvdb", ExternalID: "123", Confidence: 1.0,
+		Work:         library.WorkIdentity{MediaType: "tv", CanonicalTitle: "Invented Show", SortTitle: "invented show"},
+		RootFolderID: 3, MediaObjectID: mediaObjectID,
+	}}); err != nil {
+		t.Fatalf("ResolveWorks: %v", err)
+	}
+	for mediaType, want := range map[string]int{"music": 0, "tv": 1} {
+		found, err := artworks.NeedingEmbeddedArtwork(t.Context(), mediaType, 0, 10)
+		if err != nil || len(found) != want {
+			t.Errorf("%s: %d candidates, %v; want %d", mediaType, len(found), err, want)
+		}
 	}
 }

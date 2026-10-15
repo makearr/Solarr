@@ -205,7 +205,7 @@ LIMIT sqlc.arg(page_size);
 -- Every work still without a cover that has a known file to read embedded art
 -- from: its lowest-id file, at that file's lowest library_path. Root folder
 -- paths live in settings.db, so the caller resolves root_folder_id itself
--- (section 4.3).
+-- (section 4.3). Only the asking media type's works: a series has no embedded cover.
 -- name: ListWorksNeedingEmbeddedArtwork :many
 SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
 FROM work_file f
@@ -213,6 +213,7 @@ JOIN library_path lp ON lp.id = (
     SELECT MIN(lp2.id) FROM library_path lp2 WHERE lp2.media_object_id = f.media_object_id
   )
 WHERE f.work_id > sqlc.arg(after_id)
+  AND EXISTS (SELECT 1 FROM work w WHERE w.id = f.work_id AND w.media_type = sqlc.arg(media_type))
   AND f.media_object_id = (SELECT MIN(f2.media_object_id) FROM work_file f2 WHERE f2.work_id = f.work_id)
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = f.work_id AND a.kind = 'cover'

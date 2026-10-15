@@ -757,7 +757,7 @@ type Querier interface {
 	// Every work still without a cover that has a known file to read embedded art
 	// from: its lowest-id file, at that file's lowest library_path. Root folder
 	// paths live in settings.db, so the caller resolves root_folder_id itself
-	// (section 4.3).
+	// (section 4.3). Only the asking media type's works: a series has no embedded cover.
 	ListWorksNeedingEmbeddedArtwork(ctx context.Context, arg ListWorksNeedingEmbeddedArtworkParams) ([]ListWorksNeedingEmbeddedArtworkRow, error)
 	// Every work still without a cover that carries a release-group id, for the
 	// Cover Art Archive's release-group endpoint: a wanted album with no edition
