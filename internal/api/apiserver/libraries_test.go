@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"testing"
 
@@ -298,9 +299,12 @@ func TestListLibraryLevel_WorkPartEntityDelegatesToLibraryTracksReader(t *testin
 	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedGet(t, cookies,
-		fmt.Sprintf("/api/v1/libraries/%d/tracks", category.ID)))
+		fmt.Sprintf("/api/v1/libraries/%d/tracks?q=night&where=%s", category.ID, url.QueryEscape(`[{"field":"has_file","op":"is","value":"true"}]`))))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
+	}
+	if got := fixture.libraryTracks.lastFilter; got.Search != "night" || got.Where != `[{"field":"has_file","op":"is","value":"true"}]` {
+		t.Errorf("filter = %+v, want the search and the custom filter passed on", got)
 	}
 	var body libraryLevelPageBody
 	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {

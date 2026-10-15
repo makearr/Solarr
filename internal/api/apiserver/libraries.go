@@ -375,6 +375,9 @@ func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 	if raw := query.Get("where"); raw != "" {
 		params.Where = &raw
 	}
+	if raw := query.Get("q"); raw != "" {
+		params.Q = &raw
+	}
 	s.ListLibraryLevel(w, r, id, level, params)
 }
 
