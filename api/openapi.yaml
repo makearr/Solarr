@@ -442,6 +442,10 @@ paths:
         "403":
           $ref: "#/components/responses/Problem"
           description: This instance is configured for API keys only.
+        "429":
+          $ref: "#/components/responses/Problem"
+          description: >-
+            Five sign-ins from this address failed within a minute; Retry-After says how many seconds to wait.
 
   /auth/logout:
     post:

@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/auth"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
@@ -253,6 +254,8 @@ type Server struct {
 	running *jobs.Running
 	jobDefs *jobs.Registry
 	events  *events.Bus
+	// logins limits failed sign-ins per client address.
+	logins  *auth.LoginLimiter
 	wall    clock.Clock
 	webui   http.Handler
 	roots   RootChecker
@@ -359,6 +362,7 @@ func New(config Config) (*Server, error) {
 		build:   config.Build,
 		checker: config.Checker,
 		auth:    config.Auth,
+		logins:  auth.NewLoginLimiter(config.Clock),
 		jobs:    config.Jobs,
 		running: config.Running,
 		jobDefs: config.JobRegistry,

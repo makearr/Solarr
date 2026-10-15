@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"errors"
+	"net/netip"
 	"strings"
 	"testing"
 	"time"
@@ -152,19 +153,19 @@ func newSessions(t *testing.T) (*auth.Sessions, *clock.Fake) {
 func TestSession_RoundTrips(t *testing.T) {
 	sessions, _ := newSessions(t)
 
-	token := sessions.Issue(42)
-	userID, err := sessions.Verify(token)
+	token := sessions.Issue(42, "a1b2c3")
+	userID, stamp, err := sessions.Verify(token)
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
-	if userID != 42 {
-		t.Errorf("Verify = %d, want 42", userID)
+	if userID != 42 || stamp != "a1b2c3" {
+		t.Errorf("Verify = %d, %q; want 42, a1b2c3", userID, stamp)
 	}
 }
 
 func TestSession_RejectsTampering(t *testing.T) {
 	sessions, _ := newSessions(t)
-	token := sessions.Issue(42)
+	token := sessions.Issue(42, "a1b2c3")
 
 	// Claiming to be user 1 with user 42's signature.
 	separator := strings.Index(token, ".")
@@ -172,7 +173,7 @@ func TestSession_RejectsTampering(t *testing.T) {
 		t.Fatalf("issued token %q has no separator", token)
 	}
 	forged := "1" + token[separator:]
-	if _, err := sessions.Verify(forged); !errors.Is(err, auth.ErrInvalidSession) {
+	if _, _, err := sessions.Verify(forged); !errors.Is(err, auth.ErrInvalidSession) {
 		t.Errorf("Verify of a forged token = %v, want ErrInvalidSession", err)
 	}
 }
@@ -183,22 +184,22 @@ func TestSession_RejectsAnotherKeysToken(t *testing.T) {
 
 	// Rotating the encryption key is the revocation path for signed sessions,
 	// so a token from a different key must not verify.
-	if _, err := sessions.Verify(other.Issue(42)); !errors.Is(err, auth.ErrInvalidSession) {
+	if _, _, err := sessions.Verify(other.Issue(42, "a1b2c3")); !errors.Is(err, auth.ErrInvalidSession) {
 		t.Errorf("Verify of another key's token = %v, want ErrInvalidSession", err)
 	}
 }
 
 func TestSession_Expires(t *testing.T) {
 	sessions, fake := newSessions(t)
-	token := sessions.Issue(42)
+	token := sessions.Issue(42, "a1b2c3")
 
 	fake.Advance(time.Hour - time.Second)
-	if _, err := sessions.Verify(token); err != nil {
+	if _, _, err := sessions.Verify(token); err != nil {
 		t.Fatalf("Verify just before expiry = %v, want nil", err)
 	}
 
 	fake.Advance(2 * time.Second)
-	if _, err := sessions.Verify(token); !errors.Is(err, auth.ErrSessionExpired) {
+	if _, _, err := sessions.Verify(token); !errors.Is(err, auth.ErrSessionExpired) {
 		t.Errorf("Verify after expiry = %v, want ErrSessionExpired", err)
 	}
 }
@@ -206,7 +207,7 @@ func TestSession_Expires(t *testing.T) {
 func TestSession_RejectsGarbage(t *testing.T) {
 	sessions, _ := newSessions(t)
 	for _, token := range []string{"", "nonsense", "1.2", "1.2.3.4"} {
-		if _, err := sessions.Verify(token); err == nil {
+		if _, _, err := sessions.Verify(token); err == nil {
 			t.Errorf("Verify(%q) = nil, want an error", token)
 		}
 	}
@@ -217,4 +218,42 @@ func TestSession_RejectsGarbage(t *testing.T) {
 func weakKey(t *testing.T) string {
 	t.Helper()
 	return auth.WeakFixtureKeyForTest(password, "abcdefghijklmnop")
+}
+
+// A stamp cannot be swapped: a session issued under one password does not carry another's stamp.
+func TestSession_RejectsAStampChangedAfterSigning(t *testing.T) {
+	sessions, _ := newSessions(t)
+	token := sessions.Issue(42, "a1b2c3")
+	forged := strings.Replace(token, ".a1b2c3.", ".ffffff.", 1)
+	if forged == token {
+		t.Fatalf("token %q does not carry the stamp where expected", token)
+	}
+	if _, _, err := sessions.Verify(forged); !errors.Is(err, auth.ErrInvalidSession) {
+		t.Errorf("Verify(forged stamp) = %v, want ErrInvalidSession", err)
+	}
+}
+
+// Five failures within a minute make an address wait until the oldest leaves the window; another address is free.
+func TestLoginLimiter_MakesAnAddressWaitAfterFiveFailures(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	limiter := auth.NewLoginLimiter(fake)
+	address, other := netip.MustParseAddr("192.0.2.7"), netip.MustParseAddr("192.0.2.8")
+	for range auth.LoginAttempts - 1 {
+		limiter.Failed(address)
+		fake.Advance(time.Second)
+	}
+	if wait := limiter.Wait(address); wait != 0 {
+		t.Fatalf("after four failures wait = %v, want 0", wait)
+	}
+	limiter.Failed(address)
+	if wait := limiter.Wait(address); wait != auth.LoginWindow-4*time.Second {
+		t.Errorf("after five failures wait = %v, want %v", wait, auth.LoginWindow-4*time.Second)
+	}
+	if wait := limiter.Wait(other); wait != 0 {
+		t.Errorf("another address waits %v, want 0", wait)
+	}
+	fake.Advance(auth.LoginWindow)
+	if wait := limiter.Wait(address); wait != 0 {
+		t.Errorf("a minute later wait = %v, want 0", wait)
+	}
 }

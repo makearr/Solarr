@@ -7656,6 +7656,8 @@ export interface operations {
             401: components["responses"]["Problem"];
             /** @description This instance is configured for API keys only. */
             403: components["responses"]["Problem"];
+            /** @description Five sign-ins from this address failed within a minute; Retry-After says how many seconds to wait. */
+            429: components["responses"]["Problem"];
         };
     };
     logout: {

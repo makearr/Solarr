@@ -34,6 +34,8 @@ const (
 	TypeUnavailable  = "unavailable"
 	TypeInternal     = "internal"
 	TypeUnauthorized = "unauthorized"
+	// TypeTooManyRequests is a caller that must wait before trying again.
+	TypeTooManyRequests = "too-many-requests"
 	// A wrong verb is not a malformed request.
 	TypeMethodNotAllowed = "method-not-allowed"
 )

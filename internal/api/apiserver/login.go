@@ -3,10 +3,13 @@ package apiserver
 import (
 	"crypto/rand"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/auth"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -41,9 +44,17 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	address := s.resolvedClientAddress(r)
+	if wait := s.logins.Wait(address); wait > 0 {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second).Seconds())+1))
+		writeProblem(w, s.logger, http.StatusTooManyRequests, TypeTooManyRequests, "Too many attempts",
+			fmt.Sprintf("too many failed sign-ins from this address; try again in %s", wait.Round(time.Second)))
+		return
+	}
 	user, err := s.verifyPassword(r, strings.TrimSpace(request.Username), request.Password)
 	if err != nil {
-		s.logger.Info("failed login", slog.String("username", request.Username))
+		s.logins.Failed(address)
+		s.logger.Info("failed login", slog.String("username", request.Username), slog.String("address", address.String()))
 		writeProblem(w, s.logger, http.StatusUnauthorized, TypeUnauthorized,
 			"Unauthorized", "the username or password is incorrect")
 		return
@@ -55,7 +66,7 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	if request.Remember {
 		maxAge = int(s.auth.Sessions.TTL().Seconds())
 	}
-	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(user.ID), maxAge, r))
+	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(user.ID, user.SessionStamp), maxAge, r))
 	writeJSON(w, s.logger, http.StatusOK, map[string]any{
 		"user_id": user.ID, "username": user.Username, "role": string(user.Role),
 	})

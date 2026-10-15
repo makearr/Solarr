@@ -77,7 +77,11 @@ export function Login() {
           </label>
 
           {signIn.isError && (
-            <p className="text-xs text-danger">The username or password is incorrect.</p>
+            <p className="text-xs text-danger">
+              {problemType(signIn.error) === "too-many-requests"
+                ? "Too many failed sign-ins from this address. Wait a minute, then try again."
+                : "The username or password is incorrect."}
+            </p>
           )}
 
           <button
@@ -98,3 +102,8 @@ export function Login() {
 const inputStyle =
   "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+/** problemType reads an API problem's type slug, if the error is one. */
+function problemType(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "type" in error && typeof error.type === "string" ? error.type : undefined;
+}
