@@ -75,7 +75,9 @@ type Service struct {
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
 	// Grace is the configured wait after an episode's time, read per write; nil leaves each part its default.
-	Grace  func() library.AvailabilityGrace
+	Grace func() library.AvailabilityGrace
+	// KindOf answers a library's kind; nil takes none.
+	KindOf func(categoryID int64) string
 	Series library.Series
 	// Exclusions are the works the user removed and asked not to see again.
 	Exclusions library.Exclusions
@@ -402,6 +404,12 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, err
 	}
 
+	if kindType := s.kindType(request.CategoryID); stored.Created && series.Type == SeriesStandard && kindType != SeriesStandard {
+		// The library says what the providers did not: an anime library's series is anime.
+		if err := s.SetSeriesType(ctx, stored.WorkID, kindType); err != nil {
+			return AddResult{}, err
+		}
+	}
 	monitoring := newMonitors(request.Monitor, request.Specials, now, series.Episodes)
 	seasons, err := s.ensureSeasons(ctx, stored, series, monitoring.wants, request.CategoryID, request.ProfileID, request.AddedBy)
 	if err != nil {
@@ -673,4 +681,11 @@ func (s Service) grace() *library.AvailabilityGrace {
 	}
 	grace := s.Grace()
 	return &grace
+}
+
+func (s Service) kindType(categoryID int64) SeriesType {
+	if s.KindOf == nil {
+		return SeriesStandard
+	}
+	return seriesTypeOfKind(s.KindOf(categoryID))
 }

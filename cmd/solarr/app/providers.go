@@ -259,7 +259,11 @@ func (p *process) tvService() tv.Service {
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
 			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
 			Grace:    p.availabilityGrace,
-			Series:   library.NewSeries(p.library), Exclusions: library.NewExclusions(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
+			KindOf: func(categoryID int64) string {
+				category, _ := p.cache.Snapshot().Category(categoryID)
+				return category.Kind
+			},
+			Series: library.NewSeries(p.library), Exclusions: library.NewExclusions(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library), Clock: wall, Logger: p.logger,
 		}
 	})
 	return p.tvShared

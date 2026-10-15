@@ -1399,9 +1399,12 @@ type CategorySearchEnqueued struct {
 
 // CategorySettings A category's full settings-side detail (ADR-27's policy boundary), administrator only -- richer than LibraryCategory, which stays lean for the many navigation callers (root folder pickers, *Arr import, the sidebar) that never need any of this.
 type CategorySettings struct {
-	Id                int64  `json:"id"`
-	LanguageProfileId *int64 `json:"language_profile_id,omitempty"`
-	MediaType         string `json:"media_type"`
+	Id int64 `json:"id"`
+
+	// Kind The library's kind within its media type (MediaTypeInfo.kinds); absent for none.
+	Kind              *string `json:"kind,omitempty"`
+	LanguageProfileId *int64  `json:"language_profile_id,omitempty"`
+	MediaType         string  `json:"media_type"`
 
 	// MonitorDiscovered What a scan does with an album it finds on disk that nobody asked for (section 19.6, todo 4.4).
 	MonitorDiscovered CategorySettingsMonitorDiscovered `json:"monitor_discovered"`
@@ -1461,6 +1464,9 @@ type CategoryStatistics struct {
 
 // CategoryWrite defines model for CategoryWrite.
 type CategoryWrite struct {
+	// Kind One of the media type's kinds; absent leaves it. Changing it applies no defaults, it only says what the library is.
+	Kind *string `json:"kind,omitempty"`
+
 	// LanguageProfileId Absent or null clears it -- no default profile.
 	LanguageProfileId *int64                          `json:"language_profile_id,omitempty"`
 	MonitorDiscovered *CategoryWriteMonitorDiscovered `json:"monitor_discovered,omitempty"`
@@ -2436,10 +2442,13 @@ type Library struct {
 
 // LibraryCategory A category as a navigation target: no `permission` field, since the list is already narrowed to what the caller may read (unlike `Me`'s `categories`, which reports the caller's level on each).
 type LibraryCategory struct {
-	Files     *int   `json:"files,omitempty"`
-	Id        int64  `json:"id"`
-	MediaType string `json:"media_type"`
-	Name      string `json:"name"`
+	Files *int  `json:"files,omitempty"`
+	Id    int64 `json:"id"`
+
+	// Kind The library's kind within its media type; absent for none.
+	Kind      *string `json:"kind,omitempty"`
+	MediaType string  `json:"media_type"`
+	Name      string  `json:"name"`
 
 	// Works From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once.
 	Works *int `json:"works,omitempty"`
@@ -2727,6 +2736,13 @@ type MediaTypeInfo struct {
 
 	// Key Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
 	Key MediaType `json:"key"`
+
+	// Kinds What a library of the type can be, picked when one is added; the first is the default. Empty for a type of one kind.
+	Kinds *[]struct {
+		Help  *string `json:"help,omitempty"`
+		Key   string  `json:"key"`
+		Label string  `json:"label"`
+	} `json:"kinds,omitempty"`
 
 	// Label Also the default name of a library of this type.
 	Label      string    `json:"label"`
@@ -4349,9 +4365,11 @@ type GetCalendarFeedICSParams struct {
 
 // CreateCategoryJSONBody defines parameters for CreateCategory.
 type CreateCategoryJSONBody struct {
-	MediaType    string `json:"media_type"`
-	Name         string `json:"name"`
-	PriorityRank *int64 `json:"priority_rank,omitempty"`
+	// Kind One of the media type's kinds (MediaTypeInfo.kinds); omitted takes its first. The kind's quality profiles and language profile become the library's own.
+	Kind         *string `json:"kind,omitempty"`
+	MediaType    string  `json:"media_type"`
+	Name         string  `json:"name"`
+	PriorityRank *int64  `json:"priority_rank,omitempty"`
 }
 
 // ResolveCategoryDuplicatesJSONBody defines parameters for ResolveCategoryDuplicates.

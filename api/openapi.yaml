@@ -4707,6 +4707,11 @@ paths:
                 media_type: { type: string }
                 name: { type: string, minLength: 1 }
                 priority_rank: { type: integer, format: int64 }
+                kind:
+                  type: string
+                  description: >-
+                    One of the media type's kinds (MediaTypeInfo.kinds); omitted takes its first. The kind's quality
+                    profiles and language profile become the library's own.
       responses:
         "201":
           description: Created.
@@ -6998,6 +7003,16 @@ components:
               label: { type: string }
         wanted_grain: { type: string, enum: [work, part], description: "What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts)." }
         commits_held_imports: { type: boolean, description: "A held import unit is committed by hand, anyway or as a work named (Identify as)." }
+        kinds:
+          type: array
+          description: What a library of the type can be, picked when one is added; the first is the default. Empty for a type of one kind.
+          items:
+            type: object
+            required: [key, label]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              help: { type: string }
         commit_guess_floor:
           type: number
           format: double
@@ -9565,6 +9580,7 @@ components:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         name: { type: string }
+        kind: { type: string, description: "The library's kind within its media type; absent for none." }
         works:
           type: integer
           description: >-
@@ -9603,6 +9619,7 @@ components:
           description: >-
             What a scan monitors of a series it finds in a TV library: only the
             episodes on disk (existing), every episode (all), or none.
+        kind: { type: string, description: "The library's kind within its media type (MediaTypeInfo.kinds); absent for none." }
 
     CategoryWrite:
       type: object
@@ -9626,6 +9643,9 @@ components:
           type: string
           enum: [existing, all, none]
           description: TV libraries only; absent leaves it as it is.
+        kind:
+          type: string
+          description: One of the media type's kinds; absent leaves it. Changing it applies no defaults, it only says what the library is.
 
     Library:
       type: object

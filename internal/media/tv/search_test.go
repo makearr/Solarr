@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -158,12 +159,14 @@ func clockAt(_ interface{ Unix() int64 }) clock.Clock {
 
 // queryIndexer answers only the exact query it was given an answer for.
 type queryIndexer struct {
-	answers  map[string][]indexer.RawItem
-	requests []string
+	answers    map[string][]indexer.RawItem
+	requests   []string
+	categories [][]int
 }
 
 func (q *queryIndexer) Search(_ context.Context, request indexer.SearchRequest) ([]indexer.RawItem, error) {
 	q.requests = append(q.requests, request.Query)
+	q.categories = append(q.categories, request.Categories)
 	return q.answers[request.Query], nil
 }
 
@@ -204,12 +207,35 @@ func TestAnAnimeSeasonIsAlsoSearchedByAbsoluteNumberAndFoundThatWay(t *testing.T
 		"Example Show 002": {{Title: "[SubGroup] Example Show - 02 (1080p) [ABCD1234]", GUID: "g", Link: "https://example.test/g"}},
 	}}
 	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)), Settings: cache, Clock: clockAt(addNow)}
-	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake}}, addNow)
+	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Impl: "newznab", Client: fake, Categories: []int{5000}}}, addNow)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(result.Decisions) != 1 {
 		t.Errorf("decisions = %d after queries %v; the absolute-number release should cover episode 2", len(result.Decisions), fake.requests)
+	}
+	for index, query := range fake.requests {
+		if !slices.Equal(fake.categories[index], []int{5000, 5070}) {
+			t.Errorf("query %q asked in %v, want the indexer's 5000 and anime's 5070", query, fake.categories[index])
+		}
+	}
+}
+
+// An anime library says what the providers did not: a series they call standard is anime there, and only there.
+func TestASeriesAddedToAnAnimeLibraryIsAnime(t *testing.T) {
+	cache := settingsCache(t)
+	for kind, want := range map[string]string{tv.KindAnime: "anime", tv.KindSeries: "standard"} {
+		service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+		service.Reader = library.NewSeriesReader(opened)
+		service.KindOf = func(int64) string { return kind }
+		added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorAll})
+		if err != nil {
+			t.Fatal(err)
+		}
+		detail, err := library.NewSeriesReader(opened).Get(t.Context(), 7, added.WorkID, addNow)
+		if err != nil || detail.Summary.Fields["series_type"] != want {
+			t.Errorf("added to a %s library: series type = %q, %v; want %s", kind, detail.Summary.Fields["series_type"], err, want)
+		}
 	}
 }
 

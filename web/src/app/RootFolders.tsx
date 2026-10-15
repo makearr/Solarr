@@ -7,6 +7,7 @@ import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { EditCategoryForm } from "./Categories";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { KindSelect } from "./LibraryKindSelect";
 import { MoveJobList, RootMoveControls } from "./Moves";
 
 type RootFolder = components["schemas"]["RootFolder"];
@@ -558,6 +559,7 @@ function AddRootFolder({
   const [newLibraryName, setNewLibraryName] = useState(mediaTypeName("music"));
   const [newLibraryNameTouched, setNewLibraryNameTouched] = useState(false);
   const [newLibraryMediaType, setNewLibraryMediaType] = useState<MediaType>("music");
+  const [newLibraryKind, setNewLibraryKind] = useState("");
   const mediaTypes = useMediaTypes();
 
   // categories arrives asynchronously (its own useQuery, one render behind
@@ -582,6 +584,7 @@ function AddRootFolder({
           body: {
             name: newLibraryName.trim() || mediaTypeName(newLibraryMediaType),
             media_type: newLibraryMediaType,
+            kind: newLibraryKind || undefined,
           },
         });
         if (categoryError) throw categoryError;
@@ -677,6 +680,7 @@ function AddRootFolder({
               onChange={(event) => {
                 const value = event.target.value as MediaType;
                 setNewLibraryMediaType(value);
+                setNewLibraryKind("");
                 if (!newLibraryNameTouched) setNewLibraryName(mediaTypeName(value));
               }}
             >
@@ -687,6 +691,7 @@ function AddRootFolder({
               ))}
             </select>
           </label>
+          <KindSelect mediaType={newLibraryMediaType} value={newLibraryKind} onChange={setNewLibraryKind} />
         </>
       )}
       <button

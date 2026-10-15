@@ -55,6 +55,53 @@ type MediaTypeInfo struct {
 	ExtraFiles settings.ExtraFiles
 	// GuessFloor is the least confidence "Commit anyway" takes a held unit's best guess at; 0 takes any.
 	GuessFloor float64
+	// Kinds are what a library of the type can be, the first being the default.
+	Kinds []LibraryKind
+}
+
+// LibraryKind is one kind of library of a media type and the defaults a library of it starts with.
+type LibraryKind struct {
+	Key, Label, Help string
+	// QualityProfiles name the profiles the library accepts, best first; one not found is left out.
+	QualityProfiles []string
+	// Language is the language profile it starts with, found by name or created; nil for none.
+	Language *settings.LanguageProfile
+}
+
+// kindOf answers the media type's kind named key, its first for "", and false for one it does not have; a type
+// without kinds answers the zero kind for "".
+func (info MediaTypeInfo) kindOf(key string) (LibraryKind, bool) {
+	if len(info.Kinds) == 0 {
+		return LibraryKind{}, key == ""
+	}
+	if key == "" {
+		return info.Kinds[0], true
+	}
+	for _, kind := range info.Kinds {
+		if kind.Key == key {
+			return kind, true
+		}
+	}
+	return LibraryKind{}, false
+}
+
+func kindViews(kinds []LibraryKind) *[]struct {
+	Help  *string `json:"help,omitempty"`
+	Key   string  `json:"key"`
+	Label string  `json:"label"`
+} {
+	if len(kinds) == 0 {
+		return nil
+	}
+	views := make([]struct {
+		Help  *string `json:"help,omitempty"`
+		Key   string  `json:"key"`
+		Label string  `json:"label"`
+	}, len(kinds))
+	for i, kind := range kinds {
+		views[i].Key, views[i].Label, views[i].Help = kind.Key, kind.Label, strPtr(kind.Help)
+	}
+	return &views
 }
 
 // MediaChoice is one key a media type offers, with its label.
@@ -86,7 +133,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
 				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage), WantedGrain: gen.MediaTypeInfoWantedGrain(info.WantedGrain),
 				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports, CommitGuessFloor: &info.GuessFloor,
-				DuplicatesByName: info.DuplicatesByName,
+				DuplicatesByName: info.DuplicatesByName, Kinds: kindViews(info.Kinds),
 			})
 		}
 	}

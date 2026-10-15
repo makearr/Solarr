@@ -31,7 +31,7 @@ func (s *Server) ListCategories(w http.ResponseWriter, r *http.Request) {
 	for index, category := range visible {
 		works, files := s.categoryCounts(r.Context(), category.ID)
 		views[index] = gen.LibraryCategory{
-			Id: category.ID, MediaType: category.MediaType, Name: category.Name,
+			Id: category.ID, MediaType: category.MediaType, Name: category.Name, Kind: strPtr(category.Kind),
 			Works: &works, Files: &files,
 		}
 	}
@@ -68,6 +68,14 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		priorityRank = &next
 	}
 
+	info, _ := s.mediaTypeInfo(body.MediaType)
+	kind, known := info.kindOf(derefOr(body.Kind, ""))
+	if !known {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Unknown kind",
+			fmt.Sprintf("a %s library has no kind %q", body.MediaType, derefOr(body.Kind, "")))
+		return
+	}
+
 	created, err := s.auth.Settings.CreateCategory(r.Context(), body.MediaType, body.Name, *priorityRank)
 	if err != nil {
 		var problems config.Problems
@@ -80,9 +88,16 @@ func (s *Server) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if kind.Key != "" {
+		if created, err = s.applyKind(r.Context(), created, kind); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
+	}
+
 	works, files := s.categoryCounts(r.Context(), created.ID)
 	writeJSON(w, s.logger, http.StatusCreated, gen.LibraryCategory{
-		Id: created.ID, MediaType: created.MediaType, Name: created.Name,
+		Id: created.ID, MediaType: created.MediaType, Name: created.Name, Kind: strPtr(created.Kind),
 		Works: &works, Files: &files,
 	})
 }
@@ -180,6 +195,15 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	if err == nil && body.TvMonitor != nil {
 		updated, err = s.auth.Settings.SetCategoryTVMonitor(r.Context(), id, string(*body.TvMonitor))
 	}
+	if err == nil && body.Kind != nil {
+		info, _ := s.mediaTypeInfo(updated.MediaType)
+		if _, known := info.kindOf(*body.Kind); !known || *body.Kind == "" && len(info.Kinds) > 0 {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Unknown kind",
+				fmt.Sprintf("a %s library has no kind %q", updated.MediaType, *body.Kind))
+			return
+		}
+		updated, err = s.auth.Settings.SetCategoryKind(r.Context(), id, *body.Kind)
+	}
 	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -207,7 +231,50 @@ func categorySettingsView(c settings.Category) gen.CategorySettings {
 		QualityProfileId: c.QualityProfileID, LanguageProfileId: c.LanguageProfileID,
 		MonitorDiscovered: gen.CategorySettingsMonitorDiscovered(c.MonitorDiscovered),
 		TvMonitor:         tvMonitorView(c.TVMonitor),
+		Kind:              strPtr(c.Kind),
 	}
+}
+
+// applyKind gives a library just added its kind and the kind's defaults: its quality profiles, best first, and its
+// language profile, created under the kind's name when no profile has it.
+func (s *Server) applyKind(ctx context.Context, category settings.Category, kind LibraryKind) (settings.Category, error) {
+	updated, err := s.auth.Settings.SetCategoryKind(ctx, category.ID, kind.Key)
+	if err != nil {
+		return category, err
+	}
+	snapshot := s.auth.Settings.Snapshot()
+	var profileIDs []int64
+	for _, name := range kind.QualityProfiles {
+		for _, profile := range snapshot.QualityProfiles() {
+			if profile.Name == name && profile.MediaType == category.MediaType {
+				profileIDs = append(profileIDs, profile.ID)
+			}
+		}
+	}
+	if len(profileIDs) > 0 {
+		if err := s.auth.Settings.SetCategoryQuality(ctx, category.ID, profileIDs, nil, nil); err != nil {
+			return updated, err
+		}
+	}
+	if kind.Language != nil {
+		languageID := int64(0)
+		for _, profile := range snapshot.LanguageProfiles() {
+			if profile.Name == kind.Language.Name {
+				languageID = profile.ID
+			}
+		}
+		if languageID == 0 {
+			created, err := s.auth.Settings.CreateLanguageProfile(ctx, *kind.Language)
+			if err != nil {
+				return updated, err
+			}
+			languageID = created.ID
+		}
+		if err := s.auth.Settings.SetCategoryLanguageProfile(ctx, category.ID, &languageID); err != nil {
+			return updated, err
+		}
+	}
+	return updated, nil
 }
 
 // routeDeleteCategory parses the id path parameter, mirroring routeGetWork.

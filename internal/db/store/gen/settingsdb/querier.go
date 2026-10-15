@@ -133,6 +133,7 @@ type Querier interface {
 	SetArrInstanceAPIKey(ctx context.Context, arg SetArrInstanceAPIKeyParams) error
 	SetArrInstanceSyncResult(ctx context.Context, arg SetArrInstanceSyncResultParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
+	SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error
 	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
 	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error

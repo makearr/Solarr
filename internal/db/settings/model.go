@@ -92,6 +92,8 @@ type Category struct {
 	MonitorDiscovered string
 	// TVMonitor is what a scan monitors of a series it finds: "existing" (the episodes on disk), "all", or "none".
 	TVMonitor string
+	// Kind is the library's kind within its media type, one the type declares (TV: "anime"); "" is none.
+	Kind string
 	// MonitorReleaseTypes is which release types a monitored artist in this
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).

@@ -223,8 +223,19 @@ func (w wanted) queries() [][]judge.Query {
 	for _, name := range names {
 		spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", cleanQuery(name), w.season)})
 	}
-	return append(tiers, spelled)
+	tiers = append(tiers, spelled)
+	if w.anime {
+		for _, tier := range tiers {
+			for index := range tier {
+				tier[index].MoreCategories = []int{animeCategory}
+			}
+		}
+	}
+	return tiers
 }
+
+// animeCategory is Newznab's TV/Anime, where indexers file what Sonarr searches as its anime categories.
+const animeCategory = 5070
 
 // maxAbsoluteQueries bounds the per-episode searches an anime season may cost.
 const maxAbsoluteQueries = 5

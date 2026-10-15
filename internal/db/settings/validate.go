@@ -3,6 +3,7 @@ package settings
 import (
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -54,6 +55,16 @@ func validateMonitorDiscovered(policy string) config.Problems {
 		return config.Problems{{Path: "monitor_discovered", Value: policy,
 			Expectation: "one of monitored, unmonitored, none"}}
 	}
+}
+
+var kindPattern = regexp.MustCompile(`^[a-z_]{0,32}$`)
+
+// validateKind accepts a kind's shape; whether the media type has it is the media type's to say.
+func validateKind(kind string) config.Problems {
+	if !kindPattern.MatchString(kind) {
+		return config.Problems{{Path: "kind", Value: kind, Expectation: "a kind of the library's media type, such as anime"}}
+	}
+	return nil
 }
 
 func validateTVMonitor(policy string) config.Problems {

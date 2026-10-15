@@ -65,6 +65,7 @@ type Category struct {
 	PreferredProtocol      string
 	ProtocolDelayMinutes   int64
 	TvMonitor              string
+	Kind                   string
 }
 
 type CategoryFileManagement struct {

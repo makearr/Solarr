@@ -8,6 +8,7 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 
 import { Card } from "./SettingsCard";
+import { KindSelect } from "./LibraryKindSelect";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
@@ -270,6 +271,7 @@ function EditCategoryFields({
   const [languageProfileId, setLanguageProfileId] = useState(initial.language_profile_id ?? 0);
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
   const [tvMonitor, setTvMonitor] = useState<TVMonitor>(initial.tv_monitor ?? "existing");
+  const [kind, setKind] = useState(initial.kind ?? "");
   const isTV = initial.media_type === "tv";
   const queryClient = useQueryClient();
 
@@ -284,6 +286,7 @@ function EditCategoryFields({
           language_profile_id: languageProfileId || undefined,
           monitor_discovered: monitorDiscovered,
           tv_monitor: isTV ? tvMonitor : undefined,
+          kind: kind || undefined,
         },
       });
       if (error) throw error;
@@ -356,6 +359,7 @@ function EditCategoryFields({
             ))}
           </select>
         </label>
+        <KindSelect mediaType={initial.media_type} value={kind} onChange={setKind} />
         {isTV ? (
           <label className="flex flex-col gap-1 text-xs text-ink-muted">
             Monitor series found by a scan
@@ -415,12 +419,13 @@ function EditCategoryFields({
 function AddCategory({ onAdded }: { onAdded: () => void }) {
   const [name, setName] = useState("");
   const [mediaType, setMediaType] = useState<MediaType>("music");
+  const [kind, setKind] = useState("");
   const mediaTypes = useMediaTypes();
 
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/categories", {
-        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType },
+        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType, kind: kind || undefined },
       });
       if (error) throw error;
       return data;
@@ -454,7 +459,10 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
         <select
           className={inputStyle}
           value={mediaType}
-          onChange={(event) => setMediaType(event.target.value as MediaType)}
+          onChange={(event) => {
+            setMediaType(event.target.value as MediaType);
+            setKind("");
+          }}
         >
           {mediaTypes.map((type) => (
             <option key={type.key} value={type.key}>
@@ -463,6 +471,7 @@ function AddCategory({ onAdded }: { onAdded: () => void }) {
           ))}
         </select>
       </label>
+      <KindSelect mediaType={mediaType} value={kind} onChange={setKind} />
       <button
         type="submit"
         disabled={create.isPending}

@@ -83,7 +83,11 @@ On an album's, series' or artist's page, **Choose image** lists the pictures the
 
 ## 4b. Add TV
 
-Create a library of media type **TV** (Settings → Libraries), give it a root folder, and a scan reads your folders:
+Create a library of media type **TV** (Settings → Libraries) and pick its **kind**: Series, Anime, Documentary, Reality or
+Kids. A kind only sets the starting point: its quality profiles (Anime 1080p first for anime, a smaller x265 profile
+for reality), its languages (English or German; Japanese, English or German for anime), and for anime that a series the
+providers call standard is anime there, searched by absolute episode number and in the indexers' anime category too.
+Give the library a root folder, and a scan reads your folders:
 each series folder is matched by name, `{tvdb-123}` in the folder name, or what you already added, and every episode file
 is attached to its episode. **Settings → Libraries → Edit** has **Monitor series found by a scan**: only the episodes on
 disk (the default, so nothing is hunted that you did not ask for), every episode, or none.

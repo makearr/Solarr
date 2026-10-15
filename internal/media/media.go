@@ -100,6 +100,19 @@ type Descriptor struct {
 	ExtraFiles ExtraFilesDefault
 	// GuessFloor is the least confidence "Commit anyway" takes a held unit's best guess at; 0 takes any.
 	GuessFloor float64
+	// Kinds are what a library of the type can be (TV: series, anime), picked when one is added; none for a type of one
+	// kind. The first is the default.
+	Kinds []LibraryKind
+}
+
+// LibraryKind is one kind of library of a media type, with the defaults a library of it starts with. The type itself
+// gives the kind any further meaning (TV: an anime library's series are anime).
+type LibraryKind struct {
+	Key, Label, Help string
+	// QualityProfiles name the shipped profiles the library accepts, best first; one not found is left out.
+	QualityProfiles []string
+	// Language is the language profile it starts with, found by name or created; nil starts with none.
+	Language *settings.LanguageProfile
 }
 
 // ExtraFilesDefault is a media type's "Import Extra Files" for a library that has not chosen.

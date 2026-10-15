@@ -219,6 +219,11 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		info.DuplicatesByName = descriptor.DuplicatesByName
 		info.ExtraFiles = settings.ExtraFiles{Import: &descriptor.ExtraFiles.Import, Extensions: descriptor.ExtraFiles.Extensions}
 		info.GuessFloor = descriptor.GuessFloor
+		for _, kind := range descriptor.Kinds {
+			info.Kinds = append(info.Kinds, apiserver.LibraryKind{
+				Key: kind.Key, Label: kind.Label, Help: kind.Help, QualityProfiles: kind.QualityProfiles, Language: kind.Language,
+			})
+		}
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {
 			info.WantedGrain = "part"

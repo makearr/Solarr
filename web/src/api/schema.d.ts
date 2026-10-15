@@ -4470,6 +4470,12 @@ export interface components {
             wanted_grain: "work" | "part";
             /** @description A held import unit is committed by hand, anyway or as a work named (Identify as). */
             commits_held_imports: boolean;
+            /** @description What a library of the type can be, picked when one is added; the first is the default. Empty for a type of one kind. */
+            kinds?: {
+                key: string;
+                label: string;
+                help?: string;
+            }[];
             /**
              * Format: double
              * @description The least confidence "Commit anyway" places a held unit's best guess at; below it the unit is named with Identify as. 0 takes any.
@@ -6500,6 +6506,8 @@ export interface components {
             /** @example music */
             media_type: string;
             name: string;
+            /** @description The library's kind within its media type; absent for none. */
+            kind?: string;
             /** @description From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once. */
             works?: number;
             files?: number;
@@ -6530,6 +6538,8 @@ export interface components {
              * @enum {string}
              */
             tv_monitor?: "existing" | "all" | "none";
+            /** @description The library's kind within its media type (MediaTypeInfo.kinds); absent for none. */
+            kind?: string;
         };
         CategoryWrite: {
             name: string;
@@ -6555,6 +6565,8 @@ export interface components {
              * @enum {string}
              */
             tv_monitor?: "existing" | "all" | "none";
+            /** @description One of the media type's kinds; absent leaves it. Changing it applies no defaults, it only says what the library is. */
+            kind?: string;
         };
         /** @description A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel. */
         Library: {
@@ -12036,6 +12048,8 @@ export interface operations {
                     name: string;
                     /** Format: int64 */
                     priority_rank?: number;
+                    /** @description One of the media type's kinds (MediaTypeInfo.kinds); omitted takes its first. The kind's quality profiles and language profile become the library's own. */
+                    kind?: string;
                 };
             };
         };

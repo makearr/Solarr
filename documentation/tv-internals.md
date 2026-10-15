@@ -170,3 +170,13 @@ The search of an UPGRADABLE season wants only the episodes below the cutoff and 
 
 The shipped TV profile **Any** also takes a small additive penalty for a release under 0.4 Mbps or over 25 Mbps of video, so a starved or bloated file loses a tie.
 
+
+## Library kinds (T3)
+
+A media type may declare **kinds** of library (`media.Descriptor.Kinds`); TV declares series, anime, documentary,
+reality and kids (`internal/media/tv/kinds.go`). Adding a library takes one (`POST /categories` `kind`, the type's first
+when omitted, stored as `category.kind`, settings migration 0041) and the API applies its defaults once: the named
+quality profiles in order (one not found is skipped) and a language profile found by name or created. Changing the
+kind later applies nothing. TV gives anime its own meaning: `Service.Add` makes a series it creates in an anime library
+anime (a manual field) when the providers say standard, and every query of an anime-type series also asks Newznab
+5070 (`judge.Query.MoreCategories`), as Sonarr's anime categories do.

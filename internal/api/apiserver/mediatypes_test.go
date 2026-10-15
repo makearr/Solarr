@@ -22,7 +22,11 @@ func (fakeMediaTypes) List() []apiserver.MediaTypeInfo {
 			LeadPeople: apiserver.MediaTerm{One: "Artist", Many: "Artists"},
 			Roles:      []apiserver.MediaRole{{Key: "artist", Label: "Artist", Lead: true, Followable: true}},
 		},
-		{Key: "tv", Label: "TV", Work: apiserver.MediaTerm{One: "Series", Many: "Series"}},
+		{Key: "tv", Label: "TV", Work: apiserver.MediaTerm{One: "Series", Many: "Series"}, Kinds: []apiserver.LibraryKind{
+			{Key: "series", Label: "Series", QualityProfiles: []string{"WEB 1080p"}},
+			{Key: "anime", Label: "Anime", Help: "Anime.", QualityProfiles: []string{"Anime 1080p", "WEB 1080p", "No such profile"},
+				Language: &settings.LanguageProfile{Name: "Japanese first", AudioPreferred: []string{"ja", "en"}}},
+		}},
 	}
 }
 
@@ -54,6 +58,7 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 		{
 			"key": "tv", "label": "TV", "work": term("Series", "Series"), "part": term("", ""), "group": term("", ""),
 			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false,
+			"kinds": []any{map[string]any{"key": "series", "label": "Series"}, map[string]any{"key": "anime", "label": "Anime", "help": "Anime."}},
 		},
 	}
 	if !reflect.DeepEqual(got, want) {

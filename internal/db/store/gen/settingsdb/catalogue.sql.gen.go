@@ -77,7 +77,7 @@ INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
           monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind
 `
 
 type CreateCategoryParams struct {
@@ -104,6 +104,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.PreferredProtocol,
 		&i.ProtocolDelayMinutes,
 		&i.TvMonitor,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -187,7 +188,7 @@ func (q *Queries) DetachRootFolderFromCategory(ctx context.Context, arg DetachRo
 const getCategory = `-- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind
 FROM category WHERE id = ?
 `
 
@@ -209,6 +210,7 @@ func (q *Queries) GetCategory(ctx context.Context, id int64) (Category, error) {
 		&i.PreferredProtocol,
 		&i.ProtocolDelayMinutes,
 		&i.TvMonitor,
+		&i.Kind,
 	)
 	return i, err
 }
@@ -263,7 +265,7 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 const listCategories = `-- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind
 FROM category ORDER BY priority_rank, name
 `
 
@@ -291,6 +293,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 			&i.PreferredProtocol,
 			&i.ProtocolDelayMinutes,
 			&i.TvMonitor,
+			&i.Kind,
 		); err != nil {
 			return nil, err
 		}
@@ -384,6 +387,20 @@ func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const setCategoryKind = `-- name: SetCategoryKind :exec
+UPDATE category SET kind = ? WHERE id = ?
+`
+
+type SetCategoryKindParams struct {
+	Kind string
+	ID   int64
+}
+
+func (q *Queries) SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryKind, arg.Kind, arg.ID)
+	return err
 }
 
 const setCategoryMonitorDiscovered = `-- name: SetCategoryMonitorDiscovered :exec

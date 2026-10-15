@@ -151,6 +151,7 @@ func (Module) Descriptor() media.Descriptor {
 		// Sonarr brings subtitles along; a hand-named folder guessed below this is named by a person instead.
 		ExtraFiles: media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
 		GuessFloor: GuessFloor,
+		Kinds:      libraryKinds,
 	}
 }
 

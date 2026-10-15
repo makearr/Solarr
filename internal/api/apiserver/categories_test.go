@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -602,5 +603,49 @@ func TestDetachRootFolderFromCategory_RemovesTheAttachment(t *testing.T) {
 	attached := fixture.cache.Snapshot().CategoriesForRootFolder(root.ID)
 	if len(attached) != 0 {
 		t.Errorf("CategoriesForRootFolder = %v, want none after detach", attached)
+	}
+}
+
+// A library added as a kind starts with the kind's profiles and language, and one of no kind its type has is refused.
+func TestCreateCategory_AKindBringsItsDefaults(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories", `{"media_type":"tv","name":"Anime","kind":"anime"}`))
+	if recorder.Code != http.StatusCreated {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var created struct {
+		ID   int64  `json:"id"`
+		Kind string `json:"kind"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &created); err != nil || created.Kind != "anime" {
+		t.Fatalf("created = %+v, %v; want kind anime", created, err)
+	}
+	snapshot := fixture.cache.Snapshot()
+	category, _ := snapshot.Category(created.ID)
+	var names []string
+	for _, id := range category.QualityProfileIDs {
+		profile, _ := snapshot.QualityProfile(id)
+		names = append(names, profile.Name)
+	}
+	if !reflect.DeepEqual(names, []string{"Anime 1080p", "WEB 1080p"}) {
+		t.Errorf("profiles = %v, want the kind's, best first, the unknown one left out", names)
+	}
+	if category.LanguageProfileID == nil {
+		t.Fatalf("no language profile, want the kind's")
+	}
+	language, _ := snapshot.LanguageProfile(*category.LanguageProfileID)
+	if language.Name != "Japanese first" || !reflect.DeepEqual(language.AudioPreferred, []string{"ja", "en"}) {
+		t.Errorf("language profile = %+v, want the kind's", language)
+	}
+
+	defaulted := fixture.do(authedPost(t, cookies, "/api/v1/categories", `{"media_type":"tv","name":"Shows"}`))
+	if err := json.Unmarshal(defaulted.Body.Bytes(), &created); err != nil || created.Kind != "series" {
+		t.Errorf("no kind given: %+v, %v; want the type's first, series", created, err)
+	}
+	if refused := fixture.do(authedPost(t, cookies, "/api/v1/categories", `{"media_type":"tv","name":"Odd","kind":"opera"}`)); refused.Code != http.StatusBadRequest {
+		t.Errorf("an unknown kind: status %d, want 400", refused.Code)
 	}
 }

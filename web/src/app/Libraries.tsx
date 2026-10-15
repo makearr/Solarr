@@ -9,6 +9,7 @@ import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { MEDIA_TYPE_NAME } from "./Categories";
+import { KindSelect } from "./LibraryKindSelect";
 import { defaultLevelKey } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];
@@ -99,12 +100,13 @@ function AddLibrary() {
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [mediaType, setMediaType] = useState<MediaType>("music");
+  const [kind, setKind] = useState("");
   const mediaTypes = useMediaTypes();
 
   const create = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/categories", {
-        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType },
+        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType, kind: kind || undefined },
       });
       if (error) throw error;
       return data;
@@ -138,7 +140,10 @@ function AddLibrary() {
         <select
           className={inputStyle}
           value={mediaType}
-          onChange={(event) => setMediaType(event.target.value as MediaType)}
+          onChange={(event) => {
+            setMediaType(event.target.value as MediaType);
+            setKind("");
+          }}
         >
           {mediaTypes.map((type) => (
             <option key={type.key} value={type.key}>
@@ -147,6 +152,7 @@ function AddLibrary() {
           ))}
         </select>
       </label>
+      <KindSelect mediaType={mediaType} value={kind} onChange={setKind} />
       <button
         type="submit"
         disabled={create.isPending}

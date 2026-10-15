@@ -6,6 +6,8 @@ import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
+import { KindSelect } from "./LibraryKindSelect";
+
 // The wizard connects an app to make a library from it; Prowlarr has none, so it is added under Connections.
 type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
 type MediaType = components["schemas"]["MediaType"];
@@ -375,6 +377,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   // no library attached is invisible to every import and scan afterwards.
   const [categoryId, setCategoryId] = useState<number | "new">("new");
   const [mediaType, setMediaType] = useState<MediaType>("music");
+  const [kind, setKind] = useState("");
   const mediaTypes = useMediaTypes();
   const [libraryName, setLibraryName] = useState(mediaTypeName("music"));
   const [libraryNameTouched, setLibraryNameTouched] = useState(false);
@@ -399,7 +402,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
       let attachTo = categoryId;
       if (attachTo === "new") {
         const { data: category, error: categoryError } = await api.POST("/categories", {
-          body: { name: libraryName.trim() || mediaTypeName(mediaType), media_type: mediaType },
+          body: { name: libraryName.trim() || mediaTypeName(mediaType), media_type: mediaType, kind: kind || undefined },
         });
         if (categoryError) throw categoryError;
         attachTo = category!.id;
@@ -471,7 +474,10 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
               <select
                 className={inputStyle}
                 value={mediaType}
-                onChange={(event) => changeMediaType(event.target.value as MediaType)}
+                onChange={(event) => {
+                  changeMediaType(event.target.value as MediaType);
+                  setKind("");
+                }}
               >
                 {mediaTypes.map((type) => (
                   <option key={type.key} value={type.key}>
@@ -480,6 +486,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
                 ))}
               </select>
             </Field>
+            <KindSelect mediaType={mediaType} value={kind} onChange={setKind} />
             <Field label="Library name">
               <input
                 className={inputStyle}

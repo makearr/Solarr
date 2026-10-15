@@ -459,6 +459,33 @@
       "one": "Season"
     },
     "key": "tv",
+    "kinds": [
+      {
+        "help": "Shows and miniseries.",
+        "key": "series",
+        "label": "Series"
+      },
+      {
+        "help": "Its series are anime: searched by absolute episode number as well and in the indexers' anime category.",
+        "key": "anime",
+        "label": "Anime"
+      },
+      {
+        "help": "Documentary series.",
+        "key": "documentary",
+        "label": "Documentary"
+      },
+      {
+        "help": "Reality and game shows, where a smaller file is plenty.",
+        "key": "reality",
+        "label": "Reality"
+      },
+      {
+        "help": "Children's series.",
+        "key": "kids",
+        "label": "Kids"
+      }
+    ],
     "label": "TV",
     "lead_people": {
       "many": "Cast",

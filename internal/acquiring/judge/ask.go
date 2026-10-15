@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -59,6 +60,9 @@ type Query struct {
 	Needs    []string
 	// Limit bounds the indexer's answer to this query; zero takes resultLimit.
 	Limit int
+	// MoreCategories widen an indexer's own categories for this query (anime's 5070 besides TV's 5000); an indexer
+	// asked without categories is asked without them still.
+	MoreCategories []int
 }
 
 // Answer is what one indexer gave for one tier's queries, up to its first failure.
@@ -105,8 +109,12 @@ func askIndexer(ctx context.Context, conn Conn, queries []Query) Answer {
 		if len(query.Needs) > 0 && !conn.Takes(query.Function, query.Needs) {
 			continue
 		}
+		categories := conn.Categories
+		if len(categories) > 0 && len(query.MoreCategories) > 0 {
+			categories = append(slices.Clone(categories), query.MoreCategories...)
+		}
 		raws, err := conn.Client.Search(ctx, indexer.SearchRequest{
-			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: conn.Categories, Limit: cmp.Or(query.Limit, resultLimit),
+			Function: query.Function, Query: query.Text, Extra: query.Extra, Categories: categories, Limit: cmp.Or(query.Limit, resultLimit),
 		})
 		if err != nil {
 			answer.Err = err

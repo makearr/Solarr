@@ -199,6 +199,8 @@ type CategoryEntry struct {
 	MonitorDiscovered string `yaml:"monitor_discovered,omitempty"`
 	// TVMonitor is what a scan monitors of a series it finds; written only when not the default (existing).
 	TVMonitor string `yaml:"tv_monitor,omitempty"`
+	// Kind is the library's kind within its media type; absent for none.
+	Kind string `yaml:"kind,omitempty"`
 	// Naming is absent for a library still on its media type's default.
 	Naming *NamingEntry `yaml:"naming,omitempty"`
 	// FileManagement is absent for a library still on Sonarr's defaults.
@@ -490,6 +492,7 @@ func (c *Cache) Export() Document {
 			PriorityRank:      category.PriorityRank,
 			MonitorDiscovered: category.MonitorDiscovered,
 		}
+		entry.Kind = category.Kind
 		if category.TVMonitor != TVMonitorExisting {
 			entry.TVMonitor = category.TVMonitor
 		}
@@ -865,6 +868,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		if category.TVMonitor != "" {
 			problems = append(problems, validateTVMonitor(category.TVMonitor)...)
 		}
+		problems = append(problems, validateKind(category.Kind)...)
 	}
 
 	for index, pattern := range d.ExclusionPatterns {
@@ -1139,6 +1143,11 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 					MonitorDiscovered: category.MonitorDiscovered, ID: id,
 				}); err != nil {
 					return fmt.Errorf("category %q monitor_discovered: %w", key, err)
+				}
+			}
+			if category.Kind != "" {
+				if err := queries.SetCategoryKind(ctx, settingsdb.SetCategoryKindParams{Kind: category.Kind, ID: id}); err != nil {
+					return fmt.Errorf("category %q kind: %w", key, err)
 				}
 			}
 			if category.TVMonitor != "" {
