@@ -44,42 +44,41 @@ func NewSessions(encryptionKey []byte, cl clock.Clock, ttl time.Duration) *Sessi
 	return &Sessions{key: derived.Sum(nil), clock: cl, ttl: ttl}
 }
 
-// Issue returns a signed token for a user.
-func (s *Sessions) Issue(userID int64) string {
+// Issue returns a signed token for a user; stamp ties it to the account's current password, so a new one ends it.
+func (s *Sessions) Issue(userID int64, stamp string) string {
 	expires := s.clock.Now().Add(s.ttl).Unix()
-	claims := fmt.Sprintf("%d.%d", userID, expires)
+	claims := fmt.Sprintf("%d.%d.%s", userID, expires, stamp)
 	return claims + "." + s.sign(claims)
 }
 
 // TTL reports how long an issued session lasts, for the cookie's Max-Age.
 func (s *Sessions) TTL() time.Duration { return s.ttl }
 
-// Verify checks a token's signature and expiry, returning the user it names.
-func (s *Sessions) Verify(token string) (int64, error) {
+// Verify checks a token's signature and expiry, returning the user it names and the password stamp it was issued with.
+func (s *Sessions) Verify(token string) (int64, string, error) {
 	claims, signature := reverseCut(token)
 	if signature == "" {
-		return 0, ErrInvalidSession
+		return 0, "", ErrInvalidSession
 	}
 	if !hmac.Equal([]byte(signature), []byte(s.sign(claims))) {
-		return 0, ErrInvalidSession
+		return 0, "", ErrInvalidSession
 	}
-
-	rawUser, rawExpiry, found := strings.Cut(claims, ".")
-	if !found {
-		return 0, ErrInvalidSession
+	parts := strings.Split(claims, ".")
+	if len(parts) != 3 {
+		return 0, "", ErrInvalidSession
 	}
-	userID, err := strconv.ParseInt(rawUser, 10, 64)
+	userID, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return 0, ErrInvalidSession
+		return 0, "", ErrInvalidSession
 	}
-	expires, err := strconv.ParseInt(rawExpiry, 10, 64)
+	expires, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
-		return 0, ErrInvalidSession
+		return 0, "", ErrInvalidSession
 	}
 	if s.clock.Now().Unix() >= expires {
-		return 0, ErrSessionExpired
+		return 0, "", ErrSessionExpired
 	}
-	return userID, nil
+	return userID, parts[2], nil
 }
 
 func (s *Sessions) sign(claims string) string {

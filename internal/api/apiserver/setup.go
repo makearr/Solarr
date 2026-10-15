@@ -80,7 +80,7 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 	}
 
 	// Signed in immediately; re-typing the credentials adds nothing.
-	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(created.ID),
+	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(created.ID, created.SessionStamp),
 		int(s.auth.Sessions.TTL().Seconds()), r))
 	s.logger.Info("first administrator created", "username", created.Username)
 

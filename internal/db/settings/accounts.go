@@ -2,7 +2,9 @@ package settings
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"time"
 
@@ -220,8 +222,17 @@ func userFromRow(id int64, username string, hash sql.NullString, role string, cr
 	}
 	return User{
 		ID: id, Username: username,
-		HasPassword: hash.Valid && hash.String != "",
-		Role:        Role(role), CreatedAt: time.Unix(createdAt, 0).UTC(),
+		HasPassword: hash.Valid && hash.String != "", SessionStamp: sessionStampOf(hash.String),
+		Role: Role(role), CreatedAt: time.Unix(createdAt, 0).UTC(),
 		Tier: effective, Limits: limits,
 	}
+}
+
+// sessionStampOf digests a password hash for session cookies: short, not reversible, and new with every password.
+func sessionStampOf(passwordHash string) string {
+	if passwordHash == "" {
+		return ""
+	}
+	sum := sha256.Sum256([]byte("solarr:session-stamp:" + passwordHash))
+	return hex.EncodeToString(sum[:8])
 }

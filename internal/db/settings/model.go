@@ -66,8 +66,10 @@ type User struct {
 	// HasPassword is false for an account that authenticates only by proxy
 	// header or API key. The hash itself is never held in the snapshot.
 	HasPassword bool
-	Role        Role
-	CreatedAt   time.Time
+	// SessionStamp is a digest of the password hash a session must carry; a new password changes it.
+	SessionStamp string
+	Role         Role
+	CreatedAt    time.Time
 	// Tier is the level the account is shown, never above Limits.TierMax.
 	Tier   Tier
 	Limits UserLimits

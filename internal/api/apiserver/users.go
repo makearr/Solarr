@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/auth"
+	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
@@ -145,6 +146,9 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 	if !found {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such account")
 		return
+	}
+	if request.Password != nil {
+		s.keepSignedIn(w, r, user)
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.userView(user))
 }
@@ -316,4 +320,17 @@ func routeUser(handler func(http.ResponseWriter, *http.Request, int64)) http.Han
 		}
 		handler(w, r, id)
 	}
+}
+
+// keepSignedIn gives the browser that changed its own password a session under the new one: every other session of
+// the account ended with the old password.
+func (s *Server) keepSignedIn(w http.ResponseWriter, r *http.Request, user settings.User) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil || access.UserID() != user.ID {
+		return
+	}
+	if _, err := r.Cookie(auth.SessionCookieName); err != nil {
+		return
+	}
+	http.SetCookie(w, s.sessionCookie(s.auth.Sessions.Issue(user.ID, user.SessionStamp), int(s.auth.Sessions.TTL().Seconds()), r))
 }

@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"crypto/subtle"
 	"errors"
 	"log/slog"
 	"net"
@@ -115,13 +116,13 @@ func (s *Server) identifyBySession(r *http.Request) (settings.User, error) {
 	if err != nil {
 		return settings.User{}, errNoCredential
 	}
-	userID, err := s.auth.Sessions.Verify(cookie.Value)
+	userID, stamp, err := s.auth.Sessions.Verify(cookie.Value)
 	if err != nil {
 		return settings.User{}, err
 	}
 	user, found := s.auth.Settings.Snapshot().User(userID)
-	if !found {
-		// A valid signature for a user who has since been deleted.
+	if !found || subtle.ConstantTimeCompare([]byte(stamp), []byte(user.SessionStamp)) != 1 {
+		// A user since deleted, or a session from before the password last changed.
 		return settings.User{}, errNoCredential
 	}
 	return user, nil

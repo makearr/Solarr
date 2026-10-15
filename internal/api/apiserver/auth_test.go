@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -582,5 +584,51 @@ func TestDeleteMyAPIKey_RefusesAnotherUsersKey(t *testing.T) {
 	}
 	if len(remaining) != 1 {
 		t.Error("the admin's key was removed despite the refusal")
+	}
+}
+
+// A new password ends every session from before it; the browser that set it stays signed in.
+func TestAuth_ChangingAPasswordEndsTheOtherSessions(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	elsewhere := fixture.login(t, "avs", testPassword).Result().Cookies()[0]
+	here := fixture.login(t, "avs", testPassword).Result().Cookies()[0]
+	housemate := fixture.login(t, "housemate", testPassword).Result().Cookies()[0]
+
+	body := strings.NewReader(`{"password":"a new and long passphrase"}`)
+	change := httptest.NewRequest(http.MethodPatch, fmt.Sprintf("/api/v1/users/%d", fixture.admin.ID), body)
+	change.AddCookie(here)
+	response := fixture.do(t, change)
+	if response.Code != http.StatusOK {
+		t.Fatalf("password change = %d %s", response.Code, response.Body.String())
+	}
+	renewed := response.Result().Cookies()
+	if len(renewed) != 1 || renewed[0].Name != auth.SessionCookieName {
+		t.Fatalf("the changing browser got %v, want a new session cookie", renewed)
+	}
+	me := func(cookie *http.Cookie) int {
+		request := httptest.NewRequest(http.MethodGet, "/api/v1/me", nil)
+		request.AddCookie(cookie)
+		return fixture.do(t, request).Code
+	}
+	if got := []int{me(elsewhere), me(here), me(renewed[0]), me(housemate)}; !slices.Equal(got, []int{401, 401, 200, 200}) {
+		t.Errorf("other session, old cookie here, renewed cookie, another account = %v; want 401 401 200 200", got)
+	}
+}
+
+// Five wrong passwords from one address make the sixth try wait, even with the right password.
+func TestAuth_FailedLoginsFromOneAddressAreLimited(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	for range auth.LoginAttempts {
+		if got := fixture.login(t, "avs", "not the password").Code; got != http.StatusUnauthorized {
+			t.Fatalf("wrong password = %d, want 401", got)
+		}
+	}
+	limited := fixture.login(t, "avs", testPassword)
+	if limited.Code != http.StatusTooManyRequests || limited.Header().Get("Retry-After") == "" {
+		t.Fatalf("sixth try = %d (Retry-After %q), want 429 with Retry-After", limited.Code, limited.Header().Get("Retry-After"))
+	}
+	fixture.clock.Advance(auth.LoginWindow)
+	if got := fixture.login(t, "avs", testPassword).Code; got != http.StatusOK {
+		t.Errorf("a minute later = %d, want 200", got)
 	}
 }
