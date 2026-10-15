@@ -649,7 +649,15 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 		librarydb.SetDesiredItemRequiredCountParams{RequiredCount: required, ID: itemID}); err != nil {
 		return fmt.Errorf("set required count: %w", err)
 	}
-	if err := stampComingOut(ctx, queries, item, required, nextOut(item, parts, now)); err != nil {
+	next, basis := nextOut(item, parts, now), availableFromParts
+	if next == 0 && !anyPartTimed(item, parts) {
+		// A work whose parts carry no time of their own (an album) is out on its release day.
+		if next, err = releaseAhead(ctx, queries, workID, now); err != nil {
+			return fmt.Errorf("release day: %w", err)
+		}
+		basis = availableFromRelease
+	}
+	if err := stampComingOut(ctx, queries, item, required, next, basis); err != nil {
 		return fmt.Errorf("set coming out: %w", err)
 	}
 	if err := queries.RecomputePresentCount(ctx, itemID); err != nil {
@@ -683,8 +691,12 @@ func requiredOf(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time
 	return sql.NullInt64{Int64: owed, Valid: true}
 }
 
-// availableFromParts marks an item's available_from as the next part out, kept only while the item owes nothing.
-const availableFromParts = "parts"
+const (
+	// availableFromParts marks an item's available_from as the next part out, kept only while the item owes nothing.
+	availableFromParts = "parts"
+	// availableFromRelease marks it as the work's release day, for a work whose parts carry no time.
+	availableFromRelease = "release"
+)
 
 // nextOut is when the earliest monitored part of the item not out yet comes out; zero when none has a time.
 func nextOut(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time.Time) int64 {
@@ -707,20 +719,44 @@ func nextOut(item librarydb.DesiredItem, parts []librarydb.WorkPart, now time.Ti
 	return next
 }
 
-// stampComingOut gives an item that owes nothing yet the time its next part comes out ("Not out yet"), and takes it
-// away once something is owed; a time set any other way is left alone.
-func stampComingOut(ctx context.Context, queries *librarydb.Queries, item librarydb.DesiredItem, required sql.NullInt64, next int64) error {
-	owesNothing := required.Valid && required.Int64 == 0
+// anyPartTimed says whether a part of the item has a time or a day of its own.
+func anyPartTimed(item librarydb.DesiredItem, parts []librarydb.WorkPart) bool {
+	for _, part := range parts {
+		if partInScope(part.MediaRef, item.MediaRef) && (part.AvailableAt.Valid || part.Date.String != "") {
+			return true
+		}
+	}
+	return false
+}
+
+// releaseAhead answers the start of the work's release day while it is still ahead, 0 otherwise.
+func releaseAhead(ctx context.Context, queries *librarydb.Queries, workID int64, now time.Time) (int64, error) {
+	day, err := queries.WorkReleaseDay(ctx, workID)
+	if err != nil {
+		return 0, err
+	}
+	// A malformed day is no release ahead: failing here would stop the whole re-count of the item.
+	if released, err := time.Parse("2006-01-02", day); err == nil && released.After(now) {
+		return released.Unix(), nil
+	}
+	return 0, nil
+}
+
+// stampComingOut gives an item the time it comes out ("Not out yet"): the next part's while the item owes nothing, or
+// the work's release day while it is ahead; it takes either away once it no longer holds.
+func stampComingOut(ctx context.Context, queries *librarydb.Queries, item librarydb.DesiredItem, required sql.NullInt64, next int64, basis string) error {
+	holds := next > 0 && (basis == availableFromRelease || required.Valid && required.Int64 == 0)
+	stamped := item.AvailableBasis.String == availableFromParts || item.AvailableBasis.String == availableFromRelease
 	switch {
-	case owesNothing && next > 0:
-		if item.AvailableFrom.Int64 == next && item.AvailableBasis.String == availableFromParts {
+	case holds:
+		if item.AvailableFrom.Int64 == next && item.AvailableBasis.String == basis {
 			return nil
 		}
 		return queries.SetDesiredItemAvailability(ctx, librarydb.SetDesiredItemAvailabilityParams{
-			AvailableFrom: sql.NullInt64{Int64: next, Valid: true}, AvailableBasis: sql.NullString{String: availableFromParts, Valid: true},
+			AvailableFrom: sql.NullInt64{Int64: next, Valid: true}, AvailableBasis: sql.NullString{String: basis, Valid: true},
 			ID: item.ID,
 		})
-	case item.AvailableBasis.String == availableFromParts:
+	case stamped:
 		return queries.SetDesiredItemAvailability(ctx, librarydb.SetDesiredItemAvailabilityParams{ID: item.ID})
 	}
 	return nil
@@ -759,6 +795,33 @@ func (d Desired) RecountComingOut(ctx context.Context, longestGrace time.Duratio
 			if requiredOf(item, parts, now) == item.RequiredCount {
 				continue
 			}
+			if err := d.RecomputeAlbum(ctx, row.ID, row.WorkID); err != nil {
+				return changed, err
+			}
+			changed++
+		}
+		if len(page) < 200 {
+			break
+		}
+	}
+	released, err := d.recountReleases(ctx, now)
+	return changed + released, err
+}
+
+// recountReleases stamps the albums whose release day is ahead and unstamped, and clears those whose day has come.
+func (d Desired) recountReleases(ctx context.Context, now time.Time) (int, error) {
+	read := librarydb.New(d.store.Read())
+	changed := 0
+	var afterID int64
+	for {
+		page, err := read.ListItemsAwaitingRelease(ctx, librarydb.ListItemsAwaitingReleaseParams{
+			AfterID: afterID, Today: now.UTC().Format("2006-01-02"), Now: sql.NullInt64{Int64: now.Unix(), Valid: true}, PageSize: 200,
+		})
+		if err != nil {
+			return changed, fmt.Errorf("library: items awaiting release: %w", err)
+		}
+		for _, row := range page {
+			afterID = row.ID
 			if err := d.RecomputeAlbum(ctx, row.ID, row.WorkID); err != nil {
 				return changed, err
 			}

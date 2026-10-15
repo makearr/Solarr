@@ -574,6 +574,8 @@ type Querier interface {
 	// that item already has everything it needs, just not at the quality
 	// wanted, a different report from "missing" entirely.
 	ListIncompleteDesiredItems(ctx context.Context, arg ListIncompleteDesiredItemsParams) ([]ListIncompleteDesiredItemsRow, error)
+	// The SET items of works without timed parts whose release-day stamp is missing or has passed, for a re-count.
+	ListItemsAwaitingRelease(ctx context.Context, arg ListItemsAwaitingReleaseParams) ([]ListItemsAwaitingReleaseRow, error)
 	// The SET items of works with a monitored part whose time or day is recent or still ahead: what a
 	// season owes may change, or have changed, without anything being written to it.
 	ListItemsWithPartsComingOut(ctx context.Context, arg ListItemsWithPartsComingOutParams) ([]ListItemsWithPartsComingOutRow, error)
@@ -1066,6 +1068,8 @@ type Querier interface {
 	WithdrawEdition(ctx context.Context, id int64) error
 	// A work has files while one of them has a path no sweep found gone.
 	WorkHasLiveFile(ctx context.Context, workID int64) (int64, error)
+	// A work's release day: its earliest dated release, '' when it has none to the day.
+	WorkReleaseDay(ctx context.Context, workID int64) (string, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -960,6 +960,58 @@ func (q *Queries) ListIncompleteDesiredItems(ctx context.Context, arg ListIncomp
 	return items, nil
 }
 
+const listItemsAwaitingRelease = `-- name: ListItemsAwaitingRelease :many
+SELECT d.id, d.work_id FROM desired_item d
+WHERE d.satisfaction_kind = 'SET' AND d.id > ?1
+  AND ((d.available_from IS NULL
+        AND EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = d.work_id AND LENGTH(wd.date) = 10 AND wd.date > ?2))
+    OR (d.available_basis = 'release' AND d.available_from <= ?3))
+  AND NOT EXISTS (SELECT 1 FROM work_part p WHERE p.work_id = d.work_id AND (p.available_at IS NOT NULL OR COALESCE(p.date, '') <> ''))
+ORDER BY d.id
+LIMIT ?4
+`
+
+type ListItemsAwaitingReleaseParams struct {
+	AfterID  int64
+	Today    string
+	Now      sql.NullInt64
+	PageSize int64
+}
+
+type ListItemsAwaitingReleaseRow struct {
+	ID     int64
+	WorkID int64
+}
+
+// The SET items of works without timed parts whose release-day stamp is missing or has passed, for a re-count.
+func (q *Queries) ListItemsAwaitingRelease(ctx context.Context, arg ListItemsAwaitingReleaseParams) ([]ListItemsAwaitingReleaseRow, error) {
+	rows, err := q.db.QueryContext(ctx, listItemsAwaitingRelease,
+		arg.AfterID,
+		arg.Today,
+		arg.Now,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListItemsAwaitingReleaseRow{}
+	for rows.Next() {
+		var i ListItemsAwaitingReleaseRow
+		if err := rows.Scan(&i.ID, &i.WorkID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listItemsWithPartsComingOut = `-- name: ListItemsWithPartsComingOut :many
 SELECT DISTINCT d.id, d.work_id
 FROM desired_item d
@@ -2035,4 +2087,16 @@ func (q *Queries) UpsertPlannedHunt(ctx context.Context, arg UpsertPlannedHuntPa
 		arg.QueuedSince,
 	)
 	return err
+}
+
+const workReleaseDay = `-- name: WorkReleaseDay :one
+SELECT CAST(COALESCE(MIN(date), '') AS TEXT) AS day FROM work_date WHERE work_id = ? AND LENGTH(date) = 10
+`
+
+// A work's release day: its earliest dated release, ” when it has none to the day.
+func (q *Queries) WorkReleaseDay(ctx context.Context, workID int64) (string, error) {
+	row := q.db.QueryRowContext(ctx, workReleaseDay, workID)
+	var day string
+	err := row.Scan(&day)
+	return day, err
 }

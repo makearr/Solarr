@@ -1,11 +1,13 @@
 package library_test
 
 import (
+	"context"
 	"slices"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -227,5 +229,40 @@ func TestStampGrace_ALongerWaitKeepsAnEpisodeUnowedLonger(t *testing.T) {
 	}
 	if got := owed(5 * time.Hour); got != 1 {
 		t.Errorf("five hours after: owed %d, want 1", got)
+	}
+}
+
+// An album's tracks carry no time, so its release day says when it comes out; the re-count stamps an album that
+// lacks it and takes it away once the day has come.
+func TestRecountComingOut_AnAlbumNotOutYetCarriesItsReleaseDay(t *testing.T) {
+	fake := clock.NewFake(time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC))
+	opened, queries := newLibraryAt(t, fake)
+	work := createWork(t, opened, "music", "Henry's Dream")
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.SetWorkDate(ctx, librarydb.SetWorkDateParams{
+			WorkID: work.ID, Kind: library.WorkDateStreet, Region: "", Date: "2026-03-20", Source: "test",
+		})
+	})
+	item := createDesired(t, opened, work.ID, "SET", 12)
+	desired := library.NewDesired(opened)
+	recount := func() librarydb.DesiredItem {
+		t.Helper()
+		if _, err := desired.RecountComingOut(t.Context(), library.DefaultAvailabilityGrace.Longest()); err != nil {
+			t.Fatal(err)
+		}
+		got, err := queries.GetDesiredItem(t.Context(), item.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return got
+	}
+
+	day := time.Date(2026, 3, 20, 0, 0, 0, 0, time.UTC).Unix()
+	if got := recount(); got.AvailableFrom.Int64 != day || got.AvailableBasis.String != "release" {
+		t.Fatalf("before release: from %+v basis %+v; want %d by release", got.AvailableFrom, got.AvailableBasis, day)
+	}
+	fake.Set(time.Date(2026, 3, 21, 0, 0, 0, 0, time.UTC))
+	if got := recount(); got.AvailableFrom.Valid || got.AvailableBasis.Valid {
+		t.Errorf("after release: from %+v basis %+v; want neither", got.AvailableFrom, got.AvailableBasis)
 	}
 }

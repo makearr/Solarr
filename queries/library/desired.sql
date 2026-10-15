@@ -485,3 +485,18 @@ WHERE di.category_id = sqlc.arg(category_id) AND p.root_folder_id = sqlc.arg(roo
     WHERE other.desired_item_id = di.id AND other.media_ref = dif.media_ref AND held.missing_since IS NULL)
 ORDER BY wp.id
 LIMIT sqlc.arg(page_size);
+
+-- A work's release day: its earliest dated release, '' when it has none to the day.
+-- name: WorkReleaseDay :one
+SELECT CAST(COALESCE(MIN(date), '') AS TEXT) AS day FROM work_date WHERE work_id = ? AND LENGTH(date) = 10;
+
+-- The SET items of works without timed parts whose release-day stamp is missing or has passed, for a re-count.
+-- name: ListItemsAwaitingRelease :many
+SELECT d.id, d.work_id FROM desired_item d
+WHERE d.satisfaction_kind = 'SET' AND d.id > sqlc.arg(after_id)
+  AND ((d.available_from IS NULL
+        AND EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = d.work_id AND LENGTH(wd.date) = 10 AND wd.date > sqlc.arg(today)))
+    OR (d.available_basis = 'release' AND d.available_from <= sqlc.arg(now)))
+  AND NOT EXISTS (SELECT 1 FROM work_part p WHERE p.work_id = d.work_id AND (p.available_at IS NOT NULL OR COALESCE(p.date, '') <> ''))
+ORDER BY d.id
+LIMIT sqlc.arg(page_size);
