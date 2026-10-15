@@ -281,6 +281,66 @@ func (q *Queries) ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersF
 	return items, nil
 }
 
+const listPartPaths = `-- name: ListPartPaths :many
+SELECT wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title, CAST(COALESCE(wp.date, '') AS TEXT) AS date,
+       CAST(COALESCE(wp.runtime_ms, 0) AS INTEGER) AS runtime_ms, lp.root_folder_id, lp.rel_path,
+       CAST(COALESCE((SELECT x.external_id FROM work_part_external_id x WHERE x.part_id = wp.id AND x.provider = ?1
+                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id
+FROM work_part wp
+JOIN desired_item d ON d.work_id = wp.work_id
+JOIN desired_item_file f ON f.desired_item_id = d.id AND f.media_ref = wp.media_ref AND f.role = 'primary'
+JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
+WHERE wp.work_id = ?2
+ORDER BY wp.sort_key, lp.id
+`
+
+type ListPartPathsParams struct {
+	Provider string
+	WorkID   int64
+}
+
+type ListPartPathsRow struct {
+	MediaRef     string
+	Title        string
+	Date         string
+	RuntimeMs    int64
+	RootFolderID int64
+	RelPath      string
+	ExternalID   string
+}
+
+// The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
+func (q *Queries) ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([]ListPartPathsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPartPaths, arg.Provider, arg.WorkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPartPathsRow{}
+	for rows.Next() {
+		var i ListPartPathsRow
+		if err := rows.Scan(
+			&i.MediaRef,
+			&i.Title,
+			&i.Date,
+			&i.RuntimeMs,
+			&i.RootFolderID,
+			&i.RelPath,
+			&i.ExternalID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSeriesTitles = `-- name: ListSeriesTitles :many
 SELECT w.id AS work_id, w.canonical_title AS title, w.year AS year
 FROM work w
@@ -346,6 +406,44 @@ func (q *Queries) ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWor
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorksOnRoot = `-- name: ListWorksOnRoot :many
+SELECT DISTINCT wf.work_id FROM work_file wf
+JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL
+WHERE lp.root_folder_id = ?1 AND wf.work_id > ?2
+ORDER BY wf.work_id
+LIMIT ?3
+`
+
+type ListWorksOnRootParams struct {
+	RootFolderID int64
+	AfterID      int64
+	PageSize     int64
+}
+
+// The works with a file on a root, a page at a time.
+func (q *Queries) ListWorksOnRoot(ctx context.Context, arg ListWorksOnRootParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksOnRoot, arg.RootFolderID, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var work_id int64
+		if err := rows.Scan(&work_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

@@ -88,6 +88,7 @@ type CategoryFileManagement struct {
 	NavidromeProfile         int64
 	ImportExtraFiles         sql.NullInt64
 	ExtraFileExtensions      sql.NullString
+	MediaServerFiles         int64
 }
 
 type CategoryQualityProfile struct {

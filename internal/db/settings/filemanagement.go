@@ -62,6 +62,8 @@ type FileManagement struct {
 	Tagging Tagging
 	// ExtraFiles is what import brings along with the files it places.
 	ExtraFiles ExtraFiles
+	// MediaServerFiles writes what Jellyfin and Kodi read beside the library's files (nfo, artwork), never over one.
+	MediaServerFiles bool
 }
 
 // Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
@@ -98,7 +100,8 @@ func (f FileManagement) IsDefault() bool {
 		f.DeleteEmptyFolders == d.DeleteEmptyFolders && f.CreateEmptyArtistFolders == d.CreateEmptyArtistFolders &&
 		f.UnmonitorDeleted == d.UnmonitorDeleted && f.MergeArtistAliases == d.MergeArtistAliases &&
 		f.SetPermissions == d.SetPermissions && f.ChmodFolder == d.ChmodFolder && f.ChownGroup == d.ChownGroup &&
-		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil
+		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil &&
+		f.MediaServerFiles == d.MediaServerFiles
 }
 
 // FolderMode is ChmodFolder as a mode; FileMode drops the execute bits, as Sonarr does.
@@ -183,6 +186,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		NavidromeProfile:   boolToInt(f.Tagging.Navidrome),
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
+		MediaServerFiles: boolToInt(f.MediaServerFiles),
 	})
 }
 
@@ -210,7 +214,8 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
 				Navidrome: row.NavidromeProfile != 0,
 			},
-			ExtraFiles: decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
+			ExtraFiles:       decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
+			MediaServerFiles: row.MediaServerFiles != 0,
 		}
 	}
 	return categories

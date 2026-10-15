@@ -6232,6 +6232,8 @@ export interface components {
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
+            /** @description Write what Jellyfin and Kodi read beside the library's files: nfo files with the provider ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root. Omitted on a save keeps what is stored. */
+            media_server_files?: boolean;
             /** @description Sonarr's and Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks or episodes they are named after. Each library starts with its media type's choice (TV on, for subtitles). Omitted on a save keeps what is stored. */
             import_extra_files?: boolean;
             /** @description Extensions without the dot, such as srt. A file named like a track follows the track's new name; any other keeps its own name in the album folder. In a TV library only a file named after an episode comes along, keeping what follows the name (".en.srt"). Omitted on a save keeps what is stored. */

@@ -229,6 +229,7 @@ type FileManagementEntry struct {
 	// ImportExtraFiles and ExtraFileExtensions are absent while the library takes its media type's own.
 	ImportExtraFiles    *bool    `yaml:"import_extra_files,omitempty"`
 	ExtraFileExtensions []string `yaml:"extra_file_extensions,omitempty"`
+	MediaServerFiles    bool     `yaml:"media_server_files,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
@@ -242,7 +243,8 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 			WriteIDs: e.WriteIDsToTags == nil || *e.WriteIDsToTags, ReplaceIDs: e.ReplaceIDsInTags,
 			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile,
 		},
-		ExtraFiles: ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
+		ExtraFiles:       ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
+		MediaServerFiles: e.MediaServerFiles,
 	}
 }
 
@@ -257,6 +259,7 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
 		EmbedCoverInTags: f.Tagging.EmbedCover, NavidromeProfile: f.Tagging.Navidrome,
 		ImportExtraFiles: f.ExtraFiles.Import, ExtraFileExtensions: f.ExtraFiles.Extensions,
+		MediaServerFiles: f.MediaServerFiles,
 	}
 }
 

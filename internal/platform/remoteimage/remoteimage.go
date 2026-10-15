@@ -108,6 +108,15 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 	return key, nil
 }
 
+// Original answers the picture at the address as the provider serves it, for a file a media server reads; nothing is
+// cached, and only the providers' image hosts are asked.
+func (c *Cache) Original(ctx context.Context, address string) ([]byte, error) {
+	if !c.allowed(address) {
+		return nil, ErrNotAllowed
+	}
+	return c.fetch(ctx, address)
+}
+
 func (c *Cache) path(key string, size artwork.Size) string {
 	name := map[artwork.Size]string{artwork.Thumb: "thumb", artwork.Small: "small", artwork.Full: "full"}[size]
 	return filepath.Join(c.Dir, key+"-"+name+".webp")

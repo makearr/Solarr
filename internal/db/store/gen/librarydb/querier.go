@@ -597,6 +597,8 @@ type Querier interface {
 	// media_ref present_count is derived from, so the album detail and the
 	// artist overview cannot disagree about what is there; a file a sweep found gone is not.
 	ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error)
+	// The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
+	ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([]ListPartPathsRow, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// ADR-51's drain: every real file to evacuate, with its size for
 	// mover.PlanDrain's own affinity-group byte totals. Primary paths only,
@@ -748,6 +750,8 @@ type Querier interface {
 	// carrying several after a merge. 'musicbrainz:release-group' must match
 	// internal/media/music.ProviderReleaseGroup.
 	ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error)
+	// The works with a file on a root, a page at a time.
+	ListWorksOnRoot(ctx context.Context, arg ListWorksOnRootParams) ([]int64, error)
 	// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
 	// that role from the asking provider. The edition label is the default (else first) edition's provider id.
 	ListWorksToAskOrganisation(ctx context.Context, arg ListWorksToAskOrganisationParams) ([]ListWorksToAskOrganisationRow, error)

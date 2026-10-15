@@ -9189,6 +9189,12 @@ components:
                  delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
                  merge_artist_aliases, set_permissions, chmod_folder, chown_group]
       properties:
+        media_server_files:
+          type: boolean
+          description: >-
+            Write what Jellyfin and Kodi read beside the library's files: nfo files with the provider ids, and the
+            series' poster, fanart, banner and logo. Only where none exists, never on a read-only root. Omitted on a
+            save keeps what is stored.
         import_extra_files:
           type: boolean
           description: >-

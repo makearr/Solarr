@@ -152,3 +152,24 @@ WHERE id IN (
           WHEN 'high' THEN CAST(sqlc.arg(high) AS INTEGER) WHEN 'medium' THEN CAST(sqlc.arg(medium) AS INTEGER) ELSE CAST(sqlc.arg(low) AS INTEGER) END
   LIMIT sqlc.arg(limit)
 );
+
+-- The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
+-- name: ListPartPaths :many
+SELECT wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title, CAST(COALESCE(wp.date, '') AS TEXT) AS date,
+       CAST(COALESCE(wp.runtime_ms, 0) AS INTEGER) AS runtime_ms, lp.root_folder_id, lp.rel_path,
+       CAST(COALESCE((SELECT x.external_id FROM work_part_external_id x WHERE x.part_id = wp.id AND x.provider = sqlc.arg(provider)
+                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id
+FROM work_part wp
+JOIN desired_item d ON d.work_id = wp.work_id
+JOIN desired_item_file f ON f.desired_item_id = d.id AND f.media_ref = wp.media_ref AND f.role = 'primary'
+JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
+WHERE wp.work_id = sqlc.arg(work_id)
+ORDER BY wp.sort_key, lp.id;
+
+-- The works with a file on a root, a page at a time.
+-- name: ListWorksOnRoot :many
+SELECT DISTINCT wf.work_id FROM work_file wf
+JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL
+WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND wf.work_id > sqlc.arg(after_id)
+ORDER BY wf.work_id
+LIMIT sqlc.arg(page_size);

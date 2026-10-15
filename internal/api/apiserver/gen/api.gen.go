@@ -1821,6 +1821,9 @@ type FileManagement struct {
 	// ImportExtraFiles Sonarr's and Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks or episodes they are named after. Each library starts with its media type's choice (TV on, for subtitles). Omitted on a save keeps what is stored.
 	ImportExtraFiles *bool `json:"import_extra_files,omitempty"`
 
+	// MediaServerFiles Write what Jellyfin and Kodi read beside the library's files: nfo files with the provider ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root. Omitted on a save keeps what is stored.
+	MediaServerFiles *bool `json:"media_server_files,omitempty"`
+
 	// MergeArtistAliases An artist stored under several names (folders, aliases) is merged into one after each disk scan: the identified artist wins, else the name with the most albums.
 	MergeArtistAliases   bool                             `json:"merge_artist_aliases"`
 	PropersRepacks       FileManagementPropersRepacks     `json:"propers_repacks"`

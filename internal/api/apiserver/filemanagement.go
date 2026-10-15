@@ -64,6 +64,10 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 	if body.ExtraFileExtensions != nil {
 		wanted.ExtraFiles.Extensions = *body.ExtraFileExtensions
 	}
+	wanted.MediaServerFiles = category.FileManagement.MediaServerFiles
+	if body.MediaServerFiles != nil {
+		wanted.MediaServerFiles = *body.MediaServerFiles
+	}
 	if err := s.auth.Settings.SetCategoryFileManagement(r.Context(), id, wanted); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -74,9 +78,17 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 		writeError(w, s.logger, err)
 		return
 	}
+	if wanted.MediaServerFiles && !category.FileManagement.MediaServerFiles && s.scheduler != nil {
+		if err := s.scheduler.RunNow(r.Context(), mediaServerFilesTaskKey, false); err != nil {
+			s.logger.InfoContext(r.Context(), "jellyfin/kodi files after switching them on not started", "error", err)
+		}
+	}
 	category.FileManagement = wanted
 	writeJSON(w, s.logger, http.StatusOK, s.fileManagementView(category))
 }
+
+// mediaServerFilesTaskKey is the registered pass writing Jellyfin and Kodi files.
+const mediaServerFilesTaskKey = "media_server_files"
 
 func (s *Server) fileManagementView(category settings.Category) gen.FileManagement {
 	f := category.FileManagement
@@ -89,7 +101,7 @@ func (s *Server) fileManagementView(category settings.Category) gen.FileManageme
 		extensions = []string{}
 	}
 	return gen.FileManagement{
-		ImportExtraFiles: &extrasOn, ExtraFileExtensions: &extensions,
+		ImportExtraFiles: &extrasOn, ExtraFileExtensions: &extensions, MediaServerFiles: &f.MediaServerFiles,
 		PropersRepacks:     gen.FileManagementPropersRepacks(f.PropersRepacks),
 		RescanAfterRefresh: gen.FileManagementRescanAfterRefresh(f.RescanAfterRefresh),
 		ChangeFileDate:     gen.FileManagementChangeFileDate(f.ChangeFileDate), RecycleRetentionDays: f.RecycleRetentionDays,

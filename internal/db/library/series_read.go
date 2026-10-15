@@ -406,3 +406,36 @@ func (r SeriesReader) WantedSeasonItems(ctx context.Context, workIDs []int64) ([
 func (r SeriesReader) ManualFields(ctx context.Context, workID int64) (map[string]string, error) {
 	return Works(r).ManualFields(ctx, workID)
 }
+
+// PartPath is one file of a part: where it lies, and the part's title, date, runtime and one provider's id.
+type PartPath struct {
+	MediaRef, Title, Date string
+	RuntimeMs             int64
+	RootFolderID          int64
+	RelPath               string
+	ExternalID            string
+}
+
+// PartPaths answers the files of a work's parts still on disk, with provider's id of each part.
+func (r SeriesReader) PartPaths(ctx context.Context, workID int64, provider string) ([]PartPath, error) {
+	rows, err := librarydb.New(r.store.Read()).ListPartPaths(ctx, librarydb.ListPartPathsParams{Provider: provider, WorkID: workID})
+	if err != nil {
+		return nil, fmt.Errorf("library: part paths of work %d: %w", workID, err)
+	}
+	paths := make([]PartPath, len(rows))
+	for i, row := range rows {
+		paths[i] = PartPath(row)
+	}
+	return paths, nil
+}
+
+// WorksOnRoot answers up to pageSize works after afterID with a file on the root.
+func (r SeriesReader) WorksOnRoot(ctx context.Context, rootFolderID, afterID, pageSize int64) ([]int64, error) {
+	works, err := librarydb.New(r.store.Read()).ListWorksOnRoot(ctx, librarydb.ListWorksOnRootParams{
+		RootFolderID: rootFolderID, AfterID: afterID, PageSize: pageSize,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: works on root %d: %w", rootFolderID, err)
+	}
+	return works, nil
+}

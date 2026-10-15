@@ -33,6 +33,8 @@ type Module struct {
 	CutoffJob
 	// Retry identifies again the files that waited for review; nil leaves the job unregistered.
 	Retry *RetryJob
+	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.
+	ServerFiles *ServerFilesJob
 	// Following is TV's part of a follow.
 	Following
 	// Profiling is TV's part of a person's page.
@@ -109,10 +111,15 @@ func (Module) ReleaseLabel(releaseTitle, itemRef string, now time.Time) string {
 
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
-	if m.Retry == nil {
-		return nil
+	if m.Retry != nil {
+		if err := register(RetryDefinition, m.Retry); err != nil {
+			return err
+		}
 	}
-	return register(RetryDefinition, m.Retry)
+	if m.ServerFiles != nil {
+		return register(ServerFilesDefinition, m.ServerFiles)
+	}
+	return nil
 }
 
 // Descriptor implements media.Module.

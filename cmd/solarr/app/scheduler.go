@@ -26,6 +26,7 @@ const (
 	categoryCountsScheduleCron     = "30 5 * * *"    // daily, after database maintenance; only corrects drift
 	freshCountsScheduleCron        = "40 * * * *"    // every hour
 	comingOutScheduleCron          = "*/15 * * * *"  // every 15 minutes
+	serverFilesScheduleCron        = "30 4 * * *"    // daily at 04:30
 	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
 	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
 	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
@@ -111,6 +112,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "coming_out", Name: "Count what has come out", DefaultCadence: comingOutScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueComingOut,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "media_server_files", Name: "Write Jellyfin and Kodi files", DefaultCadence: serverFilesScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOff,
+		Enqueue: p.enqueueServerFiles,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "probe", Name: "Attribute probe", DefaultCadence: probeScheduleCron,

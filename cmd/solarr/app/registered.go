@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -183,7 +184,18 @@ func (p *process) tvModule() tv.Module {
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
-		Retry:     retry,
+		Retry: retry,
+		ServerFiles: &tv.ServerFilesJob{
+			Writer: tv.ServerFiles{
+				FS: p.fsys, Reader: library.NewSeriesReader(p.library), Roots: adapters.Roots{Cache: p.cache},
+				Picture: p.remoteImages().Original, Clock: clock.NewSystem(),
+			},
+			Libraries: func() []settings.Category { return p.cache.Snapshot().Categories() },
+			RootsOf: func(categoryID int64) []settings.RootFolder {
+				return p.cache.Snapshot().RootFoldersForCategory(categoryID)
+			},
+			Logger: p.logger,
+		},
 		Searching: tv.Searching{Acquire: p.tvGrab(), Conns: p.tvIndexerConns, Clock: clock.NewSystem()},
 		Following: tv.Following{
 			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,
@@ -267,4 +279,9 @@ func (p *process) musicFiles() adapters.MusicFiles {
 		Unidentified: library.NewUnidentified(p.library), Identity: library.NewIdentity(p.library),
 		Provider: p.musicBrainzProvider(), Clock: clock.NewSystem(),
 	}
+}
+
+// enqueueServerFiles submits the pass writing Jellyfin and Kodi files.
+func (p *process) enqueueServerFiles(ctx context.Context) (jobs.EnqueueResult, error) {
+	return tv.EnqueueServerFiles(ctx, p.queue)
 }
