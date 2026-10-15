@@ -94,6 +94,7 @@ function ConnectArr({
   const [mediaType, setMediaType] = useState<MediaType>(LIBRARY_SUGGESTION.lidarr.mediaType);
   const mediaTypes = useMediaTypes();
   const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
+  const [connectKind, setConnectKind] = useState("");
   const [importRootFolders, setImportRootFolders] = useState(true);
   const [importContent, setImportContent] = useState(false);
   const [outcome, setOutcome] = useState<ConnectOutcome | null>(null);
@@ -108,7 +109,7 @@ function ConnectArr({
   const connect = useMutation({
     mutationFn: async (): Promise<ConnectOutcome> => {
       const { data: category, error: categoryError } = await api.POST("/categories", {
-        body: { name: libraryName, media_type: mediaType },
+        body: { name: libraryName, media_type: mediaType, kind: connectKind || undefined },
       });
       if (categoryError) throw categoryError;
 
@@ -243,6 +244,7 @@ function ConnectArr({
               onChange={(event) => {
                 setMediaTypeTouched(true);
                 setMediaType(event.target.value as MediaType);
+                setConnectKind("");
               }}
             >
               {mediaTypes.map((type) => (
@@ -253,6 +255,7 @@ function ConnectArr({
             </select>
           </Field>
         </div>
+        <KindSelect mediaType={mediaType} value={connectKind} onChange={setConnectKind} />
 
         <label className="flex items-center gap-2 text-sm">
           <input
