@@ -11,7 +11,7 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { PosterGrid } from "@/list/PosterGrid";
 import { useRouteView } from "@/list/useRouteView";
-import { Toolbar, ToolbarAdd, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
+import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
 import { LEVEL_FILTER_FIELDS } from "./filterFields";
@@ -26,7 +26,7 @@ import { formatBytes } from "./Queue";
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
 const ROW_HEIGHT = 44;
-const FILTER_KEYS: readonly string[] = ["monitored", "where"];
+const FILTER_KEYS: readonly string[] = ["monitored", "where", "q"];
 
 
 // The poster wall's own geometry: a tile is at least this wide, gaps and page
@@ -166,7 +166,10 @@ export function LibraryLevelList() {
         const { data, error } = await api.GET("/libraries/{id}/{level}", {
           params: {
             path: { id: Number(categoryId), level: level ?? "" },
-            query: { cursor, limit: 100, sort, dir, monitored: monitored ? monitored === "true" : undefined, where: query.filters.where || undefined },
+            query: {
+              cursor, limit: 100, sort, dir, monitored: monitored ? monitored === "true" : undefined,
+              where: query.filters.where || undefined, q: query.filters.q || undefined,
+            },
           },
           signal,
         });
@@ -186,6 +189,14 @@ export function LibraryLevelList() {
             <option value="true">Monitored</option>
             <option value="false">Unmonitored</option>
           </ToolbarSelect>
+        )}
+        {level === "tracks" && (
+          <ToolbarSearch
+            value={list.query.filters.q ?? ""}
+            onChange={(value) => list.filterBy("q", value)}
+            placeholder="Track, album or artist…"
+            label="Search tracks"
+          />
         )}
         {level && LEVEL_FILTER_FIELDS[level] && (
           <CustomFilterMenu

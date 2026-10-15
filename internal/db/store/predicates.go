@@ -46,3 +46,6 @@ func (p Predicates) Args(trailing ...any) []any {
 
 // Len reports how many filters were added.
 func (p Predicates) Len() int { return len(p.fragments) }
+
+// Joined renders the fragments joined with AND and no keyword, for a predicate nested inside another query.
+func (p Predicates) Joined() string { return strings.Join(p.fragments, " AND ") }

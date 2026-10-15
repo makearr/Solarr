@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // setUpAlbumWithParts is a small helper: resolves a work with a root folder
@@ -176,5 +177,49 @@ func TestTrackParts_DescendingReversesTheAlbumsNotTheirTracks(t *testing.T) {
 	}
 	if want := []string{"B1", "B2", "A1", "A2"}; !slices.Equal(got, want) {
 		t.Errorf("tracks = %q, want %q", got, want)
+	}
+}
+
+// A search or a filter narrows both the albums a page holds and the tracks shown of each.
+func TestTrackParts_SearchAndFilterNarrowTheTracks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	identity := library.NewIdentity(opened)
+	people := library.NewPeople(opened)
+	tracks := library.NewTrackParts(opened)
+	setUpAlbumWithParts(t, identity, people, "b-album", "B Album", "b album", "artist-b", "Bravo", 1, "Night Drive", "Morning")
+	setUpAlbumWithParts(t, identity, people, "a-album", "A Album", "a album", "artist-a", "Aleph", 1, "A1", "Late Night", "A3")
+
+	titles := func(filter library.TrackFilter) []string {
+		t.Helper()
+		filter.RootFolderIDs = []int64{1}
+		rows, _, _, err := tracks.List(t.Context(), filter, library.TrackAlbumCursor{}, 10)
+		if err != nil {
+			t.Fatalf("List: %v", err)
+		}
+		var got []string
+		for _, row := range rows {
+			got = append(got, row.Title.String)
+		}
+		return got
+	}
+	if got := titles(library.TrackFilter{Search: "NIGHT"}); !slices.Equal(got, []string{"Late Night", "Night Drive"}) {
+		t.Errorf("search night = %v, want the two tracks naming it", got)
+	}
+	if got := titles(library.TrackFilter{Search: "bravo"}); !slices.Equal(got, []string{"Night Drive", "Morning"}) {
+		t.Errorf("search bravo = %v, want the artist's tracks", got)
+	}
+	where, err := listfilter.Parse(`[{"field":"album","op":"is","value":"a album"},{"field":"title","op":"not_contains","value":"night"}]`, library.TrackFields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(library.TrackFilter{Where: where}); !slices.Equal(got, []string{"A1", "A3"}) {
+		t.Errorf("album is A Album and title lacks night = %v, want A1 and A3", got)
+	}
+	noFile, err := listfilter.Parse(`[{"field":"has_file","op":"is","value":"true"}]`, library.TrackFields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := titles(library.TrackFilter{Where: noFile}); len(got) != 0 {
+		t.Errorf("has a file = %v, want none (no files here)", got)
 	}
 }

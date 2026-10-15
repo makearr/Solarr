@@ -214,6 +214,10 @@ type TracksFilter struct {
 	RootFolderIDs []int64
 	CategoryIDs   []int64
 	Descending    bool
+	// Search keeps tracks whose title, album or artist contains it.
+	Search string
+	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
+	Where string
 }
 
 // TracksCursor is a position among the albums backing a Tracks page --
@@ -422,7 +426,10 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 	case model.LevelEntityWork:
 		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction, derefOr(params.Where, ""))
 	case model.LevelEntityWorkPart:
-		s.listLibraryLevelTracks(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending)
+		s.listLibraryLevelTracks(w, r, TracksFilter{
+			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: direction == SortDescending,
+			Search: derefOr(params.Q, ""), Where: derefOr(params.Where, ""),
+		}, cursor, limit)
 	case model.LevelEntityPerson:
 		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending, params.Monitored, derefOr(params.Where, ""))
 	default:
@@ -500,17 +507,13 @@ func (s *Server) listLibraryLevelWorks(
 
 // listLibraryLevelTracks serves a work_part-entity level (Tracks) over
 // LibraryTracksReader.
-func (s *Server) listLibraryLevelTracks(
-	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
-	descending bool,
-) {
+func (s *Server) listLibraryLevelTracks(w http.ResponseWriter, r *http.Request, filter TracksFilter, cursor levelCursor, limit int) {
 	if s.libraryTracks == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "the library is not available")
 		return
 	}
-	rows, next, hasMore, err := s.libraryTracks.ListLibraryTracks(r.Context(),
-		TracksFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending},
+	rows, next, hasMore, err := s.libraryTracks.ListLibraryTracks(r.Context(), filter,
 		TracksCursor{ArtistSortName: cursor.field(0), AlbumSortTitle: cursor.field(1), AlbumID: cursor.id}, limit)
 	if err != nil {
 		writeError(w, s.logger, err)

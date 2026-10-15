@@ -56,6 +56,9 @@ fixed.
 
 **Library → Music → Add new** (or Discover): search for an album or an artist.
 
+**Library → Music → Tracks** lists every track, album by album; its search box finds a track by its title, album or
+artist, and **Filter** narrows by title, album, artist, year, monitored or whether it has a file.
+
 - **Monitor what I add**: whether Solarr should get it. Off keeps it in the library without
   looking for it.
 - **Start search for missing albums** (on by default, remembered for you): an album is searched at

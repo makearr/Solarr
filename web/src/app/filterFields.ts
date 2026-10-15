@@ -23,4 +23,12 @@ export const LEVEL_FILTER_FIELDS: Record<string, readonly FilterField[]> = {
     { key: "verified", label: "Identified", kind: "bool" },
     { key: "size_mb", label: "Size on disk (MB)", kind: "number" },
   ],
+  tracks: [
+    { key: "title", label: "Title", kind: "text" },
+    { key: "album", label: "Album", kind: "text" },
+    { key: "artist", label: "Artist", kind: "text" },
+    { key: "year", label: "Year", kind: "number" },
+    { key: "monitored", label: "Monitored", kind: "bool" },
+    { key: "has_file", label: "Has a file", kind: "bool" },
+  ],
 };

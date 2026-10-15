@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/platform/listfilter"
 )
 
 // TrackFilter narrows the Tracks navigation level (ADR-54) the same way
@@ -17,6 +19,62 @@ type TrackFilter struct {
 	CategoryIDs   []int64
 	// Descending orders the albums Z to A; tracks stay in their album's order.
 	Descending bool
+	// Search keeps the tracks whose title, album or artist contains it, any case; "" keeps all.
+	Search string
+	// Where is a custom filter over TrackFields, all of which must hold.
+	Where []listfilter.Condition
+}
+
+// TrackFields are the fields a custom filter of the Tracks list may name.
+var TrackFields = map[string]listfilter.Field{
+	"title":     {Kind: listfilter.Text},
+	"album":     {Kind: listfilter.Text},
+	"artist":    {Kind: listfilter.Text},
+	"year":      {Kind: listfilter.Number},
+	"monitored": {Kind: listfilter.Bool},
+	"has_file":  {Kind: listfilter.Bool},
+}
+
+const (
+	trackArtistName = "COALESCE((SELECT p.name FROM person p WHERE p.id = work.lead_person_id), '')"
+	trackHasFile    = "EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id" +
+		" JOIN library_path lp ON lp.media_object_id = f.media_object_id" +
+		" WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary' AND lp.missing_since IS NULL)"
+	trackPartColumns = "wp.id, wp.work_id, wp.media_ref, wp.sort_key, wp.title, wp.runtime_ms, wp.date, wp.monitored," +
+		" wp.available_at, wp.available_confidence, wp.available_basis, wp.available_grace"
+)
+
+// partPredicates are the filter's conditions on a track itself, over work_part wp joined to its work; empty when
+// none narrows the tracks.
+func (f TrackFilter) partPredicates() store.Predicates {
+	var predicates store.Predicates
+	if search := strings.TrimSpace(f.Search); search != "" {
+		like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(search)) + "%"
+		predicates.Add("(LOWER(COALESCE(wp.title, '')) LIKE ? ESCAPE '\\' OR LOWER(work.canonical_title) LIKE ? ESCAPE '\\'"+
+			" OR LOWER("+trackArtistName+") LIKE ? ESCAPE '\\')", like, like, like)
+	}
+	for _, condition := range f.Where {
+		var fragment string
+		var arguments []any
+		switch condition.Field {
+		case "title":
+			fragment, arguments = condition.SQL(listfilter.Text, "COALESCE(wp.title, '')")
+		case "album":
+			fragment, arguments = condition.SQL(listfilter.Text, "work.canonical_title")
+		case "artist":
+			fragment, arguments = condition.SQL(listfilter.Text, trackArtistName)
+		case "year":
+			fragment, arguments = condition.SQL(listfilter.Number, "COALESCE(work.year, 0)")
+		case "monitored":
+			fragment, arguments = condition.SQL(listfilter.Bool, "wp.monitored = 1")
+		case "has_file":
+			fragment, arguments = condition.SQL(listfilter.Bool, trackHasFile)
+		default:
+			continue
+		}
+		predicates.Add(fragment, arguments...)
+	}
+	return predicates
 }
 
 // TrackAlbumCursor is a position among the albums backing a Tracks page (see
@@ -64,6 +122,9 @@ func NewTrackParts(opened *store.Store) TrackParts { return TrackParts{store: op
 func composeAlbumPage(filter TrackFilter, after TrackAlbumCursor, albumPageSize int) (string, []any) {
 	var predicates store.Predicates
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
+	if parts := filter.partPredicates(); parts.Len() > 0 {
+		predicates.Add("EXISTS (SELECT 1 FROM work_part wp WHERE wp.work_id = work.id AND "+parts.Joined()+")", parts.Args()...)
+	}
 
 	artistExpr := leadSortExpression
 	operator, direction := ">", ""
@@ -120,8 +181,14 @@ func (t TrackParts) List(
 	}
 
 	queries := librarydb.New(t.store.Read())
+	narrowed := filter.partPredicates()
 	for _, album := range albums {
-		parts, err := queries.ListWorkParts(ctx, album.id)
+		var parts []librarydb.WorkPart
+		if narrowed.Len() == 0 {
+			parts, err = queries.ListWorkParts(ctx, album.id)
+		} else {
+			parts, err = t.matchingParts(ctx, album.id, narrowed)
+		}
 		if err != nil {
 			return nil, TrackAlbumCursor{}, false, fmt.Errorf("library: list parts for work %d: %w", album.id, err)
 		}
@@ -133,6 +200,27 @@ func (t TrackParts) List(
 		}
 	}
 	return rows, nextCursor, hasMore, nil
+}
+
+// matchingParts answers an album's tracks that pass the filter, in the album's own order.
+func (t TrackParts) matchingParts(ctx context.Context, albumID int64, narrowed store.Predicates) ([]librarydb.WorkPart, error) {
+	query := "SELECT " + trackPartColumns + " FROM work_part wp JOIN work ON work.id = wp.work_id WHERE wp.work_id = ? AND " +
+		narrowed.Joined() + " ORDER BY wp.sort_key, wp.id"
+	rows, err := t.store.Read().QueryContext(ctx, query, append([]any{albumID}, narrowed.Args()...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var parts []librarydb.WorkPart
+	for rows.Next() {
+		var part librarydb.WorkPart
+		if err := rows.Scan(&part.ID, &part.WorkID, &part.MediaRef, &part.SortKey, &part.Title, &part.RuntimeMs, &part.Date,
+			&part.Monitored, &part.AvailableAt, &part.AvailableConfidence, &part.AvailableBasis, &part.AvailableGrace); err != nil {
+			return nil, err
+		}
+		parts = append(parts, part)
+	}
+	return parts, rows.Err()
 }
 
 // ExplainAlbumPage returns SQLite's plan for the album-page query List runs,

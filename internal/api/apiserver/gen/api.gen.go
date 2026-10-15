@@ -4534,8 +4534,11 @@ type ListLibraryLevelParams struct {
 	// Monitored At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
 	Monitored *bool `form:"monitored,omitempty" json:"monitored,omitempty"`
 
-	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country (text); albums_wanted, albums_complete (number); monitored (bool). Other levels ignore it.
+	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country (text); albums_wanted, albums_complete (number); monitored (bool). Tracks: title, album, artist (text); year (number); monitored, has_file (bool). Other levels ignore it.
 	Where *string `form:"where,omitempty" json:"where,omitempty"`
+
+	// Q Tracks only, for now -- the tracks whose title, album or artist contains it, any case.
+	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
 
 // ListLibraryLevelParamsSort defines parameters for ListLibraryLevel.
@@ -10894,6 +10897,14 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "where", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "q" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "q", Err: err})
 		return
 	}
 
