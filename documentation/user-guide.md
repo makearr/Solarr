@@ -114,6 +114,8 @@ ticked so a scan, a follow or an import list leaves it out (the Series index lis
 An episode counts as missing a while after it airs (2 hours after an exact time, 12 after a likely one, 36 after a date
 alone; **Settings → Metadata → Air times**, advanced), and a season nothing of which is out yet says **Not out yet** with
 its first date. If a series' air times are off because its network's time zone is wrong, set **Edit → Air time zone**.
+A series TheTVDB also lists in DVD, absolute or another order has **Numbering** on its page: pick the order, preview which
+episodes move, apply; the files follow their episodes and keep their names until you rename them.
 **Edit → Series type** shows what was detected (anime, daily or standard) and lets you change it; anime seasons are also searched
 by absolute episode number. Posters and photos are fetched once and served by Solarr itself.
 

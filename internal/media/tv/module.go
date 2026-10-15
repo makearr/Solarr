@@ -35,6 +35,8 @@ type Module struct {
 	Retry *RetryJob
 	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.
 	ServerFiles *ServerFilesJob
+	// Renumber numbers a series by another of TheTVDB's orderings; nil offers none.
+	Renumber media.Renumbering
 	// Following is TV's part of a follow.
 	Following
 	// Profiling is TV's part of a person's page.
@@ -94,6 +96,30 @@ func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
 		return false, media.ErrNotWired
 	}
 	return m.Refresh(ctx, workID)
+}
+
+// NumberingChoices implements media.Renumbering.
+func (m Module) NumberingChoices(ctx context.Context, workID int64) ([]media.Choice, string, error) {
+	if m.Renumber == nil {
+		return nil, "", media.ErrNotWired
+	}
+	return m.Renumber.NumberingChoices(ctx, workID)
+}
+
+// PlanNumbering implements media.Renumbering.
+func (m Module) PlanNumbering(ctx context.Context, workID int64, basis string) (media.NumberingPlan, error) {
+	if m.Renumber == nil {
+		return media.NumberingPlan{}, media.ErrNotWired
+	}
+	return m.Renumber.PlanNumbering(ctx, workID, basis)
+}
+
+// ApplyNumbering implements media.Renumbering.
+func (m Module) ApplyNumbering(ctx context.Context, workID int64, basis string) (media.NumberingPlan, error) {
+	if m.Renumber == nil {
+		return media.NumberingPlan{}, media.ErrNotWired
+	}
+	return m.Renumber.ApplyNumbering(ctx, workID, basis)
 }
 
 // HuntSearch implements media.Hunting.

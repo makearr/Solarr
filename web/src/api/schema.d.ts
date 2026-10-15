@@ -3574,6 +3574,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/numbering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The lists a work can be numbered by (a series by TheTVDB's DVD or absolute order) and the one it is. */
+        get: operations["getWorkNumbering"];
+        put?: never;
+        /**
+         * Number a work by another list, or preview it. Administrator only.
+         * @description Its parts move to their places in that list, keeping their files, history and ids, and the choice holds for every later refresh. A part the list has no place for whose place it gives to another is set aside, its files kept. Files keep their names until renamed (the work's Rename preview).
+         */
+        post: operations["setWorkNumbering"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/merge-suggestion": {
         parameters: {
             query?: never;
@@ -4627,6 +4650,20 @@ export interface components {
             items: components["schemas"]["Job"][];
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
+        };
+        NumberingMove: {
+            title: string;
+            /** @example S01E05 */
+            from: string;
+            /** @example S02E01 */
+            to?: string;
+            has_file: boolean;
+        };
+        NumberingPlan: {
+            moves: components["schemas"]["NumberingMove"][];
+            set_aside: components["schemas"]["NumberingMove"][];
+            unchanged: number;
+            new: number;
         };
         WorkMergeSuggestion: {
             /** Format: int64 */
@@ -13256,6 +13293,77 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWorkNumbering: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The choices. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        current: string;
+                        choices: {
+                            key: string;
+                            label: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description The work's type has no other numbering */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setWorkNumbering: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    basis: string;
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What moved, or would move. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NumberingPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];

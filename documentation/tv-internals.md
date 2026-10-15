@@ -180,3 +180,17 @@ quality profiles in order (one not found is skipped) and a language profile foun
 kind later applies nothing. TV gives anime its own meaning: `Service.Add` makes a series it creates in an anime library
 anime (a manual field) when the providers say standard, and every query of an anime-type series also asks Newznab
 5070 (`judge.Query.MoreCategories`), as Sonarr's anime categories do.
+
+## Numbering by another ordering (T4c)
+
+A series can be numbered by another of TheTVDB's orderings (DVD, absolute, alternate, regional, altdvd), as SickGear
+switches a show's list and Medusa offers DVD order: the series page's **Numbering** (administrators; shown only when
+TheTVDB lists another ordering) previews every episode that moves and applies it (`GET/POST /works/{id}/numbering`,
+the `media.Renumbering` capability). TheTVDB's episode ids are the same in every ordering, so each part is matched by its
+`tvdb:episode` id: it moves to its place in the new list keeping its id, files, credits and history
+(`library.Series.Renumber`, through temporary refs so two parts can trade places in one transaction). A part the list
+lacks whose place it gives to another is set aside under `unplaced:<id>`, its files kept, in no season. The choice is the
+manual field `numbering_basis` (`tvdb:dvd`, ...; empty is aired) and every later refresh numbers by it
+(`Service.keepOrdering`), moving parts again if TheTVDB's list itself shifted. Files keep their names until renamed
+(the series' Rename preview). Not built: numbering by another *source* (TMDB, TVmaze), whose episodes share no id
+with TheTVDB's.

@@ -146,6 +146,7 @@ func (p *process) tvModule() tv.Module {
 		Hunt:     p.tvHunt,
 		Adder:    p.seriesCatalog(),
 		Pictures: p.seriesCatalog(),
+		Renumber: p.seriesCatalog(),
 		Files:    p.unidentifiedTV(),
 		Passes: media.Passes{
 			WorksPass: func(ctx context.Context, _ bool) (bool, error) {

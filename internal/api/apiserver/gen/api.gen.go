@@ -2955,6 +2955,22 @@ type NetworkSettingsUpdate struct {
 	ProxyUrl          *string  `json:"proxy_url,omitempty"`
 }
 
+// NumberingMove defines model for NumberingMove.
+type NumberingMove struct {
+	From    string  `json:"from"`
+	HasFile bool    `json:"has_file"`
+	Title   string  `json:"title"`
+	To      *string `json:"to,omitempty"`
+}
+
+// NumberingPlan defines model for NumberingPlan.
+type NumberingPlan struct {
+	Moves     []NumberingMove `json:"moves"`
+	New       int             `json:"new"`
+	SetAside  []NumberingMove `json:"set_aside"`
+	Unchanged int             `json:"unchanged"`
+}
+
 // OrganisationDetail defines model for OrganisationDetail.
 type OrganisationDetail struct {
 	Country *string           `json:"country,omitempty"`
@@ -5033,6 +5049,12 @@ type SetWorkMonitoredJSONBody struct {
 	Specials *bool `json:"specials,omitempty"`
 }
 
+// SetWorkNumberingJSONBody defines parameters for SetWorkNumbering.
+type SetWorkNumberingJSONBody struct {
+	Basis   string `json:"basis"`
+	Preview *bool  `json:"preview,omitempty"`
+}
+
 // ListWorkPartsParams defines parameters for ListWorkParts.
 type ListWorkPartsParams struct {
 	// Group A group's ref (GET /works/{id} lists them); absent is every part.
@@ -5327,6 +5349,9 @@ type MergeWorkJSONRequestBody MergeWorkJSONBody
 
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
+
+// SetWorkNumberingJSONRequestBody defines body for SetWorkNumbering for application/json ContentType.
+type SetWorkNumberingJSONRequestBody SetWorkNumberingJSONBody
 
 // RemovePartJSONRequestBody defines body for RemovePart for application/json ContentType.
 type RemovePartJSONRequestBody RemovePartJSONBody
@@ -6044,6 +6069,12 @@ type ServerInterface interface {
 	// Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
+	// The lists a work can be numbered by (a series by TheTVDB's DVD or absolute order) and the one it is.
+	// (GET /works/{id}/numbering)
+	GetWorkNumbering(w http.ResponseWriter, r *http.Request, id int64)
+	// Number a work by another list, or preview it. Administrator only.
+	// (POST /works/{id}/numbering)
+	SetWorkNumbering(w http.ResponseWriter, r *http.Request, id int64)
 	// One page of a work's parts (tracks, episodes), of one group or of all, in order.
 	// (GET /works/{id}/parts)
 	ListWorkParts(w http.ResponseWriter, r *http.Request, id int64, params ListWorkPartsParams)
@@ -7469,6 +7500,18 @@ func (_ Unimplemented) GetWorkMergeSuggestion(w http.ResponseWriter, r *http.Req
 // Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 // (POST /works/{id}/monitor)
 func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The lists a work can be numbered by (a series by TheTVDB's DVD or absolute order) and the one it is.
+// (GET /works/{id}/numbering)
+func (_ Unimplemented) GetWorkNumbering(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Number a work by another list, or preview it. Administrator only.
+// (POST /works/{id}/numbering)
+func (_ Unimplemented) SetWorkNumbering(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15114,6 +15157,72 @@ func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkNumbering operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkNumbering(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkNumbering(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWorkNumbering operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkNumbering(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkNumbering(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListWorkParts operation middleware
 func (siw *ServerInterfaceWrapper) ListWorkParts(w http.ResponseWriter, r *http.Request) {
 
@@ -16190,6 +16299,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/numbering", wrapper.GetWorkNumbering)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/numbering", wrapper.SetWorkNumbering)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/parts", wrapper.ListWorkParts)

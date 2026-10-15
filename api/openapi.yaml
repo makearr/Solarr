@@ -5758,6 +5758,66 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/numbering:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkNumbering
+      tags: [library]
+      summary: The lists a work can be numbered by (a series by TheTVDB's DVD or absolute order) and the one it is.
+      responses:
+        "200":
+          description: The choices.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [choices, current]
+                properties:
+                  current: { type: string }
+                  choices:
+                    type: array
+                    items:
+                      type: object
+                      required: [key, label]
+                      properties:
+                        key: { type: string }
+                        label: { type: string }
+        "204": { description: The work's type has no other numbering, or it is not known for this work. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: setWorkNumbering
+      tags: [library]
+      summary: Number a work by another list, or preview it. Administrator only.
+      description: >-
+        Its parts move to their places in that list, keeping their files, history and ids, and the choice holds for
+        every later refresh. A part the list has no place for whose place it gives to another is set aside, its files
+        kept. Files keep their names until renamed (the work's Rename preview).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [basis]
+              properties:
+                basis: { type: string }
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: What moved, or would move.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NumberingPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/merge-suggestion:
     get:
       operationId: getWorkMergeSuggestion
@@ -7241,6 +7301,24 @@ components:
           description: >-
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
+
+    NumberingMove:
+      type: object
+      required: [title, from, has_file]
+      properties:
+        title: { type: string }
+        from: { type: string, example: "S01E05" }
+        to: { type: string, example: "S02E01" }
+        has_file: { type: boolean }
+
+    NumberingPlan:
+      type: object
+      required: [moves, set_aside, unchanged, new]
+      properties:
+        moves: { type: array, items: { $ref: "#/components/schemas/NumberingMove" } }
+        set_aside: { type: array, items: { $ref: "#/components/schemas/NumberingMove" } }
+        unchanged: { type: integer }
+        new: { type: integer }
 
     WorkMergeSuggestion:
       type: object

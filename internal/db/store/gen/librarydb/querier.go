@@ -597,6 +597,8 @@ type Querier interface {
 	// media_ref present_count is derived from, so the album detail and the
 	// artist overview cannot disagree about what is there; a file a sweep found gone is not.
 	ListPartFilesForWork(ctx context.Context, workID int64) ([]ListPartFilesForWorkRow, error)
+	// Every part of a work with one provider's id of it, for matching a new numbering of the same parts.
+	ListPartIDs(ctx context.Context, arg ListPartIDsParams) ([]ListPartIDsRow, error)
 	// The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
 	ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([]ListPartPathsRow, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
@@ -959,6 +961,7 @@ type Querier interface {
 	// ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
 	// non-null is what "actually placed" means from here on.
 	SetImportUnitPlacement(ctx context.Context, arg SetImportUnitPlacementParams) error
+	SetItemFileRefs(ctx context.Context, arg SetItemFileRefsParams) error
 	SetLibraryPathLinkKind(ctx context.Context, arg SetLibraryPathLinkKindParams) error
 	// Measured attributes replace claimed ones after probing; the claim is kept so a
 	// mismatch stays visible (ADR-39). The scalars land on the object, not the
@@ -971,6 +974,7 @@ type Querier interface {
 	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
 	SetOrganisationMonitored(ctx context.Context, arg SetOrganisationMonitoredParams) error
+	SetPartRef(ctx context.Context, arg SetPartRefParams) error
 	SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error
 	// A provider's picture of a person is kept in fields_json and never replaces one already there.
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error

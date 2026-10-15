@@ -439,3 +439,15 @@ func (r SeriesReader) WorksOnRoot(ctx context.Context, rootFolderID, afterID, pa
 	}
 	return works, nil
 }
+
+// FirstCategory answers the first library the series is wanted in.
+func (r SeriesReader) FirstCategory(ctx context.Context, workID int64) (int64, error) {
+	_, categories, err := Works(r).Places(ctx, workID)
+	if err != nil {
+		return 0, err
+	}
+	if len(categories) == 0 {
+		return 0, fmt.Errorf("%w: work %d is in no library", ErrSeriesNotFound, workID)
+	}
+	return categories[0], nil
+}

@@ -461,3 +461,65 @@ func (s Series) StampGrace(ctx context.Context, grace AvailabilityGrace) (int, e
 		total += int(changed)
 	}
 }
+
+// PartID is one part of a work with one provider's id of it.
+type PartID struct {
+	PartID     int64
+	MediaRef   string
+	Title      string
+	ExternalID string
+	HasFile    bool
+}
+
+// PartIDs answers every part of the work with the provider's id of each, "" where it has none.
+func (s Series) PartIDs(ctx context.Context, workID int64, provider string) ([]PartID, error) {
+	rows, err := librarydb.New(s.store.Read()).ListPartIDs(ctx, librarydb.ListPartIDsParams{Provider: provider, WorkID: workID})
+	if err != nil {
+		return nil, fmt.Errorf("library: part ids of work %d: %w", workID, err)
+	}
+	parts := make([]PartID, len(rows))
+	for i, row := range rows {
+		parts[i] = PartID{PartID: row.ID, MediaRef: row.MediaRef, Title: row.Title, ExternalID: row.ExternalID, HasFile: row.HasFile}
+	}
+	return parts, nil
+}
+
+// PartMove is one part taking a new place in its work's numbering.
+type PartMove struct {
+	PartID         int64
+	OldRef, NewRef string
+	NewSortKey     string
+}
+
+// UnplacedRef prefixes the place of a part a renumbering sets aside: out of every group, its files kept.
+const UnplacedRef = "unplaced:"
+
+// Renumber gives parts new places in one transaction, keeping each part's id, files, credits and history.
+func (s Series) Renumber(ctx context.Context, workID int64, moves []PartMove) error {
+	err := s.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		// Through a temporary name first, so two parts trading places never meet on one.
+		for _, move := range moves {
+			temporary := "renumber:" + move.NewRef
+			if err := queries.SetPartRef(ctx, librarydb.SetPartRefParams{NewRef: temporary, SortKey: move.NewSortKey, PartID: move.PartID}); err != nil {
+				return fmt.Errorf("part %d: %w", move.PartID, err)
+			}
+			if err := queries.SetItemFileRefs(ctx, librarydb.SetItemFileRefsParams{NewRef: temporary, OldRef: move.OldRef, WorkID: workID}); err != nil {
+				return fmt.Errorf("files of part %d: %w", move.PartID, err)
+			}
+		}
+		for _, move := range moves {
+			if err := queries.SetPartRef(ctx, librarydb.SetPartRefParams{NewRef: move.NewRef, SortKey: move.NewSortKey, PartID: move.PartID}); err != nil {
+				return fmt.Errorf("part %d: %w", move.PartID, err)
+			}
+			if err := queries.SetItemFileRefs(ctx, librarydb.SetItemFileRefsParams{NewRef: move.NewRef, OldRef: "renumber:" + move.NewRef, WorkID: workID}); err != nil {
+				return fmt.Errorf("files of part %d: %w", move.PartID, err)
+			}
+		}
+		return recomputeWorkItemsTx(ctx, queries, workID, s.store.Now())
+	})
+	if err != nil {
+		return fmt.Errorf("library: renumber work %d: %w", workID, err)
+	}
+	return nil
+}

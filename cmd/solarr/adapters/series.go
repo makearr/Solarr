@@ -164,3 +164,26 @@ func setString(into **string, value string) {
 		*into = &value
 	}
 }
+
+// NumberingChoices implements media.Renumbering for TV.
+func (c SeriesCatalog) NumberingChoices(ctx context.Context, seriesID int64) ([]media.Choice, string, error) {
+	return c.Service.NumberingChoices(ctx, seriesID)
+}
+
+// PlanNumbering implements media.Renumbering for TV.
+func (c SeriesCatalog) PlanNumbering(ctx context.Context, seriesID int64, basis string) (media.NumberingPlan, error) {
+	return c.Service.PlanNumbering(ctx, seriesID, basis)
+}
+
+// ApplyNumbering implements media.Renumbering for TV, refreshing the series in its first library afterwards.
+func (c SeriesCatalog) ApplyNumbering(ctx context.Context, seriesID int64, basis string) (media.NumberingPlan, error) {
+	categoryID, err := c.Reader.FirstCategory(ctx, seriesID)
+	if err != nil {
+		return media.NumberingPlan{}, err
+	}
+	profile := c.DefaultProfileID
+	if category, ok := c.Categories.Category(categoryID); ok {
+		profile = c.Categories.ProfileFor(category, profile)
+	}
+	return c.Service.ApplyNumbering(ctx, tv.RefreshRequest{WorkID: seriesID, CategoryID: categoryID, ProfileID: profile}, basis)
+}

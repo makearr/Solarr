@@ -281,6 +281,58 @@ func (q *Queries) ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersF
 	return items, nil
 }
 
+const listPartIDs = `-- name: ListPartIDs :many
+SELECT wp.id, wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title,
+       CAST(COALESCE((SELECT x.external_id FROM work_part_external_id x WHERE x.part_id = wp.id AND x.provider = ?1
+                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id,
+       EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary') AS has_file
+FROM work_part wp WHERE wp.work_id = ?2 ORDER BY wp.sort_key, wp.id
+`
+
+type ListPartIDsParams struct {
+	Provider string
+	WorkID   int64
+}
+
+type ListPartIDsRow struct {
+	ID         int64
+	MediaRef   string
+	Title      string
+	ExternalID string
+	HasFile    bool
+}
+
+// Every part of a work with one provider's id of it, for matching a new numbering of the same parts.
+func (q *Queries) ListPartIDs(ctx context.Context, arg ListPartIDsParams) ([]ListPartIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPartIDs, arg.Provider, arg.WorkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPartIDsRow{}
+	for rows.Next() {
+		var i ListPartIDsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaRef,
+			&i.Title,
+			&i.ExternalID,
+			&i.HasFile,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPartPaths = `-- name: ListPartPaths :many
 SELECT wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title, CAST(COALESCE(wp.date, '') AS TEXT) AS date,
        CAST(COALESCE(wp.runtime_ms, 0) AS INTEGER) AS runtime_ms, lp.root_folder_id, lp.rel_path,
@@ -585,6 +637,23 @@ func (q *Queries) SeriesPartCounts(ctx context.Context, arg SeriesPartCountsPara
 	return items, nil
 }
 
+const setItemFileRefs = `-- name: SetItemFileRefs :exec
+UPDATE desired_item_file SET media_ref = ?1
+WHERE desired_item_file.media_ref = ?2
+  AND desired_item_file.desired_item_id IN (SELECT d.id FROM desired_item d WHERE d.work_id = ?3)
+`
+
+type SetItemFileRefsParams struct {
+	NewRef string
+	OldRef string
+	WorkID int64
+}
+
+func (q *Queries) SetItemFileRefs(ctx context.Context, arg SetItemFileRefsParams) error {
+	_, err := q.db.ExecContext(ctx, setItemFileRefs, arg.NewRef, arg.OldRef, arg.WorkID)
+	return err
+}
+
 const setOrganisationLogo = `-- name: SetOrganisationLogo :exec
 UPDATE organisation SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.logo', ?1)
 WHERE id = ?2
@@ -597,6 +666,21 @@ type SetOrganisationLogoParams struct {
 
 func (q *Queries) SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error {
 	_, err := q.db.ExecContext(ctx, setOrganisationLogo, arg.Logo, arg.ID)
+	return err
+}
+
+const setPartRef = `-- name: SetPartRef :exec
+UPDATE work_part SET media_ref = ?1, sort_key = ?2 WHERE id = ?3
+`
+
+type SetPartRefParams struct {
+	NewRef  string
+	SortKey string
+	PartID  int64
+}
+
+func (q *Queries) SetPartRef(ctx context.Context, arg SetPartRefParams) error {
+	_, err := q.db.ExecContext(ctx, setPartRef, arg.NewRef, arg.SortKey, arg.PartID)
 	return err
 }
 

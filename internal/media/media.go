@@ -194,6 +194,39 @@ type Merging interface {
 	AfterMerge(ctx context.Context, keepID int64) error
 }
 
+// Renumbering is the capability of a media type whose works can be numbered by another of their sources' lists (a
+// series by TheTVDB's DVD or absolute order): the parts move, keeping their files and history.
+type Renumbering interface {
+	// NumberingChoices answers the lists the work can be numbered by and the one it is.
+	NumberingChoices(ctx context.Context, workID int64) (choices []Choice, current string, err error)
+	// PlanNumbering answers what numbering by basis would change; ApplyNumbering does it.
+	PlanNumbering(ctx context.Context, workID int64, basis string) (NumberingPlan, error)
+	ApplyNumbering(ctx context.Context, workID int64, basis string) (NumberingPlan, error)
+}
+
+// ErrNoNumbering is a work whose sources offer no other list; ErrUnknownNumbering a basis the work does not have.
+var (
+	ErrNoNumbering      = errors.New("media: the work has no other numbering")
+	ErrUnknownNumbering = errors.New("media: the work has no such numbering")
+)
+
+// NumberingPlan is what a renumbering moves.
+type NumberingPlan struct {
+	Moves []NumberingMove
+	// SetAside are parts the new list has no place for whose place it gives to another: kept with their files,
+	// in no group.
+	SetAside  []NumberingMove
+	Unchanged int
+	// New counts places of the new list no part held.
+	New int
+}
+
+// NumberingMove is one part moving, as a person reads its places ("S01E05").
+type NumberingMove struct {
+	Title, From, To string
+	HasFile         bool
+}
+
 // ImageOption is one picture a provider offers for a work or a person.
 type ImageOption struct {
 	URL, ThumbURL, Source, Label string

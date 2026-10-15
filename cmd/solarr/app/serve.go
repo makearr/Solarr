@@ -799,6 +799,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Cache: p.cache,
 		},
 		VanishedFiles: p.vanishedFiles(),
+		WorkNumbering: adapters.WorkNumbering{Works: library.NewWorks(p.library), Registry: p.media},
 		WorkMerger: adapters.WorkMerger{
 			Identity: library.NewIdentity(p.library), History: statistics.NewHistory(p.statistics), Registry: p.media, Logger: p.logger,
 		},

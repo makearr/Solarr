@@ -173,3 +173,20 @@ JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_s
 WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND wf.work_id > sqlc.arg(after_id)
 ORDER BY wf.work_id
 LIMIT sqlc.arg(page_size);
+
+-- Every part of a work with one provider's id of it, for matching a new numbering of the same parts.
+-- name: ListPartIDs :many
+SELECT wp.id, wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS title,
+       CAST(COALESCE((SELECT x.external_id FROM work_part_external_id x WHERE x.part_id = wp.id AND x.provider = sqlc.arg(provider)
+                      ORDER BY x.confidence DESC LIMIT 1), '') AS TEXT) AS external_id,
+       EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary') AS has_file
+FROM work_part wp WHERE wp.work_id = sqlc.arg(work_id) ORDER BY wp.sort_key, wp.id;
+
+-- name: SetPartRef :exec
+UPDATE work_part SET media_ref = sqlc.arg(new_ref), sort_key = sqlc.arg(sort_key) WHERE id = sqlc.arg(part_id);
+
+-- name: SetItemFileRefs :exec
+UPDATE desired_item_file SET media_ref = sqlc.arg(new_ref)
+WHERE desired_item_file.media_ref = sqlc.arg(old_ref)
+  AND desired_item_file.desired_item_id IN (SELECT d.id FROM desired_item d WHERE d.work_id = sqlc.arg(work_id));

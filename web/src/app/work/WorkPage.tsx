@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePen, ListChecks, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
+import { FilePen, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -25,6 +25,7 @@ import { InteractiveSearch, type SearchScope } from "../InteractiveSearch";
 import { RenamePlanner } from "../RenamePlanner";
 import { statusLabel, useQueue } from "../Queue";
 import { EditWork } from "./EditWork";
+import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
 import { grabNote } from "./grabNote";
 import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
@@ -181,6 +182,8 @@ function WorkHeader({
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [numbering, setNumbering] = useState(false);
+  const numberings = useNumberingChoices(work.id, administrator);
   const [removal, setRemoval] = useState({ deleteFiles: false, exclude: true });
   const [note, setNote] = useState<string>();
 
@@ -331,6 +334,11 @@ function WorkHeader({
                 {t("action.renamePreview")}
               </Button>
             )}
+            {administrator && numberings.data && (
+              <Button icon={<ListOrdered aria-hidden className="size-4" />} onClick={() => setNumbering(true)}>
+                {t("numbering.title")}
+              </Button>
+            )}
             {administrator && (
               <Button variant="danger" icon={<Trash2 aria-hidden className="size-4" />} onClick={() => setRemoving(true)}>
                 {t("action.remove")}
@@ -343,6 +351,7 @@ function WorkHeader({
         <p className="text-xs text-ink-muted">{refresh.isError ? "Refresh failed." : monitor.isError ? "That could not be changed." : note}</p>
       )}
       {editing && <EditWork work={work} info={info} onClose={() => setEditing(false)} />}
+      {numbering && <NumberingDialog workId={work.id} title={work.title} onClose={() => setNumbering(false)} />}
       {renaming && categoryId !== undefined && (
         <Dialog title={t("action.renamePreview")} description={work.title} width="wide" onClose={() => setRenaming(false)}>
           <RenamePlanner categoryId={Number(categoryId)} workId={work.id} previewAtOnce />

@@ -257,8 +257,9 @@ func (p *process) tvService() tv.Service {
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
-			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
-			Grace:    p.availabilityGrace,
+			Priority:  func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
+			Grace:     p.availabilityGrace,
+			Orderings: p.tvdbShared,
 			KindOf: func(categoryID int64) string {
 				category, _ := p.cache.Snapshot().Category(categoryID)
 				return category.Kind

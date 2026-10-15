@@ -78,7 +78,9 @@ type Service struct {
 	Grace func() library.AvailabilityGrace
 	// KindOf answers a library's kind; nil takes none.
 	KindOf func(categoryID int64) string
-	Series library.Series
+	// Orderings lists a series in TheTVDB's other orderings (DVD, absolute, ...); nil offers the aired one only.
+	Orderings OrderingSource
+	Series    library.Series
 	// Exclusions are the works the user removed and asked not to see again.
 	Exclusions library.Exclusions
 	Reader     library.SeriesReader
@@ -515,6 +517,9 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 		return AddResult{}, err
 	}
 	applyAirTimeZone(&series, manual[FieldAirTimeZone])
+	if err := s.keepOrdering(ctx, request.WorkID, &series); err != nil {
+		return AddResult{}, fmt.Errorf("tv: numbering by the chosen ordering: %w", err)
+	}
 	monitored, err := s.Reader.SeasonMonitoring(ctx, request.WorkID)
 	if err != nil {
 		return AddResult{}, err
