@@ -626,7 +626,8 @@ function StallFields({ stall, onChange }: { stall: StallCleanup; onChange: (stal
           <span className="text-ink">Remove stalled downloads</span>
           <span className="block text-ink-muted">
             A download of Solarr's that stops moving gets a strike at each check; after the strikes, or the hours without
-            progress, it is removed with its files, blocklisted and searched for again. Queued and paused downloads are left alone.
+            progress, the tracks or episodes it did finish are imported first (qBittorrent), then it is removed with its
+            files, blocklisted and searched for again for the rest. Queued and paused downloads are left alone.
           </span>
         </span>
       </label>

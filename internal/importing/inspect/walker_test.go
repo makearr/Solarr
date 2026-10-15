@@ -224,3 +224,15 @@ func (*interruptedError) Error() string { return "injected interruption" }
 func taggedReader(byPath map[string]inspect.Tags) inspect.TagReader {
 	return func(relPath string) inspect.Tags { return byPath[relPath] }
 }
+
+// A walk limited to some files sees only those: the finished tracks of a download that stalled.
+func TestWalker_OnlySeesTheFilesItIsGiven(t *testing.T) {
+	tr := newTree(t, "Katupoken/KI Pecezinu/01 Sesoge.flac", "Katupoken/KI Pecezinu/02 Vagelo.flac", "Katupoken/KI Pecezinu/03 Rumi.flac")
+	units, _ := walkAll(t, tr, inspect.WalkOptions{Only: map[string]bool{
+		"Katupoken/KI Pecezinu/01 Sesoge.flac": true, "Katupoken/KI Pecezinu/03 Rumi.flac": true,
+	}})
+	if len(units) != 1 || len(units[0].Media) != 2 || units[0].Media[0].RelPath != "Katupoken/KI Pecezinu/01 Sesoge.flac" ||
+		units[0].Media[1].RelPath != "Katupoken/KI Pecezinu/03 Rumi.flac" {
+		t.Errorf("units = %+v, want one album of the two files given", units)
+	}
+}

@@ -315,13 +315,14 @@ DELETE FROM candidate WHERE id IN (
 );
 
 -- name: GetAcquisitionStall :one
-SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at FROM acquisition_stall WHERE acquisition_id = ?;
+SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at, importing_finished FROM acquisition_stall WHERE acquisition_id = ?;
 
 -- name: SetAcquisitionStall :exec
-INSERT INTO acquisition_stall (acquisition_id, strikes, left_bytes, progress_at, checked_at) VALUES (?, ?, ?, ?, ?)
+INSERT INTO acquisition_stall (acquisition_id, strikes, left_bytes, progress_at, checked_at, importing_finished)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (acquisition_id) DO UPDATE SET
   strikes = excluded.strikes, left_bytes = excluded.left_bytes,
-  progress_at = excluded.progress_at, checked_at = excluded.checked_at;
+  progress_at = excluded.progress_at, checked_at = excluded.checked_at, importing_finished = excluded.importing_finished;
 
 -- name: DeleteAcquisitionStall :exec
 DELETE FROM acquisition_stall WHERE acquisition_id = ?;

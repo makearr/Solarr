@@ -94,8 +94,9 @@ type Config struct {
 	Clients func(ctx context.Context) (map[int64]Client, error)
 	// DownloadFolders are the folders a reported path must lie in (ADR-14, section 10.9).
 	DownloadFolders func(ctx context.Context) ([]string, error)
-	// Import starts a targeted import of one download's folder (Invariant 17).
-	Import func(ctx context.Context, acquisition library.Acquisition, localPath string) error
+	// Import starts a targeted import of one download's folder (Invariant 17); only, when set, limits it to those
+	// files, relative to the folder.
+	Import func(ctx context.Context, acquisition library.Acquisition, localPath string, only []string) error
 	// Search searches a desired item again after its download failed.
 	Search func(ctx context.Context, desiredItemID int64) error
 	// History records an imported or failed download for History and the album's page.
@@ -350,9 +351,65 @@ func (j *Job) checkStall(ctx context.Context, client Client, acquisition library
 		return j.config.Acquisitions.SetStall(ctx, acquisition.ID, state)
 	}
 	detail := fmt.Sprintf("stalled: no progress for %s (%d checks)", still.Round(time.Minute), state.Strikes)
+	importing, missed, err := j.importFinished(ctx, client, acquisition, state, detail)
+	if importing || err != nil {
+		return err
+	}
+	if missed != "" {
+		detail += "; its finished files were not imported: " + missed
+	}
 	j.config.Logger.Info("stalled download removed", slog.Int64("acquisition_id", acquisition.ID),
 		slog.String("release", acquisition.CandidateTitle), slog.String("client", client.Name), slog.String("detail", detail))
 	return j.failed(ctx, client, acquisition, library.BlocklistDownloadFailed, detail)
+}
+
+// importFinished brings in the files of a stalled download that did arrive (finished tracks or episodes) before it is
+// removed; the download stays in the client until that import ends (followImport). It answers false, and nothing
+// changed, when the client cannot say or nothing is finished; missed says why finished files could not be taken.
+func (j *Job) importFinished(
+	ctx context.Context, client Client, acquisition library.Acquisition, state library.StallState, detail string,
+) (importing bool, missed string, err error) {
+	finisher, ok := client.Client.(download.FinishedFiles)
+	if !ok {
+		return false, "", nil
+	}
+	folder, files, err := finisher.FinishedFiles(ctx, acquisition.DownloadClientRef)
+	if err != nil {
+		return false, "the client could not list them: " + err.Error(), nil //nolint:nilerr // told in the failure instead
+	}
+	if len(files) == 0 {
+		return false, "", nil
+	}
+	local := folder
+	if client.LocalPath != nil {
+		local = client.LocalPath(folder)
+	}
+	if problem := j.checkPath(ctx, local); problem != "" {
+		return false, problem, nil
+	}
+	now := j.config.Clock.Now().Unix()
+	if err := j.config.Acquisitions.SetPath(ctx, acquisition.ID, local, now); err != nil {
+		return false, "", err
+	}
+	acquisition.DownloadDir = local
+	if err := j.config.Import(ctx, acquisition, local, files); err != nil {
+		return false, "the import could not start: " + err.Error(), nil //nolint:nilerr // told in the failure instead
+	}
+	state.ImportingFinished = true
+	if err := j.config.Acquisitions.SetStall(ctx, acquisition.ID, state); err != nil {
+		return false, "", err
+	}
+	j.config.Logger.Info("stalled download: importing what finished", slog.Int64("acquisition_id", acquisition.ID),
+		slog.String("release", acquisition.CandidateTitle), slog.Int("files", len(files)))
+	return true, "", j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting,
+		fmt.Sprintf("%s; importing the %d finished %s, the rest is searched for again", detail, len(files), plural(len(files), "file", "files")), now)
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return one
+	}
+	return many
 }
 
 // checkFingerprint records the client's own name and size when a download is first seen; a
@@ -396,7 +453,7 @@ func (j *Job) completed(ctx context.Context, client Client, acquisition library.
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCompleted, problem, now)
 	}
 	acquisition.DownloadDir = localPath
-	if err := j.config.Import(ctx, acquisition, localPath); err != nil {
+	if err := j.config.Import(ctx, acquisition, localPath, nil); err != nil {
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCompleted, "import could not start: "+err.Error(), now)
 	}
 	return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, "", now)
@@ -478,7 +535,13 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		}
 	}
 	now := j.config.Clock.Now().Unix()
+	stall, _, err := j.config.Acquisitions.Stall(ctx, acquisition.ID)
+	if err != nil {
+		return err
+	}
 	switch {
+	case placed > 0 && stall.ImportingFinished:
+		return j.finishedImported(ctx, client, acquisition)
 	case placed > 0:
 		if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImported, "", now); err != nil {
 			return err
@@ -498,6 +561,35 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		}
 		return j.failed(ctx, client, acquisition, library.BlocklistImportFailed, reason)
 	}
+}
+
+// finishedImported ends a stalled download whose finished files are in the library: recorded as imported, blocklisted
+// so the rest is never fetched from it again, removed from the client with what it still held, and searched for again.
+func (j *Job) finishedImported(ctx context.Context, client Client, acquisition library.Acquisition) error {
+	now := j.config.Clock.Now()
+	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImported, "stalled; its finished files were imported", now.Unix()); err != nil {
+		return err
+	}
+	acquisition.State = StateImported
+	j.config.History(ctx, download.HistoryImported, acquisition, "the finished files of a download that stalled")
+	if j.config.Imported != nil {
+		j.config.Imported(ctx, acquisition)
+	}
+	if err := j.blocklistFailed(ctx, acquisition, library.BlocklistDownloadFailed); err != nil {
+		return err
+	}
+	if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
+		j.config.Logger.Warn("stalled download could not be removed from the client", slog.Int64("acquisition_id", acquisition.ID), slog.Any("error", err))
+	} else if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCleaned, "stalled; its finished files were imported", now.Unix()); err != nil {
+		return err
+	}
+	if acquisition.DesiredItemID != nil {
+		if err := j.config.Search(ctx, *acquisition.DesiredItemID); err != nil {
+			j.config.Logger.Warn("search for the rest of a stalled download did not run",
+				slog.Int64("desired_item_id", *acquisition.DesiredItemID), slog.Any("error", err))
+		}
+	}
+	return nil
 }
 
 // WaitingForReview is the note of a download whose import is held for a person: nothing is moving, so it may be removed.
@@ -520,17 +612,8 @@ func (j *Job) cleanUp(ctx context.Context, client Client, acquisition library.Ac
 func (j *Job) failed(
 	ctx context.Context, client Client, acquisition library.Acquisition, reason library.BlocklistReason, detail string,
 ) error {
-	now := j.config.Clock.Now()
-	if acquisition.CandidateGUID != "" || acquisition.ContentHash != "" {
-		expires := now.Add(failureMemory).Unix()
-		if _, err := j.config.Blocklist.Create(ctx, library.NewBlocklistEntry{
-			IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, ContentHash: acquisition.ContentHash,
-			Title:         acquisition.CandidateTitle,
-			DesiredItemID: acquisition.DesiredItemID, Reason: reason, Source: library.BlocklistSourceAuto,
-			ExpiresAt: &expires, CreatedAt: now.Unix(),
-		}); err != nil {
-			return err
-		}
+	if err := j.blocklistFailed(ctx, acquisition, reason); err != nil {
+		return err
 	}
 	if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
 		j.config.Logger.Warn("failed download could not be removed from the client",
@@ -546,4 +629,20 @@ func (j *Job) failed(
 		}
 	}
 	return nil
+}
+
+// blocklistFailed keeps the release out for failureMemory, by guid and by content (section 10.11).
+func (j *Job) blocklistFailed(ctx context.Context, acquisition library.Acquisition, reason library.BlocklistReason) error {
+	if acquisition.CandidateGUID == "" && acquisition.ContentHash == "" {
+		return nil
+	}
+	now := j.config.Clock.Now()
+	expires := now.Add(failureMemory).Unix()
+	_, err := j.config.Blocklist.Create(ctx, library.NewBlocklistEntry{
+		IndexerID: acquisition.IndexerID, GUID: acquisition.CandidateGUID, ContentHash: acquisition.ContentHash,
+		Title:         acquisition.CandidateTitle,
+		DesiredItemID: acquisition.DesiredItemID, Reason: reason, Source: library.BlocklistSourceAuto,
+		ExpiresAt: &expires, CreatedAt: now.Unix(),
+	})
+	return err
 }

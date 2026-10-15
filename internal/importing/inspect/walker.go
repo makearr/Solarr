@@ -27,6 +27,8 @@ type WalkOptions struct {
 	Tags                TagReader
 	SegmentPlausible    SegmentPlausibility
 	MediaSizeFloorBytes int64
+	// Only, when set, is the files (relative to the root) the walk may see; everything else is as if absent.
+	Only map[string]bool
 }
 
 // WalkResult is what one resumable walk did.
@@ -175,6 +177,9 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 			continue
 		}
 		childRelative := path.Join(relative, entry.Name)
+		if w.opts.Only != nil && !w.opts.Only[childRelative] {
+			continue
+		}
 		info, err := w.fsys.Stat(path.Join(absolute, entry.Name))
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {

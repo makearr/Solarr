@@ -70,6 +70,8 @@ type Payload struct {
 	// NoUnverified keeps a folder nothing identified out of the library; by default an Import-screen
 	// run adds it as an unverified album (D6). Negative, so a resumed session keeps the default.
 	NoUnverified bool `json:"no_unverified,omitempty"`
+	// Only limits the import to these files, relative to SourcePath: the finished ones of a download that stalled.
+	Only []string `json:"only,omitempty"`
 }
 
 // UnverifiedCommitter is a Committer that can also place a unit nothing identified as an
@@ -217,6 +219,10 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	// An archive is a folder (ADR-49): its contents are opened into a workspace and imported as one, then the
 	// source's own loose files, if it has any.
+	// A download's finished files are imported as they are: its other archive parts are missing or half written.
+	if len(payload.Only) > 0 {
+		return j.runSession(ctx, job, payload)
+	}
 	if workspace, opened := j.unpack(ctx, payload.SourcePath); opened > 0 {
 		inner := payload
 		inner.SourcePath = workspace
@@ -377,7 +383,7 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	}
 	seeds := j.provenanceSeeds(ctx, payload.AcquisitionID)
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
-		j.walkOptions(payload.CategoryID),
+		j.walkOptions(payload.CategoryID, payload.Only),
 		func(ctx context.Context, batch []inspect.Unit) error {
 			err := j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
 				unverifiedWanted(payload), payload.TransferLadder, seeds, batch)
@@ -1071,9 +1077,16 @@ func (j *Job) importWith(
 const videoSizeFloor = 30 << 20
 
 // walkOptions are the inspection options of a category's media type; music takes the defaults.
-func (j *Job) walkOptions(categoryID *int64) inspect.WalkOptions {
+func (j *Job) walkOptions(categoryID *int64, only []string) inspect.WalkOptions {
+	var options inspect.WalkOptions
 	if j.importerFor(categoryID) != nil {
-		return inspect.WalkOptions{MediaSizeFloorBytes: videoSizeFloor}
+		options.MediaSizeFloorBytes = videoSizeFloor
 	}
-	return inspect.WalkOptions{}
+	if len(only) > 0 {
+		options.Only = make(map[string]bool, len(only))
+		for _, file := range only {
+			options.Only[file] = true
+		}
+	}
+	return options
 }

@@ -17,6 +17,9 @@ type StallState struct {
 	LeftBytes  int64
 	ProgressAt int64
 	CheckedAt  int64
+	// ImportingFinished says the download stalled and its finished files are being imported; the rest is searched
+	// again once that import ends.
+	ImportingFinished bool
 }
 
 // Stall answers a download's stall state; found is false before its first check.
@@ -28,7 +31,10 @@ func (a Acquisitions) Stall(ctx context.Context, acquisitionID int64) (StallStat
 	if err != nil {
 		return StallState{}, false, fmt.Errorf("library: stall of acquisition %d: %w", acquisitionID, err)
 	}
-	return StallState{Strikes: int(row.Strikes), LeftBytes: row.LeftBytes, ProgressAt: row.ProgressAt, CheckedAt: row.CheckedAt}, true, nil
+	return StallState{
+		Strikes: int(row.Strikes), LeftBytes: row.LeftBytes, ProgressAt: row.ProgressAt, CheckedAt: row.CheckedAt,
+		ImportingFinished: row.ImportingFinished == 1,
+	}, true, nil
 }
 
 // SetStall records a download's stall state.
@@ -36,7 +42,7 @@ func (a Acquisitions) SetStall(ctx context.Context, acquisitionID int64, state S
 	return a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).SetAcquisitionStall(ctx, librarydb.SetAcquisitionStallParams{
 			AcquisitionID: acquisitionID, Strikes: int64(state.Strikes), LeftBytes: state.LeftBytes,
-			ProgressAt: state.ProgressAt, CheckedAt: state.CheckedAt,
+			ProgressAt: state.ProgressAt, CheckedAt: state.CheckedAt, ImportingFinished: boolInt(state.ImportingFinished),
 		})
 	})
 }

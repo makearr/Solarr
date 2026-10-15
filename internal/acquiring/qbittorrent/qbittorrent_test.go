@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -167,5 +168,28 @@ func TestDownloader_PauseFallsBackToTheOlderEndpointName(t *testing.T) {
 	}
 	if len(server.requested) != 2 || server.requested[1].URL.Path != "/api/v2/torrents/pause" || server.bodies[1] != "hashes=a%7Cb" {
 		t.Errorf("requests = %v bodies %v, want stop then pause with both hashes", server.requested, server.bodies)
+	}
+}
+
+// A torrent's finished, wanted files are named below its own folder, where qBittorrent writes unfinished torrents; one
+// whose files are loose in the client's folder has no folder of its own and answers none.
+func TestDownloader_FinishedFilesAreTheCompleteOnesBelowTheTorrentsFolder(t *testing.T) {
+	server := &fakeServer{routes: map[string]route{
+		"/api/v2/torrents/info": {body: `[{"hash":"abc","save_path":"/downloads/arr","download_path":"/downloads/incomplete"}]`},
+		"/api/v2/torrents/files": {body: `[
+			{"name":"Heka - Zanuvode/01 - Kelo.flac","progress":1,"priority":1},
+			{"name":"Heka - Zanuvode/02 - Mira.flac","progress":0.4,"priority":1},
+			{"name":"Heka - Zanuvode/CD2/03 - Vosa.flac","progress":1,"priority":1},
+			{"name":"Heka - Zanuvode/cover.jpg","progress":1,"priority":0}]`},
+	}}
+	downloader := qbittorrent.Downloader{Client: newClient(t, server, "")}
+	folder, files, err := downloader.FinishedFiles(t.Context(), "abc")
+	if err != nil || folder != "/downloads/incomplete/Heka - Zanuvode" || !slices.Equal(files, []string{"01 - Kelo.flac", "CD2/03 - Vosa.flac"}) {
+		t.Errorf("FinishedFiles = %q %q, %v; want the two finished tracks below the torrent's folder", folder, files, err)
+	}
+
+	server.routes["/api/v2/torrents/files"] = route{body: `[{"name":"one.mkv","progress":1,"priority":1},{"name":"two.mkv","progress":0,"priority":1}]`}
+	if folder, files, err := downloader.FinishedFiles(t.Context(), "abc"); err != nil || folder != "" || files != nil {
+		t.Errorf("loose files = %q %q, %v; want none", folder, files, err)
 	}
 }

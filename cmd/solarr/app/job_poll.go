@@ -106,8 +106,8 @@ func (p *process) pollDownloadFolders(ctx context.Context) ([]string, error) {
 }
 
 // importAcquisition starts the targeted import of one finished download into its album's library.
-func (p *process) importAcquisition(ctx context.Context, acquisition library.Acquisition, localPath string) error {
-	payload := importjob.Payload{SourcePath: localPath, Origin: library.ImportOriginAcquisition, AcquisitionID: &acquisition.ID}
+func (p *process) importAcquisition(ctx context.Context, acquisition library.Acquisition, localPath string, only []string) error {
+	payload := importjob.Payload{SourcePath: localPath, Origin: library.ImportOriginAcquisition, AcquisitionID: &acquisition.ID, Only: only}
 	if acquisition.DesiredItemID != nil {
 		item, err := library.NewDesired(p.library).Get(ctx, *acquisition.DesiredItemID)
 		if err != nil {

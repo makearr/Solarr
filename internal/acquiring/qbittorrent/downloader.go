@@ -3,6 +3,7 @@ package qbittorrent
 import (
 	"context"
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -50,6 +51,39 @@ func (d Downloader) Downloads(ctx context.Context, category string) ([]download.
 		}
 	}
 	return downloads, nil
+}
+
+// FinishedFiles implements download.FinishedFiles: the files of a torrent that are fully downloaded and wanted, below
+// the torrent's own top folder; qBittorrent names them relative to where the torrent is being written.
+func (d Downloader) FinishedFiles(ctx context.Context, clientRef string) (string, []string, error) {
+	torrent, found, err := d.Client.Torrent(ctx, clientRef)
+	if err != nil || !found {
+		return "", nil, err
+	}
+	files, err := d.Client.Files(ctx, clientRef)
+	if err != nil {
+		return "", nil, err
+	}
+	base := torrent.DownloadPath
+	if base == "" {
+		base = torrent.SavePath
+	}
+	top := ""
+	var finished []string
+	for _, file := range files {
+		head, rest, nested := strings.Cut(file.Name, "/")
+		if !nested || (top != "" && head != top) {
+			return "", nil, nil // files loose in the client's folder: there is no folder of the download's own
+		}
+		top = head
+		if file.Priority != 0 && file.Progress >= 1 {
+			finished = append(finished, rest)
+		}
+	}
+	if top == "" || len(finished) == 0 {
+		return "", nil, nil
+	}
+	return path.Join(base, top), finished, nil
 }
 
 // QueueStatus answers the totals over every torrent still downloading.

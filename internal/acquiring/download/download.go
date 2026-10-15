@@ -85,6 +85,13 @@ type QueueStatus struct {
 	SizeLeftBytes    int64
 }
 
+// FinishedFiles is a client that can say which files of an unfinished download are complete, so a download that
+// stalled can still bring in what did arrive. Folder is the download's own folder as the client names it, files are
+// relative to it; a download with no folder of its own (one file, or files loose in the client's folder) answers none.
+type FinishedFiles interface {
+	FinishedFiles(ctx context.Context, clientRef string) (folder string, files []string, err error)
+}
+
 // Client is one configured download client.
 type Client interface {
 	// Add sends a release and answers the client's reference for it.

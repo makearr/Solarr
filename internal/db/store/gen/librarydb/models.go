@@ -43,11 +43,12 @@ type AcquisitionFile struct {
 }
 
 type AcquisitionStall struct {
-	AcquisitionID int64
-	Strikes       int64
-	LeftBytes     int64
-	ProgressAt    int64
-	CheckedAt     int64
+	AcquisitionID     int64
+	Strikes           int64
+	LeftBytes         int64
+	ProgressAt        int64
+	CheckedAt         int64
+	ImportingFinished int64
 }
 
 type AltNumbering struct {

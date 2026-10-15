@@ -30,6 +30,13 @@ type fakeClient struct {
 	removed   []string
 	paused    []string
 	resumed   []string
+	// finishedFolder and finished are what FinishedFiles answers: a torrent's own folder and its complete files.
+	finishedFolder string
+	finished       []string
+}
+
+func (f *fakeClient) FinishedFiles(context.Context, string) (string, []string, error) {
+	return f.finishedFolder, f.finished, nil
 }
 
 func (f *fakeClient) Downloads(context.Context, string) ([]download.Download, error) {
@@ -116,8 +123,11 @@ func (e *env) job() *poll.Job {
 				LocalPath: func(reported string) string { return reported }, Stall: e.stall}}, nil
 		},
 		DownloadFolders: func(context.Context) ([]string, error) { return []string{"/downloads"}, nil },
-		Import: func(_ context.Context, _ library.Acquisition, localPath string) error {
+		Import: func(_ context.Context, _ library.Acquisition, localPath string, only []string) error {
 			e.imported = append(e.imported, localPath)
+			if only != nil {
+				e.imported = append(e.imported, "only: "+strings.Join(only, ", "))
+			}
 			return nil
 		},
 		Search: func(_ context.Context, desiredItemID int64) error {
@@ -563,5 +573,87 @@ func TestPoll_TheStallLimitsAndTheSwitch(t *testing.T) {
 		if got := e.state(t, sent.ID); (got.State == poll.StateFailed) != tc.failed {
 			t.Errorf("%s: %s %q, want failed %v", tc.name, got.State, got.LastError, tc.failed)
 		}
+	}
+}
+
+// A stalled download's finished files are imported before it goes: only those files, from its own folder; once they
+// are in the library the release is blocklisted, the download removed with what it still held, and the rest searched.
+func TestPoll_AStalledDownloadBringsInWhatFinished(t *testing.T) {
+	e := newEnv(t)
+	e.stall = poll.StallRules{Enabled: true, Strikes: 1, Check: 15 * time.Minute, NoProgress: 24 * time.Hour}
+	e.client.finishedFolder = "/downloads/complete/Heka-Zanuvode"
+	e.client.finished = []string{"01 - Kelo.flac", "CD2/03 - Vosa.flac"}
+	sent := e.send(t, "nzo-1")
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	e.clock.Advance(15 * time.Minute)
+	e.downloading("nzo-1", 500)
+	e.run(t)
+
+	got := e.state(t, sent.ID)
+	if got.State != poll.StateImporting || !strings.Contains(got.LastError, "importing the 2 finished files") {
+		t.Fatalf("after the strike: %s %q, want IMPORTING its finished files", got.State, got.LastError)
+	}
+	if want := []string{"/downloads/complete/Heka-Zanuvode", "only: 01 - Kelo.flac, CD2/03 - Vosa.flac"}; !slices.Equal(e.imported, want) {
+		t.Errorf("imported %q, want %q", e.imported, want)
+	}
+	if len(e.client.removed) != 0 || len(e.searched) != 0 {
+		t.Fatalf("removed %v, searched %v while importing; want nothing until the import ends", e.client.removed, e.searched)
+	}
+
+	e.finishImport(t, got, true, library.UnitCommit)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateCleaned {
+		t.Errorf("after the import: %s %q, want CLEANED", got.State, got.LastError)
+	}
+	if !slices.Equal(e.client.removed, []string{"nzo-1+files"}) || !slices.Equal(e.searched, []int64{*sent.DesiredItemID}) {
+		t.Errorf("removed %v, searched %v; want the rest removed and searched for again", e.client.removed, e.searched)
+	}
+	indexerID := int64(3)
+	if blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix()); err != nil || !blocked {
+		t.Errorf("blocklisted = %v, %v; want the stalled release blocked", blocked, err)
+	}
+	if want := []string{"download.imported nzo-1 the finished files of a download that stalled"}; !slices.Equal(e.history, want) {
+		t.Errorf("history = %q, want %q", e.history, want)
+	}
+}
+
+// Finished files nothing could place leave the stalled download to fail as one with nothing finished does.
+func TestPoll_AStalledDownloadWhoseFinishedFilesPlaceNothingFails(t *testing.T) {
+	e := newEnv(t)
+	e.stall = poll.StallRules{Enabled: true, Strikes: 1, Check: 15 * time.Minute, NoProgress: 24 * time.Hour}
+	e.client.finishedFolder = "/downloads/complete/Heka-Zanuvode"
+	e.client.finished = []string{"01 - Kelo.flac"}
+	sent := e.send(t, "nzo-1")
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	e.clock.Advance(15 * time.Minute)
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	e.finishImport(t, e.state(t, sent.ID), false, library.UnitCommit)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateFailed {
+		t.Errorf("= %s %q, want FAILED", got.State, got.LastError)
+	}
+	if !slices.Equal(e.client.removed, []string{"nzo-1+files"}) || !slices.Equal(e.searched, []int64{*sent.DesiredItemID}) {
+		t.Errorf("removed %v, searched %v; want removed and searched", e.client.removed, e.searched)
+	}
+}
+
+// Finished files in a folder Solarr cannot see are not lost silently: the failure says why they stayed behind.
+func TestPoll_AStalledDownloadSaysWhyItsFinishedFilesStayed(t *testing.T) {
+	e := newEnv(t)
+	e.stall = poll.StallRules{Enabled: true, Strikes: 1, Check: 15 * time.Minute, NoProgress: 24 * time.Hour}
+	e.client.finishedFolder = "/elsewhere/incomplete/Heka-Zanuvode"
+	e.client.finished = []string{"01 - Kelo.flac"}
+	sent := e.send(t, "nzo-1")
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	e.clock.Advance(15 * time.Minute)
+	e.downloading("nzo-1", 500)
+	e.run(t)
+	got := e.state(t, sent.ID)
+	if got.State != poll.StateFailed || !strings.Contains(got.LastError, "its finished files were not imported: /elsewhere/incomplete/Heka-Zanuvode is outside every download folder") {
+		t.Errorf("= %s %q, want FAILED saying why the finished files stayed", got.State, got.LastError)
 	}
 }

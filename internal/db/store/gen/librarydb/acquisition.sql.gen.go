@@ -327,7 +327,7 @@ func (q *Queries) GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisit
 }
 
 const getAcquisitionStall = `-- name: GetAcquisitionStall :one
-SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at FROM acquisition_stall WHERE acquisition_id = ?
+SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at, importing_finished FROM acquisition_stall WHERE acquisition_id = ?
 `
 
 func (q *Queries) GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error) {
@@ -339,6 +339,7 @@ func (q *Queries) GetAcquisitionStall(ctx context.Context, acquisitionID int64) 
 		&i.LeftBytes,
 		&i.ProgressAt,
 		&i.CheckedAt,
+		&i.ImportingFinished,
 	)
 	return i, err
 }
@@ -1575,18 +1576,20 @@ func (q *Queries) SetAcquisitionPath(ctx context.Context, arg SetAcquisitionPath
 }
 
 const setAcquisitionStall = `-- name: SetAcquisitionStall :exec
-INSERT INTO acquisition_stall (acquisition_id, strikes, left_bytes, progress_at, checked_at) VALUES (?, ?, ?, ?, ?)
+INSERT INTO acquisition_stall (acquisition_id, strikes, left_bytes, progress_at, checked_at, importing_finished)
+VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT (acquisition_id) DO UPDATE SET
   strikes = excluded.strikes, left_bytes = excluded.left_bytes,
-  progress_at = excluded.progress_at, checked_at = excluded.checked_at
+  progress_at = excluded.progress_at, checked_at = excluded.checked_at, importing_finished = excluded.importing_finished
 `
 
 type SetAcquisitionStallParams struct {
-	AcquisitionID int64
-	Strikes       int64
-	LeftBytes     int64
-	ProgressAt    int64
-	CheckedAt     int64
+	AcquisitionID     int64
+	Strikes           int64
+	LeftBytes         int64
+	ProgressAt        int64
+	CheckedAt         int64
+	ImportingFinished int64
 }
 
 func (q *Queries) SetAcquisitionStall(ctx context.Context, arg SetAcquisitionStallParams) error {
@@ -1596,6 +1599,7 @@ func (q *Queries) SetAcquisitionStall(ctx context.Context, arg SetAcquisitionSta
 		arg.LeftBytes,
 		arg.ProgressAt,
 		arg.CheckedAt,
+		arg.ImportingFinished,
 	)
 	return err
 }

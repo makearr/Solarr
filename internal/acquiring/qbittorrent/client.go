@@ -169,17 +169,20 @@ func (c Client) Categories(ctx context.Context) ([]string, error) {
 
 // Torrent is the part of qBittorrent's torrents/info one download needs.
 type Torrent struct {
-	Hash        string  `json:"hash"`
-	Name        string  `json:"name"`
-	Category    string  `json:"category"`
-	State       string  `json:"state"`
-	Size        int64   `json:"size"`
-	AmountLeft  int64   `json:"amount_left"`
-	ContentPath string  `json:"content_path"`
-	DLSpeed     int64   `json:"dlspeed"`
-	Progress    float64 `json:"progress"`
-	Ratio       float64 `json:"ratio"`
-	SeedingTime int64   `json:"seeding_time"`
+	Hash        string `json:"hash"`
+	Name        string `json:"name"`
+	Category    string `json:"category"`
+	State       string `json:"state"`
+	Size        int64  `json:"size"`
+	AmountLeft  int64  `json:"amount_left"`
+	ContentPath string `json:"content_path"`
+	SavePath    string `json:"save_path"`
+	// DownloadPath is where an unfinished torrent's files are when qBittorrent keeps them apart; empty when it does not.
+	DownloadPath string  `json:"download_path"`
+	DLSpeed      int64   `json:"dlspeed"`
+	Progress     float64 `json:"progress"`
+	Ratio        float64 `json:"ratio"`
+	SeedingTime  int64   `json:"seeding_time"`
 }
 
 // Torrents answers the torrents in category, or every torrent for "".
@@ -193,6 +196,36 @@ func (c Client) Torrents(ctx context.Context, category string) ([]Torrent, error
 		return nil, err
 	}
 	return torrents, nil
+}
+
+// TorrentFile is one file of a torrent: its path below the torrent's folder, and how much of it is done.
+type TorrentFile struct {
+	Name     string  `json:"name"`
+	Size     int64   `json:"size"`
+	Progress float64 `json:"progress"`
+	// Priority 0 is a file the torrent skips.
+	Priority int `json:"priority"`
+}
+
+// Torrent answers one torrent by hash; found is false when qBittorrent no longer has it.
+func (c Client) Torrent(ctx context.Context, hash string) (Torrent, bool, error) {
+	var torrents []Torrent
+	if err := c.getJSON(ctx, "/api/v2/torrents/info", url.Values{"hashes": {hash}}, &torrents); err != nil {
+		return Torrent{}, false, err
+	}
+	if len(torrents) == 0 {
+		return Torrent{}, false, nil
+	}
+	return torrents[0], true, nil
+}
+
+// Files answers a torrent's files.
+func (c Client) Files(ctx context.Context, hash string) ([]TorrentFile, error) {
+	var files []TorrentFile
+	if err := c.getJSON(ctx, "/api/v2/torrents/files", url.Values{"hash": {hash}}, &files); err != nil {
+		return nil, err
+	}
+	return files, nil
 }
 
 // AddRequest is one torrent file, or a magnet link in Magnet, sent under a category.

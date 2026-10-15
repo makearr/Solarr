@@ -87,3 +87,13 @@ whatever the strikes, the download takes the path of a download the client faile
 release blocklisted by guid and content for 30 days, the album or season searched again, History saying "stalled".
 Queued and paused downloads are never struck, and a paused one's clock starts again when it runs, so a person's pause
 is never undone; downloads over the size limit (default 50 GB, 0 none) and clients with the switch off are left alone.
+
+**What finished is kept.** Before a stalled download is removed, a client that can say which of its files are complete
+(`download.FinishedFiles`; qBittorrent, from each file's progress) has those files imported on their own: the import
+is limited to them (`importjob.Payload.Only`, `inspect.WalkOptions.Only`; no archive is opened), the download stays in
+the client meanwhile, and once the import has placed something the release is blocklisted, the download removed with
+what it still held, and the item searched for again for the rest (`poll.finishedImported`). Only a download with a
+folder of its own qualifies (a multi-file torrent). qBittorrent keeps unfinished torrents in its own folder when
+"Keep incomplete torrents in" is set (`download_path`): that folder must be visible to Solarr through the client's
+path mapping and lie in a download folder, or the failure says why the finished files stayed behind. SABnzbd is not
+asked: a usenet job fails on missing articles rather than stalling, and its finished parts are often RAR volumes.
