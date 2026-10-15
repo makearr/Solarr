@@ -6,6 +6,7 @@ named file, linked from the code by path.
 | Page | Covers |
 |---|---|
 | [user-guide.md](user-guide.md) | **For people running Solarr**: install, first run, connections, adding music, what happens on its own, import, the colours |
+| [screenshots/](screenshots/) | The images the top-level README shows, taken from a demo instance whose files are placeholders |
 | [codebase-map.md](codebase-map.md) | The package tree, what depends on what, and where to start reading |
 | [coding-standards.md](coding-standards.md) | Style, structure, comments, testing, AI-maintainability |
 | [sql-and-sqlc.md](sql-and-sqlc.md) | Writing queries, and the sqlc/SQLite constraints that bite silently |
