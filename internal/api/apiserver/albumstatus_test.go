@@ -31,6 +31,11 @@ func TestAlbumStatus_DecidesTheColourInPrecedenceOrder(t *testing.T) {
 			want: "unreleased",
 		},
 		{
+			name: "an album here before its release day is complete, not not-released (found 2026-10-15)",
+			row:  apiserver.PersonWorkRow{AvailableFrom: &future, OnDisk: true, WantedState: &complete},
+			want: "complete",
+		},
+		{
 			name: "a download in flight shows even over a complete album being upgraded",
 			row:  apiserver.PersonWorkRow{AvailableFrom: &past, Downloading: true, WantedState: &complete},
 			want: "downloading",

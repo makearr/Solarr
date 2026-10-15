@@ -76,20 +76,19 @@ const (
 	AlbumIncomplete  AlbumStatus = "incomplete"
 )
 
-// albumStatus decides one album's colour. Unreleased outranks everything:
-// an album that is not out yet is not missing, and colouring it red would
-// report a problem nobody can act on. Downloading outranks complete so a
-// finishing upgrade is visible while it runs.
+// albumStatus decides one album's colour. Unreleased outranks all but a complete album: one not out yet is not missing,
+// and red would report a problem nobody can act on. Downloading outranks complete so a finishing upgrade shows.
 func albumStatus(row PersonWorkRow, now time.Time) AlbumStatus {
+	// Every track is here; below the cutoff is Cutoff Unmet's business, not missing (as Lidarr).
+	allHere := row.WantedState != nil && (*row.WantedState == "COMPLETE" || *row.WantedState == "UPGRADABLE")
 	switch {
 	case row.Unverified:
 		return AlbumUnverified
-	case row.AvailableFrom != nil && row.AvailableFrom.After(now):
+	case row.AvailableFrom != nil && row.AvailableFrom.After(now) && !allHere:
 		return AlbumUnreleased
 	case row.Downloading:
 		return AlbumDownloading
-	case row.WantedState != nil && (*row.WantedState == "COMPLETE" || *row.WantedState == "UPGRADABLE"):
-		// Every track is here; below the cutoff is Cutoff Unmet's business, not missing (as Lidarr).
+	case allHere:
 		return AlbumComplete
 	case row.WantedState == nil && row.OnDisk:
 		// Nothing wants it, but the files are here: on disk is complete.
