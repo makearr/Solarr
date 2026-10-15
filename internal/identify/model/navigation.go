@@ -18,6 +18,8 @@ const (
 	// LevelEntityOrganisation means the level lists organisation rows -- a
 	// publisher, a studio.
 	LevelEntityOrganisation LevelEntity = "organisation"
+	// LevelEntityCollection means the level lists collections of parts -- a crossover event across series.
+	LevelEntityCollection LevelEntity = "collection"
 )
 
 // Level is one browsable entry in a library's tree (ADR-54). Key is the

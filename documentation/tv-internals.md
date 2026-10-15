@@ -194,3 +194,15 @@ manual field `numbering_basis` (`tvdb:dvd`, ...; empty is aired) and every later
 (`Service.keepOrdering`), moving parts again if TheTVDB's list itself shifted. Files keep their names until renamed
 (the series' Rename preview). Not built: numbering by another *source* (TMDB, TVmaze), whose episodes share no id
 with TheTVDB's.
+
+## Crossovers (T23)
+
+Two kinds, on generic tables. An **event across series** is a `collection` of kind `crossover` whose members are parts
+(`collection_member.part_id`, migration 0059) in watch order; a part shows "Event, 2 of 4" and links to the event's page,
+which can monitor every episode at once (`library.Crossovers`, `/crossovers`). **One broadcast listed under two series**
+is a `relationship` (`part` -> `part`, kind `same_content`): a file covering either episode covers the other too, on
+linking and whenever files are attached (`AttachFiles` -> `coverLinkedTx`), so the episode counts as on disk in both. The
+library's **Crossovers** level (a `collection` level entity) lists the events and suggests pairs of episodes of two
+series with one title on one day; nothing is linked without a person. Not built yet: placing a hardlink of the file in
+the second series' folder (a media server still sees it under one series only), suggestions from file hashes or TMDB
+episode notes, and a release named after one series searched for the other's want.

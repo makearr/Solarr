@@ -177,6 +177,8 @@ type Querier interface {
 	// category (private/next.md's work_root_folder retirement). Distinct because a
 	// scanned, monitored work has rows on both sides and must count once.
 	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
+	// Copies one part's coverage onto another's: the same broadcast held once satisfies both.
+	CoverPartLikeAnother(ctx context.Context, arg CoverPartLikeAnotherParams) error
 	// Which parts of a work have a file still there, by any item.
 	CoveredPartRefs(ctx context.Context, workID int64) ([]string, error)
 	CreateAcquisition(ctx context.Context, arg CreateAcquisitionParams) (Acquisition, error)
@@ -217,6 +219,8 @@ type Querier interface {
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
+	DeleteCollection(ctx context.Context, id int64) error
+	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
@@ -239,6 +243,7 @@ type Querier interface {
 	// are attached to it and still await identification (D6).
 	DeletePlacedUnidentified(ctx context.Context) error
 	DeleteRecycleBinEntry(ctx context.Context, id int64) error
+	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
@@ -335,6 +340,7 @@ type Querier interface {
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
 	GetBlockedContent(ctx context.Context, id int64) (BlockedContent, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
+	GetCollection(ctx context.Context, id int64) (Collection, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
@@ -483,6 +489,8 @@ type Querier interface {
 	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
+	ListCollectionsOfKind(ctx context.Context, arg ListCollectionsOfKindParams) ([]Collection, error)
+	ListCollectionsOfWorkParts(ctx context.Context, arg ListCollectionsOfWorkPartsParams) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
 	ListCreditsForEdition(ctx context.Context, editionID int64) ([]Credit, error)
 	// Per-track performers and composers, which is what classical and various-artists
@@ -593,6 +601,8 @@ type Querier interface {
 	// discography import makes one row) but nothing bounds them the way a
 	// session count is bounded (Invariant 22's own reasoning).
 	ListPacksPage(ctx context.Context, arg ListPacksPageParams) ([]Pack, error)
+	// A crossover (an event across works) and its members in order, each with what a list shows of it.
+	ListPartCollectionMembers(ctx context.Context, collectionIds []int64) ([]ListPartCollectionMembersRow, error)
 	// Which part of a work has a file, and what that file measures. The same
 	// media_ref present_count is derived from, so the album detail and the
 	// artist overview cannot disagree about what is there; a file a sweep found gone is not.
@@ -645,6 +655,10 @@ type Querier interface {
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
+	// The parts one part is the same broadcast as, either way round, with what a list shows of them.
+	ListSameContentParts(ctx context.Context, arg ListSameContentPartsParams) ([]ListSameContentPartsRow, error)
+	// Episodes of different works with the same title on the same day, not yet linked: likely one broadcast twice.
+	ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
 	ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error)
@@ -877,6 +891,7 @@ type Querier interface {
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
+	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
 	RenameUserTag(ctx context.Context, arg RenameUserTagParams) (int64, error)
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work

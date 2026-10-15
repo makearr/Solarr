@@ -28,6 +28,7 @@ import { CacheSettingsPage } from "./CacheSettings";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
+import { CrossoverIndex, CrossoverPage } from "./Crossovers";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { useLibrary } from "@/lib/useLibrary";
 import { Libraries } from "./Libraries";
@@ -79,6 +80,7 @@ function LevelForLibrary() {
   if (entity === "organisation") return <OrganisationIndex />;
   if (entity === "work") return <WorkIndex />;
   if (entity === "work_part") return <LibraryLevelList />;
+  if (entity === "collection") return <CrossoverIndex />;
   return <EmptyState title={t("level.notFound")} />;
 }
 
@@ -259,6 +261,7 @@ const routes = [
   // Import are grouped under one section. /import and /moves redirect
   // rather than 404ing, the same courtesy the old flat /library got.
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/roots", component: RootFolders }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/crossovers/$id", component: CrossoverPage }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/storage/moves",

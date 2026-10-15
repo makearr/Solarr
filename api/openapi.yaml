@@ -5758,6 +5758,168 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /crossovers:
+    get:
+      operationId: listCrossovers
+      tags: [library]
+      summary: A library's crossover events, and episodes that look like one broadcast listed under two series.
+      parameters:
+        - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The events and the suggestions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events, suggestions]
+                properties:
+                  events: { type: array, items: { $ref: "#/components/schemas/Crossover" } }
+                  suggestions: { type: array, items: { $ref: "#/components/schemas/SameContentSuggestion" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createCrossover
+      tags: [library]
+      summary: Record an event across series, its episodes in watch order. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CrossoverWrite" }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Crossover" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /crossovers/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      operationId: getCrossover
+      tags: [library]
+      summary: One crossover event.
+      responses:
+        "200":
+          description: The event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Crossover" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: updateCrossover
+      tags: [library]
+      summary: Rename an event and set its episodes, in order. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CrossoverWrite" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Crossover" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteCrossover
+      tags: [library]
+      summary: Forget an event; its episodes stay as they are. Administrator only.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /crossovers/{id}/monitor:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: monitorCrossover
+      tags: [library]
+      summary: Monitor or unmonitor every episode of an event, each season following. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [monitored]
+              properties:
+                monitored: { type: boolean }
+      responses:
+        "200":
+          description: The event.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Crossover" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/{id}/crossovers:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    get:
+      operationId: getWorkCrossovers
+      tags: [library]
+      summary: The events a work's episodes are in, and its episodes listed as the same broadcast as another series'.
+      responses:
+        "200":
+          description: The events and the links.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [events, same_content]
+                properties:
+                  events: { type: array, items: { $ref: "#/components/schemas/Crossover" } }
+                  same_content: { type: array, items: { $ref: "#/components/schemas/SameContentLink" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /parts/{id}/same-content:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: linkSameContent
+      tags: [library]
+      summary: Record two episodes as one broadcast, so one file holds both. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [part_id]
+              properties:
+                part_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Linked. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: unlinkSameContent
+      tags: [library]
+      summary: Forget two episodes were one broadcast. Administrator only.
+      parameters:
+        - { name: part_id, in: query, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "204": { description: Unlinked. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/numbering:
     parameters:
       - name: id
@@ -7302,6 +7464,63 @@ components:
             Empty on the last page, which is how a client knows to stop without
             one more request that returns nothing.
 
+    CrossoverWrite:
+      type: object
+      required: [name, part_ids]
+      properties:
+        category_id: { type: integer, format: int64, description: "The library the event is listed under; on create only." }
+        name: { type: string, minLength: 1 }
+        part_ids: { type: array, items: { type: integer, format: int64 }, description: "The episodes in watch order." }
+
+    Crossover:
+      type: object
+      required: [id, name, monitored, members]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        monitored: { type: boolean }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/CrossoverMember" }
+
+    CrossoverMember:
+      type: object
+      required: [part_id, work_id, work_title, media_ref, title, monitored, has_file]
+      properties:
+        part_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64 }
+        work_title: { type: string }
+        media_ref: { type: string }
+        title: { type: string }
+        date: { type: string }
+        monitored: { type: boolean }
+        has_file: { type: boolean }
+
+    SameContentLink:
+      type: object
+      required: [part_id, other_part_id, other_work_id, other_ref, other_work_title]
+      properties:
+        part_id: { type: integer, format: int64 }
+        other_part_id: { type: integer, format: int64 }
+        other_work_id: { type: integer, format: int64 }
+        other_ref: { type: string }
+        other_work_title: { type: string }
+
+    SameContentSuggestion:
+      type: object
+      required: [part_id, work_id, work_title, media_ref, title, date, other_part_id, other_work_id, other_work_title, other_ref]
+      properties:
+        part_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64 }
+        work_title: { type: string }
+        media_ref: { type: string }
+        title: { type: string }
+        date: { type: string }
+        other_part_id: { type: integer, format: int64 }
+        other_work_id: { type: integer, format: int64 }
+        other_work_title: { type: string }
+        other_ref: { type: string }
+
     NumberingMove:
       type: object
       required: [title, from, has_file]
@@ -8345,7 +8564,7 @@ components:
       properties:
         key: { type: string }
         label: { type: string }
-        entity: { type: string, enum: [work, work_part, person, organisation] }
+        entity: { type: string, enum: [work, work_part, person, organisation, collection] }
         kind: { type: string, enum: [text, number, enum, list, duration] }
         choices:
           type: array
@@ -9784,7 +10003,7 @@ components:
           example: "Albums"
         entity:
           type: string
-          enum: [work, work_part, person, organisation]
+          enum: [work, work_part, person, organisation, collection]
         default_sort:
           type: string
           example: "title"

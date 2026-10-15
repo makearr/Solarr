@@ -157,6 +157,8 @@ type Config struct {
 	// DrainStarter starts and stops ADR-51's own drain. Optional: without
 	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
 	DrainStarter DrainStarter
+	// Crossovers are events across works and one broadcast listed twice. Optional: without it, 503.
+	Crossovers Crossovers
 	// WorkNumbering numbers a work by another of its sources' lists. Optional: without it, none is offered.
 	WorkNumbering WorkNumbering
 	// WorkMerger folds an album held twice into one. Optional: without it, MergeWork answers 503.
@@ -296,6 +298,7 @@ type Server struct {
 	vanishedFiles           VanishedFiles
 	workMerger              WorkMerger
 	workNumbering           WorkNumbering
+	crossovers              Crossovers
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
 	namingSchemes           NamingSchemes
@@ -404,6 +407,7 @@ func New(config Config) (*Server, error) {
 		vanishedFiles:           config.VanishedFiles,
 		workMerger:              config.WorkMerger,
 		workNumbering:           config.WorkNumbering,
+		crossovers:              config.Crossovers,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
 		namingSchemes:           config.NamingSchemes,
@@ -510,6 +514,15 @@ func New(config Config) (*Server, error) {
 				server.routeWorkID(w, r, server.GetWorkMergeSuggestion)
 			})
 			secured.Post("/works/{id}/merge", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.MergeWork) })
+			secured.Get("/crossovers", server.routeListCrossovers)
+			secured.Post("/crossovers", server.CreateCrossover)
+			secured.Get("/crossovers/{id}", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.GetCrossover) })
+			secured.Put("/crossovers/{id}", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.UpdateCrossover) })
+			secured.Delete("/crossovers/{id}", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.DeleteCrossover) })
+			secured.Post("/crossovers/{id}/monitor", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.MonitorCrossover) })
+			secured.Get("/works/{id}/crossovers", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.GetWorkCrossovers) })
+			secured.Post("/parts/{id}/same-content", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.LinkSameContent) })
+			secured.Delete("/parts/{id}/same-content", server.routeUnlinkSameContent)
 			secured.Get("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkNumbering) })
 			secured.Post("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkNumbering) })
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)

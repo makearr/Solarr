@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Search, Trash2, User } from "lucide-react";
+import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Link2, Search, Trash2, User } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -60,6 +60,9 @@ export interface PartActions {
   onGrab?: (part: Part, group: Group) => void;
   onInteractive?: (part: Part, group: Group) => void;
   onRemove?: (part: Part, deleteFiles: boolean) => void;
+  /** What a part takes part in beyond its work (a crossover event, the same broadcast in another series). */
+  badgesOf?: (part: Part) => React.ReactNode;
+  onCrossover?: (part: Part) => void;
 }
 
 /** Sonarr's season: a header with its monitoring, counts and searches, opening to its episodes. */
@@ -216,6 +219,7 @@ function PartRow({
           </span>
         )}
         <PartCredits credits={part.credits ?? []} categoryId={categoryId} info={info} />
+        {actions.badgesOf?.(part)}
       </td>
       <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted sm:table-cell">
         {part.runtime_ms ? (part.runtime_ms >= 10 * 60_000 ? formatMinutes(part.runtime_ms) : formatDuration(part.runtime_ms)) : ""}
@@ -234,6 +238,11 @@ function PartRow({
         {group && actions.onInteractive && (
           <Button variant="icon" title="Choose the release yourself" aria-label={`${t("action.interactive")} ${title}`} onClick={() => actions.onInteractive?.(part, group)}>
             <User aria-hidden className="size-3.5" />
+          </Button>
+        )}
+        {actions.onCrossover && (
+          <Button variant="icon" title={t("crossover.action")} aria-label={`${t("crossover.action")} ${title}`} onClick={() => actions.onCrossover?.(part)}>
+            <Link2 aria-hidden className="size-3.5" />
           </Button>
         )}
         {actions.onRemove && (

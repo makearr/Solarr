@@ -51,6 +51,12 @@
         "entity": "organisation",
         "key": "networks",
         "label": "Networks"
+      },
+      {
+        "default_sort": "name",
+        "entity": "collection",
+        "key": "crossovers",
+        "label": "Crossovers"
       }
     ],
     "media_type": "tv",

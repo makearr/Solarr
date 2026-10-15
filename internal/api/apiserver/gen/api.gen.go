@@ -180,6 +180,7 @@ const (
 
 // Defines values for FacetEntity.
 const (
+	FacetEntityCollection   FacetEntity = "collection"
 	FacetEntityOrganisation FacetEntity = "organisation"
 	FacetEntityPerson       FacetEntity = "person"
 	FacetEntityWork         FacetEntity = "work"
@@ -323,6 +324,7 @@ const (
 
 // Defines values for LibraryLevelEntity.
 const (
+	LibraryLevelEntityCollection   LibraryLevelEntity = "collection"
 	LibraryLevelEntityOrganisation LibraryLevelEntity = "organisation"
 	LibraryLevelEntityPerson       LibraryLevelEntity = "person"
 	LibraryLevelEntityWork         LibraryLevelEntity = "work"
@@ -1518,6 +1520,36 @@ type Credit struct {
 	PersonId   int64   `json:"person_id"`
 	PersonName string  `json:"person_name"`
 	Role       string  `json:"role"`
+}
+
+// Crossover defines model for Crossover.
+type Crossover struct {
+	Id        int64             `json:"id"`
+	Members   []CrossoverMember `json:"members"`
+	Monitored bool              `json:"monitored"`
+	Name      string            `json:"name"`
+}
+
+// CrossoverMember defines model for CrossoverMember.
+type CrossoverMember struct {
+	Date      *string `json:"date,omitempty"`
+	HasFile   bool    `json:"has_file"`
+	MediaRef  string  `json:"media_ref"`
+	Monitored bool    `json:"monitored"`
+	PartId    int64   `json:"part_id"`
+	Title     string  `json:"title"`
+	WorkId    int64   `json:"work_id"`
+	WorkTitle string  `json:"work_title"`
+}
+
+// CrossoverWrite defines model for CrossoverWrite.
+type CrossoverWrite struct {
+	// CategoryId The library the event is listed under; on create only.
+	CategoryId *int64 `json:"category_id,omitempty"`
+	Name       string `json:"name"`
+
+	// PartIds The episodes in watch order.
+	PartIds []int64 `json:"part_ids"`
 }
 
 // DashboardSummary defines model for DashboardSummary.
@@ -3676,6 +3708,29 @@ type RunningJob struct {
 	Type  string `json:"type"`
 }
 
+// SameContentLink defines model for SameContentLink.
+type SameContentLink struct {
+	OtherPartId    int64  `json:"other_part_id"`
+	OtherRef       string `json:"other_ref"`
+	OtherWorkId    int64  `json:"other_work_id"`
+	OtherWorkTitle string `json:"other_work_title"`
+	PartId         int64  `json:"part_id"`
+}
+
+// SameContentSuggestion defines model for SameContentSuggestion.
+type SameContentSuggestion struct {
+	Date           string `json:"date"`
+	MediaRef       string `json:"media_ref"`
+	OtherPartId    int64  `json:"other_part_id"`
+	OtherRef       string `json:"other_ref"`
+	OtherWorkId    int64  `json:"other_work_id"`
+	OtherWorkTitle string `json:"other_work_title"`
+	PartId         int64  `json:"part_id"`
+	Title          string `json:"title"`
+	WorkId         int64  `json:"work_id"`
+	WorkTitle      string `json:"work_title"`
+}
+
 // Schedule One registered periodic task (ADR-59), its effective settings and run-state.
 type Schedule struct {
 	// Cadences Effective cadences -- a stored override if one exists, [default_cadence] otherwise.
@@ -4424,6 +4479,16 @@ type SearchCategoryJSONBody struct {
 	WorkIds     *[]int64 `json:"work_ids,omitempty"`
 }
 
+// ListCrossoversParams defines parameters for ListCrossovers.
+type ListCrossoversParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// MonitorCrossoverJSONBody defines parameters for MonitorCrossover.
+type MonitorCrossoverJSONBody struct {
+	Monitored bool `json:"monitored"`
+}
+
 // ListIncompleteDiscographiesParams defines parameters for ListIncompleteDiscographies.
 type ListIncompleteDiscographiesParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -4677,6 +4742,16 @@ type UnfollowOrganisationParams struct {
 type ListPacksParams struct {
 	AfterId *int64 `form:"after_id,omitempty" json:"after_id,omitempty"`
 	Limit   *int   `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// UnlinkSameContentParams defines parameters for UnlinkSameContent.
+type UnlinkSameContentParams struct {
+	PartId int64 `form:"part_id" json:"part_id"`
+}
+
+// LinkSameContentJSONBody defines parameters for LinkSameContent.
+type LinkSameContentJSONBody struct {
+	PartId int64 `json:"part_id"`
 }
 
 // ListPeopleParams defines parameters for ListPeople.
@@ -5149,6 +5224,15 @@ type SearchCategoryJSONRequestBody SearchCategoryJSONBody
 // SetLibraryTaggingJSONRequestBody defines body for SetLibraryTagging for application/json ContentType.
 type SetLibraryTaggingJSONRequestBody = Tagging
 
+// CreateCrossoverJSONRequestBody defines body for CreateCrossover for application/json ContentType.
+type CreateCrossoverJSONRequestBody = CrossoverWrite
+
+// UpdateCrossoverJSONRequestBody defines body for UpdateCrossover for application/json ContentType.
+type UpdateCrossoverJSONRequestBody = CrossoverWrite
+
+// MonitorCrossoverJSONRequestBody defines body for MonitorCrossover for application/json ContentType.
+type MonitorCrossoverJSONRequestBody MonitorCrossoverJSONBody
+
 // AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
 type AddDownloaderJSONRequestBody = AddDownloaderRequest
 
@@ -5256,6 +5340,9 @@ type FollowOrganisationJSONRequestBody = FollowRequest
 
 // PreviewOrganisationFollowJSONRequestBody defines body for PreviewOrganisationFollow for application/json ContentType.
 type PreviewOrganisationFollowJSONRequestBody = FollowRequest
+
+// LinkSameContentJSONRequestBody defines body for LinkSameContent for application/json ContentType.
+type LinkSameContentJSONRequestBody LinkSameContentJSONBody
 
 // ChoosePersonArtworkJSONRequestBody defines body for ChoosePersonArtwork for application/json ContentType.
 type ChoosePersonArtworkJSONRequestBody = ImagePick
@@ -5520,6 +5607,24 @@ type ServerInterface interface {
 	// Save a library's tagging; the tag writer runs at once. Administrator only.
 	// (PUT /categories/{id}/tagging)
 	SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64)
+	// A library's crossover events, and episodes that look like one broadcast listed under two series.
+	// (GET /crossovers)
+	ListCrossovers(w http.ResponseWriter, r *http.Request, params ListCrossoversParams)
+	// Record an event across series, its episodes in watch order. Administrator only.
+	// (POST /crossovers)
+	CreateCrossover(w http.ResponseWriter, r *http.Request)
+	// Forget an event; its episodes stay as they are. Administrator only.
+	// (DELETE /crossovers/{id})
+	DeleteCrossover(w http.ResponseWriter, r *http.Request, id int64)
+	// One crossover event.
+	// (GET /crossovers/{id})
+	GetCrossover(w http.ResponseWriter, r *http.Request, id int64)
+	// Rename an event and set its episodes, in order. Administrator only.
+	// (PUT /crossovers/{id})
+	UpdateCrossover(w http.ResponseWriter, r *http.Request, id int64)
+	// Monitor or unmonitor every episode of an event, each season following. Administrator only.
+	// (POST /crossovers/{id}/monitor)
+	MonitorCrossover(w http.ResponseWriter, r *http.Request, id int64)
 	// Configured libraries and current state, for the landing page.
 	// (GET /dashboard)
 	GetDashboard(w http.ResponseWriter, r *http.Request)
@@ -5787,6 +5892,12 @@ type ServerInterface interface {
 	// One pack and its own members, in the order they were recorded.
 	// (GET /packs/{id})
 	GetPack(w http.ResponseWriter, r *http.Request, id int64)
+	// Forget two episodes were one broadcast. Administrator only.
+	// (DELETE /parts/{id}/same-content)
+	UnlinkSameContent(w http.ResponseWriter, r *http.Request, id int64, params UnlinkSameContentParams)
+	// Record two episodes as one broadcast, so one file holds both. Administrator only.
+	// (POST /parts/{id}/same-content)
+	LinkSameContent(w http.ResponseWriter, r *http.Request, id int64)
 	// A page of people of one library, or of every library the caller may read (ADR-32).
 	// (GET /people)
 	ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams)
@@ -6051,6 +6162,9 @@ type ServerInterface interface {
 	// Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 	// (POST /works/{id}/candidates/{decisionId}/send)
 	SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params SendCandidateParams)
+	// The events a work's episodes are in, and its episodes listed as the same broadcast as another series'.
+	// (GET /works/{id}/crossovers)
+	GetWorkCrossovers(w http.ResponseWriter, r *http.Request, id int64)
 	// What an album's Edit dialog shows (Radarr's Edit).
 	// (GET /works/{id}/edit)
 	GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
@@ -6402,6 +6516,42 @@ func (_ Unimplemented) GetLibraryTagging(w http.ResponseWriter, r *http.Request,
 // Save a library's tagging; the tag writer runs at once. Administrator only.
 // (PUT /categories/{id}/tagging)
 func (_ Unimplemented) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's crossover events, and episodes that look like one broadcast listed under two series.
+// (GET /crossovers)
+func (_ Unimplemented) ListCrossovers(w http.ResponseWriter, r *http.Request, params ListCrossoversParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Record an event across series, its episodes in watch order. Administrator only.
+// (POST /crossovers)
+func (_ Unimplemented) CreateCrossover(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Forget an event; its episodes stay as they are. Administrator only.
+// (DELETE /crossovers/{id})
+func (_ Unimplemented) DeleteCrossover(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One crossover event.
+// (GET /crossovers/{id})
+func (_ Unimplemented) GetCrossover(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename an event and set its episodes, in order. Administrator only.
+// (PUT /crossovers/{id})
+func (_ Unimplemented) UpdateCrossover(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Monitor or unmonitor every episode of an event, each season following. Administrator only.
+// (POST /crossovers/{id}/monitor)
+func (_ Unimplemented) MonitorCrossover(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -6939,6 +7089,18 @@ func (_ Unimplemented) GetPack(w http.ResponseWriter, r *http.Request, id int64)
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Forget two episodes were one broadcast. Administrator only.
+// (DELETE /parts/{id}/same-content)
+func (_ Unimplemented) UnlinkSameContent(w http.ResponseWriter, r *http.Request, id int64, params UnlinkSameContentParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Record two episodes as one broadcast, so one file holds both. Administrator only.
+// (POST /parts/{id}/same-content)
+func (_ Unimplemented) LinkSameContent(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // A page of people of one library, or of every library the caller may read (ADR-32).
 // (GET /people)
 func (_ Unimplemented) ListPeople(w http.ResponseWriter, r *http.Request, params ListPeopleParams) {
@@ -7464,6 +7626,12 @@ func (_ Unimplemented) BlocklistCandidate(w http.ResponseWriter, r *http.Request
 // Dispatch one ACCEPTed decision's own release to a matching downloader (ADR-57's acquire.send). No resource gate yet -- every dispatch here is a user's own explicit action (ADR-12's own "user request: never paused"), since nothing automatic calls this until stage 6's planner exists.
 // (POST /works/{id}/candidates/{decisionId}/send)
 func (_ Unimplemented) SendCandidate(w http.ResponseWriter, r *http.Request, id int64, decisionId int64, params SendCandidateParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The events a work's episodes are in, and its episodes listed as the same broadcast as another series'.
+// (GET /works/{id}/crossovers)
+func (_ Unimplemented) GetWorkCrossovers(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9173,6 +9341,202 @@ func (siw *ServerInterfaceWrapper) SetLibraryTagging(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetLibraryTagging(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListCrossovers operation middleware
+func (siw *ServerInterfaceWrapper) ListCrossovers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListCrossoversParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListCrossovers(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateCrossover operation middleware
+func (siw *ServerInterfaceWrapper) CreateCrossover(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateCrossover(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteCrossover operation middleware
+func (siw *ServerInterfaceWrapper) DeleteCrossover(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteCrossover(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCrossover operation middleware
+func (siw *ServerInterfaceWrapper) GetCrossover(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCrossover(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateCrossover operation middleware
+func (siw *ServerInterfaceWrapper) UpdateCrossover(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateCrossover(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MonitorCrossover operation middleware
+func (siw *ServerInterfaceWrapper) MonitorCrossover(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MonitorCrossover(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12005,6 +12369,90 @@ func (siw *ServerInterfaceWrapper) GetPack(w http.ResponseWriter, r *http.Reques
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GetPack(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UnlinkSameContent operation middleware
+func (siw *ServerInterfaceWrapper) UnlinkSameContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params UnlinkSameContentParams
+
+	// ------------- Required query parameter "part_id" -------------
+
+	if paramValue := r.URL.Query().Get("part_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "part_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "part_id", r.URL.Query(), &params.PartId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "part_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UnlinkSameContent(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// LinkSameContent operation middleware
+func (siw *ServerInterfaceWrapper) LinkSameContent(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.LinkSameContent(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -14940,6 +15388,39 @@ func (siw *ServerInterfaceWrapper) SendCandidate(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkCrossovers operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkCrossovers(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkCrossovers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkEdit operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkEdit(w http.ResponseWriter, r *http.Request) {
 
@@ -15752,6 +16233,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Put(options.BaseURL+"/categories/{id}/tagging", wrapper.SetLibraryTagging)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/crossovers", wrapper.ListCrossovers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/crossovers", wrapper.CreateCrossover)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/crossovers/{id}", wrapper.DeleteCrossover)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/crossovers/{id}", wrapper.GetCrossover)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/crossovers/{id}", wrapper.UpdateCrossover)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/crossovers/{id}/monitor", wrapper.MonitorCrossover)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/dashboard", wrapper.GetDashboard)
 	})
 	r.Group(func(r chi.Router) {
@@ -16019,6 +16518,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/packs/{id}", wrapper.GetPack)
 	})
 	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/parts/{id}/same-content", wrapper.UnlinkSameContent)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/parts/{id}/same-content", wrapper.LinkSameContent)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people", wrapper.ListPeople)
 	})
 	r.Group(func(r chi.Router) {
@@ -16281,6 +16786,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/candidates/{decisionId}/send", wrapper.SendCandidate)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/crossovers", wrapper.GetWorkCrossovers)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/edit", wrapper.GetWorkEdit)

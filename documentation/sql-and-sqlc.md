@@ -213,3 +213,6 @@ It indents each step by depth: a temp b-tree inside a correlated subquery is not
 **A case-insensitive order needs a matching index.** `ORDER BY sort_name COLLATE NOCASE` is
 served only by an index declared `COLLATE NOCASE` (migration 0046), and the cursor and prefix
 comparisons must carry the same collation or pages disagree with the order.
+
+- **A `sqlc.slice` used twice in one query is expanded once** (found 2026-10-15, a UNION over both directions of a
+  relationship): give each use its own name (`part_ids`, `part_ids_again`) and pass the slice twice.

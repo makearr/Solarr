@@ -116,6 +116,10 @@ alone; **Settings → Metadata → Air times**, advanced), and a season nothing 
 its first date. If a series' air times are off because its network's time zone is wrong, set **Edit → Air time zone**.
 A series TheTVDB also lists in DVD, absolute or another order has **Numbering** on its page: pick the order, preview which
 episodes move, apply; the files follow their episodes and keep their names until you rename them.
+**Crossovers** (under a TV library) lists events across series and suggests episodes that look like one broadcast listed
+under two series. On a series page, an episode's link button adds it to an event (shown as "Event, 2 of 4" in every
+series it touches, with a page that monitors the whole event) or records it as the same broadcast as another series'
+episode, so one file holds both.
 **Edit → Series type** shows what was detected (anime, daily or standard) and lets you change it; anime seasons are also searched
 by absolute episode number. Posters and photos are fetched once and served by Solarr itself.
 

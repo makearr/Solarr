@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const addCollectionMember = `-- name: AddCollectionMember :exec
@@ -110,6 +111,29 @@ func (q *Queries) CountGroupOutcomes(ctx context.Context, arg CountGroupOutcomes
 	return items, nil
 }
 
+const coverPartLikeAnother = `-- name: CoverPartLikeAnother :exec
+INSERT OR IGNORE INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+SELECT target_item.id, f.media_object_id, f.role, target.media_ref, f.added_at
+FROM work_part source
+JOIN desired_item source_item ON source_item.work_id = source.work_id
+JOIN desired_item_file f ON f.desired_item_id = source_item.id AND f.media_ref = source.media_ref AND f.role = 'primary'
+JOIN work_part target ON target.id = ?1
+JOIN desired_item target_item ON target_item.work_id = target.work_id AND target_item.satisfaction_kind = 'SET'
+  AND (target_item.media_ref = '' OR target.media_ref LIKE target_item.media_ref || ':%')
+WHERE source.id = ?2
+`
+
+type CoverPartLikeAnotherParams struct {
+	TargetPartID int64
+	SourcePartID int64
+}
+
+// Copies one part's coverage onto another's: the same broadcast held once satisfies both.
+func (q *Queries) CoverPartLikeAnother(ctx context.Context, arg CoverPartLikeAnotherParams) error {
+	_, err := q.db.ExecContext(ctx, coverPartLikeAnother, arg.TargetPartID, arg.SourcePartID)
+	return err
+}
+
 const createCollection = `-- name: CreateCollection :one
 
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
@@ -150,6 +174,47 @@ func (q *Queries) CreateCollection(ctx context.Context, arg CreateCollectionPara
 		&i.AddedAt,
 	)
 	return i, err
+}
+
+const deleteCollection = `-- name: DeleteCollection :exec
+DELETE FROM collection WHERE id = ?
+`
+
+func (q *Queries) DeleteCollection(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCollection, id)
+	return err
+}
+
+const deleteCollectionMembers = `-- name: DeleteCollectionMembers :exec
+DELETE FROM collection_member WHERE collection_id = ?
+`
+
+func (q *Queries) DeleteCollectionMembers(ctx context.Context, collectionID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCollectionMembers, collectionID)
+	return err
+}
+
+const deleteRelationship = `-- name: DeleteRelationship :exec
+DELETE FROM relationship WHERE from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND kind = ?
+`
+
+type DeleteRelationshipParams struct {
+	FromType string
+	FromID   int64
+	ToType   string
+	ToID     int64
+	Kind     string
+}
+
+func (q *Queries) DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error {
+	_, err := q.db.ExecContext(ctx, deleteRelationship,
+		arg.FromType,
+		arg.FromID,
+		arg.ToType,
+		arg.ToID,
+		arg.Kind,
+	)
+	return err
 }
 
 const dequeueReady = `-- name: DequeueReady :exec
@@ -232,6 +297,26 @@ func (q *Queries) GetArtwork(ctx context.Context, arg GetArtworkParams) (string,
 	var cache_key string
 	err := row.Scan(&cache_key)
 	return cache_key, err
+}
+
+const getCollection = `-- name: GetCollection :one
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at FROM collection WHERE id = ?
+`
+
+func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, error) {
+	row := q.db.QueryRowContext(ctx, getCollection, id)
+	var i Collection
+	err := row.Scan(
+		&i.ID,
+		&i.MediaType,
+		&i.Name,
+		&i.Kind,
+		&i.Source,
+		&i.Monitored,
+		&i.CompleteAt,
+		&i.AddedAt,
+	)
+	return i, err
 }
 
 const getGroupReputation = `-- name: GetGroupReputation :one
@@ -409,6 +494,92 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 	return items, nil
 }
 
+const listCollectionsOfKind = `-- name: ListCollectionsOfKind :many
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at
+FROM collection WHERE kind = ?1 AND media_type = ?2 ORDER BY name, id
+`
+
+type ListCollectionsOfKindParams struct {
+	Kind      string
+	MediaType string
+}
+
+func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollectionsOfKindParams) ([]Collection, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionsOfKind, arg.Kind, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Collection{}
+	for rows.Next() {
+		var i Collection
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaType,
+			&i.Name,
+			&i.Kind,
+			&i.Source,
+			&i.Monitored,
+			&i.CompleteAt,
+			&i.AddedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCollectionsOfWorkParts = `-- name: ListCollectionsOfWorkParts :many
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+FROM collection c JOIN collection_member m ON m.collection_id = c.id
+WHERE m.work_id = ?1 AND m.part_id <> 0 AND c.kind = ?2
+ORDER BY c.name, c.id
+`
+
+type ListCollectionsOfWorkPartsParams struct {
+	WorkID int64
+	Kind   string
+}
+
+func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollectionsOfWorkPartsParams) ([]Collection, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionsOfWorkParts, arg.WorkID, arg.Kind)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Collection{}
+	for rows.Next() {
+		var i Collection
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaType,
+			&i.Name,
+			&i.Kind,
+			&i.Source,
+			&i.Monitored,
+			&i.CompleteAt,
+			&i.AddedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroupObservations = `-- name: ListGroupObservations :many
 SELECT id, release_group, media_object_id, outcome, cause, observed_at, was_exploration
 FROM group_observation
@@ -437,6 +608,77 @@ func (q *Queries) ListGroupObservations(ctx context.Context, arg ListGroupObserv
 			&i.Cause,
 			&i.ObservedAt,
 			&i.WasExploration,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPartCollectionMembers = `-- name: ListPartCollectionMembers :many
+SELECT m.collection_id, m.ord, wp.id AS part_id, wp.work_id, wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS part_title,
+       CAST(COALESCE(wp.date, '') AS TEXT) AS date, wp.monitored, w.canonical_title AS work_title,
+       EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+               JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
+               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary') AS has_file
+FROM collection_member m
+JOIN work_part wp ON wp.id = m.part_id
+JOIN work w ON w.id = wp.work_id
+WHERE m.collection_id IN (/*SLICE:collection_ids*/?)
+ORDER BY m.collection_id, m.ord, m.part_id
+`
+
+type ListPartCollectionMembersRow struct {
+	CollectionID int64
+	Ord          sql.NullInt64
+	PartID       int64
+	WorkID       int64
+	MediaRef     string
+	PartTitle    string
+	Date         string
+	Monitored    int64
+	WorkTitle    string
+	HasFile      bool
+}
+
+// A crossover (an event across works) and its members in order, each with what a list shows of it.
+func (q *Queries) ListPartCollectionMembers(ctx context.Context, collectionIds []int64) ([]ListPartCollectionMembersRow, error) {
+	query := listPartCollectionMembers
+	var queryParams []interface{}
+	if len(collectionIds) > 0 {
+		for _, v := range collectionIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:collection_ids*/?", strings.Repeat(",?", len(collectionIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:collection_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListPartCollectionMembersRow{}
+	for rows.Next() {
+		var i ListPartCollectionMembersRow
+		if err := rows.Scan(
+			&i.CollectionID,
+			&i.Ord,
+			&i.PartID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.PartTitle,
+			&i.Date,
+			&i.Monitored,
+			&i.WorkTitle,
+			&i.HasFile,
 		); err != nil {
 			return nil, err
 		}
@@ -490,6 +732,151 @@ func (q *Queries) ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNe
 	for rows.Next() {
 		var i ListPeopleNeedingArtworkRow
 		if err := rows.Scan(&i.PersonID, &i.ArtistMbid); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSameContentParts = `-- name: ListSameContentParts :many
+SELECT r.from_id AS part_id, wp.id AS other_part_id, wp.work_id AS other_work_id, wp.media_ref AS other_ref,
+       w.canonical_title AS other_work_title
+FROM relationship r JOIN work_part wp ON wp.id = r.to_id JOIN work w ON w.id = wp.work_id
+WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND r.from_id IN (/*SLICE:part_ids*/?)
+UNION ALL
+SELECT r.to_id AS part_id, wp.id AS other_part_id, wp.work_id AS other_work_id, wp.media_ref AS other_ref,
+       w.canonical_title AS other_work_title
+FROM relationship r JOIN work_part wp ON wp.id = r.from_id JOIN work w ON w.id = wp.work_id
+WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND r.to_id IN (/*SLICE:part_ids_again*/?)
+`
+
+type ListSameContentPartsParams struct {
+	PartIds      []int64
+	PartIdsAgain []int64
+}
+
+type ListSameContentPartsRow struct {
+	PartID         int64
+	OtherPartID    int64
+	OtherWorkID    int64
+	OtherRef       string
+	OtherWorkTitle string
+}
+
+// The parts one part is the same broadcast as, either way round, with what a list shows of them.
+func (q *Queries) ListSameContentParts(ctx context.Context, arg ListSameContentPartsParams) ([]ListSameContentPartsRow, error) {
+	query := listSameContentParts
+	var queryParams []interface{}
+	if len(arg.PartIds) > 0 {
+		for _, v := range arg.PartIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", strings.Repeat(",?", len(arg.PartIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:part_ids*/?", "NULL", 1)
+	}
+	if len(arg.PartIdsAgain) > 0 {
+		for _, v := range arg.PartIdsAgain {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:part_ids_again*/?", strings.Repeat(",?", len(arg.PartIdsAgain))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:part_ids_again*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSameContentPartsRow{}
+	for rows.Next() {
+		var i ListSameContentPartsRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.OtherPartID,
+			&i.OtherWorkID,
+			&i.OtherRef,
+			&i.OtherWorkTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSameContentSuggestions = `-- name: ListSameContentSuggestions :many
+SELECT a.id AS part_id, a.work_id, wa.canonical_title AS work_title, a.media_ref, CAST(COALESCE(a.title, '') AS TEXT) AS title,
+       b.id AS other_part_id, b.work_id AS other_work_id, wb.canonical_title AS other_work_title, b.media_ref AS other_ref,
+       CAST(COALESCE(a.date, '') AS TEXT) AS date
+FROM work_part a
+JOIN work_part b ON b.date = a.date AND LOWER(b.title) = LOWER(a.title) AND b.work_id > a.work_id
+JOIN work wa ON wa.id = a.work_id
+JOIN work wb ON wb.id = b.work_id
+WHERE a.date IS NOT NULL AND a.title IS NOT NULL AND LENGTH(a.title) > 3 AND wa.media_type = ?1
+  AND wb.media_type = wa.media_type
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = a.work_id AND d.category_id = ?2)
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = b.work_id AND d.category_id = ?2)
+  AND NOT EXISTS (SELECT 1 FROM relationship r WHERE r.kind = 'same_content'
+                  AND ((r.from_id = a.id AND r.to_id = b.id) OR (r.from_id = b.id AND r.to_id = a.id)))
+ORDER BY a.date DESC
+LIMIT ?3
+`
+
+type ListSameContentSuggestionsParams struct {
+	MediaType  string
+	CategoryID int64
+	PageSize   int64
+}
+
+type ListSameContentSuggestionsRow struct {
+	PartID         int64
+	WorkID         int64
+	WorkTitle      string
+	MediaRef       string
+	Title          string
+	OtherPartID    int64
+	OtherWorkID    int64
+	OtherWorkTitle string
+	OtherRef       string
+	Date           string
+}
+
+// Episodes of different works with the same title on the same day, not yet linked: likely one broadcast twice.
+func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSameContentSuggestions, arg.MediaType, arg.CategoryID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSameContentSuggestionsRow{}
+	for rows.Next() {
+		var i ListSameContentSuggestionsRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.WorkID,
+			&i.WorkTitle,
+			&i.MediaRef,
+			&i.Title,
+			&i.OtherPartID,
+			&i.OtherWorkID,
+			&i.OtherWorkTitle,
+			&i.OtherRef,
+			&i.Date,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -799,6 +1186,21 @@ func (q *Queries) RecordGroupObservation(ctx context.Context, arg RecordGroupObs
 		arg.ObservedAt,
 		arg.WasExploration,
 	)
+	return err
+}
+
+const renameCollection = `-- name: RenameCollection :exec
+UPDATE collection SET name = ?, monitored = ? WHERE id = ?
+`
+
+type RenameCollectionParams struct {
+	Name      string
+	Monitored int64
+	ID        int64
+}
+
+func (q *Queries) RenameCollection(ctx context.Context, arg RenameCollectionParams) error {
+	_, err := q.db.ExecContext(ctx, renameCollection, arg.Name, arg.Monitored, arg.ID)
 	return err
 }
 

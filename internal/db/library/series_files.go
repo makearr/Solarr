@@ -59,6 +59,7 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 			}
 		}
 		touched := map[int64]bool{}
+		var attachedParts []int64
 		for _, link := range links {
 			if err := queries.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: workID, MediaObjectID: link.MediaObjectID, FirstSeenAt: at.Unix()}); err != nil {
 				return fmt.Errorf("link file: %w", err)
@@ -91,6 +92,7 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 				}
 				touched[itemID] = true
 				result.Attached++
+				attachedParts = append(attachedParts, part.ID)
 			}
 		}
 		for itemID := range touched {
@@ -98,7 +100,8 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 				return err
 			}
 		}
-		return nil
+		// The same broadcast listed under another series is held by this file too (T23).
+		return coverLinkedTx(ctx, queries, attachedParts, s.store.Now())
 	})
 	if err != nil {
 		return FileAttachment{}, fmt.Errorf("library: attach series files: %w", err)

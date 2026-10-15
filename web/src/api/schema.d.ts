@@ -3574,6 +3574,103 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/crossovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A library's crossover events, and episodes that look like one broadcast listed under two series. */
+        get: operations["listCrossovers"];
+        put?: never;
+        /** Record an event across series, its episodes in watch order. Administrator only. */
+        post: operations["createCrossover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/crossovers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One crossover event. */
+        get: operations["getCrossover"];
+        /** Rename an event and set its episodes, in order. Administrator only. */
+        put: operations["updateCrossover"];
+        post?: never;
+        /** Forget an event; its episodes stay as they are. Administrator only. */
+        delete: operations["deleteCrossover"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/crossovers/{id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Monitor or unmonitor every episode of an event, each season following. Administrator only. */
+        post: operations["monitorCrossover"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/{id}/crossovers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The events a work's episodes are in, and its episodes listed as the same broadcast as another series'. */
+        get: operations["getWorkCrossovers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/parts/{id}/same-content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record two episodes as one broadcast, so one file holds both. Administrator only. */
+        post: operations["linkSameContent"];
+        /** Forget two episodes were one broadcast. Administrator only. */
+        delete: operations["unlinkSameContent"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/numbering": {
         parameters: {
             query?: never;
@@ -4651,6 +4748,61 @@ export interface components {
             /** @description Empty on the last page, which is how a client knows to stop without one more request that returns nothing. */
             next_cursor?: string;
         };
+        CrossoverWrite: {
+            /**
+             * Format: int64
+             * @description The library the event is listed under; on create only.
+             */
+            category_id?: number;
+            name: string;
+            /** @description The episodes in watch order. */
+            part_ids: number[];
+        };
+        Crossover: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            monitored: boolean;
+            members: components["schemas"]["CrossoverMember"][];
+        };
+        CrossoverMember: {
+            /** Format: int64 */
+            part_id: number;
+            /** Format: int64 */
+            work_id: number;
+            work_title: string;
+            media_ref: string;
+            title: string;
+            date?: string;
+            monitored: boolean;
+            has_file: boolean;
+        };
+        SameContentLink: {
+            /** Format: int64 */
+            part_id: number;
+            /** Format: int64 */
+            other_part_id: number;
+            /** Format: int64 */
+            other_work_id: number;
+            other_ref: string;
+            other_work_title: string;
+        };
+        SameContentSuggestion: {
+            /** Format: int64 */
+            part_id: number;
+            /** Format: int64 */
+            work_id: number;
+            work_title: string;
+            media_ref: string;
+            title: string;
+            date: string;
+            /** Format: int64 */
+            other_part_id: number;
+            /** Format: int64 */
+            other_work_id: number;
+            other_work_title: string;
+            other_ref: string;
+        };
         NumberingMove: {
             title: string;
             /** @example S01E05 */
@@ -5571,7 +5723,7 @@ export interface components {
             key: string;
             label: string;
             /** @enum {string} */
-            entity: "work" | "work_part" | "person" | "organisation";
+            entity: "work" | "work_part" | "person" | "organisation" | "collection";
             /** @enum {string} */
             kind: "text" | "number" | "enum" | "list" | "duration";
             choices?: {
@@ -6632,7 +6784,7 @@ export interface components {
             /** @example Albums */
             label: string;
             /** @enum {string} */
-            entity: "work" | "work_part" | "person" | "organisation";
+            entity: "work" | "work_part" | "person" | "organisation" | "collection";
             /** @example title */
             default_sort: string;
             /** @description From the counter table (section 21.12), never a live COUNT. Absent when this entity has no counter yet. */
@@ -13296,6 +13448,249 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listCrossovers: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The events and the suggestions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: components["schemas"]["Crossover"][];
+                        suggestions: components["schemas"]["SameContentSuggestion"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    createCrossover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossoverWrite"];
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Crossover"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getCrossover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The event. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Crossover"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    updateCrossover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrossoverWrite"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Crossover"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteCrossover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    monitorCrossover: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    monitored: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The event. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Crossover"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWorkCrossovers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The events and the links. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: components["schemas"]["Crossover"][];
+                        same_content: components["schemas"]["SameContentLink"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    linkSameContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    part_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Linked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    unlinkSameContent: {
+        parameters: {
+            query: {
+                part_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     getWorkNumbering: {

@@ -24,6 +24,8 @@ import { ChooseImage } from "../ChooseImage";
 import { InteractiveSearch, type SearchScope } from "../InteractiveSearch";
 import { RenamePlanner } from "../RenamePlanner";
 import { statusLabel, useQueue } from "../Queue";
+import { CrossoverBadges, CrossoverDialog, useWorkCrossovers } from "../Crossovers";
+import { useLibrary } from "@/lib/useLibrary";
 import { EditWork } from "./EditWork";
 import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
 import { grabNote } from "./grabNote";
@@ -464,7 +466,15 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
     onSuccess: changed,
   });
 
+  const library = useLibrary(categoryId ?? "");
+  const hasCrossovers = library?.levels.some((level) => level.entity === "collection") === true;
+  const crossovers = useWorkCrossovers(work.id, hasCrossovers);
+  const [crossoverPart, setCrossoverPart] = useState<{ id: number; title?: string; media_ref: string }>();
   const actions: PartActions = {
+    badgesOf: crossovers.data
+      ? (part) => <CrossoverBadges partId={part.id} events={crossovers.data.events} links={crossovers.data.same_content} categoryId={categoryId} />
+      : undefined,
+    onCrossover: hasCrossovers && administrator && categoryId ? (part) => setCrossoverPart(part) : undefined,
     onMonitor: work.can_request ? (part, monitored) => monitor.mutate({ monitored, parts: [part.id] }) : undefined,
     onGrab: grouped && work.can_request ? (part, group) => grab.mutate({ group, part: part.id }) : undefined,
     onInteractive: grouped && work.can_request ? (part, group) => setInteractive({ scope: { group: group.ref, part: part.id }, title: `${work.title}, ${group.label} ${part.number ?? ""}` }) : undefined,
@@ -475,6 +485,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
   return (
     <div className="flex flex-col gap-4">
       <CastStrip work={work} info={info} categoryId={categoryId} />
+      {crossoverPart && categoryId && <CrossoverDialog part={crossoverPart} categoryId={categoryId} onClose={() => setCrossoverPart(undefined)} />}
       {grouped ? (
         groups.map((group) => (
           <GroupSection

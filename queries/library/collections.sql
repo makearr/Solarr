@@ -219,3 +219,83 @@ WHERE f.work_id > sqlc.arg(after_id)
   )
 ORDER BY f.work_id
 LIMIT sqlc.arg(page_size);
+
+-- A crossover (an event across works) and its members in order, each with what a list shows of it.
+-- name: ListPartCollectionMembers :many
+SELECT m.collection_id, m.ord, wp.id AS part_id, wp.work_id, wp.media_ref, CAST(COALESCE(wp.title, '') AS TEXT) AS part_title,
+       CAST(COALESCE(wp.date, '') AS TEXT) AS date, wp.monitored, w.canonical_title AS work_title,
+       EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+               JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
+               WHERE d.work_id = wp.work_id AND f.media_ref = wp.media_ref AND f.role = 'primary') AS has_file
+FROM collection_member m
+JOIN work_part wp ON wp.id = m.part_id
+JOIN work w ON w.id = wp.work_id
+WHERE m.collection_id IN (sqlc.slice(collection_ids))
+ORDER BY m.collection_id, m.ord, m.part_id;
+
+-- name: ListCollectionsOfKind :many
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at
+FROM collection WHERE kind = sqlc.arg(kind) AND media_type = sqlc.arg(media_type) ORDER BY name, id;
+
+-- name: ListCollectionsOfWorkParts :many
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+FROM collection c JOIN collection_member m ON m.collection_id = c.id
+WHERE m.work_id = sqlc.arg(work_id) AND m.part_id <> 0 AND c.kind = sqlc.arg(kind)
+ORDER BY c.name, c.id;
+
+-- name: GetCollection :one
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at FROM collection WHERE id = ?;
+
+-- name: RenameCollection :exec
+UPDATE collection SET name = ?, monitored = ? WHERE id = ?;
+
+-- name: DeleteCollectionMembers :exec
+DELETE FROM collection_member WHERE collection_id = ?;
+
+-- name: DeleteCollection :exec
+DELETE FROM collection WHERE id = ?;
+
+-- name: DeleteRelationship :exec
+DELETE FROM relationship WHERE from_type = ? AND from_id = ? AND to_type = ? AND to_id = ? AND kind = ?;
+
+-- The parts one part is the same broadcast as, either way round, with what a list shows of them.
+-- name: ListSameContentParts :many
+SELECT r.from_id AS part_id, wp.id AS other_part_id, wp.work_id AS other_work_id, wp.media_ref AS other_ref,
+       w.canonical_title AS other_work_title
+FROM relationship r JOIN work_part wp ON wp.id = r.to_id JOIN work w ON w.id = wp.work_id
+WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND r.from_id IN (sqlc.slice(part_ids))
+UNION ALL
+SELECT r.to_id AS part_id, wp.id AS other_part_id, wp.work_id AS other_work_id, wp.media_ref AS other_ref,
+       w.canonical_title AS other_work_title
+FROM relationship r JOIN work_part wp ON wp.id = r.from_id JOIN work w ON w.id = wp.work_id
+WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND r.to_id IN (sqlc.slice(part_ids_again));
+
+-- Copies one part's coverage onto another's: the same broadcast held once satisfies both.
+-- name: CoverPartLikeAnother :exec
+INSERT OR IGNORE INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+SELECT target_item.id, f.media_object_id, f.role, target.media_ref, f.added_at
+FROM work_part source
+JOIN desired_item source_item ON source_item.work_id = source.work_id
+JOIN desired_item_file f ON f.desired_item_id = source_item.id AND f.media_ref = source.media_ref AND f.role = 'primary'
+JOIN work_part target ON target.id = sqlc.arg(target_part_id)
+JOIN desired_item target_item ON target_item.work_id = target.work_id AND target_item.satisfaction_kind = 'SET'
+  AND (target_item.media_ref = '' OR target.media_ref LIKE target_item.media_ref || ':%')
+WHERE source.id = sqlc.arg(source_part_id);
+
+-- Episodes of different works with the same title on the same day, not yet linked: likely one broadcast twice.
+-- name: ListSameContentSuggestions :many
+SELECT a.id AS part_id, a.work_id, wa.canonical_title AS work_title, a.media_ref, CAST(COALESCE(a.title, '') AS TEXT) AS title,
+       b.id AS other_part_id, b.work_id AS other_work_id, wb.canonical_title AS other_work_title, b.media_ref AS other_ref,
+       CAST(COALESCE(a.date, '') AS TEXT) AS date
+FROM work_part a
+JOIN work_part b ON b.date = a.date AND LOWER(b.title) = LOWER(a.title) AND b.work_id > a.work_id
+JOIN work wa ON wa.id = a.work_id
+JOIN work wb ON wb.id = b.work_id
+WHERE a.date IS NOT NULL AND a.title IS NOT NULL AND LENGTH(a.title) > 3 AND wa.media_type = sqlc.arg(media_type)
+  AND wb.media_type = wa.media_type
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = a.work_id AND d.category_id = sqlc.arg(category_id))
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = b.work_id AND d.category_id = sqlc.arg(category_id))
+  AND NOT EXISTS (SELECT 1 FROM relationship r WHERE r.kind = 'same_content'
+                  AND ((r.from_id = a.id AND r.to_id = b.id) OR (r.from_id = b.id AND r.to_id = a.id)))
+ORDER BY a.date DESC
+LIMIT sqlc.arg(page_size);
