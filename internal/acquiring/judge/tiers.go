@@ -4,11 +4,13 @@ import (
 	"cmp"
 	"context"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // GroupDeadline bounds one tier's fan-out to every indexer (ADR-37's default), whatever each indexer's own timeout.
@@ -53,6 +55,26 @@ type Pipeline struct {
 // Search widens through tiers until one finds a release for the item: every indexer is asked a tier's queries at
 // once, and the first tier with a find records all of them and ends the search.
 func (p Pipeline) Search(ctx context.Context, itemID int64, conns []Conn, tiers [][]Query, evaluate Evaluate, at time.Time) (Result, error) {
+	result, err := p.search(ctx, itemID, conns, tiers, evaluate, at)
+	if err != nil {
+		return result, err
+	}
+	return result, p.logSearch(ctx, itemID, result, at)
+}
+
+// logSearch records the search for the found rate; whether it found means a release the library accepts.
+func (p Pipeline) logSearch(ctx context.Context, itemID int64, result Result, at time.Time) error {
+	item, err := p.Desired.Get(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	found := slices.ContainsFunc(result.Decisions, func(detail library.DecisionDetail) bool {
+		return detail.Decision.Outcome == string(model.OutcomeAccept)
+	})
+	return p.Candidates.RecordSearch(ctx, item.CategoryID, itemID, found, at)
+}
+
+func (p Pipeline) search(ctx context.Context, itemID int64, conns []Conn, tiers [][]Query, evaluate Evaluate, at time.Time) (Result, error) {
 	var result Result
 	for tierIndex, queries := range tiers {
 		answers, err := AskEveryIndexer(ctx, conns, queries, cmp.Or(p.Deadline, GroupDeadline))

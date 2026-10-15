@@ -10412,6 +10412,12 @@ components:
       properties:
         computed_at: { type: string, format: date-time, description: When the rollup last ran; absent before the first run. }
         window_days: { type: integer, description: How many days back the download figures reach. }
+        searches:
+          $ref: "#/components/schemas/StatisticsSearches"
+        most_searched:
+          type: array
+          description: The wanted items searched most that are still missing, most first; at most ten.
+          items: { $ref: "#/components/schemas/StatisticsSearchedItem" }
         files_by_codec:
           type: array
           items: { $ref: "#/components/schemas/StatisticsFiles" }
@@ -10465,6 +10471,23 @@ components:
         files: { type: integer, format: int64 }
         bytes: { type: integer, format: int64 }
 
+    StatisticsSearches:
+      type: object
+      description: The searches of the window and how many found a release the library accepts.
+      required: [searched, found]
+      properties:
+        searched: { type: integer, format: int64 }
+        found: { type: integer, format: int64 }
+    StatisticsSearchedItem:
+      type: object
+      required: [work_id, title, searches, last_searched_at]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        lead: { type: string, description: The artist or other lead, when the work has one. }
+        media_ref: { type: string, description: The group the item wants, such as a season (s02); absent for a whole work. }
+        searches: { type: integer, format: int64 }
+        last_searched_at: { type: string, format: date-time }
     StatisticsSeries:
       type: object
       required: [series_id, title]

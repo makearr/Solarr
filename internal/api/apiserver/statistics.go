@@ -37,6 +37,8 @@ type StatisticsView struct {
 	DownloadsByState   []StatisticsFigure
 	GrowthByMonth      []StatisticsFigure
 	DecisionsByOutcome []StatisticsFigure
+	Searches           []StatisticsFigure
+	MostSearched       []StatisticsFigure
 }
 
 // StatisticsReader answers a library's statistics from stat_rollup (section 21.12).
@@ -98,6 +100,7 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 	out.FilesByHdr, out.FilesByAudio = files(view.FilesByHDR), files(view.FilesByAudio)
 	out.SeriesBySize, out.SeriesGaps = seriesFigures(view.SeriesSize, false), seriesFigures(view.SeriesGaps, true)
 	out.SizePerHour = pictureFigures(view.SizePerHour, view.VideoBitrate)
+	out.Searches, out.MostSearched = searchFigures(view.Searches), mostSearched(view.MostSearched)
 	if !view.ComputedAt.IsZero() {
 		out.ComputedAt = &view.ComputedAt
 	}
@@ -158,5 +161,52 @@ func pictureFigures(perHour, bitrate []StatisticsFigure) *[]gen.StatisticsPictur
 		out[i] = gen.StatisticsPicture{Key: figure.Key, Files: figure.Count, BytesPerHour: int64(figure.Value), VideoKbps: kbps[figure.Key]}
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Files > out[j].Files })
+	return &out
+}
+
+// searchFigures reads the "searched" and "found" counts; nil before the first search was logged.
+func searchFigures(figures []StatisticsFigure) *gen.StatisticsSearches {
+	if len(figures) == 0 {
+		return nil
+	}
+	var out gen.StatisticsSearches
+	for _, figure := range figures {
+		switch figure.Key {
+		case "searched":
+			out.Searched = figure.Count
+		case "found":
+			out.Found = figure.Count
+		}
+	}
+	return &out
+}
+
+// mostSearched reads "<work id>|<media ref>|<lead>|<title>" keys, value the searches and count the last one's time.
+func mostSearched(figures []StatisticsFigure) *[]gen.StatisticsSearchedItem {
+	if len(figures) == 0 {
+		return nil
+	}
+	out := make([]gen.StatisticsSearchedItem, 0, len(figures))
+	for _, figure := range figures {
+		parts := strings.SplitN(figure.Key, "|", 4)
+		if len(parts) != 4 {
+			continue
+		}
+		workID, err := strconv.ParseInt(parts[0], 10, 64)
+		if err != nil {
+			continue
+		}
+		item := gen.StatisticsSearchedItem{
+			WorkId: workID, Title: parts[3], Searches: int64(figure.Value), LastSearchedAt: time.Unix(figure.Count, 0).UTC(),
+		}
+		if parts[1] != "" {
+			item.MediaRef = &parts[1]
+		}
+		if parts[2] != "" {
+			item.Lead = &parts[2]
+		}
+		out = append(out, item)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Searches > out[j].Searches })
 	return &out
 }

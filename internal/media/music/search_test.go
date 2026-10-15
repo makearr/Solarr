@@ -249,6 +249,12 @@ func TestSearchItem_ExactTierAcceptsAMatchingRelease(t *testing.T) {
 	if len(stored) != 1 || stored[0].ReleaseCandidate.GUID != "guid-1" {
 		t.Errorf("stored = %+v, want the one persisted candidate", stored)
 	}
+
+	// The search is logged for the found rate, as one that found something.
+	searches, err := env.candidates.SearchesByCategory(t.Context(), 0)
+	if err != nil || len(searches) != 2 || searches[0].Count != 1 || searches[1].Count != 1 {
+		t.Errorf("search log = %+v, %v; want one search that found something", searches, err)
+	}
 }
 
 // Another artist's release of a same-named song is not this album, however close the combined

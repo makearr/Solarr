@@ -521,3 +521,57 @@ func (q *Queries) ListHeldReleaseGroupsByArtist(ctx context.Context, categoryID 
 	}
 	return items, nil
 }
+
+const listMostSearchedMissing = `-- name: ListMostSearchedMissing :many
+SELECT d.category_id, w.id AS work_id, w.canonical_title AS title, d.media_ref,
+       CAST(COALESCE((SELECT p.name FROM person p WHERE p.id = w.lead_person_id), '') AS TEXT) AS lead_name,
+       h.search_count, h.last_searched_at
+FROM hunt_queue h
+JOIN desired_item d ON d.id = h.desired_item_id
+JOIN work w ON w.id = d.work_id
+WHERE h.class = 'missing' AND h.search_count >= 2 AND d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
+ORDER BY h.search_count DESC, h.last_searched_at, h.desired_item_id
+LIMIT 5000
+`
+
+type ListMostSearchedMissingRow struct {
+	CategoryID     int64
+	WorkID         int64
+	Title          string
+	MediaRef       string
+	LeadName       string
+	SearchCount    int64
+	LastSearchedAt int64
+}
+
+// The wanted items searched most that are still missing, most first; the statistics job keeps the top of each library.
+func (q *Queries) ListMostSearchedMissing(ctx context.Context) ([]ListMostSearchedMissingRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMostSearchedMissing)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListMostSearchedMissingRow{}
+	for rows.Next() {
+		var i ListMostSearchedMissingRow
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.WorkID,
+			&i.Title,
+			&i.MediaRef,
+			&i.LeadName,
+			&i.SearchCount,
+			&i.LastSearchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

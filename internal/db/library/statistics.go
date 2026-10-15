@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -39,10 +40,30 @@ const (
 	// StatDecisionsByOutcome: value and count the release decisions of the last 30 days, key ACCEPT, REJECT or DEFER;
 	// counted in statistics.db, where the decisions are.
 	StatDecisionsByOutcome = "decisions_by_outcome"
+	// StatSearches: value and count the searches of the last 30 days (key "searched") and those that found a release
+	// the library accepts (key "found"); counted in statistics.db, where the search log is.
+	StatSearches = "searches"
+	// StatMostSearched: the wanted items searched most that are still missing, key "<work id>|<title>", value the
+	// searches, count when the last ran (Unix seconds).
+	StatMostSearched = "most_searched"
 )
 
-// topSeries is how many series the size and gap lists keep per library.
-const topSeries = 20
+// The keys of StatSearches.
+const (
+	SearchesKeySearched = "searched"
+	SearchesKeyFound    = "found"
+)
+
+// topSeries is how many series the size and gap lists keep per library; topSearched the most-searched list.
+const (
+	topSeries   = 20
+	topSearched = 10
+)
+
+// MostSearchedKey is a StatMostSearched key: "<work id>|<media ref>|<lead>|<title>", the title last as it may hold "|".
+func MostSearchedKey(workID int64, mediaRef, lead, title string) string {
+	return fmt.Sprintf("%d|%s|%s|%s", workID, mediaRef, strings.ReplaceAll(lead, "|", "/"), title)
+}
 
 // StatisticsWindowDays is how far back the download figures reach.
 const StatisticsWindowDays = 30
@@ -64,6 +85,7 @@ type StatRow struct {
 var ComputedMetrics = []string{
 	StatSeriesSize, StatSeriesGaps, StatSizePerHour, StatVideoBitrate, StatFilesByCodec, StatFilesByVideoCodec,
 	StatFilesByResolution, StatFilesByHDR, StatFilesByAudio, StatAlbumsByState, StatDownloadsByState, StatGrowthByMonth,
+	StatMostSearched,
 }
 
 // Figures measures every computed metric from library.db; the caller stores them in statistics.db. categoryOfRoot
@@ -106,6 +128,10 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 	if err != nil {
 		return nil, fmt.Errorf("library: statistics: size per hour: %w", err)
 	}
+	mostSearched, err := reader.ListMostSearchedMissing(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("library: statistics: most searched: %w", err)
+	}
 
 	type figure struct {
 		metric, dimension string
@@ -124,6 +150,13 @@ func (s Statistics) Figures(ctx context.Context, categoryOfRoot map[int64]int64,
 		if key := dimensionOf(row.CategoryID, fmt.Sprintf("%d|%s", row.WorkID, row.Title)); taken[StatSeriesGaps+strconv.FormatInt(row.CategoryID, 10)] < topSeries {
 			taken[StatSeriesGaps+strconv.FormatInt(row.CategoryID, 10)]++
 			figures = append(figures, figure{StatSeriesGaps, key, float64(row.Missing), row.Unaired})
+		}
+	}
+	for _, row := range mostSearched {
+		if taken[StatMostSearched+strconv.FormatInt(row.CategoryID, 10)] < topSearched {
+			taken[StatMostSearched+strconv.FormatInt(row.CategoryID, 10)]++
+			key := dimensionOf(row.CategoryID, MostSearchedKey(row.WorkID, row.MediaRef, row.LeadName, row.Title))
+			figures = append(figures, figure{StatMostSearched, key, float64(row.SearchCount), row.LastSearchedAt})
 		}
 	}
 	type pictureTotal struct{ bytes, duration, files, bitrateSum int64 }

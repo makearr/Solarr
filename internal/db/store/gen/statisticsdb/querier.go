@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	// Release decisions since a time, per library and outcome.
 	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
+	// Searches and finds per library since a time.
+	AggregateSearchesByCategory(ctx context.Context, since int64) ([]AggregateSearchesByCategoryRow, error)
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)
 	// The copy from library.db keeps every id; a row already copied is left as it is.
 	CopyCandidate(ctx context.Context, arg CopyCandidateParams) error
@@ -21,11 +23,14 @@ type Querier interface {
 	CountDecisionRollup(ctx context.Context) (int64, error)
 	CountStatRollup(ctx context.Context) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
+	// The oldest page of searches before a time, removed.
+	DeleteSearchLogBefore(ctx context.Context, arg DeleteSearchLogBeforeParams) (int64, error)
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	// A candidate goes once it expired and no decision refers to it; a held release carries its own copy.
 	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
+	InsertSearchLog(ctx context.Context, arg InsertSearchLogParams) error
 	// Where a copy resumes.
 	LastCandidateID(ctx context.Context) (int64, error)
 	LastCopiedHistoryEvent(ctx context.Context) (int64, error)

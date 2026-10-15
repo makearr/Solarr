@@ -65,6 +65,14 @@ type History struct {
 	EventID       int64
 }
 
+type SearchLog struct {
+	ID            int64
+	At            int64
+	CategoryID    int64
+	DesiredItemID int64
+	Found         int64
+}
+
 type StatRollup struct {
 	Metric     string
 	Dimension  string

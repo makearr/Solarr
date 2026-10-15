@@ -1462,6 +1462,12 @@ type CategoryStatistics struct {
 	// GrowthByMonth Files and bytes first seen per month, oldest first; the first scan lands in one month.
 	GrowthByMonth []StatisticsFiles `json:"growth_by_month"`
 
+	// MostSearched The wanted items searched most that are still missing, most first; at most ten.
+	MostSearched *[]StatisticsSearchedItem `json:"most_searched,omitempty"`
+
+	// Searches The searches of the window and how many found a release the library accepts.
+	Searches *StatisticsSearches `json:"searches,omitempty"`
+
 	// SeriesBySize Video libraries only; the 20 series taking most space.
 	SeriesBySize *[]StatisticsSeries `json:"series_by_size,omitempty"`
 
@@ -3890,6 +3896,26 @@ type StatisticsPicture struct {
 	// Key Resolution and codec, e.g. "1080p h265".
 	Key       string `json:"key"`
 	VideoKbps int64  `json:"video_kbps"`
+}
+
+// StatisticsSearchedItem defines model for StatisticsSearchedItem.
+type StatisticsSearchedItem struct {
+	LastSearchedAt time.Time `json:"last_searched_at"`
+
+	// Lead The artist or other lead
+	Lead *string `json:"lead,omitempty"`
+
+	// MediaRef The group the item wants
+	MediaRef *string `json:"media_ref,omitempty"`
+	Searches int64   `json:"searches"`
+	Title    string  `json:"title"`
+	WorkId   int64   `json:"work_id"`
+}
+
+// StatisticsSearches The searches of the window and how many found a release the library accepts.
+type StatisticsSearches struct {
+	Found    int64 `json:"found"`
+	Searched int64 `json:"searched"`
 }
 
 // StatisticsSeries defines model for StatisticsSeries.

@@ -132,3 +132,15 @@ JOIN media_object mo ON mo.id = lp.media_object_id
 JOIN media_attributes ma ON ma.id = mo.measured_attributes_id
 WHERE ma.video_codec IS NOT NULL AND ma.video_codec <> '' AND ma.resolution IS NOT NULL AND mo.duration_ms > 0
 GROUP BY lp.root_folder_id, resolution, video_codec;
+
+-- The wanted items searched most that are still missing, most first; the statistics job keeps the top of each library.
+-- name: ListMostSearchedMissing :many
+SELECT d.category_id, w.id AS work_id, w.canonical_title AS title, d.media_ref,
+       CAST(COALESCE((SELECT p.name FROM person p WHERE p.id = w.lead_person_id), '') AS TEXT) AS lead_name,
+       h.search_count, h.last_searched_at
+FROM hunt_queue h
+JOIN desired_item d ON d.id = h.desired_item_id
+JOIN work w ON w.id = d.work_id
+WHERE h.class = 'missing' AND h.search_count >= 2 AND d.monitored = 1 AND d.state IN ('MISSING', 'PARTIAL')
+ORDER BY h.search_count DESC, h.last_searched_at, h.desired_item_id
+LIMIT 5000;

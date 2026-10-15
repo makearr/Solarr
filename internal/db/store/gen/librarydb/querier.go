@@ -587,6 +587,8 @@ type Querier interface {
 	// The monitored parts covered only by files a full scan just found gone: deleted on purpose, by
 	// a library's "Unmonitor deleted" for a type whose parts are wanted one by one.
 	ListMonitoredPartsLosingFiles(ctx context.Context, arg ListMonitoredPartsLosingFilesParams) ([]ListMonitoredPartsLosingFilesRow, error)
+	// The wanted items searched most that are still missing, most first; the statistics job keeps the top of each library.
+	ListMostSearchedMissing(ctx context.Context) ([]ListMostSearchedMissingRow, error)
 	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.

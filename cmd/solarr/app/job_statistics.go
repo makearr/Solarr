@@ -40,8 +40,13 @@ func (p *process) registerStatisticsJob(registry *jobs.Registry, executor *jobs.
 		if err != nil {
 			return fmt.Errorf("statistics: %w", err)
 		}
-		metrics := append(slices.Clone(library.ComputedMetrics), library.StatDecisionsByOutcome)
-		if err := rollup.Replace(ctx, metrics, append(statFigures(rows), decided...), now); err != nil {
+		searched, err := decisions.SearchesByCategory(ctx, now-library.StatisticsWindowDays*86_400)
+		if err != nil {
+			return fmt.Errorf("statistics: %w", err)
+		}
+		metrics := append(slices.Clone(library.ComputedMetrics), library.StatDecisionsByOutcome, library.StatSearches)
+		figures := append(append(statFigures(rows), decided...), searched...)
+		if err := rollup.Replace(ctx, metrics, figures, now); err != nil {
 			return err
 		}
 		p.logger.Info("statistics computed", slog.Int("roots", len(categoryOfRoot)))

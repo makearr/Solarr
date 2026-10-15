@@ -127,6 +127,7 @@ func (c Candidates) DecisionsByOutcome(ctx context.Context, since int64) ([]Figu
 type Retired struct {
 	Decisions  int64
 	Candidates int64
+	Searches   int64
 }
 
 // rollupKey is one decision_rollup row: an item, a day and an outcome.
@@ -173,7 +174,9 @@ func (c Candidates) Retire(ctx context.Context, now, decisionsBefore time.Time, 
 			break
 		}
 	}
-	return retired, nil
+	searches, err := c.retireSearches(ctx, decisionsBefore, maxPages)
+	retired.Searches = searches
+	return retired, err
 }
 
 // retireDecisionPage rolls the oldest page's aged decisions up and deletes them in one transaction, so a decision is

@@ -7106,6 +7106,9 @@ export interface components {
             computed_at?: string;
             /** @description How many days back the download figures reach. */
             window_days: number;
+            searches?: components["schemas"]["StatisticsSearches"];
+            /** @description The wanted items searched most that are still missing, most first; at most ten. */
+            most_searched?: components["schemas"]["StatisticsSearchedItem"][];
             files_by_codec: components["schemas"]["StatisticsFiles"][];
             /** @description Video libraries only; the measured video codec of each file. */
             files_by_video_codec?: components["schemas"]["StatisticsFiles"][];
@@ -7134,6 +7137,26 @@ export interface components {
             files: number;
             /** Format: int64 */
             bytes: number;
+        };
+        /** @description The searches of the window and how many found a release the library accepts. */
+        StatisticsSearches: {
+            /** Format: int64 */
+            searched: number;
+            /** Format: int64 */
+            found: number;
+        };
+        StatisticsSearchedItem: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            /** @description The artist or other lead */
+            lead?: string;
+            /** @description The group the item wants */
+            media_ref?: string;
+            /** Format: int64 */
+            searches: number;
+            /** Format: date-time */
+            last_searched_at: string;
         };
         StatisticsSeries: {
             /** Format: int64 */

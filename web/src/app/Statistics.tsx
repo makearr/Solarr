@@ -272,6 +272,14 @@ export function Statistics() {
             </ul>
           </section>
 
+          <Searching
+            windowDays={data.window_days}
+            searches={data.searches}
+            mostSearched={data.most_searched}
+            categoryId={categoryId ?? ""}
+            group={words.Group ?? "Group"}
+          />
+
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">Acquisition, last {data.window_days} days</h2>
             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -293,4 +301,73 @@ export function Statistics() {
       )}
     </div>
   );
+}
+
+/** How well searching works: how often a search finds a release the library accepts, and what keeps not being found. */
+function Searching({
+  windowDays,
+  searches,
+  mostSearched,
+  categoryId,
+  group,
+}: {
+  windowDays: number;
+  searches: components["schemas"]["StatisticsSearches"] | undefined;
+  mostSearched: components["schemas"]["StatisticsSearchedItem"][] | undefined;
+  categoryId: string;
+  group: string;
+}) {
+  const searched = searches?.searched ?? 0;
+  const found = searches?.found ?? 0;
+  const tiles: [string, string][] = [
+    [String(searched), "Searches"],
+    [String(found), "Found something"],
+    [searched > 0 ? `${Math.round((found / searched) * 100)}%` : "–", "Found rate"],
+    [found > 0 ? (searched / found).toFixed(1) : "–", "Searches per find"],
+  ];
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-sm font-medium">Searching, last {windowDays} days</h2>
+      <p className="text-xs text-ink-muted">
+        Automatic and manual searches; one found something when it turned up a release your profile accepts.
+      </p>
+      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        {tiles.map(([value, label]) => (
+          <li key={label} className="flex flex-col rounded-lg border border-border-subtle bg-surface p-3">
+            <span className="text-2xl font-semibold tabular-nums">{value}</span>
+            <span className="text-xs text-ink-muted">{label}</span>
+          </li>
+        ))}
+      </ul>
+      <h3 className="mt-2 text-sm font-medium">Searched most, still missing</h3>
+      {mostSearched === undefined || mostSearched.length === 0 ? (
+        <p className="text-sm text-ink-muted">Nothing has been searched for twice without being found.</p>
+      ) : (
+        <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+          {mostSearched.map((item) => (
+            <li key={`${item.work_id}:${item.media_ref ?? ""}`} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <Link
+                to="/library/$categoryId/works/$workId"
+                params={{ categoryId, workId: String(item.work_id) }}
+                className="min-w-0 flex-1 truncate hover:underline"
+              >
+                {item.lead ? `${item.lead} – ` : ""}
+                {item.title}
+                {item.media_ref ? <span className="text-ink-muted"> · {groupLabel(item.media_ref, group)}</span> : null}
+              </Link>
+              <span className="shrink-0 text-xs text-ink-muted tabular-nums">
+                {item.searches} searches · last {new Date(item.last_searched_at).toLocaleDateString()}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** groupLabel reads a group reference such as "s02" as "Season 2", in the library's own word for a group. */
+function groupLabel(ref: string, group: string): string {
+  const number = /^[a-z](\d+)$/.exec(ref)?.[1];
+  return number === undefined ? ref : `${group} ${Number(number)}`;
 }

@@ -175,3 +175,31 @@ func TestStatistics_BiggestWorksAreTwentyPerLibrary(t *testing.T) {
 		}
 	}
 }
+
+// The items searched most and still missing are listed per library, most first; one searched once is not.
+func TestStatistics_MostSearchedStillMissing(t *testing.T) {
+	opened, _ := newLibrary(t)
+	statistics, desired := library.NewStatistics(opened), library.NewDesired(opened)
+	searched := func(title string, times int) int64 {
+		t.Helper()
+		work := createWork(t, opened, "music", title)
+		item := createDesired(t, opened, work.ID, "SET", 10)
+		for at := range times {
+			if err := desired.RecordSearched(t.Context(), item.ID, int64(1_000+at)); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return work.ID
+	}
+	often := searched("Often", 5)
+	searched("Once", 1)
+	twice := searched("Twice", 2)
+	got := figuresOf(t, statistics, map[int64]int64{}, 5_000, library.StatMostSearched, 1)
+	want := []statFigure{
+		{library.MostSearchedKey(often, "", "", "Often"), 5, 1_004},
+		{library.MostSearchedKey(twice, "", "", "Twice"), 2, 1_001},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("most searched = %+v, want %+v", got, want)
+	}
+}
