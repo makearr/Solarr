@@ -292,7 +292,7 @@ function HeldList({ held }: { held: readonly HeldRelease[] }) {
   );
 }
 
-function ProgressBar({ item }: { item: QueueItem }) {
+export function ProgressBar({ item }: { item: QueueItem }) {
   if (!item.size_bytes) return null;
   const done = Math.max(0, Math.min(1, 1 - (item.size_left_bytes ?? 0) / item.size_bytes));
   return (

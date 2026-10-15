@@ -8,6 +8,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
 import { ArtistCoverMark, Poster } from "./Poster";
+import { DashboardDownloads } from "./DashboardDownloads";
 import { SearchBox } from "./SearchBox";
 import { pageTier } from "./sections";
 import { defaultLevelKey } from "./Sidebar";
@@ -121,6 +122,10 @@ export function Dashboard() {
             </ul>
           </Section>
         )}
+
+        <Section title="Downloads">
+          <DashboardDownloads />
+        </Section>
 
         <Section title="Recently added">
           {recent.isLoading && <Note>Loading…</Note>}
