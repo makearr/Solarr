@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // ArrSyncOptions is what one import brings in (asked 2026-09-30): monitored and unmonitored items,
@@ -378,7 +379,7 @@ func (s *Server) writeArrConnectionError(w http.ResponseWriter, err error) {
 	case errors.Is(err, settings.ErrNotFound):
 		writeError(w, s.logger, err)
 	default:
-		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The *Arr could not be read", err.Error())
+		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The *Arr could not be read", httpx.Explain(err))
 	}
 }
 

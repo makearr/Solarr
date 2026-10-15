@@ -56,7 +56,7 @@ func (c ConnectionTester) TestIndexer(ctx context.Context, id int64) (apiserver.
 	if err != nil {
 		// A connection problem is the answer this method exists to report,
 		// not a failure of the method call itself -- ok:false, never an error.
-		return apiserver.ConnectionTestResult{Message: err.Error(), TestedAt: at}, nil //nolint:nilerr
+		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}, nil //nolint:nilerr
 	}
 
 	if encoded, err := json.Marshal(caps); err == nil {
@@ -112,7 +112,7 @@ func (c ConnectionTester) testQBittorrent(ctx context.Context, client qbittorren
 	at := c.Clock.Now()
 	version, err := client.Version(ctx)
 	if err != nil {
-		return apiserver.ConnectionTestResult{Message: err.Error(), TestedAt: at}
+		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}
 	}
 	message := fmt.Sprintf("Connected. qBittorrent %s.", version)
 	if categories, err := client.Categories(ctx); err == nil {
@@ -135,11 +135,11 @@ func (c ConnectionTester) testSABnzbd(ctx context.Context, client sabnzbd.Client
 	at := c.Clock.Now()
 	version, err := client.Version(ctx)
 	if err != nil {
-		return apiserver.ConnectionTestResult{Message: err.Error(), TestedAt: at}
+		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}
 	}
 	folder, err := client.CompleteFolder(ctx)
 	if err != nil {
-		return apiserver.ConnectionTestResult{Message: err.Error(), TestedAt: at}
+		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}
 	}
 	message := fmt.Sprintf("Connected. Version %s. Finished downloads go to %s.", version, folder)
 	if categories, err := client.Categories(ctx); err == nil {

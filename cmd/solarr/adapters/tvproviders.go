@@ -2,9 +2,9 @@ package adapters
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // TVProviderProbe is one TV metadata provider: how it is listed, what key state it is in and one cheap question to ask it.
@@ -42,7 +42,7 @@ func (p TVProviders) Test(ctx context.Context) []apiserver.TVProviderResult {
 			continue
 		}
 		if err := probe.Ping(ctx); err != nil {
-			result.Message = describeProbeError(err)
+			result.Message = httpx.Explain(err)
 		} else {
 			result.OK, result.Message = true, "Answered."
 		}
@@ -50,5 +50,3 @@ func (p TVProviders) Test(ctx context.Context) []apiserver.TVProviderResult {
 	}
 	return results
 }
-
-func describeProbeError(err error) string { return fmt.Sprintf("Failed: %v", err) }

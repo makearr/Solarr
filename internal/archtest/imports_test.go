@@ -57,7 +57,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
 		"internal/platform/privilege", "internal/identify/score", "internal/db/settings", "internal/platform/secrets",
-		"internal/identify/quality", "internal/platform/listfilter",
+		"internal/identify/quality", "internal/platform/listfilter", "internal/platform/httpx",
 	},
 	"internal/platform/clock": {},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
