@@ -2,7 +2,6 @@ package music
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 
@@ -11,8 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/mover"
-	"github.com/makearr/Solarr/internal/moving/moverjob"
-	"github.com/makearr/Solarr/internal/moving/placement"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -144,101 +142,12 @@ func RenameStart(
 	if err != nil {
 		return mover.MovePlan{}, 0, nil, err
 	}
-	if len(targets) == 0 {
-		return mover.MovePlan{}, 0, nil, nil
-	}
-	warnings := make(map[int64][]string, len(targets))
-	for _, target := range targets {
-		if len(target.Warnings) == 0 {
-			continue
-		}
-		messages := make([]string, len(target.Warnings))
-		for i, w := range target.Warnings {
-			messages[i] = w.Message
-		}
-		warnings[target.MediaObjectID] = messages
-	}
-
-	root, ok := cfg.Roots.RootFolder(rootFolderID)
-	if !ok {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: root folder %d not found", rootFolderID)
-	}
-
-	files := make([]mover.FileToMove, len(targets))
+	moves := make([]renamejob.Target, len(targets))
 	for i, target := range targets {
-		files[i] = mover.FileToMove{
-			MediaObjectID: target.MediaObjectID, SourceRootFolderID: rootFolderID,
-			SourceRelPath: target.CurrentRelPath, SizeBytes: target.SizeBytes,
-			AffinityKey:      fmt.Sprintf("work:%d", target.WorkID),
-			DestRootFolderID: rootFolderID, DestRelPath: target.ProposedRelPath,
-		}
+		moves[i] = renamejob.Target(target)
 	}
-
-	rootCandidate := renameRootCandidate(rootFolderID, root)
-	plan, err := mover.Plan(mover.Request{
-		Reason: mover.ReasonRename, Files: files,
-		Roots:             map[int64]placement.RootCandidate{rootFolderID: rootCandidate},
-		SourceReadOnly:    map[int64]bool{rootFolderID: root.ReadOnly},
-		SourceAllowRename: map[int64]bool{rootFolderID: root.AllowRename},
-	})
-	if err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: plan rename for root %d: %w", rootFolderID, err)
-	}
-	if preview || len(plan.Moves) == 0 {
-		return plan, 0, warnings, nil
-	}
-
-	items := make([]library.NewMoveItem, len(plan.Moves))
-	var bytesTotal int64
-	for i, m := range plan.Moves {
-		items[i] = library.NewMoveItem{
-			MediaObjectID: m.MediaObjectID, AffinityKey: m.AffinityKey,
-			DestRootID: m.DestRootFolderID, DestRelPath: m.DestRelPath, Bytes: m.SizeBytes,
-		}
-		bytesTotal += m.SizeBytes
-	}
-	planJSON, err := json.Marshal(plan)
-	if err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: encode rename plan: %w", err)
-	}
-
-	cl := cfg.Clock
-	if cl == nil {
-		cl = clock.NewSystem()
-	}
-	var onlyCategoryID *int64
-	if scope.CategoryID != 0 {
-		onlyCategoryID = &scope.CategoryID
-	}
-	jobID, err := cfg.MoveJobs.Create(ctx, library.NewMoveJob{
-		Reason: string(mover.ReasonRename), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,
-		PlanJSON: string(planJSON), CreatedAt: cl.Now().Unix(), CategoryID: onlyCategoryID,
-	})
-	if err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: create move job for root %d: %w", rootFolderID, err)
-	}
-	if err := cfg.MoveJobs.AddItems(ctx, jobID, items); err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: add items to move job %d: %w", jobID, err)
-	}
-	if _, err := moverjob.Enqueue(ctx, cfg.Queue, jobID); err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("music: enqueue move job %d: %w", jobID, err)
-	}
-
-	return plan, jobID, warnings, nil
-}
-
-func renameRootCandidate(rootFolderID int64, root settings.RootFolder) placement.RootCandidate {
-	var freeBytes, totalBytes int64
-	if root.FreeBytes != nil {
-		freeBytes = *root.FreeBytes
-	}
-	if root.TotalBytes != nil {
-		totalBytes = *root.TotalBytes
-	}
-	return placement.RootCandidate{
-		RootFolderID: rootFolderID, FSID: root.FSID, Online: root.Online, Writable: root.Writable,
-		ReadOnly: root.ReadOnly, FreeBytes: freeBytes, TotalBytes: totalBytes, MinFreeBytes: root.MinFreeBytes,
-	}
+	return renamejob.Start(ctx, renamejob.Config{Roots: cfg.Roots, MoveJobs: cfg.MoveJobs, Queue: cfg.Queue, Clock: cfg.Clock},
+		rootFolderID, scope.CategoryID, moves, preview)
 }
 
 // namingFor is the naming of the work's library -- onlyCategoryID when given, which also

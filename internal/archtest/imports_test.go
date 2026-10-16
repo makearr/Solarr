@@ -33,7 +33,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/jobs/cachebudget", "internal/jobs/capacity", "internal/importing/batch", "internal/media/music", "internal/media/tv", "internal/identify/quality", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/tvdb", "internal/metadata/anilist", "internal/metadata/metacache",
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz", "internal/metadata/theaudiodb",
 		"internal/metadata/wikidata", "internal/moving/drainjob",
-		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/platform/clock", "internal/platform/config",
+		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/mediatool",
 		"internal/platform/privilege",
@@ -231,7 +231,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/artwork", "internal/platform/clock", "internal/platform/fsx",
 		"internal/platform/httpx", "internal/importing/inspect", "internal/jobs", "internal/db/library",
 		"internal/db/store/gen/librarydb", "internal/identify/match", "internal/platform/mediatool",
-		"internal/identify/model", "internal/moving/mover", "internal/moving/moverjob",
+		"internal/identify/model", "internal/moving/mover", "internal/moving/moverjob", "internal/moving/renamejob",
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz",
 		"internal/moving/naming", "internal/moving/placement",
 		"internal/identify/parse", "internal/identify/score", "internal/scanning/scan", "internal/db/settings",
@@ -270,6 +270,11 @@ var allowedInternalImports = map[string][]string{
 	// records/unlinks through internal/db/library. No internal/db/settings import --
 	// a cmd/solarr adapter bridges RootFolders the same way importjob's
 	// Policy is bridged.
+	// One rename planner and move job for every media type, which supplies only the proposed names.
+	"internal/moving/renamejob": {
+		"internal/db/library", "internal/db/settings", "internal/jobs", "internal/moving/mover", "internal/moving/moverjob",
+		"internal/moving/naming", "internal/moving/placement", "internal/platform/clock",
+	},
 	"internal/moving/moverjob": {
 		"internal/platform/clock", "internal/platform/fsx", "internal/jobs", "internal/db/library", "internal/moving/mover",
 	},
@@ -329,7 +334,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/parallel": {},
 	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
 	"internal/media":             {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/mover", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
-	"internal/media/tv":          {"internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/metaresolve", "internal/moving/naming", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
+	"internal/media/tv":          {"internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/moving/placement", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// Sonarr's TheTVDB proxy (T4): the preferred TV source, never required.
 	"internal/metadata/skyhook": {"internal/platform/httpx"},
 	// Generated by oapi-codegen from api/openapi.yaml (ADR-31).
