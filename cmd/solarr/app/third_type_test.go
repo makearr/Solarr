@@ -40,7 +40,7 @@ type movieModule struct {
 
 func (*movieModule) Descriptor() media.Descriptor {
 	return media.Descriptor{
-		Key: "movie", Label: "Movies",
+		Key: "comic", Label: "Movies",
 		Vocabulary: media.Vocabulary{
 			Work: media.Term{One: "Movie", Many: "Movies"}, LeadPeople: media.Term{One: "Director", Many: "Directors"},
 			Organisation: media.Term{One: "Studio", Many: "Studios"},
@@ -87,7 +87,7 @@ func (m *movieModule) add(ctx context.Context, categoryID int64, movie fakeMovie
 	now := time.Unix(1_800_000_000, 0)
 	works, err := library.NewIdentity(m.library).ResolveWorks(ctx, now, []library.WorkLink{{
 		Provider: "fake:movie", ExternalID: movie.id, Confidence: 1, RootFolderID: rootFolderID, MediaObjectID: mediaObjectID,
-		Work: library.WorkIdentity{MediaType: "movie", CanonicalTitle: movie.title, SortTitle: strings.ToLower(movie.title)},
+		Work: library.WorkIdentity{MediaType: "comic", CanonicalTitle: movie.title, SortTitle: strings.ToLower(movie.title)},
 	}})
 	if err != nil {
 		return 0, err
@@ -182,10 +182,10 @@ func TestAThirdMediaTypeWorksThroughTheModuleAlone(t *testing.T) {
 	movies.library, movies.profileID = server.process.library, server.process.defaultQualityProfileID
 	ctx := t.Context()
 
-	if types := string(server.get(t, "/mediatypes")); !strings.Contains(types, `"key":"movie"`) || !strings.Contains(types, `"lead_people":{"many":"Directors","one":"Director"}`) {
+	if types := string(server.get(t, "/mediatypes")); !strings.Contains(types, `"key":"comic"`) || !strings.Contains(types, `"lead_people":{"many":"Directors","one":"Director"}`) {
 		t.Fatalf("/mediatypes = %s, want the movie type with its words", types)
 	}
-	status, body := server.post(t, "/categories", `{"media_type":"movie","name":"Movies"}`)
+	status, body := server.post(t, "/categories", `{"media_type":"comic","name":"Movies"}`)
 	if status != http.StatusCreated && status != http.StatusOK {
 		t.Fatalf("create a movie library: %d %s", status, body)
 	}

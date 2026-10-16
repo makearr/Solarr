@@ -618,5 +618,200 @@
       "one": "Series"
     },
     "work_image": "poster"
+  },
+  {
+    "add_kinds": [
+      {
+        "key": "movie",
+        "label": "Movies"
+      }
+    ],
+    "commit_guess_floor": 0.75,
+    "commits_held_imports": true,
+    "duplicates_by_name": false,
+    "facets": [
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "year",
+        "kind": "number",
+        "label": "Year",
+        "sortable": true
+      },
+      {
+        "choices": [
+          {
+            "key": "announced",
+            "label": "Announced"
+          },
+          {
+            "key": "in_cinemas",
+            "label": "In cinemas"
+          },
+          {
+            "key": "released",
+            "label": "Released"
+          }
+        ],
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "status",
+        "kind": "enum",
+        "label": "Status",
+        "sortable": true
+      },
+      {
+        "choices": [
+          {
+            "key": "announced",
+            "label": "Announced"
+          },
+          {
+            "key": "in_cinemas",
+            "label": "In cinemas"
+          },
+          {
+            "key": "released",
+            "label": "Released"
+          }
+        ],
+        "column": false,
+        "editable": true,
+        "entity": "work",
+        "filterable": false,
+        "key": "minimum_availability",
+        "kind": "enum",
+        "label": "Minimum availability",
+        "sortable": false
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "studio",
+        "kind": "text",
+        "label": "Studio",
+        "sortable": true
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "genre",
+        "kind": "list",
+        "label": "Genre",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": false,
+        "key": "runtime",
+        "kind": "duration",
+        "label": "Runtime",
+        "sortable": true
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "original_language",
+        "kind": "text",
+        "label": "Original language",
+        "sortable": false
+      }
+    ],
+    "follow_options": [],
+    "group": {
+      "many": "",
+      "one": ""
+    },
+    "key": "movie",
+    "label": "Movies",
+    "lead_people": {
+      "many": "Directors",
+      "one": "Director"
+    },
+    "monitor_options": [
+      {
+        "key": "movie_only",
+        "label": "Movie only"
+      },
+      {
+        "key": "movie_and_collection",
+        "label": "Movie and collection"
+      },
+      {
+        "key": "none",
+        "label": "None"
+      }
+    ],
+    "organisation": {
+      "many": "Studios",
+      "one": "Studio"
+    },
+    "part": {
+      "many": "",
+      "one": ""
+    },
+    "roles": [
+      {
+        "character": false,
+        "followable": true,
+        "key": "director",
+        "label": "Director",
+        "lead": true,
+        "part_scoped": false
+      },
+      {
+        "character": true,
+        "followable": true,
+        "key": "actor",
+        "label": "Cast",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "writer",
+        "label": "Writer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "producer",
+        "label": "Producer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "composer",
+        "label": "Composer",
+        "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "cinematographer",
+        "label": "Cinematographer",
+        "lead": false,
+        "part_scoped": false
+      }
+    ],
+    "search_terms": [],
+    "wanted_grain": "work",
+    "work": {
+      "many": "Movies",
+      "one": "Movie"
+    },
+    "work_image": "poster"
   }
 ]

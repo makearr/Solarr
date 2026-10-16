@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -23,7 +24,7 @@ import (
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
 // A new type is one more module here; nothing else in this package names a type's scan.
 func (p *process) registerMedia() error {
-	registry, err := media.NewRegistry(append([]media.Module{p.musicModule(), p.tvModule()}, p.extraMedia...)...)
+	registry, err := media.NewRegistry(append([]media.Module{p.musicModule(), p.tvModule(), p.movieModule()}, p.extraMedia...)...)
 	if err != nil {
 		return err
 	}
@@ -318,4 +319,59 @@ func (p *process) musicJobs() []media.JobRegistration {
 // tvJobs are the job types the TV module brings besides its own typed ones.
 func (p *process) tvJobs() []media.JobRegistration {
 	return []media.JobRegistration{p.tvRefreshJob(), p.bridgeJob(), p.tvArtworkJob()}
+}
+
+// movieModule wires movies: the sweep that finds movie files, the add and refresh over TMDB and Radarr's service, and the
+// jobs that keep the metadata and pictures current.
+func (p *process) movieModule() movie.Module {
+	consumer := movie.NewConsumer(movie.ConsumerConfig{
+		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
+		Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+	})
+	catalog := p.movieCatalog()
+	return movie.Module{
+		Registrations:  p.movieJobs(),
+		TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
+		Sweep: scan.Sweep{
+			Consumer: consumer, Include: movie.IsFeature,
+			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		},
+		Adder:    catalog,
+		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
+		Service:  p.movieService(),
+		// A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
+		Refresh: func(ctx context.Context, workID int64) (bool, error) {
+			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+			if err != nil {
+				return false, err
+			}
+			if len(libraries) == 0 {
+				return false, fmt.Errorf("movie %d is in no library", workID)
+			}
+			return false, catalog.Refresh(ctx, libraries[0], workID)
+		},
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := movie.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := movie.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
+	}
+}
+
+// movieJobs are the job types the movie module brings.
+func (p *process) movieJobs() []media.JobRegistration {
+	return []media.JobRegistration{
+		{Definition: movie.RefreshDefinition, Handler: movie.NewRefreshJob(movie.RefreshConfig{
+			Reader: library.NewSeriesReader(p.library), Service: p.movieService(), Clock: clock.NewSystem(), Logger: p.logger,
+		})},
+		{Definition: movie.ArtworkDefinition, Handler: movie.NewArtworkJob(movie.ArtworkConfig{
+			Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger,
+		})},
+	}
 }

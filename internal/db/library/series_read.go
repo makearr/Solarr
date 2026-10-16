@@ -356,13 +356,19 @@ type RefreshCandidate struct {
 // DueForRefresh lists the series last written longer ago than their status asks: those not known to have ended after
 // continuing, an ended one after endedAfter. The oldest come first.
 func (r SeriesReader) DueForRefresh(ctx context.Context, now time.Time, continuing, ended time.Duration, limit int) ([]RefreshCandidate, error) {
+	return r.DueForRefreshOf(ctx, "tv", "ended", now, continuing, ended, limit)
+}
+
+// DueForRefreshOf is DueForRefresh for the works of one media type: those whose status is the settled one (an ended
+// series, a released movie) are read again as often as settled, the rest as often as active.
+func (r SeriesReader) DueForRefreshOf(ctx context.Context, mediaType, settledStatus string, now time.Time, active, settled time.Duration, limit int) ([]RefreshCandidate, error) {
 	rows, err := r.store.Read().QueryContext(ctx,
 		`SELECT w.id, COALESCE((SELECT d.category_id FROM desired_item d WHERE d.work_id = w.id ORDER BY d.id LIMIT 1), 0)
 FROM work w
-WHERE w.media_type = 'tv'
+WHERE w.media_type = ?
   AND w.updated_at < ? - CASE WHEN COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'status'
-                                             ORDER BY f.provider = '__manual__' DESC LIMIT 1), '') = 'ended' THEN ? ELSE ? END
-ORDER BY w.updated_at, w.id LIMIT ?`, now.Unix(), int64(ended.Seconds()), int64(continuing.Seconds()), limit)
+                                             ORDER BY f.provider = '__manual__' DESC LIMIT 1), '') = ? THEN ? ELSE ? END
+ORDER BY w.updated_at, w.id LIMIT ?`, mediaType, now.Unix(), settledStatus, int64(settled.Seconds()), int64(active.Seconds()), limit)
 	if err != nil {
 		return nil, fmt.Errorf("library: series due for refresh: %w", err)
 	}

@@ -14,12 +14,14 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
@@ -272,6 +274,30 @@ func (p *process) tvService() tv.Service {
 		}
 	})
 	return p.tvShared
+}
+
+// movieService is the process's one movie service: TMDB on the bucket TV already uses, Radarr's keyless service behind it.
+func (p *process) movieService() movie.Service {
+	p.movieOnce.Do(func() {
+		p.tvService()
+		proxy := radarrmeta.New(p.providerClient(providerRadarrMeta, nil, httpx.ClientConfig{}))
+		p.movieShared = movie.Service{
+			TMDB: p.tmdbShared, Proxy: proxy,
+			Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+			Franchises: library.NewFranchises(p.library), Exclusions: library.NewExclusions(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		}
+	})
+	return p.movieShared
+}
+
+// movieCatalog is the movie screens' data source.
+func (p *process) movieCatalog() movie.Catalog {
+	return movie.Catalog{
+		Service: p.movieService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		AllowAgain: func(ctx context.Context, provider, externalID string) error {
+			return adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)}.Allow(ctx, movie.MediaType, provider, externalID)
+		},
+	}
 }
 
 // seriesCatalog is the TV screens' data source.

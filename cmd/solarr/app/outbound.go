@@ -24,6 +24,7 @@ const (
 	providerTMDB           = "tmdb"
 	providerTVDB           = "tvdb"
 	providerAniList        = "anilist"
+	providerRadarrMeta     = "radarr-meta"
 	// Each indexer and each download client connection has a bucket of its own, named by its id.
 	providerIndexerPrefix    = "indexer:"
 	providerDownloaderPrefix = "downloader:"
@@ -51,6 +52,8 @@ var providerLimits = map[string]httpx.Limits{
 	providerTMDB:    {MinInterval: 25 * time.Millisecond},
 	providerTVDB:    {MinInterval: 50 * time.Millisecond},
 	providerAniList: {MinInterval: 2 * time.Second},
+	// Radarr's own metadata service: shared infrastructure this project does not operate.
+	providerRadarrMeta: {MinInterval: 250 * time.Millisecond},
 	// A wall of posters must not starve the metadata calls.
 	providerImages: {MinInterval: 100 * time.Millisecond},
 }

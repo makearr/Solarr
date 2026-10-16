@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -110,46 +109,18 @@ func (c SeriesCatalog) Refresh(ctx context.Context, categoryID, seriesID int64) 
 	return err
 }
 
-// WorkPictures implements media.Picturing for TV: the posters the providers hold, the thumbnail being the poster itself.
+// WorkPictures implements media.Picturing for TV: the posters the providers hold.
 func (c SeriesCatalog) WorkPictures(ctx context.Context, seriesID int64) ([]media.ImageOption, error) {
-	images, err := c.Reader.Images(ctx, seriesID)
-	if err != nil {
-		return nil, err
-	}
-	var options []media.ImageOption
-	for _, image := range images {
-		if image.Kind == "poster" {
-			options = append(options, media.ImageOption{URL: image.URL, ThumbURL: image.URL, Source: image.Source, Label: "Poster"})
-		}
-	}
-	return options, nil
+	return c.pictures().WorkPictures(ctx, seriesID)
 }
 
-// PickWorkPicture implements media.Picturing for TV: the chosen poster goes first among the series' pictures as the
-// user's own, keeping the other pictures.
+// PickWorkPicture implements media.Picturing for TV: the chosen poster goes first as the user's own.
 func (c SeriesCatalog) PickWorkPicture(ctx context.Context, seriesID int64, url string) error {
-	images, err := c.Reader.Images(ctx, seriesID)
-	if err != nil {
-		return err
-	}
-	chosen := []tv.Image{}
-	rest := []tv.Image{}
-	for _, image := range images {
-		entry := tv.Image{Kind: image.Kind, URL: image.URL, Source: image.Source}
-		if image.Kind == "poster" && image.URL == url {
-			chosen = append(chosen, entry)
-		} else {
-			rest = append(rest, entry)
-		}
-	}
-	if len(chosen) == 0 {
-		return media.ErrImageNotOffered
-	}
-	value, err := json.Marshal(append(chosen, rest...))
-	if err != nil {
-		return err
-	}
-	return c.Service.Series.SetManualField(ctx, c.Clock.Now(), seriesID, "images", string(value))
+	return c.pictures().PickWorkPicture(ctx, seriesID, url)
+}
+
+func (c SeriesCatalog) pictures() ProviderPictures {
+	return ProviderPictures{Reader: c.Reader, Series: c.Service.Series, Clock: c.Clock}
 }
 
 func translateSeriesError(err error) error {

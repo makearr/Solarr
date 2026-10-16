@@ -81,8 +81,15 @@ func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (
 }
 
 func notWired(err error) error {
-	if errors.Is(err, media.ErrNotWired) {
+	switch {
+	case errors.Is(err, media.ErrNotWired):
 		return apiserver.ErrDiscoverUnsupportedMediaType
+	case errors.Is(err, media.ErrSourceUnavailable):
+		return fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
+	case errors.Is(err, media.ErrInvalidAdd):
+		return fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	case errors.Is(err, media.ErrQueryTooShort):
+		return fmt.Errorf("%w: %w", apiserver.ErrQueryTooShort, err)
 	}
 	return err
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
@@ -120,6 +121,9 @@ type process struct {
 	// tvOnce builds the TV providers once so every caller shares their rate buckets (ADR-13).
 	tvOnce   sync.Once
 	tvShared tv.Service
+	// movieOnce builds the movie providers once, on the same TMDB bucket as TV.
+	movieOnce   sync.Once
+	movieShared movie.Service
 	// The shared clients behind tvShared, for the provider test and the people pages.
 	skyhookShared skyhook.Client
 	tvmazeShared  tvmaze.Client

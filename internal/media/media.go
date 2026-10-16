@@ -291,6 +291,15 @@ func (p Passes) StartPass(ctx context.Context, pass Pass, manual bool) (started,
 	return true, duplicate, err
 }
 
+// ErrSourceUnavailable reports an add or lookup whose metadata providers could not answer.
+var ErrSourceUnavailable = errors.New("media: the metadata sources are not available")
+
+// ErrInvalidAdd reports an add or lookup the type cannot take: an id it does not know, a monitor option it lacks.
+var ErrInvalidAdd = errors.New("media: that cannot be added")
+
+// ErrQueryTooShort reports a lookup with too little to search by.
+var ErrQueryTooShort = errors.New("media: the search is too short")
+
 // ErrNotWired reports a capability whose module was built without what it needs.
 var ErrNotWired = errors.New("media: not wired in this build")
 
