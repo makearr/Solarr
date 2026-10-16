@@ -205,12 +205,16 @@ export function LibraryFileManagement() {
         )}
       </section>
 
-      {isTV && (
+      {isVideo && (
         <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
           <h2 className="text-sm font-medium">Media servers</h2>
           <Toggle
             label="Jellyfin and Kodi files"
-            help="Write what Jellyfin and Kodi read beside the series: tvshow.nfo, season.nfo and an nfo per episode with the TheTVDB ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root; daily, and at once when switched on."
+            help={
+              isTV
+                ? "Write what Jellyfin and Kodi read beside the series: tvshow.nfo, season.nfo and an nfo per episode with the TheTVDB ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root; daily, and at once when switched on."
+                : "Write what Jellyfin and Kodi read beside each movie: an nfo named after the file with the TMDB and IMDb ids, and the movie's poster and fanart. Only where none exists, never on a read-only root; daily, and at once when switched on."
+            }
             checked={draft.media_server_files ?? false}
             onChange={(checked) => set({ media_server_files: checked })}
           />

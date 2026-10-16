@@ -1,14 +1,10 @@
 package tv
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
-	"errors"
 	"fmt"
-	"io"
-	"io/fs"
 	"log/slog"
 	"path"
 	"regexp"
@@ -20,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -39,6 +36,8 @@ type ServerFiles struct {
 	Picture func(ctx context.Context, address string) ([]byte, error)
 	Clock   clock.Clock
 }
+
+func (w ServerFiles) files() sidecar.Writer { return sidecar.Writer{FS: w.FS, Picture: w.Picture} }
 
 // artworkFiles are the series pictures by kind, under the names both servers read in a series folder.
 var artworkFiles = []struct{ kind, name string }{
@@ -66,7 +65,7 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 	seasonFolders := map[string]int{}
 	for _, file := range paths {
 		root, found := w.Roots.RootFolder(file.RootFolderID)
-		if !found || !writableRoot(root) {
+		if !found || !sidecar.WritableRoot(root) {
 			continue
 		}
 		directory := path.Dir(file.RelPath)
@@ -80,7 +79,7 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 			seriesFolders[path.Join(root.Path, series)] = root
 		}
 		episodeNFO := path.Join(root.Path, strings.TrimSuffix(file.RelPath, path.Ext(file.RelPath))+".nfo")
-		made, err := w.writeOnce(episodeNFO, func() ([]byte, error) { return episodeDocument(detail, file) })
+		made, err := w.files().Once(episodeNFO, func() ([]byte, error) { return episodeDocument(detail, file) })
 		if err != nil {
 			return written, err
 		}
@@ -88,14 +87,14 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 		written += w.writeEpisodeThumb(ctx, path.Join(root.Path, strings.TrimSuffix(file.RelPath, path.Ext(file.RelPath))), detail.Summary.Fields["episode_images"], file.MediaRef)
 	}
 	for folder, number := range seasonFolders {
-		made, err := w.writeOnce(path.Join(folder, "season.nfo"), func() ([]byte, error) { return seasonDocument(number) })
+		made, err := w.files().Once(path.Join(folder, "season.nfo"), func() ([]byte, error) { return seasonDocument(number) })
 		if err != nil {
 			return written, err
 		}
 		written += made
 	}
 	for _, folder := range sortedKeys(seriesFolders) {
-		made, err := w.writeOnce(path.Join(folder, "tvshow.nfo"), func() ([]byte, error) { return showDocument(detail) })
+		made, err := w.files().Once(path.Join(folder, "tvshow.nfo"), func() ([]byte, error) { return showDocument(detail) })
 		if err != nil {
 			return written, err
 		}
@@ -120,10 +119,10 @@ func (w ServerFiles) writeSeasonPosters(ctx context.Context, seasonFolders map[s
 		index := slices.IndexFunc(seasons, func(season Season) bool { return season.Number == number && season.Poster != "" })
 		name := seasonPosterName(number)
 		parent := path.Dir(folder)
-		if index < 0 || w.anyExists(parent, name) {
+		if index < 0 || w.files().AnyExists(parent, name) {
 			continue
 		}
-		written += w.writePicture(ctx, parent, name, seasons[index].Poster)
+		written += w.files().WritePicture(ctx, parent, name, seasons[index].Poster)
 	}
 	return written
 }
@@ -140,23 +139,10 @@ func (w ServerFiles) writeEpisodeThumb(ctx context.Context, base, encoded, media
 	season, number := splitRef(mediaRef)
 	address := stills[stillKey(season, number)]
 	name := path.Base(base) + "-thumb"
-	if address == "" || w.anyExists(path.Dir(base), name) {
+	if address == "" || w.files().AnyExists(path.Dir(base), name) {
 		return 0
 	}
-	return w.writePicture(ctx, path.Dir(base), name, address)
-}
-
-// writePicture writes one provider picture under the name in the format it is served in; failing to get it is skipped.
-func (w ServerFiles) writePicture(ctx context.Context, folder, name, address string) int {
-	extension := strings.ToLower(path.Ext(strings.SplitN(address, "?", 2)[0]))
-	if extension != ".png" {
-		extension = ".jpg"
-	}
-	made, err := w.writeOnce(path.Join(folder, name+extension), func() ([]byte, error) { return w.Picture(ctx, address) })
-	if err != nil {
-		return 0
-	}
-	return made
+	return w.files().WritePicture(ctx, path.Dir(base), name, address)
 }
 
 func seasonPosterName(number int) string {
@@ -193,62 +179,19 @@ func (w ServerFiles) writeArtwork(ctx context.Context, folder, encoded string) i
 	if w.Picture == nil || encoded == "" {
 		return 0
 	}
-	var images []Image
+	var images []sidecar.Image
 	if json.Unmarshal([]byte(encoded), &images) != nil {
 		return 0
 	}
 	written := 0
 	for _, file := range artworkFiles {
-		index := firstImage(images, file.kind)
-		if index < 0 || w.anyExists(folder, file.name) {
+		index := sidecar.FirstImage(images, file.kind)
+		if index < 0 || w.files().AnyExists(folder, file.name) {
 			continue
 		}
-		written += w.writePicture(ctx, folder, file.name, images[index].URL)
+		written += w.files().WritePicture(ctx, folder, file.name, images[index].URL)
 	}
 	return written
-}
-
-// anyExists says whether a picture of the name is there in either format a person may have put it in.
-func (w ServerFiles) anyExists(folder, name string) bool {
-	for _, extension := range []string{".jpg", ".jpeg", ".png", ".webp"} {
-		if _, err := w.FS.Stat(path.Join(folder, name+extension)); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// writeOnce writes the file when nothing is at the path, answering 1 when it did.
-func (w ServerFiles) writeOnce(target string, content func() ([]byte, error)) (int, error) {
-	if _, err := w.FS.Stat(target); err == nil {
-		return 0, nil
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return 0, err
-	}
-	body, err := content()
-	if err != nil {
-		return 0, err
-	}
-	if err := fsx.WriteAtomic(w.FS, target, func(out io.Writer) error {
-		_, err := out.Write(body)
-		return err
-	}); err != nil {
-		return 0, fmt.Errorf("tv: write %s: %w", target, err)
-	}
-	return 1, nil
-}
-
-func writableRoot(root settings.RootFolder) bool {
-	return root.Online && root.Writable && !root.ReadOnly
-}
-
-func firstImage(images []Image, kind string) int {
-	for index, image := range images {
-		if image.Kind == kind && image.URL != "" {
-			return index
-		}
-	}
-	return -1
 }
 
 func sortedKeys(folders map[string]settings.RootFolder) []string {
@@ -260,22 +203,15 @@ func sortedKeys(folders map[string]settings.RootFolder) []string {
 	return keys
 }
 
-// uniqueID is one provider id as both servers read it.
-type uniqueID struct {
-	Type    string `xml:"type,attr"`
-	Default bool   `xml:"default,attr,omitempty"`
-	Value   string `xml:",chardata"`
-}
-
 type showNFO struct {
-	XMLName   xml.Name   `xml:"tvshow"`
-	Title     string     `xml:"title"`
-	Year      int64      `xml:"year,omitempty"`
-	Plot      string     `xml:"plot,omitempty"`
-	Status    string     `xml:"status,omitempty"`
-	Studio    string     `xml:"studio,omitempty"`
-	Genres    []string   `xml:"genre"`
-	UniqueIDs []uniqueID `xml:"uniqueid"`
+	XMLName   xml.Name           `xml:"tvshow"`
+	Title     string             `xml:"title"`
+	Year      int64              `xml:"year,omitempty"`
+	Plot      string             `xml:"plot,omitempty"`
+	Status    string             `xml:"status,omitempty"`
+	Studio    string             `xml:"studio,omitempty"`
+	Genres    []string           `xml:"genre"`
+	UniqueIDs []sidecar.UniqueID `xml:"uniqueid"`
 }
 
 type seasonNFO struct {
@@ -285,14 +221,14 @@ type seasonNFO struct {
 }
 
 type episodeNFO struct {
-	XMLName   xml.Name   `xml:"episodedetails"`
-	Title     string     `xml:"title"`
-	ShowTitle string     `xml:"showtitle"`
-	Season    int        `xml:"season"`
-	Episode   int        `xml:"episode"`
-	Aired     string     `xml:"aired,omitempty"`
-	Runtime   int64      `xml:"runtime,omitempty"`
-	UniqueIDs []uniqueID `xml:"uniqueid"`
+	XMLName   xml.Name           `xml:"episodedetails"`
+	Title     string             `xml:"title"`
+	ShowTitle string             `xml:"showtitle"`
+	Season    int                `xml:"season"`
+	Episode   int                `xml:"episode"`
+	Aired     string             `xml:"aired,omitempty"`
+	Runtime   int64              `xml:"runtime,omitempty"`
+	UniqueIDs []sidecar.UniqueID `xml:"uniqueid"`
 }
 
 // providerOrder is the id types a server is offered, the first one held being the default.
@@ -307,10 +243,10 @@ func showDocument(detail library.SeriesDetailRow) ([]byte, error) {
 	}
 	for _, id := range providerOrder {
 		if value := detail.IDs[id.provider]; value != "" {
-			show.UniqueIDs = append(show.UniqueIDs, uniqueID{Type: id.kind, Default: len(show.UniqueIDs) == 0, Value: value})
+			show.UniqueIDs = append(show.UniqueIDs, sidecar.UniqueID{Type: id.kind, Default: len(show.UniqueIDs) == 0, Value: value})
 		}
 	}
-	return document(show)
+	return sidecar.Document(show)
 }
 
 func seasonDocument(number int) ([]byte, error) {
@@ -318,7 +254,7 @@ func seasonDocument(number int) ([]byte, error) {
 	if number == 0 {
 		title = "Specials"
 	}
-	return document(seasonNFO{Number: number, Title: title})
+	return sidecar.Document(seasonNFO{Number: number, Title: title})
 }
 
 func episodeDocument(detail library.SeriesDetailRow, file library.PartPath) ([]byte, error) {
@@ -328,21 +264,9 @@ func episodeDocument(detail library.SeriesDetailRow, file library.PartPath) ([]b
 		Runtime: file.RuntimeMs / 60_000,
 	}
 	if file.ExternalID != "" {
-		episode.UniqueIDs = []uniqueID{{Type: "tvdb", Default: true, Value: file.ExternalID}}
+		episode.UniqueIDs = []sidecar.UniqueID{{Type: "tvdb", Default: true, Value: file.ExternalID}}
 	}
-	return document(episode)
-}
-
-func document(value any) ([]byte, error) {
-	var out bytes.Buffer
-	out.WriteString(xml.Header)
-	encoder := xml.NewEncoder(&out)
-	encoder.Indent("", "  ")
-	if err := encoder.Encode(value); err != nil {
-		return nil, err
-	}
-	out.WriteString("\n")
-	return out.Bytes(), nil
+	return sidecar.Document(episode)
 }
 
 // ServerFilesJobType is the registered type of the pass that writes Jellyfin and Kodi files.
@@ -375,7 +299,7 @@ func (j ServerFilesJob) Run(ctx context.Context, job jobs.Job) error {
 			continue
 		}
 		for _, root := range j.RootsOf(category.ID) {
-			if !writableRoot(root) {
+			if !sidecar.WritableRoot(root) {
 				continue
 			}
 			var afterID int64

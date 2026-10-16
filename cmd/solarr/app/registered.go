@@ -17,6 +17,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/service/follow"
@@ -306,8 +307,18 @@ func (p *process) enqueueServerFilesFor(ctx context.Context, categoryID, workID 
 	}
 }
 
-// enqueueServerFiles submits the pass writing Jellyfin and Kodi files.
+// enqueueMovieServerFilesFor submits the pass for one movie, right after an import placed a file of it.
+func (p *process) enqueueMovieServerFilesFor(ctx context.Context, categoryID, workID int64) {
+	if _, err := movie.EnqueueServerFilesFor(ctx, p.queue, categoryID, workID); err != nil {
+		p.logger.Warn("could not queue the media server files of an imported movie", "work_id", workID, "error", err)
+	}
+}
+
+// enqueueServerFiles submits the passes writing Jellyfin and Kodi files, one per media type that has them.
 func (p *process) enqueueServerFiles(ctx context.Context) (jobs.EnqueueResult, error) {
+	if _, err := movie.EnqueueServerFiles(ctx, p.queue); err != nil {
+		return jobs.EnqueueResult{}, err
+	}
 	return tv.EnqueueServerFiles(ctx, p.queue)
 }
 
@@ -339,6 +350,18 @@ func (p *process) movieModule() movie.Module {
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		Adder: catalog, Franchise: catalog,
+		ServerFiles: &movie.ServerFilesJob{
+			Writer: movie.ServerFiles{
+				Sidecar: sidecar.Writer{FS: p.fsys, Picture: p.remoteImages().Original}, Reader: library.NewSeriesReader(p.library),
+				Physical: library.NewPhysical(p.library), Identity: library.NewIdentity(p.library),
+				Roots: adapters.Roots{Cache: p.cache}, Clock: clock.NewSystem(),
+			},
+			Libraries: func() []settings.Category { return p.cache.Snapshot().Categories() },
+			RootsOf: func(categoryID int64) []settings.RootFolder {
+				return p.cache.Snapshot().RootFoldersForCategory(categoryID)
+			},
+			Logger: p.logger,
+		},
 		Hunt: p.movieHunt,
 		Feed: movie.Feed{
 			Grab: p.movieGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.movieIndexerConns, Logger: p.logger,

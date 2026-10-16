@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -182,7 +183,7 @@ func (s SharedFiles) destination(
 ) (settings.RootFolder, string, error) {
 	if len(homes) > 0 {
 		root, found := s.Roots.RootFolder(homes[0].rootID)
-		if !found || !writableRoot(root) {
+		if !found || !sidecar.WritableRoot(root) {
 			return settings.RootFolder{}, "", fmt.Errorf("the series' root folder %d is offline, not writable or read-only", homes[0].rootID)
 		}
 		folder, err := names.RenderSeriesFolder(episode)
@@ -196,7 +197,7 @@ func (s SharedFiles) destination(
 		return boolOrder(a.ID != source.RootFolderID) - boolOrder(b.ID != source.RootFolderID)
 	})
 	for _, root := range roots {
-		if writableRoot(root) {
+		if sidecar.WritableRoot(root) {
 			return root, rendered, nil
 		}
 	}

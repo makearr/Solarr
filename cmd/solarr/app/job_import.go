@@ -237,6 +237,7 @@ func (p *process) movieImporter() movie.Importer {
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, Probe: p.probeMeasured,
+		AfterPlacing: p.enqueueMovieServerFilesFor,
 	})
 }
 

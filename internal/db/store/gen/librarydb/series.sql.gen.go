@@ -191,12 +191,13 @@ func (q *Queries) GetOrganisationByExternalID(ctx context.Context, arg GetOrgani
 const getSeriesInCategory = `-- name: GetSeriesInCategory :one
 SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms
 FROM work w
-WHERE w.id = ?1 AND w.media_type = 'tv'
-  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?2)
+WHERE w.id = ?1 AND w.media_type = ?2
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?3)
 `
 
 type GetSeriesInCategoryParams struct {
 	ID         int64
+	MediaType  string
 	CategoryID int64
 }
 
@@ -212,7 +213,7 @@ type GetSeriesInCategoryRow struct {
 }
 
 func (q *Queries) GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error) {
-	row := q.db.QueryRowContext(ctx, getSeriesInCategory, arg.ID, arg.CategoryID)
+	row := q.db.QueryRowContext(ctx, getSeriesInCategory, arg.ID, arg.MediaType, arg.CategoryID)
 	var i GetSeriesInCategoryRow
 	err := row.Scan(
 		&i.ID,

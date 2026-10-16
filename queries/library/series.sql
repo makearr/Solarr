@@ -59,7 +59,7 @@ ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating;
 -- name: GetSeriesInCategory :one
 SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms
 FROM work w
-WHERE w.id = sqlc.arg(id) AND w.media_type = 'tv'
+WHERE w.id = sqlc.arg(id) AND w.media_type = sqlc.arg(media_type)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id));
 
 -- Per series: its parts, the monitored ones that have aired by the given date and the next air time still to come.

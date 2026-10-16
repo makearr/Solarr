@@ -32,6 +32,8 @@ type Module struct {
 	CutoffJob
 	// Searching is the movie module's part of a search a person asks for.
 	Searching
+	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.
+	ServerFiles *ServerFilesJob
 	// Franchise lists the library's franchises and follows them; nil leaves the level empty.
 	Franchise media.Franchising
 	// Service applies a monitor option to a movie a library holds.
@@ -97,6 +99,9 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 		if err := register(registration.Definition, registration.Handler); err != nil {
 			return err
 		}
+	}
+	if m.ServerFiles != nil {
+		return register(ServerFilesDefinition, m.ServerFiles)
 	}
 	return nil
 }

@@ -98,8 +98,13 @@ func NewSeriesReader(opened *store.Store) SeriesReader { return SeriesReader{sto
 
 // Get returns one series of a category with every episode; ErrSeriesNotFound when it is not there.
 func (r SeriesReader) Get(ctx context.Context, categoryID, workID int64, now time.Time) (SeriesDetailRow, error) {
+	return r.GetOf(ctx, "tv", categoryID, workID, now)
+}
+
+// GetOf reads one work of the media type as Get reads a series; movies have no episodes, so only the work is read.
+func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, workID int64, now time.Time) (SeriesDetailRow, error) {
 	queries := librarydb.New(r.store.Read())
-	row, err := queries.GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: workID, CategoryID: categoryID})
+	row, err := queries.GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: workID, CategoryID: categoryID, MediaType: mediaType})
 	if errors.Is(err, sql.ErrNoRows) {
 		return SeriesDetailRow{}, ErrSeriesNotFound
 	}
