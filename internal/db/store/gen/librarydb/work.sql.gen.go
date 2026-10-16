@@ -1511,8 +1511,12 @@ FROM work_part p
 JOIN work w ON w.id = p.work_id
 WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
   AND p.monitored = 1
-  AND ((p.available_at IS NOT NULL AND p.available_at <= ?2)
-       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date <= ?3))
+  AND ((p.available_at IS NOT NULL
+        AND p.available_at + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= ?2)
+       OR (p.available_at IS NULL AND p.date IS NOT NULL
+           AND CASE WHEN strftime('%s', p.date) IS NULL THEN p.date <= ?3
+                    ELSE CAST(strftime('%s', p.date) AS INTEGER)
+                         + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= ?2 END))
   AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
                   WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary')
   AND (COALESCE(p.date, '') < ?4 OR (COALESCE(p.date, '') = ?4 AND p.id < ?5))
@@ -1539,7 +1543,7 @@ type ListWantedPartsRow struct {
 	AvailableAt sql.NullInt64
 }
 
-// A library's missing parts, newest first: monitored, out, and no file covers them (Sonarr's Wanted, Missing).
+// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
 func (q *Queries) ListWantedParts(ctx context.Context, arg ListWantedPartsParams) ([]ListWantedPartsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listWantedParts,
 		arg.CategoryID,

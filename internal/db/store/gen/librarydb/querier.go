@@ -728,7 +728,7 @@ type Querier interface {
 	ListUserTagsWithUse(ctx context.Context) ([]ListUserTagsWithUseRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
-	// A library's missing parts, newest first: monitored, out, and no file covers them (Sonarr's Wanted, Missing).
+	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
 	ListWantedParts(ctx context.Context, arg ListWantedPartsParams) ([]ListWantedPartsRow, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)

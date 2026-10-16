@@ -520,15 +520,19 @@ WHERE work_id = sqlc.arg(work_id)
   AND (sort_key > sqlc.arg(after_sort_key) OR (sort_key = sqlc.arg(after_sort_key) AND id > sqlc.arg(after_id)))
 ORDER BY sort_key, id LIMIT sqlc.arg(page_size);
 
--- A library's missing parts, newest first: monitored, out, and no file covers them (Sonarr's Wanted, Missing).
+-- A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
 -- name: ListWantedParts :many
 SELECT p.id AS part_id, p.work_id, w.canonical_title AS work_title, p.media_ref, p.title, p.date, p.available_at
 FROM work_part p
 JOIN work w ON w.id = p.work_id
 WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
   AND p.monitored = 1
-  AND ((p.available_at IS NOT NULL AND p.available_at <= sqlc.arg(now))
-       OR (p.available_at IS NULL AND p.date IS NOT NULL AND p.date <= sqlc.arg(today)))
+  AND ((p.available_at IS NOT NULL
+        AND p.available_at + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= sqlc.arg(now))
+       OR (p.available_at IS NULL AND p.date IS NOT NULL
+           AND CASE WHEN strftime('%s', p.date) IS NULL THEN p.date <= sqlc.arg(today)
+                    ELSE CAST(strftime('%s', p.date) AS INTEGER)
+                         + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= sqlc.arg(now) END))
   AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
                   WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary')
   AND (COALESCE(p.date, '') < sqlc.arg(after_date) OR (COALESCE(p.date, '') = sqlc.arg(after_date) AND p.id < sqlc.arg(after_id)))

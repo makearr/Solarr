@@ -303,3 +303,25 @@ func TestCalendarListsMonitoredEpisodesAndCountsTheirDates(t *testing.T) {
 		t.Errorf("dates = %+v, %v", dates, err)
 	}
 }
+
+// An episode dated today is not owed until its wait has passed, the same rule the season counts follow.
+func TestWantedWaitsOutTheGraceOfAnEpisodeAiredToday(t *testing.T) {
+	opened, _ := newLibrary(t)
+	write := sampleSeries()
+	write.Parts = []library.SeriesPartWrite{{MediaRef: "s01:e01", SortKey: "a", Date: "2026-10-16", MonitoredIfNew: true}}
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.NewDesired(opened).EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", CategoryID: 4, ProfileID: 1, Monitored: true}); err != nil {
+		t.Fatal(err)
+	}
+	works := library.NewWorks(opened)
+	midnight := time.Date(2026, 10, 16, 0, 0, 0, 0, time.UTC)
+	if got, _ := works.WantedParts(t.Context(), 4, library.WantedPartsCursor{}, 10, midnight.Add(time.Hour)); len(got) != 0 {
+		t.Errorf("an hour after a date-only airing: wanted %+v, want none until the grace has passed", got)
+	}
+	if got, _ := works.WantedParts(t.Context(), 4, library.WantedPartsCursor{}, 10, midnight.Add(48*time.Hour)); len(got) != 1 {
+		t.Errorf("two days later: wanted %+v, want the episode", got)
+	}
+}
