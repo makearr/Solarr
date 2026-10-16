@@ -70,7 +70,7 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, ErrFollowSourceMissing):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Cannot follow yet", err.Error())
 
-	case errors.Is(err, ErrSeriesNotFound):
+	case errors.Is(err, ErrSeriesNotFound), errors.Is(err, ErrCandidateNotFound):
 		writeProblem(w, logger, http.StatusNotFound, TypeNotFound, "Not found", err.Error())
 
 	case errors.Is(err, ErrSeriesSourceUnavailable):

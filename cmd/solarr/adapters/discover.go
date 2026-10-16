@@ -2,7 +2,9 @@ package adapters
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -112,6 +114,16 @@ func (a Discover) searchArtists(ctx context.Context, query string, limit int) ([
 	return results, nil
 }
 
+// musicbrainzIDShape is the shape of an MBID; a mistyped one never reaches the source, which answers 400 for it.
+var musicbrainzIDShape = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func checkMusicBrainzID(id string) error {
+	if !musicbrainzIDShape.MatchString(id) {
+		return fmt.Errorf("%w: %q is not a MusicBrainz id", apiserver.ErrCandidateNotFound, id)
+	}
+	return nil
+}
+
 // AddWork implements media.Adding: an album is resolved or created and gets a wanted item, without an edition yet
 // (enrichment chooses one); an artist is followed.
 func (a Discover) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
@@ -130,7 +142,13 @@ func (a Discover) AddWork(ctx context.Context, request media.AddRequest) (media.
 	// Re-fetched from the provider, never trusted from the request: an
 	// external id names identity (ADR-8), the title that goes with it is the
 	// provider's to say, not the caller's.
+	if err := checkMusicBrainzID(externalID); err != nil {
+		return media.AddResult{}, err
+	}
 	releaseGroup, _, err := a.Provider.Album(ctx, musicbrainz.PriorityInteractive, externalID, "")
+	if errors.Is(err, musicbrainz.ErrNotFound) {
+		return media.AddResult{}, fmt.Errorf("%w: release group %s", apiserver.ErrCandidateNotFound, externalID)
+	}
 	if err != nil {
 		return media.AddResult{}, fmt.Errorf("musicbrainz: %w", err)
 	}
@@ -182,7 +200,13 @@ func (a Discover) addArtist(
 ) (media.AddResult, error) {
 	// Re-fetched rather than trusted from the request, the same rule the album
 	// path follows: an external id names identity, the provider says the rest.
+	if err := checkMusicBrainzID(externalID); err != nil {
+		return media.AddResult{}, err
+	}
 	artist, err := a.Provider.Artist(ctx, musicbrainz.PriorityInteractive, externalID)
+	if errors.Is(err, musicbrainz.ErrNotFound) {
+		return media.AddResult{}, fmt.Errorf("%w: artist %s", apiserver.ErrCandidateNotFound, externalID)
+	}
 	if err != nil {
 		return media.AddResult{}, fmt.Errorf("musicbrainz: %w", err)
 	}

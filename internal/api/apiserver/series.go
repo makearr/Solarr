@@ -12,5 +12,8 @@ var ErrInvalidChoice = errors.New("apiserver: invalid choice")
 // ErrSeriesNotFound is a series id that is not in the library asked about; answered as 404.
 var ErrSeriesNotFound = errors.New("apiserver: series not found")
 
+// ErrCandidateNotFound is an external id no metadata source knows, so there is nothing to add; answered as 404.
+var ErrCandidateNotFound = errors.New("apiserver: no metadata source knows that id")
+
 // ErrSeriesSourceUnavailable means no metadata provider could be reached; answered as 502.
 var ErrSeriesSourceUnavailable = errors.New("apiserver: the metadata sources could not be reached")
