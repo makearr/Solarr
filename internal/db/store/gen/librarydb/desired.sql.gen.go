@@ -1065,6 +1065,60 @@ func (q *Queries) ListItemsWithPartsComingOut(ctx context.Context, arg ListItems
 	return items, nil
 }
 
+const listMonitoredItemsLosingFiles = `-- name: ListMonitoredItemsLosingFiles :many
+SELECT DISTINCT di.id AS item_id
+FROM desired_item di
+JOIN desired_item_file dif ON dif.desired_item_id = di.id
+JOIN library_path p ON p.media_object_id = dif.media_object_id
+WHERE di.category_id = ?1 AND p.root_folder_id = ?2
+  AND di.satisfaction_kind = 'SET' AND di.media_ref = '' AND di.monitored = 1
+  AND p.missing_since = ?3 AND di.id > ?4
+  AND NOT EXISTS (
+    SELECT 1 FROM desired_item_file other
+    JOIN library_path held ON held.media_object_id = other.media_object_id
+    WHERE other.desired_item_id = di.id AND held.missing_since IS NULL)
+ORDER BY di.id
+LIMIT ?5
+`
+
+type ListMonitoredItemsLosingFilesParams struct {
+	CategoryID   int64
+	RootFolderID int64
+	MissingSince sql.NullInt64
+	AfterID      int64
+	PageSize     int64
+}
+
+// The monitored whole-work items (a movie's) covered only by files a full scan just found gone.
+func (q *Queries) ListMonitoredItemsLosingFiles(ctx context.Context, arg ListMonitoredItemsLosingFilesParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listMonitoredItemsLosingFiles,
+		arg.CategoryID,
+		arg.RootFolderID,
+		arg.MissingSince,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var item_id int64
+		if err := rows.Scan(&item_id); err != nil {
+			return nil, err
+		}
+		items = append(items, item_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMonitoredPartsLosingFiles = `-- name: ListMonitoredPartsLosingFiles :many
 SELECT DISTINCT wp.id AS part_id, di.work_id
 FROM desired_item di

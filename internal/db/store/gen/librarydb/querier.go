@@ -594,6 +594,8 @@ type Querier interface {
 	// The artists credited on a library's albums, with what a merge needs to rank them. shared is set
 	// when the person also has work in another library, which a merge in this one must leave alone.
 	ListMergeCandidatesForCategory(ctx context.Context, categoryID int64) ([]ListMergeCandidatesForCategoryRow, error)
+	// The monitored whole-work items (a movie's) covered only by files a full scan just found gone.
+	ListMonitoredItemsLosingFiles(ctx context.Context, arg ListMonitoredItemsLosingFilesParams) ([]int64, error)
 	// The monitored parts covered only by files a full scan just found gone: deleted on purpose, by
 	// a library's "Unmonitor deleted" for a type whose parts are wanted one by one.
 	ListMonitoredPartsLosingFiles(ctx context.Context, arg ListMonitoredPartsLosingFilesParams) ([]ListMonitoredPartsLosingFilesRow, error)

@@ -347,6 +347,9 @@ func (p *process) movieModule() movie.Module {
 		TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: movie.IsFeature,
+			Housekeeping: movie.Housekeeping{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library), Logger: p.logger,
+			},
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		Adder: catalog, Franchise: catalog,

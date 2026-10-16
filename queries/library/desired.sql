@@ -491,6 +491,22 @@ WHERE di.category_id = sqlc.arg(category_id) AND p.root_folder_id = sqlc.arg(roo
 ORDER BY wp.id
 LIMIT sqlc.arg(page_size);
 
+-- The monitored whole-work items (a movie's) covered only by files a full scan just found gone.
+-- name: ListMonitoredItemsLosingFiles :many
+SELECT DISTINCT di.id AS item_id
+FROM desired_item di
+JOIN desired_item_file dif ON dif.desired_item_id = di.id
+JOIN library_path p ON p.media_object_id = dif.media_object_id
+WHERE di.category_id = sqlc.arg(category_id) AND p.root_folder_id = sqlc.arg(root_folder_id)
+  AND di.satisfaction_kind = 'SET' AND di.media_ref = '' AND di.monitored = 1
+  AND p.missing_since = sqlc.arg(missing_since) AND di.id > sqlc.arg(after_id)
+  AND NOT EXISTS (
+    SELECT 1 FROM desired_item_file other
+    JOIN library_path held ON held.media_object_id = other.media_object_id
+    WHERE other.desired_item_id = di.id AND held.missing_since IS NULL)
+ORDER BY di.id
+LIMIT sqlc.arg(page_size);
+
 -- A work's release day: its earliest dated release, '' when it has none to the day.
 -- name: WorkReleaseDay :one
 SELECT CAST(COALESCE(MIN(date), '') AS TEXT) AS day FROM work_date WHERE work_id = ? AND LENGTH(date) = 10;

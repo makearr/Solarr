@@ -313,6 +313,32 @@ func (d Desired) UnmonitorPartsLosingFiles(ctx context.Context, categoryID, root
 	}
 }
 
+// UnmonitorWorksLosingFiles unmonitors the whole-work items (a movie's) of categoryID whose only files, on rootFolderID,
+// were marked missing at missingSince, and answers how many.
+func (d Desired) UnmonitorWorksLosingFiles(ctx context.Context, categoryID, rootFolderID, missingSince int64) (int, error) {
+	total := 0
+	var afterID int64
+	for {
+		page, err := librarydb.New(d.store.Read()).ListMonitoredItemsLosingFiles(ctx, librarydb.ListMonitoredItemsLosingFilesParams{
+			CategoryID: categoryID, RootFolderID: rootFolderID,
+			MissingSince: sql.NullInt64{Int64: missingSince, Valid: true}, AfterID: afterID, PageSize: dirtyBatchSize,
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: items losing files: %w", err)
+		}
+		for _, itemID := range page {
+			afterID = itemID
+			if err := d.SetItemMonitored(ctx, itemID, false); err != nil {
+				return total, err
+			}
+			total++
+		}
+		if len(page) < dirtyBatchSize {
+			return total, nil
+		}
+	}
+}
+
 // syncSeasonMonitoring makes a season item monitored exactly when one of its episodes is, so wanting one episode of an
 // unmonitored season is not silently ignored.
 func syncSeasonMonitoring(ctx context.Context, queries *librarydb.Queries, workID int64, item librarydb.DesiredItem) error {
