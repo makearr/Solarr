@@ -45,6 +45,7 @@ type queueResponse struct {
 		SizeLeftMB    string      `json:"mbleft"`
 		SpeedKBPerSec string      `json:"kbpersec"`
 		SlotsTotal    int         `json:"noofslots_total"`
+		SlotsShown    int         `json:"noofslots"`
 		Slots         []queueSlot `json:"slots"`
 	} `json:"queue"`
 }
@@ -82,6 +83,6 @@ func (c Client) Queue(ctx context.Context) (QueueState, error) {
 		Paused:    parsed.Queue.Paused,
 		SizeBytes: megabytesToBytes(parsed.Queue.SizeMB), SizeLeftBytes: megabytesToBytes(parsed.Queue.SizeLeftMB),
 		SpeedBytesPerSec: kbPerSecToBytesPerSec(parsed.Queue.SpeedKBPerSec),
-		SlotsTotal:       parsed.Queue.SlotsTotal, Slots: slots,
+		SlotsTotal:       max(parsed.Queue.SlotsTotal, parsed.Queue.SlotsShown, len(slots)), Slots: slots,
 	}, nil
 }

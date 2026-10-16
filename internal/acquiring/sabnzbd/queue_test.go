@@ -109,3 +109,17 @@ func TestQueue_UnparseableSizeAnswersZeroNotAnError(t *testing.T) {
 		t.Errorf("SizeBytes = %d, want 0 for an unparseable field", state.SizeBytes)
 	}
 }
+
+// A queue that only says how many slots it lists, or only lists them, still counts them: a paused download is in it.
+func TestQueue_CountsSlotsWhenTheTotalIsMissing(t *testing.T) {
+	for name, body := range map[string]string{
+		"only the slots": `{"queue":{"paused":true,"mb":"1","mbleft":"1","kbpersec":"0","slots":[{"nzo_id":"a","status":"Paused"}]}}`,
+		"only noofslots": `{"queue":{"paused":true,"mb":"1","mbleft":"1","kbpersec":"0","noofslots":1,"slots":[]}}`,
+	} {
+		client := sabnzbd.NewClient(newTestClient(t, &recordingTransport{body: body}), "http://sabnzbd.local:8080", "test-api-key")
+		state, err := client.Queue(context.Background())
+		if err != nil || state.SlotsTotal != 1 {
+			t.Errorf("%s: SlotsTotal = %d, %v; want 1", name, state.SlotsTotal, err)
+		}
+	}
+}
