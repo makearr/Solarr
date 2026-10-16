@@ -21,7 +21,7 @@ func (c Roots) RootFolder(id int64) (settings.RootFolder, bool) {
 // "ask fresh, never cache" shape as Roots.
 type Categories struct{ Cache *settings.Cache }
 
-// ProfileFor is the quality profile a new item of the category starts with: the library's own, else the shipped "Any"
+// ProfileFor is the quality profile a new item of the category starts with: the library's own, else the shipped "Any" ("Movie Any" for movies)
 // of its media type, else any profile of it, else fallback.
 func (c Categories) ProfileFor(category settings.Category, fallback int64) int64 {
 	if category.QualityProfileID != nil {
@@ -32,7 +32,7 @@ func (c Categories) ProfileFor(category settings.Category, fallback int64) int64
 		if profile.MediaType != category.MediaType {
 			continue
 		}
-		if profile.Name == "Any" {
+		if profile.Name == "Any" || profile.Name == "Movie Any" {
 			return profile.ID
 		}
 		if first == 0 {

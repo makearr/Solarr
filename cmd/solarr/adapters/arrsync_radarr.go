@@ -105,11 +105,12 @@ func (a ArrSync) syncMovie(ctx context.Context, importID, categoryID int64, rada
 	return result.Created, nil
 }
 
-// movieProfile is the Solarr movie profile that has the movie's Radarr profile's name, else the library's own.
+// movieProfile is the Solarr movie profile that has the movie's Radarr profile's name (shipped ones lead with "Movie "),
+// else the library's own.
 func (a ArrSync) movieProfile(category settings.Category, radarr arrimport.RadarrMovie, profileNames map[int64]string) int64 {
 	if name := profileNames[radarr.QualityProfileID]; name != "" {
 		for _, profile := range a.Cache.Snapshot().QualityProfiles() {
-			if profile.MediaType == category.MediaType && strings.EqualFold(profile.Name, name) {
+			if profile.MediaType == category.MediaType && strings.EqualFold(strings.TrimPrefix(profile.Name, "Movie "), name) {
 				return profile.ID
 			}
 		}
