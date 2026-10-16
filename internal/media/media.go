@@ -486,6 +486,26 @@ type Profiling interface {
 // JobRegistrar takes one job type with its handler.
 type JobRegistrar func(definition jobs.Definition, handler jobs.Handler) error
 
+// Health severities a module's check may carry; an error means something cannot work at all.
+const (
+	HealthError   = "error"
+	HealthWarning = "warning"
+)
+
+// HealthCheck is one thing a media type finds wrong with the instance, as the health list shows it.
+type HealthCheck struct {
+	ID       string
+	Severity string
+	Message  string
+	Link     string
+}
+
+// Healthy is the capability of a media type that can say what its libraries lack: a provider key, a source that is down.
+type Healthy interface {
+	// HealthChecks answers its checks given how many libraries of the type exist; none when there are none.
+	HealthChecks(libraries int) []HealthCheck
+}
+
 // JobRegistration is one job type a media type brings, with the handler that runs it.
 type JobRegistration struct {
 	Definition jobs.Definition

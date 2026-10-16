@@ -136,7 +136,7 @@ func (p *process) tvModule() tv.Module {
 			return libraries
 		},
 	})
-	return tv.Module{Registrations: p.tvJobs(),
+	return tv.Module{Registrations: p.tvJobs(), TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },

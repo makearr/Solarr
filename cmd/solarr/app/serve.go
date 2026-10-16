@@ -659,7 +659,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Settings: p.cache, Facets: adapters.MediaTypes{Registry: p.media}.Facets,
 			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf,
 		},
-		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles()},
+		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media},
 		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:      adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{

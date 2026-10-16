@@ -16,6 +16,8 @@ import (
 
 // Module is TV as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
 type Module struct {
+	// TMDBConfigured says the owner has stored a TMDB key; nil leaves the missing-key check out.
+	TMDBConfigured func() bool
 	// Registrations are job types TV brings besides the ones named below, with their handlers.
 	Registrations []media.JobRegistration
 	Sweep         scan.Sweep
@@ -60,6 +62,18 @@ func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]medi
 		return nil, media.ErrNotWired
 	}
 	return m.Adder.LookupWorks(ctx, lookup)
+}
+
+// HealthChecks implements media.Healthy: TMDB, the one TV provider that needs the owner's own key, is not set up.
+func (m Module) HealthChecks(libraries int) []media.HealthCheck {
+	if libraries == 0 || m.TMDBConfigured == nil || m.TMDBConfigured() {
+		return nil
+	}
+	return []media.HealthCheck{{
+		ID: "tv_no_tmdb_key", Severity: media.HealthWarning,
+		Message: "TV works without a TMDB key, but cast, crew, guest stars, networks and artwork come from TMDB: add your free key under Metadata.",
+		Link:    "/settings/metadata",
+	}}
 }
 
 // FiltersReleases implements media.ReleaseFiltering: the TV judge applies a series' release filters.

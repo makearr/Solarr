@@ -3,12 +3,12 @@ package adapters
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 )
 
 // SystemHealth answers the health checks that need more than the settings
@@ -22,6 +22,8 @@ type SystemHealth struct {
 	}
 	// Vanished finds full scans that held a mass vanish back; nil skips that check.
 	Vanished apiserver.VanishedFiles
+	// Registry lets each media type add its own checks; nil adds none.
+	Registry *media.Registry
 }
 
 // Checks reports what is missing. Every probe is best-effort: a failure to
@@ -47,21 +49,32 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.waitingForReview(ctx)...)
 	snapshot := a.Cache.Snapshot()
 	checks = append(checks, a.vanishedHeld(ctx, snapshot)...)
-	hasTV := slices.ContainsFunc(snapshot.Categories(), func(category settings.Category) bool { return category.MediaType == "tv" })
-	checks = append(checks, tvKeyCheck(hasTV, snapshot.TMDBConfigured())...)
+	checks = append(checks, a.mediaChecks(snapshot)...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
 
-// tvKeyCheck tells a TV library's owner that TMDB, the one TV provider that needs their own key, is not set up.
-func tvKeyCheck(hasTV, tmdbStored bool) []apiserver.HealthCheck {
-	if !hasTV || tmdbStored {
+// mediaChecks asks each media type that can say what its libraries lack.
+func (a SystemHealth) mediaChecks(snapshot *settings.Snapshot) []apiserver.HealthCheck {
+	if a.Registry == nil {
 		return nil
 	}
-	return []apiserver.HealthCheck{{
-		ID: "tv_no_tmdb_key", Severity: apiserver.HealthWarning,
-		Message: "TV works without a TMDB key, but cast, crew, guest stars, networks and artwork come from TMDB: add your free key under Metadata.",
-		Link:    "/settings/metadata",
-	}}
+	var checks []apiserver.HealthCheck
+	for _, descriptor := range a.Registry.Descriptors() {
+		module, ok := media.Capability[media.Healthy](a.Registry, descriptor.Key)
+		if !ok {
+			continue
+		}
+		libraries := 0
+		for _, category := range snapshot.Categories() {
+			if category.MediaType == string(descriptor.Key) {
+				libraries++
+			}
+		}
+		for _, check := range module.HealthChecks(libraries) {
+			checks = append(checks, apiserver.HealthCheck{ID: check.ID, Severity: check.Severity, Message: check.Message, Link: check.Link})
+		}
+	}
+	return checks
 }
 
 // waitingForReview counts the downloads whose import is held until someone identifies them on the Import page.
