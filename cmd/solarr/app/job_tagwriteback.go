@@ -37,7 +37,7 @@ func (p *process) tagRoots(context.Context) ([]music.TagRoot, error) {
 		}
 		for _, categoryID := range snapshot.CategoriesForRootFolder(root.ID) {
 			category, found := snapshot.Category(categoryID)
-			if found && category.MediaType == "music" {
+			if found && category.MediaType == string(music.MediaType) {
 				tagging := category.FileManagement.Tagging
 				roots = append(roots, music.TagRoot{ID: root.ID, Path: root.Path, Options: music.TagOptions{
 					WriteIDs: tagging.WriteIDs, ReplaceIDs: tagging.ReplaceIDs,

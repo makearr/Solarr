@@ -19,7 +19,7 @@ func (p *process) registerDiscographyCoverageJob(registry *jobs.Registry, execut
 		Categories: func() []int64 {
 			var ids []int64
 			for _, category := range p.cache.Snapshot().Categories() {
-				if category.MediaType == "music" {
+				if category.MediaType == string(music.MediaType) {
 					ids = append(ids, category.ID)
 				}
 			}

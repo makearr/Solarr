@@ -84,7 +84,7 @@ func (p *process) tvGrab() tv.Grab {
 			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
 			Sightings: &sightings, ReleaseFilters: &filters,
 		},
-		Dispatch: p.dispatchFor("tv"),
+		Dispatch: p.dispatchFor(tv.MediaType),
 	}
 }
 
@@ -139,7 +139,7 @@ func (p *process) musicGrab() music.Grab {
 
 // musicDispatch builds internal/media/music.Dispatch (ADR-57's own
 // acquire.send) over the real stores.
-func (p *process) musicDispatch() music.Dispatch { return p.dispatchFor("music") }
+func (p *process) musicDispatch() music.Dispatch { return p.dispatchFor(string(music.MediaType)) }
 
 // dispatchFor is the dispatch of one media type: the same stores, its own client category.
 func (p *process) dispatchFor(mediaType string) music.Dispatch {
