@@ -691,7 +691,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				library.NewPeople(p.library), library.NewSubscriptions(p.library),
 			),
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
-			TV: p.tvService(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
+			TV: p.tvService(), Movies: p.movieCatalog(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
 		},
 		Prowlarr: adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{

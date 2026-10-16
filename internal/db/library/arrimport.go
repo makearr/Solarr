@@ -23,6 +23,7 @@ const (
 	ArrImportItemArtist = "artist"
 	ArrImportItemAlbum  = "album"
 	ArrImportItemSeries = "series"
+	ArrImportItemMovie  = "movie"
 	ArrImportItemParked = "parked"
 )
 

@@ -95,15 +95,22 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 			return media.AddResult{}, err
 		}
 	}
-	userID := request.UserID
-	result, err := c.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, AddedBy: &userID})
+	var addedBy *int64
+	if request.UserID != 0 {
+		addedBy = &request.UserID
+	}
+	availability := Availability(request.Choices[FieldMinimumAvailability])
+	if availability != "" && !availability.Valid() {
+		return media.AddResult{}, fmt.Errorf("%w: %q is not a minimum availability", media.ErrInvalidAdd, availability)
+	}
+	result, err := c.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, Availability: availability, AddedBy: addedBy})
 	if errors.Is(err, ErrNoSource) {
 		return media.AddResult{}, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}
 	if err != nil {
 		return media.AddResult{}, err
 	}
-	return media.AddResult{Kind: "movie", WorkID: result.WorkID}, nil
+	return media.AddResult{Kind: "movie", WorkID: result.WorkID, Created: result.Created}, nil
 }
 
 // Refresh re-reads one movie from the sources; monitoring and the person's own fields stay as they are.

@@ -172,6 +172,8 @@ type AddRequest struct {
 	Specials  bool
 	ProfileID *int64
 	Search    bool
+	// Choices are the type's own add-form answers by key ("minimum_availability" for a movie); unknown keys are ignored.
+	Choices map[string]string
 }
 
 // AddResult is what an add stored.
@@ -180,6 +182,8 @@ type AddResult struct {
 	WorkID, PersonID int64
 	// Searching says the type started looking for what was added; false leaves a search of the work to the caller.
 	Searching bool
+	// Created says the add made the work, false that the library already held it.
+	Created bool
 }
 
 // Refreshing is the capability of a media type whose works are read again from their sources on request.

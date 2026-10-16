@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -50,7 +51,9 @@ type ArrSync struct {
 	Clock            clock.Clock
 	Lidarr           LidarrClientFactory
 	// TV adds the series a Sonarr import maps; Categories resolves a library's quality profile.
-	TV         TVAdder
+	TV TVAdder
+	// Movies adds the movies a Radarr import maps.
+	Movies     media.Adding
 	Categories Categories
 	// Progress holds the live figure of running imports; nil keeps none.
 	Progress *ArrProgress
@@ -109,7 +112,7 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.A
 	if err != nil {
 		return apiserver.ArrImportRun{}, err
 	}
-	if instance.App != settings.ArrAppLidarr && instance.App != settings.ArrAppSonarr {
+	if !arrAppSupported(instance.App) {
 		return apiserver.ArrImportRun{}, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -156,9 +159,12 @@ func (a ArrSync) runAndFinish(
 	}}
 	var counts library.ArrImportCounts
 	var syncErr error
-	if instance.App == settings.ArrAppSonarr {
+	switch instance.App {
+	case settings.ArrAppSonarr:
 		counts, syncErr = walkArr(ctx, walk, a.sonarrSource(importID, client.Sonarr()))
-	} else {
+	case settings.ArrAppRadarr:
+		counts, syncErr = walkArr(ctx, walk, a.radarrSource(importID, client.Radarr()))
+	default:
 		counts, syncErr = walkArr(ctx, walk, a.lidarrSource(importID, client, options))
 	}
 	defer a.Progress.clear(importID)
@@ -193,6 +199,11 @@ func (a ArrSync) runAndFinish(
 	}
 }
 
+// arrAppSupported is every app an import is mapped for.
+func arrAppSupported(app settings.ArrApp) bool {
+	return app == settings.ArrAppLidarr || app == settings.ArrAppSonarr || app == settings.ArrAppRadarr
+}
+
 // RootFolders reads one instance's own configured root folders live -- the
 // setup wizard's own "import the root folder(s)" step, and the only place
 // this package builds a client without also running a sync.
@@ -201,7 +212,7 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	if instance.App != settings.ArrAppLidarr && instance.App != settings.ArrAppSonarr {
+	if !arrAppSupported(instance.App) {
 		return nil, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -211,9 +222,12 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 
 	client := a.Lidarr(instance.BaseURL, apiKey.Reveal())
 	var folders []arrimport.LidarrRootFolder
-	if instance.App == settings.ArrAppSonarr {
+	switch instance.App {
+	case settings.ArrAppSonarr:
 		folders, err = client.Sonarr().RootFolders(ctx)
-	} else {
+	case settings.ArrAppRadarr:
+		folders, err = client.Radarr().RootFolders(ctx)
+	default:
 		folders, err = client.RootFolders(ctx)
 	}
 	if err != nil {
