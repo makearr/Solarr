@@ -338,8 +338,8 @@ func (p *process) movieModule() movie.Module {
 			Consumer: consumer, Include: movie.IsFeature,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Adder: catalog,
-		Hunt:  p.movieHunt,
+		Adder: catalog, Franchise: catalog,
+		Hunt: p.movieHunt,
 		Feed: movie.Feed{
 			Grab: p.movieGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.movieIndexerConns, Logger: p.logger,
 			Libraries: func() []int64 {

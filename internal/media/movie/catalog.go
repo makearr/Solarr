@@ -2,10 +2,12 @@ package movie
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strconv"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/media"
@@ -19,6 +21,7 @@ type Catalog struct {
 		ProfileFor(category settings.Category, fallback int64) int64
 	}
 	DefaultProfileID int64
+	FranchiseStore   library.Franchises
 	// AllowAgain lifts the exclusion of a movie a person removed and now adds on purpose; nil lifts nothing.
 	AllowAgain func(ctx context.Context, provider, externalID string) error
 }
@@ -120,4 +123,98 @@ func (c Catalog) Refresh(ctx context.Context, categoryID, workID int64) error {
 		return fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}
 	return err
+}
+
+var _ media.Franchising = Catalog{}
+
+// Franchises implements media.Franchising: the library's franchises and the films of each it holds.
+func (c Catalog) Franchises(ctx context.Context, categoryID int64) ([]media.Franchise, error) {
+	rows, err := c.FranchiseStore.InCategory(ctx, MediaType, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]media.Franchise, len(rows))
+	for index, row := range rows {
+		out[index] = media.Franchise{ID: row.ID, Name: row.Name, Monitored: row.Monitored, Total: int(row.Total)}
+		for _, member := range row.Members {
+			out[index].Members = append(out[index].Members, media.FranchiseMember{
+				WorkID: member.WorkID, Title: member.Title, Year: int(member.Year), Monitored: member.Monitored, HasFile: member.Files > 0,
+			})
+		}
+	}
+	return out, nil
+}
+
+// MonitorFranchise implements media.Franchising: following adds every film of the franchise the library lacks and does
+// not exclude, monitored; without a TMDB key only the flag is kept, since only TMDB lists a franchise's films.
+func (c Catalog) MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (int, error) {
+	row, err := c.FranchiseStore.Get(ctx, franchiseID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, media.ErrNoFranchise
+	}
+	if err != nil {
+		return 0, err
+	}
+	category, ok := c.Categories.Category(categoryID)
+	if !ok {
+		return 0, fmt.Errorf("%w: no such library", media.ErrInvalidAdd)
+	}
+	added, total := 0, int64(0)
+	if monitored && c.Service.TMDB != nil && c.Service.TMDB.Configured() {
+		if added, total, err = c.addMissing(ctx, category, categoryID, row); err != nil {
+			return 0, err
+		}
+	}
+	if err := c.FranchiseStore.SetMonitored(ctx, franchiseID, monitored, total); err != nil {
+		return added, err
+	}
+	return added, nil
+}
+
+// addMissing adds the films TMDB lists in the franchise that the library neither holds nor excludes.
+func (c Catalog) addMissing(ctx context.Context, category settings.Category, categoryID int64, row library.FranchiseRow) (added int, total int64, err error) {
+	// A franchise with no TMDB id has nothing to list: only its flag is kept.
+	id, _ := strconv.ParseInt(row.ExternalID, 10, 64)
+	if id <= 0 {
+		return 0, 0, nil
+	}
+	detail, err := c.Service.TMDB.Collection(ctx, id)
+	if err != nil {
+		return 0, 0, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
+	}
+	rows, err := c.FranchiseStore.InCategory(ctx, MediaType, categoryID)
+	if err != nil {
+		return 0, 0, err
+	}
+	held := map[int64]bool{}
+	for _, member := range franchiseMembers(rows, row.ID) {
+		ids, err := c.Service.Reader.ProviderIDs(ctx, member.WorkID)
+		if err != nil {
+			return 0, 0, err
+		}
+		if tmdbID, err := strconv.ParseInt(ids[ProviderTMDB], 10, 64); err == nil {
+			held[tmdbID] = true
+		}
+	}
+	profile := c.Categories.ProfileFor(category, c.DefaultProfileID)
+	for _, part := range detail.Parts {
+		ids := IDs{TMDB: part.ID}
+		if held[part.ID] || c.Service.IsExcluded(ctx, ids) {
+			continue
+		}
+		if _, err := c.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: categoryID, ProfileID: profile, Monitor: MonitorMovieOnly}); err != nil {
+			return added, int64(len(detail.Parts)), fmt.Errorf("add %q: %w", part.Title, err)
+		}
+		added++
+	}
+	return added, int64(len(detail.Parts)), nil
+}
+
+func franchiseMembers(rows []library.FranchiseRow, id int64) []library.FranchiseMember {
+	for _, row := range rows {
+		if row.ID == id {
+			return row.Members
+		}
+	}
+	return nil
 }

@@ -181,6 +181,7 @@ const (
 // Defines values for FacetEntity.
 const (
 	FacetEntityCollection   FacetEntity = "collection"
+	FacetEntityFranchise    FacetEntity = "franchise"
 	FacetEntityOrganisation FacetEntity = "organisation"
 	FacetEntityPerson       FacetEntity = "person"
 	FacetEntityWork         FacetEntity = "work"
@@ -331,6 +332,7 @@ const (
 // Defines values for LibraryLevelEntity.
 const (
 	LibraryLevelEntityCollection   LibraryLevelEntity = "collection"
+	LibraryLevelEntityFranchise    LibraryLevelEntity = "franchise"
 	LibraryLevelEntityOrganisation LibraryLevelEntity = "organisation"
 	LibraryLevelEntityPerson       LibraryLevelEntity = "person"
 	LibraryLevelEntityWork         LibraryLevelEntity = "work"
@@ -1975,6 +1977,26 @@ type FollowRequest struct {
 
 	// Search Search for what the follow adds as soon as it is added.
 	Search *bool `json:"search,omitempty"`
+}
+
+// Franchise defines model for Franchise.
+type Franchise struct {
+	Id        int64             `json:"id"`
+	Members   []FranchiseMember `json:"members"`
+	Monitored bool              `json:"monitored"`
+	Name      string            `json:"name"`
+
+	// Total The films the provider says the franchise has; absent when it has not said.
+	Total *int `json:"total,omitempty"`
+}
+
+// FranchiseMember defines model for FranchiseMember.
+type FranchiseMember struct {
+	HasFile   bool   `json:"has_file"`
+	Monitored bool   `json:"monitored"`
+	Title     string `json:"title"`
+	WorkId    int64  `json:"work_id"`
+	Year      *int   `json:"year,omitempty"`
 }
 
 // GateResult A hard requirement, evaluated before any comparison (ADR-40 stage 1).
@@ -4632,6 +4654,17 @@ type StreamEventsParams struct {
 	LastEventID *string       `json:"Last-Event-ID,omitempty"`
 }
 
+// ListFranchisesParams defines parameters for ListFranchises.
+type ListFranchisesParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// MonitorFranchiseJSONBody defines parameters for MonitorFranchise.
+type MonitorFranchiseJSONBody struct {
+	CategoryId int64 `json:"category_id"`
+	Monitored  bool  `json:"monitored"`
+}
+
 // ListHistoryParams defines parameters for ListHistory.
 type ListHistoryParams struct {
 	After  *int64 `form:"after,omitempty" json:"after,omitempty"`
@@ -5363,6 +5396,9 @@ type UpdateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 // RemoveAndBlockFileJSONRequestBody defines body for RemoveAndBlockFile for application/json ContentType.
 type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 
+// MonitorFranchiseJSONRequestBody defines body for MonitorFranchise for application/json ContentType.
+type MonitorFranchiseJSONRequestBody MonitorFranchiseJSONBody
+
 // UpdateImportListJSONRequestBody defines body for UpdateImportList for application/json ContentType.
 type UpdateImportListJSONRequestBody = ImportListWrite
 
@@ -5794,6 +5830,12 @@ type ServerInterface interface {
 	// "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
 	// (POST /files/{mediaObjectId}/remove-block)
 	RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// A library's franchises (a movie's collections) with the films of each it holds.
+	// (GET /franchises)
+	ListFranchises(w http.ResponseWriter, r *http.Request, params ListFranchisesParams)
+	// Follow or stop following a franchise; following adds the films of it the library lacks.
+	// (POST /franchises/{id}/monitor)
+	MonitorFranchise(w http.ResponseWriter, r *http.Request, id int64)
 	// Liveness.
 	// (GET /health)
 	GetHealth(w http.ResponseWriter, r *http.Request)
@@ -6793,6 +6835,18 @@ func (_ Unimplemented) UpdateExclusionPattern(w http.ResponseWriter, r *http.Req
 // "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
 // (POST /files/{mediaObjectId}/remove-block)
 func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's franchises (a movie's collections) with the films of each it holds.
+// (GET /franchises)
+func (_ Unimplemented) ListFranchises(w http.ResponseWriter, r *http.Request, params ListFranchisesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Follow or stop following a franchise; following adds the films of it the library lacks.
+// (POST /franchises/{id}/monitor)
+func (_ Unimplemented) MonitorFranchise(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10296,6 +10350,81 @@ func (siw *ServerInterfaceWrapper) RemoveAndBlockFile(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveAndBlockFile(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListFranchises operation middleware
+func (siw *ServerInterfaceWrapper) ListFranchises(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFranchisesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFranchises(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MonitorFranchise operation middleware
+func (siw *ServerInterfaceWrapper) MonitorFranchise(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MonitorFranchise(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16525,6 +16654,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/files/{mediaObjectId}/remove-block", wrapper.RemoveAndBlockFile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/franchises", wrapper.ListFranchises)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/franchises/{id}/monitor", wrapper.MonitorFranchise)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/health", wrapper.GetHealth)

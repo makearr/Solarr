@@ -347,6 +347,22 @@ func (q *Queries) GetCollectionByExternalID(ctx context.Context, arg GetCollecti
 	return i, err
 }
 
+const getCollectionExternalIDOf = `-- name: GetCollectionExternalIDOf :one
+SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider LIMIT 1
+`
+
+type GetCollectionExternalIDOfRow struct {
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) GetCollectionExternalIDOf(ctx context.Context, collectionID int64) (GetCollectionExternalIDOfRow, error) {
+	row := q.db.QueryRowContext(ctx, getCollectionExternalIDOf, collectionID)
+	var i GetCollectionExternalIDOfRow
+	err := row.Scan(&i.Provider, &i.ExternalID)
+	return i, err
+}
+
 const getGroupReputation = `-- name: GetGroupReputation :one
 SELECT release_group, samples, raw_success, bounded_success, corruption_rate,
        mislabel_rate, last_observed_at, updated_at
@@ -610,6 +626,73 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 			&i.Monitored,
 			&i.CompleteAt,
 			&i.AddedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFranchiseMembersInCategory = `-- name: ListFranchiseMembersInCategory :many
+SELECT c.id AS collection_id, c.name AS collection_name, c.monitored AS collection_monitored, c.complete_at AS total,
+       CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id,
+       w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
+       CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1), 0) AS INTEGER) AS monitored,
+       CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files
+FROM collection c
+JOIN collection_member m ON m.collection_id = c.id
+JOIN work w ON w.id = m.work_id
+WHERE c.kind = 'franchise' AND c.media_type = ?2
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
+ORDER BY c.name, c.id, w.year, w.id
+`
+
+type ListFranchiseMembersInCategoryParams struct {
+	CategoryID int64
+	MediaType  string
+}
+
+type ListFranchiseMembersInCategoryRow struct {
+	CollectionID        int64
+	CollectionName      string
+	CollectionMonitored int64
+	Total               sql.NullInt64
+	ExternalID          string
+	WorkID              int64
+	Title               string
+	Year                int64
+	Monitored           int64
+	Files               int64
+}
+
+// A library's franchises with the films of each it holds: monitored per film as the library's own item says, files counted.
+func (q *Queries) ListFranchiseMembersInCategory(ctx context.Context, arg ListFranchiseMembersInCategoryParams) ([]ListFranchiseMembersInCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFranchiseMembersInCategory, arg.CategoryID, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFranchiseMembersInCategoryRow{}
+	for rows.Next() {
+		var i ListFranchiseMembersInCategoryRow
+		if err := rows.Scan(
+			&i.CollectionID,
+			&i.CollectionName,
+			&i.CollectionMonitored,
+			&i.Total,
+			&i.ExternalID,
+			&i.WorkID,
+			&i.Title,
+			&i.Year,
+			&i.Monitored,
+			&i.Files,
 		); err != nil {
 			return nil, err
 		}

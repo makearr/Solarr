@@ -294,6 +294,7 @@ func (p *process) movieService() movie.Service {
 func (p *process) movieCatalog() movie.Catalog {
 	return movie.Catalog{
 		Service: p.movieService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		FranchiseStore: library.NewFranchises(p.library),
 		AllowAgain: func(ctx context.Context, provider, externalID string) error {
 			return adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)}.Allow(ctx, movie.MediaType, provider, externalID)
 		},

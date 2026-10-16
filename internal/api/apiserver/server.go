@@ -158,6 +158,8 @@ type Config struct {
 	// DrainStarter starts and stops ADR-51's own drain. Optional: without
 	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
 	DrainStarter DrainStarter
+	// Franchises are the groups a provider puts works in. Optional: without it every library lists none.
+	Franchises Franchises
 	// Crossovers are events across works and one broadcast listed twice. Optional: without it, 503.
 	Crossovers Crossovers
 	// WorkNumbering numbers a work by another of its sources' lists. Optional: without it, none is offered.
@@ -305,6 +307,7 @@ type Server struct {
 	workNumbering           WorkNumbering
 	workReleaseFilters      WorkReleaseFilters
 	crossovers              Crossovers
+	franchises              Franchises
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
 	namingSchemes           NamingSchemes
@@ -416,6 +419,7 @@ func New(config Config) (*Server, error) {
 		workNumbering:           config.WorkNumbering,
 		workReleaseFilters:      config.WorkReleaseFilters,
 		crossovers:              config.Crossovers,
+		franchises:              config.Franchises,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
 		namingSchemes:           config.NamingSchemes,
@@ -524,6 +528,8 @@ func New(config Config) (*Server, error) {
 				server.routeWorkID(w, r, server.GetWorkMergeSuggestion)
 			})
 			secured.Post("/works/{id}/merge", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.MergeWork) })
+			secured.Get("/franchises", server.routeListFranchises)
+			secured.Post("/franchises/{id}/monitor", server.routeMonitorFranchise)
 			secured.Get("/crossovers", server.routeListCrossovers)
 			secured.Post("/crossovers", server.CreateCrossover)
 			secured.Get("/crossovers/{id}", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.GetCrossover) })

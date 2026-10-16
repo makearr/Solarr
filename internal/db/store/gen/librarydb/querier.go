@@ -347,6 +347,7 @@ type Querier interface {
 	GetCollection(ctx context.Context, id int64) (Collection, error)
 	// A collection a provider names, found by its id there: a movie's franchise.
 	GetCollectionByExternalID(ctx context.Context, arg GetCollectionByExternalIDParams) (Collection, error)
+	GetCollectionExternalIDOf(ctx context.Context, collectionID int64) (GetCollectionExternalIDOfRow, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
@@ -543,6 +544,8 @@ type Querier interface {
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	// A library's franchises with the films of each it holds: monitored per film as the library's own item says, files counted.
+	ListFranchiseMembersInCategory(ctx context.Context, arg ListFranchiseMembersInCategoryParams) ([]ListFranchiseMembersInCategoryRow, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).

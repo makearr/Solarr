@@ -3594,6 +3594,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/franchises": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** A library's franchises (a movie's collections) with the films of each it holds. */
+        get: operations["listFranchises"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/franchises/{id}/monitor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Follow or stop following a franchise; following adds the films of it the library lacks. */
+        post: operations["monitorFranchise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/crossovers": {
         parameters: {
             query?: never;
@@ -4807,6 +4843,23 @@ export interface components {
             /** @description The episodes in watch order. */
             part_ids: number[];
         };
+        Franchise: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            monitored: boolean;
+            /** @description The films the provider says the franchise has; absent when it has not said. */
+            total?: number;
+            members: components["schemas"]["FranchiseMember"][];
+        };
+        FranchiseMember: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            year?: number;
+            monitored: boolean;
+            has_file: boolean;
+        };
         Crossover: {
             /** Format: int64 */
             id: number;
@@ -5796,7 +5849,7 @@ export interface components {
             key: string;
             label: string;
             /** @enum {string} */
-            entity: "work" | "work_part" | "person" | "organisation" | "collection";
+            entity: "work" | "work_part" | "person" | "organisation" | "collection" | "franchise";
             /** @enum {string} */
             kind: "text" | "number" | "enum" | "list" | "duration";
             choices?: {
@@ -6864,7 +6917,7 @@ export interface components {
             /** @example Albums */
             label: string;
             /** @enum {string} */
-            entity: "work" | "work_part" | "person" | "organisation" | "collection";
+            entity: "work" | "work_part" | "person" | "organisation" | "collection" | "franchise";
             /** @example title */
             default_sort: string;
             /** @description From the counter table (section 21.12), never a live COUNT. Absent when this entity has no counter yet. */
@@ -13569,6 +13622,67 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    listFranchises: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The franchises, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        franchises: components["schemas"]["Franchise"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    monitorFranchise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                    monitored: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description How many films were added. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        added: number;
+                    };
+                };
             };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];

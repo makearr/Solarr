@@ -208,6 +208,37 @@ type Renumbering interface {
 	ApplyNumbering(ctx context.Context, workID int64, basis string) (NumberingPlan, error)
 }
 
+// Franchising is the capability of a media type whose works belong to franchises a provider names (a movie's
+// collection): they are listed with the works the library holds, and followed as a whole.
+type Franchising interface {
+	Franchises(ctx context.Context, categoryID int64) ([]Franchise, error)
+	// MonitorFranchise follows or stops following a franchise; following adds the works of it the library lacks, and
+	// answers how many were added.
+	MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (added int, err error)
+}
+
+// Franchise is one franchise as a library holds it.
+type Franchise struct {
+	ID        int64
+	Name      string
+	Monitored bool
+	// Total is how many works the provider says it has, 0 when not known.
+	Total   int
+	Members []FranchiseMember
+}
+
+// FranchiseMember is a work of a franchise the library holds.
+type FranchiseMember struct {
+	WorkID    int64
+	Title     string
+	Year      int
+	Monitored bool
+	HasFile   bool
+}
+
+// ErrNoFranchise is an id that names no franchise.
+var ErrNoFranchise = errors.New("media: no such franchise")
+
 // ErrNoNumbering is a work whose sources offer no other list; ErrUnknownNumbering a basis the work does not have.
 var (
 	ErrNoNumbering      = errors.New("media: the work has no other numbering")

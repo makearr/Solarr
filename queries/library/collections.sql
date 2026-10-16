@@ -331,3 +331,20 @@ UPDATE collection SET monitored = ? WHERE id = ?;
 
 -- name: SetCollectionComplete :exec
 UPDATE collection SET complete_at = ? WHERE id = ?;
+
+-- A library's franchises with the films of each it holds: monitored per film as the library's own item says, files counted.
+-- name: ListFranchiseMembersInCategory :many
+SELECT c.id AS collection_id, c.name AS collection_name, c.monitored AS collection_monitored, c.complete_at AS total,
+       CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id,
+       w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
+       CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)), 0) AS INTEGER) AS monitored,
+       CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files
+FROM collection c
+JOIN collection_member m ON m.collection_id = c.id
+JOIN work w ON w.id = m.work_id
+WHERE c.kind = 'franchise' AND c.media_type = sqlc.arg(media_type)
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
+ORDER BY c.name, c.id, w.year, w.id;
+
+-- name: GetCollectionExternalIDOf :one
+SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider LIMIT 1;

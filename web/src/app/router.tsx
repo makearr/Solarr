@@ -28,6 +28,7 @@ import { CacheSettingsPage } from "./CacheSettings";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
+import { FranchiseIndex } from "./Franchises";
 import { CrossoverIndex, CrossoverPage } from "./Crossovers";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { useLibrary } from "@/lib/useLibrary";
@@ -81,6 +82,7 @@ function LevelForLibrary() {
   if (entity === "work") return <WorkIndex />;
   if (entity === "work_part") return <LibraryLevelList />;
   if (entity === "collection") return <CrossoverIndex />;
+  if (entity === "franchise") return <FranchiseIndex />;
   return <EmptyState title={t("level.notFound")} />;
 }
 

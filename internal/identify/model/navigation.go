@@ -20,6 +20,8 @@ const (
 	LevelEntityOrganisation LevelEntity = "organisation"
 	// LevelEntityCollection means the level lists collections of parts -- a crossover event across series.
 	LevelEntityCollection LevelEntity = "collection"
+	// LevelEntityFranchise means the level lists the franchises a provider groups works in -- a movie's collection.
+	LevelEntityFranchise LevelEntity = "franchise"
 )
 
 // Level is one browsable entry in a library's tree (ADR-54). Key is the

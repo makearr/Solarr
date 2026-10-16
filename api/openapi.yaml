@@ -5780,6 +5780,57 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /franchises:
+    get:
+      operationId: listFranchises
+      tags: [library]
+      summary: A library's franchises (a movie's collections) with the films of each it holds.
+      parameters:
+        - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The franchises, by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [franchises]
+                properties:
+                  franchises: { type: array, items: { $ref: "#/components/schemas/Franchise" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /franchises/{id}/monitor:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+    post:
+      operationId: monitorFranchise
+      tags: [library]
+      summary: Follow or stop following a franchise; following adds the films of it the library lacks.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, monitored]
+              properties:
+                category_id: { type: integer, format: int64 }
+                monitored: { type: boolean }
+      responses:
+        "200":
+          description: How many films were added.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [added]
+                properties:
+                  added: { type: integer }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /crossovers:
     get:
       operationId: listCrossovers
@@ -7549,6 +7600,28 @@ components:
         name: { type: string, minLength: 1 }
         part_ids: { type: array, items: { type: integer, format: int64 }, description: "The episodes in watch order." }
 
+    Franchise:
+      type: object
+      required: [id, name, monitored, members]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        monitored: { type: boolean }
+        total: { type: integer, description: "The films the provider says the franchise has; absent when it has not said." }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/FranchiseMember" }
+
+    FranchiseMember:
+      type: object
+      required: [work_id, title, monitored, has_file]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        year: { type: integer }
+        monitored: { type: boolean }
+        has_file: { type: boolean }
+
     Crossover:
       type: object
       required: [id, name, monitored, members]
@@ -8666,7 +8739,7 @@ components:
       properties:
         key: { type: string }
         label: { type: string }
-        entity: { type: string, enum: [work, work_part, person, organisation, collection] }
+        entity: { type: string, enum: [work, work_part, person, organisation, collection, franchise] }
         kind: { type: string, enum: [text, number, enum, list, duration] }
         choices:
           type: array
@@ -10117,7 +10190,7 @@ components:
           example: "Albums"
         entity:
           type: string
-          enum: [work, work_part, person, organisation, collection]
+          enum: [work, work_part, person, organisation, collection, franchise]
         default_sort:
           type: string
           example: "title"

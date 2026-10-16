@@ -32,6 +32,8 @@ type Module struct {
 	CutoffJob
 	// Searching is the movie module's part of a search a person asks for.
 	Searching
+	// Franchise lists the library's franchises and follows them; nil leaves the level empty.
+	Franchise media.Franchising
 	// Service applies a monitor option to a movie a library holds.
 	Service Service
 	// Passes are the type's periodic metadata passes.
@@ -176,3 +178,19 @@ func (Module) Descriptor() media.Descriptor {
 
 // GuessFloor is the least confidence a held folder's guessed movie is placed at by "Commit anyway".
 const GuessFloor = 0.75
+
+// Franchises implements media.Franchising.
+func (m Module) Franchises(ctx context.Context, categoryID int64) ([]media.Franchise, error) {
+	if m.Franchise == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Franchise.Franchises(ctx, categoryID)
+}
+
+// MonitorFranchise implements media.Franchising.
+func (m Module) MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (int, error) {
+	if m.Franchise == nil {
+		return 0, media.ErrNotWired
+	}
+	return m.Franchise.MonitorFranchise(ctx, categoryID, franchiseID, monitored)
+}
