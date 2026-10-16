@@ -65,6 +65,12 @@ var DefaultMusicCategories = []int{3000}
 // DefaultTVCategories is Newznab's TV parent category, which covers its sub-categories.
 var DefaultTVCategories = []int{5000}
 
+// DefaultMovieCategories is Newznab's Movies parent category, which covers its sub-categories.
+var DefaultMovieCategories = []int{2000}
+
+// MovieCategories are the categories movies are searched and read in.
+func (i Indexer) MovieCategories() []int { return slices.Clone(DefaultMovieCategories) }
+
 // TVCategories are the categories TV is searched and read in.
 func (i Indexer) TVCategories() []int { return slices.Clone(DefaultTVCategories) }
 

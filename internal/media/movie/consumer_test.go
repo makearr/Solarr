@@ -168,6 +168,21 @@ func TestScanQueuesAFileItCannotPlace(t *testing.T) {
 	}
 }
 
+func TestScanTakesTheBetterRankedOfTwoFilmsWithTheSameTitleAndYear(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(329865, "Arrival", "2016-09-01"), simpleMovie(472349, "Arrival", "2016-01-01")}}, settings.TVMonitorExisting)
+	if err := consumer.Observe(t.Context(), root(), 3, []scan.Observed{writeVideo(t, fsys, "Arrival (2016)/Arrival (2016).mp4")}); err != nil {
+		t.Fatal(err)
+	}
+	var held int64
+	for _, id := range workTitles(t, opened, 3) {
+		held = id
+	}
+	ids, err := library.NewSeriesReader(opened).ProviderIDs(t.Context(), held)
+	if err != nil || ids["tmdb"] != "329865" {
+		t.Errorf("provider ids = %v, %v; want the first-ranked film, 329865", ids, err)
+	}
+}
+
 func TestScanKeepsTwoEditionsAsFilesOfOneMovie(t *testing.T) {
 	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(78, "Nhasi Huvcem", "1982-06-25")}}, settings.TVMonitorExisting)
 	batch := []scan.Observed{

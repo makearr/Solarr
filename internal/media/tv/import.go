@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -654,7 +655,7 @@ func episodeNaming(detail library.SeriesDetailRow, file fileEpisodes) EpisodeNam
 	naming := EpisodeNaming{
 		SeriesType: seriesType, SeriesTitle: summary.Title, SeriesYear: int(summary.Year),
 		IDs:          idsOf(detail.IDs),
-		QualityTitle: qualityTitle(file.info.Claims), Proper: file.info.Claims.Version > 1, Version: file.info.Claims.Version,
+		QualityTitle: releasefacts.QualityTitle(file.info.Claims), Proper: file.info.Claims.Version > 1, Version: file.info.Claims.Version,
 		VideoCodec: strings.ToUpper(file.info.Claims.VideoCodec), DynamicRange: file.info.Claims.HDR,
 		AudioCodec: strings.ToUpper(file.info.Claims.AudioCodec), AudioChannels: file.info.Claims.AudioChannels,
 		ReleaseGroup: file.info.ReleaseGroup, OriginalTitle: file.info.ReleaseTitle,
@@ -691,21 +692,4 @@ func idsOf(ids map[string]string) IDs {
 	out.TMDB, _ = strconv.ParseInt(ids[ProviderTMDB], 10, 64)
 	out.IMDb = ids[ProviderIMDb]
 	return out
-}
-
-// qualityTitle is Sonarr's "WEBDL-1080p": the source and the resolution a name claims.
-func qualityTitle(claims parsetv.Claims) string {
-	source := map[string]string{"webdl": "WEBDL", "webrip": "WEBRip", "bluray": "Bluray", "bdrip": "Bluray", "brrip": "Bluray", "hdtv": "HDTV", "dvd": "DVD", "sdtv": "SDTV", "pdtv": "SDTV", "dsr": "SDTV", "tvrip": "SDTV", "rawhd": "Raw-HD"}[claims.Source]
-	if claims.Remux {
-		source = "Bluray"
-	}
-	switch {
-	case source == "":
-		return ""
-	case claims.Resolution == 0:
-		return source
-	case claims.Remux:
-		return source + "-" + strconv.Itoa(claims.Resolution) + "p Remux"
-	}
-	return source + "-" + strconv.Itoa(claims.Resolution) + "p"
 }

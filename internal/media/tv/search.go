@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
+	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
@@ -209,7 +210,7 @@ func (w wanted) queries() [][]judge.Query {
 	}
 	var text []judge.Query
 	for _, name := range names {
-		clean := cleanQuery(name)
+		clean := releasefacts.CleanQuery(name)
 		if oneEpisode {
 			text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02dE%02d", clean, w.season, episodeNumber)})
 		} else {
@@ -223,7 +224,7 @@ func (w wanted) queries() [][]judge.Query {
 
 	var spelled []judge.Query
 	for _, name := range names {
-		spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", cleanQuery(name), w.season)})
+		spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", releasefacts.CleanQuery(name), w.season)})
 	}
 	tiers = append(tiers, spelled)
 	if w.anime {
@@ -254,24 +255,9 @@ func (w wanted) absoluteQueries(names []string) []judge.Query {
 	slices.Sort(numbers)
 	var queries []judge.Query
 	for _, absolute := range numbers[:min(len(numbers), maxAbsoluteQueries)] {
-		queries = append(queries, judge.Query{Function: "search", Text: fmt.Sprintf("%s %03d", cleanQuery(names[0]), absolute)})
+		queries = append(queries, judge.Query{Function: "search", Text: fmt.Sprintf("%s %03d", releasefacts.CleanQuery(names[0]), absolute)})
 	}
 	return queries
-}
-
-// cleanQuery drops the punctuation indexers' text search chokes on.
-func cleanQuery(title string) string {
-	var out strings.Builder
-	for _, r := range strings.ReplaceAll(title, "&", " and ") {
-		switch {
-		case r == '\'' || r == '’':
-		case r >= '0' && r <= '9', r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r > 127:
-			out.WriteRune(r)
-		default:
-			out.WriteRune(' ')
-		}
-	}
-	return strings.Join(strings.Fields(out.String()), " ")
 }
 
 // SearchItem searches one season item: tiers widen until one finds a release that covers a missing episode, and every
@@ -372,9 +358,9 @@ func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Fin
 			continue
 		}
 		covered := len(numbers)
-		facts := factsFromRelease(info, raw, conn.Impl)
+		facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
 		held := releaseEpisodes(info, covered, y.wanted.allCount)
-		estimateBitrate(&facts, raw.SizeBytes, held, y.wanted.runtimeMs)
+		releasefacts.EstimateBitrate(&facts, raw.SizeBytes, held, y.wanted.runtimeMs)
 		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
 		decision = judge.ApplyFilters(decision, y.filters, raw.Title, info.ReleaseGroup, y.mediaRef)
 		y.requireUpgrade(&decision, facts, numbers, held)
@@ -474,35 +460,6 @@ func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts, n
 	}
 }
 
-// factsFromRelease stands a release name's claims in for measured facts before download (ADR-39).
-func factsFromRelease(info parsetv.Info, raw indexer.RawItem, impl string) score.Facts {
-	claims := info.Claims
-	facts := score.Facts{
-		Release: score.ReleaseFacts{Title: raw.Title, ReleaseGroup: info.ReleaseGroup, Seeders: raw.Seeders, Leechers: raw.Peers, Protocol: judge.ProtocolFor(impl)},
-		File: score.FileFacts{
-			Source: sourceFact(claims), VideoCodec: claims.VideoCodec, HDR: claims.HDR, AudioCodec: claims.AudioCodec,
-			AudioChannels: claims.AudioChannels, AudioLanguages: claims.Languages, ReleaseGroup: info.ReleaseGroup, ProperRepack: claims.Version > 1,
-		},
-	}
-	if claims.Resolution > 0 {
-		facts.File.Resolution = strconv.Itoa(claims.Resolution) + "p"
-	}
-	return facts
-}
-
-func sourceFact(claims parsetv.Claims) string {
-	if claims.Remux {
-		return "remux"
-	}
-	switch claims.Source {
-	case "bdrip", "brrip":
-		return "bluray"
-	case "pdtv", "sdtv", "dsr", "tvrip":
-		return "hdtv"
-	}
-	return claims.Source
-}
-
 // releaseEpisodes is how many episodes a release holds: the ones its name numbers, else the season it is a pack of.
 func releaseEpisodes(info parsetv.Info, covered, seasonEpisodes int) int {
 	switch {
@@ -512,18 +469,4 @@ func releaseEpisodes(info parsetv.Info, covered, seasonEpisodes int) int {
 		return max(seasonEpisodes, covered)
 	}
 	return max(covered, 1)
-}
-
-// videoShare is the part of a file's bits the picture takes; the sound is the rest. A guess, as the size is the
-// only fact before download, and good enough to rank a bloated release above a starved one.
-const videoShare = 0.92
-
-// estimateBitrate stands the release's size over its length in for the bitrate the probe will measure.
-func estimateBitrate(facts *score.Facts, sizeBytes int64, episodes int, runtimeMs int64) {
-	if sizeBytes <= 0 || episodes <= 0 || runtimeMs <= 0 {
-		return
-	}
-	overall := float64(sizeBytes) * 8 / (float64(episodes) * float64(runtimeMs) / 1000)
-	facts.File.OverallBitrate = int64(overall)
-	facts.File.VideoBitrate = int64(overall * videoShare)
 }

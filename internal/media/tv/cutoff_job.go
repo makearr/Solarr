@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/acquiring/cutoff"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
+	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
@@ -190,10 +191,4 @@ func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, it
 }
 
 // FileFacts is what the probe measured of an episode's file, as the facts a profile or a target judges.
-func FileFacts(file library.EpisodeFile) score.Facts {
-	return score.Facts{File: score.FileFacts{
-		Resolution: file.Resolution, VideoCodec: file.VideoCodec, HDR: file.HDR, AudioCodec: file.AudioCodec,
-		AudioChannels: file.AudioChannels, Container: file.Container, AudioLanguages: file.Languages, SubtitleLanguages: file.Subtitles,
-		FrameRate: file.FrameRate, VideoBitrate: file.VideoBitrate, AudioBitrate: file.AudioBitrate, CRF: file.CRF,
-	}}
-}
+func FileFacts(file library.EpisodeFile) score.Facts { return releasefacts.FromFile(file) }

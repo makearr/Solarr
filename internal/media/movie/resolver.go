@@ -154,8 +154,12 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 	return result.WorkID
 }
 
-// pickCandidate chooses the one hit with the named title and a year that agrees; with no year named, or several such
-// hits, it chooses none.
+// rankedWell is how far down a provider's own ranking an exact title-and-year hit may sit and still be taken: two films
+// can share a title and a year, and the provider ranks the better known first, as Radarr takes it.
+const rankedWell = 3
+
+// pickCandidate chooses the first hit with the named title and a year that agrees, when it is among the provider's top
+// few; with no year named, or no such hit, it chooses none.
 func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, bool) {
 	if info.Year == 0 {
 		return Candidate{}, false
@@ -164,24 +168,17 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
 		wanted[parsetv.CleanTitle(title)] = true
 	}
-	var matches []Candidate
-	for _, candidate := range candidates {
-		if wanted[parsetv.CleanTitle(candidate.Title)] && yearsAgree(candidate.Year, info.Year) {
-			matches = append(matches, candidate)
+	// An exact year beats a year off by one, wherever each sits in the first few.
+	for _, exactYear := range []bool{true, false} {
+		for rank, candidate := range candidates {
+			if rank >= rankedWell {
+				break
+			}
+			sameYear := candidate.Year == info.Year
+			if wanted[parsetv.CleanTitle(candidate.Title)] && yearsAgree(candidate.Year, info.Year) && sameYear == exactYear {
+				return candidate, true
+			}
 		}
-	}
-	if len(matches) == 1 {
-		return matches[0], true
-	}
-	// Several hits of one title: the one in the named year beats the ones a year off.
-	var exact []Candidate
-	for _, match := range matches {
-		if match.Year == info.Year {
-			exact = append(exact, match)
-		}
-	}
-	if len(exact) == 1 {
-		return exact[0], true
 	}
 	return Candidate{}, false
 }

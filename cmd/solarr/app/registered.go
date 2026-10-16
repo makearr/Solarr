@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/movie"
@@ -337,9 +338,27 @@ func (p *process) movieModule() movie.Module {
 			Consumer: consumer, Include: movie.IsFeature,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
-		Adder:    catalog,
-		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
-		Service:  p.movieService(),
+		Adder: catalog,
+		Hunt:  p.movieHunt,
+		Feed: movie.Feed{
+			Grab: p.movieGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.movieIndexerConns, Logger: p.logger,
+			Libraries: func() []int64 {
+				var ids []int64
+				for _, category := range p.cache.Snapshot().Categories() {
+					if category.MediaType == movie.MediaType {
+						ids = append(ids, category.ID)
+					}
+				}
+				return ids
+			},
+		},
+		CutoffJob: movie.CutoffJob{
+			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache,
+			Recycle: p.recycleSuperseded, Logger: p.logger,
+		},
+		Searching: movie.Searching{Acquire: p.movieGrab(), Conns: p.movieIndexerConns, Clock: clock.NewSystem()},
+		Pictures:  adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
+		Service:   p.movieService(),
 		// A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
 		Refresh: func(ctx context.Context, workID int64) (bool, error) {
 			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
@@ -374,4 +393,40 @@ func (p *process) movieJobs() []media.JobRegistration {
 			Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger,
 		})},
 	}
+}
+
+// movieGrab builds the movie module's automatic search over the real stores.
+func (p *process) movieGrab() movie.Grab {
+	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
+	return movie.Grab{
+		Search: movie.Search{
+			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Candidates: statistics.NewCandidates(p.statistics),
+			Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist, Sightings: &sightings, ReleaseFilters: &filters,
+		},
+		Automatic: dispatch.Automatic{
+			Dispatch: p.dispatchFor(movie.MediaType), Name: "movie",
+			FreeSpace: func(categoryID int64) (int64, bool) { return p.cache.Snapshot().AcquisitionHeadroom(categoryID) },
+		},
+	}
+}
+
+// movieHunt searches one movie the hunt chose and sends the best release.
+func (p *process) movieHunt(ctx context.Context, itemID int64) (plan.Outcome, error) {
+	conns, err := p.movieIndexerConns(ctx)
+	if err != nil {
+		return plan.OutcomeSearched, err
+	}
+	result, err := p.movieGrab().SearchAndSend(ctx, itemID, conns, dispatch.GrabAutomatic, clock.NewSystem().Now())
+	switch {
+	case errors.Is(err, movie.ErrNotSearchable):
+		return plan.OutcomeNotWanted, nil
+	case err != nil:
+		return plan.OutcomeSearched, err
+	case result.AlreadyInFlight:
+		return plan.OutcomeInFlight, nil
+	}
+	if result.Sent != nil || result.Held {
+		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
+	}
+	return plan.OutcomeSearched, nil
 }

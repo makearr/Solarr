@@ -4,7 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/makearr/Solarr/internal/acquiring/plan"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -21,6 +24,14 @@ type Module struct {
 	Pictures media.Picturing
 	// Refresh reads one movie again from its sources; nil leaves it unrefreshable.
 	Refresh func(ctx context.Context, workID int64) (duplicate bool, err error)
+	// Hunt searches for one wanted movie and sends the best release; nil leaves movies unhunted.
+	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
+	// Feed is the movie module's part of the RSS sync.
+	Feed
+	// CutoffJob is the movie module's part of the cutoff check.
+	CutoffJob
+	// Searching is the movie module's part of a search a person asks for.
+	Searching
 	// Service applies a monitor option to a movie a library holds.
 	Service Service
 	// Passes are the type's periodic metadata passes.
@@ -70,6 +81,14 @@ func (m Module) RefreshWork(ctx context.Context, workID int64) (bool, error) {
 	return m.Refresh(ctx, workID)
 }
 
+// HuntSearch implements media.Hunting.
+func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, error) {
+	if m.Hunt == nil {
+		return plan.OutcomeNotWanted, nil
+	}
+	return m.Hunt(ctx, itemID)
+}
+
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
 	for _, registration := range m.Registrations {
@@ -90,6 +109,20 @@ func (m Module) HealthChecks(libraries int) []media.HealthCheck {
 		Message: "Movies work without a TMDB key through Radarr's metadata service, which can be slow or unavailable: add your free TMDB key under Metadata.",
 		Link:    "/settings/metadata",
 	}}
+}
+
+// NamingScheme implements media.Naming.
+func (Module) NamingScheme() naming.Scheme { return NamingScheme }
+
+// DefaultNamingProfile implements media.Naming.
+func (Module) DefaultNamingProfile() settings.NamingProfile { return DefaultNamingProfile() }
+
+// ValidateNaming implements media.Naming.
+func (Module) ValidateNaming(profile settings.NamingProfile) error { return ValidateNaming(profile) }
+
+// NamingExamples implements media.Naming.
+func (Module) NamingExamples(profile settings.NamingProfile) []media.NamingExample {
+	return NamingExamples(NamingFor(&profile))
 }
 
 // FiltersReleases implements media.ReleaseFiltering: the movie judge applies a movie's release filters.

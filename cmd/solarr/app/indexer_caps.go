@@ -42,6 +42,11 @@ func (c *indexerCapsCache) musicParams(ctx context.Context, indexerID int64, bas
 	return c.searchParams(ctx, indexerID, baseURL, client, "music-search")
 }
 
+// movieParams is musicParams for the movie search function.
+func (c *indexerCapsCache) movieParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client) []string {
+	return c.searchParams(ctx, indexerID, baseURL, client, "movie-search")
+}
+
 // tvParams is musicParams for the TV search function.
 func (c *indexerCapsCache) tvParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client) []string {
 	return c.searchParams(ctx, indexerID, baseURL, client, "tv-search")

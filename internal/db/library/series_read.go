@@ -463,3 +463,75 @@ func (r SeriesReader) FirstCategory(ctx context.Context, workID int64) (int64, e
 	}
 	return categories[0], nil
 }
+
+// WantedItem is a work's one wanted item that still wants something: a movie with no file, or one below the cutoff.
+type WantedItem struct {
+	ID     int64
+	WorkID int64
+}
+
+// WantedItemsOf lists the monitored whole-work items (a movie's) of the given works that are missing or upgradable and
+// already out, in the works' order.
+func (r SeriesReader) WantedItemsOf(ctx context.Context, workIDs []int64, now time.Time) ([]WantedItem, error) {
+	if len(workIDs) == 0 {
+		return nil, nil
+	}
+	marks := strings.TrimSuffix(strings.Repeat("?,", len(workIDs)), ",")
+	args := make([]any, 0, len(workIDs)+1)
+	for _, id := range workIDs {
+		args = append(args, id)
+	}
+	args = append(args, now.Unix())
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT id, work_id FROM desired_item
+WHERE work_id IN (`+marks+`) AND monitored = 1 AND satisfaction_kind = 'SET' AND media_ref = '' AND edition_id IS NULL
+  AND state IN ('MISSING', 'UPGRADABLE') AND (available_from IS NULL OR available_from <= ?)
+ORDER BY work_id, id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("library: wanted items: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var wanted []WantedItem
+	for rows.Next() {
+		var item WantedItem
+		if err := rows.Scan(&item.ID, &item.WorkID); err != nil {
+			return nil, fmt.Errorf("library: scan wanted item: %w", err)
+		}
+		wanted = append(wanted, item)
+	}
+	return wanted, rows.Err()
+}
+
+// WorkBasics is what a search names a work by: its title, year, runtime and every alias.
+type WorkBasics struct {
+	Title     string
+	Year      int64
+	RuntimeMs int64
+	Aliases   []string
+}
+
+// Basics reads a work's title, year, runtime and aliases.
+func (r SeriesReader) Basics(ctx context.Context, workID int64) (WorkBasics, error) {
+	queries := librarydb.New(r.store.Read())
+	work, err := queries.GetWork(ctx, workID)
+	if err != nil {
+		return WorkBasics{}, fmt.Errorf("library: work %d: %w", workID, err)
+	}
+	titles, err := queries.ListWorkTitles(ctx, workID)
+	if err != nil {
+		return WorkBasics{}, fmt.Errorf("library: titles of work %d: %w", workID, err)
+	}
+	basics := WorkBasics{Title: work.CanonicalTitle, Year: work.Year.Int64, RuntimeMs: work.RuntimeMs.Int64}
+	for _, title := range titles {
+		basics.Aliases = append(basics.Aliases, title.Title)
+	}
+	return basics, nil
+}
+
+// WantedItemDetail is the facts of one wanted item a search needs besides what its work says.
+type WantedItemDetail struct {
+	ItemID, WorkID, CategoryID, ProfileID int64
+	State                                 string
+	// Present counts the files the item holds.
+	Present int64
+}

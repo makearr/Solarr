@@ -55,13 +55,18 @@ ORDER BY f.media_ref, mo.id`, itemID)
 	return files, rows.Err()
 }
 
-// TVCutoffPage pages through monitored COMPLETE, UPGRADABLE and PARTIAL season items of TV series by id.
+// TVCutoffPage is CutoffPageOf for TV: the season items of series.
 func (d Desired) TVCutoffPage(ctx context.Context, afterID, limit int64) ([]CutoffItem, error) {
+	return d.CutoffPageOf(ctx, "tv", afterID, limit)
+}
+
+// CutoffPageOf pages through the monitored COMPLETE, UPGRADABLE and PARTIAL items of the works of one media type by id.
+func (d Desired) CutoffPageOf(ctx context.Context, mediaType string, afterID, limit int64) ([]CutoffItem, error) {
 	rows, err := d.store.Read().QueryContext(ctx,
 		`SELECT id, work_id, category_id, profile_id, state, present_count FROM desired_item
 WHERE monitored = 1 AND satisfaction_kind = 'SET' AND state IN ('COMPLETE', 'UPGRADABLE', 'PARTIAL') AND id > ?
-  AND EXISTS (SELECT 1 FROM work w WHERE w.id = desired_item.work_id AND w.media_type = 'tv')
-ORDER BY id LIMIT ?`, afterID, limit)
+  AND EXISTS (SELECT 1 FROM work w WHERE w.id = desired_item.work_id AND w.media_type = ?)
+ORDER BY id LIMIT ?`, afterID, mediaType, limit)
 	if err != nil {
 		return nil, fmt.Errorf("library: tv cutoff page: %w", err)
 	}
@@ -75,4 +80,41 @@ ORDER BY id LIMIT ?`, afterID, limit)
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+// ItemFiles lists every primary file of a work's one wanted item (a movie's), the incumbent (lowest media object id)
+// first, with what the probe measured; Monitored is the item's own flag, Ref empty.
+func (r SeriesReader) ItemFiles(ctx context.Context, itemID int64) ([]SeasonFile, error) {
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT d.monitored, f.added_at, mo.id, mo.size_bytes, COALESCE(ma.resolution, ''), COALESCE(ma.video_codec, ''), COALESCE(ma.hdr, ''),
+       COALESCE(ma.audio_codec, ''), COALESCE(ma.audio_channels, ''), COALESCE(ma.subtitles, ''),
+       COALESCE(mo.video_bitrate, 0), COALESCE(mo.duration_ms, 0), COALESCE(ma.container, ''),
+       COALESCE(ma.languages, ''), COALESCE(ma.frame_rate, 0), COALESCE(mo.audio_bitrate, 0), COALESCE(ma.crf, 0)
+FROM desired_item_file f
+JOIN desired_item d ON d.id = f.desired_item_id
+JOIN media_object mo ON mo.id = f.media_object_id
+LEFT JOIN media_attributes ma ON ma.id = mo.measured_attributes_id
+WHERE f.desired_item_id = ? AND f.role = 'primary' AND f.media_ref = ''
+ORDER BY mo.id`, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("library: item files: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var files []SeasonFile
+	for rows.Next() {
+		var found SeasonFile
+		var subtitles, languages string
+		var monitored int64
+		if err := rows.Scan(&monitored, &found.AddedAt, &found.File.MediaObjectID, &found.File.SizeBytes, &found.File.Resolution, &found.File.VideoCodec,
+			&found.File.HDR, &found.File.AudioCodec, &found.File.AudioChannels, &subtitles, &found.File.VideoBitrate, &found.File.DurationMs,
+			&found.File.Container, &languages, &found.File.FrameRate, &found.File.AudioBitrate, &found.File.CRF); err != nil {
+			return nil, fmt.Errorf("library: scan item file: %w", err)
+		}
+		found.Monitored = monitored == 1
+		found.Measured = found.File.VideoCodec != ""
+		found.File.Subtitles = jsonStrings(nullString(subtitles))
+		found.File.Languages = jsonStrings(nullString(languages))
+		files = append(files, found)
+	}
+	return files, rows.Err()
 }

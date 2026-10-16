@@ -75,6 +75,35 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 	return conns, nil
 }
 
+// movieIndexerConns is indexerConns for movies: the same connections, searched in the movie categories with the
+// movie function's parameters.
+func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
+	configured, err := p.cache.Indexers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	factory := p.indexerClientFactory()
+	conns := make([]judge.Conn, 0, len(configured))
+	for _, found := range configured {
+		if !found.Enabled {
+			continue
+		}
+		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, found.ID)
+		if err != nil {
+			return nil, err
+		}
+		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Client: client, Categories: found.MovieCategories()}
+		if p.indexerCaps != nil {
+			if params := p.indexerCaps.movieParams(ctx, found.ID, found.BaseURL, client); params != nil {
+				conn.Params = map[string][]string{"movie": params}
+			}
+		}
+		conns = append(conns, conn)
+	}
+	return conns, nil
+}
+
 // tvGrab builds the TV module's automatic search over the real stores.
 func (p *process) tvGrab() tv.Grab {
 	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
