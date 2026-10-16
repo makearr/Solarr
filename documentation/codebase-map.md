@@ -27,7 +27,7 @@ internal/
 ├── identify/   model  parse  parsetv  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob
-├── moving/     mover  moverjob  drainjob  placement  naming
+├── moving/     mover  moverjob  drainjob  renamejob  placement  naming
 ├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  qbittorrent  poll  plan
 │               judge  dispatch  rss
 ├── media/      the media-type registry  +  music  tv

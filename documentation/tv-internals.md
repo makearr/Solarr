@@ -229,3 +229,17 @@ next refresh on.
 An import queues a pass for just the series it placed episodes of (`EnqueueServerFilesFor`, deduplicated per series), so new files get their nfo and thumb at once; the daily pass still covers everything.
 
 A scan names a series folder by, in order: an id in the folder name (`{tvdb-N}`, `[tmdbid-N]`, `{imdb-ttN}`), the ids in the folder's `tvshow.nfo` (`ShowNFOIDs`), a series the library holds under that title, then a provider search.
+
+## Episodes a provider drops (`library.Series.PruneParts`, `Service.pruneVanished`)
+
+A refresh used to keep every part, so an episode TheTVDB deleted or renumbered stayed as a phantom wanted episode. After a refresh
+whose Skyhook answer arrived and whose series is numbered by the aired order, the parts the list no longer has are removed when
+nothing holds on to them: no file covers them, no crossover event lists them and no shared broadcast is linked through them. One
+refresh never removes more than a quarter of a series' parts (`ErrPruneTooLarge`), because a bad answer would otherwise empty it.
+The season counts are recomputed in the same transaction; the log line "episodes the provider no longer lists were removed" names them.
+
+## Where a media type plugs in
+
+A module brings job types through `RegisterJobs` (`media.JobRegistration`), says what its libraries lack through `media.Healthy`
+(the TV module asks for a TMDB key), and renames through `media.Renaming`, whose planner and move job are shared
+(`internal/moving/renamejob`). TV has no `Renaming` yet; see `private/opus.md` for why (the files beside an episode).
