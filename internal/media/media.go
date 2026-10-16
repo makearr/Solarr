@@ -294,6 +294,12 @@ func (p Passes) StartPass(ctx context.Context, pass Pass, manual bool) (started,
 // ErrNotWired reports a capability whose module was built without what it needs.
 var ErrNotWired = errors.New("media: not wired in this build")
 
+// ReleaseFiltering is the capability of a media type whose works carry their own release filters (required, denied and
+// preferred words, allowed and denied groups) that its search and RSS judge hold every release against.
+type ReleaseFiltering interface {
+	FiltersReleases()
+}
+
 // Numbering is the capability of a media type that places a part for a reader: a heading within its group, and
 // the number it is shown with ("Disc 2", "3"; "", "7").
 type Numbering interface {

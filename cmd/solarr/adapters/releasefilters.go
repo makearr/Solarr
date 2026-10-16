@@ -10,20 +10,28 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/media"
 )
 
-// WorkReleaseFilters implements apiserver.WorkReleaseFilters for TV works.
+// WorkReleaseFilters implements apiserver.WorkReleaseFilters for the works of media types that filter releases.
 type WorkReleaseFilters struct {
-	Works   library.Works
-	Filters library.ReleaseFilters
+	Works    library.Works
+	Filters  library.ReleaseFilters
+	Registry *media.Registry
 }
 
 func (a WorkReleaseFilters) requireSeries(ctx context.Context, workID int64) error {
 	mediaType, err := a.Works.MediaTypeOf(ctx, workID)
-	if errors.Is(err, sql.ErrNoRows) || err == nil && mediaType != "tv" {
+	if errors.Is(err, sql.ErrNoRows) {
 		return apiserver.ErrSeriesNotFound
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	if _, filters := media.Capability[media.ReleaseFiltering](a.Registry, media.Key(mediaType)); !filters {
+		return apiserver.ErrSeriesNotFound
+	}
+	return nil
 }
 
 // List implements apiserver.WorkReleaseFilters.

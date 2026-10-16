@@ -60,6 +60,9 @@ func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]medi
 	return m.Adder.LookupWorks(ctx, lookup)
 }
 
+// FiltersReleases implements media.ReleaseFiltering: the TV judge applies a series' release filters.
+func (Module) FiltersReleases() {}
+
 // AddWork implements media.Adding.
 func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
 	if m.Adder == nil {
