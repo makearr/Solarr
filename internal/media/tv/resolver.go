@@ -71,19 +71,30 @@ type FolderGuess struct {
 	Title  string
 	Year   int
 	TVDBID int64
+	TMDBID int64
+	IMDbID string
 }
 
 var (
 	idInName   = regexp.MustCompile(`(?i)[\[{(]\s*tvdb(?:id)?[-= ]?(\d+)\s*[\]})]`)
+	tmdbInName = regexp.MustCompile(`(?i)[\[{(]\s*tmdb(?:id)?[-= ]?(\d+)\s*[\]})]`)
+	imdbInName = regexp.MustCompile(`(?i)[\[{(]\s*imdb(?:id)?[-= ]?(tt\d+)\s*[\]})]`)
 	yearInName = regexp.MustCompile(`\s*[\[(]((?:19|20)\d{2})[\])]\s*$`)
 	bracketIDs = regexp.MustCompile(`(?i)\s*[\[{(]\s*(?:tvdb|tmdb|imdb|tvmaze)(?:id)?[-= ]?[\w]+\s*[\]})]`)
 )
 
-// GuessFolder reads a series folder name: the title, a trailing year and an embedded TheTVDB id ({tvdb-123}).
+// GuessFolder reads a series folder name: the title, a trailing year and an embedded TheTVDB, TMDB or IMDb id
+// ({tvdb-123}, [tmdbid-123], {imdb-tt123}), as Sonarr, Jellyfin and Plex write them.
 func GuessFolder(name string) FolderGuess {
 	guess := FolderGuess{}
 	if m := idInName.FindStringSubmatch(name); m != nil {
 		guess.TVDBID, _ = strconv.ParseInt(m[1], 10, 64)
+	}
+	if m := tmdbInName.FindStringSubmatch(name); m != nil {
+		guess.TMDBID, _ = strconv.ParseInt(m[1], 10, 64)
+	}
+	if m := imdbInName.FindStringSubmatch(name); m != nil {
+		guess.IMDbID = strings.ToLower(m[1])
 	}
 	title := strings.TrimSpace(bracketIDs.ReplaceAllString(name, ""))
 	if m := yearInName.FindStringSubmatch(title); m != nil {
@@ -128,7 +139,7 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 		}
 	}
 	guess := GuessFolder(name)
-	if guess.Title == "" && guess.TVDBID == 0 {
+	if guess.Title == "" && guess.TVDBID == 0 && guess.TMDBID == 0 && guess.IMDbID == "" {
 		return 0, nil
 	}
 
@@ -137,6 +148,9 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 			return id, nil
 		}
 		return c.add(ctx, categoryID, IDs{TVDB: guess.TVDBID}), nil
+	}
+	if id := c.byNamedID(ctx, categoryID, guess); id != 0 { // -1 is an excluded series, kept as such
+		return id, nil
 	}
 
 	if id, found := c.inLibrary(ctx, categoryID, guess); found {
@@ -153,6 +167,24 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 		}
 	}
 	return 0, identifications(candidates)
+}
+
+// byNamedID places a folder that names a TMDB or IMDb id: the series held under it, else the one added from it; zero
+// falls back to searching by title, as when TMDB is not configured to map an IMDb id.
+func (c Resolver) byNamedID(ctx context.Context, categoryID int64, guess FolderGuess) int64 {
+	if guess.TMDBID > 0 {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, ProviderTMDB, strconv.FormatInt(guess.TMDBID, 10)); err == nil && held {
+			return id
+		}
+		return c.add(ctx, categoryID, IDs{TMDB: guess.TMDBID})
+	}
+	if guess.IMDbID != "" {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, ProviderIMDb, guess.IMDbID); err == nil && held {
+			return id
+		}
+		return c.add(ctx, categoryID, IDs{IMDb: guess.IMDbID})
+	}
+	return 0
 }
 
 // searchLimit is how many hits one search keeps; a short list hides the right series behind its namesakes.

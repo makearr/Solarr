@@ -252,7 +252,10 @@ func TestGuessFolderReadsYearAndIDs(t *testing.T) {
 		"Example Show (2010)":              {Title: "Example Show", Year: 2010},
 		"Example Show (2010) {tvdb-123}":   {Title: "Example Show", Year: 2010, TVDBID: 123},
 		"Example Show [tvdbid-77]":         {Title: "Example Show", TVDBID: 77},
-		"Example Show {imdb-tt123} (2001)": {Title: "Example Show", Year: 2001},
+		"Example Show {imdb-tt123} (2001)": {Title: "Example Show", Year: 2001, IMDbID: "tt123"},
+		"Example Show [tmdbid-4455]":       {Title: "Example Show", TMDBID: 4455},
+		"Example Show (2001) {tmdb-9}":     {Title: "Example Show", Year: 2001, TMDBID: 9},
+		"Example Show [imdbid-tt0903747]":  {Title: "Example Show", IMDbID: "tt0903747"},
 	}
 	for name, want := range cases {
 		if got := tv.GuessFolder(name); got != want {
