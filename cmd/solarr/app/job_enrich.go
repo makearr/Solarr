@@ -7,21 +7,17 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// registerEnrichJob wires the background metadata sweep into the registry and the
-// executor: ADR-29's provider (the Servarr proxy first when enabled, direct
-// MusicBrainz always -- it is what the proxy falls back to), permanent cache,
-// music's interpretation of what comes back.
-func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(music.EnrichDefinition); err != nil {
-		return err
-	}
+// enrichJobs are the background metadata sweep and its refresh variants: ADR-29's provider (the Servarr proxy first when
+// enabled, direct MusicBrainz always -- it is what the proxy falls back to), permanent cache, music's interpretation of
+// what comes back.
+func (p *process) enrichJobs() []media.JobRegistration {
 	// Person images come from the Commons hosts on a bucket of their own, apart from Wikidata's and Wikipedia's.
 	imageClient := p.providerClient(providerWikimediaImage, nil, httpx.ClientConfig{})
 
@@ -55,20 +51,12 @@ func (p *process) registerEnrichJob(registry *jobs.Registry, executor *jobs.Exec
 		Clock:     clock.NewSystem(),
 		Logger:    p.logger,
 	})
-	executor.Handle(music.EnrichJobType, job)
-	if err := registry.Register(music.RefreshArtistDefinition); err != nil {
-		return err
+	return []media.JobRegistration{
+		{Definition: music.EnrichDefinition, Handler: job},
+		{Definition: music.RefreshArtistDefinition, Handler: music.RefreshArtistJob{Enrich: job}},
+		{Definition: music.RefreshAlbumDefinition, Handler: music.RefreshAlbumJob{Enrich: job}},
+		{Definition: music.RefreshArtistsDefinition, Handler: music.RefreshArtistsJob{Enrich: job}},
 	}
-	executor.Handle(music.RefreshArtistJobType, music.RefreshArtistJob{Enrich: job})
-	if err := registry.Register(music.RefreshAlbumDefinition); err != nil {
-		return err
-	}
-	executor.Handle(music.RefreshAlbumJobType, music.RefreshAlbumJob{Enrich: job})
-	if err := registry.Register(music.RefreshArtistsDefinition); err != nil {
-		return err
-	}
-	executor.Handle(music.RefreshArtistsJobType, music.RefreshArtistsJob{Enrich: job})
-	return nil
 }
 
 // enrichmentPass starts music's enrichment sweep: its part of the "Refresh works" pass, and at once after a scan, an

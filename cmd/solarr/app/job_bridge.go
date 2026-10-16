@@ -6,16 +6,14 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
 )
 
-// registerBridgeJob wires the sweep that recognises the same human in TV and music.
-func (p *process) registerBridgeJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(tv.BridgeDefinition); err != nil {
-		return err
-	}
-	executor.Handle(tv.BridgeJobType, tv.NewBridgeJob(tv.BridgeConfig{People: library.NewPeople(p.library), Source: p.tmdbShared, Wikidata: p.wikidataFetcher(), Logger: p.logger}))
-	return nil
+// bridgeJob is the sweep that recognises the same human in TV and music; tvService first, which builds the TMDB source.
+func (p *process) bridgeJob() media.JobRegistration {
+	p.tvService()
+	return media.JobRegistration{Definition: tv.BridgeDefinition, Handler: tv.NewBridgeJob(tv.BridgeConfig{People: library.NewPeople(p.library), Source: p.tmdbShared, Wikidata: p.wikidataFetcher(), Logger: p.logger})}
 }
 
 // enqueueBridge submits one bridge sweep; registered as the "Match people across libraries" task.
@@ -36,11 +34,7 @@ func (p *process) enqueueTVRetry(ctx context.Context) (jobs.EnqueueResult, error
 	return result, err
 }
 
-// registerTVArtworkJob wires the sweep that keeps a TV library's posters, logos and photos in the picture cache.
-func (p *process) registerTVArtworkJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(tv.ArtworkDefinition); err != nil {
-		return err
-	}
-	executor.Handle(tv.ArtworkJobType, tv.NewArtworkJob(tv.ArtworkConfig{Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger}))
-	return nil
+// tvArtworkJob is the sweep that keeps a TV library's posters, logos and photos in the picture cache.
+func (p *process) tvArtworkJob() media.JobRegistration {
+	return media.JobRegistration{Definition: tv.ArtworkDefinition, Handler: tv.NewArtworkJob(tv.ArtworkConfig{Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger})}
 }

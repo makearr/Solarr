@@ -7,23 +7,20 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// registerTagWritebackJob wires the tag writer: ids, metadata and covers into library files (revision D3).
-func (p *process) registerTagWritebackJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(music.TagWritebackDefinition); err != nil {
-		return err
-	}
-	executor.Handle(music.TagWritebackJobType, music.NewTagWritebackJob(music.TagWritebackConfig{
+// tagWritebackJob is the tag writer: ids, metadata and covers into library files (revision D3).
+func (p *process) tagWritebackJob() media.JobRegistration {
+	return media.JobRegistration{Definition: music.TagWritebackDefinition, Handler: music.NewTagWritebackJob(music.TagWritebackConfig{
 		Files: library.NewTagWriteback(p.library), Roots: p.tagRoots, Tool: mediatool.New(nil, 0), FS: p.fsys,
 		ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
 		CoversDir: filepath.Join(p.config.Paths.CacheDir, "tag-covers"),
 		Clock:     clock.NewSystem(), Logger: p.logger,
-	}))
-	return nil
+	})}
 }
 
 // tagRoots are the roots the tag writer may touch: a music library's own roots, online, writable and

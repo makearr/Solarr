@@ -6,15 +6,13 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-func (p *process) registerDiscographyCoverageJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(music.DiscographyCoverageDefinition); err != nil {
-		return err
-	}
-	executor.Handle(music.DiscographyCoverageJobType, music.NewDiscographyCoverageJob(music.DiscographyCoverageConfig{
+func (p *process) discographyCoverageJob() media.JobRegistration {
+	return media.JobRegistration{Definition: music.DiscographyCoverageDefinition, Handler: music.NewDiscographyCoverageJob(music.DiscographyCoverageConfig{
 		Statistics: library.NewStatistics(p.library), Coverage: statistics.NewRollup(p.statistics), Provider: p.musicBrainzProvider(),
 		Categories: func() []int64 {
 			var ids []int64
@@ -26,8 +24,7 @@ func (p *process) registerDiscographyCoverageJob(registry *jobs.Registry, execut
 			return ids
 		},
 		Clock: clock.NewSystem(), Logger: p.logger,
-	}))
-	return nil
+	})}
 }
 
 func (p *process) enqueueDiscographyCoverage(ctx context.Context) (jobs.EnqueueResult, error) {

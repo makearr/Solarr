@@ -447,22 +447,10 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerScanJob(ctx, registry, executor); err != nil {
 		return err
 	}
-	if err := p.registerEnrichJob(registry, executor); err != nil {
-		return err
-	}
-	if err := p.registerTagWritebackJob(registry, executor); err != nil {
-		return err
-	}
-	if err := p.registerArtworkJob(registry, executor); err != nil {
-		return err
-	}
 	if err := p.registerCategoryCountsJob(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerStatisticsJob(registry, executor); err != nil {
-		return err
-	}
-	if err := p.registerDiscographyCoverageJob(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerPollJob(registry, executor); err != nil {
@@ -486,15 +474,6 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerDownloadWatchJob(registry, executor); err != nil {
 		return err
 	}
-	if err := p.registerTVRefreshJob(registry, executor); err != nil {
-		return err
-	}
-	if err := p.registerBridgeJob(registry, executor); err != nil {
-		return err
-	}
-	if err := p.registerTVArtworkJob(registry, executor); err != nil {
-		return err
-	}
 	if err := p.registerFollowJob(registry, executor); err != nil {
 		return err
 	}
@@ -505,9 +484,6 @@ func (p *process) startJobs(ctx context.Context) error {
 		return err
 	}
 	if err := p.registerMoverJob(registry, executor); err != nil {
-		return err
-	}
-	if err := p.registerSearchCategoryJob(registry, executor); err != nil {
 		return err
 	}
 	if err := p.registerPlanJobs(registry, executor); err != nil {

@@ -19,7 +19,9 @@ const MediaType media.Key = "music"
 
 // Module is music as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
 type Module struct {
-	Sweep scan.Sweep
+	// Registrations are the job types music brings, with their handlers.
+	Registrations []media.JobRegistration
+	Sweep         scan.Sweep
 	// Hunt searches for one wanted album and sends the best release; nil leaves music unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
 	// Adder looks a work up and adds it; nil leaves the type without an add.
@@ -116,6 +118,16 @@ func (m Module) StartRename(ctx context.Context, rootFolderID int64, scope media
 		return mover.MovePlan{}, 0, nil, errors.New("music: rename is not wired")
 	}
 	return RenameStart(ctx, *m.Rename, rootFolderID, scope, preview)
+}
+
+// RegisterJobs implements media.Jobs.
+func (m Module) RegisterJobs(register media.JobRegistrar) error {
+	for _, registration := range m.Registrations {
+		if err := register(registration.Definition, registration.Handler); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ScanSweep implements media.Scanning.

@@ -101,7 +101,7 @@ func (p *process) musicModule() music.Module {
 	realign := func(ctx context.Context, workID int64) error {
 		return music.AlignClaimedFiles(ctx, &desired, clock.NewSystem(), workID)
 	}
-	return music.Module{Hunt: p.musicHunt, Refresh: refresh, Realign: realign, Adder: p.musicAdder(), Pictures: p.musicPictures(), Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
+	return music.Module{Registrations: p.musicJobs(), Hunt: p.musicHunt, Refresh: refresh, Realign: realign, Adder: p.musicAdder(), Pictures: p.musicPictures(), Files: p.musicFiles(), Passes: passes, Feed: feed, CutoffJob: check, Following: following, Searching: searching, Rename: &rename, Sweep: scan.Sweep{
 		Consumer: consumer,
 		Include:  scan.IsAudio,
 		Housekeeping: music.NewHousekeeping(music.HousekeepingConfig{
@@ -136,7 +136,7 @@ func (p *process) tvModule() tv.Module {
 			return libraries
 		},
 	})
-	return tv.Module{
+	return tv.Module{Registrations: p.tvJobs(),
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
@@ -307,4 +307,15 @@ func (p *process) enqueueServerFilesFor(ctx context.Context, categoryID, workID 
 // enqueueServerFiles submits the pass writing Jellyfin and Kodi files.
 func (p *process) enqueueServerFiles(ctx context.Context) (jobs.EnqueueResult, error) {
 	return tv.EnqueueServerFiles(ctx, p.queue)
+}
+
+// musicJobs are the job types the music module brings.
+func (p *process) musicJobs() []media.JobRegistration {
+	registrations := p.enrichJobs()
+	return append(registrations, p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob())
+}
+
+// tvJobs are the job types the TV module brings besides its own typed ones.
+func (p *process) tvJobs() []media.JobRegistration {
+	return []media.JobRegistration{p.tvRefreshJob(), p.bridgeJob(), p.tvArtworkJob()}
 }

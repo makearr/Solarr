@@ -9,7 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
-	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -176,17 +176,11 @@ func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string
 	return nil, fmt.Errorf("indexer %d is no longer configured", indexerID)
 }
 
-// registerSearchCategoryJob wires the per-category candidate search (todo
-// 5.2) into the registry and the executor.
-func (p *process) registerSearchCategoryJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(music.SearchCategoryDefinition); err != nil {
-		return err
-	}
-	job := music.NewSearchCategoryJob(music.SearchCategoryConfig{
+// searchCategoryJob is the per-category candidate search (todo 5.2).
+func (p *process) searchCategoryJob() media.JobRegistration {
+	return media.JobRegistration{Definition: music.SearchCategoryDefinition, Handler: music.NewSearchCategoryJob(music.SearchCategoryConfig{
 		Grab: p.musicGrab(), Indexers: p.indexerConns, Clock: clock.NewSystem(), Logger: p.logger,
-	})
-	executor.Handle(music.SearchCategoryJobType, job)
-	return nil
+	})}
 }
 
 // candidateSearcher builds adapters.CandidateSearch over the real stores.

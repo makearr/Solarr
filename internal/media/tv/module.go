@@ -16,7 +16,9 @@ import (
 
 // Module is TV as the media registry sees it. The zero value declares the type; Sweep makes it scannable.
 type Module struct {
-	Sweep scan.Sweep
+	// Registrations are job types TV brings besides the ones named below, with their handlers.
+	Registrations []media.JobRegistration
+	Sweep         scan.Sweep
 	// Hunt searches for one wanted season and sends the best release; nil leaves TV unhunted.
 	Hunt func(ctx context.Context, itemID int64) (plan.Outcome, error)
 	// Adder looks a work up and adds it; nil leaves the type without an add.
@@ -142,6 +144,11 @@ func (Module) ReleaseLabel(releaseTitle, itemRef string, now time.Time) string {
 
 // RegisterJobs implements media.Jobs.
 func (m Module) RegisterJobs(register media.JobRegistrar) error {
+	for _, registration := range m.Registrations {
+		if err := register(registration.Definition, registration.Handler); err != nil {
+			return err
+		}
+	}
 	if m.Retry != nil {
 		if err := register(RetryDefinition, m.Retry); err != nil {
 			return err

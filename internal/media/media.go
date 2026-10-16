@@ -486,6 +486,12 @@ type Profiling interface {
 // JobRegistrar takes one job type with its handler.
 type JobRegistrar func(definition jobs.Definition, handler jobs.Handler) error
 
+// JobRegistration is one job type a media type brings, with the handler that runs it.
+type JobRegistration struct {
+	Definition jobs.Definition
+	Handler    jobs.Handler
+}
+
 // Jobs is the capability of a media type that brings job types of its own.
 type Jobs interface {
 	RegisterJobs(register JobRegistrar) error

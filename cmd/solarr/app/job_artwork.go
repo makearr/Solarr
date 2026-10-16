@@ -7,7 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -20,12 +20,8 @@ import (
 // choose between, so there is nothing a setting would let an operator change.
 const coverArtBaseURL = "https://coverartarchive.org"
 
-// registerArtworkJob wires section 21.6's background cover art sweep into the
-// registry and the executor.
-func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Executor) error {
-	if err := registry.Register(music.ArtworkDefinition); err != nil {
-		return err
-	}
+// artworkJob is section 21.6's background cover art sweep.
+func (p *process) artworkJob() media.JobRegistration {
 	client := p.providerClient(musicbrainz.CoverArtName, nil, httpx.ClientConfig{})
 
 	job := music.NewArtworkJob(music.ArtworkJobConfig{
@@ -42,8 +38,7 @@ func (p *process) registerArtworkJob(registry *jobs.Registry, executor *jobs.Exe
 		TheAudioDBCover: theAudioDBCover(p.theAudioDB()),
 		OnDone:          func(ctx context.Context) { _, _ = p.enqueueTagWriteback(ctx) },
 	})
-	executor.Handle(music.ArtworkJobType, job)
-	return nil
+	return media.JobRegistration{Definition: music.ArtworkDefinition, Handler: job}
 }
 
 // artworkPass starts music's cover art sweep: its part of the "Fetch pictures" pass, and after enrichment.
