@@ -68,6 +68,10 @@ func (s *Server) SetLibraryFileManagement(w http.ResponseWriter, r *http.Request
 	if body.MediaServerFiles != nil {
 		wanted.MediaServerFiles = *body.MediaServerFiles
 	}
+	wanted.IgnoreNewSeasons = category.FileManagement.IgnoreNewSeasons
+	if body.MonitorNewSeasons != nil {
+		wanted.IgnoreNewSeasons = !*body.MonitorNewSeasons
+	}
 	wanted.SharedFileFallback = category.FileManagement.SharedFileFallback
 	if body.SharedFileFallback != nil {
 		wanted.SharedFileFallback = settings.SharedFileFallback(*body.SharedFileFallback)
@@ -105,9 +109,10 @@ func (s *Server) fileManagementView(category settings.Category) gen.FileManageme
 		extensions = []string{}
 	}
 	fallback := gen.FileManagementSharedFileFallback(f.SharedFileFallback)
+	monitorNew := !f.IgnoreNewSeasons
 	return gen.FileManagement{
 		ImportExtraFiles: &extrasOn, ExtraFileExtensions: &extensions, MediaServerFiles: &f.MediaServerFiles,
-		SharedFileFallback: &fallback,
+		SharedFileFallback: &fallback, MonitorNewSeasons: &monitorNew,
 		PropersRepacks:     gen.FileManagementPropersRepacks(f.PropersRepacks),
 		RescanAfterRefresh: gen.FileManagementRescanAfterRefresh(f.RescanAfterRefresh),
 		ChangeFileDate:     gen.FileManagementChangeFileDate(f.ChangeFileDate), RecycleRetentionDays: f.RecycleRetentionDays,

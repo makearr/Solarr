@@ -267,6 +267,25 @@ func TestRefreshMonitorsNewEpisodesByTheirSeasonAndNewSeasonsWhenTheSeriesIsWant
 	}
 }
 
+func TestRefreshLeavesANewSeasonUnmonitoredWhenTheLibraryIgnoresNewSeasons(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	service.IgnoreNewSeasons = func(categoryID int64) bool { return categoryID == 3 }
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorFirstSeason})
+	if err != nil {
+		t.Fatal(err)
+	}
+	grown := fixtureSkyhook()
+	grown.Episodes = append(grown.Episodes, skyhook.Episode{TVDBID: 9, SeasonNumber: 3, EpisodeNumber: 1, Title: "New", AirDate: "2026-11-01"})
+	service.Skyhook = searchSkyhook{series: grown}
+	if _, err := service.Refresh(t.Context(), tv.RefreshRequest{WorkID: added.WorkID, CategoryID: 3, ProfileID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if got := partMonitoring(t, opened, added.WorkID)["s03:e01"]; got != 0 {
+		t.Errorf("the new season's episode monitored = %d, want 0", got)
+	}
+}
+
 func TestApplyMonitorReappliesSonarrsChoicesToAHeldSeries(t *testing.T) {
 	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
 	service.Reader = library.NewSeriesReader(opened)

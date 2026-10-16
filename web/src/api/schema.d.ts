@@ -6499,6 +6499,8 @@ export interface components {
              * @enum {string}
              */
             shared_file_fallback?: "copy" | "symlink";
+            /** @description Whether a season a refresh finds is monitored when the series already has a monitored one (Sonarr's "Monitor New Seasons": all or none). On by default. Omitted on a save keeps what is stored. */
+            monitor_new_seasons?: boolean;
             /** @description Write what Jellyfin and Kodi read beside the library's files: nfo files with the provider ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root. Omitted on a save keeps what is stored. */
             media_server_files?: boolean;
             /** @description Sonarr's and Lidarr's "Import Extra Files": bring files with the listed extensions along with the tracks or episodes they are named after. Each library starts with its media type's choice (TV on, for subtitles). Omitted on a save keeps what is stored. */

@@ -232,6 +232,7 @@ type FileManagementEntry struct {
 	MediaServerFiles    bool     `yaml:"media_server_files,omitempty"`
 	// SharedFileFallback is absent while it is the default, copy.
 	SharedFileFallback string `yaml:"shared_file_fallback,omitempty"`
+	IgnoreNewSeasons   bool   `yaml:"ignore_new_seasons,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
@@ -246,7 +247,7 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 			WriteMetadata: e.WriteMetadataToTags, EmbedCover: e.EmbedCoverInTags, Navidrome: e.NavidromeProfile,
 		},
 		ExtraFiles:       ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
-		MediaServerFiles: e.MediaServerFiles, SharedFileFallback: SharedFileCopy,
+		MediaServerFiles: e.MediaServerFiles, SharedFileFallback: SharedFileCopy, IgnoreNewSeasons: e.IgnoreNewSeasons,
 	}
 	if e.SharedFileFallback != "" {
 		f.SharedFileFallback = SharedFileFallback(e.SharedFileFallback)
@@ -265,7 +266,7 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 		ReplaceIDsInTags: f.Tagging.ReplaceIDs, WriteMetadataToTags: f.Tagging.WriteMetadata,
 		EmbedCoverInTags: f.Tagging.EmbedCover, NavidromeProfile: f.Tagging.Navidrome,
 		ImportExtraFiles: f.ExtraFiles.Import, ExtraFileExtensions: f.ExtraFiles.Extensions,
-		MediaServerFiles: f.MediaServerFiles,
+		MediaServerFiles: f.MediaServerFiles, IgnoreNewSeasons: f.IgnoreNewSeasons,
 	}
 	if f.SharedFileFallback != SharedFileCopy {
 		entry.SharedFileFallback = string(f.SharedFileFallback)

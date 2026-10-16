@@ -90,6 +90,7 @@ type CategoryFileManagement struct {
 	ExtraFileExtensions      sql.NullString
 	MediaServerFiles         int64
 	SharedFileFallback       string
+	IgnoreNewSeasons         int64
 }
 
 type CategoryQualityProfile struct {

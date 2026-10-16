@@ -75,6 +75,8 @@ type FileManagement struct {
 	MediaServerFiles bool
 	// SharedFileFallback places a same-broadcast file into this library's series across filesystems; empty is copy.
 	SharedFileFallback SharedFileFallback
+	// IgnoreNewSeasons leaves a season that appears on refresh unmonitored (Sonarr's "Monitor New Seasons: None").
+	IgnoreNewSeasons bool
 }
 
 // Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
@@ -112,7 +114,8 @@ func (f FileManagement) IsDefault() bool {
 		f.UnmonitorDeleted == d.UnmonitorDeleted && f.MergeArtistAliases == d.MergeArtistAliases &&
 		f.SetPermissions == d.SetPermissions && f.ChmodFolder == d.ChmodFolder && f.ChownGroup == d.ChownGroup &&
 		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil &&
-		f.MediaServerFiles == d.MediaServerFiles && f.SharedFileFallback == d.SharedFileFallback
+		f.MediaServerFiles == d.MediaServerFiles && f.SharedFileFallback == d.SharedFileFallback &&
+		f.IgnoreNewSeasons == d.IgnoreNewSeasons
 }
 
 // FolderMode is ChmodFolder as a mode; FileMode drops the execute bits, as Sonarr does.
@@ -205,6 +208,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
 		MediaServerFiles: boolToInt(f.MediaServerFiles), SharedFileFallback: string(f.SharedFileFallback),
+		IgnoreNewSeasons: boolToInt(f.IgnoreNewSeasons),
 	})
 }
 
@@ -235,6 +239,7 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 			ExtraFiles:         decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
 			MediaServerFiles:   row.MediaServerFiles != 0,
 			SharedFileFallback: SharedFileFallback(row.SharedFileFallback),
+			IgnoreNewSeasons:   row.IgnoreNewSeasons != 0,
 		}
 	}
 	return categories

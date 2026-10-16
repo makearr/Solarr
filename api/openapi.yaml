@@ -9595,6 +9595,11 @@ components:
             How a file one broadcast shares with another series reaches this library's series when the two are on
             different filesystems and no link can be made: a second copy (the default) or a symbolic link. Omitted
             on a save keeps what is stored.
+        monitor_new_seasons:
+          type: boolean
+          description: >-
+            Whether a season a refresh finds is monitored when the series already has a monitored one (Sonarr's
+            "Monitor New Seasons": all or none). On by default. Omitted on a save keeps what is stored.
         media_server_files:
           type: boolean
           description: >-

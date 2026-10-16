@@ -260,6 +260,10 @@ func (p *process) tvService() tv.Service {
 			Priority:  func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
 			Grace:     p.availabilityGrace,
 			Orderings: p.tvdbShared,
+			IgnoreNewSeasons: func(categoryID int64) bool {
+				category, _ := p.cache.Snapshot().Category(categoryID)
+				return category.FileManagement.IgnoreNewSeasons
+			},
 			KindOf: func(categoryID int64) string {
 				category, _ := p.cache.Snapshot().Category(categoryID)
 				return category.Kind

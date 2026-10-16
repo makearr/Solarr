@@ -76,6 +76,8 @@ type Service struct {
 	Priority func() []string
 	// Grace is the configured wait after an episode's time, read per write; nil leaves each part its default.
 	Grace func() library.AvailabilityGrace
+	// IgnoreNewSeasons says a library leaves the seasons a refresh finds unmonitored; nil follows the series.
+	IgnoreNewSeasons func(categoryID int64) bool
 	// KindOf answers a library's kind; nil takes none.
 	KindOf func(categoryID int64) string
 	// Orderings lists a series in TheTVDB's other orderings (DVD, absolute, ...); nil offers the aired one only.
@@ -535,7 +537,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 		if on, held := monitored[episode.Season]; held {
 			return on
 		}
-		return seriesWanted
+		return seriesWanted && (s.IgnoreNewSeasons == nil || !s.IgnoreNewSeasons(request.CategoryID))
 	}
 	now := s.Clock.Now()
 	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{NewPart: wants, Now: now, Grace: s.grace()}))

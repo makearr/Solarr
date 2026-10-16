@@ -1886,7 +1886,10 @@ type FileManagement struct {
 	MediaServerFiles *bool `json:"media_server_files,omitempty"`
 
 	// MergeArtistAliases An artist stored under several names (folders, aliases) is merged into one after each disk scan: the identified artist wins, else the name with the most albums.
-	MergeArtistAliases   bool                             `json:"merge_artist_aliases"`
+	MergeArtistAliases bool `json:"merge_artist_aliases"`
+
+	// MonitorNewSeasons Whether a season a refresh finds is monitored when the series already has a monitored one (Sonarr's "Monitor New Seasons": all or none). On by default. Omitted on a save keeps what is stored.
+	MonitorNewSeasons    *bool                            `json:"monitor_new_seasons,omitempty"`
 	PropersRepacks       FileManagementPropersRepacks     `json:"propers_repacks"`
 	RecycleRetentionDays int64                            `json:"recycle_retention_days"`
 	RescanAfterRefresh   FileManagementRescanAfterRefresh `json:"rescan_after_refresh"`

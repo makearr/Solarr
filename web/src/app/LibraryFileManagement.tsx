@@ -204,6 +204,12 @@ export function LibraryFileManagement() {
             checked={draft.media_server_files ?? false}
             onChange={(checked) => set({ media_server_files: checked })}
           />
+          <Toggle
+            label="Monitor new seasons"
+            help="When a refresh finds a season the library does not have yet, monitor it if the series already has a monitored season. Off leaves new seasons unmonitored until you choose them."
+            checked={draft.monitor_new_seasons ?? true}
+            onChange={(checked) => set({ monitor_new_seasons: checked })}
+          />
           <Choice
             label="Shared episodes across disks"
             help="An episode listed under two series (a crossover) is held once and linked into the second series' folder. When the two folders are on different disks no link can be made: keep a second copy, or put a symbolic link there."
