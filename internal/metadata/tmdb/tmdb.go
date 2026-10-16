@@ -1,4 +1,4 @@
-// Package tmdb reads The Movie Database for TV: series, seasons with guest stars and episode crew, aggregate
+// Package tmdb reads The Movie Database for TV and movies: series, seasons with guest stars and episode crew, aggregate
 // credits, artwork, keywords, alternative orderings and person pages. It needs the user's own key (stage 8 T4).
 package tmdb
 
