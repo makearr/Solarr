@@ -3714,6 +3714,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/release-filters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** A series' own rules for the releases offered for it. Administrator only. */
+        get: operations["getWorkReleaseFilters"];
+        /**
+         * Replace a series' rules. Administrator only.
+         * @description Every release a search or the RSS sync finds for the series is held against them: a missing required word, a denied word or group, or a group outside the allowed list rejects it; a preferred word adds to its score. Words match anywhere in the release name without regard to case, or as a pattern.
+         */
+        put: operations["setWorkReleaseFilters"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/merge-suggestion": {
         parameters: {
             query?: never;
@@ -4836,6 +4859,17 @@ export interface components {
             /** @example S02E01 */
             to?: string;
             has_file: boolean;
+        };
+        ReleaseFilter: {
+            /** @enum {string} */
+            kind: "must_contain" | "must_not_contain" | "prefer" | "group_allow" | "group_deny";
+            value: string;
+            /** @default false */
+            is_regex: boolean;
+            /** @description What a preferred word adds; the other kinds ignore it. */
+            score?: number;
+            /** @description Limits the rule to part of the series ('s03'); empty is all of it. */
+            season_prefix?: string;
         };
         NumberingPlan: {
             moves: components["schemas"]["NumberingMove"][];
@@ -13845,6 +13879,61 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["NumberingPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getWorkReleaseFilters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules, in the order they were made. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseFilter"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setWorkReleaseFilters: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseFilter"][];
+            };
+        };
+        responses: {
+            /** @description The rules now held. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleaseFilter"][];
                 };
             };
             400: components["responses"]["Problem"];

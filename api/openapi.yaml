@@ -6002,6 +6002,55 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/release-filters:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getWorkReleaseFilters
+      tags: [library]
+      summary: A series' own rules for the releases offered for it. Administrator only.
+      responses:
+        "200":
+          description: The rules, in the order they were made.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReleaseFilter" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setWorkReleaseFilters
+      tags: [library]
+      summary: Replace a series' rules. Administrator only.
+      description: >-
+        Every release a search or the RSS sync finds for the series is held against them: a missing required word, a
+        denied word or group, or a group outside the allowed list rejects it; a preferred word adds to its score.
+        Words match anywhere in the release name without regard to case, or as a pattern.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/ReleaseFilter" }
+      responses:
+        "200":
+          description: The rules now held.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ReleaseFilter" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/merge-suggestion:
     get:
       operationId: getWorkMergeSuggestion
@@ -7558,6 +7607,15 @@ components:
         to: { type: string, example: "S02E01" }
         has_file: { type: boolean }
 
+    ReleaseFilter:
+      type: object
+      required: [kind, value]
+      properties:
+        kind: { type: string, enum: [must_contain, must_not_contain, prefer, group_allow, group_deny] }
+        value: { type: string }
+        is_regex: { type: boolean, default: false }
+        score: { type: integer, description: What a preferred word adds; the other kinds ignore it. }
+        season_prefix: { type: string, description: "Limits the rule to part of the series ('s03'); empty is all of it." }
     NumberingPlan:
       type: object
       required: [moves, set_aside, unchanged, new]

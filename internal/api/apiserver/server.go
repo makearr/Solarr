@@ -162,6 +162,8 @@ type Config struct {
 	Crossovers Crossovers
 	// WorkNumbering numbers a work by another of its sources' lists. Optional: without it, none is offered.
 	WorkNumbering WorkNumbering
+	// WorkReleaseFilters holds a series' own rules for the releases offered for it. Optional: without it, 503.
+	WorkReleaseFilters WorkReleaseFilters
 	// WorkMerger folds an album held twice into one. Optional: without it, MergeWork answers 503.
 	WorkMerger WorkMerger
 	// VanishedFiles reports and accepts a mass vanish a full scan held back. Optional: without it, roots report none
@@ -301,6 +303,7 @@ type Server struct {
 	vanishedFiles           VanishedFiles
 	workMerger              WorkMerger
 	workNumbering           WorkNumbering
+	workReleaseFilters      WorkReleaseFilters
 	crossovers              Crossovers
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
@@ -411,6 +414,7 @@ func New(config Config) (*Server, error) {
 		vanishedFiles:           config.VanishedFiles,
 		workMerger:              config.WorkMerger,
 		workNumbering:           config.WorkNumbering,
+		workReleaseFilters:      config.WorkReleaseFilters,
 		crossovers:              config.Crossovers,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
@@ -530,6 +534,8 @@ func New(config Config) (*Server, error) {
 			secured.Post("/parts/{id}/same-content", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.LinkSameContent) })
 			secured.Delete("/parts/{id}/same-content", server.routeUnlinkSameContent)
 			secured.Get("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkNumbering) })
+			secured.Get("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.GetWorkReleaseFilters) })
+			secured.Put("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkReleaseFilters) })
 			secured.Post("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkNumbering) })
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)
 			secured.Get("/categories/{id}/quality", server.routeGetLibraryQuality)

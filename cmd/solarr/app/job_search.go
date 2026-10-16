@@ -77,12 +77,12 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 
 // tvGrab builds the TV module's automatic search over the real stores.
 func (p *process) tvGrab() tv.Grab {
-	blocklist, sightings := library.NewBlocklistStore(p.library), library.NewSightings(p.library)
+	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
 	return tv.Grab{
 		Search: tv.Search{
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library),
 			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
-			Sightings: &sightings,
+			Sightings: &sightings, ReleaseFilters: &filters,
 		},
 		Dispatch: p.dispatchFor("tv"),
 	}

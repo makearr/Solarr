@@ -559,6 +559,15 @@ const (
 	ReadyStatusStatusReady ReadyStatusStatus = "ready"
 )
 
+// Defines values for ReleaseFilterKind.
+const (
+	ReleaseFilterKindGroupAllow     ReleaseFilterKind = "group_allow"
+	ReleaseFilterKindGroupDeny      ReleaseFilterKind = "group_deny"
+	ReleaseFilterKindMustContain    ReleaseFilterKind = "must_contain"
+	ReleaseFilterKindMustNotContain ReleaseFilterKind = "must_not_contain"
+	ReleaseFilterKindPrefer         ReleaseFilterKind = "prefer"
+)
+
 // Defines values for RemoveAndBlockRequestBlockReason.
 const (
 	RemoveAndBlockRequestBlockReasonCORRUPT     RemoveAndBlockRequestBlockReason = "CORRUPT"
@@ -3574,6 +3583,22 @@ type Rejection struct {
 	Wanted string `json:"wanted"`
 }
 
+// ReleaseFilter defines model for ReleaseFilter.
+type ReleaseFilter struct {
+	IsRegex *bool             `json:"is_regex,omitempty"`
+	Kind    ReleaseFilterKind `json:"kind"`
+
+	// Score What a preferred word adds; the other kinds ignore it.
+	Score *int `json:"score,omitempty"`
+
+	// SeasonPrefix Limits the rule to part of the series ('s03'); empty is all of it.
+	SeasonPrefix *string `json:"season_prefix,omitempty"`
+	Value        string  `json:"value"`
+}
+
+// ReleaseFilterKind defines model for ReleaseFilter.Kind.
+type ReleaseFilterKind string
+
 // RemoveAndBlockRequest Each step is independently requestable (architecture.md section 10.8's own text) -- requesting none of the four is accepted and does nothing.
 type RemoveAndBlockRequest struct {
 	Block          *bool                               `json:"block,omitempty"`
@@ -5221,6 +5246,9 @@ type SetTrackWantedJSONBody struct {
 	Wanted bool `json:"wanted"`
 }
 
+// SetWorkReleaseFiltersJSONBody defines parameters for SetWorkReleaseFilters.
+type SetWorkReleaseFiltersJSONBody = []ReleaseFilter
+
 // RemoveWorkJSONBody defines parameters for RemoveWork.
 type RemoveWorkJSONBody struct {
 	// DeleteFiles Also move every file of this album into the recycle bin.
@@ -5517,6 +5545,9 @@ type RemovePartJSONRequestBody RemovePartJSONBody
 
 // SetTrackWantedJSONRequestBody defines body for SetTrackWanted for application/json ContentType.
 type SetTrackWantedJSONRequestBody SetTrackWantedJSONBody
+
+// SetWorkReleaseFiltersJSONRequestBody defines body for SetWorkReleaseFilters for application/json ContentType.
+type SetWorkReleaseFiltersJSONRequestBody = SetWorkReleaseFiltersJSONBody
 
 // RemoveWorkJSONRequestBody defines body for RemoveWork for application/json ContentType.
 type RemoveWorkJSONRequestBody RemoveWorkJSONBody
@@ -6276,6 +6307,12 @@ type ServerInterface interface {
 	// Read the work again from its sources, past the cache. An album is refreshed in the background (a second request while one runs is folded in); a series at once, adding new episodes. Request on its library.
 	// (POST /works/{id}/refresh)
 	RefreshWork(w http.ResponseWriter, r *http.Request, id int64)
+	// A series' own rules for the releases offered for it. Administrator only.
+	// (GET /works/{id}/release-filters)
+	GetWorkReleaseFilters(w http.ResponseWriter, r *http.Request, id int64)
+	// Replace a series' rules. Administrator only.
+	// (PUT /works/{id}/release-filters)
+	SetWorkReleaseFilters(w http.ResponseWriter, r *http.Request, id int64)
 	// Stop wanting a work, optionally delete its files and keep it from being added back. Administrator only.
 	// (POST /works/{id}/remove)
 	RemoveWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -7785,6 +7822,18 @@ func (_ Unimplemented) SetTrackWanted(w http.ResponseWriter, r *http.Request, id
 // Read the work again from its sources, past the cache. An album is refreshed in the background (a second request while one runs is folded in); a series at once, adding new episodes. Request on its library.
 // (POST /works/{id}/refresh)
 func (_ Unimplemented) RefreshWork(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A series' own rules for the releases offered for it. Administrator only.
+// (GET /works/{id}/release-filters)
+func (_ Unimplemented) GetWorkReleaseFilters(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Replace a series' rules. Administrator only.
+// (PUT /works/{id}/release-filters)
+func (_ Unimplemented) SetWorkReleaseFilters(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15976,6 +16025,72 @@ func (siw *ServerInterfaceWrapper) RefreshWork(w http.ResponseWriter, r *http.Re
 	handler.ServeHTTP(w, r)
 }
 
+// GetWorkReleaseFilters operation middleware
+func (siw *ServerInterfaceWrapper) GetWorkReleaseFilters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetWorkReleaseFilters(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetWorkReleaseFilters operation middleware
+func (siw *ServerInterfaceWrapper) SetWorkReleaseFilters(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetWorkReleaseFilters(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveWork operation middleware
 func (siw *ServerInterfaceWrapper) RemoveWork(w http.ResponseWriter, r *http.Request) {
 
@@ -16923,6 +17038,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/refresh", wrapper.RefreshWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/release-filters", wrapper.GetWorkReleaseFilters)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/works/{id}/release-filters", wrapper.SetWorkReleaseFilters)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/remove", wrapper.RemoveWork)

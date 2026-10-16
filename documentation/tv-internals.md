@@ -211,3 +211,13 @@ reflink, then hardlink, else the library's `shared_file_fallback` (copy or symli
 alone, an existing name is never replaced, and the Jellyfin/Kodi pass skips a shared file outside the series' folders.
 Not built yet: suggestions from file hashes or TMDB episode notes, a release named after one series searched for the
 other's want, and a rename moving both paths.
+
+## Release filters (T2c: `judge.ApplyFilters`, `library.ReleaseFilters`)
+
+A series' own rules for the releases offered for it, stored in `work_release_filter` and edited on the series page
+(Release filters, administrator only; `GET`/`PUT /works/{id}/release-filters`). The TV judge reads them once per search or RSS
+offer and applies them after the quality profile: a missing **must contain** word (any one of them is enough), a **must not
+contain** word, a **never** group, or a group outside an **only** list turns the decision into a rejection with a gate per
+failed rule; a **prefer** word adds its score. Words match anywhere in the release name without regard to case, or as a
+pattern. A season prefix (`s02`) limits a rule to that season's searches; the prefix is compared with the searched item's
+`media_ref`. Music does not use them.

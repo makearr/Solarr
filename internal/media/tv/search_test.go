@@ -266,3 +266,37 @@ func TestOneEpisodeCanBeSearchedWhateverItsMonitoring(t *testing.T) {
 		t.Errorf("decisions = %d, requests = %+v; want a search for episode 2 that finds its release", len(result.Decisions), fake.requests)
 	}
 }
+
+func TestSearchHoldsEveryReleaseAgainstTheSeriesOwnFilters(t *testing.T) {
+	cache := settingsCache(t)
+	service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	added, _ := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "WEB 1080p"), Monitor: tv.MonitorAll})
+	items, _ := library.NewDesired(opened).AlbumItemsForWork(t.Context(), added.WorkID)
+	var season1 int64
+	for _, item := range items {
+		if item.MediaRef == "s01" {
+			season1 = item.ID
+		}
+	}
+	filters := library.NewReleaseFilters(opened)
+	if err := filters.Replace(t.Context(), added.WorkID, []library.ReleaseFilter{{Kind: judge.FilterGroupDeny, Value: "BAD"}}); err != nil {
+		t.Fatal(err)
+	}
+	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"tvsearch": {
+		{Title: "Example.Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-BAD", GUID: "denied", Link: "https://example.test/denied", SizeBytes: 2e9},
+		{Title: "Example.Show.S01E02.1080p.WEB-DL.DDP5.1.H.264-GOOD", GUID: "fine", Link: "https://example.test/fine", SizeBytes: 2e9},
+	}}}
+	search := tv.Search{Desired: library.NewDesired(opened), Series: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
+		Settings: cache, Clock: clockAt(addNow), ReleaseFilters: &filters}
+	result, err := search.SearchItem(t.Context(), season1, []judge.Conn{{ID: 1, Name: "test", Impl: "newznab", Client: fake}}, addNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outcomes := map[string]string{}
+	for _, d := range result.Decisions {
+		outcomes[d.ReleaseCandidate.GUID] = d.Decision.Outcome
+	}
+	if outcomes["denied"] != "REJECT" || outcomes["fine"] != "ACCEPT" {
+		t.Errorf("outcomes = %v, want the denied group rejected and the other accepted", outcomes)
+	}
+}

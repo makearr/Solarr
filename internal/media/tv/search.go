@@ -47,6 +47,8 @@ type Search struct {
 	Blocklist  *library.BlocklistStore
 	// Sightings, when set, remember what RSS showed for "fresh" (ADR-55).
 	Sightings *library.Sightings
+	// ReleaseFilters, when set, hold every release against the series' own required, denied and preferred words and groups.
+	ReleaseFilters *library.ReleaseFilters
 	// IndexerDeadline bounds each tier's fan-out; zero is judge.GroupDeadline.
 	IndexerDeadline time.Duration
 }
@@ -323,6 +325,8 @@ type yardstick struct {
 	now            time.Time
 	// incumbents are the decisions the files an upgrade replaces would get; empty when the search is not an upgrade.
 	incumbents map[int]model.Decision
+	filters    []judge.ReleaseFilter
+	mediaRef   string
 }
 
 func (s Search) yardstick(ctx context.Context, item librarydb.DesiredItem, w wanted) (yardstick, error) {
@@ -333,7 +337,18 @@ func (s Search) yardstick(ctx context.Context, item librarydb.DesiredItem, w wan
 	}
 	built := yardstick{
 		wanted: w, titles: w.titles(), rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID),
-		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{},
+		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{}, mediaRef: item.MediaRef,
+	}
+	if s.ReleaseFilters != nil {
+		stored, err := s.ReleaseFilters.List(ctx, item.WorkID)
+		if err != nil {
+			return yardstick{}, err
+		}
+		for _, filter := range stored {
+			built.filters = append(built.filters, judge.ReleaseFilter{
+				Prefix: filter.Prefix, Kind: filter.Kind, Value: filter.Value, IsRegex: filter.IsRegex, Score: int(filter.Score),
+			})
+		}
 	}
 	for number, file := range w.owned {
 		built.incumbents[number] = judge.EvaluateInOrder(rules, FileFacts(file), built.languagePolicy)
@@ -361,6 +376,7 @@ func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Fin
 		held := releaseEpisodes(info, covered, y.wanted.allCount)
 		estimateBitrate(&facts, raw.SizeBytes, held, y.wanted.runtimeMs)
 		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
+		decision = judge.ApplyFilters(decision, y.filters, raw.Title, info.ReleaseGroup, y.mediaRef)
 		y.requireUpgrade(&decision, facts, numbers, held)
 		fraction := float64(covered) / float64(len(y.wanted.missing))
 		finds = append(finds, judge.Find{

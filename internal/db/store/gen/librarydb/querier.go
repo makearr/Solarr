@@ -215,6 +215,7 @@ type Querier interface {
 	// Identity queries. Column lists follow table order, or sqlc stops reusing models.
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
 	CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) (WorkPart, error)
+	CreateWorkReleaseFilter(ctx context.Context, arg CreateWorkReleaseFilterParams) error
 	// Guarded on the current state so approving (or declining) twice -- a race between
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
@@ -263,6 +264,7 @@ type Querier interface {
 	DeleteWorkMergeSuggestion(ctx context.Context, workID int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
+	DeleteWorkReleaseFilters(ctx context.Context, workID int64) error
 	DeleteWorkTags(ctx context.Context, subjectID int64) error
 	DeleteWorkTitlesBySource(ctx context.Context, arg DeleteWorkTitlesBySourceParams) error
 	DequeueReady(ctx context.Context, candidateID int64) error
@@ -752,6 +754,8 @@ type Querier interface {
 	ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPageParams) ([]WorkPart, error)
 	// One work's files on one root, each by its primary path: a rename scoped to one work.
 	ListWorkPathsOnRoot(ctx context.Context, arg ListWorkPathsOnRootParams) ([]ListWorkPathsOnRootRow, error)
+	// A work's release filters (stage 8 T2c): required, denied and preferred words, allowed and denied release groups.
+	ListWorkReleaseFilters(ctx context.Context, workID int64) ([]WorkReleaseFilter, error)
 	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is

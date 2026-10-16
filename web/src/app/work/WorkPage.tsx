@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePen, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
+import { FilePen, Filter, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -28,6 +28,7 @@ import { CrossoverBadges, CrossoverDialog, useWorkCrossovers } from "../Crossove
 import { useLibrary } from "@/lib/useLibrary";
 import { EditWork } from "./EditWork";
 import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
+import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
 import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
@@ -185,6 +186,7 @@ function WorkHeader({
   const [removing, setRemoving] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [numbering, setNumbering] = useState(false);
+  const [filtering, setFiltering] = useState(false);
   const numberings = useNumberingChoices(work.id, administrator);
   const [removal, setRemoval] = useState({ deleteFiles: false, exclude: true });
   const [note, setNote] = useState<string>();
@@ -341,6 +343,11 @@ function WorkHeader({
                 {t("numbering.title")}
               </Button>
             )}
+            {administrator && work.media_type === "tv" && (
+              <Button icon={<Filter aria-hidden className="size-4" />} onClick={() => setFiltering(true)}>
+                {t("releaseFilters.title")}
+              </Button>
+            )}
             {administrator && (
               <Button variant="danger" icon={<Trash2 aria-hidden className="size-4" />} onClick={() => setRemoving(true)}>
                 {t("action.remove")}
@@ -353,6 +360,7 @@ function WorkHeader({
         <p className="text-xs text-ink-muted">{refresh.isError ? "Refresh failed." : monitor.isError ? "That could not be changed." : note}</p>
       )}
       {editing && <EditWork work={work} info={info} onClose={() => setEditing(false)} />}
+      {filtering && <ReleaseFiltersDialog workId={work.id} title={work.title} onClose={() => setFiltering(false)} />}
       {numbering && <NumberingDialog workId={work.id} title={work.title} onClose={() => setNumbering(false)} />}
       {renaming && categoryId !== undefined && (
         <Dialog title={t("action.renamePreview")} description={work.title} width="wide" onClose={() => setRenaming(false)}>
