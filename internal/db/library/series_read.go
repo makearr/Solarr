@@ -315,7 +315,12 @@ type SeriesTitle struct {
 
 // Titles lists every canonical and alias title of a category's series.
 func (r SeriesReader) Titles(ctx context.Context, categoryID int64) ([]SeriesTitle, error) {
-	rows, err := librarydb.New(r.store.Read()).ListSeriesTitles(ctx, categoryID)
+	return r.TitlesOf(ctx, "tv", categoryID)
+}
+
+// TitlesOf is Titles for the works of one media type: a movie library's titles and aliases, for matching a folder.
+func (r SeriesReader) TitlesOf(ctx context.Context, mediaType string, categoryID int64) ([]SeriesTitle, error) {
+	rows, err := librarydb.New(r.store.Read()).ListSeriesTitles(ctx, librarydb.ListSeriesTitlesParams{MediaType: mediaType, CategoryID: categoryID})
 	if err != nil {
 		return nil, fmt.Errorf("library: series titles: %w", err)
 	}

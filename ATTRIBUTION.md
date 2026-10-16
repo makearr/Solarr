@@ -10,6 +10,39 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
 
 ## Incorporated code
 
+### Import rules — from Radarr and Sonarr (GPL-3.0)
+
+- Source: `github.com/Radarr/Radarr` and `github.com/Sonarr/Sonarr`, `develop` branch, fetched 2026-10-16 via
+  `raw.githubusercontent.com`, on the project owner's explicit instruction to port their import rules (this is the
+  decision `CLAUDE.md` asks to be raised first for anything beyond parser and quality definitions).
+  - Radarr `src/NzbDrone.Core/MediaFiles/MovieImport/`: `DetectSample.cs`, `ImportDecisionMaker.cs`, and the
+    specifications `NotSample`, `HasAudioTrack`, `NotMultiPart`, `NotUnpacking`, `AlreadyImported`, `FreeSpace`,
+    `MatchesGrab`, `MatchesFolder`, `GrabbedReleaseQuality`, `Upgrade`; `MediaFiles/DownloadedMovieImportService.cs`.
+  - Sonarr `src/NzbDrone.Core/MediaFiles/EpisodeImport/`: `DetectSample.cs` and the specifications `FullSeason`,
+    `SplitEpisode`, `AbsoluteEpisodeNumber`, `EpisodeTitle`, `SameEpisodesImport`, `MatchesGrab`, `MatchesFolder`,
+    `UnverifiedSceneNumbering`, `NotSample`, `Upgrade`; `RejectedFileExtensionService.cs`;
+    `MediaFiles/DownloadedEpisodesImportService.cs`, `MediaFiles/FileExtensions.cs`.
+- Taken, as pure Go functions in `internal/importing/rules` (each cites its rule name; the table of what each becomes
+  is `documentation/import-rules.md`): the dangerous, executable, archive and user-rejected extension lists; the `._`
+  hidden-file skip; the sample check by runtime with its four tiers and its skipped extensions; the audio-track check;
+  the multi-part movie regexes (verbatim: `cd`, `dvd`, `part`, `disc` followed by a digit or a–d, not at the start of the
+  name); the unpacking working-folder names (`_UNPACK_`, `_FAILED_`) and their stripping from a folder name; the
+  folder-removable rule (only samples and no archive over 10 MB left); the full-season and split-episode refusals;
+  the missing-absolute-number and episode-title rules (never, bulk season releases, always; the 48-hour and four-episode
+  thresholds); the unexpected-episode, grabbed-release and existing-file-has-more-episodes checks.
+- Changed:
+  - **No database or disk reads inside a rule.** Radarr and Sonarr call services (history, episode files, ffprobe, disk
+    provider); here the importer passes the answer in, so each rule is a function of its arguments and tested as one.
+  - **An unreadable file is let through, not held.** Both reject a file whose runtime cannot be read ("unable to
+    determine if file is a sample"); here ffprobe is optional (ADR-30), so an import must not stall without it.
+  - **The unpacking rule is the Unix one**: a file under a client's working folder is refused, with no five-minute
+    grace on modification time (that is their Windows branch).
+  - **`AlreadyImported`, `FreeSpace`, `Upgrade` and `GrabbedReleaseQuality` are not ported as rules**: Solarr answers
+    them in its own places (acquisition state per client reference, the per-root free-space gate, the strict-upgrade
+    judge), and `MatchesFolder` is unimplemented in Radarr itself.
+  - Rejections are `model.Rejection` data (rule, field, wanted, got), never the sentences they carry upstream.
+
+
 ### Release-name and quality parsing — from Lidarr (GPL-3.0)
 
 - Source: `github.com/Lidarr/Lidarr`, `develop` branch, fetched 2026-09-04 via direct

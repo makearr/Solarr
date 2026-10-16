@@ -319,6 +319,34 @@ func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, erro
 	return i, err
 }
 
+const getCollectionByExternalID = `-- name: GetCollectionByExternalID :one
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
+WHERE e.provider = ? AND e.external_id = ?
+`
+
+type GetCollectionByExternalIDParams struct {
+	Provider   string
+	ExternalID string
+}
+
+// A collection a provider names, found by its id there: a movie's franchise.
+func (q *Queries) GetCollectionByExternalID(ctx context.Context, arg GetCollectionByExternalIDParams) (Collection, error) {
+	row := q.db.QueryRowContext(ctx, getCollectionByExternalID, arg.Provider, arg.ExternalID)
+	var i Collection
+	err := row.Scan(
+		&i.ID,
+		&i.MediaType,
+		&i.Name,
+		&i.Kind,
+		&i.Source,
+		&i.Monitored,
+		&i.CompleteAt,
+		&i.AddedAt,
+	)
+	return i, err
+}
+
 const getGroupReputation = `-- name: GetGroupReputation :one
 SELECT release_group, samples, raw_success, bounded_success, corruption_rate,
        mislabel_rate, last_observed_at, updated_at
@@ -340,6 +368,22 @@ func (q *Queries) GetGroupReputation(ctx context.Context, releaseGroup string) (
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const linkCollectionExternalID = `-- name: LinkCollectionExternalID :exec
+INSERT INTO collection_external_id (provider, external_id, collection_id) VALUES (?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING
+`
+
+type LinkCollectionExternalIDParams struct {
+	Provider     string
+	ExternalID   string
+	CollectionID int64
+}
+
+func (q *Queries) LinkCollectionExternalID(ctx context.Context, arg LinkCollectionExternalIDParams) error {
+	_, err := q.db.ExecContext(ctx, linkCollectionExternalID, arg.Provider, arg.ExternalID, arg.CollectionID)
+	return err
 }
 
 const listAllStatRollup = `-- name: ListAllStatRollup :many
@@ -1261,6 +1305,48 @@ type RenameCollectionParams struct {
 
 func (q *Queries) RenameCollection(ctx context.Context, arg RenameCollectionParams) error {
 	_, err := q.db.ExecContext(ctx, renameCollection, arg.Name, arg.Monitored, arg.ID)
+	return err
+}
+
+const setCollectionComplete = `-- name: SetCollectionComplete :exec
+UPDATE collection SET complete_at = ? WHERE id = ?
+`
+
+type SetCollectionCompleteParams struct {
+	CompleteAt sql.NullInt64
+	ID         int64
+}
+
+func (q *Queries) SetCollectionComplete(ctx context.Context, arg SetCollectionCompleteParams) error {
+	_, err := q.db.ExecContext(ctx, setCollectionComplete, arg.CompleteAt, arg.ID)
+	return err
+}
+
+const setCollectionMonitored = `-- name: SetCollectionMonitored :exec
+UPDATE collection SET monitored = ? WHERE id = ?
+`
+
+type SetCollectionMonitoredParams struct {
+	Monitored int64
+	ID        int64
+}
+
+func (q *Queries) SetCollectionMonitored(ctx context.Context, arg SetCollectionMonitoredParams) error {
+	_, err := q.db.ExecContext(ctx, setCollectionMonitored, arg.Monitored, arg.ID)
+	return err
+}
+
+const setCollectionName = `-- name: SetCollectionName :exec
+UPDATE collection SET name = ? WHERE id = ?
+`
+
+type SetCollectionNameParams struct {
+	Name string
+	ID   int64
+}
+
+func (q *Queries) SetCollectionName(ctx context.Context, arg SetCollectionNameParams) error {
+	_, err := q.db.ExecContext(ctx, setCollectionName, arg.Name, arg.ID)
 	return err
 }
 

@@ -58,6 +58,7 @@ type Movie struct {
 	Title            string  `json:"title"`
 	OriginalTitle    string  `json:"original_title"`
 	Tagline          string  `json:"tagline"`
+	Homepage         string  `json:"homepage"`
 	Overview         string  `json:"overview"`
 	ReleaseDate      string  `json:"release_date"`
 	Runtime          int     `json:"runtime"`

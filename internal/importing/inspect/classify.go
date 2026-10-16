@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/Solarr/internal/importing/rules"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 )
 
@@ -65,7 +66,8 @@ func isArchivePart(name string) bool {
 // file that looks like a track but is too small to be one.
 func Classify(relPath string, sizeBytes, floor int64) Class {
 	name := path.Base(relPath)
-	if junkNames[strings.ToLower(name)] {
+	// macOS resource forks, and the files Sonarr and Radarr refuse outright (scripts, shortcuts, programs), are debris.
+	if junkNames[strings.ToLower(name)] || rules.HiddenFile(name) != nil || rules.Extension(name, nil) != nil {
 		return ClassJunk
 	}
 	if isArchivePart(name) {

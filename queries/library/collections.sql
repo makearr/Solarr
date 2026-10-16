@@ -312,3 +312,22 @@ JOIN work_part b ON b.id IN (r.from_id, r.to_id) AND b.id <> a.id
 JOIN work w ON w.id = a.work_id
 WHERE r.kind = 'same_content' AND r.from_type = 'part' AND r.to_type = 'part' AND w.media_type = sqlc.arg(media_type)
 ORDER BY a.work_id, a.sort_key, b.id;
+
+-- A collection a provider names, found by its id there: a movie's franchise.
+-- name: GetCollectionByExternalID :one
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
+WHERE e.provider = ? AND e.external_id = ?;
+
+-- name: LinkCollectionExternalID :exec
+INSERT INTO collection_external_id (provider, external_id, collection_id) VALUES (?, ?, ?)
+ON CONFLICT (provider, external_id) DO NOTHING;
+
+-- name: SetCollectionName :exec
+UPDATE collection SET name = ? WHERE id = ?;
+
+-- name: SetCollectionMonitored :exec
+UPDATE collection SET monitored = ? WHERE id = ?;
+
+-- name: SetCollectionComplete :exec
+UPDATE collection SET complete_at = ? WHERE id = ?;

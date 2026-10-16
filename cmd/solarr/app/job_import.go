@@ -210,7 +210,7 @@ func (p *process) tvImporter() tv.Importer {
 		Categories: categories, BlockedContent: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID, BelowCutoff: p.belowCutoff,
-		ExtraFiles: p.extraFileExtensions, SharedFiles: p.enqueueSharedFiles, AfterPlacing: p.enqueueServerFilesFor,
+		ExtraFiles: p.extraFileExtensions, SharedFiles: p.enqueueSharedFiles, AfterPlacing: p.enqueueServerFilesFor, Probe: p.probeMeasured,
 	})
 }
 
@@ -223,4 +223,13 @@ func (p *process) belowCutoff(categoryID int64, file library.EpisodeFile) bool {
 	}
 	judged, ok := quality.Judge(snapshot, category, tv.FileFacts(file))
 	return ok && !judged.MeetsCutoff
+}
+
+// probeMeasured is what ffprobe measured of one file, for the import rules (sample by runtime, no audio track).
+func (p *process) probeMeasured(ctx context.Context, absolutePath string) (mediatool.Measured, bool) {
+	probes, err := p.tool.ReadTags(ctx, []string{absolutePath})
+	if err != nil || len(probes) != 1 || probes[0].Err != nil {
+		return mediatool.Measured{}, false
+	}
+	return probes[0].Measured, true
 }

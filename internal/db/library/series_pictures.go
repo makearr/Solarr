@@ -11,14 +11,19 @@ type PictureSet struct {
 	Posters, Logos, Photos []string
 }
 
-// PictureAddresses lists the poster of each series (the provider the page itself reads), the logo of each network and the
-// photos of the people billed first in each series, at most maxPhotos of them.
+// PictureAddresses is PictureAddressesOf for TV: series and their networks.
 func (r SeriesReader) PictureAddresses(ctx context.Context, maxPhotos int) (PictureSet, error) {
+	return r.PictureAddressesOf(ctx, "tv", "network", maxPhotos)
+}
+
+// PictureAddressesOf lists the poster of each work of a media type (the provider the page itself reads), the logo of each
+// organisation of a kind (networks, studios) and the photos of the people billed first in each work, at most maxPhotos.
+func (r SeriesReader) PictureAddressesOf(ctx context.Context, mediaType, organisationKind string, maxPhotos int) (PictureSet, error) {
 	var set PictureSet
 	rows, err := r.store.Read().QueryContext(ctx,
-		`SELECT f.work_id, f.value FROM work_field f JOIN work w ON w.id = f.work_id AND w.media_type = 'tv'
+		`SELECT f.work_id, f.value FROM work_field f JOIN work w ON w.id = f.work_id AND w.media_type = ?
 WHERE f.field = 'images'
-ORDER BY f.work_id, CASE f.provider WHEN '__manual__' THEN 0 WHEN 'skyhook' THEN 1 WHEN 'tvmaze' THEN 2 ELSE 3 END`)
+ORDER BY f.work_id, CASE f.provider WHEN '__manual__' THEN 0 WHEN 'skyhook' THEN 1 WHEN 'tvmaze' THEN 2 ELSE 3 END`, mediaType)
 	if err != nil {
 		return set, fmt.Errorf("library: poster addresses: %w", err)
 	}
@@ -49,7 +54,7 @@ ORDER BY f.work_id, CASE f.provider WHEN '__manual__' THEN 0 WHEN 'skyhook' THEN
 		return set, fmt.Errorf("library: poster addresses: %w", err)
 	}
 	logos, err := r.store.Read().QueryContext(ctx,
-		`SELECT DISTINCT json_extract(fields_json, '$.logo') FROM organisation WHERE kind = 'network' AND json_extract(fields_json, '$.logo') IS NOT NULL`)
+		`SELECT DISTINCT json_extract(fields_json, '$.logo') FROM organisation WHERE kind = ? AND json_extract(fields_json, '$.logo') IS NOT NULL`, organisationKind)
 	if err != nil {
 		return set, fmt.Errorf("library: logo addresses: %w", err)
 	}
@@ -65,9 +70,9 @@ ORDER BY f.work_id, CASE f.provider WHEN '__manual__' THEN 0 WHEN 'skyhook' THEN
 	}
 	photos, err := r.store.Read().QueryContext(ctx,
 		`SELECT DISTINCT json_extract(p.fields_json, '$.image_url')
-FROM credit c JOIN person p ON p.id = c.person_id JOIN work w ON w.id = c.work_id AND w.media_type = 'tv'
+FROM credit c JOIN person p ON p.id = c.person_id JOIN work w ON w.id = c.work_id AND w.media_type = ?
 WHERE c.part_id = 0 AND COALESCE(c.ord, 0) < 8 AND json_extract(p.fields_json, '$.image_url') IS NOT NULL
-ORDER BY c.work_id DESC LIMIT ?`, maxPhotos)
+ORDER BY c.work_id DESC LIMIT ?`, mediaType, maxPhotos)
 	if err != nil {
 		return set, fmt.Errorf("library: photo addresses: %w", err)
 	}

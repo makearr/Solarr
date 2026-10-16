@@ -345,6 +345,8 @@ type Querier interface {
 	GetBlockedContent(ctx context.Context, id int64) (BlockedContent, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
 	GetCollection(ctx context.Context, id int64) (Collection, error)
+	// A collection a provider names, found by its id there: a movie's franchise.
+	GetCollectionByExternalID(ctx context.Context, arg GetCollectionByExternalIDParams) (Collection, error)
 	// A dashboard figure is one lookup regardless of library size (ADR-28).
 	GetCounter(ctx context.Context, arg GetCounterParams) (Counter, error)
 	GetDesiredItem(ctx context.Context, id int64) (DesiredItem, error)
@@ -420,6 +422,7 @@ type Querier interface {
 	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
 	// A merged release's old id still names its edition, or files tagged with it open a second one.
 	KeepEditionAlias(ctx context.Context, arg KeepEditionAliasParams) error
+	LinkCollectionExternalID(ctx context.Context, arg LinkCollectionExternalIDParams) error
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error
 	LinkPersonExternalID(ctx context.Context, arg LinkPersonExternalIDParams) error
@@ -674,7 +677,7 @@ type Querier interface {
 	ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
-	ListSeriesTitles(ctx context.Context, categoryID int64) ([]ListSeriesTitlesRow, error)
+	ListSeriesTitles(ctx context.Context, arg ListSeriesTitlesParams) ([]ListSeriesTitlesRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files whose probe predates what the probe now reads of every file (below_version), read once more.
@@ -959,6 +962,9 @@ type Querier interface {
 	// namesakes) -- those only mean something once a measured claim exists to
 	// compare against.
 	SetClaimedAttributes(ctx context.Context, arg SetClaimedAttributesParams) error
+	SetCollectionComplete(ctx context.Context, arg SetCollectionCompleteParams) error
+	SetCollectionMonitored(ctx context.Context, arg SetCollectionMonitoredParams) error
+	SetCollectionName(ctx context.Context, arg SetCollectionNameParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
 	SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error

@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -16,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
 // Resolver finds the series a folder or file name is: a {tvdb-N} id, a title or alias of a series the library holds,
@@ -28,7 +28,7 @@ type Resolver struct {
 	DefaultProfileID int64
 	// Locks serialises the folders of one name, so the season directories of a series a scan reads side by side ask
 	// the providers once between them; nil means no serialising.
-	Locks      *FolderLocks
+	Locks      *keyedlock.Locks
 	Categories interface {
 		Category(id int64) (settings.Category, bool)
 		ProfileFor(category settings.Category, fallback int64) int64
@@ -42,28 +42,6 @@ var releaseMarker = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:S\d{1,3}(?:E\d{1,4})
 // Gardens" has a number in it and is not one.
 func looksLikeRelease(name string) bool {
 	return releaseMarker.MatchString(name) || (!strings.Contains(name, " ") && strings.Count(name, ".") >= 3)
-}
-
-// FolderLocks hands out one lock per key.
-type FolderLocks struct {
-	mu    sync.Mutex
-	locks map[string]*sync.Mutex
-}
-
-// Lock takes the key's lock and answers how to release it.
-func (l *FolderLocks) Lock(key string) func() {
-	l.mu.Lock()
-	if l.locks == nil {
-		l.locks = map[string]*sync.Mutex{}
-	}
-	lock, found := l.locks[key]
-	if !found {
-		lock = &sync.Mutex{}
-		l.locks[key] = lock
-	}
-	l.mu.Unlock()
-	lock.Lock()
-	return lock.Unlock
 }
 
 // FolderGuess is what a series folder's name says about the series.

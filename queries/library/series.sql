@@ -99,13 +99,13 @@ UPDATE work_part SET monitored = sqlc.arg(monitored) WHERE work_id = sqlc.arg(wo
 -- name: ListSeriesTitles :many
 SELECT w.id AS work_id, w.canonical_title AS title, w.year AS year
 FROM work w
-WHERE w.media_type = 'tv'
+WHERE w.media_type = sqlc.arg(media_type)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
 UNION ALL
 SELECT t.work_id, t.title, w.year
 FROM work_title t
 JOIN work w ON w.id = t.work_id
-WHERE w.media_type = 'tv'
+WHERE w.media_type = sqlc.arg(media_type)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id));
 
 -- A provider's picture of a person is kept in fields_json and never replaces one already there.

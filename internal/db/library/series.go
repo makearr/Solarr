@@ -81,15 +81,28 @@ type SeriesWrite struct {
 	GenreSource    string
 	Network        string
 	NetworkCountry string
-	Dates          []SeriesDateWrite
-	Rating         *SeriesRatingWrite
-	Certification  string
+	// OrganisationKind is what Network and MoreNetworks are: a TV "network" (the default), a movie "studio".
+	OrganisationKind string
+	Dates            []SeriesDateWrite
+	Rating           *SeriesRatingWrite
+	// MoreRatings are further providers' scores of the work, stored beside Rating.
+	MoreRatings   []SeriesRatingWrite
+	Certification string
+	// CertificationSystem names the scheme Certification is in: "tv" (the default) or "movie".
+	CertificationSystem string
 	// MoreNetworks are linked beside Network, which stays the primary one; one that names it adds its id and logo.
 	MoreNetworks []SeriesNetworkWrite
 	Keywords     []string
 	Credits      []SeriesCreditWrite
 	Parts        []SeriesPartWrite
+	// Franchise is the collection a provider says the work belongs to (a movie's franchise); nil leaves it as it is.
+	Franchise *SeriesFranchiseWrite
 }
+
+// SeriesFranchiseWrite names a franchise by the provider's id for it.
+type SeriesFranchiseWrite struct{ Provider, ExternalID, Name string }
+
+func (w SeriesWrite) organisationKind() string { return orDefault(w.OrganisationKind, "network") }
 
 // SeriesResult reports what a refresh did.
 type SeriesResult struct {
@@ -280,13 +293,26 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 			return fmt.Errorf("library: set rating: %w", err)
 		}
 	}
+	for _, rating := range write.MoreRatings {
+		if err := queries.SetWorkRating(ctx, librarydb.SetWorkRatingParams{
+			WorkID: workID, Provider: rating.Provider, Score: rating.Score, Votes: sql.NullInt64{Int64: rating.Votes, Valid: rating.Votes > 0}, FetchedAt: at.Unix(),
+		}); err != nil {
+			return fmt.Errorf("library: set rating: %w", err)
+		}
+	}
 	if write.Certification != "" {
-		if err := queries.SetWorkCertification(ctx, librarydb.SetWorkCertificationParams{WorkID: workID, System: "tv", Rating: write.Certification}); err != nil {
+		if err := queries.SetWorkCertification(ctx, librarydb.SetWorkCertificationParams{WorkID: workID, System: orDefault(write.CertificationSystem, "tv"), Rating: write.Certification}); err != nil {
 			return fmt.Errorf("library: set certification: %w", err)
 		}
 	}
 	if err := writeSeriesKeywords(ctx, queries, workID, write); err != nil {
 		return err
+	}
+	if write.Franchise != nil {
+		var collectionID int64
+		if err := joinFranchiseTx(ctx, queries, &collectionID, at.Unix(), write.Work.MediaType, write.Franchise.Provider, write.Franchise.ExternalID, write.Franchise.Name, workID); err != nil {
+			return fmt.Errorf("library: franchise: %w", err)
+		}
 	}
 	return writeSeriesNetwork(ctx, queries, workID, write)
 }
@@ -312,7 +338,7 @@ func writeSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID 
 		return err
 	}
 	for _, network := range write.MoreNetworks {
-		if err := linkSeriesNetwork(ctx, queries, workID, network); err != nil {
+		if err := linkSeriesNetwork(ctx, queries, workID, network, write.organisationKind()); err != nil {
 			return err
 		}
 	}
@@ -324,7 +350,7 @@ func writeSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID 
 }
 
 // linkSeriesNetwork finds the network by its provider id, else by name, creates it when new, and links it to the work.
-func linkSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID int64, network SeriesNetworkWrite) error {
+func linkSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID int64, network SeriesNetworkWrite, kind string) error {
 	var id int64
 	found, err := queries.GetOrganisationByExternalID(ctx, librarydb.GetOrganisationByExternalIDParams{Provider: network.Provider, ExternalID: network.ExternalID})
 	if err == nil {
@@ -333,13 +359,13 @@ func linkSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID i
 		return fmt.Errorf("library: network %q: %w", network.Name, err)
 	}
 	if id == 0 {
-		byName, err := queries.FindOrganisationByName(ctx, librarydb.FindOrganisationByNameParams{Kind: "network", Name: network.Name})
+		byName, err := queries.FindOrganisationByName(ctx, librarydb.FindOrganisationByNameParams{Kind: kind, Name: network.Name})
 		switch {
 		case err == nil:
 			id = byName.ID
 		case errors.Is(err, sql.ErrNoRows):
 			created, err := queries.CreateOrganisation(ctx, librarydb.CreateOrganisationParams{
-				Name: network.Name, SortName: strings.ToLower(network.Name), Kind: "network", Country: nullString(network.Country),
+				Name: network.Name, SortName: strings.ToLower(network.Name), Kind: kind, Country: nullString(network.Country),
 			})
 			if err != nil {
 				return fmt.Errorf("library: create network %q: %w", network.Name, err)
@@ -359,23 +385,24 @@ func linkSeriesNetwork(ctx context.Context, queries *librarydb.Queries, workID i
 			return fmt.Errorf("library: network logo %q: %w", network.Name, err)
 		}
 	}
-	return queries.AddWorkOrganisation(ctx, librarydb.AddWorkOrganisationParams{WorkID: workID, OrganisationID: id, Role: "network"})
+	return queries.AddWorkOrganisation(ctx, librarydb.AddWorkOrganisationParams{WorkID: workID, OrganisationID: id, Role: kind})
 }
 
 func writeSeriesPrimaryNetwork(ctx context.Context, queries *librarydb.Queries, workID int64, write SeriesWrite) error {
-	organisation, err := queries.FindOrganisationByName(ctx, librarydb.FindOrganisationByNameParams{Kind: "network", Name: write.Network})
+	kind := write.organisationKind()
+	organisation, err := queries.FindOrganisationByName(ctx, librarydb.FindOrganisationByNameParams{Kind: kind, Name: write.Network})
 	if errors.Is(err, sql.ErrNoRows) {
 		organisation, err = queries.CreateOrganisation(ctx, librarydb.CreateOrganisationParams{
-			Name: write.Network, SortName: strings.ToLower(write.Network), Kind: "network", Country: nullString(write.NetworkCountry),
+			Name: write.Network, SortName: strings.ToLower(write.Network), Kind: kind, Country: nullString(write.NetworkCountry),
 		})
 	}
 	if err != nil {
 		return fmt.Errorf("library: network %q: %w", write.Network, err)
 	}
-	if err := queries.ClearWorkOrganisationRole(ctx, librarydb.ClearWorkOrganisationRoleParams{WorkID: workID, Role: "network"}); err != nil {
+	if err := queries.ClearWorkOrganisationRole(ctx, librarydb.ClearWorkOrganisationRoleParams{WorkID: workID, Role: kind}); err != nil {
 		return fmt.Errorf("library: clear network: %w", err)
 	}
-	return queries.LinkWorkOrganisation(ctx, librarydb.LinkWorkOrganisationParams{WorkID: workID, OrganisationID: organisation.ID, Role: "network"})
+	return queries.LinkWorkOrganisation(ctx, librarydb.LinkWorkOrganisationParams{WorkID: workID, OrganisationID: organisation.ID, Role: kind})
 }
 
 func upsertSeriesPart(ctx context.Context, queries *librarydb.Queries, workID int64, part SeriesPartWrite) (int64, error) {

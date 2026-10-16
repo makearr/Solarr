@@ -309,6 +309,9 @@ func TestClassify_EveryClass(t *testing.T) {
 		{"movie.srt", 1024, 64 * 1024, inspect.ClassSubtitle},
 		{"Thumbs.db", 1024, 64 * 1024, inspect.ClassJunk},
 		{"readme", 1024, 64 * 1024, inspect.ClassUnknown},
+		{"Album/._01-track.flac", 4 * 1024 * 1024, 64 * 1024, inspect.ClassJunk},
+		{"Movie/install.exe", 4 * 1024 * 1024, 64 * 1024, inspect.ClassJunk},
+		{"Movie/payload.ps1", 1024, 64 * 1024, inspect.ClassJunk},
 	}
 	for _, c := range cases {
 		if got := inspect.Classify(c.path, c.size, c.floor); got != c.want {

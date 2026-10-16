@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,32 +15,12 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
 // IsVideo reports a path worth probing as an episode: a video file that is not a sample or an extra.
-func IsVideo(relPath string) bool {
-	return filekind.Of(relPath) == filekind.Video && !isExtra(strings.ToLower(relPath))
-}
-
-// extraFolders are the folder names Sonarr, Plex and Jellyfin keep non-episode video in.
-var extraFolders = map[string]bool{
-	"extras": true, "featurettes": true, "behind the scenes": true, "deleted scenes": true, "interviews": true,
-	"scenes": true, "shorts": true, "trailers": true, "other": true, "sample": true, "samples": true,
-}
-
-func isExtra(lowered string) bool {
-	components := strings.Split(lowered, "/")
-	for _, folder := range components[:len(components)-1] {
-		if extraFolders[folder] {
-			return true
-		}
-	}
-	file := components[len(components)-1]
-	return sampleName.MatchString(strings.TrimSuffix(file, path.Ext(file)))
-}
-
-var sampleName = regexp.MustCompile(`(?:^|[-._ \[(])sample(?:$|[-._ \])])`)
+func IsVideo(relPath string) bool { return filekind.IsFeature(relPath) }
 
 // ConsumerConfig is what a Consumer needs; every field but Logger is required.
 type ConsumerConfig struct {
@@ -79,7 +58,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{config: config, logger: logger, resolver: Resolver{
 		Service: config.Service, Reader: config.Reader, Clock: config.Clock, Logger: logger,
-		DefaultProfileID: config.DefaultProfileID, Categories: config.Categories, Locks: &FolderLocks{},
+		DefaultProfileID: config.DefaultProfileID, Categories: config.Categories, Locks: &keyedlock.Locks{},
 	}}
 }
 

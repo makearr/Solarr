@@ -4,6 +4,7 @@ package filekind
 
 import (
 	"path"
+	"regexp"
 	"strings"
 )
 
@@ -40,4 +41,28 @@ func Of(relPath string) Kind {
 		return kind
 	}
 	return Other
+}
+
+// extraFolders are the folder names Sonarr, Radarr, Plex and Jellyfin keep non-feature video in.
+var extraFolders = map[string]bool{
+	"extras": true, "featurettes": true, "behind the scenes": true, "deleted scenes": true, "interviews": true,
+	"scenes": true, "shorts": true, "trailers": true, "other": true, "sample": true, "samples": true,
+}
+
+var sampleName = regexp.MustCompile(`(?:^|[-._ \[(])sample(?:$|[-._ \])])`)
+
+// IsFeature reports a video file that is the thing itself, not a sample, trailer or extra beside it: the files a TV or
+// movie scan probes.
+func IsFeature(relPath string) bool {
+	if Of(relPath) != Video {
+		return false
+	}
+	components := strings.Split(strings.ToLower(relPath), "/")
+	for _, folder := range components[:len(components)-1] {
+		if extraFolders[folder] {
+			return false
+		}
+	}
+	file := components[len(components)-1]
+	return !sampleName.MatchString(strings.TrimSuffix(file, path.Ext(file)))
 }

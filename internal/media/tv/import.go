@@ -17,10 +17,12 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/importing/rules"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/placement"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
 // PlacementRoots is the settings-side facts placing a file needs.
@@ -79,6 +81,9 @@ type ImporterConfig struct {
 	// BelowCutoff says an owned file misses its library's cutoff, so a download may replace it; nil lets any owned
 	// file of an upgrading season be replaced.
 	BelowCutoff func(categoryID int64, file library.EpisodeFile) bool
+	// Probe measures a downloaded video file for the sample and audio checks; ok is false when it cannot be read. nil
+	// skips those two checks.
+	Probe func(ctx context.Context, absolutePath string) (measured mediatool.Measured, ok bool)
 	// AfterPlacing is told of each series an import placed episodes of; nil is told nothing.
 	AfterPlacing func(ctx context.Context, categoryID, workID int64)
 	// SharedFiles asks for the shared-broadcast pass after an imported episode turned out linked; nil never asks.
@@ -137,9 +142,15 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			continue
 		}
 		placed, err := i.placeUnit(ctx, request, unit, workID, upgrade && workID == seeded)
+		var refused *rejectedError
 		switch {
 		case errors.Is(err, errNothingToPlace):
 			decision.WorkID = &workID
+			result.Decisions[index] = decision
+		case errors.As(err, &refused):
+			// Held for a person with the rule that refused it, as Sonarr leaves such a file in the download folder.
+			decision.WorkID = &workID
+			decision.Reason = refused.Error()
 			result.Decisions[index] = decision
 		case err != nil:
 			i.logger.Warn("tv import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
@@ -230,6 +241,51 @@ func (i Importer) seedSeries(ctx context.Context, acquisitionID int64) (workID i
 	return item.WorkID, item.State == ItemStateUpgradable || item.State == "PARTIAL"
 }
 
+// rejectedError says every file of a unit that could have been placed was refused by Sonarr's import rules.
+type rejectedError struct{ Rejections []model.Rejection }
+
+func (e *rejectedError) Error() string {
+	rules := make([]string, len(e.Rejections))
+	for index, rejection := range e.Rejections {
+		rules[index] = rejection.Rule
+	}
+	return "tv: refused by the import rules: " + strings.Join(rules, ", ")
+}
+
+// screen holds one downloaded file against the checks Sonarr makes before it imports: still being unpacked, a whole
+// season or one piece of an episode in a single file, a sample by its runtime, no audio track. nil lets it through.
+func (i Importer) screen(ctx context.Context, sourceAbs string, info parsetv.Info, parts []library.ResolvedPart, runtimes map[string]int64) *model.Rejection {
+	for _, rejection := range []*model.Rejection{rules.Unpacking(sourceAbs, false), rules.FullSeason(info.FullSeason), rules.SplitEpisode(info.SplitEpisode)} {
+		if rejection != nil {
+			return rejection
+		}
+	}
+	if i.config.Probe == nil {
+		return nil
+	}
+	measured, ok := i.config.Probe(ctx, sourceAbs)
+	expected := 0
+	for _, part := range parts {
+		expected += int(runtimes[part.MediaRef] / 60_000)
+	}
+	if expected == 0 {
+		expected = defaultEpisodeMinutes
+	}
+	verdict := rules.Sample(rules.SampleFacts{Path: sourceAbs, Runtime: measured.Duration, Probed: ok, ExpectedMinutes: expected, Special: info.Special})
+	if verdict == rules.VerdictSample {
+		return rules.RejectSample(verdict, false)
+	}
+	// A file ffprobe could not read is let through, unlike Sonarr, which waits: the tool is optional here.
+	audioStreams := 0
+	if measured.AudioCodec != "" {
+		audioStreams = 1
+	}
+	return rules.HasAudio(ok && measured.VideoCodec != "", audioStreams)
+}
+
+// defaultEpisodeMinutes is what Sonarr assumes an episode runs when nothing says.
+const defaultEpisodeMinutes = 45
+
 var errNothingToPlace = errors.New("tv: no file of the unit covers an episode that is wanted")
 
 // fileEpisodes is one video file and the episodes it covers.
@@ -257,7 +313,12 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		}
 	}
 
+	runtimes := map[string]int64{}
+	for _, episode := range detail.Episodes {
+		runtimes[MediaRef(episode.Season, episode.Number)] = episode.RuntimeMs
+	}
 	var files []fileEpisodes
+	var rejections []model.Rejection
 	var totalBytes int64
 	for _, media := range unit.Media {
 		info, ok := parsetv.ParsePath(media.RelPath, now)
@@ -275,10 +336,17 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 			continue
 		}
 		replacing := slices.ContainsFunc(fresh, func(part library.ResolvedPart) bool { return present[part.MediaRef] })
+		if rejection := i.screen(ctx, path.Join(request.SourcePath, media.RelPath), info, fresh, runtimes); rejection != nil {
+			rejections = append(rejections, *rejection)
+			continue
+		}
 		files = append(files, fileEpisodes{media: media, info: info, parts: fresh, replacing: replacing})
 		totalBytes += media.SizeBytes
 	}
 	if len(files) == 0 {
+		if len(rejections) > 0 {
+			return nil, &rejectedError{Rejections: rejections}
+		}
 		return nil, errNothingToPlace
 	}
 
