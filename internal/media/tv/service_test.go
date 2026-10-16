@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -283,6 +284,28 @@ func TestRefreshLeavesANewSeasonUnmonitoredWhenTheLibraryIgnoresNewSeasons(t *te
 	}
 	if got := partMonitoring(t, opened, added.WorkID)["s03:e01"]; got != 0 {
 		t.Errorf("the new season's episode monitored = %d, want 0", got)
+	}
+}
+
+func TestRefreshRemovesAnEpisodeSkyhookNoLongerListsWhenNothingHoldsOnToIt(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Reader = library.NewSeriesReader(opened)
+	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorAll})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shrunk := fixtureSkyhook()
+	shrunk.Episodes = shrunk.Episodes[:len(shrunk.Episodes)-1]
+	service.Skyhook = searchSkyhook{series: shrunk}
+	refreshed, err := service.Refresh(t.Context(), tv.RefreshRequest{WorkID: added.WorkID, CategoryID: 3, ProfileID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(refreshed.Pruned, []string{"s02:e03"}) {
+		t.Errorf("pruned = %v, want the episode the list lost", refreshed.Pruned)
+	}
+	if _, stillThere := partMonitoring(t, opened, added.WorkID)["s02:e03"]; stillThere {
+		t.Error("the removed episode is still stored")
 	}
 }
 

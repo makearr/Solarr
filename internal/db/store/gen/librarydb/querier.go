@@ -654,6 +654,8 @@ type Querier interface {
 	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
 	// the paced sweep. Absent hunt columns read as zero.
 	ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error)
+	// Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
+	ListPrunableWorkParts(ctx context.Context, workID int64) ([]ListPrunableWorkPartsRow, error)
 	// One page of queued files with what their newest attempt concluded. The caller
 	// filters on the pass and outcome it cares about (D12's "re-run what a missing
 	// AcoustID key skipped"): sqlc's SQLite parser cannot model json_each's columns

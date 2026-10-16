@@ -523,3 +523,47 @@ func (s Series) Renumber(ctx context.Context, workID int64, moves []PartMove) er
 	}
 	return nil
 }
+
+// ErrPruneTooLarge is a prune that would remove more than the share of a series' parts it may.
+var ErrPruneTooLarge = errors.New("library: prune would remove too many parts")
+
+// PruneParts removes the parts of a series that a provider no longer lists (not in keep), but only those nothing holds
+// on to: no file, no crossover event, no shared broadcast. More than maxShare of the series' parts is refused, since a
+// provider that answered badly would otherwise empty a series. It answers the refs removed, and recounts the series.
+func (s Series) PruneParts(ctx context.Context, workID int64, keep map[string]bool, maxShare float64) ([]string, error) {
+	var removed []string
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		all, err := queries.ListWorkPartRefs(ctx, workID)
+		if err != nil {
+			return err
+		}
+		candidates, err := queries.ListPrunableWorkParts(ctx, workID)
+		if err != nil {
+			return err
+		}
+		var drop []librarydb.ListPrunableWorkPartsRow
+		for _, part := range candidates {
+			if !keep[part.MediaRef] {
+				drop = append(drop, part)
+			}
+		}
+		if len(drop) == 0 {
+			return nil
+		}
+		if float64(len(drop)) > maxShare*float64(len(all)) {
+			return fmt.Errorf("%w: %d of %d", ErrPruneTooLarge, len(drop), len(all))
+		}
+		for _, part := range drop {
+			if err := queries.DeleteWorkPart(ctx, part.ID); err != nil {
+				return err
+			}
+			removed = append(removed, part.MediaRef)
+		}
+		return recomputeWorkItemsTx(ctx, queries, workID, s.store.Now())
+	})
+	if err != nil {
+		return nil, err
+	}
+	return removed, nil
+}

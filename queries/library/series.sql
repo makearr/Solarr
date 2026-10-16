@@ -190,3 +190,13 @@ UPDATE work_part SET media_ref = sqlc.arg(new_ref), sort_key = sqlc.arg(sort_key
 UPDATE desired_item_file SET media_ref = sqlc.arg(new_ref)
 WHERE desired_item_file.media_ref = sqlc.arg(old_ref)
   AND desired_item_file.desired_item_id IN (SELECT d.id FROM desired_item d WHERE d.work_id = sqlc.arg(work_id));
+
+-- Parts nothing holds on to: no file covers them, no event across series lists them, and no broadcast is shared through them.
+-- name: ListPrunableWorkParts :many
+SELECT p.id, p.media_ref FROM work_part p
+WHERE p.work_id = ?
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d ON d.id = f.desired_item_id
+                  WHERE d.work_id = p.work_id AND f.media_ref = p.media_ref)
+  AND NOT EXISTS (SELECT 1 FROM collection_member m WHERE m.part_id = p.id)
+  AND NOT EXISTS (SELECT 1 FROM relationship r
+                  WHERE (r.from_type = 'part' AND r.from_id = p.id) OR (r.to_type = 'part' AND r.to_id = p.id));

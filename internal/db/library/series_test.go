@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -323,5 +324,47 @@ func TestWantedWaitsOutTheGraceOfAnEpisodeAiredToday(t *testing.T) {
 	}
 	if got, _ := works.WantedParts(t.Context(), 4, library.WantedPartsCursor{}, 10, midnight.Add(48*time.Hour)); len(got) != 1 {
 		t.Errorf("two days later: wanted %+v, want the episode", got)
+	}
+}
+
+func TestPrunePartsRemovesOnlyWhatNothingHoldsOnTo(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	work := createWork(t, opened, "tv", "Invented Show")
+	other := createWork(t, opened, "tv", "Invented Spinoff")
+	gone := createPart(t, opened, work.ID, "s01:e01", "a", "Gone")
+	held := createPart(t, opened, work.ID, "s01:e02", "b", "Has a file")
+	listed := createPart(t, opened, work.ID, "s01:e03", "c", "In an event")
+	shared := createPart(t, opened, work.ID, "s01:e04", "d", "Shared")
+	kept := createPart(t, opened, work.ID, "s01:e05", "e", "Still listed")
+	for _, ref := range []string{"s01:e06", "s01:e07", "s01:e08", "s01:e09", "s01:e10", "s01:e11"} {
+		createPart(t, opened, work.ID, ref, ref, ref)
+	}
+	elsewhere := createPart(t, opened, other.ID, "s01:e01", "a", "Elsewhere")
+	item := createDesired(t, opened, work.ID, "SET", 1)
+	object := createObject(t, opened, "file", 1)
+	attach(t, opened, item.ID, object.ID, "primary", held.MediaRef)
+	if _, err := library.NewCrossovers(opened).Create(t.Context(), "tv", "Event", []int64{listed.ID, elsewhere.ID}); err != nil {
+		t.Fatal(err)
+	}
+	if err := library.NewCrossovers(opened).LinkSameContent(t.Context(), shared.ID, elsewhere.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	keep := map[string]bool{kept.MediaRef: true}
+	for _, ref := range []string{"s01:e06", "s01:e07", "s01:e08", "s01:e09", "s01:e10", "s01:e11"} {
+		keep[ref] = true
+	}
+	removed, err := series.PruneParts(t.Context(), work.ID, keep, 0.25)
+	if err != nil || !reflect.DeepEqual(removed, []string{gone.MediaRef}) {
+		t.Fatalf("removed %v, %v; want only %s (the file, the event and the shared broadcast hold the rest)", removed, err, gone.MediaRef)
+	}
+
+	third := createWork(t, opened, "tv", "Invented Third")
+	for _, ref := range []string{"s01:e01", "s01:e02", "s01:e03", "s01:e04"} {
+		createPart(t, opened, third.ID, ref, ref, ref)
+	}
+	if _, err := series.PruneParts(t.Context(), third.ID, map[string]bool{}, 0.25); !errors.Is(err, library.ErrPruneTooLarge) {
+		t.Errorf("emptying a series: err = %v, want ErrPruneTooLarge", err)
 	}
 }

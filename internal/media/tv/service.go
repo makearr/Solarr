@@ -388,6 +388,8 @@ type AddResult struct {
 	Created  bool
 	Episodes int
 	Seasons  int
+	// Pruned are the episodes a refresh removed because Skyhook no longer lists them (nothing held on to them).
+	Pruned []string
 	// Series is the merged record that was stored, for a caller that answers with it.
 	Series Series
 }
@@ -540,7 +542,8 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 		return seriesWanted && (s.IgnoreNewSeasons == nil || !s.IgnoreNewSeasons(request.CategoryID))
 	}
 	now := s.Clock.Now()
-	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{NewPart: wants, Now: now, Grace: s.grace()}))
+	write := ToWrite(series, WriteOptions{NewPart: wants, Now: now, Grace: s.grace()})
+	stored, err := s.Series.Upsert(ctx, now, write)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -548,7 +551,36 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	if err != nil {
 		return AddResult{}, err
 	}
-	return AddResult{WorkID: stored.WorkID, Episodes: len(series.Episodes), Seasons: seasons, Series: series}, nil
+	pruned := s.pruneVanished(ctx, request.WorkID, series, write)
+	return AddResult{WorkID: stored.WorkID, Episodes: len(series.Episodes), Seasons: seasons, Pruned: pruned, Series: series}, nil
+}
+
+// maxPruneShare is the most of a series' episodes one refresh may remove; more means the answer, not the series, changed.
+const maxPruneShare = 0.25
+
+// pruneVanished removes the episodes Skyhook, the aired numbering's source, stopped listing, when nothing holds on to
+// them. It does nothing unless Skyhook answered and the series is numbered by the aired order, since any other source
+// or ordering lists different episodes; a failure is logged and the refresh goes on.
+func (s Service) pruneVanished(ctx context.Context, workID int64, series Series, write library.SeriesWrite) []string {
+	if !slices.Contains(series.Sources, sourceSkyhook) || len(write.Parts) == 0 {
+		return nil
+	}
+	if basis, err := s.numberedByOrdering(ctx, workID); err != nil || basis != "" {
+		return nil
+	}
+	keep := make(map[string]bool, len(write.Parts))
+	for _, part := range write.Parts {
+		keep[part.MediaRef] = true
+	}
+	removed, err := s.Series.PruneParts(ctx, workID, keep, maxPruneShare)
+	if err != nil {
+		s.warn("prune vanished episodes", workID, err)
+		return nil
+	}
+	if len(removed) > 0 && s.Logger != nil {
+		s.Logger.Info("episodes the provider no longer lists were removed", slog.Int64("work_id", workID), slog.Any("episodes", removed))
+	}
+	return removed
 }
 
 func (s Service) ensureSeasons(
