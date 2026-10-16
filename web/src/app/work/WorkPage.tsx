@@ -272,7 +272,7 @@ function WorkHeader({
                   Unverified
                 </Chip>
               )}
-              {groups.length > 0 && work.part_count === 0 && <Chip>{t("work.waitingForMetadata")}</Chip>}
+              {info?.part.one && groups.length > 0 && work.part_count === 0 && <Chip>{t("work.waitingForMetadata")}</Chip>}
               {groups.length > 0 && work.part_count > 0 && (
                 <Chip tone={counts.required > 0 && counts.present >= counts.required ? "ok" : "neutral"}>
                   {counts.required > 0
@@ -343,7 +343,7 @@ function WorkHeader({
                 {t("numbering.title")}
               </Button>
             )}
-            {administrator && work.media_type === "tv" && (
+            {administrator && (work.media_type === "tv" || work.media_type === "movie") && (
               <Button icon={<Filter aria-hidden className="size-4" />} onClick={() => setFiltering(true)}>
                 {t("releaseFilters.title")}
               </Button>
@@ -511,9 +511,9 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
             note={grab.isPending && grab.variables.group.ref === group.ref && !grab.variables.part ? "Searching…" : notes[group.ref]}
           />
         ))
-      ) : (
+      ) : info?.part.one ? (
         <WholeParts work={work} info={info} words={words} categoryId={categoryId} actions={actions} />
-      )}
+      ) : null}
       {work.editions.length > 0 && (
         <details className="rounded-lg border border-border-subtle bg-surface p-3 text-sm">
           <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-ink-muted">Releases ({work.editions.length})</summary>

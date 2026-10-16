@@ -20,7 +20,11 @@ export function LibraryFileManagement() {
   const queryClient = useQueryClient();
   // Sonarr's basic view: folders and deleted tracks; the recycle bin and the rest are advanced (2026-09-30).
   const advanced = isTierVisible(useTier(), "advanced");
-  const isTV = useLibrary(categoryId ?? "")?.media_type === "tv";
+  const mediaType = useLibrary(categoryId ?? "")?.media_type;
+  const isTV = mediaType === "tv";
+  const isVideo = isTV || mediaType === "movie";
+  // Wording per type: TV talks of episodes, movies of the film, music of tracks.
+  const pick = (tv: string, movie: string, music: string) => (isTV ? tv : mediaType === "movie" ? movie : music);
 
   const saved = useQuery({
     queryKey: ["libraryFileManagement", id],
@@ -66,7 +70,7 @@ export function LibraryFileManagement() {
 
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Folders</h2>
-        {!isTV && (
+        {!isVideo && (
           <Toggle
             label="Create Empty Artist Folders"
             help="Create missing artist folders for monitored artists during disk scan."
@@ -77,9 +81,11 @@ export function LibraryFileManagement() {
         <Toggle
           label="Delete Empty Folders"
           help={
-            isTV
-              ? "Delete a series or season folder left empty when episode files are deleted."
-              : "Delete empty artist and album folders during disk scan and when track files are deleted."
+            pick(
+              "Delete a series or season folder left empty when episode files are deleted.",
+              "Delete a movie folder left empty when its file is deleted.",
+              "Delete empty artist and album folders during disk scan and when track files are deleted.",
+            )
           }
           checked={draft.delete_empty_folders}
           onChange={(checked) => set({ delete_empty_folders: checked })}
@@ -89,16 +95,18 @@ export function LibraryFileManagement() {
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">File Management</h2>
         <Toggle
-          label={isTV ? "Unmonitor Deleted Episodes" : "Unmonitor Deleted Tracks"}
+          label={pick("Unmonitor Deleted Episodes", "Unmonitor Deleted Movies", "Unmonitor Deleted Tracks")}
           help={
-            isTV
-              ? "An episode whose file is deleted from disk is unmonitored instead of being fetched again."
-              : "An album with a track deleted from disk is automatically unmonitored."
+            pick(
+              "An episode whose file is deleted from disk is unmonitored instead of being fetched again.",
+              "A movie whose file is deleted from disk is unmonitored instead of being fetched again.",
+              "An album with a track deleted from disk is automatically unmonitored.",
+            )
           }
           checked={draft.unmonitor_deleted}
           onChange={(checked) => set({ unmonitor_deleted: checked })}
         />
-        {!isTV && (
+        {!isVideo && (
         <Toggle
           label="Merge Artists Stored Under Several Names"
           help="After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are."
@@ -119,7 +127,7 @@ export function LibraryFileManagement() {
           ]}
           onChange={(value) => set({ propers_repacks: value as FileManagement["propers_repacks"] })}
         />
-        {!isTV && (
+        {!isVideo && (
         <Choice
           label="Rescan Artist Folder after Refresh"
           help={
@@ -142,7 +150,7 @@ export function LibraryFileManagement() {
           value={draft.change_file_date}
           options={[
             ["none", "None"],
-            ["release_date", isTV ? "Episode Air Date" : "Album Release Date"],
+            ["release_date", pick("Episode Air Date", "Movie Release Date", "Album Release Date")],
           ]}
           onChange={(value) => set({ change_file_date: value as FileManagement["change_file_date"] })}
         />
@@ -170,9 +178,11 @@ export function LibraryFileManagement() {
         <Toggle
           label="Import Extra Files"
           help={
-            isTV
-              ? "Bring files named after an episode along with it, such as its subtitles, under the episode's new name."
-              : "Bring matching files along with the tracks: lyrics, cue sheets, rip logs."
+            pick(
+              "Bring files named after an episode along with it, such as its subtitles, under the episode's new name.",
+              "Bring files named after the movie along with it, such as its subtitles, under the movie file's new name.",
+              "Bring matching files along with the tracks: lyrics, cue sheets, rip logs.",
+            )
           }
           checked={draft.import_extra_files ?? false}
           onChange={(checked) => set({ import_extra_files: checked })}
@@ -181,8 +191,8 @@ export function LibraryFileManagement() {
           <SettingRow
             label="Extra File Extensions"
             help={
-              isTV
-                ? "Comma separated, such as srt,ass. A subtitle keeps what follows the episode's name (.en.srt)."
+              isVideo
+                ? "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt)."
                 : "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs."
             }
           >

@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/api/client";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
+import { useLibrary } from "@/lib/useLibrary";
 import type { components } from "@/api/schema";
 
 type UnidentifiedFile = components["schemas"]["UnidentifiedFile"];
@@ -16,6 +17,9 @@ const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Unidentified() {
   const queryClient = useQueryClient();
+  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  // Only TV has a job that asks the providers again.
+  const canRetry = useLibrary(categoryId ?? "")?.media_type === "tv";
   const retry = useMutation({
     mutationFn: async () => {
       const { error, response } = await api.POST("/schedules/{key}/run", { params: { path: { key: "tv_retry" } } });
@@ -111,6 +115,7 @@ export function Unidentified() {
         <span className="text-xs text-ink-muted">
           Files a scan found but could not confidently match to a work
         </span>
+        {canRetry && (
         <button
           type="button"
           disabled={retry.isPending}
@@ -120,6 +125,7 @@ export function Unidentified() {
         >
           {retry.isSuccess ? "Started: it runs in the background" : "Try TV files again"}
         </button>
+        )}
       </div>
 
       <div className="min-h-0 flex-1">

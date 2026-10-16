@@ -272,7 +272,7 @@ function EditCategoryFields({
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
   const [tvMonitor, setTvMonitor] = useState<TVMonitor>(initial.tv_monitor ?? "existing");
   const [kind, setKind] = useState(initial.kind ?? "");
-  const isTV = initial.media_type === "tv";
+  const isTV = initial.media_type === "tv" || initial.media_type === "movie";
   const queryClient = useQueryClient();
 
   const save = useMutation({
@@ -362,7 +362,7 @@ function EditCategoryFields({
         <KindSelect mediaType={initial.media_type} value={kind} onChange={setKind} />
         {isTV ? (
           <label className="flex flex-col gap-1 text-xs text-ink-muted">
-            Monitor series found by a scan
+            {initial.media_type === "movie" ? "Monitor movies found by a scan" : "Monitor series found by a scan"}
             <select className={inputStyle} value={tvMonitor} onChange={(event) => setTvMonitor(event.target.value as TVMonitor)}>
               {TV_MONITOR_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

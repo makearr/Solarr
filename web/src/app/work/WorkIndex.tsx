@@ -133,10 +133,10 @@ export function WorkIndex() {
   const narrow = useNarrow();
   const metrics = useGridMetrics(frameRef, POSTER_WIDTHS[options.size], POSTER_GAP, POSTER_PADDING);
   const isPoster = view === "poster";
-  const defaultSort = lead ? "artist" : "title";
+  const defaultSort = lead && !portrait ? "artist" : "title";
   const sort = routeView.query.sort ?? defaultSort;
   // Albums as posters are grouped by artist (2026-09-17), which needs them in artist order.
-  const grouped = isPoster && lead !== undefined && sort === "artist";
+  const grouped = isPoster && lead !== undefined && !portrait && sort === "artist";
   const listView = useMemo<ViewState>(
     () => (grouped ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } } : routeView),
     [grouped, routeView],

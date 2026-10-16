@@ -89,7 +89,7 @@ function LibraryQualityEditor() {
   const [preferred, setPreferred] = useState<"" | "usenet" | "torrent">("");
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [targetId, setTargetId] = useState<number | undefined>();
-  const video = useLibrary(categoryId)?.media_type === "tv";
+  const video = ["tv", "movie"].includes(useLibrary(categoryId)?.media_type ?? "");
   useEffect(() => {
     if (!quality.data) return;
     setOrder(quality.data.profiles.map((profile) => profile.id));
@@ -222,7 +222,7 @@ function LibraryQualityEditor() {
           <span className="flex flex-col">
             <span className="text-ink">Upgrades allowed</span>
             <span className="text-ink-muted">
-              {video ? "Off, a season with every episode is complete whatever its quality: nothing is searched for an upgrade." : "Off, an album with every track is complete whatever its quality: nothing is searched for an upgrade."}
+              {video ? "Off, a season, or a film with its file, is complete whatever its quality: nothing is searched for an upgrade." : "Off, an album with every track is complete whatever its quality: nothing is searched for an upgrade."}
             </span>
           </span>
         </label>
@@ -248,7 +248,7 @@ function LibraryQualityEditor() {
         <h2 className="text-sm font-medium">Delay profile</h2>
         <p className="text-xs text-ink-muted">
           Prefer one kind of download and give it a head start: a release of the other kind is held back until it has been
-          posted this long, then taken like any other. Nothing is refused, so {video ? "an episode" : "an album"} only one kind has is still found.
+          posted this long, then taken like any other. Nothing is refused, so {video ? "an episode or film" : "an album"} only one kind has is still found.
         </p>
         <div className="flex flex-wrap items-end gap-3 text-xs text-ink-muted">
           <label className="flex flex-col gap-1">

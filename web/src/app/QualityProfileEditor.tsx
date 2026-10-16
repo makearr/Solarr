@@ -21,7 +21,7 @@ type QualityProfile = components["schemas"]["QualityProfile"];
 // Every media type a stored profile may carry, for grouping; a new profile picks from the registered ones.
 const MEDIA_TYPES = ["music", "audiobook", "podcast", "tv", "movie", "youtube", "news", "book", "comic", "rom", "adult"];
 const AUDIO = new Set(["music", "audiobook", "podcast"]);
-const VIDEO = new Set(["tv"]);
+const VIDEO = new Set(["tv", "movie"]);
 
 const RESOLUTIONS: Record<string, string> = {
   "2160p": "2160p (4K)", "1080p": "1080p", "1080i": "1080i", "720p": "720p", "576p": "576p", "480p": "480p", "360p": "360p",
@@ -176,7 +176,7 @@ function ProfileForm({
   const [rules, setRules] = useState<AudioRules>(() =>
     initial ? parseAudioRules(initial.rules) : { ...parseAudioRules(""), sampleRate: SAMPLE_RATE_FALLBACK },
   );
-  const [video, setVideo] = useState<VideoRules>(() => parseVideoRules(initial?.media_type === "tv" ? initial.rules : ""));
+  const [video, setVideo] = useState<VideoRules>(() => parseVideoRules(initial && VIDEO.has(initial.media_type) ? initial.rules : ""));
   const [json, setJson] = useState(initial?.rules ?? "");
   const [asJSON, setAsJSON] = useState(false);
   const [upgrade, setUpgrade] = useState(initial?.upgrade ?? DEFAULT_UPGRADE);
