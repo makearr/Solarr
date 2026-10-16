@@ -227,3 +227,5 @@ episode file (from the `episode_images` field, `season:episode` to the provider'
 next refresh on.
 
 An import queues a pass for just the series it placed episodes of (`EnqueueServerFilesFor`, deduplicated per series), so new files get their nfo and thumb at once; the daily pass still covers everything.
+
+A scan names a series folder by, in order: an id in the folder name (`{tvdb-N}`, `[tmdbid-N]`, `{imdb-ttN}`), the ids in the folder's `tvshow.nfo` (`ShowNFOIDs`), a series the library holds under that title, then a provider search.

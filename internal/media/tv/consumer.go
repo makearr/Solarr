@@ -146,7 +146,11 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		for n, i := range indexes {
 			relPaths[n] = readable[i].File.RelPath
 		}
-		series, candidates := c.resolver.ResolveFiles(ctx, categoryID, folder, relPaths)
+		var named FolderGuess
+		if folder != "" {
+			named = ShowNFOIDs(c.config.FS, path.Join(root.Path, folder))
+		}
+		series, candidates := c.resolver.ResolveFolder(ctx, categoryID, folder, relPaths, named)
 		if series == ExcludedSeries {
 			continue
 		}

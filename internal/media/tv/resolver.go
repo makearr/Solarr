@@ -117,6 +117,11 @@ func (c Resolver) Resolve(ctx context.Context, categoryID int64, folder, relPath
 
 // ResolveFiles is Resolve with every file of the folder, whose episode numbers settle a title the providers list twice.
 func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder string, relPaths []string) (int64, []model.Identification) {
+	return c.ResolveFolder(ctx, categoryID, folder, relPaths, FolderGuess{})
+}
+
+// ResolveFolder is ResolveFiles with the ids the folder's own tvshow.nfo names; an id in the folder's name wins over them.
+func (c Resolver) ResolveFolder(ctx context.Context, categoryID int64, folder string, relPaths []string, named FolderGuess) (int64, []model.Identification) {
 	relPath := ""
 	if len(relPaths) > 0 {
 		relPath = relPaths[0]
@@ -139,6 +144,9 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 		}
 	}
 	guess := GuessFolder(name)
+	if guess.TVDBID == 0 && guess.TMDBID == 0 && guess.IMDbID == "" {
+		guess.TVDBID, guess.TMDBID, guess.IMDbID = named.TVDBID, named.TMDBID, named.IMDbID
+	}
 	if guess.Title == "" && guess.TVDBID == 0 && guess.TMDBID == 0 && guess.IMDbID == "" {
 		return 0, nil
 	}
