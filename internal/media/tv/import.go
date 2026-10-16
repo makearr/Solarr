@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -18,35 +19,25 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/importing/rules"
 	"github.com/makearr/Solarr/internal/moving/mover"
-	"github.com/makearr/Solarr/internal/moving/placement"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// PlacementRoots is the settings-side facts placing a file needs.
-type PlacementRoots interface {
-	RootFolder(id int64) (settings.RootFolder, bool)
-	CategoryRoots() []settings.CategoryRoot
-}
-
-// PlacementAffinity keeps a series on one root once placed (section 11.7).
-type PlacementAffinity interface {
-	PlacementAffinity(ctx context.Context, categoryID int64, affinityKey string) (int64, bool, error)
-	SetPlacementAffinity(ctx context.Context, categoryID int64, affinityKey string, rootFolderID, updatedAt int64) error
-}
-
-// BlockedContent is the ADR-53 hash gate: bytes that failed before never enter the library.
-type BlockedContent interface {
-	FindByHash(ctx context.Context, oshash, quickHash string, now int64) ([]library.BlockedContent, error)
-}
+type (
+	// PlacementRoots is the settings-side facts placing a file needs.
+	PlacementRoots = placer.Roots
+	// PlacementAffinity keeps a series on one root once placed.
+	PlacementAffinity = placer.Affinity
+	// BlockedContent is the ADR-53 hash gate.
+	BlockedContent = placer.Blocked
+)
 
 // AcquisitionSource finds the desired item a finished download was grabbed for.
-type AcquisitionSource interface {
-	Get(ctx context.Context, id int64) (library.Acquisition, error)
-}
+type AcquisitionSource = batch.AcquisitionSource
 
 // ReasonPreview is the import job's own reason for a unit a preview run held for a person.
 const ReasonPreview = "preview"
@@ -97,6 +88,7 @@ type ImporterConfig struct {
 type Importer struct {
 	config ImporterConfig
 	logger *slog.Logger
+	placer placer.Placer
 }
 
 // NewImporter builds the importer.
@@ -105,7 +97,10 @@ func NewImporter(config ImporterConfig) Importer {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return Importer{config: config, logger: logger}
+	return Importer{config: config, logger: logger, placer: placer.New(placer.Config{
+		FS: config.FS, Roots: config.Roots, Affinity: config.Affinity, Identity: config.Identity, Blocked: config.BlockedContent,
+		Clock: config.Clock, Logger: logger, TransferLadder: config.TransferLadder, GroupID: config.GroupID,
+	})}
 }
 
 var _ batch.Importer = Importer{}
@@ -351,19 +346,25 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return nil, errNothingToPlace
 	}
 
-	hashes, err := i.checkBlocked(ctx, request.SourcePath, files)
+	toCheck := make([]placer.File, len(files))
+	for index, file := range files {
+		toCheck[index] = placer.File{RelPath: file.media.RelPath, SizeBytes: file.media.SizeBytes}
+	}
+	hashes, err := i.placer.CheckBlocked(ctx, request.SourcePath, toCheck)
 	if err != nil {
 		return nil, err
 	}
 	names, fileManagement := i.namingFor(request.CategoryID)
-	destRoot, err := i.chooseRoot(ctx, request.CategoryID, workID, detail.Summary.Title, totalBytes)
+	destRoot, err := i.placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(detail.Summary.Title), totalBytes)
 	if err != nil {
 		return nil, err
 	}
-	methods := i.methods(request.Ladder)
+	methods := i.placer.Methods(request.Ladder)
 
 	placed := make([]placedEpisode, 0, len(files))
-	undo := func(cause error) (*library.Placement, error) { return nil, errors.Join(cause, i.undo(placed)) }
+	undo := func(cause error) (*library.Placement, error) {
+		return nil, errors.Join(cause, i.placer.Undo(placedFiles(placed)))
+	}
 	for index, file := range files {
 		naming := episodeNaming(detail, file)
 		destRel, _, err := names.RenderEpisode(naming, file.media.RelPath)
@@ -372,22 +373,22 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		}
 		sourceAbs := path.Join(request.SourcePath, file.media.RelPath)
 		if file.replacing {
-			destRel = i.freeName(destRoot.Path, destRel)
+			destRel = i.placer.FreeName(destRoot.Path, destRel)
 		}
 		destAbs := path.Join(destRoot.Path, destRel)
 		method, err := mover.PlaceOne(i.config.FS, sourceAbs, destAbs, file.media.SizeBytes, methods)
 		if err != nil {
 			return undo(fmt.Errorf("place %q: %w", file.media.RelPath, err))
 		}
-		placed = append(placed, placedEpisode{source: sourceAbs, dest: destAbs, size: file.media.SizeBytes, method: method, rel: destRel, hash: hashes[index], file: file})
+		placed = append(placed, placedEpisode{Placed: placer.Placed{Source: sourceAbs, Dest: destAbs, Size: file.media.SizeBytes, Method: method, Rel: destRel, Hash: hashes[index]}, file: file})
 		if method != mover.PlaceSymlink {
-			i.finish(destRoot, destAbs, fileManagement, file.parts)
+			i.placer.Finish(destRoot, destAbs, fileManagement, firstAirDate(file.parts))
 		}
 	}
 
 	physical := make([]library.PhysicalFile, len(placed))
 	for index, p := range placed {
-		physical[index] = library.PhysicalFile{RelPath: p.rel, SizeBytes: p.size, QuickHash: p.hash, FirstSeenAt: now}
+		physical[index] = library.PhysicalFile{RelPath: p.Rel, SizeBytes: p.Size, QuickHash: p.Hash, FirstSeenAt: now}
 	}
 	registered, err := i.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
 	if err != nil {
@@ -415,110 +416,53 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	for index, p := range placed {
 		placement.MediaObjectIDs = append(placement.MediaObjectIDs, registered[index].MediaObjectID)
 		placement.LibraryPathIDs = append(placement.LibraryPathIDs, registered[index].LibraryPathID)
-		placement.TransferMethods = append(placement.TransferMethods, string(p.method))
+		placement.TransferMethods = append(placement.TransferMethods, string(p.Method))
 	}
 	return placement, nil
 }
 
-// placeExtras brings along the unit's other files that are named after a placed episode file, its subtitles above
-// all (Sonarr's rule): each keeps what follows the episode's name (".en.srt") under the episode's new name. A file
-// already there is left, and one that cannot be placed is logged, never the import's failure.
+// placeExtras brings along the unit's other files that are named after a placed episode file (package placer).
 func (i Importer) placeExtras(
 	categoryID int64, sourceRoot string, destRoot settings.RootFolder, unit inspect.Unit, placed []placedEpisode, methods []mover.PlaceMethod,
 ) []library.UnitExtra {
 	if i.config.ExtraFiles == nil {
 		return nil
 	}
-	wanted := map[string]bool{}
-	for _, extension := range i.config.ExtraFiles(categoryID) {
-		wanted["."+strings.ToLower(extension)] = true
+	owners := make([]placer.Owner, len(placed))
+	for index, one := range placed {
+		owners[index] = placer.Owner{SourceRel: one.file.media.RelPath, DestRel: one.Rel}
 	}
-	var extras []library.UnitExtra
-	for _, other := range unit.Other {
-		if !wanted[strings.ToLower(path.Ext(other.RelPath))] {
-			continue
-		}
-		var owner *placedEpisode
-		var suffix string
-		for index := range placed {
-			source := placed[index].file.media.RelPath
-			rest, named := strings.CutPrefix(other.RelPath, strings.TrimSuffix(source, path.Ext(source)))
-			// The episode named most exactly owns it: "S01E01E02.en.srt" is not the subtitle of "S01E01".
-			if named && strings.HasPrefix(rest, ".") && (owner == nil || len(rest) < len(suffix)) {
-				owner, suffix = &placed[index], rest
-			}
-		}
-		if owner == nil {
-			continue
-		}
-		destRel := strings.TrimSuffix(owner.rel, path.Ext(owner.rel)) + suffix
-		destAbs := path.Join(destRoot.Path, destRel)
-		if _, err := i.config.FS.Stat(destAbs); err == nil {
-			continue
-		}
-		if _, err := mover.PlaceOne(i.config.FS, path.Join(sourceRoot, other.RelPath), destAbs, other.SizeBytes, methods); err != nil {
-			i.logger.Warn("tv import: could not bring an extra file along", slog.String("file", other.RelPath), slog.Any("error", err))
-			continue
-		}
-		extras = append(extras, library.UnitExtra{RootFolderID: destRoot.ID, RelPath: destRel})
-	}
-	return extras
+	return i.placer.Extras(i.config.ExtraFiles(categoryID), sourceRoot, destRoot, unit.Other, owners, methods)
 }
 
-// freeName keeps an upgrade from landing on the file it replaces when both are named alike.
-func (i Importer) freeName(rootPath, rel string) string {
-	if _, err := i.config.FS.Stat(path.Join(rootPath, rel)); err != nil {
-		return rel
+func placedFiles(placed []placedEpisode) []placer.Placed {
+	out := make([]placer.Placed, len(placed))
+	for index, p := range placed {
+		out[index] = p.Placed
 	}
-	extension := path.Ext(rel)
-	return strings.TrimSuffix(rel, extension) + " [upgrade]" + extension
+	return out
+}
+
+func affinityKey(title string) string {
+	if key := "series:" + parsetv.CleanTitle(title); key != "series:" {
+		return key
+	}
+	return ""
+}
+
+// firstAirDate is the air date of the first of parts that has one, zero when none does.
+func firstAirDate(parts []library.ResolvedPart) time.Time {
+	for _, part := range parts {
+		if at, ok := airInstant(part.Date); ok {
+			return at
+		}
+	}
+	return time.Time{}
 }
 
 type placedEpisode struct {
-	source, dest, rel, hash string
-	size                    int64
-	method                  mover.PlaceMethod
-	file                    fileEpisodes
-}
-
-// undo takes back a failed unit's files: a moved file returns to its source, anything else is removed.
-func (i Importer) undo(placed []placedEpisode) error {
-	var failures []error
-	for _, p := range placed {
-		var err error
-		if p.method == mover.PlaceMove {
-			_, err = mover.PlaceOne(i.config.FS, p.dest, p.source, p.size, []mover.PlaceMethod{mover.PlaceMove})
-		} else {
-			err = i.config.FS.Remove(p.dest)
-		}
-		if err != nil {
-			failures = append(failures, fmt.Errorf("tv: could not take back %q: %w", p.dest, err))
-		}
-	}
-	return errors.Join(failures...)
-}
-
-// checkBlocked hashes every file before any is placed and refuses the unit when one is blocked content (ADR-53).
-func (i Importer) checkBlocked(ctx context.Context, sourceRoot string, files []fileEpisodes) ([]string, error) {
-	hashes := make([]string, len(files))
-	for index, file := range files {
-		hash, err := library.QuickHash(i.config.FS, path.Join(sourceRoot, file.media.RelPath), file.media.SizeBytes)
-		if err != nil {
-			return nil, err
-		}
-		hashes[index] = hash
-		if i.config.BlockedContent == nil {
-			continue
-		}
-		blocks, err := i.config.BlockedContent.FindByHash(ctx, "", hash, i.config.Clock.Now().Unix())
-		if err != nil {
-			return nil, err
-		}
-		if len(blocks) > 0 {
-			return nil, fmt.Errorf("blocked content (%s): %s", blocks[0].Reason, file.media.RelPath)
-		}
-	}
-	return hashes, nil
+	placer.Placed
+	file fileEpisodes
 }
 
 func (i Importer) namingFor(categoryID int64) (Naming, settings.FileManagement) {
@@ -532,117 +476,6 @@ func (i Importer) namingFor(categoryID int64) (Naming, settings.FileManagement) 
 		names.RenameFiles = false
 	}
 	return names, fileManagement
-}
-
-func (i Importer) methods(ladder []string) []mover.PlaceMethod {
-	methods := mover.DefaultLadder
-	if i.config.TransferLadder != nil {
-		if configured := i.config.TransferLadder(); len(configured) > 0 {
-			methods = configured
-		}
-	}
-	if len(ladder) > 0 {
-		methods = make([]mover.PlaceMethod, len(ladder))
-		for index, method := range ladder {
-			methods[index] = mover.PlaceMethod(method)
-		}
-	}
-	return methods
-}
-
-// chooseRoot keeps a series where it already is: its recorded affinity, else the root of a file it already has, else
-// the placement strategy's choice among the library's roots.
-func (i Importer) chooseRoot(ctx context.Context, categoryID, workID int64, title string, bytes int64) (settings.RootFolder, error) {
-	key := "series:" + parsetv.CleanTitle(title)
-	var existing *int64
-	if rootID, found, err := i.config.Affinity.PlacementAffinity(ctx, categoryID, key); err != nil {
-		return settings.RootFolder{}, err
-	} else if found {
-		existing = &rootID
-	}
-	if existing == nil {
-		if roots, err := i.config.Identity.WorkFileRoots(ctx, workID); err == nil && len(roots) > 0 {
-			rootID := roots[0].RootFolderID
-			existing = &rootID
-		}
-	}
-	root, decision, err := placement.Resolve(placement.Request{
-		CategoryID: categoryID, SizeBytes: bytes, Strategy: placement.StrategyMostFreeSpace,
-		AffinityEnabled: key != "series:", AffinityKey: key, ExistingAffinityRoot: existing,
-	}, i.rootCandidates(categoryID))
-	if err != nil {
-		return settings.RootFolder{}, fmt.Errorf("resolve placement: %w", err)
-	}
-	if decision.Outcome != placement.OutcomePlaced {
-		return settings.RootFolder{}, fmt.Errorf("no root folder can take it: %s", decision.Reason)
-	}
-	destRoot, ok := i.config.Roots.RootFolder(root.RootFolderID)
-	if !ok {
-		return settings.RootFolder{}, fmt.Errorf("root folder %d has no known path", root.RootFolderID)
-	}
-	if err := i.config.Affinity.SetPlacementAffinity(ctx, categoryID, key, root.RootFolderID, i.config.Clock.Now().Unix()); err != nil {
-		return settings.RootFolder{}, err
-	}
-	return destRoot, nil
-}
-
-func (i Importer) rootCandidates(categoryID int64) []placement.RootCandidate {
-	acceptsNew := map[int64]bool{}
-	var order []int64
-	seen := map[int64]bool{}
-	for _, attachment := range i.config.Roots.CategoryRoots() {
-		if attachment.CategoryID != categoryID {
-			continue
-		}
-		if !seen[attachment.RootFolderID] {
-			seen[attachment.RootFolderID] = true
-			order = append(order, attachment.RootFolderID)
-		}
-		if attachment.AcceptsNew {
-			acceptsNew[attachment.RootFolderID] = true
-		}
-	}
-	candidates := make([]placement.RootCandidate, 0, len(order))
-	for _, id := range order {
-		root, ok := i.config.Roots.RootFolder(id)
-		if !ok {
-			continue
-		}
-		var free, total int64
-		if root.FreeBytes != nil {
-			free = *root.FreeBytes
-		}
-		if root.TotalBytes != nil {
-			total = *root.TotalBytes
-		}
-		candidates = append(candidates, placement.RootCandidate{
-			RootFolderID: root.ID, FSID: root.FSID, Online: root.Online, Writable: root.Writable, ReadOnly: root.ReadOnly,
-			AcceptsNew: acceptsNew[id], FreeBytes: free, TotalBytes: total, MinFreeBytes: root.MinFreeBytes,
-		})
-	}
-	return candidates
-}
-
-// finish applies the library's Set Permissions to a placed file; a failure is not worth failing an import over.
-func (i Importer) finish(root settings.RootFolder, fileAbs string, fileManagement settings.FileManagement, parts []library.ResolvedPart) {
-	rootPath := root.Path
-	i.changeFileDate(root, fileAbs, fileManagement, parts)
-	if !fileManagement.SetPermissions {
-		return
-	}
-	permissions := mover.Permissions{FolderMode: fileManagement.FolderMode(), FileMode: fileManagement.FileMode(), GID: -1}
-	if group := fileManagement.ChownGroup; group != "" {
-		if gid, err := strconv.Atoi(group); err == nil {
-			permissions.GID = gid
-		} else if i.config.GroupID != nil {
-			if gid, err := i.config.GroupID(group); err == nil {
-				permissions.GID = gid
-			}
-		}
-	}
-	if err := mover.ApplyPermissions(i.config.FS, rootPath, fileAbs, permissions); err != nil {
-		i.logger.Warn("tv import: permissions not set", slog.String("path", fileAbs), slog.Any("error", err))
-	}
 }
 
 // episodeNaming gathers everything a placed file's name can draw on.

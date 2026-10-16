@@ -39,6 +39,11 @@ type Importer interface {
 	ImportBatch(ctx context.Context, request Request) (Result, error)
 }
 
+// AcquisitionSource finds the desired item a finished download was grabbed for.
+type AcquisitionSource interface {
+	Get(ctx context.Context, id int64) (library.Acquisition, error)
+}
+
 // Named is the work a person said a unit is, by a provider's id.
 type Named struct{ Provider, ExternalID string }
 

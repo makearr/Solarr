@@ -11,11 +11,14 @@ import (
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
+	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -191,7 +194,7 @@ func (p *process) manualCommitter() importjob.ManualCommitter {
 
 // batchImporters are the media types that identify and place an import in their own way, by type.
 func (p *process) batchImporters() map[string]batch.Importer {
-	return map[string]batch.Importer{tv.MediaType: p.tvImporter()}
+	return map[string]batch.Importer{tv.MediaType: p.tvImporter(), movie.MediaType: p.movieImporter()}
 }
 
 // tvImporter is the TV module's batch importer: the same placement rules as music's commit, naming by the library's TV
@@ -211,6 +214,29 @@ func (p *process) tvImporter() tv.Importer {
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 		TransferLadder: p.transferLadder, RenameOnImport: p.renameOnImport, GroupID: lookupGroupID, BelowCutoff: p.belowCutoff,
 		ExtraFiles: p.extraFileExtensions, SharedFiles: p.enqueueSharedFiles, AfterPlacing: p.enqueueServerFilesFor, Probe: p.probeMeasured,
+	})
+}
+
+// movieImporter is the movie module's batch importer, placing through the same steps as TV's.
+func (p *process) movieImporter() movie.Importer {
+	categories := adapters.Categories{Cache: p.cache}
+	identity := library.NewIdentity(p.library)
+	return movie.NewImporter(movie.ImporterConfig{
+		FS: p.fsys, Physical: library.NewPhysical(p.library), Series: library.NewSeries(p.library),
+		Reader: library.NewSeriesReader(p.library), Identity: identity, Desired: library.NewDesired(p.library),
+		Acquisitions: library.NewAcquisitions(p.library),
+		Placer: placer.New(placer.Config{
+			FS: p.fsys, Roots: adapters.DrainRoots{Cache: p.cache}, Affinity: p.cache, Identity: identity,
+			Blocked: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+			TransferLadder: p.transferLadder, GroupID: lookupGroupID,
+		}),
+		Resolver: movie.Resolver{
+			Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
+			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Locks: &keyedlock.Locks{},
+		},
+		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
+		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
+		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions, Probe: p.probeMeasured,
 	})
 }
 
