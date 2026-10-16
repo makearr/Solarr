@@ -79,6 +79,8 @@ type ImporterConfig struct {
 	// BelowCutoff says an owned file misses its library's cutoff, so a download may replace it; nil lets any owned
 	// file of an upgrading season be replaced.
 	BelowCutoff func(categoryID int64, file library.EpisodeFile) bool
+	// AfterPlacing is told of each series an import placed episodes of; nil is told nothing.
+	AfterPlacing func(ctx context.Context, categoryID, workID int64)
 	// SharedFiles asks for the shared-broadcast pass after an imported episode turned out linked; nil never asks.
 	SharedFiles func(ctx context.Context) error
 }
@@ -148,6 +150,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			decision.WorkID = &workID
 			result.Decisions[index] = decision
 			result.Placements[index] = placed
+			i.afterPlacing(ctx, request.CategoryID, workID)
 		}
 	}
 	return result, nil
@@ -196,7 +199,14 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	if err != nil {
 		return library.Placement{}, err
 	}
+	i.afterPlacing(ctx, request.CategoryID, workID)
 	return *placed, nil
+}
+
+func (i Importer) afterPlacing(ctx context.Context, categoryID, workID int64) {
+	if i.config.AfterPlacing != nil {
+		i.config.AfterPlacing(ctx, categoryID, workID)
+	}
 }
 
 func firstMedia(unit inspect.Unit) string {

@@ -297,6 +297,13 @@ func (p *process) enqueueSharedFiles(ctx context.Context) error {
 	return tv.EnqueueSharedFiles(ctx, p.queue)
 }
 
+// enqueueServerFilesFor submits the pass for one series, right after an import placed episodes of it.
+func (p *process) enqueueServerFilesFor(ctx context.Context, categoryID, workID int64) {
+	if _, err := tv.EnqueueServerFilesFor(ctx, p.queue, categoryID, workID); err != nil {
+		p.logger.Warn("could not queue the media server files of an imported series", "work_id", workID, "error", err)
+	}
+}
+
 // enqueueServerFiles submits the pass writing Jellyfin and Kodi files.
 func (p *process) enqueueServerFiles(ctx context.Context) (jobs.EnqueueResult, error) {
 	return tv.EnqueueServerFiles(ctx, p.queue)

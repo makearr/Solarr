@@ -225,3 +225,5 @@ pattern. A season prefix (`s02`) limits a rule to that season's searches; the pr
 Server files also include a `seasonNN-poster` per season folder (from the `season_images` field) and a `<episode>-thumb` beside each
 episode file (from the `episode_images` field, `season:episode` to the provider's still); both are written only where missing, from the
 next refresh on.
+
+An import queues a pass for just the series it placed episodes of (`EnqueueServerFilesFor`, deduplicated per series), so new files get their nfo and thumb at once; the daily pass still covers everything.

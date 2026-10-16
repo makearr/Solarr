@@ -2,12 +2,15 @@ package tv_test
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"log/slog"
 	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -78,6 +81,19 @@ func TestServerFilesWritesWhatIsMissingAndNothingElse(t *testing.T) {
 	}
 	if again, err := writer.WriteSeries(t.Context(), 7, added.WorkID); err != nil || again != 0 {
 		t.Errorf("second pass wrote %d, %v; want 0", again, err)
+	}
+	if err := fsys.Remove("/library/Example Show/Season 1/season.nfo"); err != nil {
+		t.Fatal(err)
+	}
+	job := tv.ServerFilesJob{
+		Writer: writer, Logger: slog.New(slog.DiscardHandler),
+		Libraries: func() []settings.Category {
+			return []settings.Category{{ID: 7, MediaType: tv.MediaType, FileManagement: settings.FileManagement{MediaServerFiles: true}}}
+		},
+	}
+	payload := []byte(fmt.Sprintf(`{"category_id":7,"work_id":%d}`, added.WorkID))
+	if err := job.Run(t.Context(), jobs.Job{Payload: payload}); err != nil || !strings.Contains(readFile(t, fsys, "/library/Example Show/Season 1/season.nfo"), "<seasonnumber>1</seasonnumber>") {
+		t.Errorf("a pass for one series: %v; want its missing season.nfo written", err)
 	}
 	readOnly := writer
 	root.ReadOnly = true

@@ -364,7 +364,11 @@ type ServerFilesJob struct {
 }
 
 // Run implements jobs.Handler.
-func (j ServerFilesJob) Run(ctx context.Context, _ jobs.Job) error {
+func (j ServerFilesJob) Run(ctx context.Context, job jobs.Job) error {
+	var one serverFilesPayload
+	if err := json.Unmarshal(job.Payload, &one); err == nil && one.WorkID != 0 {
+		return j.runOne(ctx, one)
+	}
 	written, series := 0, 0
 	for _, category := range j.Libraries() {
 		if category.MediaType != MediaType || !category.FileManagement.MediaServerFiles {
@@ -400,6 +404,37 @@ func (j ServerFilesJob) Run(ctx context.Context, _ jobs.Job) error {
 }
 
 const serverFilesPage = 200
+
+// serverFilesPayload names the one series a pass is for; empty is every series.
+type serverFilesPayload struct {
+	CategoryID int64 `json:"category_id"`
+	WorkID     int64 `json:"work_id"`
+}
+
+func (j ServerFilesJob) runOne(ctx context.Context, one serverFilesPayload) error {
+	for _, category := range j.Libraries() {
+		if category.ID != one.CategoryID || category.MediaType != MediaType || !category.FileManagement.MediaServerFiles {
+			continue
+		}
+		made, err := j.Writer.WriteSeries(ctx, one.CategoryID, one.WorkID)
+		if err != nil {
+			return err
+		}
+		j.Logger.Info("jellyfin and kodi files written", slog.Int("files", made), slog.Int64("work_id", one.WorkID))
+	}
+	return nil
+}
+
+// EnqueueServerFilesFor submits a pass for one series, as right after an import; one already waiting for it is the same work.
+func EnqueueServerFilesFor(ctx context.Context, queue *jobs.Queue, categoryID, workID int64) (jobs.EnqueueResult, error) {
+	payload, err := json.Marshal(serverFilesPayload{CategoryID: categoryID, WorkID: workID})
+	if err != nil {
+		return jobs.EnqueueResult{}, err
+	}
+	return queue.Enqueue(ctx, jobs.Request{
+		Type: ServerFilesJobType, ActionKey: fmt.Sprintf("%s:%d", ServerFilesJobType, workID), Priority: jobs.PriorityLow, Payload: payload,
+	})
+}
 
 // EnqueueServerFiles submits one pass; a second while one waits is the same work.
 func EnqueueServerFiles(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {
