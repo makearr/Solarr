@@ -16,6 +16,8 @@ type WorkAdding struct {
 	Adding     func(mediaType string) (media.Adding, bool)
 	// AddKinds answers a media type's declared add kinds, the first being its default.
 	AddKinds func(mediaType string) []media.Choice
+	// AfterAdd runs once something was added, so the library's counts follow at once; nil does nothing.
+	AfterAdd func(ctx context.Context)
 }
 
 // adder resolves a library's type's add and the kind asked for, the type's first when none is.
@@ -71,6 +73,9 @@ func (a WorkAdding) Add(ctx context.Context, request apiserver.AddWorkRequest) (
 	})
 	if err != nil {
 		return apiserver.AddWorkResult{}, notWired(err)
+	}
+	if a.AfterAdd != nil {
+		a.AfterAdd(ctx)
 	}
 	return apiserver.AddWorkResult{Kind: result.Kind, WorkID: result.WorkID, PersonID: result.PersonID, Searching: result.Searching}, nil
 }

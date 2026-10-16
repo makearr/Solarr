@@ -699,6 +699,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorkAdder: adapters.WorkAdding{
 			Categories: adapters.Categories{Cache: p.cache},
 			Adding:     adapters.MediaTypes{Registry: p.media}.AddingOf, AddKinds: adapters.MediaTypes{Registry: p.media}.AddKinds,
+			AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		ArrSync: adapters.ArrSync{
 			Progress: adapters.NewArrProgress(),
