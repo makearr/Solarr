@@ -25,7 +25,7 @@ import (
 )
 
 // ServerFiles writes what Jellyfin and Kodi read beside a series (Stage 8 T24): tvshow.nfo, a season.nfo per season
-// folder, an nfo per episode file, and the series' poster, fanart, banner and logo. A file already there is never
+// folder, an nfo and a thumb per episode file, the series' poster, fanart, banner and logo, and a poster per season. A file already there is never
 // replaced, and nothing is written on a root that is read only, offline or not writable.
 type ServerFiles struct {
 	FS     fsx.FS
@@ -85,6 +85,7 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 			return written, err
 		}
 		written += made
+		written += w.writeEpisodeThumb(ctx, path.Join(root.Path, strings.TrimSuffix(file.RelPath, path.Ext(file.RelPath))), detail.Summary.Fields["episode_images"], file.MediaRef)
 	}
 	for folder, number := range seasonFolders {
 		made, err := w.writeOnce(path.Join(folder, "season.nfo"), func() ([]byte, error) { return seasonDocument(number) })
@@ -101,7 +102,68 @@ func (w ServerFiles) WriteSeries(ctx context.Context, categoryID, workID int64) 
 		written += made
 		written += w.writeArtwork(ctx, folder, detail.Summary.Fields["images"])
 	}
+	written += w.writeSeasonPosters(ctx, seasonFolders, detail.Summary.Fields["season_images"])
 	return written, nil
+}
+
+// writeSeasonPosters writes seasonNN-poster beside each season folder's parent, the name both servers read.
+func (w ServerFiles) writeSeasonPosters(ctx context.Context, seasonFolders map[string]int, encoded string) int {
+	if w.Picture == nil || encoded == "" {
+		return 0
+	}
+	var seasons []Season
+	if json.Unmarshal([]byte(encoded), &seasons) != nil {
+		return 0
+	}
+	written := 0
+	for folder, number := range seasonFolders {
+		index := slices.IndexFunc(seasons, func(season Season) bool { return season.Number == number && season.Poster != "" })
+		name := seasonPosterName(number)
+		parent := path.Dir(folder)
+		if index < 0 || w.anyExists(parent, name) {
+			continue
+		}
+		written += w.writePicture(ctx, parent, name, seasons[index].Poster)
+	}
+	return written
+}
+
+// writeEpisodeThumb writes <episode file name>-thumb beside the episode, from the still a provider holds of it.
+func (w ServerFiles) writeEpisodeThumb(ctx context.Context, base, encoded, mediaRef string) int {
+	if w.Picture == nil || encoded == "" {
+		return 0
+	}
+	var stills map[string]string
+	if json.Unmarshal([]byte(encoded), &stills) != nil {
+		return 0
+	}
+	season, number := splitRef(mediaRef)
+	address := stills[stillKey(season, number)]
+	name := path.Base(base) + "-thumb"
+	if address == "" || w.anyExists(path.Dir(base), name) {
+		return 0
+	}
+	return w.writePicture(ctx, path.Dir(base), name, address)
+}
+
+// writePicture writes one provider picture under the name in the format it is served in; failing to get it is skipped.
+func (w ServerFiles) writePicture(ctx context.Context, folder, name, address string) int {
+	extension := strings.ToLower(path.Ext(strings.SplitN(address, "?", 2)[0]))
+	if extension != ".png" {
+		extension = ".jpg"
+	}
+	made, err := w.writeOnce(path.Join(folder, name+extension), func() ([]byte, error) { return w.Picture(ctx, address) })
+	if err != nil {
+		return 0
+	}
+	return made
+}
+
+func seasonPosterName(number int) string {
+	if number == 0 {
+		return "season-specials-poster"
+	}
+	return fmt.Sprintf("season%02d-poster", number)
 }
 
 // ownPaths drops the files of shared episodes that lie outside the series' own folders.
@@ -141,15 +203,7 @@ func (w ServerFiles) writeArtwork(ctx context.Context, folder, encoded string) i
 		if index < 0 || w.anyExists(folder, file.name) {
 			continue
 		}
-		address := images[index].URL
-		extension := strings.ToLower(path.Ext(strings.SplitN(address, "?", 2)[0]))
-		if extension != ".png" {
-			extension = ".jpg"
-		}
-		made, err := w.writeOnce(path.Join(folder, file.name+extension), func() ([]byte, error) { return w.Picture(ctx, address) })
-		if err == nil {
-			written += made
-		}
+		written += w.writePicture(ctx, folder, file.name, images[index].URL)
 	}
 	return written
 }

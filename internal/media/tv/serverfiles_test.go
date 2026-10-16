@@ -21,6 +21,8 @@ func TestServerFilesWritesWhatIsMissingAndNothingElse(t *testing.T) {
 	cache := settingsCache(t)
 	series := fixtureSkyhook()
 	series.Images = []skyhook.Image{{CoverType: "Poster", URL: "https://example.test/p.jpg"}, {CoverType: "Fanart", URL: "https://example.test/f.jpg"}}
+	series.Seasons = []skyhook.Season{{SeasonNumber: 1, Images: []skyhook.Image{{CoverType: "Poster", URL: "https://example.test/s1.jpg"}}}}
+	series.Episodes[2].Image = "https://example.test/e2.jpg"
 	service, opened := newService(t, searchSkyhook{series: series}, fakeTVmaze{err: tvmaze.ErrNotFound})
 	added, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 7, ProfileID: profileID(t, cache, "Any"), Monitor: tv.MonitorAll})
 	if err != nil {
@@ -53,14 +55,16 @@ func TestServerFilesWritesWhatIsMissingAndNothingElse(t *testing.T) {
 	}
 
 	written, err := writer.WriteSeries(t.Context(), 7, added.WorkID)
-	if err != nil || written != 4 {
-		t.Fatalf("written %d, %v; want the episode, season and show nfo and the poster", written, err)
+	if err != nil || written != 6 {
+		t.Fatalf("written %d, %v; want the episode, season and show nfo, the poster, the season poster and the episode thumb", written, err)
 	}
 	for file, wants := range map[string][]string{
-		"/library/Example Show/tvshow.nfo":                                   {"<tvshow>", "<title>Example Show</title>", `<uniqueid type="tvdb" default="true">1234</uniqueid>`},
-		"/library/Example Show/Season 1/season.nfo":                          {"<seasonnumber>1</seasonnumber>"},
-		"/library/Example Show/Season 1/Example Show - S01E02 - Episode.nfo": {"<episodedetails>", "<season>1</season>", "<episode>2</episode>", `<uniqueid type="tvdb" default="true">3</uniqueid>`},
-		"/library/Example Show/poster.jpg":                                   {"picture"},
+		"/library/Example Show/tvshow.nfo":                                         {"<tvshow>", "<title>Example Show</title>", `<uniqueid type="tvdb" default="true">1234</uniqueid>`},
+		"/library/Example Show/Season 1/season.nfo":                                {"<seasonnumber>1</seasonnumber>"},
+		"/library/Example Show/Season 1/Example Show - S01E02 - Episode.nfo":       {"<episodedetails>", "<season>1</season>", "<episode>2</episode>", `<uniqueid type="tvdb" default="true">3</uniqueid>`},
+		"/library/Example Show/poster.jpg":                                         {"picture"},
+		"/library/Example Show/season01-poster.jpg":                                {"picture"},
+		"/library/Example Show/Season 1/Example Show - S01E02 - Episode-thumb.jpg": {"picture"},
 	} {
 		body := readFile(t, fsys, file)
 		for _, want := range wants {
@@ -69,7 +73,7 @@ func TestServerFilesWritesWhatIsMissingAndNothingElse(t *testing.T) {
 			}
 		}
 	}
-	if len(asked) != 1 || readFile(t, fsys, "/library/Example Show/fanart.png") != "a person's own" {
+	if len(asked) != 3 || readFile(t, fsys, "/library/Example Show/fanart.png") != "a person's own" {
 		t.Errorf("pictures asked for %v; the fanart a person put there must stay and not be fetched", asked)
 	}
 	if again, err := writer.WriteSeries(t.Context(), 7, added.WorkID); err != nil || again != 0 {

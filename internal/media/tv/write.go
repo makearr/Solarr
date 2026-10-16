@@ -301,8 +301,26 @@ func fieldWrites(series Series, source string) []library.SeriesFieldWrite {
 			add("season_images", string(encoded))
 		}
 	}
+	if stills := episodeStills(series.Episodes); len(stills) > 0 {
+		if encoded, err := json.Marshal(stills); err == nil {
+			add("episode_images", string(encoded))
+		}
+	}
 	return fields
 }
+
+// episodeStills maps "season:episode" to the picture a provider holds of that episode.
+func episodeStills(episodes []Episode) map[string]string {
+	stills := map[string]string{}
+	for _, episode := range episodes {
+		if episode.Image != "" {
+			stills[stillKey(episode.Season, episode.Number)] = episode.Image
+		}
+	}
+	return stills
+}
+
+func stillKey(season, number int) string { return fmt.Sprintf("%d:%d", season, number) }
 
 func orDefault(value, fallback string) string {
 	if value == "" {

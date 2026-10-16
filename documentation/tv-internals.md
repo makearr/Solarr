@@ -221,3 +221,7 @@ contain** word, a **never** group, or a group outside an **only** list turns the
 failed rule; a **prefer** word adds its score. Words match anywhere in the release name without regard to case, or as a
 pattern. A season prefix (`s02`) limits a rule to that season's searches; the prefix is compared with the searched item's
 `media_ref`. Music does not use them.
+
+Server files also include a `seasonNN-poster` per season folder (from the `season_images` field) and a `<episode>-thumb` beside each
+episode file (from the `episode_images` field, `season:episode` to the provider's still); both are written only where missing, from the
+next refresh on.
