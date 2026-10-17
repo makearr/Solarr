@@ -200,3 +200,14 @@ WHERE p.work_id = ?
   AND NOT EXISTS (SELECT 1 FROM collection_member m WHERE m.part_id = p.id)
   AND NOT EXISTS (SELECT 1 FROM relationship r
                   WHERE (r.from_type = 'part' AND r.from_id = p.id) OR (r.to_type = 'part' AND r.to_id = p.id));
+
+-- The works whose files already sit under a folder of a root, to place a directory the providers cannot name alone.
+-- name: ListWorksOfFolder :many
+SELECT DISTINCT wf.work_id
+FROM library_path lp
+JOIN work_file wf ON wf.media_object_id = lp.media_object_id
+JOIN work w ON w.id = wf.work_id
+WHERE lp.root_folder_id = sqlc.arg(root_folder_id)
+  AND w.media_type = sqlc.arg(media_type)
+  AND lp.rel_path >= sqlc.arg(prefix) AND lp.rel_path < sqlc.arg(prefix_end)
+LIMIT 2;

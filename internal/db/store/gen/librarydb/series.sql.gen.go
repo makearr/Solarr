@@ -521,6 +521,53 @@ func (q *Queries) ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWor
 	return items, nil
 }
 
+const listWorksOfFolder = `-- name: ListWorksOfFolder :many
+SELECT DISTINCT wf.work_id
+FROM library_path lp
+JOIN work_file wf ON wf.media_object_id = lp.media_object_id
+JOIN work w ON w.id = wf.work_id
+WHERE lp.root_folder_id = ?1
+  AND w.media_type = ?2
+  AND lp.rel_path >= ?3 AND lp.rel_path < ?4
+LIMIT 2
+`
+
+type ListWorksOfFolderParams struct {
+	RootFolderID int64
+	MediaType    string
+	Prefix       string
+	PrefixEnd    string
+}
+
+// The works whose files already sit under a folder of a root, to place a directory the providers cannot name alone.
+func (q *Queries) ListWorksOfFolder(ctx context.Context, arg ListWorksOfFolderParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listWorksOfFolder,
+		arg.RootFolderID,
+		arg.MediaType,
+		arg.Prefix,
+		arg.PrefixEnd,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var work_id int64
+		if err := rows.Scan(&work_id); err != nil {
+			return nil, err
+		}
+		items = append(items, work_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorksOnRoot = `-- name: ListWorksOnRoot :many
 SELECT DISTINCT wf.work_id FROM work_file wf
 JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL

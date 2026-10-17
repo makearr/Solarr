@@ -11,6 +11,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/filekind"
@@ -129,7 +130,14 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		if folder != "" {
 			named = ShowNFOIDs(c.config.FS, path.Join(root.Path, folder))
 		}
-		series, candidates := c.resolver.ResolveFolder(ctx, categoryID, folder, relPaths, named)
+		var series int64
+		var candidates []model.Identification
+		// Files already placed under the folder name its series, which a directory of specials cannot show alone.
+		if held, found, err := c.config.Reader.WorkOfFolder(ctx, MediaType, root.ID, folder); folder != "" && err == nil && found {
+			series = held
+		} else {
+			series, candidates = c.resolver.ResolveFolder(ctx, categoryID, folder, relPaths, named)
+		}
 		if series == ExcludedSeries {
 			continue
 		}

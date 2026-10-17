@@ -2,6 +2,7 @@ package tv_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
 	"testing"
@@ -442,5 +443,35 @@ func TestScanDoesNotReadANumberInASeriesFolderNameAsAnEpisode(t *testing.T) {
 		"Opealw the Dofjm in 80 Saszulk/Season 1/Opealw the Dofjm in 80 Saszulk - S01E01 - Mexico.mkv")
 	if len(list) != 1 || list[0].Title != "Opealw the Dofjm in 80 Saszulk" {
 		t.Fatalf("list = %+v, want the series named by its whole folder", list)
+	}
+}
+
+// switchedSkyhook searches until it is switched off, as a provider that no longer answers.
+type switchedSkyhook struct {
+	searchSkyhook
+	off *bool
+}
+
+func (s switchedSkyhook) Search(ctx context.Context, term string) ([]skyhook.Series, error) {
+	if *s.off {
+		return nil, errors.New("provider down")
+	}
+	return s.searchSkyhook.Search(ctx, term)
+}
+
+func TestAnotherBatchOfAFolderIsPlacedOnTheSeriesItsFilesAlreadyHave(t *testing.T) {
+	off := false
+	consumer, opened, fsys := newConsumer(t, switchedSkyhook{searchSkyhook{series: fixtureSkyhook()}, &off})
+	root := settings.RootFolder{ID: 1, Path: scanRoot, Online: true}
+	if err := consumer.Observe(t.Context(), root, 3, []scan.Observed{writeVideo(t, fsys, "Example Show/Season 1/Example Show - S01E01 - Episode.mkv")}); err != nil {
+		t.Fatal(err)
+	}
+	off = true
+	if err := consumer.Observe(t.Context(), root, 3, []scan.Observed{writeVideo(t, fsys, "Example Show/Specials/Example Show - S00E01 - Recap.mkv")}); err != nil {
+		t.Fatal(err)
+	}
+	waiting, err := library.NewUnidentified(opened).Count(t.Context())
+	if err != nil || waiting != 0 {
+		t.Errorf("waiting = %d, %v: the specials follow the folder's series", waiting, err)
 	}
 }

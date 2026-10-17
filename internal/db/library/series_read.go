@@ -542,3 +542,18 @@ type WantedItemDetail struct {
 	// Present counts the files the item holds.
 	Present int64
 }
+
+// WorkOfFolder answers the one work of a media type whose files already sit under a folder of a root; found is false
+// when there is none or the folder holds files of several.
+func (r SeriesReader) WorkOfFolder(ctx context.Context, mediaType string, rootFolderID int64, folder string) (workID int64, found bool, err error) {
+	ids, err := librarydb.New(r.store.Read()).ListWorksOfFolder(ctx, librarydb.ListWorksOfFolderParams{
+		RootFolderID: rootFolderID, MediaType: mediaType, Prefix: folder + "/", PrefixEnd: folder + "0",
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("library: works of folder: %w", err)
+	}
+	if len(ids) != 1 {
+		return 0, false, nil
+	}
+	return ids[0], true, nil
+}

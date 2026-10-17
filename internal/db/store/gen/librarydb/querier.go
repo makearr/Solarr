@@ -820,6 +820,8 @@ type Querier interface {
 	// carrying several after a merge. 'musicbrainz:release-group' must match
 	// internal/media/music.ProviderReleaseGroup.
 	ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error)
+	// The works whose files already sit under a folder of a root, to place a directory the providers cannot name alone.
+	ListWorksOfFolder(ctx context.Context, arg ListWorksOfFolderParams) ([]int64, error)
 	// The works with a file on a root, a page at a time.
 	ListWorksOnRoot(ctx context.Context, arg ListWorksOnRootParams) ([]int64, error)
 	// Works of a media type with a provider's id whose organisation in one role was never asked for: no work_field of
