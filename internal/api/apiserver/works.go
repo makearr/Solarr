@@ -201,13 +201,13 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 }
 
 // startAtLetter is the cursor that begins a title or artist ordering at the letter: everything sorting after it, which is
-// every name starting with it.
+// every name starting with it. The id is below any real one, which is also what marks the cursor as set.
 func startAtLetter(sort WorkSort, letter string) paginate.TextCursor {
 	switch sort {
 	case WorkSortArtist:
-		return paginate.TextCursor{Sort: letter + artistCursorSeparator}
+		return paginate.TextCursor{Sort: letter + artistCursorSeparator, ID: -1}
 	case WorkSortTitle, "title":
-		return paginate.TextCursor{Sort: letter}
+		return paginate.TextCursor{Sort: letter, ID: -1}
 	}
 	return paginate.TextCursor{}
 }

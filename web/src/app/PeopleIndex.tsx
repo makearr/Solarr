@@ -61,7 +61,9 @@ export function PeopleIndex() {
   const type = types.find((entry) => entry.key === library?.media_type);
   const roles = rolesOf(types, categoryId ? library?.media_type : undefined);
   // A library opens on its lead role (Artists, Cast); the list of every library on everyone.
-  const lead = categoryId ? (roles.find((role) => role.lead) ?? roles[0]) : undefined;
+  // A poster library (movies, series) opens on its cast; an album one on its artists.
+  const castFirst = type?.work_image === "poster" ? roles.find((role) => role.character) : undefined;
+  const lead = categoryId ? (castFirst ?? roles.find((role) => role.lead) ?? roles[0]) : undefined;
   const view = useRouteView(FILTER_KEYS);
   const chosen = view.query.filters.role || (lead ? lead.key : EVERYONE);
   // The coverage bar is the lead role's, as Lidarr's artists carry one; a wall of cast carries none.

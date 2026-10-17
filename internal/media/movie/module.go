@@ -166,8 +166,8 @@ func (Module) Descriptor() media.Descriptor {
 		},
 		Levels: Navigation{}.Levels(),
 		Roles: []media.Role{
-			{Key: RoleDirector, Label: "Director", Lead: true, Followable: true},
 			{Key: RoleActor, Label: "Cast", Followable: true, Character: true},
+			{Key: RoleDirector, Label: "Director", Lead: true, Followable: true},
 			{Key: RoleWriter, Label: "Writer", Followable: true},
 			{Key: RoleProducer, Label: "Producer", Followable: true},
 			{Key: RoleComposer, Label: "Composer", Followable: true},

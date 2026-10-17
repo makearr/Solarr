@@ -758,19 +758,19 @@
     },
     "roles": [
       {
-        "character": false,
-        "followable": true,
-        "key": "director",
-        "label": "Director",
-        "lead": true,
-        "part_scoped": false
-      },
-      {
         "character": true,
         "followable": true,
         "key": "actor",
         "label": "Cast",
         "lead": false,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "director",
+        "label": "Director",
+        "lead": true,
         "part_scoped": false
       },
       {
