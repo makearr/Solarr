@@ -220,14 +220,17 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 	}
 	want := parsetv.CleanTitle(guess.Title)
 	seen := map[int64]int64{}
+	qualified := map[int64]bool{}
 	for _, title := range titles {
-		if parsetv.CleanTitle(title.Title) == want {
+		if parsetv.CleanTitle(title.Title) == want || parsetv.CleanTitle(trailingBrackets.ReplaceAllString(title.Title, "")) == want {
 			seen[title.WorkID] = title.Year
+			qualified[title.WorkID] = qualified[title.WorkID] || (guess.Year > 0 && strings.Contains(title.Title, "("+strconv.Itoa(guess.Year)+")"))
 		}
 	}
 	if guess.Year > 0 {
+		// A year within one of the first-aired year, or TheTVDB's own "(2003)" qualifier, is the folder's year.
 		for id, year := range seen {
-			if year != int64(guess.Year) {
+			if !qualified[id] && (year == 0 || year-int64(guess.Year) < -1 || year-int64(guess.Year) > 1) {
 				delete(seen, id)
 			}
 		}
