@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -38,7 +39,7 @@ var FranchisePassDefinition = jobs.Definition{
 }
 
 // franchisesPerRun bounds one pass: Wikimedia asks for polite use of its query service, so a library is worked off over days.
-const franchisesPerRun = 25
+const franchisesPerRun = 60
 
 // AnimeRelations is AniList as the franchise pass asks it: what an anime is a sequel, prequel or spin-off of.
 type AnimeRelations interface {
@@ -95,7 +96,7 @@ func (p FranchisePass) Run(ctx context.Context, _ jobs.Job) error {
 		if len(members) >= 2 {
 			held[series.WorkID] = true
 			for workID := range held {
-				if _, err := p.Franchises.Join(ctx, MediaType, ProviderWikidata, franchise.QID, franchise.Label, workID); err != nil {
+				if _, err := p.Franchises.Join(ctx, MediaType, ProviderWikidata, franchise.QID, franchiseName(franchise.Label, members), workID); err != nil {
 					return err
 				}
 			}
@@ -155,7 +156,16 @@ func (p FranchisePass) groupByName(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	edges := titleEdges(works)
+	traits, err := p.Franchises.WorkTraits(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	var edges [][2]int64
+	for _, edge := range titleEdges(works) {
+		if compatible(traits[edge[0]], traits[edge[1]]) {
+			edges = append(edges, edge)
+		}
+	}
 	related, err := p.Franchises.RelatedPairs(ctx, MediaType)
 	if err != nil {
 		return 0, err
@@ -179,6 +189,14 @@ func (p FranchisePass) groupByName(ctx context.Context) (int, error) {
 	kept := 0
 	for _, group := range groupsOf(edges) {
 		if heldTogether(memberships, group) {
+			continue
+		}
+		// A franchise a provider named that already holds some of them takes the rest in, so one family is one collection.
+		if id := mostOverlapping(memberships, group); id != 0 {
+			if err := p.Franchises.AddToFranchise(ctx, id, group); err != nil {
+				return kept, err
+			}
+			kept++
 			continue
 		}
 		if _, err := p.Franchises.JoinGroup(ctx, MediaType, groupName(titles, group), group, memberships); err != nil {
@@ -362,4 +380,41 @@ func (f Franchising) poster(ctx context.Context, member wikidata.FranchiseSeries
 	f.Pictures.posters[key] = poster
 	f.Pictures.mu.Unlock()
 	return poster
+}
+
+// mostOverlapping is the franchise a provider named that holds the most of the group, 0 when none holds any.
+func mostOverlapping(memberships []library.Membership, group []int64) int64 {
+	count := map[int64]int{}
+	for _, membership := range memberships {
+		if membership.Source != library.AutoSource && slices.Contains(group, membership.WorkID) {
+			count[membership.CollectionID]++
+		}
+	}
+	var best int64
+	for id, held := range count {
+		if held > count[best] || (held == count[best] && id < best) {
+			best = id
+		}
+	}
+	return best
+}
+
+// franchiseName is the name a provider's franchise goes by: the franchise item's own label, unless that is one series of
+// it ("Hik 10: Ihaol Force" for Hik 10), when what the series share is.
+func franchiseName(label string, members []wikidata.FranchiseSeries) string {
+	titles := map[int64]string{}
+	ids := make([]int64, 0, len(members))
+	named := false
+	for index, member := range members {
+		titles[int64(index)] = member.Label
+		ids = append(ids, int64(index))
+		named = named || member.Label == label
+	}
+	if !named || len(members) < 2 {
+		return label
+	}
+	if common := groupName(titles, ids); common != "" && !strings.Contains(common, " / ") && len(common) < len(label) {
+		return common
+	}
+	return label
 }

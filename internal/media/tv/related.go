@@ -14,6 +14,7 @@ func words(title string) []string {
 	if open := strings.Index(title, "("); open > 0 {
 		title = title[:open]
 	}
+	title = strings.NewReplacer("'", "", "\u2019", "").Replace(title)
 	fields := strings.FieldsFunc(strings.ToLower(title), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 	if len(fields) > 1 && fields[0] == "the" {
 		fields = fields[1:]
@@ -58,7 +59,7 @@ func titleEdges(works []library.WorkName) [][2]int64 {
 		if len(one.stem) > 0 && len(strings.Join(one.stem, "")) >= 3 {
 			byStem[strings.Join(one.stem, " ")] = append(byStem[strings.Join(one.stem, " ")], one.id)
 		}
-		if len(one.words) >= 2 {
+		if namesAFranchise(one.words[:min(len(one.words), 2)]) {
 			byTwo[strings.Join(one.words[:2], " ")] = append(byTwo[strings.Join(one.words[:2], " ")], one.id)
 		}
 		for _, other := range entries {
@@ -68,9 +69,9 @@ func titleEdges(works []library.WorkName) [][2]int64 {
 			switch {
 			case slices.Equal(one.words, other.words):
 				edges = append(edges, [2]int64{one.id, other.id})
-			case hasPrefix(other.words, one.words) && (len(one.words) >= 2 || len(one.words[0]) >= 6):
+			case hasPrefix(other.words, one.words) && namesAFranchise(one.words):
 				edges = append(edges, [2]int64{one.id, other.id})
-			case hasPrefix(one.words, other.words) && (len(other.words) >= 2 || len(other.words[0]) >= 6):
+			case hasPrefix(one.words, other.words) && namesAFranchise(other.words):
 				edges = append(edges, [2]int64{one.id, other.id})
 			case len(one.stem) > 0 && slices.Equal(one.stem, other.words), len(other.stem) > 0 && slices.Equal(other.stem, one.words):
 				edges = append(edges, [2]int64{one.id, other.id})
@@ -159,4 +160,38 @@ func groupName(titles map[int64]string, members []int64) string {
 		names = append(names, titles[id])
 	}
 	return strings.Join(names, " / ")
+}
+
+// compatible says two works that share a name also share something else: a genre in common (a third of those they have
+// between them), a network or studio, or someone who made both. "Kung Fu" and "Logt Po Nidxo" share a name and nothing else.
+func compatible(a, b *library.Traits) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	for _, organisation := range a.Organisations {
+		if slices.Contains(b.Organisations, organisation) {
+			return true
+		}
+	}
+	for _, creator := range a.Creators {
+		if slices.Contains(b.Creators, creator) {
+			return true
+		}
+	}
+	shared := 0
+	for _, genre := range a.Genres {
+		if slices.Contains(b.Genres, genre) {
+			shared++
+		}
+	}
+	union := len(a.Genres) + len(b.Genres) - shared
+	return union > 0 && shared*3 >= union
+}
+
+// connectors end no name: "House of" starts a dozen unrelated titles.
+var connectors = []string{"of", "the", "a", "an", "to", "in", "and", "at", "on", "for", "with", "vs", "my", "is", "or"}
+
+// namesAFranchise says the first words of a title could be the name of one: two words at least, the last no connector.
+func namesAFranchise(prefix []string) bool {
+	return len(prefix) >= 2 && !slices.Contains(connectors, prefix[len(prefix)-1])
 }

@@ -817,6 +817,39 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 	return items, nil
 }
 
+const listCreatorLinksOfType = `-- name: ListCreatorLinksOfType :many
+SELECT DISTINCT c.work_id, c.person_id FROM credit c JOIN work w ON w.id = c.work_id
+WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner', 'executive_producer')
+`
+
+type ListCreatorLinksOfTypeRow struct {
+	WorkID   int64
+	PersonID int64
+}
+
+func (q *Queries) ListCreatorLinksOfType(ctx context.Context, mediaType string) ([]ListCreatorLinksOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCreatorLinksOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCreatorLinksOfTypeRow{}
+	for rows.Next() {
+		var i ListCreatorLinksOfTypeRow
+		if err := rows.Scan(&i.WorkID, &i.PersonID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFranchiseMembershipsOfType = `-- name: ListFranchiseMembershipsOfType :many
 SELECT c.id AS collection_id, c.source AS source, m.work_id
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
@@ -841,6 +874,39 @@ func (q *Queries) ListFranchiseMembershipsOfType(ctx context.Context, mediaType 
 	for rows.Next() {
 		var i ListFranchiseMembershipsOfTypeRow
 		if err := rows.Scan(&i.CollectionID, &i.Source, &i.WorkID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listGenresOfType = `-- name: ListGenresOfType :many
+SELECT wc.work_id, wc.value AS genre FROM work_classification wc JOIN work w ON w.id = wc.work_id
+WHERE w.media_type = ? AND wc.kind = 'genre'
+`
+
+type ListGenresOfTypeRow struct {
+	WorkID int64
+	Genre  string
+}
+
+func (q *Queries) ListGenresOfType(ctx context.Context, mediaType string) ([]ListGenresOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listGenresOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListGenresOfTypeRow{}
+	for rows.Next() {
+		var i ListGenresOfTypeRow
+		if err := rows.Scan(&i.WorkID, &i.Genre); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -883,6 +949,38 @@ func (q *Queries) ListGroupObservations(ctx context.Context, arg ListGroupObserv
 			&i.ObservedAt,
 			&i.WasExploration,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOrganisationLinksOfType = `-- name: ListOrganisationLinksOfType :many
+SELECT wo.work_id, wo.organisation_id FROM work_organisation wo JOIN work w ON w.id = wo.work_id WHERE w.media_type = ?
+`
+
+type ListOrganisationLinksOfTypeRow struct {
+	WorkID         int64
+	OrganisationID int64
+}
+
+func (q *Queries) ListOrganisationLinksOfType(ctx context.Context, mediaType string) ([]ListOrganisationLinksOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOrganisationLinksOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganisationLinksOfTypeRow{}
+	for rows.Next() {
+		var i ListOrganisationLinksOfTypeRow
+		if err := rows.Scan(&i.WorkID, &i.OrganisationID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

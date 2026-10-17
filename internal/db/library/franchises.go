@@ -434,3 +434,72 @@ func (f Franchises) JoinGroup(ctx context.Context, mediaType, name string, workI
 	}
 	return keep, nil
 }
+
+// Traits are what two works share when they belong together: genres, the networks or studios they are on, and the people
+// who made them.
+type Traits struct {
+	Genres, Creators []string
+	Organisations    []int64
+}
+
+// WorkTraits lists the traits of every work of the media type, by work.
+func (f Franchises) WorkTraits(ctx context.Context, mediaType string) (map[int64]*Traits, error) {
+	queries := librarydb.New(f.store.Read())
+	traits := map[int64]*Traits{}
+	of := func(id int64) *Traits {
+		if traits[id] == nil {
+			traits[id] = &Traits{}
+		}
+		return traits[id]
+	}
+	genres, err := queries.ListGenresOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: genres: %w", err)
+	}
+	for _, row := range genres {
+		of(row.WorkID).Genres = append(of(row.WorkID).Genres, row.Genre)
+	}
+	organisations, err := queries.ListOrganisationLinksOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: organisations: %w", err)
+	}
+	for _, row := range organisations {
+		of(row.WorkID).Organisations = append(of(row.WorkID).Organisations, row.OrganisationID)
+	}
+	creators, err := queries.ListCreatorLinksOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: creators: %w", err)
+	}
+	for _, row := range creators {
+		of(row.WorkID).Creators = append(of(row.WorkID).Creators, strconv.FormatInt(row.PersonID, 10))
+	}
+	return traits, nil
+}
+
+// SetFranchiseName gives a franchise the name its works share.
+func (f Franchises) SetFranchiseName(ctx context.Context, id int64, name string) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetCollectionName(ctx, librarydb.SetCollectionNameParams{Name: name, ID: id})
+	})
+	if err != nil {
+		return fmt.Errorf("library: franchise %d name: %w", id, err)
+	}
+	return nil
+}
+
+// AddToFranchise puts works in a franchise that is already there.
+func (f Franchises) AddToFranchise(ctx context.Context, id int64, workIDs []int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, workID := range workIDs {
+			if err := queries.AddCollectionMember(ctx, librarydb.AddCollectionMemberParams{CollectionID: id, WorkID: workID, PartID: 0}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: add to franchise %d: %w", id, err)
+	}
+	return nil
+}

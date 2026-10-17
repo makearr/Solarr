@@ -18,6 +18,8 @@ func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
 		"Ovalevag Zuk!", "American Horror Story", // 18-19
 		"FBI", "FBI: Most Wanted", "Tobmad", "Tobmad: New Blood", // 20-23
 		"Love", "Lovecraft Country", // 24-25: a word that only starts another word is no prefix
+		"Jzamkie's Orpigv", "Jzamkie's Orpigv (2011)", // 26-27
+		"Huuva of Waofe", "Huuva of the Ppamir", "Gag pb. Mewj", "Gag Pb Sua", // 28-31: a connector ends no name
 	}
 	var works []library.WorkName
 	for index, title := range titles {
@@ -29,7 +31,7 @@ func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
 	}
 
 	groups := groupsOf(titleEdges(works))
-	want := [][]int64{{1, 2, 3}, {4, 5}, {7, 8, 9}, {10, 11}, {13, 14, 15}, {16, 17}, {20, 21}, {22, 23}}
+	want := [][]int64{{1, 2, 3}, {4, 5}, {7, 8, 9}, {13, 14, 15}, {16, 17}, {20, 21}, {22, 23}, {26, 27}}
 	if len(groups) != len(want) {
 		t.Fatalf("groups = %v, want %v", groups, want)
 	}
@@ -38,7 +40,7 @@ func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
 			t.Errorf("group %d = %v, want %v", index, groups[index], want[index])
 		}
 	}
-	for index, name := range map[int]string{0: "PLUH", 1: "Tzul Nmex", 2: "Ppamir Vetl", 4: "Kdihep Uisbl", 6: "FBI"} {
+	for index, name := range map[int]string{0: "PLUH", 1: "Tzul Nmex", 2: "Ppamir Vetl", 3: "Kdihep Uisbl", 5: "FBI", 7: "Charlies Angels"} {
 		if got := groupName(byTitle, groups[index]); got != name {
 			t.Errorf("group %d is named %q, want %q", index, got, name)
 		}
@@ -53,5 +55,22 @@ func TestGroupsFollowEdgesFromProvidersAndCrossovers(t *testing.T) {
 	}
 	if got := groupName(titles, groups[0]); got != "Eureka / Sifuruowu 13" {
 		t.Errorf("a group whose names share nothing is named by them: %q", got)
+	}
+}
+
+func TestNamesAloneAreNotEnoughTwoWorksNeedAGenreANetworkOrACreatorInCommon(t *testing.T) {
+	drama := &library.Traits{Genres: []string{"Drama", "Action & Adventure"}}
+	cartoon := &library.Traits{Genres: []string{"Animation", "Kids", "Action & Adventure", "Comedy"}}
+	if compatible(drama, cartoon) {
+		t.Error("Kung Fu and Logt Po Nidxo share one genre of six and nothing else")
+	}
+	if !compatible(drama, &library.Traits{Genres: []string{"Drama", "Crime"}}) {
+		t.Error("two dramas share a third of their genres")
+	}
+	if !compatible(&library.Traits{Organisations: []int64{4}}, &library.Traits{Organisations: []int64{4}, Genres: []string{"Animation"}}) {
+		t.Error("the same network is something in common")
+	}
+	if compatible(drama, nil) {
+		t.Error("a work nothing is known of is grouped with none")
 	}
 }

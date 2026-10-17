@@ -43,7 +43,7 @@ const (
 	rssScheduleCron                = "*/15 * * * *"  // every 15 minutes, as Lidarr's RSS Sync
 	huntScheduleCron               = "*/15 * * * *"  // every 15 minutes, within the hourly budget
 	crossoverPassScheduleCron      = "10 5 * * *"    // daily at 05:10, after the night's refreshes
-	franchisePassScheduleCron      = "20 4 * * *"    // daily at 04:20; 25 series a run, Wikidata asks for polite use
+	franchisePassScheduleCron      = "20 */4 * * *"  // every four hours; 60 series a run, Wikidata asks for polite use
 	bridgeScheduleCron             = "50 3 * * *"    // daily at 03:50; 300 people a run, after the night's refreshes
 	tvRetryScheduleCron            = "30 4 * * *"    // daily at 04:30: providers learn new series and fix old data overnight
 )

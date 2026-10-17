@@ -506,6 +506,7 @@ type Querier interface {
 	ListCollectionsOfKind(ctx context.Context, arg ListCollectionsOfKindParams) ([]Collection, error)
 	ListCollectionsOfWorkParts(ctx context.Context, arg ListCollectionsOfWorkPartsParams) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
+	ListCreatorLinksOfType(ctx context.Context, mediaType string) ([]ListCreatorLinksOfTypeRow, error)
 	ListCreditsForEdition(ctx context.Context, editionID int64) ([]Credit, error)
 	// Per-track performers and composers, which is what classical and various-artists
 	// releases need and what a work-level credit cannot express.
@@ -556,6 +557,7 @@ type Querier interface {
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
 	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error)
+	ListGenresOfType(ctx context.Context, mediaType string) ([]ListGenresOfTypeRow, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	// The artists with something held in a library, and the release groups they hold there: what a discography is
 	// compared against. A held work without a release-group id yields an empty id.
@@ -614,6 +616,7 @@ type Querier interface {
 	// The organisations a work is made or aired by, named.
 	ListNamedOrganisationsForWork(ctx context.Context, workID int64) ([]ListNamedOrganisationsForWorkRow, error)
 	ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error)
+	ListOrganisationLinksOfType(ctx context.Context, mediaType string) ([]ListOrganisationLinksOfTypeRow, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)

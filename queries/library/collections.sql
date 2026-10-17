@@ -417,3 +417,14 @@ WHERE r.kind = 'related_series' AND r.from_type = 'work' AND r.to_type = 'work';
 -- name: MoveCollectionMembers :exec
 INSERT OR IGNORE INTO collection_member (collection_id, work_id, part_id, ord)
 SELECT sqlc.arg(into_id), cm.work_id, cm.part_id, cm.ord FROM collection_member cm WHERE cm.collection_id = sqlc.arg(from_id);
+
+-- name: ListGenresOfType :many
+SELECT wc.work_id, wc.value AS genre FROM work_classification wc JOIN work w ON w.id = wc.work_id
+WHERE w.media_type = ? AND wc.kind = 'genre';
+
+-- name: ListOrganisationLinksOfType :many
+SELECT wo.work_id, wo.organisation_id FROM work_organisation wo JOIN work w ON w.id = wo.work_id WHERE w.media_type = ?;
+
+-- name: ListCreatorLinksOfType :many
+SELECT DISTINCT c.work_id, c.person_id FROM credit c JOIN work w ON w.id = c.work_id
+WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner', 'executive_producer');
