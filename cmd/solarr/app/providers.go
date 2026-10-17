@@ -57,7 +57,8 @@ func (p *process) liveProxyPolicy() httpx.LiveProxyPolicy {
 // breaker, and vice versa).
 func (p *process) wikidataFetcher() wikidata.Fetcher {
 	return wikidata.New(wikidata.Config{
-		WikidataClient:  p.providerClient(providerWikidata, nil, httpx.ClientConfig{}),
+		// The query service answers a batch of a library's series in seconds, but takes a minute when busy.
+		WikidataClient:  p.providerClient(providerWikidata, nil, httpx.ClientConfig{Timeout: 90 * time.Second}),
 		WikipediaClient: p.providerClient(providerWikipedia, nil, httpx.ClientConfig{}),
 	})
 }

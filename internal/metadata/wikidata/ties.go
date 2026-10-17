@@ -19,10 +19,10 @@ type SeriesTies struct {
 }
 
 // tiesPerQuery bounds the series one query asks about, so its address stays well inside what the service takes.
-const tiesPerQuery = 150
+const tiesPerQuery = 50
 
 // membersPerQuery bounds the franchises one query lists the series of.
-const membersPerQuery = 40
+const membersPerQuery = 20
 
 // TiesOf answers what Wikidata knows of each series, a batch of them per query; series it does not know are absent.
 func (f Fetcher) TiesOf(ctx context.Context, series []SeriesRef) (map[SeriesRef]SeriesTies, error) {
@@ -43,8 +43,11 @@ func (f Fetcher) TiesOf(ctx context.Context, series []SeriesRef) (map[SeriesRef]
 		}
 		for start := 0; start < len(ids); start += tiesPerQuery {
 			batch := ids[start:min(start+tiesPerQuery, len(ids))]
+			// The query service drops a query now and then when busy; one more try before the stage gives up.
 			if err := f.tiesBatch(ctx, property, batch, refs, out); err != nil {
-				return out, err
+				if err := f.tiesBatch(ctx, property, batch, refs, out); err != nil {
+					return out, err
+				}
 			}
 		}
 	}
@@ -102,12 +105,16 @@ func (f Fetcher) FranchiseMembers(ctx context.Context, qids []string) (map[strin
 	}
 	for start := 0; start < len(valid); start += membersPerQuery {
 		batch := valid[start:min(start+membersPerQuery, len(valid))]
-		rows, err := f.sparql(ctx, `SELECT DISTINCT ?q ?m ?mLabel ?tvdb ?tmdb ?start WHERE {
-  VALUES ?q { `+strings.Join(batch, " ")+` }
+		query := `SELECT DISTINCT ?q ?m ?mLabel ?tvdb ?tmdb ?start WHERE {
+  VALUES ?q { ` + strings.Join(batch, " ") + ` }
   { ?m wdt:P179 ?q } UNION { ?m wdt:P8345 ?q } UNION { ?q wdt:P31 [] . BIND(?q AS ?m) }
   OPTIONAL { ?m wdt:P4835 ?tvdb } OPTIONAL { ?m wdt:P4983 ?tmdb } FILTER(BOUND(?tvdb) || BOUND(?tmdb))
   OPTIONAL { ?m wdt:P580 ?start }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`)
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`
+		rows, err := f.sparql(ctx, query)
+		if err != nil {
+			rows, err = f.sparql(ctx, query)
+		}
 		if err != nil {
 			return out, fmt.Errorf("wikidata: franchise members: %w", err)
 		}
