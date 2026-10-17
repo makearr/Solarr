@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -28,7 +29,9 @@ type Resolver struct {
 	DefaultProfileID int64
 	// Locks serialises the folders of one name, so the season directories of a series a scan reads side by side ask
 	// the providers once between them; nil means no serialising.
-	Locks      *keyedlock.Locks
+	Locks *keyedlock.Locks
+	// Resolved remembers the series of each folder; nil remembers none.
+	Resolved   *FolderMemory
 	Categories interface {
 		Category(id int64) (settings.Category, bool)
 		ProfileFor(category settings.Category, fallback int64) int64
@@ -100,12 +103,56 @@ func (c Resolver) ResolveFiles(ctx context.Context, categoryID int64, folder str
 
 // ResolveFolder is ResolveFiles with the ids the folder's own tvshow.nfo names; an id in the folder's name wins over them.
 func (c Resolver) ResolveFolder(ctx context.Context, categoryID int64, folder string, relPaths []string, named FolderGuess) (int64, []model.Identification) {
+	key := strconv.FormatInt(categoryID, 10) + "|" + strings.ToLower(folder)
+	if c.Locks != nil {
+		defer c.Locks.Lock(key)()
+	}
+	if folder == "" {
+		return c.resolveFolder(ctx, categoryID, folder, relPaths, named)
+	}
+	if id, known := c.Resolved.recall(key); known {
+		return id, nil
+	}
+	id, candidates := c.resolveFolder(ctx, categoryID, folder, relPaths, named)
+	if id != 0 {
+		c.Resolved.remember(key, id)
+	}
+	return id, candidates
+}
+
+// FolderMemory is the series each folder was placed on, so a directory of specials that alone cannot tell the series
+// (its episodes were what decided the rest of the folder) is placed with the others.
+type FolderMemory struct {
+	mu     sync.Mutex
+	series map[string]int64
+}
+
+func (m *FolderMemory) recall(key string) (int64, bool) {
+	if m == nil {
+		return 0, false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	id, known := m.series[key]
+	return id, known
+}
+
+func (m *FolderMemory) remember(key string, id int64) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.series == nil {
+		m.series = map[string]int64{}
+	}
+	m.series[key] = id
+}
+
+func (c Resolver) resolveFolder(ctx context.Context, categoryID int64, folder string, relPaths []string, named FolderGuess) (int64, []model.Identification) {
 	relPath := ""
 	if len(relPaths) > 0 {
 		relPath = relPaths[0]
-	}
-	if c.Locks != nil {
-		defer c.Locks.Lock(strconv.FormatInt(categoryID, 10) + "|" + strings.ToLower(folder))()
 	}
 	name := folder
 	if name == "" {

@@ -58,7 +58,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{config: config, logger: logger, resolver: Resolver{
 		Service: config.Service, Reader: config.Reader, Clock: config.Clock, Logger: logger,
-		DefaultProfileID: config.DefaultProfileID, Categories: config.Categories, Locks: &keyedlock.Locks{},
+		DefaultProfileID: config.DefaultProfileID, Categories: config.Categories, Locks: &keyedlock.Locks{}, Resolved: &FolderMemory{},
 	}}
 }
 

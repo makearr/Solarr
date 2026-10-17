@@ -32,3 +32,19 @@ func TestAFolderYearThatTheTVDBQualifiesInTheTitleFindsTheHeldSeries(t *testing.
 		t.Errorf("resolved %d, want the held series %d without asking the providers again", got, added.WorkID)
 	}
 }
+
+func TestADirectoryOfSpecialsIsPlacedOnTheSeriesItsFolderWasPlacedOn(t *testing.T) {
+	first, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: errors.New("down")})
+	memory := &tv.FolderMemory{}
+	resolver := tv.Resolver{Service: first, Reader: library.NewSeriesReader(opened), Clock: first.Clock, DefaultProfileID: 1, Categories: categories{}, Resolved: memory}
+	placed, _ := resolver.ResolveFolder(t.Context(), 3, "Example Show", []string{"Example Show/Season 1/Example Show - S01E01.mp4"}, tv.FolderGuess{})
+	if placed == 0 {
+		t.Fatal("the folder was not placed")
+	}
+	elsewhere, other := newService(t, noSearchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: errors.New("down")})
+	later := tv.Resolver{Service: elsewhere, Reader: library.NewSeriesReader(other), Clock: first.Clock, DefaultProfileID: 1, Categories: categories{}, Resolved: memory}
+	got, _ := later.ResolveFolder(t.Context(), 3, "Example Show", []string{"Example Show/Specials/Example Show - S00E01.mp4"}, tv.FolderGuess{})
+	if got != placed {
+		t.Errorf("specials resolved to %d, want the folder's series %d", got, placed)
+	}
+}
