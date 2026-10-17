@@ -84,7 +84,7 @@ function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaType
         <MergeSuggestion work={work} words={words} categoryId={categoryId} />
         <Tabs label={work.title} tabs={tabs} active={tab} />
         {tab === "overview" && <OverviewTab work={work} info={info} words={words} categoryId={categoryId} />}
-        {tab === "files" && <FilesTab work={work} words={words} />}
+        {tab === "files" && <FilesTab work={work} words={words} info={info} />}
         {tab === "history" && <HistoryTab workId={work.id} />}
         {tab === "search" && <WorkSearchTab work={work} info={info} words={words} lead={lead?.person_name ?? ""} />}
       </div>
@@ -416,7 +416,7 @@ function headerFacts(work: Work, info: MediaTypeInfo | undefined): string[] {
 
 /** Who made it, one line per role the type declares for a whole work, the lead and the cast strip's actors aside. */
 function PeopleLine({ work, info, categoryId }: { work: Work; info: MediaTypeInfo | undefined; categoryId: string | undefined }) {
-  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && !role.lead && !role.character);
+  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && (!role.lead || !work.lead_id) && !role.character);
   const lines = roles
     .map((role) => ({ role, people: work.credits.filter((credit, index, all) => credit.role === role.key && all.findIndex((other) => other.role === role.key && other.person_id === credit.person_id) === index) }))
     .filter((line) => line.people.length > 0);
@@ -513,7 +513,9 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
         ))
       ) : info?.part.one ? (
         <WholeParts work={work} info={info} words={words} categoryId={categoryId} actions={actions} />
-      ) : null}
+      ) : (
+        <WholeFiles work={work} />
+      )}
       {work.editions.length > 0 && (
         <details className="rounded-lg border border-border-subtle bg-surface p-3 text-sm">
           <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-ink-muted">Releases ({work.editions.length})</summary>
@@ -548,20 +550,37 @@ function WholeParts({ work, info, words, categoryId, actions }: { work: Work; in
   );
 }
 
-/** The work's people with their pictures: the crew first, then the cast with whom they played (a slider). */
+/** The order a work's people are shown in: actors, then who directed and wrote it, producers last. */
+const CREW_ORDER = ["director", "creator", "showrunner", "writer", "composer", "cinematographer", "executive_producer", "producer"];
+
+/** The work's people with their pictures: the actors first, then the director, the writers and the producers last; a person
+ *  once, with every part they played. */
 function CastStrip({ work, info, categoryId }: { work: Work; info: MediaTypeInfo | undefined; categoryId: string | undefined }) {
-  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && !role.lead);
-  const once = (credits: Credit[]) => credits.filter((credit, index, all) => all.findIndex((other) => other.person_id === credit.person_id) === index);
-  const cast = work.credits.filter((credit) => roles.some((role) => role.character && role.key === credit.role)).slice(0, 24);
-  if (cast.length === 0) return null;
-  const crew = once(roles.filter((role) => !role.character).flatMap((role) => work.credits.filter((credit) => credit.role === role.key))).slice(0, 8);
-  const roleLabel = (key: string) => roles.find((role) => role.key === key)?.label ?? key;
+  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && (!role.lead || !work.lead_id));
+  const labelOf = (key: string) => roles.find((role) => role.key === key)?.label ?? key;
+  const actorRoles = new Set(roles.filter((role) => role.character).map((role) => role.key));
+  const rank = (role: string) => {
+    const index = CREW_ORDER.indexOf(role);
+    return index < 0 ? CREW_ORDER.length : index;
+  };
+  const ordered = [
+    ...work.credits.filter((credit) => actorRoles.has(credit.role)),
+    ...work.credits.filter((credit) => !actorRoles.has(credit.role) && roles.some((role) => role.key === credit.role)).sort((a, b) => rank(a.role) - rank(b.role)),
+  ];
+  if (ordered.length === 0) return null;
+  const people: { credit: Credit; subtitle: string[] }[] = [];
+  for (const credit of ordered) {
+    const found = people.find((person) => person.credit.person_id === credit.person_id);
+    const part = actorRoles.has(credit.role) ? credit.character ?? labelOf(credit.role) : labelOf(credit.role);
+    if (!found) people.push({ credit, subtitle: [part] });
+    else if (part && !found.subtitle.includes(part)) found.subtitle.push(part);
+  }
   const tile = (credit: Credit, subtitle: string) => {
     const link = categoryId
       ? ({ to: "/library/$categoryId/people/$personId", params: { categoryId, personId: String(credit.person_id) } } as const)
       : ({ to: "/people/$id", params: { id: String(credit.person_id) } } as const);
     return (
-      <Link key={`${credit.person_id}-${credit.role}`} {...link} className="flex w-24 shrink-0 flex-col items-center gap-1 text-center focus-visible:outline-2 focus-visible:outline-accent">
+      <Link key={credit.person_id} {...link} className="flex w-24 shrink-0 flex-col items-center gap-1 text-center focus-visible:outline-2 focus-visible:outline-accent">
         <span className="block size-20 overflow-hidden rounded-full border border-border-subtle bg-surface">
           {credit.image_url ? (
             <img src={remoteImage(credit.image_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />
@@ -572,17 +591,16 @@ function CastStrip({ work, info, categoryId }: { work: Work; info: MediaTypeInfo
           )}
         </span>
         <span className="w-full truncate text-xs font-medium">{credit.person_name}</span>
-        <span className="w-full truncate text-[11px] text-ink-muted">{subtitle}</span>
+        <span className="w-full truncate text-[11px] text-ink-muted" title={subtitle}>
+          {subtitle}
+        </span>
       </Link>
     );
   };
   return (
     <section className="flex flex-col gap-2">
       <h2 className="text-sm font-semibold">Cast and crew</h2>
-      <div className="flex gap-3 overflow-x-auto pb-1">
-        {crew.map((credit) => tile(credit, roleLabel(credit.role)))}
-        {cast.map((credit) => tile(credit, credit.character ?? ""))}
-      </div>
+      <div className="flex gap-3 overflow-x-auto pb-1">{people.slice(0, 40).map((person) => tile(person.credit, person.subtitle.join(" · ")))}</div>
     </section>
   );
 }
@@ -605,9 +623,10 @@ function EditionCard({ edition, workTitle }: { edition: Edition; workTitle: stri
 
 /** Sonarr's Files tab: every part with a file, where it is, what the probe measured, and whether it meets the library's
  *  quality. */
-function FilesTab({ work, words }: { work: Work; words: Vocabulary }) {
+function FilesTab({ work, words, info }: { work: Work; words: Vocabulary; info: MediaTypeInfo | undefined }) {
   const { parts, loading } = useAllParts(work.id, undefined);
   const present = parts.filter((part) => part.file);
+  if (!info?.part.one) return <WholeFiles work={work} />;
   if (loading) return <p className="text-xs text-ink-muted">{t("work.loading")}</p>;
   if (present.length === 0) return <EmptyState title={`No ${words.parts} on disk yet.`} />;
   return (
@@ -634,6 +653,33 @@ function FilesTab({ work, words }: { work: Work; words: Vocabulary }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+/** The files of a work with no parts (a movie): where each is and what the probe measured, a version each. */
+function WholeFiles({ work }: { work: Work }) {
+  const files = work.files ?? [];
+  if (files.length === 0) {
+    return <EmptyState title={work.wanted?.monitored ? t("work.file.missing") : t("work.file.none")} />;
+  }
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+      <h2 className="text-sm font-semibold">{files.length > 1 ? t("work.file.versions", { count: files.length }) : t("work.file.one")}</h2>
+      <ul className="flex flex-col divide-y divide-border-subtle text-sm">
+        {files.map((file) => (
+          <li key={file.media_object_id} className="flex flex-col gap-1 py-2">
+            {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
+            <span className="flex flex-wrap items-center gap-1">
+              {fileChips(file).map((chip) => (
+                <Chip key={chip}>{chip}</Chip>
+              ))}
+              {file.meets_target != null && <Chip tone={file.meets_target ? "ok" : "warn"}>{file.meets_target ? "meets the target" : "below the target"}</Chip>}
+              {file.meets_cutoff === false && <Chip tone="warn">below the cutoff</Chip>}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

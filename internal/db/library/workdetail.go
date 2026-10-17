@@ -115,6 +115,8 @@ type WorkDetail struct {
 	// Wanted is nil when nothing has ever wanted this album -- no scan, no
 	// subscription, no user request.
 	Wanted *DesiredItemStatus
+	// Files are the files of a work with no parts, one per version.
+	Files []PartFile
 	// Groups are the work's SET items: an album's one, with no ref, or a series' seasons.
 	Groups []GroupStatus
 }
@@ -256,8 +258,28 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		return WorkDetail{}, fmt.Errorf("library: work detail: files: %w", err)
 	}
 
+	var wholeFiles []PartFile
+	if len(partDetails) == 0 {
+		rows, err := queries.ListWholeFilesForWork(ctx, id)
+		if err != nil {
+			return WorkDetail{}, fmt.Errorf("library: work detail: whole files: %w", err)
+		}
+		for _, row := range rows {
+			wholeFiles = append(wholeFiles, PartFile{
+				MediaObjectID: row.MediaObjectID, AudioCodec: row.AudioCodec.String, VideoCodec: row.VideoCodec.String,
+				Container: row.Container.String, BitrateKbps: bitrateKbps(row.OverallBitrate, row.AudioBitrate),
+				Lossless: row.Lossless.Valid && row.Lossless.Int64 == 1, Extension: strings.ToLower(strings.TrimPrefix(path.Ext(row.RelPath), ".")),
+				RelPath: row.RelPath, SizeBytes: row.SizeBytes, Resolution: row.Resolution.String, HDR: row.Hdr.String,
+				AudioChannels: row.AudioChannels.String, VideoBitrateKbps: row.VideoBitrate.Int64 / 1000,
+				AudioLanguages: jsonStrings(row.Languages), Subtitles: jsonStrings(row.Subtitles),
+				FrameRate: row.FrameRate.Float64, CRF: row.Crf.Float64,
+			})
+		}
+	}
+
 	return WorkDetail{
-		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
+		Files: wholeFiles,
+		Work:  work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
 		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups, HasFiles: hasFiles == 1,
 	}, nil

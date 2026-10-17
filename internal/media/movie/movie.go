@@ -98,8 +98,9 @@ type Rating struct {
 
 // Collection is the franchise a movie belongs to.
 type Collection struct {
-	TMDBID int64
-	Name   string
+	TMDBID    int64
+	Name      string
+	PosterURL string
 }
 
 // Movie is one film, merged from every source that knew it. Dates are yyyy-MM-dd or empty.

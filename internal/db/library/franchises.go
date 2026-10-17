@@ -101,6 +101,7 @@ type FranchiseRow struct {
 	Name       string
 	ExternalID string
 	Monitored  bool
+	PosterURL  string
 	// Total is the films the provider says the franchise has, 0 when unknown.
 	Total   int64
 	Members []FranchiseMember
@@ -116,7 +117,7 @@ func (f Franchises) InCategory(ctx context.Context, mediaType string, categoryID
 	for _, row := range rows {
 		if len(out) == 0 || out[len(out)-1].ID != row.CollectionID {
 			out = append(out, FranchiseRow{
-				ID: row.CollectionID, Name: row.CollectionName, ExternalID: row.ExternalID, Monitored: row.CollectionMonitored == 1, Total: row.Total.Int64,
+				ID: row.CollectionID, Name: row.CollectionName, ExternalID: row.ExternalID, Monitored: row.CollectionMonitored == 1, Total: row.Total.Int64, PosterURL: row.PosterUrl,
 			})
 		}
 		last := &out[len(out)-1]
@@ -153,6 +154,17 @@ func (f Franchises) SetMonitored(ctx context.Context, id int64, monitored bool, 
 	})
 	if err != nil {
 		return fmt.Errorf("library: monitor franchise %d: %w", id, err)
+	}
+	return nil
+}
+
+// SetPoster keeps the provider's picture of a franchise.
+func (f Franchises) SetPoster(ctx context.Context, id int64, posterURL string) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetCollectionPoster(ctx, librarydb.SetCollectionPosterParams{PosterUrl: posterURL, ID: id})
+	})
+	if err != nil {
+		return fmt.Errorf("library: franchise %d poster: %w", id, err)
 	}
 	return nil
 }

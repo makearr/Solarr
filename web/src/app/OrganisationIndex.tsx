@@ -1,3 +1,4 @@
+import { LetterRail } from "@/ui/LetterRail";
 import { useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -26,7 +27,7 @@ import { Poster } from "./Poster";
 
 type Organisation = components["schemas"]["OrganisationEntry"];
 
-const ORGANISATION_FILTER_KEYS: readonly string[] = ["q", "monitored"];
+const ORGANISATION_FILTER_KEYS: readonly string[] = ["q", "monitored", "from"];
 
 /** A library's organisations (networks, labels, studios): most works first, on the same wall as every other level. */
 export function OrganisationIndex() {
@@ -58,6 +59,7 @@ export function OrganisationIndex() {
             query: {
               category: Number(categoryId),
               q: query.filters.q || undefined,
+              from: query.filters.from || undefined,
               monitored: query.filters.monitored ? query.filters.monitored === "true" : undefined,
               sort: sort as "name" | "works" | "latest",
               dir: descending ? "desc" : "asc",
@@ -117,7 +119,8 @@ export function OrganisationIndex() {
         {mode === "poster" && <PosterOptionsMenu options={options} onChange={setOptions} />}
         <IndexViewToggle view={mode} onChange={setMode} offered={["poster", "list"]} />
       </Toolbar>
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 pr-6">
+        {sort === "name" && !descending && <LetterRail value={view.query.filters.from ?? ""} onChange={(letter) => setFilter("from", letter)} />}
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
         {list.error !== null && <p className="p-4 text-sm text-danger">These could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (

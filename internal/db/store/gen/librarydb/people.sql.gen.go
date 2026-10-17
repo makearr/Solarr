@@ -1541,6 +1541,28 @@ func (q *Queries) SetPersonMonitored(ctx context.Context, arg SetPersonMonitored
 	return err
 }
 
+const setWorkLeadFromRole = `-- name: SetWorkLeadFromRole :exec
+UPDATE work SET
+  lead_person_id = (SELECT cr.person_id FROM credit cr WHERE cr.work_id = ?1 AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = ?2
+                    ORDER BY cr.ord, cr.person_id LIMIT 1),
+  lead_person_sort_name = (SELECT pe.sort_name FROM credit cr JOIN person pe ON pe.id = cr.person_id
+                           WHERE cr.work_id = ?1 AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = ?2
+                           ORDER BY cr.ord, cr.person_id LIMIT 1)
+WHERE work.id = ?1
+  AND EXISTS (SELECT 1 FROM credit cr WHERE cr.work_id = ?1 AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = ?2)
+`
+
+type SetWorkLeadFromRoleParams struct {
+	WorkID int64
+	Role   string
+}
+
+// A work is listed under the first person credited in the role: a movie's director.
+func (q *Queries) SetWorkLeadFromRole(ctx context.Context, arg SetWorkLeadFromRoleParams) error {
+	_, err := q.db.ExecContext(ctx, setWorkLeadFromRole, arg.WorkID, arg.Role)
+	return err
+}
+
 const updateSubscriptionScope = `-- name: UpdateSubscriptionScope :exec
 UPDATE subscription SET media_types_json = ?, roles_json = ?, category_id = ?, filters_json = ?,
                         monitor_back_catalogue = ?, enabled = 1

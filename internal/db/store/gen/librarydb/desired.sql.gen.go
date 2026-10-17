@@ -1469,6 +1469,84 @@ func (q *Queries) ListWantedAlbumsByArtistName(ctx context.Context, arg ListWant
 	return items, nil
 }
 
+const listWholeFilesForWork = `-- name: ListWholeFilesForWork :many
+SELECT f.media_object_id, o.overall_bitrate, o.audio_bitrate,
+       a.audio_codec, a.video_codec, a.container, a.lossless, a.languages,
+       o.size_bytes, o.video_bitrate, a.resolution, a.hdr, a.audio_channels, a.subtitles, a.frame_rate, a.crf,
+       CAST(COALESCE((SELECT lp.rel_path FROM library_path lp WHERE lp.media_object_id = o.id
+                      ORDER BY lp.is_primary DESC, lp.id LIMIT 1), '') AS TEXT) AS rel_path
+FROM desired_item d
+JOIN desired_item_file f ON f.desired_item_id = d.id
+JOIN media_object o ON o.id = f.media_object_id
+LEFT JOIN media_attributes a ON a.id = o.measured_attributes_id
+WHERE d.work_id = ? AND f.role = 'primary' AND f.media_ref = ''
+  AND NOT (EXISTS (SELECT 1 FROM library_path gone WHERE gone.media_object_id = f.media_object_id AND gone.missing_since IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM library_path held WHERE held.media_object_id = f.media_object_id AND held.missing_since IS NULL))
+ORDER BY f.media_object_id
+`
+
+type ListWholeFilesForWorkRow struct {
+	MediaObjectID  int64
+	OverallBitrate sql.NullInt64
+	AudioBitrate   sql.NullInt64
+	AudioCodec     sql.NullString
+	VideoCodec     sql.NullString
+	Container      sql.NullString
+	Lossless       sql.NullInt64
+	Languages      sql.NullString
+	SizeBytes      int64
+	VideoBitrate   sql.NullInt64
+	Resolution     sql.NullString
+	Hdr            sql.NullString
+	AudioChannels  sql.NullString
+	Subtitles      sql.NullString
+	FrameRate      sql.NullFloat64
+	Crf            sql.NullFloat64
+	RelPath        string
+}
+
+// The files of a work with no parts (a movie): the primary files of its whole-work items, a version each.
+func (q *Queries) ListWholeFilesForWork(ctx context.Context, workID int64) ([]ListWholeFilesForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWholeFilesForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWholeFilesForWorkRow{}
+	for rows.Next() {
+		var i ListWholeFilesForWorkRow
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.OverallBitrate,
+			&i.AudioBitrate,
+			&i.AudioCodec,
+			&i.VideoCodec,
+			&i.Container,
+			&i.Lossless,
+			&i.Languages,
+			&i.SizeBytes,
+			&i.VideoBitrate,
+			&i.Resolution,
+			&i.Hdr,
+			&i.AudioChannels,
+			&i.Subtitles,
+			&i.FrameRate,
+			&i.Crf,
+			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markDesiredItemDirty = `-- name: MarkDesiredItemDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE id = ?
 `

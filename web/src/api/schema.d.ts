@@ -4850,6 +4850,8 @@ export interface components {
             monitored: boolean;
             /** @description The films the provider says the franchise has; absent when it has not said. */
             total?: number;
+            /** @description The provider's picture of the franchise. */
+            poster_url?: string;
             members: components["schemas"]["FranchiseMember"][];
         };
         FranchiseMember: {
@@ -5939,6 +5941,11 @@ export interface components {
              * @description The library's work
              */
             work_id?: number;
+            /**
+             * Format: int64
+             * @description The library the work is added to from here; absent when no library holds that kind.
+             */
+            add_library_id?: number;
         };
         /** @description A label, network, studio or publisher with what it did in the libraries listed. */
         OrganisationEntry: {
@@ -6181,6 +6188,8 @@ export interface components {
             next_cursor?: string;
         };
         WorkDetail: {
+            /** @description The files of a work with no parts (a movie), one per version. */
+            files?: components["schemas"]["PartFile"][];
             /**
              * Format: int64
              * @description The person the work is listed under (an album's artist).
@@ -9545,6 +9554,8 @@ export interface operations {
                 /** @description Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added). facet:<key> orders by one of the library's media type's sortable facets (a series' network, an album's label); an unknown or unsortable one is refused. */
                 sort?: string;
                 dir?: "asc" | "desc";
+                /** @description Starts a title or artist ordering ascending at this letter instead of at the beginning, for the A-Z jump beside a long list; ignored with a cursor, another ordering or a descending one. */
+                from?: string;
                 /** @description Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required. */
                 fresh?: boolean;
                 /** @description Only works with a monitored desired_item that is not yet COMPLETE (the per-library Wanted screen). Its own state, when the work has one, comes back as wanted_state. */
@@ -13265,6 +13276,8 @@ export interface operations {
                 q?: string;
                 sort?: "name" | "works" | "latest";
                 dir?: "asc" | "desc";
+                /** @description Starts the name ordering, ascending, at this letter instead of at the beginning; ignored with a cursor. */
+                from?: string;
                 cursor?: string;
                 limit?: number;
             };
@@ -13324,6 +13337,8 @@ export interface operations {
                 where?: string;
                 sort?: "name" | "works" | "latest" | "added";
                 dir?: "asc" | "desc";
+                /** @description Starts the name ordering, ascending, at this letter instead of at the beginning; ignored with a cursor. */
+                from?: string;
                 /** @description From `next_cursor` of the previous page. Absent on the first page. */
                 cursor?: string;
                 limit?: number;

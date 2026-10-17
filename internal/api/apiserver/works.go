@@ -164,6 +164,9 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
+	if cursor.Sort == "" && cursor.ID == 0 && params.From != nil && derefOr(params.Dir, gen.ListWorksParamsDir("")) != gen.ListWorksParamsDirDesc {
+		cursor = startAtLetter(WorkSort(derefOr(params.Sort, "")), *params.From)
+	}
 
 	if s.works == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -195,6 +198,18 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort, s.wall.Now()))
+}
+
+// startAtLetter is the cursor that begins a title or artist ordering at the letter: everything sorting after it, which is
+// every name starting with it.
+func startAtLetter(sort WorkSort, letter string) paginate.TextCursor {
+	switch sort {
+	case WorkSortArtist:
+		return paginate.TextCursor{Sort: letter + artistCursorSeparator}
+	case WorkSortTitle, "title":
+		return paginate.TextCursor{Sort: letter}
+	}
+	return paginate.TextCursor{}
 }
 
 // worksCursorFor decodes the cursor's opaque sort value against whichever

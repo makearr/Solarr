@@ -894,6 +894,9 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 		}
 		params.Limit = &limit
 	}
+	if raw := query.Get("from"); raw != "" {
+		params.From = &raw
+	}
 	if raw := query.Get("category_id"); raw != "" {
 		categoryID, err := strconv.ParseInt(raw, 10, 64)
 		if err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -353,6 +354,15 @@ func (p *process) movieModule() movie.Module {
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		Adder: catalog, Franchise: catalog,
+		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared},
+		Files: movie.Files{
+			Resolver: movie.Resolver{
+				Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
+				DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+			},
+			Series: library.NewSeries(p.library), Unidentified: library.NewUnidentified(p.library), Clock: clock.NewSystem(),
+			AllowAgain: catalog.AllowAgain,
+		},
 		ServerFiles: &movie.ServerFilesJob{
 			Writer: movie.ServerFiles{
 				Sidecar: sidecar.Writer{FS: p.fsys, Picture: p.remoteImages().Original}, Reader: library.NewSeriesReader(p.library),

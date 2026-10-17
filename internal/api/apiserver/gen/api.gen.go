@@ -1986,6 +1986,9 @@ type Franchise struct {
 	Monitored bool              `json:"monitored"`
 	Name      string            `json:"name"`
 
+	// PosterUrl The provider's picture of the franchise.
+	PosterUrl *string `json:"poster_url,omitempty"`
+
 	// Total The films the provider says the franchise has; absent when it has not said.
 	Total *int `json:"total,omitempty"`
 }
@@ -2473,7 +2476,9 @@ type JobState string
 
 // KnownFor defines model for KnownFor.
 type KnownFor struct {
-	ExternalId string `json:"external_id"`
+	// AddLibraryId The library the work is added to from here; absent when no library holds that kind.
+	AddLibraryId *int64 `json:"add_library_id,omitempty"`
+	ExternalId   string `json:"external_id"`
 
 	// Kind The provider's word for the work.
 	Kind      string  `json:"kind"`
@@ -4331,7 +4336,10 @@ type WorkDetail struct {
 
 	// Facets The media type's own fields of this work, by facet key.
 	Facets *map[string][]string `json:"facets,omitempty"`
-	Genres []string             `json:"genres"`
+
+	// Files The files of a work with no parts (a movie), one per version.
+	Files  *[]PartFile `json:"files,omitempty"`
+	Genres []string    `json:"genres"`
 
 	// Groups The work's monitored-or-not groups (an album's one, a series' seasons), in order.
 	Groups   *[]WorkGroup `json:"groups,omitempty"`
@@ -4853,11 +4861,14 @@ type ListOrganisationsParams struct {
 	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
 
 	// Q Matches the start of the name.
-	Q      *string                      `form:"q,omitempty" json:"q,omitempty"`
-	Sort   *ListOrganisationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
-	Dir    *ListOrganisationsParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
-	Cursor *string                      `form:"cursor,omitempty" json:"cursor,omitempty"`
-	Limit  *int                         `form:"limit,omitempty" json:"limit,omitempty"`
+	Q    *string                      `form:"q,omitempty" json:"q,omitempty"`
+	Sort *ListOrganisationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
+	Dir  *ListOrganisationsParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+
+	// From Starts the name ordering, ascending, at this letter instead of at the beginning; ignored with a cursor.
+	From   *string `form:"from,omitempty" json:"from,omitempty"`
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+	Limit  *int    `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListOrganisationsParamsSort defines parameters for ListOrganisations.
@@ -4899,6 +4910,9 @@ type ListPeopleParams struct {
 	Where *string               `form:"where,omitempty" json:"where,omitempty"`
 	Sort  *ListPeopleParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir   *ListPeopleParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
+
+	// From Starts the name ordering, ascending, at this letter instead of at the beginning; ignored with a cursor.
+	From *string `form:"from,omitempty" json:"from,omitempty"`
 
 	// Cursor From `next_cursor` of the previous page. Absent on the first page.
 	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
@@ -5097,6 +5111,9 @@ type ListWorksParams struct {
 	// Sort Which column orders the list; title is the default. artist orders by the primary artist's sort name, then title -- the Albums view's grouping -- with a work that has no artist first. imported orders by when the newest file arrived and lists only works with files (the dashboard's Recently added). facet:<key> orders by one of the library's media type's sortable facets (a series' network, an album's label); an unknown or unsortable one is refused.
 	Sort *string             `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir  *ListWorksParamsDir `form:"dir,omitempty" json:"dir,omitempty"`
+
+	// From Starts a title or artist ordering ascending at this letter instead of at the beginning, for the A-Z jump beside a long list; ignored with a cursor, another ordering or a descending one.
+	From *string `form:"from,omitempty" json:"from,omitempty"`
 
 	// Fresh Only works released within priority.new_release_days (ADR-55's release-date window; the 48h indexer/RSS window is not built -- it needs candidate.first_seen_at, stage 5). A work with no known release date, or one known only to the year or month, never matches: day precision is required.
 	Fresh *bool `form:"fresh,omitempty" json:"fresh,omitempty"`
@@ -12368,6 +12385,14 @@ func (siw *ServerInterfaceWrapper) ListOrganisations(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "cursor" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "cursor", r.URL.Query(), &params.Cursor)
@@ -12791,6 +12816,14 @@ func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Req
 	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
 		return
 	}
 
@@ -15048,6 +15081,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "dir", r.URL.Query(), &params.Dir)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "dir", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "from" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "from", r.URL.Query(), &params.From)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "from", Err: err})
 		return
 	}
 

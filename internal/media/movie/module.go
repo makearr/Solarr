@@ -7,6 +7,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
@@ -32,8 +33,12 @@ type Module struct {
 	CutoffJob
 	// Searching is the movie module's part of a search a person asks for.
 	Searching
+	// Files places a library file nothing identified; nil leaves such files to wait.
+	Files media.PlacingFiles
 	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.
 	ServerFiles *ServerFilesJob
+	// Profiling is the movie module's part of a person's page.
+	knownfor.Profiling
 	// Franchise lists the library's franchises and follows them; nil leaves the level empty.
 	Franchise media.Franchising
 	// Service applies a monitor option to a movie a library holds.
@@ -198,4 +203,12 @@ func (m Module) MonitorFranchise(ctx context.Context, categoryID, franchiseID in
 		return 0, media.ErrNotWired
 	}
 	return m.Franchise.MonitorFranchise(ctx, categoryID, franchiseID, monitored)
+}
+
+// PlaceFile implements media.PlacingFiles.
+func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
+	if m.Files == nil {
+		return 0, 0, media.ErrNotWired
+	}
+	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
 }

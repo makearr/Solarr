@@ -177,6 +177,9 @@ func (a People) KnownFor(ctx context.Context, id, categoryID int64, visible []in
 		if title.WorkID > 0 {
 			view.WorkId = &title.WorkID
 		}
+		if library := a.libraryFor(title.Kind, categoryID); library > 0 {
+			view.AddLibraryId = &library
+		}
 		setString(&view.PosterUrl, title.PosterURL)
 		setString(&view.Role, title.Role)
 		views = append(views, view)
@@ -229,4 +232,19 @@ func monitorFiltersFor(category settings.Category) (string, error) {
 		return "", fmt.Errorf("adapters: encode subscription filters: %w", err)
 	}
 	return string(encoded), nil
+}
+
+// libraryFor is the library a work of the provider's kind is added to from a person's page: the page's own when it holds
+// that kind, else the first that does, 0 when none.
+func (a People) libraryFor(kind string, pageCategoryID int64) int64 {
+	snapshot := a.Categories.Cache.Snapshot()
+	if category, found := snapshot.Category(pageCategoryID); found && category.MediaType == kind {
+		return pageCategoryID
+	}
+	for _, category := range snapshot.Categories() {
+		if category.MediaType == kind {
+			return category.ID
+		}
+	}
+	return 0
 }

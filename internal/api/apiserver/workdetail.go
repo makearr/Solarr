@@ -158,6 +158,8 @@ type WorkDetailRow struct {
 	Groups []GroupRow
 	// Pictures are the work's provider pictures by kind (poster, fanart, logo).
 	Pictures map[string]string
+	// Files are the files of a work with no parts.
+	Files []PartFileRow
 }
 
 // BulkSelection is a selection as a query (section 21.7): every work visible under RootFolderIDs or CategoryIDs
@@ -270,19 +272,38 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	view := buildWorkDetailView(row)
 	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
 	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
+	if view.Files != nil {
+		annotateWholeFiles(access, categoryIDs, *view.Files)
+	}
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
 // annotateFileQuality marks each file against the target and cutoff of the work's first library
 // the caller can see (2026-09-19: "items show whether a file satisfies the target or cutoff").
 func annotateFileQuality(access authz.Access, categoryIDs []int64, parts []gen.WorkPart) {
+	files := make([]*gen.PartFile, len(parts))
+	for index := range parts {
+		files[index] = parts[index].File
+	}
+	annotateFiles(access, categoryIDs, files)
+}
+
+// annotateWholeFiles marks the files of a work with no parts the same way.
+func annotateWholeFiles(access authz.Access, categoryIDs []int64, files []gen.PartFile) {
+	pointers := make([]*gen.PartFile, len(files))
+	for index := range files {
+		pointers[index] = &files[index]
+	}
+	annotateFiles(access, categoryIDs, pointers)
+}
+
+func annotateFiles(access authz.Access, categoryIDs []int64, files []*gen.PartFile) {
 	for _, id := range categoryIDs {
 		category, err := access.Category(id, settings.PermissionRead)
 		if err != nil {
 			continue
 		}
-		for i := range parts {
-			file := parts[i].File
+		for _, file := range files {
 			// A file the probe has not measured yet is not judged, rather than shown as failing.
 			if file == nil || file.AudioCodec == nil && file.VideoCodec == nil {
 				continue
@@ -601,6 +622,13 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 	view.Facets, view.Groups = &facets, &groups
 	if len(row.Pictures) > 0 {
 		view.Pictures = &row.Pictures
+	}
+	if len(row.Files) > 0 {
+		files := make([]gen.PartFile, len(row.Files))
+		for index, file := range row.Files {
+			files[index] = *partFileView(file)
+		}
+		view.Files = &files
 	}
 	return view
 }

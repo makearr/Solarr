@@ -97,6 +97,9 @@ func (a UnidentifiedResolver) ResolveUnidentified(
 	if errors.Is(err, media.ErrNotWired) {
 		return workID, resolved, apiserver.ErrNotBuiltForMediaType
 	}
+	if errors.Is(err, media.ErrInvalidAdd) {
+		return workID, resolved, fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
+	}
 	return workID, resolved, err
 }
 

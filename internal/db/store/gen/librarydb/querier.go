@@ -740,6 +740,8 @@ type Querier interface {
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
 	ListWantedParts(ctx context.Context, arg ListWantedPartsParams) ([]ListWantedPartsRow, error)
+	// The files of a work with no parts (a movie): the primary files of its whole-work items, a version each.
+	ListWholeFilesForWork(ctx context.Context, workID int64) ([]ListWholeFilesForWorkRow, error)
 	ListWorkClassifications(ctx context.Context, workID int64) ([]WorkClassification, error)
 	ListWorkDates(ctx context.Context, workID int64) ([]WorkDate, error)
 	ListWorkExclusions(ctx context.Context, mediaType string) ([]WorkExclusion, error)
@@ -970,6 +972,7 @@ type Querier interface {
 	SetCollectionComplete(ctx context.Context, arg SetCollectionCompleteParams) error
 	SetCollectionMonitored(ctx context.Context, arg SetCollectionMonitoredParams) error
 	SetCollectionName(ctx context.Context, arg SetCollectionNameParams) error
+	SetCollectionPoster(ctx context.Context, arg SetCollectionPosterParams) error
 	SetCounter(ctx context.Context, arg SetCounterParams) error
 	SetDesiredItemAvailability(ctx context.Context, arg SetDesiredItemAvailabilityParams) error
 	SetDesiredItemMonitored(ctx context.Context, arg SetDesiredItemMonitoredParams) error
@@ -1030,6 +1033,8 @@ type Querier interface {
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error
 	SetWorkDescription(ctx context.Context, arg SetWorkDescriptionParams) error
 	SetWorkField(ctx context.Context, arg SetWorkFieldParams) error
+	// A work is listed under the first person credited in the role: a movie's director.
+	SetWorkLeadFromRole(ctx context.Context, arg SetWorkLeadFromRoleParams) error
 	// The Tracks navigation level's own denormalized sort key (0021's
 	// doc comment) -- written only by internal/db/library.People.AddCredit, the one place a
 	// role='artist' ord=0 credit is ever recorded.

@@ -47,6 +47,9 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		RootFolderIDs: detail.RootFolderIDs,
 		CategoryIDs:   detail.CategoryIDs,
 	}
+	for _, file := range detail.Files {
+		row.Files = append(row.Files, partFileRow(&file))
+	}
 	if detail.Work.Year.Valid {
 		row.Year = &detail.Work.Year.Int64
 	}
@@ -205,17 +208,20 @@ func (a WorkDetail) partRows(mediaType string, from []library.PartDetail) []apis
 			row.Date = &detail.Part.Date.String
 		}
 		if detail.File != nil {
-			row.File = &apiserver.PartFileRow{
-				MediaObjectID: detail.File.MediaObjectID, AudioCodec: detail.File.AudioCodec,
-				VideoCodec: detail.File.VideoCodec, Container: detail.File.Container,
-				BitrateKbps: detail.File.BitrateKbps, Lossless: detail.File.Lossless,
-				Extension: detail.File.Extension, RelPath: detail.File.RelPath, SizeBytes: detail.File.SizeBytes, Resolution: detail.File.Resolution,
-				HDR: detail.File.HDR, AudioChannels: detail.File.AudioChannels, VideoBitrateKbps: detail.File.VideoBitrateKbps,
-				AudioLanguages: detail.File.AudioLanguages, Subtitles: detail.File.Subtitles,
-				FrameRate: detail.File.FrameRate, CRF: detail.File.CRF,
-			}
+			file := partFileRow(detail.File)
+			row.File = &file
 		}
 		rows[index] = row
 	}
 	return rows
+}
+
+func partFileRow(file *library.PartFile) apiserver.PartFileRow {
+	return apiserver.PartFileRow{
+		MediaObjectID: file.MediaObjectID, AudioCodec: file.AudioCodec, VideoCodec: file.VideoCodec, Container: file.Container,
+		BitrateKbps: file.BitrateKbps, Lossless: file.Lossless, Extension: file.Extension, RelPath: file.RelPath,
+		SizeBytes: file.SizeBytes, Resolution: file.Resolution, HDR: file.HDR, AudioChannels: file.AudioChannels,
+		VideoBitrateKbps: file.VideoBitrateKbps, AudioLanguages: file.AudioLanguages, Subtitles: file.Subtitles,
+		FrameRate: file.FrameRate, CRF: file.CRF,
+	}
 }

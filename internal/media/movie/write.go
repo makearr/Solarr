@@ -114,8 +114,9 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 			Role: credit.Role, Character: credit.Character, Ord: credit.Order,
 		})
 	}
+	write.LeadRole = RoleDirector
 	if movie.Collection != nil && movie.Collection.TMDBID != 0 {
-		write.Franchise = &library.SeriesFranchiseWrite{Provider: ProviderCollection, ExternalID: idString(movie.Collection.TMDBID), Name: movie.Collection.Name}
+		write.Franchise = &library.SeriesFranchiseWrite{Provider: ProviderCollection, ExternalID: idString(movie.Collection.TMDBID), Name: movie.Collection.Name, PosterURL: movie.Collection.PosterURL}
 	}
 	return write
 }

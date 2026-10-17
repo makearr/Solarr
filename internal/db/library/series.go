@@ -95,12 +95,14 @@ type SeriesWrite struct {
 	Keywords     []string
 	Credits      []SeriesCreditWrite
 	Parts        []SeriesPartWrite
+	// LeadRole is the credit role the work is listed under (a movie's director); empty lists it under no one.
+	LeadRole string
 	// Franchise is the collection a provider says the work belongs to (a movie's franchise); nil leaves it as it is.
 	Franchise *SeriesFranchiseWrite
 }
 
 // SeriesFranchiseWrite names a franchise by the provider's id for it.
-type SeriesFranchiseWrite struct{ Provider, ExternalID, Name string }
+type SeriesFranchiseWrite struct{ Provider, ExternalID, Name, PosterURL string }
 
 func (w SeriesWrite) organisationKind() string { return orDefault(w.OrganisationKind, "network") }
 
@@ -169,6 +171,14 @@ func (s Series) Upsert(ctx context.Context, at time.Time, write SeriesWrite) (Se
 	}
 	if err := s.writeCredits(ctx, at, result.WorkID, result.PartIDs, write.Credits); err != nil {
 		return SeriesResult{}, err
+	}
+	if write.LeadRole != "" {
+		err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			return librarydb.New(tx).SetWorkLeadFromRole(ctx, librarydb.SetWorkLeadFromRoleParams{WorkID: result.WorkID, Role: write.LeadRole})
+		})
+		if err != nil {
+			return SeriesResult{}, fmt.Errorf("library: set lead of work %d: %w", result.WorkID, err)
+		}
 	}
 	return result, nil
 }
@@ -310,7 +320,11 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 	}
 	if write.Franchise != nil {
 		var collectionID int64
-		if err := joinFranchiseTx(ctx, queries, &collectionID, at.Unix(), write.Work.MediaType, write.Franchise.Provider, write.Franchise.ExternalID, write.Franchise.Name, workID); err != nil {
+		err := joinFranchiseTx(ctx, queries, &collectionID, at.Unix(), write.Work.MediaType, write.Franchise.Provider, write.Franchise.ExternalID, write.Franchise.Name, workID)
+		if err == nil && write.Franchise.PosterURL != "" {
+			err = queries.SetCollectionPoster(ctx, librarydb.SetCollectionPosterParams{PosterUrl: write.Franchise.PosterURL, ID: collectionID})
+		}
+		if err != nil {
 			return fmt.Errorf("library: franchise: %w", err)
 		}
 	}

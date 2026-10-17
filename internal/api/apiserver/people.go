@@ -152,7 +152,7 @@ func (s *Server) routeListPeople(w http.ResponseWriter, r *http.Request) {
 		}
 		params.Monitored = &monitored
 	}
-	for name, target := range map[string]**string{"cursor": &params.Cursor, "q": &params.Q, "role": &params.Role, "where": &params.Where} {
+	for name, target := range map[string]**string{"cursor": &params.Cursor, "q": &params.Q, "role": &params.Role, "where": &params.Where, "from": &params.From} {
 		if raw := query.Get(name); raw != "" {
 			*target = &raw
 		}
@@ -198,6 +198,9 @@ func (s *Server) ListPeople(w http.ResponseWriter, r *http.Request, params gen.L
 	if query.Category != 0 && !slices.Contains(visible, query.Category) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
 		return
+	}
+	if cursor.Sort == "" && cursor.ID == 0 && params.From != nil && !query.Desc && query.Sort == string(gen.ListPeopleParamsSortName) {
+		cursor = paginate.TextCursor{Sort: *params.From}
 	}
 	rows, err := s.people.ListPeople(r.Context(), query, cursor, limit+1)
 	if err != nil {

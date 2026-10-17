@@ -310,3 +310,14 @@ SELECT provider, external_id FROM organisation_external_id WHERE organisation_id
 
 -- name: SetOrganisationMonitored :exec
 UPDATE organisation SET monitored = ? WHERE id = ?;
+
+-- A work is listed under the first person credited in the role: a movie's director.
+-- name: SetWorkLeadFromRole :exec
+UPDATE work SET
+  lead_person_id = (SELECT cr.person_id FROM credit cr WHERE cr.work_id = sqlc.arg(work_id) AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = sqlc.arg(role)
+                    ORDER BY cr.ord, cr.person_id LIMIT 1),
+  lead_person_sort_name = (SELECT pe.sort_name FROM credit cr JOIN person pe ON pe.id = cr.person_id
+                           WHERE cr.work_id = sqlc.arg(work_id) AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = sqlc.arg(role)
+                           ORDER BY cr.ord, cr.person_id LIMIT 1)
+WHERE work.id = sqlc.arg(work_id)
+  AND EXISTS (SELECT 1 FROM credit cr WHERE cr.work_id = sqlc.arg(work_id) AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = sqlc.arg(role));

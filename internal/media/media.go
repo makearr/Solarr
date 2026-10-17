@@ -223,8 +223,9 @@ type Franchise struct {
 	Name      string
 	Monitored bool
 	// Total is how many works the provider says it has, 0 when not known.
-	Total   int
-	Members []FranchiseMember
+	Total     int
+	PosterURL string
+	Members   []FranchiseMember
 }
 
 // FranchiseMember is a work of a franchise the library holds.
@@ -518,6 +519,8 @@ type KnownFor struct {
 	Role string
 	// WorkID is the library's work, 0 when the library does not hold it.
 	WorkID int64
+	// AddTo is the library the work is added to from the person's page, 0 when none holds that kind.
+	AddTo int64
 }
 
 // Profiling is the capability of a media type whose providers know more of a person than its libraries hold.

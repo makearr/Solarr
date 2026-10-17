@@ -176,6 +176,7 @@ type Collection struct {
 	Monitored  int64
 	CompleteAt sql.NullInt64
 	AddedAt    int64
+	PosterUrl  string
 }
 
 type CollectionExternalID struct {

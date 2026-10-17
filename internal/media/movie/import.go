@@ -19,6 +19,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/importing/rules"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -211,7 +212,7 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 }
 
 // ErrNotAMovieID is a named film whose id is not a TMDB or IMDb one.
-var ErrNotAMovieID = errors.New("movie: that is not a movie id")
+var ErrNotAMovieID = fmt.Errorf("%w: that is not a movie id", media.ErrInvalidAdd)
 
 func namedIDs(provider, externalID string) (IDs, error) {
 	switch provider {

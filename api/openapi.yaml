@@ -1972,6 +1972,12 @@ paths:
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
+        - name: from
+          in: query
+          description: >-
+            Starts a title or artist ordering ascending at this letter instead of at the beginning, for the A-Z jump
+            beside a long list; ignored with a cursor, another ordering or a descending one.
+          schema: { type: string, pattern: '^[a-z]$' }
         - name: fresh
           in: query
           description: >-
@@ -5440,6 +5446,10 @@ paths:
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
+        - name: from
+          in: query
+          description: Starts the name ordering, ascending, at this letter instead of at the beginning; ignored with a cursor.
+          schema: { type: string, pattern: '^[a-z]$' }
         - name: cursor
           in: query
           schema: { type: string }
@@ -5502,6 +5512,10 @@ paths:
         - name: dir
           in: query
           schema: { type: string, enum: [asc, desc], default: asc }
+        - name: from
+          in: query
+          description: Starts the name ordering, ascending, at this letter instead of at the beginning; ignored with a cursor.
+          schema: { type: string, pattern: '^[a-z]$' }
         - name: cursor
           in: query
           description: >-
@@ -7608,6 +7622,7 @@ components:
         name: { type: string }
         monitored: { type: boolean }
         total: { type: integer, description: "The films the provider says the franchise has; absent when it has not said." }
+        poster_url: { type: string, description: The provider's picture of the franchise. }
         members:
           type: array
           items: { $ref: "#/components/schemas/FranchiseMember" }
@@ -8844,6 +8859,7 @@ components:
         poster_url: { type: string }
         role: { type: string, description: The character played or the job done. }
         work_id: { type: integer, format: int64, description: The library's work, when it holds it. }
+        add_library_id: { type: integer, format: int64, description: The library the work is added to from here; absent when no library holds that kind. }
 
     OrganisationEntry:
       type: object
@@ -9144,6 +9160,7 @@ components:
         - credits
         - genres
       properties:
+        files: { type: array, items: { $ref: "#/components/schemas/PartFile" }, description: "The files of a work with no parts (a movie), one per version." }
         lead_id: { type: integer, format: int64, description: "The person the work is listed under (an album's artist)." }
         pictures:
           type: object

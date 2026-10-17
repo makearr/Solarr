@@ -72,3 +72,27 @@ WHERE e.provider = 'tmdb' AND w.media_type = 'tv'
 	}
 	return held, rows.Err()
 }
+
+// HeldTMDBOf maps the TMDB id of every work of the media type, in any library, to its work.
+func (r SeriesReader) HeldTMDBOf(ctx context.Context, mediaType string) (map[int64]int64, error) {
+	rows, err := r.store.Read().QueryContext(ctx,
+		`SELECT e.external_id, e.work_id FROM work_external_id e JOIN work w ON w.id = e.work_id
+WHERE e.provider = 'tmdb' AND w.media_type = ?`, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: held tmdb ids of %s: %w", mediaType, err)
+	}
+	defer func() { _ = rows.Close() }()
+	held := map[int64]int64{}
+	for rows.Next() {
+		var external string
+		var workID int64
+		if err := rows.Scan(&external, &workID); err != nil {
+			return nil, fmt.Errorf("library: scan held tmdb id: %w", err)
+		}
+		var id int64
+		if _, err := fmt.Sscan(external, &id); err == nil {
+			held[id] = workID
+		}
+	}
+	return held, rows.Err()
+}

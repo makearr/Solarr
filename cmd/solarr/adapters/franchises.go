@@ -44,6 +44,7 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 	views := make([]gen.Franchise, len(franchises))
 	for index, franchise := range franchises {
 		views[index] = gen.Franchise{Id: franchise.ID, Name: franchise.Name, Monitored: franchise.Monitored, Members: make([]gen.FranchiseMember, len(franchise.Members))}
+		setString(&views[index].PosterUrl, franchise.PosterURL)
 		if franchise.Total > 0 {
 			total := franchise.Total
 			views[index].Total = &total

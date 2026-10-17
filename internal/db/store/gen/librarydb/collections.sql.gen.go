@@ -138,7 +138,7 @@ const createCollection = `-- name: CreateCollection :one
 
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url
 `
 
 type CreateCollectionParams struct {
@@ -172,6 +172,7 @@ func (q *Queries) CreateCollection(ctx context.Context, arg CreateCollectionPara
 		&i.Monitored,
 		&i.CompleteAt,
 		&i.AddedAt,
+		&i.PosterUrl,
 	)
 	return i, err
 }
@@ -300,7 +301,7 @@ func (q *Queries) GetArtwork(ctx context.Context, arg GetArtworkParams) (string,
 }
 
 const getCollection = `-- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at FROM collection WHERE id = ?
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url FROM collection WHERE id = ?
 `
 
 func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, error) {
@@ -315,12 +316,13 @@ func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, erro
 		&i.Monitored,
 		&i.CompleteAt,
 		&i.AddedAt,
+		&i.PosterUrl,
 	)
 	return i, err
 }
 
 const getCollectionByExternalID = `-- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?
 `
@@ -343,6 +345,7 @@ func (q *Queries) GetCollectionByExternalID(ctx context.Context, arg GetCollecti
 		&i.Monitored,
 		&i.CompleteAt,
 		&i.AddedAt,
+		&i.PosterUrl,
 	)
 	return i, err
 }
@@ -516,7 +519,7 @@ func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64)
 }
 
 const listCollectionsForWork = `-- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name
@@ -540,6 +543,7 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 			&i.Monitored,
 			&i.CompleteAt,
 			&i.AddedAt,
+			&i.PosterUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -555,7 +559,7 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 }
 
 const listCollectionsOfKind = `-- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url
 FROM collection WHERE kind = ?1 AND media_type = ?2 ORDER BY name, id
 `
 
@@ -582,6 +586,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 			&i.Monitored,
 			&i.CompleteAt,
 			&i.AddedAt,
+			&i.PosterUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -597,7 +602,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 }
 
 const listCollectionsOfWorkParts = `-- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ?1 AND m.part_id <> 0 AND c.kind = ?2
 ORDER BY c.name, c.id
@@ -626,6 +631,7 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 			&i.Monitored,
 			&i.CompleteAt,
 			&i.AddedAt,
+			&i.PosterUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -641,7 +647,7 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 }
 
 const listFranchiseMembersInCategory = `-- name: ListFranchiseMembersInCategory :many
-SELECT c.id AS collection_id, c.name AS collection_name, c.monitored AS collection_monitored, c.complete_at AS total,
+SELECT c.id AS collection_id, c.name AS collection_name, c.monitored AS collection_monitored, c.complete_at AS total, c.poster_url AS poster_url,
        CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id,
        w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
        CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1), 0) AS INTEGER) AS monitored,
@@ -664,6 +670,7 @@ type ListFranchiseMembersInCategoryRow struct {
 	CollectionName      string
 	CollectionMonitored int64
 	Total               sql.NullInt64
+	PosterUrl           string
 	ExternalID          string
 	WorkID              int64
 	Title               string
@@ -687,6 +694,7 @@ func (q *Queries) ListFranchiseMembersInCategory(ctx context.Context, arg ListFr
 			&i.CollectionName,
 			&i.CollectionMonitored,
 			&i.Total,
+			&i.PosterUrl,
 			&i.ExternalID,
 			&i.WorkID,
 			&i.Title,
@@ -1013,6 +1021,15 @@ JOIN work wa ON wa.id = a.work_id
 JOIN work wb ON wb.id = b.work_id
 WHERE a.date IS NOT NULL AND a.title IS NOT NULL AND LENGTH(a.title) > 3 AND wa.media_type = ?1
   AND wb.media_type = wa.media_type
+  -- A title every series has ("Episode 5", "Special") says nothing: two shows can air a numbered episode on one day.
+  AND LOWER(a.title) NOT GLOB 'episode [0-9]*' AND LOWER(a.title) NOT GLOB 'episode' AND LOWER(a.title) NOT GLOB 'special*'
+  AND LOWER(a.title) NOT GLOB 'part [0-9]*' AND LOWER(a.title) NOT GLOB 'trailer*' AND LOWER(a.title) NOT GLOB 'tba' AND LOWER(a.title) NOT GLOB 'tbd'
+  -- One broadcast runs one length, give or take the cuts a network makes.
+  AND (a.runtime_ms IS NULL OR b.runtime_ms IS NULL OR a.runtime_ms = 0 OR b.runtime_ms = 0
+       OR ABS(a.runtime_ms - b.runtime_ms) * 100 <= 20 * MAX(a.runtime_ms, b.runtime_ms))
+  -- Where both episodes name people, at least one is the same person.
+  AND (NOT EXISTS (SELECT 1 FROM credit ca WHERE ca.part_id = a.id) OR NOT EXISTS (SELECT 1 FROM credit cb WHERE cb.part_id = b.id)
+       OR EXISTS (SELECT 1 FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id WHERE ca.part_id = a.id))
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = a.work_id AND d.category_id = ?2)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = b.work_id AND d.category_id = ?2)
   AND NOT EXISTS (SELECT 1 FROM relationship r WHERE r.kind = 'same_content'
@@ -1430,6 +1447,20 @@ type SetCollectionNameParams struct {
 
 func (q *Queries) SetCollectionName(ctx context.Context, arg SetCollectionNameParams) error {
 	_, err := q.db.ExecContext(ctx, setCollectionName, arg.Name, arg.ID)
+	return err
+}
+
+const setCollectionPoster = `-- name: SetCollectionPoster :exec
+UPDATE collection SET poster_url = ? WHERE id = ?
+`
+
+type SetCollectionPosterParams struct {
+	PosterUrl string
+	ID        int64
+}
+
+func (q *Queries) SetCollectionPoster(ctx context.Context, arg SetCollectionPosterParams) error {
+	_, err := q.db.ExecContext(ctx, setCollectionPoster, arg.PosterUrl, arg.ID)
 	return err
 }
 

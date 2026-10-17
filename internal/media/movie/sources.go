@@ -60,7 +60,7 @@ func FromTMDB(in tmdb.Movie, country string) Movie {
 		movie.Ratings = []Rating{{Provider: ProviderTMDB, Score: in.VoteAverage, Votes: int64(in.VoteCount)}}
 	}
 	if in.Collection != nil && in.Collection.ID != 0 {
-		movie.Collection = &Collection{TMDBID: in.Collection.ID, Name: in.Collection.Name}
+		movie.Collection = &Collection{TMDBID: in.Collection.ID, Name: in.Collection.Name, PosterURL: tmdb.ImageURL(in.Collection.PosterPath)}
 	}
 	for _, title := range in.AlternativeTitles.Titles {
 		movie.Aliases = append(movie.Aliases, title.Title)

@@ -1,3 +1,4 @@
+import { LetterRail } from "@/ui/LetterRail";
 import { useMemo, useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { User } from "lucide-react";
@@ -29,7 +30,7 @@ type Person = components["schemas"]["PersonEntry"];
 type Role = MediaTypeInfo["roles"][number];
 type SortKey = "name" | "works" | "latest" | "added";
 
-const FILTER_KEYS: readonly string[] = ["role", "monitored", "q", "where"];
+const FILTER_KEYS: readonly string[] = ["role", "monitored", "q", "where", "from"];
 const SORT_LABEL: Record<SortKey, string> = { name: "Name", works: "Works", latest: "Newest work", added: "Added" };
 /** "everyone" in the address: no role chosen, which for a library with a lead role is not its default. */
 const EVERYONE = "all";
@@ -111,6 +112,7 @@ export function PeopleIndex() {
               category: categoryId ? Number(categoryId) : undefined,
               role: role || undefined,
               q: filters.q || undefined,
+              from: filters.from || undefined,
               monitored: filters.monitored ? filters.monitored === "true" : undefined,
               sort,
               dir: query.direction,
@@ -199,7 +201,8 @@ export function PeopleIndex() {
         <IndexViewToggle view={mode} onChange={setMode} />
         {canAdd && <ToolbarAdd categoryId={categoryId} />}
       </Toolbar>
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 pr-6">
+        {sort === "name" && direction !== "desc" && <LetterRail value={view.query.filters.from ?? ""} onChange={(letter) => setFilter("from", letter)} />}
         {list.isLoading && <p className="p-4 text-sm text-ink-muted">Loading…</p>}
         {list.error !== null && <p className="p-4 text-sm text-danger">The people could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (

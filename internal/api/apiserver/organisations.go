@@ -52,7 +52,7 @@ func (s *Server) routeListOrganisations(w http.ResponseWriter, r *http.Request) 
 		}
 		params.Monitored = &monitored
 	}
-	for name, target := range map[string]**string{"cursor": &params.Cursor, "q": &params.Q, "role": &params.Role} {
+	for name, target := range map[string]**string{"cursor": &params.Cursor, "from": &params.From, "q": &params.Q, "role": &params.Role} {
 		if raw := query.Get(name); raw != "" {
 			*target = &raw
 		}
@@ -97,6 +97,9 @@ func (s *Server) ListOrganisations(w http.ResponseWriter, r *http.Request, param
 	if query.Category != 0 && !slices.Contains(visible, query.Category) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such library")
 		return
+	}
+	if cursor.Sort == "" && cursor.ID == 0 && params.From != nil && !query.Desc && query.Sort == string(gen.ListOrganisationsParamsSortName) {
+		cursor = paginate.TextCursor{Sort: *params.From}
 	}
 	rows, err := s.organisations.ListOrganisations(r.Context(), query, cursor, limit+1)
 	if err != nil {

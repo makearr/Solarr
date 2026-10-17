@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
 // Catalog is the movie module's add and refresh over the service: media.Adding, with what a library's add dialog needs.
@@ -133,9 +134,10 @@ func (c Catalog) Franchises(ctx context.Context, categoryID int64) ([]media.Fran
 	if err != nil {
 		return nil, err
 	}
+	c.fillPosters(ctx, rows)
 	out := make([]media.Franchise, len(rows))
 	for index, row := range rows {
-		out[index] = media.Franchise{ID: row.ID, Name: row.Name, Monitored: row.Monitored, Total: int(row.Total)}
+		out[index] = media.Franchise{ID: row.ID, Name: row.Name, Monitored: row.Monitored, Total: int(row.Total), PosterURL: row.PosterURL}
 		for _, member := range row.Members {
 			out[index].Members = append(out[index].Members, media.FranchiseMember{
 				WorkID: member.WorkID, Title: member.Title, Year: int(member.Year), Monitored: member.Monitored, HasFile: member.Files > 0,
@@ -217,4 +219,33 @@ func franchiseMembers(rows []library.FranchiseRow, id int64) []library.Franchise
 		}
 	}
 	return nil
+}
+
+// postersPerList bounds the provider calls one listing makes to fill in franchise pictures; the rest follow next time.
+const postersPerList = 15
+
+// fillPosters asks TMDB for the picture of franchises that have none yet, keeping what it answers.
+func (c Catalog) fillPosters(ctx context.Context, rows []library.FranchiseRow) {
+	if c.Service.TMDB == nil || !c.Service.TMDB.Configured() {
+		return
+	}
+	asked := 0
+	for index := range rows {
+		if rows[index].PosterURL != "" || asked >= postersPerList {
+			continue
+		}
+		id, _ := strconv.ParseInt(rows[index].ExternalID, 10, 64)
+		if id <= 0 {
+			continue
+		}
+		asked++
+		detail, err := c.Service.TMDB.Collection(ctx, id)
+		if err != nil || detail.PosterPath == "" {
+			continue
+		}
+		poster := tmdb.ImageURL(detail.PosterPath)
+		if err := c.FranchiseStore.SetPoster(ctx, rows[index].ID, poster); err == nil {
+			rows[index].PosterURL = poster
+		}
+	}
 }

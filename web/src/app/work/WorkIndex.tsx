@@ -10,6 +10,7 @@ import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
+import { LetterRail } from "@/ui/LetterRail";
 import { whereWithTitle, type FilterField } from "@/list/customFilter";
 import { ListTable, type Column } from "@/list/ListTable";
 import { PosterGrid } from "@/list/PosterGrid";
@@ -38,7 +39,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -163,6 +164,7 @@ export function WorkIndex() {
               where: whereWithTitle(query.filters.where, query.filters.q),
               sort: query.sort ?? defaultSort,
               dir: query.direction === "desc" ? "desc" : undefined,
+              from: query.filters.from || undefined,
             },
           },
           signal,
@@ -176,6 +178,8 @@ export function WorkIndex() {
 
   const columns = useMemo(() => buildColumns(info, categoryId, new Set(hidden)), [info, categoryId, hidden]);
   const choosable = useMemo(() => buildColumns(info, categoryId, new Set()).filter((column) => column.header !== ""), [info, categoryId]);
+  // The A-Z jump is for the orderings by name, ascending: it starts the list at the letter.
+  const jumpable = (sort === "title" || sort === "artist") && routeView.query.direction !== "desc";
   const setQuery = (next: Partial<ViewState["query"]>) => routeView.setQuery({ ...routeView.query, ...next });
   const setFilter = (key: string, value: string) => setQuery({ filters: { ...routeView.query.filters, [key]: value } });
 
@@ -236,7 +240,8 @@ export function WorkIndex() {
         />
       )}
       <Exclusions mediaType={library?.media_type} words={words} />
-      <div className="min-h-0 flex-1">
+      <div className="relative min-h-0 flex-1 pr-6">
+        {jumpable && <LetterRail value={routeView.query.filters.from ?? ""} onChange={(letter) => setFilter("from", letter)} />}
         {list.isLoading && <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>}
         {list.error !== null && <p className="p-6 text-sm text-danger">The library could not be read.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (

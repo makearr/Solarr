@@ -284,18 +284,30 @@ function usePersonAction(id: number, path: "/people/{id}/search" | "/people/{id}
   });
 }
 
+/** A work once however many roles the person had in it: the first credit, with every role. */
+function onePerWork(credits: Credit[]): { credit: Credit; roles: string[] }[] {
+  const out: { credit: Credit; roles: string[] }[] = [];
+  for (const credit of credits) {
+    const found = out.find((entry) => entry.credit.work.id === credit.work.id);
+    if (!found) out.push({ credit, roles: [credit.role] });
+    else if (!found.roles.includes(credit.role)) found.roles.push(credit.role);
+  }
+  return out;
+}
+
 /** One library's part of the person: the lead role as that library lists it (an artist's discography by release
  *  type), every other role as a wall of the works, with the role chips when there are several. */
 function LibrarySection({ name, type, credits }: { name: string; type?: MediaTypeInfo; credits: Credit[] }) {
   const [role, setRole] = useState("");
   const roles = [...new Set(credits.map((credit) => credit.role))];
   const label = (key: string) => type?.roles.find((entry) => entry.key === key)?.label ?? key.replace(/_/g, " ");
-  const lead = type?.roles.find((entry) => entry.lead)?.key;
+  // Only a type listed by cover (albums by release type) has a discography; posters are a wall of titles.
+  const lead = type?.work_image === "poster" ? undefined : type?.roles.find((entry) => entry.lead)?.key;
   const shown = role ? credits.filter((credit) => credit.role === role) : credits;
   const workCount = new Set(shown.map((credit) => credit.work.id)).size;
   const works = (workCount === 1 ? type?.work.one : type?.work.many) ?? (workCount === 1 ? "work" : "works");
   const leadWorks = shown.filter((credit) => credit.role === lead).map((credit) => credit.work);
-  const others = shown.filter((credit) => credit.role !== lead);
+  const others = onePerWork(shown.filter((credit) => credit.role !== lead));
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -329,8 +341,8 @@ function LibrarySection({ name, type, credits }: { name: string; type?: MediaTyp
       ))}
       {others.length > 0 && (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
-          {others.map((credit) => (
-            <CreditTile key={`${credit.work.id}-${credit.role}-${credit.character ?? ""}`} credit={credit} label={label(credit.role)} />
+          {others.map(({ credit, roles: held }) => (
+            <CreditTile key={credit.work.id} credit={credit} label={held.map(label).join(" · ")} />
           ))}
         </div>
       )}
@@ -402,7 +414,7 @@ function KnownForSection({ personId, categoryId }: { personId: number; categoryI
             {known.data
               .filter((title) => title.kind === kind)
               .map((title) => (
-                <KnownForTile key={`${title.provider}-${title.kind}-${title.external_id}`} title={title} categoryId={categoryId} />
+                <KnownForTile key={`${title.provider}-${title.kind}-${title.external_id}`} title={title} />
               ))}
           </div>
         </div>
@@ -411,8 +423,8 @@ function KnownForSection({ personId, categoryId }: { personId: number; categoryI
   );
 }
 
-/** A title held opens the library's work; a series not held is added from here; anything else links out. */
-function KnownForTile({ title, categoryId }: { title: KnownFor; categoryId: number }) {
+/** A title the library lacks is added from here to the library that holds its kind; with none, it links out. */
+function KnownForTile({ title }: { title: KnownFor }) {
   const [adding, setAdding] = useState(false);
   const caption = (
     <>
@@ -424,19 +436,11 @@ function KnownForTile({ title, categoryId }: { title: KnownFor; categoryId: numb
       <span className="truncate text-xs text-ink-muted">{title.role}</span>
     </>
   );
-  if (title.work_id) {
-    return (
-      <Link {...workLink(categoryId, title.work_id)} className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
-        {caption}
-        <span className="text-xs text-ok">In your library</span>
-      </Link>
-    );
-  }
-  if (title.kind !== "tv") {
+  if (!title.add_library_id) {
     return (
       <a href={`https://www.themoviedb.org/${title.kind}/${title.external_id}`} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
         {caption}
-        <span className="text-xs text-ink-muted">Not a kind any library here holds yet</span>
+        <span className="text-xs text-ink-muted">No {title.kind === "movie" ? "movie" : "TV"} library to add it to</span>
       </a>
     );
   }
@@ -454,7 +458,7 @@ function KnownForTile({ title, categoryId }: { title: KnownFor; categoryId: numb
       {adding && (
         <AddToLibrary
           candidate={{ provider: title.provider, external_id: title.external_id, title: title.title }}
-          categoryId={String(categoryId)}
+          categoryId={String(title.add_library_id)}
           onDone={() => setAdding(false)}
         />
       )}
