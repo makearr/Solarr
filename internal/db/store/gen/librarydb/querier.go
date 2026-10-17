@@ -464,6 +464,8 @@ type Querier interface {
 	ListAltNumbersForParts(ctx context.Context, partIds []int64) ([]ListAltNumbersForPartsRow, error)
 	// A part's number under one other scheme ("absolute" for anime), for a whole work.
 	ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersForWorkParams) ([]ListAltNumbersForWorkRow, error)
+	// The anime (series with an AniList id) whose relations have not been read yet.
+	ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	// Revert's own lookup (library.ArrImportRevert): every item this run itself
 	// created something for, the only rows a revert is allowed to touch.
@@ -548,11 +550,14 @@ type Querier interface {
 	ListEditions(ctx context.Context, workID int64) ([]Edition, error)
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecycleBinParams) ([]RecycleBin, error)
+	ListExternalIDsOfCollection(ctx context.Context, collectionID int64) ([]ListExternalIDsOfCollectionRow, error)
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	ListFranchiseExternalIDsOfType(ctx context.Context, mediaType string) ([]ListFranchiseExternalIDsOfTypeRow, error)
 	// Who belongs to which franchise, of a media type: the provider's and the automatic ones.
 	ListFranchiseMembershipsOfType(ctx context.Context, mediaType string) ([]ListFranchiseMembershipsOfTypeRow, error)
+	ListFranchisesOfType(ctx context.Context, mediaType string) ([]ListFranchisesOfTypeRow, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
@@ -746,6 +751,8 @@ type Querier interface {
 	// what distinguishes the two, since nothing sets it before the IMPORTING
 	// phase runs.
 	ListUnplacedCommitUnits(ctx context.Context, sessionID int64) ([]ImportUnit, error)
+	// Pairs of works a person said do not belong together.
+	ListUnrelatedWorkPairs(ctx context.Context, mediaType string) ([]ListUnrelatedWorkPairsRow, error)
 	// The unverified albums (only local ids, D6) a file is linked to, for when it is identified.
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
@@ -816,6 +823,7 @@ type Querier interface {
 	ListWorksToAskOrganisation(ctx context.Context, arg ListWorksToAskOrganisationParams) ([]ListWorksToAskOrganisationRow, error)
 	// The works holding a file one sweep found gone, so their counts can follow.
 	ListWorksWithPathsMissingSince(ctx context.Context, arg ListWorksWithPathsMissingSinceParams) ([]int64, error)
+	MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
@@ -857,6 +865,7 @@ type Querier interface {
 	MergeWorkRootFolders(ctx context.Context, arg MergeWorkRootFoldersParams) error
 	MergeWorkTags(ctx context.Context, arg MergeWorkTagsParams) error
 	MoveAcquisitionsToItem(ctx context.Context, arg MoveAcquisitionsToItemParams) error
+	MoveCollectionExternalIDs(ctx context.Context, arg MoveCollectionExternalIDsParams) error
 	MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error
 	// An item the kept work has no counterpart for moves over whole, without the dropped work's edition.
 	MoveDesiredItemToWork(ctx context.Context, arg MoveDesiredItemToWorkParams) error

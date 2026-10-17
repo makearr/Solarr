@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -106,8 +105,10 @@ type FranchiseRow struct {
 	Name       string
 	Kind       string
 	ExternalID string
-	Monitored  bool
-	PosterURL  string
+	// ExternalIDs are every id the franchise is known by, as "provider:id"; a merged franchise has several.
+	ExternalIDs []string
+	Monitored   bool
+	PosterURL   string
 	// Total is the works the provider says the franchise has, 0 when unknown.
 	Total   int64
 	Members []FranchiseMember
@@ -224,6 +225,11 @@ func (f Franchises) Get(ctx context.Context, id int64) (FranchiseRow, error) {
 	row := FranchiseRow{ID: collection.ID, Name: collection.Name, Kind: collection.Kind, Monitored: collection.Monitored == 1, Total: collection.CompleteAt.Int64}
 	if external, err := queries.GetCollectionExternalIDOf(ctx, id); err == nil {
 		row.ExternalID = external.ExternalID
+	}
+	if all, err := queries.ListExternalIDsOfCollection(ctx, id); err == nil {
+		for _, one := range all {
+			row.ExternalIDs = append(row.ExternalIDs, one.Provider+":"+one.ExternalID)
+		}
 	}
 	return row, nil
 }
@@ -381,58 +387,190 @@ func (f Franchises) RelatedPairs(ctx context.Context, mediaType string) ([][2]in
 	return out, nil
 }
 
-// JoinGroup puts the works in one franchise Solarr worked out: the lowest-numbered automatic franchise any of them is
-// already in (the others of theirs merge into it), else a new one. It answers the franchise's id.
-func (f Franchises) JoinGroup(ctx context.Context, mediaType, name string, workIDs []int64, existing []Membership) (int64, error) {
-	var keep int64
-	var merge []int64
-	for _, membership := range existing {
-		if membership.Source != AutoSource || !slices.Contains(workIDs, membership.WorkID) {
-			continue
-		}
-		switch {
-		case keep == 0 || membership.CollectionID < keep:
-			if keep != 0 {
-				merge = append(merge, keep)
-			}
-			keep = membership.CollectionID
-		case membership.CollectionID != keep && !slices.Contains(merge, membership.CollectionID):
-			merge = append(merge, membership.CollectionID)
+// FranchiseSummary is a franchise as the reconciliation sees it: where it came from and the ids it is known by.
+type FranchiseSummary struct {
+	ID          int64
+	Name        string
+	Source      string
+	ExternalIDs []string
+}
+
+// Summaries lists every franchise of the media type with the ids it is known by, as "provider:id".
+func (f Franchises) Summaries(ctx context.Context, mediaType string) ([]FranchiseSummary, error) {
+	queries := librarydb.New(f.store.Read())
+	rows, err := queries.ListFranchisesOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: franchises: %w", err)
+	}
+	out := make([]FranchiseSummary, len(rows))
+	at := make(map[int64]int, len(rows))
+	for index, row := range rows {
+		out[index] = FranchiseSummary{ID: row.ID, Name: row.Name, Source: row.Source}
+		at[row.ID] = index
+	}
+	ids, err := queries.ListFranchiseExternalIDsOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: franchise ids: %w", err)
+	}
+	for _, row := range ids {
+		if index, ok := at[row.CollectionID]; ok {
+			out[index].ExternalIDs = append(out[index].ExternalIDs, row.Provider+":"+row.ExternalID)
 		}
 	}
+	return out, nil
+}
+
+// CreateAuto makes an empty franchise Solarr worked out itself and answers its id.
+func (f Franchises) CreateAuto(ctx context.Context, mediaType, name string) (int64, error) {
+	var id int64
 	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		if keep == 0 {
-			created, err := queries.CreateCollection(ctx, librarydb.CreateCollectionParams{
-				MediaType: mediaType, Name: name, Kind: FranchiseKind, Source: AutoSource, AddedAt: f.store.Now().Unix(),
-			})
-			if err != nil {
-				return err
-			}
-			keep = created.ID
-			if err := queries.LinkCollectionExternalID(ctx, librarydb.LinkCollectionExternalIDParams{Provider: AutoSource, ExternalID: strconv.FormatInt(keep, 10), CollectionID: keep}); err != nil {
-				return err
-			}
+		created, err := queries.CreateCollection(ctx, librarydb.CreateCollectionParams{
+			MediaType: mediaType, Name: name, Kind: FranchiseKind, Source: AutoSource, AddedAt: f.store.Now().Unix(),
+		})
+		if err != nil {
+			return err
 		}
-		for _, other := range merge {
+		id = created.ID
+		return queries.LinkCollectionExternalID(ctx, librarydb.LinkCollectionExternalIDParams{Provider: AutoSource, ExternalID: strconv.FormatInt(id, 10), CollectionID: id})
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: franchise %q: %w", name, err)
+	}
+	return id, nil
+}
+
+// MergeFranchises moves the members and ids of the others into the franchise kept and deletes them.
+func (f Franchises) MergeFranchises(ctx context.Context, keep int64, others []int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, other := range others {
+			if other == keep {
+				continue
+			}
 			if err := queries.MoveCollectionMembers(ctx, librarydb.MoveCollectionMembersParams{IntoID: keep, FromID: other}); err != nil {
+				return err
+			}
+			if err := queries.MoveCollectionExternalIDs(ctx, librarydb.MoveCollectionExternalIDsParams{IntoID: keep, FromID: other}); err != nil {
 				return err
 			}
 			if err := queries.DeleteCollection(ctx, other); err != nil {
 				return err
 			}
 		}
-		for _, workID := range workIDs {
-			if err := queries.AddCollectionMember(ctx, librarydb.AddCollectionMemberParams{CollectionID: keep, WorkID: workID, PartID: 0}); err != nil {
-				return err
-			}
-		}
 		return nil
 	})
 	if err != nil {
-		return 0, fmt.Errorf("library: franchise %q: %w", name, err)
+		return fmt.Errorf("library: merge franchises into %d: %w", keep, err)
 	}
-	return keep, nil
+	return nil
+}
+
+// UnrelatedKind is the relationship between two works a person said do not belong together.
+const UnrelatedKind = "unrelated_series"
+
+// UnrelatedPairs lists the works of the media type a person said do not belong together.
+func (f Franchises) UnrelatedPairs(ctx context.Context, mediaType string) (map[[2]int64]bool, error) {
+	rows, err := librarydb.New(f.store.Read()).ListUnrelatedWorkPairs(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: unrelated works: %w", err)
+	}
+	out := make(map[[2]int64]bool, len(rows)*2)
+	for _, row := range rows {
+		out[[2]int64{row.FromID, row.ToID}], out[[2]int64{row.ToID, row.FromID}] = true, true
+	}
+	return out, nil
+}
+
+// Dismiss takes a work out of a franchise a provider or Solarr made, and remembers it does not belong with the rest of
+// them, so no pass puts it back.
+func (f Franchises) Dismiss(ctx context.Context, franchiseID, workID int64) error {
+	err := f.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		members, err := queries.ListCollectionMembers(ctx, franchiseID)
+		if err != nil {
+			return err
+		}
+		for _, member := range members {
+			if member.WorkID == workID || member.PartID != 0 {
+				continue
+			}
+			if err := queries.AddRelationship(ctx, librarydb.AddRelationshipParams{FromType: "work", FromID: workID, ToType: "work", ToID: member.WorkID, Kind: UnrelatedKind}); err != nil {
+				return err
+			}
+		}
+		return queries.RemoveCollectionMember(ctx, librarydb.RemoveCollectionMemberParams{CollectionID: franchiseID, WorkID: workID})
+	})
+	if err != nil {
+		return fmt.Errorf("library: dismiss work %d from franchise %d: %w", workID, franchiseID, err)
+	}
+	return nil
+}
+
+// DeleteFranchise deletes a franchise a provider or Solarr made and remembers its works do not belong together.
+func (f Franchises) DeleteFranchise(ctx context.Context, franchiseID int64) error {
+	err := f.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		members, err := queries.ListCollectionMembers(ctx, franchiseID)
+		if err != nil {
+			return err
+		}
+		for i, one := range members {
+			for _, other := range members[i+1:] {
+				if one.PartID != 0 || other.PartID != 0 {
+					continue
+				}
+				if err := queries.AddRelationship(ctx, librarydb.AddRelationshipParams{FromType: "work", FromID: one.WorkID, ToType: "work", ToID: other.WorkID, Kind: UnrelatedKind}); err != nil {
+					return err
+				}
+			}
+		}
+		return queries.DeleteCollection(ctx, franchiseID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete franchise %d: %w", franchiseID, err)
+	}
+	return nil
+}
+
+// UncheckedAnime is an anime series whose AniList relations have not been read.
+type UncheckedAnime struct{ WorkID, AniList int64 }
+
+// AnimeWithoutRelationCheck lists up to limit entries (a series may have several) not yet crawled.
+func (f Franchises) AnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]UncheckedAnime, error) {
+	rows, err := librarydb.New(f.store.Read()).ListAnimeWithoutRelationCheck(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("library: anime without a relation check: %w", err)
+	}
+	out := make([]UncheckedAnime, 0, len(rows))
+	for _, row := range rows {
+		if id, err := strconv.ParseInt(row.Anilist, 10, 64); err == nil {
+			out = append(out, UncheckedAnime{WorkID: row.WorkID, AniList: id})
+		}
+	}
+	return out, nil
+}
+
+// MarkAnimeChecked records that the anime's relations were read.
+func (f Franchises) MarkAnimeChecked(ctx context.Context, workID int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).MarkAnimeChecked(ctx, librarydb.MarkAnimeCheckedParams{WorkID: workID, CheckedAt: f.store.Now().Unix()})
+	})
+	if err != nil {
+		return fmt.Errorf("library: anime check of work %d: %w", workID, err)
+	}
+	return nil
+}
+
+// SetTotal keeps how many works the provider says a franchise has.
+func (f Franchises) SetTotal(ctx context.Context, id, total int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetCollectionComplete(ctx, librarydb.SetCollectionCompleteParams{CompleteAt: sql.NullInt64{Int64: total, Valid: total > 0}, ID: id})
+	})
+	if err != nil {
+		return fmt.Errorf("library: franchise %d total: %w", id, err)
+	}
+	return nil
 }
 
 // Traits are what two works share when they belong together: genres, the networks or studios they are on, and the people

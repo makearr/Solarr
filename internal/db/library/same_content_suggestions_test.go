@@ -22,10 +22,11 @@ func newCrossoverFixture(t *testing.T) crossoverFixture {
 func minutes(m int64) *int64 { v := m * 60_000; return &v }
 
 // show adds a series of the parts, each with the people credited on it.
-func (f crossoverFixture) show(title, id string, parts map[string]crossoverPart) {
+func (f crossoverFixture) show(title, id, network string, parts map[string]crossoverPart) {
 	write := sampleSeries()
 	write.Work.CanonicalTitle, write.Work.SortTitle = title, title
 	write.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: id}}
+	write.Network = network
 	write.Parts = nil
 	write.Credits = nil
 	for ref, part := range parts {
@@ -67,20 +68,24 @@ next:
 
 func TestCrossoverEpisodesAreFoundByCastLengthAndAnEpisodeTitle(t *testing.T) {
 	f := newCrossoverFixture(t)
-	f.show("Show A", "1", map[string]crossoverPart{
+	f.show("Show A", "1", "Channel One", map[string]crossoverPart{
 		"s01:e01": {"Pilot", 45, cast(5)},
 		"s01:e02": {"The Big Crossover", 44, cast(5)},
 		"s01:e03": {"Long Night", 40, cast(5)},
 		"s01:e04": {"Same Name Different Cast", 45, cast(5)},
 		"s01:e05": {"No Cast Data", 45, nil},
 	})
-	f.show("Show B", "2", map[string]crossoverPart{
+	f.show("Show B", "2", "Channel Two", map[string]crossoverPart{
 		"s01:e01": {"Pilot", 45, cast(5)},
 		"s01:e02": {"The Big Crossover", 45, cast(5, 5)},
 		"s01:e03": {"Long Night", 95, cast(5)},
 		"s01:e04": {"Same Name Different Cast", 45, []string{"x1", "x2", "x3", "x4", "x5"}},
 		"s01:e05": {"No Cast Data", 45, nil},
 	})
+
+	// Two series of one network that list one specific title on one day, of one length: the same broadcast, cast data or not.
+	f.show("Docs", "3", "Channel One", map[string]crossoverPart{"s01:e01": {"A Long Night On The Moon", 59, nil}})
+	f.show("Horizon", "4", "Channel One", map[string]crossoverPart{"s01:e01": {"A Long Night On The Moon", 60, nil}})
 
 	found, err := f.crossovers.Suggestions(t.Context(), "tv", 1, 50)
 	if err != nil {
@@ -90,13 +95,13 @@ func TestCrossoverEpisodesAreFoundByCastLengthAndAnEpisodeTitle(t *testing.T) {
 	for _, suggestion := range found {
 		titles[suggestion.Title] = suggestion.Certain()
 	}
-	if len(titles) != 2 || !titles["The Big Crossover"] || titles["No Cast Data"] {
-		t.Errorf("suggestions = %v; want the crossover (certain) and the one with no cast data (only a suggestion), not a pilot, not a 40 and a 95 minute episode, not casts that share no one", titles)
+	if len(titles) != 3 || !titles["The Big Crossover"] || titles["No Cast Data"] || !titles["A Long Night On The Moon"] {
+		t.Errorf("suggestions = %v; want the crossover and the same-network one certain, the one with no cast data only a suggestion, not a pilot, not a 40 and a 95 minute episode, not casts that share no one", titles)
 	}
 
 	linked, err := f.crossovers.LinkCertain(t.Context(), "tv", 1)
-	if err != nil || linked != 1 {
-		t.Fatalf("linked %d, %v; want the one pair the evidence settles", linked, err)
+	if err != nil || linked != 2 {
+		t.Fatalf("linked %d, %v; want the two pairs the evidence settles", linked, err)
 	}
 	after, _ := f.crossovers.Suggestions(t.Context(), "tv", 1, 50)
 	if len(after) != 1 || after[0].Title != "No Cast Data" {

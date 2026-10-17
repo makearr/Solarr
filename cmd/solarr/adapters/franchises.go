@@ -48,22 +48,28 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 	if provider, ok := a.capability(category); ok {
 		var asked []media.FranchiseRef
 		for _, row := range rows {
-			if row.PosterURL == "" && row.Kind == library.FranchiseKind && len(asked) < picturesPerList {
+			if (row.PosterURL == "" || row.Total == 0) && row.Kind == library.FranchiseKind && len(asked) < picturesPerList {
 				asked = append(asked, media.FranchiseRef{ID: row.ID, ExternalID: row.ExternalID})
 			}
 		}
 		if len(asked) > 0 {
-			pictures := provider.FranchisePictures(ctx, asked)
+			facts := provider.FranchiseFacts(ctx, asked)
 			for index := range rows {
 				if !slices.ContainsFunc(asked, func(ref media.FranchiseRef) bool { return ref.ID == rows[index].ID }) {
 					continue
 				}
-				// The provider had none: the first of its works that has one stands in, and is kept so it is not asked again.
-				poster := pictures[rows[index].ID]
-				if poster == "" {
+				fact := facts[rows[index].ID]
+				if fact.Total > 0 && int64(fact.Total) != rows[index].Total {
+					if err := a.Store.SetTotal(ctx, rows[index].ID, int64(fact.Total)); err == nil {
+						rows[index].Total = int64(fact.Total)
+					}
+				}
+				// The provider had no picture: the first of its works that has one stands in, and is kept so it is not asked again.
+				poster := fact.PosterURL
+				if poster == "" && rows[index].PosterURL == "" {
 					poster = firstPoster(rows[index].Members)
 				}
-				if poster != "" {
+				if poster != "" && rows[index].PosterURL == "" {
 					if err := a.Store.SetPoster(ctx, rows[index].ID, poster); err == nil {
 						rows[index].PosterURL = poster
 					}
@@ -101,6 +107,12 @@ func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int6
 				return gen.Franchise{}, err
 			}
 		}
+		// What the provider lists is how many there are: keep it, so the list says "3 / 7" too.
+		if known := int64(len(row.Members) + len(missing)); len(missing) > 0 && known != row.Total {
+			if err := a.Store.SetTotal(ctx, row.ID, known); err == nil {
+				row.Total = known
+			}
+		}
 		return franchiseView(row, missing), nil
 	}
 	return gen.Franchise{}, apiserver.ErrNoFranchise
@@ -131,9 +143,14 @@ func (a LibraryFranchises) Rename(ctx context.Context, _, franchiseID int64, nam
 	return editable(a.Store.Rename(ctx, franchiseID, name))
 }
 
-// Delete implements apiserver.Franchises.
+// Delete implements apiserver.Franchises: a collection made by hand is deleted; a provider's or Solarr's is deleted too,
+// and its works are remembered not to belong together, so no pass makes it again.
 func (a LibraryFranchises) Delete(ctx context.Context, _, franchiseID int64) error {
-	return editable(a.Store.Delete(ctx, franchiseID))
+	err := a.Store.Delete(ctx, franchiseID)
+	if errors.Is(err, library.ErrNotCustomCollection) {
+		return a.Store.DeleteFranchise(ctx, franchiseID)
+	}
+	return err
 }
 
 // AddMember implements apiserver.Franchises.
@@ -141,9 +158,14 @@ func (a LibraryFranchises) AddMember(ctx context.Context, _, franchiseID, workID
 	return editable(a.Store.AddMember(ctx, franchiseID, workID))
 }
 
-// RemoveMember implements apiserver.Franchises.
+// RemoveMember implements apiserver.Franchises: out of a collection made by hand, or out of a provider's or Solarr's with
+// a note that it does not belong with the rest.
 func (a LibraryFranchises) RemoveMember(ctx context.Context, _, franchiseID, workID int64) error {
-	return editable(a.Store.RemoveMember(ctx, franchiseID, workID))
+	err := a.Store.RemoveMember(ctx, franchiseID, workID)
+	if errors.Is(err, library.ErrNotCustomCollection) {
+		return a.Store.Dismiss(ctx, franchiseID, workID)
+	}
+	return err
 }
 
 // Monitor implements apiserver.Franchises.
@@ -176,6 +198,12 @@ func franchiseView(row library.FranchiseRow, missing []media.FranchiseMember) ge
 		view.Total = &total
 	}
 	for _, member := range row.Members {
+		if member.Year > 0 && int(member.Year) > derefOr(view.NewestYear, 0) {
+			year := int(member.Year)
+			view.NewestYear = &year
+		}
+	}
+	for _, member := range row.Members {
 		workID := member.WorkID
 		entry := gen.FranchiseMember{WorkId: &workID, Title: member.Title, Monitored: member.Monitored, HasFile: member.Files > 0}
 		setString(&entry.PosterUrl, member.PosterURL)
@@ -206,4 +234,11 @@ func firstPoster(members []library.FranchiseMember) string {
 		}
 	}
 	return ""
+}
+
+func derefOr(value *int, fallback int) int {
+	if value == nil {
+		return fallback
+	}
+	return *value
 }

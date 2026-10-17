@@ -5907,7 +5907,7 @@ paths:
     delete:
       operationId: deleteFranchise
       tags: [library]
-      summary: Delete a collection made by hand; the works in it stay. Needs the library's manage permission.
+      summary: Delete a collection; the works in it stay. One a provider or Solarr made is not made again. Needs the library's manage permission.
       responses:
         "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Problem" }
@@ -5943,7 +5943,7 @@ paths:
     delete:
       operationId: removeFranchiseMember
       tags: [library]
-      summary: Take a work out of a collection made by hand. Needs the library's manage permission.
+      summary: Take a work out of a collection. Out of one a provider or Solarr made it stays out. Needs the library's manage permission.
       responses:
         "204": { description: Removed. }
         "401": { $ref: "#/components/responses/Problem" }
@@ -7780,6 +7780,7 @@ components:
         monitored: { type: boolean }
         total: { type: integer, description: "The films the provider says the franchise has; absent when it has not said." }
         poster_url: { type: string, description: The provider's picture of the franchise. }
+        newest_year: { type: integer, description: The year of the newest work of it the library holds. }
         members:
           type: array
           items: { $ref: "#/components/schemas/FranchiseMember" }

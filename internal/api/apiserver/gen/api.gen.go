@@ -2001,6 +2001,9 @@ type Franchise struct {
 	Monitored bool              `json:"monitored"`
 	Name      string            `json:"name"`
 
+	// NewestYear The year of the newest work of it the library holds.
+	NewestYear *int `json:"newest_year,omitempty"`
+
 	// PosterUrl The provider's picture of the franchise.
 	PosterUrl *string `json:"poster_url,omitempty"`
 
@@ -5973,7 +5976,7 @@ type ServerInterface interface {
 	// Make an empty collection of the library by hand. Needs the library's manage permission.
 	// (POST /franchises)
 	CreateFranchise(w http.ResponseWriter, r *http.Request)
-	// Delete a collection made by hand; the works in it stay. Needs the library's manage permission.
+	// Delete a collection; the works in it stay. One a provider or Solarr made is not made again. Needs the library's manage permission.
 	// (DELETE /franchises/{id})
 	DeleteFranchise(w http.ResponseWriter, r *http.Request, id int64, params DeleteFranchiseParams)
 	// One franchise with every film the provider lists, those the library lacks included.
@@ -5982,7 +5985,7 @@ type ServerInterface interface {
 	// Rename a collection made by hand. Needs the library's manage permission.
 	// (PATCH /franchises/{id})
 	RenameFranchise(w http.ResponseWriter, r *http.Request, id int64, params RenameFranchiseParams)
-	// Take a work out of a collection made by hand. Needs the library's manage permission.
+	// Take a work out of a collection. Out of one a provider or Solarr made it stays out. Needs the library's manage permission.
 	// (DELETE /franchises/{id}/members/{workId})
 	RemoveFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params RemoveFranchiseMemberParams)
 	// Put a work in a collection made by hand. Needs the library's manage permission.
@@ -7017,7 +7020,7 @@ func (_ Unimplemented) CreateFranchise(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Delete a collection made by hand; the works in it stay. Needs the library's manage permission.
+// Delete a collection; the works in it stay. One a provider or Solarr made is not made again. Needs the library's manage permission.
 // (DELETE /franchises/{id})
 func (_ Unimplemented) DeleteFranchise(w http.ResponseWriter, r *http.Request, id int64, params DeleteFranchiseParams) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -7035,7 +7038,7 @@ func (_ Unimplemented) RenameFranchise(w http.ResponseWriter, r *http.Request, i
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Take a work out of a collection made by hand. Needs the library's manage permission.
+// Take a work out of a collection. Out of one a provider or Solarr made it stays out. Needs the library's manage permission.
 // (DELETE /franchises/{id}/members/{workId})
 func (_ Unimplemented) RemoveFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params RemoveFranchiseMemberParams) {
 	w.WriteHeader(http.StatusNotImplemented)

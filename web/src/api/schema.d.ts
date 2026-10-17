@@ -3650,7 +3650,7 @@ export interface paths {
         get: operations["getFranchise"];
         put?: never;
         post?: never;
-        /** Delete a collection made by hand; the works in it stay. Needs the library's manage permission. */
+        /** Delete a collection; the works in it stay. One a provider or Solarr made is not made again. Needs the library's manage permission. */
         delete: operations["deleteFranchise"];
         options?: never;
         head?: never;
@@ -3674,7 +3674,7 @@ export interface paths {
         /** Put a work in a collection made by hand. Needs the library's manage permission. */
         put: operations["addFranchiseMember"];
         post?: never;
-        /** Take a work out of a collection made by hand. Needs the library's manage permission. */
+        /** Take a work out of a collection. Out of one a provider or Solarr made it stays out. Needs the library's manage permission. */
         delete: operations["removeFranchiseMember"];
         options?: never;
         head?: never;
@@ -4943,6 +4943,8 @@ export interface components {
             total?: number;
             /** @description The provider's picture of the franchise. */
             poster_url?: string;
+            /** @description The year of the newest work of it the library holds. */
+            newest_year?: number;
             members: components["schemas"]["FranchiseMember"][];
         };
         FranchiseMember: {

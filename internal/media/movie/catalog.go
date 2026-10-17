@@ -202,9 +202,9 @@ func franchiseMembers(rows []library.FranchiseRow, id int64) []library.Franchise
 	return nil
 }
 
-// FranchisePictures implements media.Franchising: TMDB's picture of each franchise it names.
-func (c Catalog) FranchisePictures(ctx context.Context, franchises []media.FranchiseRef) map[int64]string {
-	found := map[int64]string{}
+// FranchiseFacts implements media.Franchising: TMDB's picture and film count of each franchise it names.
+func (c Catalog) FranchiseFacts(ctx context.Context, franchises []media.FranchiseRef) map[int64]media.FranchiseFact {
+	found := map[int64]media.FranchiseFact{}
 	if c.Service.TMDB == nil || !c.Service.TMDB.Configured() {
 		return found
 	}
@@ -213,8 +213,8 @@ func (c Catalog) FranchisePictures(ctx context.Context, franchises []media.Franc
 		if id <= 0 {
 			continue
 		}
-		if detail, err := c.Service.TMDB.Collection(ctx, id); err == nil && detail.PosterPath != "" {
-			found[franchise.ID] = tmdb.ImageURL(detail.PosterPath)
+		if detail, err := c.Service.TMDB.Collection(ctx, id); err == nil {
+			found[franchise.ID] = media.FranchiseFact{PosterURL: tmdb.ImageURL(detail.PosterPath), Total: len(detail.Parts)}
 		}
 	}
 	return found

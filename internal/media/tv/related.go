@@ -1,6 +1,7 @@
 package tv
 
 import (
+	"regexp"
 	"slices"
 	"strings"
 	"unicode"
@@ -194,4 +195,184 @@ var connectors = []string{"of", "the", "a", "an", "to", "in", "and", "at", "on",
 // namesAFranchise says the first words of a title could be the name of one: two words at least, the last no connector.
 func namesAFranchise(prefix []string) bool {
 	return len(prefix) >= 2 && !slices.Contains(connectors, prefix[len(prefix)-1])
+}
+
+// sameMakers pairs the works made by the same creator on the same network or studio in the same kind of show: a spin-off
+// has that in common with its parent, and no title says so (Tenj and Zojpa, Kposoriwj Pahxih).
+func sameMakers(traits map[int64]*library.Traits) [][2]int64 {
+	byCreator := map[string][]int64{}
+	for id, one := range traits {
+		for _, creator := range one.Creators {
+			byCreator[creator] = append(byCreator[creator], id)
+		}
+	}
+	var edges [][2]int64
+	for _, ids := range byCreator {
+		// A creator of many works is a studio's name, not a family.
+		if len(ids) < 2 || len(ids) > 12 {
+			continue
+		}
+		slices.Sort(ids)
+		for i, a := range ids {
+			for _, b := range ids[i+1:] {
+				if sharesOrganisation(traits[a], traits[b]) && sharesGenres(traits[a], traits[b]) {
+					edges = append(edges, [2]int64{a, b})
+				}
+			}
+		}
+	}
+	return edges
+}
+
+func sharesOrganisation(a, b *library.Traits) bool {
+	return slices.ContainsFunc(a.Organisations, func(id int64) bool { return slices.Contains(b.Organisations, id) })
+}
+
+// sharesGenres says a third of the genres two works have between them are shared.
+func sharesGenres(a, b *library.Traits) bool {
+	shared := 0
+	for _, genre := range a.Genres {
+		if slices.Contains(b.Genres, genre) {
+			shared++
+		}
+	}
+	union := len(a.Genres) + len(b.Genres) - shared
+	return union > 0 && shared*3 >= union
+}
+
+var placeholderName = regexp.MustCompile(`^Q[0-9]+$`)
+
+// cleanTitle is a title without the year or country that tells two series of one name apart.
+func cleanTitle(title string) string {
+	if open := strings.LastIndex(title, " ("); open > 0 && strings.HasSuffix(title, ")") {
+		title = title[:open]
+	}
+	return strings.TrimSpace(title)
+}
+
+// stemOf is what comes before a colon when every title in the group has it or is it ("PLUH" for "PLUH: Los Angeles").
+func stemOf(title string, others []string) string {
+	index := strings.Index(title, ":")
+	if index <= 0 {
+		return title
+	}
+	stem := strings.TrimSpace(title[:index])
+	for _, other := range others {
+		if !strings.EqualFold(cleanTitle(other), stem) && !strings.HasPrefix(strings.ToLower(other), strings.ToLower(stem)+":") {
+			return title
+		}
+	}
+	return stem
+}
+
+// familyName names a family after its oldest series, the stem its titles share when they do: "Hik 10", not "Hik 10:
+// Ihaol Force".
+func familyName(members []library.WorkName) string {
+	sorted := slices.Clone(members)
+	slices.SortStableFunc(sorted, func(a, b library.WorkName) int {
+		switch {
+		case a.Year == b.Year:
+			return int(a.WorkID - b.WorkID)
+		case a.Year == 0:
+			return 1
+		case b.Year == 0:
+			return -1
+		}
+		return int(a.Year - b.Year)
+	})
+	titles := make([]string, len(sorted))
+	for index, member := range sorted {
+		titles[index] = member.Title
+	}
+	return stemOf(cleanTitle(titles[0]), titles[1:])
+}
+
+// franchisePlan is what one family needs done: which collection keeps it (0 for a new one), which are merged into it,
+// who is in it and what it is called.
+type franchisePlan struct {
+	Keep    int64
+	Merge   []int64
+	Members []int64
+	Name    string
+	Rename  bool
+}
+
+// planFranchises makes each connected family one collection. A franchise a provider named survives over one Solarr made,
+// the larger over the smaller, the older over the newer; the others merge into it. A provider's name stays unless it is no
+// name at all (an item id) or is only one series' title; then the oldest series names it.
+func planFranchises(
+	works []library.WorkName, collections []library.FranchiseSummary, memberships []library.Membership, extra [][2]int64, unrelated map[[2]int64]bool,
+) []franchisePlan {
+	byID := make(map[int64]library.WorkName, len(works))
+	for _, work := range works {
+		byID[work.WorkID] = work
+	}
+	held := map[int64][]int64{}
+	for _, membership := range memberships {
+		held[membership.CollectionID] = append(held[membership.CollectionID], membership.WorkID)
+	}
+	var edges [][2]int64
+	for _, edge := range extra {
+		if !unrelated[edge] {
+			edges = append(edges, edge)
+		}
+	}
+	for _, members := range held {
+		for _, edge := range chain(members) {
+			if !unrelated[edge] {
+				edges = append(edges, edge)
+			}
+		}
+	}
+	var plans []franchisePlan
+	for _, family := range groupsOf(edges) {
+		inFamily := map[int64]bool{}
+		for _, id := range family {
+			inFamily[id] = true
+		}
+		var present []library.FranchiseSummary
+		for _, collection := range collections {
+			if slices.ContainsFunc(held[collection.ID], func(id int64) bool { return inFamily[id] }) {
+				present = append(present, collection)
+			}
+		}
+		slices.SortStableFunc(present, func(a, b library.FranchiseSummary) int {
+			aProvider, bProvider := a.Source != library.AutoSource, b.Source != library.AutoSource
+			switch {
+			case aProvider != bProvider:
+				if aProvider {
+					return -1
+				}
+				return 1
+			case len(held[a.ID]) != len(held[b.ID]):
+				return len(held[b.ID]) - len(held[a.ID])
+			}
+			return int(a.ID - b.ID)
+		})
+		members := make([]library.WorkName, 0, len(family))
+		for _, id := range family {
+			members = append(members, byID[id])
+		}
+		plan := franchisePlan{Members: family, Name: familyName(members)}
+		if len(present) > 0 {
+			keep := present[0]
+			plan.Keep = keep.ID
+			for _, other := range present[1:] {
+				plan.Merge = append(plan.Merge, other.ID)
+			}
+			plan.Rename = placeholderName.MatchString(keep.Name) || keep.Name == "" || namesASeries(keep.Name, members)
+			if !plan.Rename {
+				plan.Name = keep.Name
+			}
+		}
+		plans = append(plans, plan)
+	}
+	return plans
+}
+
+// namesASeries says a franchise's name is only the title of one of its series.
+func namesASeries(name string, members []library.WorkName) bool {
+	return slices.ContainsFunc(members, func(member library.WorkName) bool {
+		return strings.EqualFold(cleanTitle(member.Title), strings.TrimSpace(name))
+	})
 }

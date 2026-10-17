@@ -29,7 +29,7 @@ import { CacheSettingsPage } from "./CacheSettings";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
-import { FranchiseIndex } from "./Franchises";
+import { CollectionPage, FranchiseIndex } from "./Franchises";
 import { CrossoverIndex, CrossoverPage } from "./Crossovers";
 import { LibraryLevelList } from "./LibraryLevelList";
 import { useLibrary } from "@/lib/useLibrary";
@@ -167,6 +167,7 @@ const routes = [
   }),
   // Registered ahead of the $level catch-all below, or these would each
   // resolve as an (invalid) level key instead of their own screen.
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/collections/$franchiseId", component: CollectionPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: AddWork }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/add", component: AddWork }),
   // Overview removed 2026-09-13 (the user's own word: it showed nothing the

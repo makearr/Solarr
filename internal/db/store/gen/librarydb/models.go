@@ -756,6 +756,11 @@ type Work struct {
 	Subtype            sql.NullString
 }
 
+type WorkAnimeCheck struct {
+	WorkID    int64
+	CheckedAt int64
+}
+
 type WorkArrival struct {
 	WorkID    int64
 	ArrivedAt int64

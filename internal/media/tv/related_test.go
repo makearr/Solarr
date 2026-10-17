@@ -74,3 +74,66 @@ func TestNamesAloneAreNotEnoughTwoWorksNeedAGenreANetworkOrACreatorInCommon(t *t
 		t.Error("a work nothing is known of is grouped with none")
 	}
 }
+
+func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
+	works := []library.WorkName{
+		{WorkID: 1, Title: "Hik 10", Year: 2005}, {WorkID: 2, Title: "Hik 10: Ihaol Force", Year: 2008}, {WorkID: 3, Title: "Hik 10: Omniverse", Year: 2012},
+		{WorkID: 4, Title: "Ketkpobxom Rimixtomu (2003)", Year: 2005}, {WorkID: 5, Title: "Ladvuxi", Year: 2010},
+		{WorkID: 6, Title: "PLUH: Los Angeles", Year: 2009}, {WorkID: 7, Title: "PLUH: Hawai'i", Year: 2021},
+		{WorkID: 8, Title: "Tzul Nmex: Voyager", Year: 1995}, {WorkID: 9, Title: "Tzul Nmex: Discovery", Year: 2017},
+		{WorkID: 10, Title: "Jzamkie's Orpigv", Year: 1976}, {WorkID: 11, Title: "Jzamkie's Orpigv (2011)", Year: 2011},
+	}
+	collections := []library.FranchiseSummary{
+		{ID: 584, Name: "Q5594233", Source: "wikidata"}, {ID: 585, Name: "Hik 10: Ihaol Force", Source: "wikidata"},
+		{ID: 643, Name: "Ketkpobxom Rimixtomu", Source: "wikidata"}, {ID: 650, Name: "Ketkpobxom Rimixtomu", Source: "wikidata"},
+		{ID: 700, Name: "PLUH", Source: "auto"}, {ID: 701, Name: "PLUH", Source: "auto"},
+		{ID: 628, Name: "Tzul Nmex", Source: "wikidata"},
+		{ID: 590, Name: "Charlies Angels", Source: "auto"},
+	}
+	memberships := []library.Membership{
+		{CollectionID: 584, WorkID: 1}, {CollectionID: 584, WorkID: 2}, {CollectionID: 584, WorkID: 3}, {CollectionID: 585, WorkID: 1}, {CollectionID: 585, WorkID: 2},
+		{CollectionID: 643, WorkID: 4}, {CollectionID: 650, WorkID: 4}, {CollectionID: 650, WorkID: 5},
+		{CollectionID: 700, WorkID: 6}, {CollectionID: 701, WorkID: 6}, {CollectionID: 701, WorkID: 7},
+		{CollectionID: 628, WorkID: 8}, {CollectionID: 628, WorkID: 9},
+		{CollectionID: 590, WorkID: 10}, {CollectionID: 590, WorkID: 11},
+	}
+	// A person said the two Jzamkie's Orpigv do not belong together.
+	unrelated := map[[2]int64]bool{{10, 11}: true, {11, 10}: true}
+	plans := planFranchises(works, collections, memberships, nil, unrelated)
+
+	byMember := map[int64]franchisePlan{}
+	for _, plan := range plans {
+		for _, id := range plan.Members {
+			byMember[id] = plan
+		}
+	}
+	if plan := byMember[1]; plan.Keep != 584 || !slices.Equal(plan.Merge, []int64{585}) || plan.Name != "Hik 10" || !plan.Rename {
+		t.Errorf("Hik 10: %+v; want the larger kept, the other merged, an item id replaced by the oldest series' name", plan)
+	}
+	if plan := byMember[4]; plan.Keep != 650 || !slices.Equal(plan.Merge, []int64{643}) || plan.Name != "Ketkpobxom Rimixtomu" {
+		t.Errorf("Ketkpobxom Rimixtomu appeared twice: %+v", plan)
+	}
+	if plan := byMember[6]; plan.Keep != 701 || !slices.Equal(plan.Merge, []int64{700}) || plan.Name != "PLUH" {
+		t.Errorf("PLUH: %+v; want one collection, named for the stem its series share", plan)
+	}
+	if plan := byMember[8]; plan.Keep != 628 || plan.Rename || plan.Name != "Tzul Nmex" {
+		t.Errorf("a provider's name that is no series' title stays: %+v", plan)
+	}
+	if _, grouped := byMember[10]; grouped {
+		t.Errorf("a pair a person ruled out is no family: %+v", byMember[10])
+	}
+}
+
+func TestSameCreatorOnTheSameNetworkInTheSameKindOfShowMakesAFamily(t *testing.T) {
+	animated := []string{"Animation", "Comedy"}
+	traits := map[int64]*library.Traits{
+		1: {Creators: []string{"7", "8"}, Organisations: []int64{3}, Genres: animated},
+		2: {Creators: []string{"7"}, Organisations: []int64{3}, Genres: animated},
+		3: {Creators: []string{"7"}, Organisations: []int64{4}, Genres: animated},
+		4: {Creators: []string{"7"}, Organisations: []int64{3}, Genres: []string{"Drama"}},
+	}
+	edges := sameMakers(traits)
+	if len(edges) != 1 || edges[0] != [2]int64{1, 2} {
+		t.Errorf("edges = %v; want only the two animated comedies of one network and creator", edges)
+	}
+}

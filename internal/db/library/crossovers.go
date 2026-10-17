@@ -287,16 +287,25 @@ type SameContentSuggestion struct {
 	OtherWorkTitle, OtherRef          string
 	RuntimeMs, OtherRuntimeMs         int64
 	People, OtherPeople, SharedPeople int64
+	// AvailableAt are the moments the two episodes aired, 0 when not known; SharedOrganisations counts the networks the series share.
+	AvailableAt, OtherAvailableAt, SharedOrganisations int64
 }
 
-// Certain says the evidence is enough to link without asking: a title that names an episode, lengths within 5% and a
-// cast that is near identical, three people at the least.
+// Certain says the evidence is enough to link without asking: a title that names the episode, and lengths within 5% (or
+// the same minute on air), and one of: a near identical cast of three or more, the same moment on air, or a network the
+// two series share with a title of more than one word.
 func (s SameContentSuggestion) Certain() bool {
-	if genericTitle(s.Title) || s.RuntimeMs <= 0 || s.OtherRuntimeMs <= 0 || !within(s.RuntimeMs, s.OtherRuntimeMs, 5) {
+	if genericTitle(s.Title) {
+		return false
+	}
+	sameAir := s.AvailableAt > 0 && s.OtherAvailableAt > 0 && max(s.AvailableAt, s.OtherAvailableAt)-min(s.AvailableAt, s.OtherAvailableAt) <= 600
+	sameLength := s.RuntimeMs > 0 && s.OtherRuntimeMs > 0 && within(s.RuntimeMs, s.OtherRuntimeMs, 5)
+	if !sameLength && !sameAir {
 		return false
 	}
 	union := s.People + s.OtherPeople - s.SharedPeople
-	return s.SharedPeople >= 3 && union > 0 && s.SharedPeople*100 >= 80*union
+	nearIdenticalCast := s.SharedPeople >= 3 && union > 0 && s.SharedPeople*100 >= 80*union
+	return nearIdenticalCast || sameAir || (s.SharedOrganisations > 0 && len(strings.Fields(s.Title)) >= 2)
 }
 
 // Plausible is false for a pair that cannot be one broadcast: a title every series has, lengths far apart, or casts that
@@ -339,6 +348,7 @@ func (c Crossovers) Suggestions(ctx context.Context, mediaType string, categoryI
 			OtherPartID: row.OtherPartID, OtherWorkID: row.OtherWorkID, OtherWorkTitle: row.OtherWorkTitle, OtherRef: row.OtherRef,
 			RuntimeMs: row.RuntimeMs, OtherRuntimeMs: row.OtherRuntimeMs,
 			People: row.People, OtherPeople: row.OtherPeople, SharedPeople: row.SharedPeople,
+			AvailableAt: row.AvailableAt, OtherAvailableAt: row.OtherAvailableAt, SharedOrganisations: row.SharedOrganisations,
 		}
 		if suggestion.Plausible() {
 			suggestions = append(suggestions, suggestion)

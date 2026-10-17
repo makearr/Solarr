@@ -482,6 +482,43 @@ func (q *Queries) ListAllStatRollup(ctx context.Context) ([]StatRollup, error) {
 	return items, nil
 }
 
+const listAnimeWithoutRelationCheck = `-- name: ListAnimeWithoutRelationCheck :many
+SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS anilist
+FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = 'anilist'
+WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_anime_check c WHERE c.work_id = w.id)
+ORDER BY w.id, e.external_id
+LIMIT ?
+`
+
+type ListAnimeWithoutRelationCheckRow struct {
+	WorkID  int64
+	Anilist string
+}
+
+// The anime (series with an AniList id) whose relations have not been read yet.
+func (q *Queries) ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAnimeWithoutRelationCheck, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAnimeWithoutRelationCheckRow{}
+	for rows.Next() {
+		var i ListAnimeWithoutRelationCheckRow
+		if err := rows.Scan(&i.WorkID, &i.Anilist); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listArtworkForSubject = `-- name: ListArtworkForSubject :many
 SELECT id, subject_type, subject_id, kind, source_url, cache_key, width, height, fetched_at
 FROM artwork WHERE subject_type = ? AND subject_id = ? ORDER BY kind
@@ -819,7 +856,7 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 
 const listCreatorLinksOfType = `-- name: ListCreatorLinksOfType :many
 SELECT DISTINCT c.work_id, c.person_id FROM credit c JOIN work w ON w.id = c.work_id
-WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner', 'executive_producer')
+WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner')
 `
 
 type ListCreatorLinksOfTypeRow struct {
@@ -837,6 +874,72 @@ func (q *Queries) ListCreatorLinksOfType(ctx context.Context, mediaType string) 
 	for rows.Next() {
 		var i ListCreatorLinksOfTypeRow
 		if err := rows.Scan(&i.WorkID, &i.PersonID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listExternalIDsOfCollection = `-- name: ListExternalIDsOfCollection :many
+SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider, external_id
+`
+
+type ListExternalIDsOfCollectionRow struct {
+	Provider   string
+	ExternalID string
+}
+
+func (q *Queries) ListExternalIDsOfCollection(ctx context.Context, collectionID int64) ([]ListExternalIDsOfCollectionRow, error) {
+	rows, err := q.db.QueryContext(ctx, listExternalIDsOfCollection, collectionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListExternalIDsOfCollectionRow{}
+	for rows.Next() {
+		var i ListExternalIDsOfCollectionRow
+		if err := rows.Scan(&i.Provider, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFranchiseExternalIDsOfType = `-- name: ListFranchiseExternalIDsOfType :many
+SELECT e.collection_id, e.provider, e.external_id FROM collection_external_id e JOIN collection c ON c.id = e.collection_id
+WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY e.collection_id, e.provider, e.external_id
+`
+
+type ListFranchiseExternalIDsOfTypeRow struct {
+	CollectionID int64
+	Provider     string
+	ExternalID   string
+}
+
+func (q *Queries) ListFranchiseExternalIDsOfType(ctx context.Context, mediaType string) ([]ListFranchiseExternalIDsOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFranchiseExternalIDsOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFranchiseExternalIDsOfTypeRow{}
+	for rows.Next() {
+		var i ListFranchiseExternalIDsOfTypeRow
+		if err := rows.Scan(&i.CollectionID, &i.Provider, &i.ExternalID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -874,6 +977,39 @@ func (q *Queries) ListFranchiseMembershipsOfType(ctx context.Context, mediaType 
 	for rows.Next() {
 		var i ListFranchiseMembershipsOfTypeRow
 		if err := rows.Scan(&i.CollectionID, &i.Source, &i.WorkID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFranchisesOfType = `-- name: ListFranchisesOfType :many
+SELECT c.id, c.name, c.source FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id
+`
+
+type ListFranchisesOfTypeRow struct {
+	ID     int64
+	Name   string
+	Source string
+}
+
+func (q *Queries) ListFranchisesOfType(ctx context.Context, mediaType string) ([]ListFranchisesOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFranchisesOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFranchisesOfTypeRow{}
+	for rows.Next() {
+		var i ListFranchisesOfTypeRow
+		if err := rows.Scan(&i.ID, &i.Name, &i.Source); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1291,7 +1427,10 @@ SELECT a.id AS part_id, a.work_id, wa.canonical_title AS work_title, a.media_ref
        CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca WHERE ca.part_id = a.id) AS INTEGER) AS people,
        CAST((SELECT COUNT(DISTINCT cb.person_id) FROM credit cb WHERE cb.part_id = b.id) AS INTEGER) AS other_people,
        CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id
-             WHERE ca.part_id = a.id) AS INTEGER) AS shared_people
+             WHERE ca.part_id = a.id) AS INTEGER) AS shared_people,
+       CAST(COALESCE(a.available_at, 0) AS INTEGER) AS available_at, CAST(COALESCE(b.available_at, 0) AS INTEGER) AS other_available_at,
+       CAST((SELECT COUNT(*) FROM work_organisation oa JOIN work_organisation ob ON ob.organisation_id = oa.organisation_id AND ob.work_id = b.work_id
+             WHERE oa.work_id = a.work_id) AS INTEGER) AS shared_organisations
 FROM work_part a
 JOIN work_part b ON b.date = a.date AND LOWER(b.title) = LOWER(a.title) AND b.work_id > a.work_id
 JOIN work wa ON wa.id = a.work_id
@@ -1313,21 +1452,24 @@ type ListSameContentSuggestionsParams struct {
 }
 
 type ListSameContentSuggestionsRow struct {
-	PartID         int64
-	WorkID         int64
-	WorkTitle      string
-	MediaRef       string
-	Title          string
-	OtherPartID    int64
-	OtherWorkID    int64
-	OtherWorkTitle string
-	OtherRef       string
-	Date           string
-	RuntimeMs      int64
-	OtherRuntimeMs int64
-	People         int64
-	OtherPeople    int64
-	SharedPeople   int64
+	PartID              int64
+	WorkID              int64
+	WorkTitle           string
+	MediaRef            string
+	Title               string
+	OtherPartID         int64
+	OtherWorkID         int64
+	OtherWorkTitle      string
+	OtherRef            string
+	Date                string
+	RuntimeMs           int64
+	OtherRuntimeMs      int64
+	People              int64
+	OtherPeople         int64
+	SharedPeople        int64
+	AvailableAt         int64
+	OtherAvailableAt    int64
+	SharedOrganisations int64
 }
 
 // Episodes of different works with the same title on the same day, not linked and not ruled out: candidates for one
@@ -1357,6 +1499,9 @@ func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameCo
 			&i.People,
 			&i.OtherPeople,
 			&i.SharedPeople,
+			&i.AvailableAt,
+			&i.OtherAvailableAt,
+			&i.SharedOrganisations,
 		); err != nil {
 			return nil, err
 		}
@@ -1450,6 +1595,41 @@ func (q *Queries) ListStatRollup(ctx context.Context, arg ListStatRollupParams) 
 			&i.Count,
 			&i.ComputedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnrelatedWorkPairs = `-- name: ListUnrelatedWorkPairs :many
+SELECT r.from_id, r.to_id FROM relationship r
+JOIN work a ON a.id = r.from_id AND a.media_type = ?
+WHERE r.kind = 'unrelated_series' AND r.from_type = 'work' AND r.to_type = 'work'
+`
+
+type ListUnrelatedWorkPairsRow struct {
+	FromID int64
+	ToID   int64
+}
+
+// Pairs of works a person said do not belong together.
+func (q *Queries) ListUnrelatedWorkPairs(ctx context.Context, mediaType string) ([]ListUnrelatedWorkPairsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnrelatedWorkPairs, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnrelatedWorkPairsRow{}
+	for rows.Next() {
+		var i ListUnrelatedWorkPairsRow
+		if err := rows.Scan(&i.FromID, &i.ToID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1664,6 +1844,21 @@ func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg L
 	return items, nil
 }
 
+const markAnimeChecked = `-- name: MarkAnimeChecked :exec
+INSERT INTO work_anime_check (work_id, checked_at) VALUES (?, ?)
+ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at
+`
+
+type MarkAnimeCheckedParams struct {
+	WorkID    int64
+	CheckedAt int64
+}
+
+func (q *Queries) MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, markAnimeChecked, arg.WorkID, arg.CheckedAt)
+	return err
+}
+
 const markFranchiseChecked = `-- name: MarkFranchiseChecked :exec
 INSERT INTO work_franchise_check (work_id, checked_at) VALUES (?, ?)
 ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at
@@ -1676,6 +1871,20 @@ type MarkFranchiseCheckedParams struct {
 
 func (q *Queries) MarkFranchiseChecked(ctx context.Context, arg MarkFranchiseCheckedParams) error {
 	_, err := q.db.ExecContext(ctx, markFranchiseChecked, arg.WorkID, arg.CheckedAt)
+	return err
+}
+
+const moveCollectionExternalIDs = `-- name: MoveCollectionExternalIDs :exec
+UPDATE collection_external_id SET collection_id = ?1 WHERE collection_id = ?2
+`
+
+type MoveCollectionExternalIDsParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionExternalIDs(ctx context.Context, arg MoveCollectionExternalIDsParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionExternalIDs, arg.IntoID, arg.FromID)
 	return err
 }
 

@@ -67,12 +67,12 @@ func (m Module) MissingFranchiseMembers(ctx context.Context, categoryID, franchi
 	return m.Franchise.MissingFranchiseMembers(ctx, categoryID, franchiseID)
 }
 
-// FranchisePictures implements media.Franchising.
-func (m Module) FranchisePictures(ctx context.Context, franchises []media.FranchiseRef) map[int64]string {
+// FranchiseFacts implements media.Franchising.
+func (m Module) FranchiseFacts(ctx context.Context, franchises []media.FranchiseRef) map[int64]media.FranchiseFact {
 	if m.Franchise == nil {
 		return nil
 	}
-	return m.Franchise.FranchisePictures(ctx, franchises)
+	return m.Franchise.FranchiseFacts(ctx, franchises)
 }
 
 // MonitorFranchise implements media.Franchising.

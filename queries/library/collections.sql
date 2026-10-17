@@ -293,7 +293,10 @@ SELECT a.id AS part_id, a.work_id, wa.canonical_title AS work_title, a.media_ref
        CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca WHERE ca.part_id = a.id) AS INTEGER) AS people,
        CAST((SELECT COUNT(DISTINCT cb.person_id) FROM credit cb WHERE cb.part_id = b.id) AS INTEGER) AS other_people,
        CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id
-             WHERE ca.part_id = a.id) AS INTEGER) AS shared_people
+             WHERE ca.part_id = a.id) AS INTEGER) AS shared_people,
+       CAST(COALESCE(a.available_at, 0) AS INTEGER) AS available_at, CAST(COALESCE(b.available_at, 0) AS INTEGER) AS other_available_at,
+       CAST((SELECT COUNT(*) FROM work_organisation oa JOIN work_organisation ob ON ob.organisation_id = oa.organisation_id AND ob.work_id = b.work_id
+             WHERE oa.work_id = a.work_id) AS INTEGER) AS shared_organisations
 FROM work_part a
 JOIN work_part b ON b.date = a.date AND LOWER(b.title) = LOWER(a.title) AND b.work_id > a.work_id
 JOIN work wa ON wa.id = a.work_id
@@ -427,4 +430,35 @@ SELECT wo.work_id, wo.organisation_id FROM work_organisation wo JOIN work w ON w
 
 -- name: ListCreatorLinksOfType :many
 SELECT DISTINCT c.work_id, c.person_id FROM credit c JOIN work w ON w.id = c.work_id
-WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner', 'executive_producer');
+WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner');
+
+-- name: ListFranchisesOfType :many
+SELECT c.id, c.name, c.source FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id;
+
+-- name: ListFranchiseExternalIDsOfType :many
+SELECT e.collection_id, e.provider, e.external_id FROM collection_external_id e JOIN collection c ON c.id = e.collection_id
+WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY e.collection_id, e.provider, e.external_id;
+
+-- name: MoveCollectionExternalIDs :exec
+UPDATE collection_external_id SET collection_id = sqlc.arg(into_id) WHERE collection_id = sqlc.arg(from_id);
+
+-- Pairs of works a person said do not belong together.
+-- name: ListUnrelatedWorkPairs :many
+SELECT r.from_id, r.to_id FROM relationship r
+JOIN work a ON a.id = r.from_id AND a.media_type = ?
+WHERE r.kind = 'unrelated_series' AND r.from_type = 'work' AND r.to_type = 'work';
+
+-- The anime (series with an AniList id) whose relations have not been read yet.
+-- name: ListAnimeWithoutRelationCheck :many
+SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS anilist
+FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = 'anilist'
+WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_anime_check c WHERE c.work_id = w.id)
+ORDER BY w.id, e.external_id
+LIMIT ?;
+
+-- name: MarkAnimeChecked :exec
+INSERT INTO work_anime_check (work_id, checked_at) VALUES (?, ?)
+ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at;
+
+-- name: ListExternalIDsOfCollection :many
+SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider, external_id;

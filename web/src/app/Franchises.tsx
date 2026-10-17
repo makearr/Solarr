@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, LayoutGrid, List, Trash2 } from "lucide-react";
@@ -18,23 +18,35 @@ import { useLibrary } from "@/lib/useLibrary";
 import { AddToLibrary } from "./work/AddWork";
 import { CoverArt } from "./CoverArt";
 import { usePreference } from "@/lib/usePreference";
+import { LetterRail } from "@/ui/LetterRail";
+import { useNavigate } from "@tanstack/react-router";
 
 type Franchise = components["schemas"]["Franchise"];
 type View = "poster" | "list";
-type Sort = "name" | "held" | "monitored";
+type Sort = "name" | "items" | "newest" | "monitored";
 
 const inputStyle = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink";
 
 function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
   const sorted = [...franchises];
-  if (sort === "held") sorted.sort((a, b) => b.members.length - a.members.length || a.name.localeCompare(b.name));
-  else if (sort === "monitored") sorted.sort((a, b) => Number(b.monitored) - Number(a.monitored) || a.name.localeCompare(b.name));
-  else sorted.sort((a, b) => a.name.localeCompare(b.name));
+  const byName = (a: Franchise, b: Franchise) => a.name.localeCompare(b.name);
+  if (sort === "items") sorted.sort((a, b) => (b.total ?? b.members.length) - (a.total ?? a.members.length) || b.members.length - a.members.length || byName(a, b));
+  else if (sort === "newest") sorted.sort((a, b) => (b.newest_year ?? 0) - (a.newest_year ?? 0) || byName(a, b));
+  else if (sort === "monitored") sorted.sort((a, b) => Number(b.monitored) - Number(a.monitored) || byName(a, b));
+  else sorted.sort(byName);
   return sorted;
 }
 
+/** "3 / 7 in your library": what the library holds of the works that exist, as far as the providers say. */
 function heldLabel(franchise: Franchise): string {
-  return franchise.total ? t("franchise.held", { held: franchise.members.length, total: franchise.total }) : t("franchise.heldUnknown", { held: franchise.members.length });
+  const held = franchise.members.filter((member) => member.work_id).length;
+  return franchise.total ? t("franchise.held", { held, total: Math.max(franchise.total, held) }) : t("franchise.heldUnknown", { held });
+}
+
+/** The letter a name is listed under: its first letter or digit, "#" for the rest. */
+function initialOf(name: string): string {
+  const letter = name.trim().charAt(0).toLowerCase();
+  return /[a-z]/.test(letter) ? letter : "";
 }
 
 /** A movie library's collections, as Radarr's: the franchises its films belong to, as posters or a list, monitored as a whole. */
@@ -45,7 +57,9 @@ export function FranchiseIndex() {
   const [view, setView] = usePreference<View>(`franchises.view.${categoryId}`, "poster");
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>("name");
-  const [open, setOpen] = useState<number | undefined>();
+  const navigate = useNavigate();
+  const [jump, setJump] = useState("");
+  const frame = useRef<HTMLDivElement>(null);
   const [creating, setCreating] = useState(false);
   const list = useQuery({
     queryKey: ["franchises", categoryId],
@@ -76,9 +90,16 @@ export function FranchiseIndex() {
   }, [list.data, filter, sort]);
   if (list.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>;
   if (!list.data) return <p className="p-6 text-sm text-danger">{t("franchise.failed")}</p>;
-  const opened = shown.find((franchise) => franchise.id === open);
+  const jumpTo = (letter: string) => {
+    setJump(letter);
+    const target = letter ? frame.current?.querySelector(`[data-initial="${letter}"]`) : undefined;
+    if (target) target.scrollIntoView({ block: "start", behavior: "smooth" });
+    else frame.current?.scrollTo({ top: 0, behavior: "smooth" });
+  };
   return (
-    <div className="h-full overflow-y-auto">
+    <div className="relative h-full">
+      {sort === "name" && <LetterRail value={jump} onChange={jumpTo} />}
+      <div ref={frame} className="h-full overflow-y-auto pr-6">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
         <PageHeader title={t("franchise.title")} subtitle={t("franchise.help")} />
         <div className="flex flex-wrap items-center gap-2">
@@ -87,7 +108,8 @@ export function FranchiseIndex() {
             {t("franchise.sort")}
             <select className={inputStyle} value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
               <option value="name">{t("franchise.sort.name")}</option>
-              <option value="held">{t("franchise.sort.held")}</option>
+              <option value="items">{t("franchise.sort.items")}</option>
+              <option value="newest">{t("franchise.sort.newest")}</option>
               <option value="monitored">{t("franchise.sort.monitored")}</option>
             </select>
           </label>
@@ -101,19 +123,19 @@ export function FranchiseIndex() {
             </Button>
           </span>
         </div>
-        {creating && <NewCollection categoryId={categoryId} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setOpen(id); }} />}
+        {creating && <NewCollection categoryId={categoryId} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); void navigate({ to: "/library/$categoryId/collections/$franchiseId", params: { categoryId, franchiseId: String(id) } }); }} />}
         {shown.length === 0 && <EmptyState title={t("franchise.none")} />}
         {view === "poster" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-4">
             {shown.map((franchise) => (
-              <button
+              <Link
                 key={franchise.id}
-                type="button"
-                aria-pressed={open === franchise.id}
-                onClick={() => setOpen(open === franchise.id ? undefined : franchise.id)}
+                data-initial={initialOf(franchise.name)}
+                to="/library/$categoryId/collections/$franchiseId"
+                params={{ categoryId, franchiseId: String(franchise.id) }}
                 className="group flex flex-col gap-1 text-left focus-visible:outline-2 focus-visible:outline-accent"
               >
-                <span className={`block aspect-[2/3] overflow-hidden rounded-lg border bg-surface ${open === franchise.id ? "border-accent" : "border-border-subtle"}`}>
+                <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
                   {franchise.poster_url ? (
                     <img src={remoteImage(franchise.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
                   ) : (
@@ -125,19 +147,19 @@ export function FranchiseIndex() {
                 <span className="truncate text-sm font-medium">{franchise.name}</span>
                 <span className="truncate text-xs text-ink-muted">{heldLabel(franchise)}</span>
                 {franchise.monitored && <Chip tone="ok">{t("franchise.monitored")}</Chip>}
-              </button>
+              </Link>
             ))}
           </div>
         ) : (
           <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
             {shown.map((franchise) => (
-              <li key={franchise.id} className="flex flex-wrap items-center gap-3 px-3 py-2">
+              <li key={franchise.id} data-initial={initialOf(franchise.name)} className="flex flex-wrap items-center gap-3 px-3 py-2">
                 <span className="block h-12 w-8 shrink-0 overflow-hidden rounded border border-border-subtle bg-canvas">
                   {franchise.poster_url && <img src={remoteImage(franchise.poster_url, "thumb")} alt="" loading="lazy" className="size-full object-cover" />}
                 </span>
-                <button type="button" onClick={() => setOpen(open === franchise.id ? undefined : franchise.id)} className="min-w-0 flex-1 truncate text-left text-sm font-medium hover:underline">
+                <Link to="/library/$categoryId/collections/$franchiseId" params={{ categoryId, franchiseId: String(franchise.id) }} className="min-w-0 flex-1 truncate text-sm font-medium hover:underline">
                   {franchise.name}
-                </button>
+                </Link>
                 <span className="text-xs text-ink-muted">{heldLabel(franchise)}</span>
                 {franchise.monitored && <Chip tone="ok">{t("franchise.monitored")}</Chip>}
                 {administrator && (
@@ -149,16 +171,7 @@ export function FranchiseIndex() {
             ))}
           </ul>
         )}
-        {opened && (
-          <CollectionDetail
-            key={opened.id}
-            categoryId={categoryId}
-            summary={opened}
-            administrator={administrator}
-            monitor={monitor}
-            onGone={() => setOpen(undefined)}
-          />
-        )}
+      </div>
       </div>
     </div>
   );
@@ -229,18 +242,18 @@ function CollectionDetail({
         <h2 className="font-medium">{franchise.name}</h2>
         <span className="text-xs text-ink-muted">{heldLabel(franchise)}</span>
         {custom && <Chip>{t("collection.mine")}</Chip>}
-        {administrator && custom && (
+        {administrator && (
           <span className="ml-auto flex gap-2">
-            <Button onClick={() => setRenaming(true)}>{t("collection.rename")}</Button>
+            {custom && <Button onClick={() => setRenaming(true)}>{t("collection.rename")}</Button>}
+            {!custom && (
+              <Button busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
+                {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
+              </Button>
+            )}
             <Button variant="icon" aria-label={t("collection.delete")} title={t("collection.delete")} onClick={() => setDeleting(true)}>
               <Trash2 aria-hidden className="size-4" />
             </Button>
           </span>
-        )}
-        {administrator && !custom && (
-          <Button className="ml-auto" busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
-            {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
-          </Button>
         )}
       </div>
       {monitor.isSuccess && monitor.variables?.id === franchise.id && !custom && (
@@ -278,8 +291,8 @@ function CollectionDetail({
                 <span className={member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}>
                   {member.has_file ? t("franchise.onDisk") : member.monitored ? t("franchise.missing") : t("franchise.unmonitored")}
                 </span>
-                {administrator && custom && (
-                  <button type="button" className="ml-auto text-ink-muted hover:text-ink" title={t("collection.remove")} onClick={() => take.mutate(member.work_id as number)}>
+                {administrator && (
+                  <button type="button" className="ml-auto text-ink-muted hover:text-ink" title={custom ? t("collection.remove") : t("collection.dismiss")} onClick={() => take.mutate(member.work_id as number)}>
                     ✕
                   </button>
                 )}
@@ -334,7 +347,7 @@ function CollectionDetail({
       {deleting && (
         <ConfirmDialog
           title={t("collection.delete")}
-          consequence={t("collection.deleteConsequence")}
+          consequence={custom ? t("collection.deleteConsequence") : t("collection.deleteMadeConsequence")}
           confirmLabel={t("collection.delete")}
           danger
           busy={remove.isPending}
@@ -375,5 +388,57 @@ function NewCollection({ categoryId, onClose, onCreated }: { categoryId: string;
     >
       <input className={inputStyle + " w-full"} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("collection.add.placeholder")} />
     </Dialog>
+  );
+}
+
+/** One collection on a page of its own: what the library holds of it to open, what it lacks to add. */
+export function CollectionPage() {
+  const { categoryId, franchiseId } = useParams({ strict: false }) as { categoryId: string; franchiseId: string };
+  const administrator = useIsAdministrator();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const detail = useQuery({
+    queryKey: ["franchise", categoryId, Number(franchiseId)],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/franchises/{id}", { params: { path: { id: Number(franchiseId) }, query: { category_id: Number(categoryId) } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const monitor = useMutation({
+    mutationFn: async (franchise: Franchise) => {
+      const { data, error } = await api.POST("/franchises/{id}/monitor", {
+        params: { path: { id: franchise.id } },
+        body: { category_id: Number(categoryId), monitored: !franchise.monitored },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, Number(franchiseId)] });
+      void queryClient.invalidateQueries({ queryKey: ["works"] });
+    },
+  });
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto flex max-w-6xl flex-col gap-4 p-4">
+        <Link to="/library/$categoryId/$level" params={{ categoryId, level: "collections" }} className="text-xs text-ink-muted hover:text-ink">
+          ← {t("franchise.title")}
+        </Link>
+        {detail.isLoading && <p className="text-sm text-ink-muted">{t("work.loading")}</p>}
+        {detail.isError && <p className="text-sm text-danger">{t("franchise.failed")}</p>}
+        {detail.data && (
+          <CollectionDetail
+            key={detail.data.id}
+            categoryId={categoryId}
+            summary={detail.data}
+            administrator={administrator}
+            monitor={monitor}
+            onGone={() => void navigate({ to: "/library/$categoryId/$level", params: { categoryId, level: "collections" } })}
+          />
+        )}
+      </div>
+    </div>
   );
 }

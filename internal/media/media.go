@@ -213,11 +213,17 @@ type Renumbering interface {
 type Franchising interface {
 	// MissingFranchiseMembers lists the works the provider says belong to the franchise that the library lacks.
 	MissingFranchiseMembers(ctx context.Context, categoryID, franchiseID int64) ([]FranchiseMember, error)
-	// FranchisePictures answers the provider's picture of each franchise it has one for, by franchise id.
-	FranchisePictures(ctx context.Context, franchises []FranchiseRef) map[int64]string
+	// FranchiseFacts answers what the provider says of each franchise it knows, by franchise id.
+	FranchiseFacts(ctx context.Context, franchises []FranchiseRef) map[int64]FranchiseFact
 	// MonitorFranchise follows or stops following a franchise; following adds the works of it the library lacks, and
 	// answers how many were added.
 	MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (added int, err error)
+}
+
+// FranchiseFact is what a provider says of a franchise: its picture and how many works it has.
+type FranchiseFact struct {
+	PosterURL string
+	Total     int
 }
 
 // FranchiseRef names a franchise to a provider: its id here and its id there.
