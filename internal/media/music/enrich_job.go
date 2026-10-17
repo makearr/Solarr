@@ -38,6 +38,8 @@ type Biographer interface {
 	Biography(ctx context.Context, qid string) (wikidata.Biography, error)
 	// Biographies answers many QIDs at once; a QID it has nothing for is absent.
 	Biographies(ctx context.Context, qids []string) (map[string]wikidata.Biography, error)
+	// GenresOf answers each item's genres, lower case; an item without any is absent.
+	GenresOf(ctx context.Context, qids []string) (map[string][]string, error)
 }
 
 // ArtistArt is a second source of an artist's photo and biography, by MusicBrainz artist id
@@ -366,7 +368,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 			}
 			j.retitle(ctx, work.WorkID, rg)
 			j.enrichCreditsAndGenres(ctx, work.WorkID, rg, artists)
-			j.enrichDescription(ctx, work.WorkID, answers[index].description)
+			j.enrichDescription(ctx, work.WorkID, answers[index])
 			enriched++
 			if j.chooseEdition(ctx, work, rg, artists) {
 				withEdition = append(withEdition, work.WorkID)
@@ -679,6 +681,8 @@ type albumAnswer struct {
 	release     musicbrainz.Release
 	err         error
 	description wikidata.Biography
+	// genres are Wikidata's, which lead MusicBrainz's where there are any.
+	genres []string
 }
 
 // placeholderAlbum names the lookup a placeholder edition needs.
@@ -757,9 +761,14 @@ func (j *EnrichJob) describeAlbums(ctx context.Context, answers []albumAnswer) {
 		j.logger.WarnContext(ctx, "work descriptions lookup failed", slog.Int("albums", len(qids)), slog.Any("error", err))
 		return
 	}
+	genres, err := j.biography.GenresOf(ctx, qids)
+	if err != nil {
+		j.logger.WarnContext(ctx, "album genres lookup failed", slog.Int("albums", len(qids)), slog.Any("error", err))
+	}
 	for index := range answers {
 		if answers[index].err == nil {
 			answers[index].description = descriptions[answers[index].rg.WikidataQID]
+			answers[index].genres = genres[answers[index].rg.WikidataQID]
 		}
 	}
 }
@@ -783,7 +792,7 @@ func (j *EnrichJob) enrichOne(
 	// not returned.
 	j.retitle(ctx, edition.WorkID, rg)
 	j.enrichCreditsAndGenres(ctx, edition.WorkID, rg, artists)
-	j.enrichDescription(ctx, edition.WorkID, album.description)
+	j.enrichDescription(ctx, edition.WorkID, album)
 	return nil
 }
 
@@ -834,7 +843,18 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 // entity -- MusicBrainz's release-group annotation, checked as an
 // alternative source, turned out empty for every real album tested while
 // building this, so it is not used.
-func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, bio wikidata.Biography) {
+func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, album albumAnswer) {
+	// Wikidata's genres are curated where MusicBrainz's are voted tags; written after MusicBrainz's, they replace them.
+	if len(album.genres) > 0 {
+		genres := make([]library.GenreLink, len(album.genres))
+		for index, name := range album.genres {
+			genres[index] = library.GenreLink{Name: name}
+		}
+		if err := j.people.AssignGenresFrom(ctx, workID, library.GenreSourceWikidata, genres); err != nil {
+			j.logger.WarnContext(ctx, "assign wikidata genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
+		}
+	}
+	bio := album.description
 	description := bio.Extract
 	if description == "" {
 		description = bio.Description

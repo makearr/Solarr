@@ -13,6 +13,10 @@ func (f fakeBridge) SeriesIDs(context.Context, wikidata.WorkIDs) (wikidata.WorkI
 	return f.ids, f.ids.QID != "", nil
 }
 
+func (fakeBridge) FactsOf(context.Context, wikidata.FactKind, []string) (map[string]wikidata.WorkFacts, error) {
+	return nil, nil
+}
+
 func TestWikidataFirstCorrectsTheIDsItsItemRecordsAndLaterOnlyFillsThem(t *testing.T) {
 	service := Service{Wikidata: fakeBridge{ids: wikidata.WorkIDs{QID: "Q1", TVDB: 900, TMDB: 31, TVmaze: 7, IMDb: "tt0000031", AniList: []int64{5}}}}
 	held := IDs{TVDB: 900, TMDB: 12, IMDb: "tt0000012"}

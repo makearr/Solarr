@@ -73,9 +73,20 @@ func (f *fakeArtistSource) Artist(_ context.Context, mbid string) (musicbrainz.A
 // fakeBiographer answers a canned biography per QID, or an error for an
 // unlisted one.
 type fakeBiographer struct {
+	genres      map[string][]string
 	biographies map[string]wikidata.Biography
 	calls       int
 	batches     int
+}
+
+func (f *fakeBiographer) GenresOf(_ context.Context, qids []string) (map[string][]string, error) {
+	out := map[string][]string{}
+	for _, qid := range qids {
+		if genres := f.genres[qid]; len(genres) > 0 {
+			out[qid] = genres
+		}
+	}
+	return out, nil
 }
 
 func (f *fakeBiographer) Biographies(ctx context.Context, qids []string) (map[string]wikidata.Biography, error) {
@@ -608,6 +619,53 @@ func TestEnrichJob_ResolvesAWorkDescriptionFromTheReleaseGroupsWikidataQID(t *te
 	}
 	if !work.Description.Valid || work.Description.String != "The Fura Husu of the Teke is..." {
 		t.Errorf("Description = %+v, want the Wikipedia extract", work.Description)
+	}
+}
+
+// Wikidata's genres, where it has any, replace the tags MusicBrainz votes on; an album without them keeps MusicBrainz's.
+func TestEnrichJob_WikidataGenresLeadMusicBrainzs(t *testing.T) {
+	source := &fakeArtistSource{
+		fakeSource: fakeSource{
+			rg: musicbrainz.ReleaseGroup{
+				MBID: "rg-1", Title: "The Fura Husu of the Teke", PrimaryType: "Album", WikidataQID: "Q150901",
+				Genres: []musicbrainz.Genre{{Name: "rock", Count: 3}},
+			},
+			release: musicbrainz.Release{MBID: "rel-1", Title: "The Fura Husu of the Teke", Status: "official"},
+		},
+	}
+	biographer := &fakeBiographer{
+		biographies: map[string]wikidata.Biography{"Q150901": {Description: "1973 studio album"}},
+		genres:      map[string][]string{"Q150901": {"progressive rock", "art rock"}},
+	}
+	job, opened, queries := newEnrichJobWithBiographer(t, source, biographer)
+	createPlaceholder(t, opened, "rg-1", "rel-1")
+	if err := job.Run(t.Context(), jobs.Job{Type: music.EnrichJobType}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	work, err := queries.GetWorkByExternalID(t.Context(), librarydb.GetWorkByExternalIDParams{Provider: music.ProviderReleaseGroup, ExternalID: "rg-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	tags, err := queries.ListTagsForSubject(t.Context(), librarydb.ListTagsForSubjectParams{SubjectType: "work", SubjectID: work.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tag := range tags {
+		if tag.Source != "wikidata" {
+			t.Errorf("tag %+v; want only Wikidata's", tag)
+		}
+	}
+	named, err := queries.ListTagsForSubjectWithName(t.Context(), librarydb.ListTagsForSubjectWithNameParams{SubjectType: "work", SubjectID: work.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, tag := range named {
+		names = append(names, tag.TagName)
+	}
+	slices.Sort(names)
+	if !slices.Equal(names, []string{"art rock", "progressive rock"}) {
+		t.Errorf("genres = %v; want Wikidata's in place of MusicBrainz's", names)
 	}
 }
 

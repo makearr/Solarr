@@ -237,20 +237,30 @@ func (p People) addCredit(ctx context.Context, workID, personID int64, role stri
 // lost a genre on MusicBrainz loses it here too, while any tag a user added
 // by hand (a different source) is never touched (ADR-33).
 func (p People) AssignGenres(ctx context.Context, workID int64, genres []GenreLink) error {
+	return p.AssignGenresFrom(ctx, workID, providerSourceMusicBrainz, genres)
+}
+
+// GenreSourceWikidata is the source of the genres Wikidata names, which replace MusicBrainz's where it has any.
+const GenreSourceWikidata = "wikidata"
+
+// AssignGenresFrom replaces a work's provider genres, MusicBrainz's and Wikidata's alike, with one provider's.
+func (p People) AssignGenresFrom(ctx context.Context, workID int64, source string, genres []GenreLink) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		if err := queries.ClearProviderTagAssignments(ctx, librarydb.ClearProviderTagAssignmentsParams{
-			SubjectType: "work", SubjectID: workID, Source: providerSourceMusicBrainz,
-		}); err != nil {
-			return fmt.Errorf("clear existing: %w", err)
+		for _, provider := range []string{providerSourceMusicBrainz, GenreSourceWikidata} {
+			if err := queries.ClearProviderTagAssignments(ctx, librarydb.ClearProviderTagAssignmentsParams{
+				SubjectType: "work", SubjectID: workID, Source: provider,
+			}); err != nil {
+				return fmt.Errorf("clear existing: %w", err)
+			}
 		}
 		for _, genre := range genres {
-			tagID, err := findOrCreateTag(ctx, queries, genre.Name, providerSourceMusicBrainz)
+			tagID, err := findOrCreateTag(ctx, queries, genre.Name, source)
 			if err != nil {
 				return fmt.Errorf("tag %q: %w", genre.Name, err)
 			}
 			if err := queries.AssignTag(ctx, librarydb.AssignTagParams{
-				TagID: tagID, SubjectType: "work", SubjectID: workID, Source: providerSourceMusicBrainz,
+				TagID: tagID, SubjectType: "work", SubjectID: workID, Source: source,
 			}); err != nil {
 				return fmt.Errorf("assign tag %q: %w", genre.Name, err)
 			}

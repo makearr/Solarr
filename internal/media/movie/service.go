@@ -144,6 +144,9 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 	if !found {
 		return Movie{}, ErrNoSource
 	}
+	if len(movie.Genres) == 0 {
+		movie.Genres = movie.spareGenres
+	}
 	return movie, nil
 }
 
@@ -162,6 +165,13 @@ func (s Service) askMore(ctx context.Context, name string, ids IDs) (Movie, bool
 		return true
 	}
 	switch name {
+	case settings.SourceWikidata:
+		if s.Wikidata != nil && ids.TMDB > 0 {
+			id := strconv.FormatInt(ids.TMDB, 10)
+			facts, err := s.Wikidata.FactsOf(ctx, wikidata.FactFilm, []string{id})
+			found, known := facts[id]
+			return FromWikidata(found), report(err) && known
+		}
 	case settings.MovieSourceMDBList:
 		if s.MDBList != nil && s.MDBList.Configured() {
 			media, err := s.MDBList.Movie(ctx, ids.TMDB, ids.IMDb)
@@ -202,9 +212,10 @@ func (s Service) askProxy(ctx context.Context, ids IDs) (radarrmeta.Movie, error
 	return s.Proxy.ByIMDb(ctx, ids.IMDb)
 }
 
-// IDBridge is Wikidata as a fetch asks it: the ids its item records for a film.
+// IDBridge is Wikidata as a fetch asks it: the ids its item records for a film, and what it says of it.
 type IDBridge interface {
 	MovieIDs(ctx context.Context, tmdb int64, imdb string) (wikidata.WorkIDs, bool, error)
+	FactsOf(ctx context.Context, kind wikidata.FactKind, ids []string) (map[string]wikidata.WorkFacts, error)
 }
 
 // bridgeIDs fills in the ids Wikidata's item records and the film lacks; first in the library's order, Wikidata also

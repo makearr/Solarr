@@ -184,6 +184,11 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 			rich, haveRich = answer.Value.series, true
 		}
 	}
+	facts, haveFacts := s.wikidataFacts(ctx, ids, order)
+	if haveFacts && facts.Summary != "" {
+		sources = append(sources, Series{Overview: facts.Summary, Sources: []string{settings.SourceWikidata}})
+		bySource[settings.SourceWikidata] = sources[len(sources)-1]
+	}
 	if len(sources) == 0 {
 		return Series{}, ErrNoSource
 	}
@@ -201,7 +206,26 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
 	}
 	ApplyPriority(&merged, bySource, order)
+	// Wikidata's genres are too fine ("crime drama television series") to lead; they only fill where no one has any.
+	if len(merged.Genres) == 0 && haveFacts {
+		merged.Genres = facts.Genres
+	}
 	return merged, nil
+}
+
+// wikidataFacts is what Wikidata and the English Wikipedia article say of the series, when the library asks Wikidata.
+func (s Service) wikidataFacts(ctx context.Context, ids IDs, order []string) (wikidata.WorkFacts, bool) {
+	if s.Wikidata == nil || ids.TVDB == 0 || !slices.Contains(order, settings.SourceWikidata) {
+		return wikidata.WorkFacts{}, false
+	}
+	id := strconv.FormatInt(ids.TVDB, 10)
+	facts, err := s.Wikidata.FactsOf(ctx, wikidata.FactSeries, []string{id})
+	if err != nil {
+		s.warn("wikidata", ids.TVDB, err)
+		return wikidata.WorkFacts{}, false
+	}
+	found, known := facts[id]
+	return found, known
 }
 
 // fetchAniList asks AniList for each cour of an anime Skyhook knows by AniList id; a series with none is not asked.
@@ -242,9 +266,10 @@ func (s Service) completeIDs(ctx context.Context, ids IDs) IDs {
 	return ids
 }
 
-// IDBridge is Wikidata as a fetch asks it: the ids its item records for a series.
+// IDBridge is Wikidata as a fetch asks it: the ids its item records for a series, and what it says of it.
 type IDBridge interface {
 	SeriesIDs(ctx context.Context, known wikidata.WorkIDs) (wikidata.WorkIDs, bool, error)
+	FactsOf(ctx context.Context, kind wikidata.FactKind, ids []string) (map[string]wikidata.WorkFacts, error)
 }
 
 // bridgeIDs fills in the ids Wikidata's item records and the series lacks; first in the library's order, Wikidata also

@@ -11,12 +11,13 @@ import (
 
 // Source names, as listed in Movie.Sources.
 const (
-	sourceTMDB    = "tmdb"
-	sourceRadar   = "radarr"
-	sourceMDBList = "mdblist"
-	sourceOMDb    = "omdb"
-	sourceFanart  = "fanart"
-	sourceTVDB    = "tvdb"
+	sourceTMDB     = "tmdb"
+	sourceRadar    = "radarr"
+	sourceMDBList  = "mdblist"
+	sourceOMDb     = "omdb"
+	sourceFanart   = "fanart"
+	sourceTVDB     = "tvdb"
+	sourceWikidata = "wikidata"
 )
 
 const (
@@ -240,6 +241,9 @@ func Merge(first, second Movie) Movie {
 	merged.Website, merged.TrailerID = cmp.Or(first.Website, second.Website), cmp.Or(first.TrailerID, second.TrailerID)
 	if len(merged.Genres) == 0 {
 		merged.Genres = second.Genres
+	}
+	if len(merged.spareGenres) == 0 {
+		merged.spareGenres = second.spareGenres
 	}
 	if len(merged.Keywords) == 0 {
 		merged.Keywords = second.Keywords

@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
 // The providers beyond TMDB and Radarr's service, as the movie fetch asks them; each is nil until wired.
@@ -137,7 +138,7 @@ var tvdbArtworkKinds = map[int]string{14: "poster", 15: "fanart", 16: "banner", 
 
 // FromTVDB is a film as TheTVDB has it: its English overview, genres, runtime, pictures and the ids it knows.
 func FromTVDB(in tvdb.Movie) Movie {
-	movie := Movie{Overview: in.Overview("eng"), RuntimeMin: in.Runtime, Sources: []string{sourceTVDB}}
+	movie := Movie{Title: in.Name, Overview: in.Overview("eng"), RuntimeMin: in.Runtime, Sources: []string{sourceTVDB}}
 	movie.IDs.IMDb = in.RemoteID("IMDB")
 	movie.IDs.TMDB, _ = strconv.ParseInt(in.RemoteID("TheMovieDB.com"), 10, 64)
 	movie.Year, _ = strconv.Atoi(in.Year)
@@ -152,6 +153,20 @@ func FromTVDB(in tvdb.Movie) Movie {
 		}
 		seen[kind] = true
 		movie.Images = append(movie.Images, Image{Kind: kind, URL: artwork.Image, Source: sourceTVDB})
+	}
+	return movie
+}
+
+// FromWikidata is what Wikidata's item and the English Wikipedia article say of a film: its overview (the article's
+// lead), original title, year, runtime and language. Its title stays the identifying provider's, which names folders
+// and matches releases; its genres are too fine ("time-travel film") to lead, so they only fill where no one else has any.
+func FromWikidata(in wikidata.WorkFacts) Movie {
+	movie := Movie{Overview: in.Summary, OriginalTitle: in.OriginalTitle, RuntimeMin: in.RuntimeMin, spareGenres: in.Genres, Sources: []string{sourceWikidata}}
+	if len(in.Date) >= 4 {
+		movie.Year, _ = strconv.Atoi(in.Date[:4])
+	}
+	if len(in.Languages) > 0 {
+		movie.OriginalLanguage = in.Languages[0]
 	}
 	return movie
 }

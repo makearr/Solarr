@@ -134,6 +134,8 @@ type Movie struct {
 	TrailerID                              string
 	// Sources names the providers that supplied it, in the order they were read.
 	Sources []string
+	// spareGenres are genres to fall back on when no provider names any: Wikidata's, too fine to lead.
+	spareGenres []string
 }
 
 // Released says the movie has come out by its own dates: a home release, else a theatrical date past.

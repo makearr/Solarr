@@ -12,6 +12,16 @@ library's order. Music is looked up once for every music library, in the first m
 they also replace the ones they disagree with. The id that found the item (a series' TheTVDB id, a film's TMDB id) is
 never changed, and an id two items claim says nothing (`bridgeIDs` in the TV and movie services).
 
+**Wikidata leads what it holds.** Once another provider has identified a work (TMDB for a film, TheTVDB for a series,
+MusicBrainz for an album), Wikidata's item is found by that id (`FactsOf` in `internal/metadata/wikidata/facts.go`)
+and, first in the order, supplies what it holds before the others: a film's overview (the English Wikipedia article's
+lead), original title, year, runtime and original language; a series' overview; an album's genres, which replace
+MusicBrainz's voted tags, and its description (already Wikidata's). Measured on a real library: every film sampled is
+on Wikidata (56 of 60 with an English article), 56 of 60 series, half the albums, one recording in thirteen. Three
+things it does not lead: titles, which name folders and match releases, so they stay the identifying provider's;
+film and series genres, which are too fine ("time-travel film", "crime drama television series") and only fill where
+no provider names any; songs, which are rarely on Wikidata and stay MusicBrainz's.
+
 ## What the upstream projects use
 
 | Project | Source of metadata | Notes |

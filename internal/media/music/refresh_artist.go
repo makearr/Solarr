@@ -111,7 +111,7 @@ func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, m
 	}
 	j.describeAlbums(ctx, answers)
 	for index, workID := range refreshed {
-		j.enrichDescription(ctx, workID, answers[index].description)
+		j.enrichDescription(ctx, workID, answers[index])
 	}
 	if j.realigner != nil && len(refreshed) > 0 {
 		if err := j.realigner.RealignWorks(ctx, refreshed, manual); err != nil {

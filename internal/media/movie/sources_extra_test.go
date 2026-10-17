@@ -1,6 +1,7 @@
 package movie_test
 
 import (
+	"context"
 	"reflect"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
 func TestEachMoreProviderGivesWhatItIsBestAt(t *testing.T) {
@@ -46,5 +48,53 @@ func TestEachMoreProviderGivesWhatItIsBestAt(t *testing.T) {
 	fromTVDB := movie.FromTVDB(record)
 	if fromTVDB.Overview != "Long." || fromTVDB.IDs != (movie.IDs{TMDB: 7001, IMDb: "tt9000001"}) || fromTVDB.Year != 1999 || len(fromTVDB.Images) != 2 {
 		t.Errorf("TheTVDB = %+v", fromTVDB)
+	}
+}
+
+type fakeWikidata struct{ facts map[string]wikidata.WorkFacts }
+
+func (fakeWikidata) MovieIDs(context.Context, int64, string) (wikidata.WorkIDs, bool, error) {
+	return wikidata.WorkIDs{}, false, nil
+}
+
+func (f fakeWikidata) FactsOf(_ context.Context, _ wikidata.FactKind, ids []string) (map[string]wikidata.WorkFacts, error) {
+	out := map[string]wikidata.WorkFacts{}
+	for _, id := range ids {
+		if facts, ok := f.facts[id]; ok {
+			out[id] = facts
+		}
+	}
+	return out, nil
+}
+
+type fakeTVDBFilms struct{ movie tvdb.Movie }
+
+func (f fakeTVDBFilms) Movie(context.Context, int64) (tvdb.Movie, error) { return f.movie, nil }
+
+func (fakeTVDBFilms) MovieByRemoteID(context.Context, string) (int64, bool, error) {
+	return 9, true, nil
+}
+
+func TestWikidataLeadsWhatItHoldsButNeverTheTitleAndItsGenresOnlyFill(t *testing.T) {
+	facts := wikidata.WorkFacts{QID: "Q1", Summary: "Example Film is a 1999 film.", OriginalTitle: "Le Film Exemplaire", Date: "1999-06-20",
+		RuntimeMin: 124, Languages: []string{"fr"}, Genres: []string{"Time-travel", "Thriller"}}
+	service := movie.Service{
+		Wikidata: fakeWikidata{facts: map[string]wikidata.WorkFacts{"7001": facts}},
+		TVDB:     fakeTVDBFilms{movie: tvdb.Movie{Name: "Example Film", Year: "1998", Runtime: 120}},
+		Priority: func() []string { return []string{"wikidata", "tvdb"} },
+	}
+	got, err := service.FetchFor(t.Context(), 0, movie.IDs{TMDB: 7001})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Title != "Example Film" || got.Overview != facts.Summary || got.OriginalTitle != "Le Film Exemplaire" || got.Year != 1999 || got.RuntimeMin != 124 || got.OriginalLanguage != "fr" {
+		t.Errorf("movie = %+v; want Wikidata's facts first and TheTVDB's title", got)
+	}
+	if !reflect.DeepEqual(got.Genres, facts.Genres) {
+		t.Errorf("genres = %v; want Wikidata's where no provider names any", got.Genres)
+	}
+	service.TVDB = fakeTVDBFilms{movie: tvdb.Movie{Name: "Example Film", Genres: []tvdb.Named{{Name: "Thriller"}}}}
+	if again, _ := service.FetchFor(t.Context(), 0, movie.IDs{TMDB: 7001}); !reflect.DeepEqual(again.Genres, []string{"Thriller"}) {
+		t.Errorf("genres = %v; want the provider's over Wikidata's finer ones", again.Genres)
 	}
 }
