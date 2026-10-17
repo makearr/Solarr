@@ -316,6 +316,8 @@ type SeriesTitle struct {
 	WorkID int64
 	Title  string
 	Year   int64
+	// Canonical is the work's own title, not one of its aliases.
+	Canonical bool
 }
 
 // Titles lists every canonical and alias title of a category's series.
@@ -331,7 +333,7 @@ func (r SeriesReader) TitlesOf(ctx context.Context, mediaType string, categoryID
 	}
 	titles := make([]SeriesTitle, len(rows))
 	for i, row := range rows {
-		titles[i] = SeriesTitle{WorkID: row.WorkID, Title: row.Title, Year: row.Year.Int64}
+		titles[i] = SeriesTitle{WorkID: row.WorkID, Title: row.Title, Year: row.Year.Int64, Canonical: row.Canonical == 1}
 	}
 	return titles, nil
 }

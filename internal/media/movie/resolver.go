@@ -117,12 +117,23 @@ func (r Resolver) inLibrary(ctx context.Context, categoryID int64, info parsemov
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
 		wanted[parsetv.CleanTitle(title)] = true
 	}
+	canonical := map[int64]string{}
+	for _, held := range titles {
+		if held.Canonical {
+			canonical[held.WorkID] = titleKey(held.Title)
+		}
+	}
 	var found []int64
 	for _, held := range titles {
-		if wanted[parsetv.CleanTitle(held.Title)] && yearsAgree(int(held.Year), info.Year) {
-			if len(found) == 0 || found[len(found)-1] != held.WorkID {
-				found = append(found, held.WorkID)
-			}
+		if !wanted[parsetv.CleanTitle(held.Title)] || !yearsAgree(int(held.Year), info.Year) {
+			continue
+		}
+		// An alias that is only part of the film's own title ("Saxewtvei" for Guillermo del Toro's) names another film as well.
+		if !held.Canonical && strings.Contains(canonical[held.WorkID], titleKey(held.Title)) {
+			continue
+		}
+		if len(found) == 0 || found[len(found)-1] != held.WorkID {
+			found = append(found, held.WorkID)
 		}
 	}
 	if len(found) == 1 {
