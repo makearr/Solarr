@@ -59,7 +59,7 @@ var MetadataProviders = []MetadataProvider{
 	{Key: SourceMusicBrainz, Label: "MusicBrainz", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"}},
 	{Key: TVSourceSkyhook, Label: "Sonarr's SkyHook", MediaTypes: []string{"tv"}, Carries: []string{"series", "seasons", "episodes", "air dates", "images", "ids"}},
 	{Key: TVSourceTMDB, Label: "TMDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"overview", "cast and crew", "guest stars", "images", "certification", "networks and studios", "collections", "ids"}, NeedsKey: true},
-	{Key: TVSourceTVDB, Label: "TheTVDB", MediaTypes: []string{"tv"}, Carries: []string{"series", "episodes", "other orderings", "images", "cast", "ids"}, NeedsKey: true},
+	{Key: TVSourceTVDB, Label: "TheTVDB", MediaTypes: []string{"tv"}, Carries: []string{"series", "episodes", "other orderings", "images", "cast", "ids"}},
 	{Key: TVSourceTVmaze, Label: "TVmaze", MediaTypes: []string{"tv"}, Carries: []string{"air times and time zones", "networks", "cast", "images"}},
 	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"}},
 	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"}},

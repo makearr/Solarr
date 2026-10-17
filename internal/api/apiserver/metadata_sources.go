@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -26,9 +27,10 @@ func (s *Server) routeSetLibraryMetadataSources(w http.ResponseWriter, r *http.R
 func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMetadataSources {
 	snapshot := s.auth.Settings.Snapshot()
 	current, _ := snapshot.Category(category.ID)
+	defaults := settings.DefaultMetadataSources(category.MediaType, category.Kind)
 	view := gen.LibraryMetadataSources{
-		Sources: snapshot.MetadataSourcesFor(current), Custom: boolPtr(len(current.MetadataSources) > 0),
-		Default:   settings.DefaultMetadataSources(category.MediaType, category.Kind),
+		Sources: snapshot.MetadataSourcesFor(current), Custom: boolPtr(len(current.MetadataSources) > 0 && !slices.Equal(current.MetadataSources, defaults)),
+		Default:   defaults,
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
@@ -39,10 +41,21 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 
 func providerInfo(snapshot *settings.Snapshot, provider settings.MetadataProvider) gen.MetadataProviderInfo {
 	return gen.MetadataProviderInfo{
-		Key: provider.Key, Label: provider.Label, Carries: provider.Carries, NeedsKey: provider.NeedsKey,
+		Key: provider.Key, Label: provider.Label, Carries: provider.Carries, NeedsKey: provider.NeedsKey && !keyStored(snapshot, provider.Key),
 		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: provider.Key != settings.SourceMusicBrainz,
 		MediaTypes: orEmpty(provider.MediaTypes), AlsoFor: orEmpty(provider.AlsoFor),
 	}
+}
+
+// keyStored says the owner's key for a provider that needs one is in place.
+func keyStored(snapshot *settings.Snapshot, key string) bool {
+	switch key {
+	case settings.TVSourceTMDB:
+		return snapshot.TMDBConfigured()
+	case settings.SourceAcoustID:
+		return snapshot.AcoustIDConfigured()
+	}
+	return false
 }
 
 func orEmpty(values []string) []string {

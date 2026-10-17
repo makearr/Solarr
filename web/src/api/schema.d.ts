@@ -4520,6 +4520,7 @@ export interface components {
             label: string;
             /** @description What the provider supplies. */
             carries: string[];
+            /** @description The provider waits for a key of the owner's own that is not stored yet. */
             needs_key: boolean;
             /** @description Switched on for every library. */
             enabled: boolean;

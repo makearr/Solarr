@@ -7181,7 +7181,7 @@ components:
         key: { type: string }
         label: { type: string }
         carries: { type: array, items: { type: string }, description: What the provider supplies. }
-        needs_key: { type: boolean }
+        needs_key: { type: boolean, description: The provider waits for a key of the owner's own that is not stored yet. }
         enabled: { type: boolean, description: Switched on for every library. }
         can_disable: { type: boolean, description: False for MusicBrainz, which always answers. }
         media_types: { type: array, items: { type: string }, description: The libraries whose order it takes a place in. }

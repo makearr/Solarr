@@ -2937,7 +2937,9 @@ type MetadataProviderInfo struct {
 
 	// MediaTypes The libraries whose order it takes a place in.
 	MediaTypes []string `json:"media_types"`
-	NeedsKey   bool     `json:"needs_key"`
+
+	// NeedsKey The provider waits for a key of the owner's own that is not stored yet.
+	NeedsKey bool `json:"needs_key"`
 }
 
 // MetadataSettings The metadata providers' own settings.
