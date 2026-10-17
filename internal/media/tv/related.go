@@ -226,7 +226,32 @@ func characterEdges(credits []library.CharacterCredit, works []library.WorkName)
 	}
 	type tally struct{ both, named int }
 	pairs := map[[2]int64]*tally{}
+	tallyOf := func(a, b int64) *tally {
+		pair := [2]int64{min(a, b), max(a, b)}
+		if pairs[pair] == nil {
+			pairs[pair] = &tally{}
+		}
+		return pairs[pair]
+	}
+	partsOf := map[int64]map[int64][]characterPart{}
 	for key, in := range playedIn {
+		if partsOf[key.person] == nil {
+			partsOf[key.person] = map[int64][]characterPart{}
+		}
+		for id, credit := range in {
+			partsOf[key.person][id] = append(partsOf[key.person][id], characterPart{strings.Fields(key.name), credit})
+		}
+	}
+	for _, in := range partsOf {
+		for newer, newerParts := range in {
+			for older, olderParts := range in {
+				if newer != older && namedAfter(byID[newer], byID[older], newerParts, olderParts) {
+					tallyOf(newer, older).named++
+				}
+			}
+		}
+	}
+	for _, in := range playedIn {
 		// A part in many series is a stock one, not a family's.
 		if len(in) < 2 || len(in) > 6 {
 			continue
@@ -238,16 +263,8 @@ func characterEdges(credits []library.CharacterCredit, works []library.WorkName)
 		slices.Sort(ids)
 		for i, a := range ids {
 			for _, b := range ids[i+1:] {
-				count := pairs[[2]int64{a, b}]
-				if count == nil {
-					count = &tally{}
-					pairs[[2]int64{a, b}] = count
-				}
 				if in[a].Regular && in[b].Regular {
-					count.both++
-				}
-				if namedAfter(byID[a], byID[b], key.name, in[b]) || namedAfter(byID[b], byID[a], key.name, in[a]) {
-					count.named++
+					tallyOf(a, b).both++
 				}
 			}
 		}
@@ -293,15 +310,46 @@ func characterEdges(credits []library.CharacterCredit, works []library.WorkName)
 	return edges
 }
 
-// namedAfter says the newer work is named after a lead of the older one (billed in its first ten) or a character in three
-// of its episodes at least: "Young Brannock", "Governor Tandry".
-func namedAfter(newer, older library.WorkName, character string, inOlder library.CharacterCredit) bool {
-	lead := inOlder.Billing >= 0 && inOlder.Billing < 10
-	if !lead && inOlder.Episodes < 3 || newer.Year == 0 || older.Year == 0 || newer.Year <= older.Year {
+// characterPart is one character a person plays in a work, as the words of its name.
+type characterPart struct {
+	words  []string
+	credit library.CharacterCredit
+}
+
+// rankWords name a rank or a family role, never one character: "President" names no one, "Curtis" does.
+var rankWords = map[string]bool{
+	"president": true, "captain": true, "doctor": true, "agent": true, "detective": true, "officer": true, "mister": true,
+	"lady": true, "lord": true, "king": true, "queen": true, "young": true, "little": true, "prince": true, "princess": true,
+	"sergeant": true, "general": true, "professor": true, "uncle": true, "aunt": true, "grandpa": true, "grandma": true,
+	"mayor": true, "governor": true, "chief": true, "judge": true, "sheriff": true, "junior": true, "senior": true,
+}
+
+// namedAfter says the newer work is named after a character one person plays in both: a word of its title names that
+// character in the newer work and, in the older, a lead (billed in the first ten) or one in three episodes or more.
+func namedAfter(newer, older library.WorkName, inNewer, inOlder []characterPart) bool {
+	if newer.Year == 0 || older.Year == 0 || newer.Year <= older.Year {
 		return false
 	}
-	first := strings.Fields(character)[0]
-	return slices.Contains(words(newer.Title), first) && !slices.Contains(words(older.Title), first)
+	olderTitle := words(older.Title)
+	for _, word := range words(newer.Title) {
+		if len(word) < 4 || rankWords[word] || slices.Contains(connectors, word) || slices.Contains(olderTitle, word) {
+			continue
+		}
+		if !slices.ContainsFunc(inNewer, func(part characterPart) bool { return slices.Contains(part.words, word) }) {
+			continue
+		}
+		episodes, lead := int64(0), false
+		for _, part := range inOlder {
+			if slices.Contains(part.words, word) {
+				episodes += part.credit.Episodes
+				lead = lead || part.credit.Billing >= 0 && part.credit.Billing < 10
+			}
+		}
+		if lead || episodes >= 3 {
+			return true
+		}
+	}
+	return false
 }
 
 // familiesWithout counts the groups a work's neighbours fall into when the work itself is taken away.

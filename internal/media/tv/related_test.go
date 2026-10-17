@@ -167,8 +167,9 @@ func TestSeriesThatShareTheirRegularsOrAreNamedAfterACharacterAreOneFamily(t *te
 		regular(5, 6, "Silas Marrow", "Dougal Harrow"), guest(6, 6, "Silas Marrow", "Dougal Harrow", 1),
 		guest(5, 7, "Orla Fenwick", "Orla Fenwick", 2), guest(3, 7, "Orla Fenwick", "Orla Fenwick", 2),
 		regular(5, 8, "Some Actor", "Narrator"), regular(6, 8, "Some Actor", "Narrator"), regular(3, 8, "Some Actor", "Narrator"),
-		// Governor Tandry recurs on Quill and Pebble before getting his own series.
-		guest(7, 9, "Basil Okoro", "Governor Tandry", 5), regular(8, 9, "Basil Okoro", "Governor Tandry"),
+		// Governor Tandry recurs on Quill and Pebble, under more than one name, before getting his own series.
+		guest(7, 9, "Basil Okoro", "Governor Tandry / Mayor Tandry (voice)", 1), guest(7, 9, "Basil Okoro", "Governor/Senator Ayo Tandry (voice)", 4),
+		regular(8, 9, "Basil Okoro", "Governor Ayo Tandry (voice)"),
 		// Gravel, billed far down Mopp and Dibble for one episode, names no spin-off of it.
 		{WorkID: 13, PersonID: 10, Person: "Ferris Tate", Character: "Gravel (voice)", Regular: true, Episodes: 1, Billing: 649},
 		regular(14, 10, "Ferris Tate", "Gravel"),
