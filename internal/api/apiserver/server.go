@@ -550,6 +550,8 @@ func New(config Config) (*Server, error) {
 			secured.Put("/works/{id}/release-filters", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkReleaseFilters) })
 			secured.Post("/works/{id}/numbering", func(w http.ResponseWriter, r *http.Request) { server.routeWorkID(w, r, server.SetWorkNumbering) })
 			secured.Post("/works/{id}/parts/{partId}/remove", server.routeRemovePart)
+			secured.Get("/categories/{id}/metadata-sources", server.routeGetLibraryMetadataSources)
+			secured.Put("/categories/{id}/metadata-sources", server.routeSetLibraryMetadataSources)
 			secured.Get("/categories/{id}/quality", server.routeGetLibraryQuality)
 			secured.Put("/categories/{id}/quality", server.routeSetLibraryQuality)
 			secured.Get("/categories/{id}/naming", server.routeGetLibraryNaming)

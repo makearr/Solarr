@@ -23,6 +23,7 @@ import { Downloaders } from "./Downloaders";
 import { Indexers } from "./Indexers";
 import { Import } from "./Import";
 import { LibraryFileManagement } from "./LibraryFileManagement";
+import { LibraryMetadata } from "./LibraryMetadata";
 import { ImportLists } from "./ImportLists";
 import { CacheSettingsPage } from "./CacheSettings";
 import { LibraryNaming } from "./LibraryNaming";
@@ -148,6 +149,11 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/naming",
     component: LibraryNaming,
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/library/$categoryId/config/metadata",
+    component: LibraryMetadata,
   }),
   createRoute({
     getParentRoute: () => rootRoute,

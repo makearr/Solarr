@@ -176,3 +176,23 @@ func TestSearchPrefersTMDBAndFallsBackToTheProxy(t *testing.T) {
 		t.Errorf("proxy search = %+v, %v", got, err)
 	}
 }
+
+func TestALibrarysOrderDecidesWhoSuppliesAndWhoOnlyFills(t *testing.T) {
+	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "Matrix (other)", DigitalRelease: "2001-03-19T00:00:00Z"}}
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, proxy)
+	orders := map[int64][]string{1: {"radarr", "tmdb"}, 2: {"tmdb"}, 3: {"radarr"}}
+	service.PriorityFor = func(categoryID int64) []string { return orders[categoryID] }
+
+	first, _ := service.FetchFor(t.Context(), 1, movie.IDs{TMDB: 603})
+	if first.Title != "Matrix (other)" || first.RuntimeMin == 0 {
+		t.Errorf("radarr first: %q runtime %d min; want its title, with what it lacks filled from TMDB", first.Title, first.RuntimeMin)
+	}
+	onlyTMDB, _ := service.FetchFor(t.Context(), 2, movie.IDs{TMDB: 603})
+	if onlyTMDB.Title != "The Tonhut" || onlyTMDB.Digital != "" {
+		t.Errorf("a provider left out is not asked: %+v", onlyTMDB)
+	}
+	onlyRadarr, _ := service.FetchFor(t.Context(), 3, movie.IDs{TMDB: 603})
+	if onlyRadarr.Title != "Matrix (other)" || len(onlyRadarr.Sources) != 1 {
+		t.Errorf("only radarr: %+v", onlyRadarr)
+	}
+}

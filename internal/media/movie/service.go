@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -37,6 +39,9 @@ type ProxySource interface {
 type Service struct {
 	TMDB  TMDBSource
 	Proxy ProxySource
+	// Priority is the instance's provider order, PriorityFor a library's own; nil follows the next, then TMDB before Radarr.
+	Priority    func() []string
+	PriorityFor func(categoryID int64) []string
 	// Country picks the certification a movie shows; "US" when it answers nothing.
 	Country func() string
 	// AvailabilityOf answers a library's default minimum availability; nil takes Radarr's "released".
@@ -63,33 +68,60 @@ func (s Service) warn(source string, id int64, err error) {
 	}
 }
 
-// Fetch merges every source that knows the movie (ADR-8): TMDB first, Radarr's service behind it. A failing source is
-// skipped; only all failing is an error.
+// Fetch merges every source that knows the movie (ADR-8) in the instance's order; see FetchFor.
 func (s Service) Fetch(ctx context.Context, ids IDs) (Movie, error) {
+	return s.FetchFor(ctx, 0, ids)
+}
+
+// order is the providers a library asks, best first: its own, else the instance's, else TMDB then Radarr's service.
+func (s Service) order(categoryID int64) []string {
+	if s.PriorityFor != nil && categoryID != 0 {
+		if order := s.PriorityFor(categoryID); len(order) > 0 {
+			return order
+		}
+	}
+	if s.Priority != nil {
+		if order := s.Priority(); len(order) > 0 {
+			return order
+		}
+	}
+	return settings.DefaultMovieSources
+}
+
+// FetchFor merges every source the library asks that knows the movie, the first supplying what it holds and each later
+// one only filling what is missing. A failing source is skipped; only all failing is an error.
+func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie, error) {
+	order := s.order(categoryID)
 	ids = s.completeIDs(ctx, ids)
-	var movie Movie
-	found := false
-	if ids.TMDB > 0 && s.TMDB != nil && s.TMDB.Configured() {
+	answers := map[string]Movie{}
+	if ids.TMDB > 0 && s.TMDB != nil && s.TMDB.Configured() && slices.Contains(order, settings.MovieSourceTMDB) {
 		answer, err := s.TMDB.Movie(ctx, ids.TMDB)
 		switch {
 		case err == nil:
-			movie, found = FromTMDB(answer, s.country()), true
+			answers[settings.MovieSourceTMDB] = FromTMDB(answer, s.country())
 		case !errors.Is(err, tmdb.ErrNotFound):
 			s.warn("tmdb", ids.TMDB, err)
 		}
 	}
-	if s.Proxy != nil && (ids.TMDB > 0 || ids.IMDb != "") {
+	if s.Proxy != nil && (ids.TMDB > 0 || ids.IMDb != "") && slices.Contains(order, settings.MovieSourceRadarr) {
 		answer, err := s.askProxy(ctx, ids)
 		switch {
 		case err == nil:
-			from := FromRadarr(answer, s.country())
-			if found {
-				movie = Merge(movie, from)
-			} else {
-				movie, found = from, true
-			}
+			answers[settings.MovieSourceRadarr] = FromRadarr(answer, s.country())
 		case !errors.Is(err, radarrmeta.ErrNotFound):
 			s.warn("radarr", ids.TMDB, err)
+		}
+	}
+	var movie Movie
+	found := false
+	for _, name := range order {
+		answer, ok := answers[name]
+		switch {
+		case !ok:
+		case !found:
+			movie, found = answer, true
+		default:
+			movie = Merge(movie, answer)
 		}
 	}
 	if !found {
@@ -228,7 +260,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if !monitor.Valid() {
 		return AddResult{}, fmt.Errorf("movie: unknown monitor option %q", monitor)
 	}
-	movie, err := s.Fetch(ctx, request.IDs)
+	movie, err := s.FetchFor(ctx, request.CategoryID, request.IDs)
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -267,7 +299,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	}
 	ids := IDs{IMDb: provider[ProviderIMDb]}
 	ids.TMDB, _ = strconv.ParseInt(provider[ProviderTMDB], 10, 64)
-	movie, err := s.Fetch(ctx, ids)
+	movie, err := s.FetchFor(ctx, request.CategoryID, ids)
 	if err != nil {
 		return AddResult{}, err
 	}

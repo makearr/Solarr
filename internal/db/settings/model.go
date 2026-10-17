@@ -117,6 +117,8 @@ type Category struct {
 	ProtocolDelayMinutes int64
 	// FileManagement is Sonarr's File Management and Permissions; the defaults when never saved.
 	FileManagement FileManagement
+	// MetadataSources are the providers the library asks, best first; empty follows the instance's order.
+	MetadataSources []string
 }
 
 // QualityTarget is a named quality a library aims for; a library picks one. BitrateKbps is nil for a lossless codec;

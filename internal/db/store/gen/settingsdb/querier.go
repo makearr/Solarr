@@ -55,6 +55,7 @@ type Querier interface {
 	DeleteArrInstance(ctx context.Context, id int64) error
 	DeleteCalendarFeed(ctx context.Context, userID int64) error
 	DeleteCategory(ctx context.Context, id int64) error
+	DeleteCategoryMetadataSources(ctx context.Context, categoryID int64) error
 	DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error
 	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
@@ -93,6 +94,7 @@ type Querier interface {
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
 	GetUserByID(ctx context.Context, id int64) (AppUser, error)
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
+	InsertCategoryMetadataSource(ctx context.Context, arg InsertCategoryMetadataSourceParams) error
 	InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error
 	InsertNamingFormat(ctx context.Context, arg InsertNamingFormatParams) error
 	ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKey, error)
@@ -101,6 +103,7 @@ type Querier interface {
 	ListCategories(ctx context.Context) ([]Category, error)
 	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
+	ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error)

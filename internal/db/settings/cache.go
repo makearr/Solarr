@@ -169,6 +169,11 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("settings: list category file management: %w", err)
 	}
 
+	metadataSources, err := c.queries.ListCategoryMetadataSources(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list category metadata sources: %w", err)
+	}
+
 	stored, err := c.queries.ListInstanceSettings(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("settings: list instance settings: %w", err)
@@ -193,8 +198,8 @@ func (c *Cache) build(ctx context.Context) (*Snapshot, error) {
 
 	return newSnapshot(
 		convertUsers(users),
-		withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
-			qualityLists, convertQualityTargets(qualityTargets), categoryTargets), fileManagement),
+		withMetadataSources(withFileManagement(withQuality(convertCategories(categories, convertNamingProfiles(namingProfiles, namingFormats)),
+			qualityLists, convertQualityTargets(qualityTargets), categoryTargets), fileManagement), metadataSources),
 		convertRootFolders(rootFolders),
 		convertAttachments(attachments),
 		access,
@@ -456,4 +461,18 @@ func decodeReleaseTypes(raw string) []string {
 		return DefaultMonitorReleaseTypes
 	}
 	return types
+}
+
+// withMetadataSources attaches each library's own provider order.
+func withMetadataSources(categories []Category, rows []settingsdb.CategoryMetadataSource) []Category {
+	index := make(map[int64]int, len(categories))
+	for i, category := range categories {
+		index[category.ID] = i
+	}
+	for _, row := range rows {
+		if i, ok := index[row.CategoryID]; ok {
+			categories[i].MetadataSources = append(categories[i].MetadataSources, row.Source)
+		}
+	}
+	return categories
 }

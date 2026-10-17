@@ -237,6 +237,18 @@ export function MetadataSettings() {
       </Card>
         </>
       )}
+      <Card title="Movies" help="A film's text, ratings and artwork come from these providers in turn; the next only fills what the first leaves out. A library can choose its own order under its Settings, Metadata.">
+        <OrderedSources
+          title="Source order: the first to hold a field supplies it"
+          sources={[
+            { id: "tmdb", label: "TMDB", note: "Overview, cast and crew, artwork, certification, studios and collections. Free, needs your own key." },
+            { id: "radarr", label: "Radarr's metadata service", note: "TMDB's films with IMDb, Rotten Tomatoes and Metacritic ratings and release dates; no key needed." },
+          ]}
+          order={(settings.movie_sources ?? ["tmdb", "radarr"]) as ("tmdb" | "radarr")[]}
+          busy={patch.isPending}
+          onChange={(order) => patch.mutate({ movie_sources: order })}
+        />
+      </Card>
       <TVProvidersCard
         settings={settings}
         advanced={advanced}

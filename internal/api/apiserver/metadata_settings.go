@@ -38,7 +38,7 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := s.auth.Registry.LookupAll(settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
-		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID,
 		settings.KeyMetadataTheAudioDB, settings.KeyMetadataPeopleBackfillPerRun,
 		settings.KeyAvailabilityGraceHigh, settings.KeyAvailabilityGraceMedium, settings.KeyAvailabilityGraceLow); err != nil {
 		writeError(w, s.logger, err)
@@ -59,6 +59,12 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 		wanted.TVSources = make([]string, 0, len(*body.TvSources))
 		for _, source := range *body.TvSources {
 			wanted.TVSources = append(wanted.TVSources, string(source))
+		}
+	}
+	if body.MovieSources != nil {
+		wanted.MovieSources = make([]string, 0, len(*body.MovieSources))
+		for _, source := range *body.MovieSources {
+			wanted.MovieSources = append(wanted.MovieSources, string(source))
 		}
 	}
 	if grace := body.AvailabilityGraceHours; grace != nil {
@@ -166,8 +172,12 @@ func (s *Server) metadataSettingsView() gen.MetadataSettings {
 	for _, source := range stored.TVSources {
 		tvSources = append(tvSources, gen.MetadataSettingsTvSources(source))
 	}
+	movieSources := make([]gen.MetadataSettingsMovieSources, 0, len(stored.MovieSources))
+	for _, source := range stored.MovieSources {
+		movieSources = append(movieSources, gen.MetadataSettingsMovieSources(source))
+	}
 	return gen.MetadataSettings{
-		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order, TvSources: &tvSources,
+		BrainzmashUserAgent: stored.BrainzMashUserAgent, SourceOrder: &order, TvSources: &tvSources, MovieSources: &movieSources,
 		CoverSources: &covers, Wikidata: stored.Wikidata, Acoustid: stored.AcoustID,
 		AcoustidApiKey:       &gen.SecretMask{HasValue: s.auth.Settings.Snapshot().AcoustIDConfigured()},
 		Theaudiodb:           stored.TheAudioDB,

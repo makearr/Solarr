@@ -134,6 +134,8 @@ type MetadataSettings struct {
 	CoverSources []string
 	// TVSources is the order the TV providers rank in; nil on a write leaves it alone.
 	TVSources []string
+	// MovieSources is the order the movie providers rank in; nil on a write leaves it alone.
+	MovieSources []string
 	// Wikidata and AcoustID are on unless switched off; nil on a write leaves them alone.
 	Wikidata   *bool
 	AcoustID   *bool
@@ -162,6 +164,7 @@ func (s *Snapshot) MetadataSettings() MetadataSettings {
 		BrainzMashUserAgent: agent, SourceOrder: order,
 		CoverSources: s.policyStringListOr(KeyMetadataCoverSources, DefaultCoverSources),
 		TVSources:    s.policyStringListOr(KeyMetadataTVSources, DefaultTVSources),
+		MovieSources: s.policyStringListOr(KeyMetadataMovieSources, DefaultMovieSources),
 		Wikidata:     &wikidata, AcoustID: &acoustID, TheAudioDB: &theAudioDB,
 		PeopleBackfillPerRun: &backfill, AvailabilityGrace: &grace,
 	}
@@ -199,6 +202,15 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 			return err
 		}
 		if err := c.setPolicy(ctx, cl, KeyMetadataTVSources, string(encoded)); err != nil {
+			return err
+		}
+	}
+	if ms.MovieSources != nil {
+		encoded, err := json.Marshal(ms.MovieSources)
+		if err != nil {
+			return err
+		}
+		if err := c.setPolicy(ctx, cl, KeyMetadataMovieSources, string(encoded)); err != nil {
 			return err
 		}
 	}
@@ -281,6 +293,15 @@ func validateMetadataSettings(ms MetadataSettings) config.Problems {
 			})
 		}
 		tvSeen[name] = true
+	}
+	movieSeen := make(map[string]bool, len(ms.MovieSources))
+	for _, name := range ms.MovieSources {
+		if !slices.Contains(DefaultMovieSources, name) || movieSeen[name] {
+			problems = append(problems, config.Problem{
+				Path: KeyMetadataMovieSources, Value: name, Expectation: "tmdb or radarr, each at most once",
+			})
+		}
+		movieSeen[name] = true
 	}
 	if grace := ms.AvailabilityGrace; grace != nil {
 		for key, hours := range map[string]int64{

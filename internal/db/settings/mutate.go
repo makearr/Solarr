@@ -69,6 +69,12 @@ func (c *Cache) CreateCategory(ctx context.Context, mediaType, name string, prio
 			return err
 		}
 		created = row
+		// A library starts with the providers that suit its type, so its order is its own from the first day.
+		for index, source := range DefaultMetadataSources(mediaType, "") {
+			if err := queries.InsertCategoryMetadataSource(ctx, settingsdb.InsertCategoryMetadataSourceParams{CategoryID: row.ID, Source: source, Ord: int64(index)}); err != nil {
+				return err
+			}
+		}
 		for userID, permission := range grants {
 			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
 				UserID: userID, CategoryID: row.ID, Permission: string(permission),
@@ -182,14 +188,29 @@ func (c *Cache) SetCategoryMonitorDiscovered(ctx context.Context, id int64, poli
 
 // SetCategoryKind records a library's kind; which kinds a media type has is its own declaration, checked by the caller.
 func (c *Cache) SetCategoryKind(ctx context.Context, id int64, kind string) (Category, error) {
-	if _, found := c.Snapshot().Category(id); !found {
+	before, found := c.Snapshot().Category(id)
+	if !found {
 		return Category{}, fmt.Errorf("%w: category %d", ErrNotFound, id)
 	}
 	if problems := validateKind(kind); len(problems) > 0 {
 		return Category{}, problems
 	}
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.SetCategoryKind(ctx, settingsdb.SetCategoryKindParams{Kind: kind, ID: id})
+		if err := queries.SetCategoryKind(ctx, settingsdb.SetCategoryKindParams{Kind: kind, ID: id}); err != nil {
+			return err
+		}
+		// A library still on its type's starting order moves to the starting order of its new kind: an anime library asks AniList first.
+		if slices.Equal(before.MetadataSources, DefaultMetadataSources(before.MediaType, before.Kind)) {
+			if err := queries.DeleteCategoryMetadataSources(ctx, id); err != nil {
+				return err
+			}
+			for index, source := range DefaultMetadataSources(before.MediaType, kind) {
+				if err := queries.InsertCategoryMetadataSource(ctx, settingsdb.InsertCategoryMetadataSourceParams{CategoryID: id, Source: source, Ord: int64(index)}); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return Category{}, err

@@ -93,6 +93,12 @@ type CategoryFileManagement struct {
 	IgnoreNewSeasons         int64
 }
 
+type CategoryMetadataSource struct {
+	CategoryID int64
+	Source     string
+	Ord        int64
+}
+
 type CategoryQualityProfile struct {
 	CategoryID       int64
 	QualityProfileID int64

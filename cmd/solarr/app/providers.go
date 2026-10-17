@@ -259,7 +259,15 @@ func (p *process) tvService() tv.Service {
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
-			Priority:  func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
+			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
+			PriorityFor: func(categoryID int64) []string {
+				snapshot := p.cache.Snapshot()
+				category, found := snapshot.Category(categoryID)
+				if !found {
+					return nil
+				}
+				return snapshot.MetadataSourcesFor(category)
+			},
 			Grace:     p.availabilityGrace,
 			Orderings: p.tvdbShared,
 			IgnoreNewSeasons: func(categoryID int64) bool {
@@ -282,6 +290,15 @@ func (p *process) movieService() movie.Service {
 		p.tvService()
 		proxy := radarrmeta.New(p.providerClient(providerRadarrMeta, nil, httpx.ClientConfig{}))
 		p.movieShared = movie.Service{
+			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().MovieSources },
+			PriorityFor: func(categoryID int64) []string {
+				snapshot := p.cache.Snapshot()
+				category, found := snapshot.Category(categoryID)
+				if !found {
+					return nil
+				}
+				return snapshot.MetadataSourcesFor(category)
+			},
 			TMDB: p.tmdbShared, Proxy: proxy,
 			Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 			Franchises: library.NewFranchises(p.library), Exclusions: library.NewExclusions(p.library), Clock: clock.NewSystem(), Logger: p.logger,

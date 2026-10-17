@@ -111,3 +111,12 @@ SELECT CAST(COUNT(*) AS INTEGER) FROM category_target WHERE target_id = ?;
 
 -- name: CountCategoryListsUsingQualityProfile :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM category_quality_profile WHERE quality_profile_id = ?;
+
+-- name: ListCategoryMetadataSources :many
+SELECT category_id, source, ord FROM category_metadata_source ORDER BY category_id, ord;
+
+-- name: DeleteCategoryMetadataSources :exec
+DELETE FROM category_metadata_source WHERE category_id = ?;
+
+-- name: InsertCategoryMetadataSource :exec
+INSERT INTO category_metadata_source (category_id, source, ord) VALUES (?, ?, ?);

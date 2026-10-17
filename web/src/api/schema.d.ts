@@ -2974,6 +2974,29 @@ export interface paths {
         patch: operations["updateCategory"];
         trace?: never;
     };
+    "/categories/{id}/metadata-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The metadata providers a library asks, in order, and the ones its media type could use. Administrator only. */
+        get: operations["getLibraryMetadataSources"];
+        /**
+         * Set a library's provider order; an empty list returns it to the instance's. Administrator only.
+         * @description The first provider that holds a field supplies it; each later one only fills what the earlier ones left empty, and one left out is not asked.
+         */
+        put: operations["setLibraryMetadataSources"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/quality": {
         parameters: {
             query?: never;
@@ -4425,6 +4448,22 @@ export interface components {
              * @description A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
              */
             max_percent_of_root: number;
+        };
+        LibraryMetadataSources: {
+            /** @description The providers asked */
+            sources: string[];
+            /** @description The library has its own order; false follows the instance's. */
+            custom?: boolean;
+            /** @description The order a library of this type and kind starts with. */
+            default: string[];
+            available: components["schemas"]["MetadataProviderInfo"][];
+        };
+        MetadataProviderInfo: {
+            key: string;
+            label: string;
+            /** @description What the provider supplies. */
+            carries: string[];
+            needs_key: boolean;
         };
         LibraryQualityWrite: {
             /** @description The profiles the library accepts, earlier preferred. */
@@ -6593,6 +6632,8 @@ export interface components {
             cover_sources?: ("coverartarchive" | "embedded" | "theaudiodb")[];
             /** @description Which TV provider supplies a series' text, genres, rating and artwork first, in order; one left out is not used. Numbering stays with TheTVDB's. Omitted on a PATCH leaves it alone. */
             tv_sources?: ("skyhook" | "tvmaze" | "tmdb" | "tvdb" | "anilist")[];
+            /** @description Which movie provider supplies a film's text, ratings and artwork first, in order; the next fills what is missing and one left out is not used. Omitted on a PATCH leaves it alone. */
+            movie_sources?: ("tmdb" | "radarr")[];
             /** @description Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone. */
             wikidata?: boolean;
             /** @description Fingerprint identification, which also needs an API key. Switching it back on re-runs what it skipped. Omitted on a PATCH leaves it alone. */
@@ -12590,6 +12631,63 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CategorySettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getLibraryMetadataSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The library's providers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryMetadataSources"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryMetadataSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    sources: string[];
+                };
+            };
+        };
+        responses: {
+            /** @description The library's providers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryMetadataSources"];
                 };
             };
             400: components["responses"]["Problem"];

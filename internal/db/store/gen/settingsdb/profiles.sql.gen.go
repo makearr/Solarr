@@ -189,6 +189,15 @@ func (q *Queries) CreateQualityTarget(ctx context.Context, arg CreateQualityTarg
 	return id, err
 }
 
+const deleteCategoryMetadataSources = `-- name: DeleteCategoryMetadataSources :exec
+DELETE FROM category_metadata_source WHERE category_id = ?
+`
+
+func (q *Queries) DeleteCategoryMetadataSources(ctx context.Context, categoryID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteCategoryMetadataSources, categoryID)
+	return err
+}
+
 const deleteCategoryQualityProfiles = `-- name: DeleteCategoryQualityProfiles :exec
 DELETE FROM category_quality_profile WHERE category_id = ?
 `
@@ -265,6 +274,21 @@ func (q *Queries) GetQualityProfile(ctx context.Context, id int64) (QualityProfi
 	return i, err
 }
 
+const insertCategoryMetadataSource = `-- name: InsertCategoryMetadataSource :exec
+INSERT INTO category_metadata_source (category_id, source, ord) VALUES (?, ?, ?)
+`
+
+type InsertCategoryMetadataSourceParams struct {
+	CategoryID int64
+	Source     string
+	Ord        int64
+}
+
+func (q *Queries) InsertCategoryMetadataSource(ctx context.Context, arg InsertCategoryMetadataSourceParams) error {
+	_, err := q.db.ExecContext(ctx, insertCategoryMetadataSource, arg.CategoryID, arg.Source, arg.Ord)
+	return err
+}
+
 const insertCategoryQualityProfile = `-- name: InsertCategoryQualityProfile :exec
 INSERT INTO category_quality_profile (category_id, quality_profile_id, ord) VALUES (?, ?, ?)
 `
@@ -278,6 +302,33 @@ type InsertCategoryQualityProfileParams struct {
 func (q *Queries) InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error {
 	_, err := q.db.ExecContext(ctx, insertCategoryQualityProfile, arg.CategoryID, arg.QualityProfileID, arg.Ord)
 	return err
+}
+
+const listCategoryMetadataSources = `-- name: ListCategoryMetadataSources :many
+SELECT category_id, source, ord FROM category_metadata_source ORDER BY category_id, ord
+`
+
+func (q *Queries) ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error) {
+	rows, err := q.db.QueryContext(ctx, listCategoryMetadataSources)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CategoryMetadataSource{}
+	for rows.Next() {
+		var i CategoryMetadataSource
+		if err := rows.Scan(&i.CategoryID, &i.Source, &i.Ord); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCategoryQualityProfiles = `-- name: ListCategoryQualityProfiles :many

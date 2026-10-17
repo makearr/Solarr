@@ -109,6 +109,7 @@ export function librarySections(categoryId: string): readonly Section[] {
       tabs: [
         { label: "Quality", path: `${base}/config/quality`, tier: "advanced", administrator: true },
         { label: "Naming", path: `${base}/config/naming`, tier: "advanced", administrator: true },
+        { label: "Metadata", path: `${base}/config/metadata`, tier: "advanced", administrator: true },
         { label: "File management", path: `${base}/config/file-management`, tier: "expert", administrator: true },
         { label: "Import lists", path: `${base}/config/import-lists`, tier: "advanced", administrator: true },
       ],

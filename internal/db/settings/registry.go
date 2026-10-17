@@ -350,6 +350,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  `["skyhook","tmdb","tvdb","tvmaze","anilist"]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataMovieSources, Kind: KindStringList, Tier: TierAdvanced,
+		Name:     "Movie source order",
+		HelpText: "Which movie provider supplies a film's text, ratings and artwork first; the next fills what is missing, one left out is not used.",
+		Default:  `["tmdb","radarr"]`,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataWikidata, Kind: KindBool, Tier: TierAdvanced,
 		Name:     "Wikidata",
 		HelpText: "Artist photos and biographies from Wikidata and Wikipedia.",

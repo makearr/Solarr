@@ -428,6 +428,12 @@ const (
 	MetadataSettingsCoverSourcesTheaudiodb      MetadataSettingsCoverSources = "theaudiodb"
 )
 
+// Defines values for MetadataSettingsMovieSources.
+const (
+	MetadataSettingsMovieSourcesRadarr MetadataSettingsMovieSources = "radarr"
+	MetadataSettingsMovieSourcesTmdb   MetadataSettingsMovieSources = "tmdb"
+)
+
 // Defines values for MetadataSettingsTvSources.
 const (
 	MetadataSettingsTvSourcesAnilist MetadataSettingsTvSources = "anilist"
@@ -2670,6 +2676,20 @@ type LibraryLevelPage struct {
 	NextCursor *string `json:"next_cursor,omitempty"`
 }
 
+// LibraryMetadataSources defines model for LibraryMetadataSources.
+type LibraryMetadataSources struct {
+	Available []MetadataProviderInfo `json:"available"`
+
+	// Custom The library has its own order; false follows the instance's.
+	Custom *bool `json:"custom,omitempty"`
+
+	// Default The order a library of this type and kind starts with.
+	Default []string `json:"default"`
+
+	// Sources The providers asked
+	Sources []string `json:"sources"`
+}
+
 // LibraryNaming defines model for LibraryNaming.
 type LibraryNaming struct {
 	Examples []NamingExample `json:"examples"`
@@ -2896,6 +2916,15 @@ type MediaTypeInfoWantedGrain string
 // MediaTypeInfoWorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
 type MediaTypeInfoWorkImage string
 
+// MetadataProviderInfo defines model for MetadataProviderInfo.
+type MetadataProviderInfo struct {
+	// Carries What the provider supplies.
+	Carries  []string `json:"carries"`
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	NeedsKey bool     `json:"needs_key"`
+}
+
 // MetadataSettings The metadata providers' own settings.
 type MetadataSettings struct {
 	// Acoustid Fingerprint identification, which also needs an API key. Switching it back on re-runs what it skipped. Omitted on a PATCH leaves it alone.
@@ -2916,6 +2945,9 @@ type MetadataSettings struct {
 
 	// CoverSources Where album covers come from, in order; each fills only covers the earlier ones left missing. A source left out is not used. Omitted on a PATCH leaves it alone.
 	CoverSources *[]MetadataSettingsCoverSources `json:"cover_sources,omitempty"`
+
+	// MovieSources Which movie provider supplies a film's text, ratings and artwork first, in order; the next fills what is missing and one left out is not used. Omitted on a PATCH leaves it alone.
+	MovieSources *[]MetadataSettingsMovieSources `json:"movie_sources,omitempty"`
 
 	// PeopleBackfillPerRun How many artists one enrichment run gives a photo and biography. Default 200. Omitted on a PATCH leaves it alone.
 	PeopleBackfillPerRun *int64 `json:"people_backfill_per_run,omitempty"`
@@ -2944,6 +2976,9 @@ type MetadataSettings struct {
 
 // MetadataSettingsCoverSources defines model for MetadataSettings.CoverSources.
 type MetadataSettingsCoverSources string
+
+// MetadataSettingsMovieSources defines model for MetadataSettings.MovieSources.
+type MetadataSettingsMovieSources string
 
 // MetadataSettingsTvSources defines model for MetadataSettings.TvSources.
 type MetadataSettingsTvSources string
@@ -4617,6 +4652,11 @@ type ResolveCategoryDuplicatesJSONBody struct {
 // ResolveCategoryDuplicatesJSONBodyDropAction defines parameters for ResolveCategoryDuplicates.
 type ResolveCategoryDuplicatesJSONBodyDropAction string
 
+// SetLibraryMetadataSourcesJSONBody defines parameters for SetLibraryMetadataSources.
+type SetLibraryMetadataSourcesJSONBody struct {
+	Sources []string `json:"sources"`
+}
+
 // RenameLibraryJSONBody defines parameters for RenameLibrary.
 type RenameLibraryJSONBody struct {
 	Preview *bool `json:"preview,omitempty"`
@@ -5421,6 +5461,9 @@ type ResolveCategoryDuplicatesJSONRequestBody ResolveCategoryDuplicatesJSONBody
 // SetLibraryFileManagementJSONRequestBody defines body for SetLibraryFileManagement for application/json ContentType.
 type SetLibraryFileManagementJSONRequestBody = FileManagement
 
+// SetLibraryMetadataSourcesJSONRequestBody defines body for SetLibraryMetadataSources for application/json ContentType.
+type SetLibraryMetadataSourcesJSONRequestBody SetLibraryMetadataSourcesJSONBody
+
 // SetLibraryNamingJSONRequestBody defines body for SetLibraryNaming for application/json ContentType.
 type SetLibraryNamingJSONRequestBody = NamingSettings
 
@@ -5804,6 +5847,12 @@ type ServerInterface interface {
 	// Link the identical copies of one library (manage access).
 	// (POST /categories/{id}/links)
 	LinkCategoryCopies(w http.ResponseWriter, r *http.Request, id int64)
+	// The metadata providers a library asks, in order, and the ones its media type could use. Administrator only.
+	// (GET /categories/{id}/metadata-sources)
+	GetLibraryMetadataSources(w http.ResponseWriter, r *http.Request, id int64)
+	// Set a library's provider order; an empty list returns it to the instance's. Administrator only.
+	// (PUT /categories/{id}/metadata-sources)
+	SetLibraryMetadataSources(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's naming, its media type's naming scheme, and rendered examples. Administrator only.
 	// (GET /categories/{id}/naming)
 	GetLibraryNaming(w http.ResponseWriter, r *http.Request, id int64)
@@ -6713,6 +6762,18 @@ func (_ Unimplemented) GetCategoryLinks(w http.ResponseWriter, r *http.Request, 
 // Link the identical copies of one library (manage access).
 // (POST /categories/{id}/links)
 func (_ Unimplemented) LinkCategoryCopies(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The metadata providers a library asks, in order, and the ones its media type could use. Administrator only.
+// (GET /categories/{id}/metadata-sources)
+func (_ Unimplemented) GetLibraryMetadataSources(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set a library's provider order; an empty list returns it to the instance's. Administrator only.
+// (PUT /categories/{id}/metadata-sources)
+func (_ Unimplemented) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9279,6 +9340,72 @@ func (siw *ServerInterfaceWrapper) LinkCategoryCopies(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.LinkCategoryCopies(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryMetadataSources operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryMetadataSources(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryMetadataSources(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryMetadataSources operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryMetadataSources(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryMetadataSources(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17001,6 +17128,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/links", wrapper.LinkCategoryCopies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/metadata-sources", wrapper.GetLibraryMetadataSources)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/metadata-sources", wrapper.SetLibraryMetadataSources)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/naming", wrapper.GetLibraryNaming)

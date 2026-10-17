@@ -4816,6 +4816,52 @@ paths:
           $ref: "#/components/responses/Problem"
           description: Still referenced; the detail names what by.
 
+  /categories/{id}/metadata-sources:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryMetadataSources
+      tags: [settings]
+      summary: The metadata providers a library asks, in order, and the ones its media type could use. Administrator only.
+      responses:
+        "200":
+          description: The library's providers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryMetadataSources" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryMetadataSources
+      tags: [settings]
+      summary: Set a library's provider order; an empty list returns it to the instance's. Administrator only.
+      description: >-
+        The first provider that holds a field supplies it; each later one only fills what the earlier ones left
+        empty, and one left out is not asked.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sources]
+              properties:
+                sources: { type: array, items: { type: string } }
+      responses:
+        "200":
+          description: The library's providers.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryMetadataSources" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/quality:
     parameters:
       - name: id
@@ -7056,6 +7102,26 @@ components:
           type: integer
           format: int64
           description: A root's recycle bin as a percentage of the root; the oldest go first. 0 is no limit.
+
+    LibraryMetadataSources:
+      type: object
+      required: [sources, default, available]
+      properties:
+        sources: { type: array, items: { type: string }, description: The providers asked, best first. }
+        custom: { type: boolean, description: The library has its own order; false follows the instance's. }
+        default: { type: array, items: { type: string }, description: The order a library of this type and kind starts with. }
+        available:
+          type: array
+          items: { $ref: "#/components/schemas/MetadataProviderInfo" }
+
+    MetadataProviderInfo:
+      type: object
+      required: [key, label, carries, needs_key]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        carries: { type: array, items: { type: string }, description: What the provider supplies. }
+        needs_key: { type: boolean }
 
     LibraryQualityWrite:
       type: object
@@ -9723,6 +9789,14 @@ components:
           items:
             type: string
             enum: [skyhook, tvmaze, tmdb, tvdb, anilist]
+        movie_sources:
+          type: array
+          description: >-
+            Which movie provider supplies a film's text, ratings and artwork first, in order; the next fills what is
+            missing and one left out is not used. Omitted on a PATCH leaves it alone.
+          items:
+            type: string
+            enum: [tmdb, radarr]
         wikidata:
           type: boolean
           description: Artist photos and biographies from Wikidata. Omitted on a PATCH leaves it alone.

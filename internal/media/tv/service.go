@@ -74,6 +74,8 @@ type Service struct {
 	AniList AnimeSource
 	// Priority is the configured TV source order, read per fetch; nil is the default order.
 	Priority func() []string
+	// PriorityFor is a library's own order; nil, or an empty answer, follows Priority.
+	PriorityFor func(categoryID int64) []string
 	// Grace is the configured wait after an episode's time, read per write; nil leaves each part its default.
 	Grace func() library.AvailabilityGrace
 	// IgnoreNewSeasons says a library leaves the seasons a refresh finds unmonitored; nil follows the series.
@@ -94,15 +96,30 @@ type Service struct {
 // Fetch merges every source that knows the series (ADR-8): Skyhook sets identity and numbering, TMDB adds credits and
 // artwork, TVmaze air times. A failing source is skipped; only all failing is an error.
 func (s Service) Fetch(ctx context.Context, ids IDs) (Series, error) {
-	return s.fetch(ctx, ids, false)
+	return s.fetch(ctx, ids, false, s.order(0))
+}
+
+// order is the providers a library asks, best first: its own, else the instance's.
+func (s Service) order(categoryID int64) []string {
+	if s.PriorityFor != nil && categoryID != 0 {
+		if order := s.PriorityFor(categoryID); len(order) > 0 {
+			return order
+		}
+	}
+	if s.Priority != nil {
+		if order := s.Priority(); len(order) > 0 {
+			return order
+		}
+	}
+	return settings.DefaultTVSources
 }
 
 // fetch is Fetch; recentOnly asks TMDB for the guest stars of the newest seasons only, which is all a refresh needs.
-func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, error) {
+func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []string) (Series, error) {
 	ids = s.completeIDs(ctx, ids)
 	var sources []Series
 	bySource := map[string]Series{}
-	if ids.TVDB > 0 && s.Skyhook != nil {
+	if ids.TVDB > 0 && s.Skyhook != nil && slices.Contains(order, settings.TVSourceSkyhook) {
 		series, err := s.Skyhook.Series(ctx, ids.TVDB)
 		if err != nil {
 			s.warn("skyhook", ids.TVDB, err)
@@ -131,7 +148,8 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 	}
 	var rich Series
 	haveRich := false
-	answers := metaresolve.AskAll(ctx, []string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze},
+	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze}, func(source string) bool { return !slices.Contains(order, source) })
+	answers := metaresolve.AskAll(ctx, asked,
 		func(ctx context.Context, source string) (fetched, error) {
 			switch source {
 			case settings.TVSourceTMDB:
@@ -166,7 +184,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 	if len(sources) == 0 {
 		return Series{}, ErrNoSource
 	}
-	merged := Merge(sources...)
+	merged := Merge(inOrder(sources, bySource, order)...)
 	merged.Type = DetectType(merged)
 	if merged.AirTime != nil && merged.AirTime.Timezone == "" {
 		if zone := GuessZone(merged.OriginalCountry); zone != "" {
@@ -178,10 +196,6 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool) (Series, e
 			merged.Episodes, merged.Basis = rich.TMDBEpisodes, ProviderTMDB+":default"
 		}
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
-	}
-	order := settings.DefaultTVSources
-	if s.Priority != nil {
-		order = s.Priority()
 	}
 	ApplyPriority(&merged, bySource, order)
 	return merged, nil
@@ -400,7 +414,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if !request.Monitor.Valid() {
 		return AddResult{}, fmt.Errorf("tv: unknown monitor option %q", request.Monitor)
 	}
-	series, err := s.Fetch(ctx, request.IDs)
+	series, err := s.fetch(ctx, request.IDs, false, s.order(request.CategoryID))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -512,7 +526,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	ids.TVDB, _ = ParseID(provider[ProviderTVDB])
 	ids.TVmaze, _ = ParseID(provider[ProviderTVmaze])
 	ids.TMDB, _ = ParseID(provider[ProviderTMDB])
-	series, err := s.fetch(ctx, ids, true)
+	series, err := s.fetch(ctx, ids, true, s.order(request.CategoryID))
 	if err != nil {
 		return AddResult{}, err
 	}
@@ -727,4 +741,22 @@ func (s Service) kindType(categoryID int64) SeriesType {
 		return SeriesStandard
 	}
 	return seriesTypeOfKind(s.KindOf(categoryID))
+}
+
+// inOrder lists the sources for merging: Skyhook first, which sets identity and numbering, then the rest as the order ranks
+// them, so a lower provider only fills what a higher one left empty.
+func inOrder(sources []Series, bySource map[string]Series, order []string) []Series {
+	out := make([]Series, 0, len(sources))
+	if series, ok := bySource[settings.TVSourceSkyhook]; ok {
+		out = append(out, series)
+	}
+	for _, name := range order {
+		if name == settings.TVSourceSkyhook {
+			continue
+		}
+		if series, ok := bySource[name]; ok {
+			out = append(out, series)
+		}
+	}
+	return out
 }
