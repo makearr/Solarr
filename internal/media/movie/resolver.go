@@ -67,6 +67,10 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsemovie
 		r.warn("movie lookup failed", info.Title, err)
 		return 0, nil
 	}
+	if len(candidates) == 0 && err == nil && info.Year > 0 {
+		// The provider filters by exact year; a film dated a year off by one is only found without it.
+		candidates, err = r.Service.Search(ctx, info.Title, 0, searchLimit)
+	}
 	for _, alternative := range info.AllTitles[min(1, len(info.AllTitles)):] {
 		more, altErr := r.Service.Search(ctx, alternative, info.Year, searchLimit)
 		if altErr == nil {
@@ -166,13 +170,16 @@ const rankedWell = 3
 func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, bool) {
 	wanted := map[string]bool{}
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
-		wanted[parsetv.CleanTitle(title)] = true
+		wanted[parsetv.CleanTitle(title)], wanted[titleKey(title)] = true, true
+	}
+	named := func(candidate Candidate) bool {
+		return wanted[parsetv.CleanTitle(candidate.Title)] || wanted[titleKey(candidate.Title)]
 	}
 	if info.Year == 0 {
 		var sole Candidate
 		same := 0
 		for rank, candidate := range candidates {
-			if rank < rankedWell && wanted[parsetv.CleanTitle(candidate.Title)] {
+			if rank < rankedWell && named(candidate) {
 				sole, same = candidate, same+1
 			}
 		}
@@ -188,7 +195,7 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 				break
 			}
 			sameYear := candidate.Year == info.Year
-			if wanted[parsetv.CleanTitle(candidate.Title)] && yearsAgree(candidate.Year, info.Year) && sameYear == exactYear {
+			if named(candidate) && yearsAgree(candidate.Year, info.Year) && sameYear == exactYear {
 				return candidate, true
 			}
 		}
@@ -197,6 +204,18 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 		return candidates[0], true
 	}
 	return Candidate{}, false
+}
+
+// titleKey is a title's letters and digits alone, apostrophes gone ("Straight A's" is "Straight As"): CleanTitle also drops
+// articles, which turns "L.A." into "l".
+func titleKey(title string) string {
+	var key strings.Builder
+	for _, r := range strings.ToLower(strings.NewReplacer("&", "and", "'", "", "\u2019", "").Replace(title)) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			key.WriteRune(r)
+		}
+	}
+	return key.String()
 }
 
 // wordsBound says the shorter title is the longer one's first or last words and has at least two ("Borat Subsequent

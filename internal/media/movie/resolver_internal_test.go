@@ -24,6 +24,8 @@ func TestPickCandidateTakesALoneTitleWithoutAYearAndABoundedTitleInTheExactYear(
 		{"no year, two films of that title", parsemovie.Info{Title: "Crash"}, hits("Crash", "Crash"), 0},
 		{"folder ends with the provider title", parsemovie.Info{Title: "Almeeg of Vix 3 Dguzoli Haheix", Year: 2012}, hits("Dguzoli Haheix"), 1},
 		{"folder begins the provider title", parsemovie.Info{Title: "Kajuh Xikkevuodp Kuruimebr", Year: 2012}, hits("Kajuh Xikkevuodp Kuruimebr: Delivery of Prodigious Bribe"), 1},
+		{"articles inside the title and an apostrophe", parsemovie.Info{Title: "Agjupo from K.A", Year: 2012}, hits("Agjupo from K.A."), 1},
+		{"a dropped apostrophe", parsemovie.Info{Title: "From Crpookmk As to HNK", Year: 2012}, hits("From Crpookmk A's to HNK"), 1},
 		{"a single shared word is not enough", parsemovie.Info{Title: "Ihaol Zodiac", Year: 2012}, hits("Zodiac"), 0},
 		{"another year is not taken", parsemovie.Info{Title: "Dguzoli Haheix Special", Year: 2013}, hits("Dguzoli Haheix"), 0},
 	}
