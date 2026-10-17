@@ -140,6 +140,9 @@ func parseSource(normalized string) string {
 // impliedResolution is what a high-definition source means by itself; only the name's own words count otherwise.
 func impliedResolution(source, normalized string) int {
 	switch source {
+	case "dvd":
+		// Sonarr's and Radarr's DVD quality is 480p: a DVD names no lines because it is standard definition.
+		return 480
 	case "pdtv", "sdtv", "dsr", "tvrip":
 		switch {
 		case strings.Contains(strings.ToLower(normalized), "1080p"):

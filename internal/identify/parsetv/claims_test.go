@@ -89,3 +89,13 @@ func TestClaimsReadRevisionsAndEncoding(t *testing.T) {
 		t.Errorf("anime v2: version %d, want 2", got)
 	}
 }
+
+func TestADVDNamesNoLinesButIsStandardDefinition(t *testing.T) {
+	claims := ParseClaims("Some.Film.1999.DVDRip.x264-GRP")
+	if claims.Source != "dvd" || claims.Resolution != 480 {
+		t.Errorf("source %q resolution %d, want dvd at 480", claims.Source, claims.Resolution)
+	}
+	if hd := ParseClaims("Some.Film.1999.720p.DVDRip.x264-GRP"); hd.Resolution != 720 {
+		t.Errorf("a stated resolution wins: %d", hd.Resolution)
+	}
+}
