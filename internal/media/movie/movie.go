@@ -136,6 +136,8 @@ type Movie struct {
 	Sources []string
 	// spareGenres are genres to fall back on when no provider names any: Wikidata's, too fine to lead.
 	spareGenres []string
+	// spareYear is the year to fall back on when no provider names one: Wikidata's earliest publication, often a festival a year or two early.
+	spareYear int
 }
 
 // Released says the movie has come out by its own dates: a home release, else a theatrical date past.

@@ -1,6 +1,7 @@
 package movie
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -144,6 +145,7 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 	if !found {
 		return Movie{}, ErrNoSource
 	}
+	movie.Year = cmp.Or(movie.Year, movie.spareYear)
 	if len(movie.Genres) == 0 {
 		movie.Genres = movie.spareGenres
 	}

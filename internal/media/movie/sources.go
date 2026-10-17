@@ -242,6 +242,7 @@ func Merge(first, second Movie) Movie {
 	if len(merged.Genres) == 0 {
 		merged.Genres = second.Genres
 	}
+	merged.spareYear = cmp.Or(first.spareYear, second.spareYear)
 	if len(merged.spareGenres) == 0 {
 		merged.spareGenres = second.spareGenres
 	}

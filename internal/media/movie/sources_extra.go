@@ -163,7 +163,7 @@ func FromTVDB(in tvdb.Movie) Movie {
 func FromWikidata(in wikidata.WorkFacts) Movie {
 	movie := Movie{Overview: in.Summary, OriginalTitle: in.OriginalTitle, RuntimeMin: in.RuntimeMin, spareGenres: in.Genres, Sources: []string{sourceWikidata}}
 	if len(in.Date) >= 4 {
-		movie.Year, _ = strconv.Atoi(in.Date[:4])
+		movie.spareYear, _ = strconv.Atoi(in.Date[:4])
 	}
 	if len(in.Languages) > 0 {
 		movie.OriginalLanguage = in.Languages[0]

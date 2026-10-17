@@ -87,11 +87,15 @@ func TestWikidataLeadsWhatItHoldsButNeverTheTitleAndItsGenresOnlyFill(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Title != "Example Film" || got.Overview != facts.Summary || got.OriginalTitle != "Le Film Exemplaire" || got.Year != 1999 || got.RuntimeMin != 124 || got.OriginalLanguage != "fr" {
-		t.Errorf("movie = %+v; want Wikidata's facts first and TheTVDB's title", got)
+	if got.Title != "Example Film" || got.Overview != facts.Summary || got.OriginalTitle != "Le Film Exemplaire" || got.Year != 1998 || got.RuntimeMin != 124 || got.OriginalLanguage != "fr" {
+		t.Errorf("movie = %+v; want Wikidata's facts first, TheTVDB's title and year", got)
 	}
 	if !reflect.DeepEqual(got.Genres, facts.Genres) {
 		t.Errorf("genres = %v; want Wikidata's where no provider names any", got.Genres)
+	}
+	service.TVDB = fakeTVDBFilms{movie: tvdb.Movie{Name: "Example Film"}}
+	if lone, _ := service.FetchFor(t.Context(), 0, movie.IDs{TMDB: 7001}); lone.Year != 1999 {
+		t.Errorf("year = %d; want Wikidata's when no provider names one", lone.Year)
 	}
 	service.TVDB = fakeTVDBFilms{movie: tvdb.Movie{Name: "Example Film", Genres: []tvdb.Named{{Name: "Thriller"}}}}
 	if again, _ := service.FetchFor(t.Context(), 0, movie.IDs{TMDB: 7001}); !reflect.DeepEqual(again.Genres, []string{"Thriller"}) {
