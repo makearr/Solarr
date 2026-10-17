@@ -13,16 +13,26 @@ import (
 )
 
 type fakeFranchises struct {
-	franchise wikidata.Franchise
-	members   []wikidata.FranchiseSeries
+	ties    map[wikidata.SeriesRef]wikidata.SeriesTies
+	members map[string][]wikidata.FranchiseSeries
 }
 
-func (f fakeFranchises) SeriesFranchise(_ context.Context, tvdb, _ int64) (wikidata.Franchise, bool, error) {
-	return f.franchise, tvdb == 1234, nil
+func (f fakeFranchises) TiesOf(_ context.Context, refs []wikidata.SeriesRef) (map[wikidata.SeriesRef]wikidata.SeriesTies, error) {
+	out := map[wikidata.SeriesRef]wikidata.SeriesTies{}
+	for _, ref := range refs {
+		if ties, ok := f.ties[ref]; ok {
+			out[ref] = ties
+		}
+	}
+	return out, nil
 }
 
-func (f fakeFranchises) FranchiseSeriesOf(context.Context, string) ([]wikidata.FranchiseSeries, error) {
-	return f.members, nil
+func (f fakeFranchises) FranchiseMembers(_ context.Context, qids []string) (map[string][]wikidata.FranchiseSeries, error) {
+	out := map[string][]wikidata.FranchiseSeries{}
+	for _, qid := range qids {
+		out[qid] = f.members[qid]
+	}
+	return out, nil
 }
 
 func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *testing.T) {
@@ -32,11 +42,14 @@ func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *te
 		t.Fatal(err)
 	}
 	source := fakeFranchises{
-		franchise: wikidata.Franchise{QID: "Q4321", Label: "Example Franchise", Named: true},
-		members: []wikidata.FranchiseSeries{
-			{QID: "Q4321", Label: "Example Show", TVDB: 1234, Year: 2020},
+		ties: map[wikidata.SeriesRef]wikidata.SeriesTies{{TVDB: 1234}: {
+			Franchises: []wikidata.Franchise{{QID: "Q4321", Label: "Example Franchise", Named: true}},
+			Related:    []wikidata.FranchiseSeries{{QID: "Q55", Label: "Example: Origins", TVDB: 888, Year: 2026}},
+		}},
+		members: map[string][]wikidata.FranchiseSeries{"Q4321": {
+			{QID: "Q1", Label: "Example Show", TVDB: 1234, Year: 2020},
 			{QID: "Q9", Label: "Example: Next Generation", TVDB: 999, Year: 2024},
-		},
+		}},
 	}
 	franchises := library.NewFranchises(opened)
 	pass := tv.FranchisePass{Source: source, Franchises: franchises, Crossovers: library.NewCrossovers(opened), Series: service.Series, Logger: slog.New(slog.DiscardHandler)}
@@ -48,13 +61,13 @@ func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *te
 	if err != nil || len(listed) != 1 || listed[0].Name != "Example Franchise" || len(listed[0].Members) != 1 || listed[0].Members[0].WorkID != added.WorkID {
 		t.Fatalf("collections = %+v, %v; want the franchise holding the series the library has", listed, err)
 	}
-	if again, _ := franchises.SeriesWithoutFranchiseCheck(t.Context(), 10); len(again) != 0 {
-		t.Errorf("a series is asked about once: %+v", again)
+	if listed[0].Total != 3 {
+		t.Errorf("total = %d; want the series held, the franchise's other one and the spin-off Wikidata ties to it", listed[0].Total)
 	}
 
 	provider := tv.Franchising{Source: source, Franchises: franchises, Series: service.Series}
 	missing, err := provider.MissingFranchiseMembers(t.Context(), 7, listed[0].ID)
-	if err != nil || len(missing) != 1 || missing[0].Provider != "tvdb" || missing[0].ExternalID != "999" || missing[0].WorkID != 0 {
-		t.Errorf("missing = %+v, %v; want the series the library lacks, to add by its TheTVDB id", missing, err)
+	if err != nil || len(missing) != 2 || missing[0].Provider != "tvdb" || missing[0].ExternalID != "888" || missing[1].ExternalID != "999" {
+		t.Errorf("missing = %+v, %v; want the series the library lacks, to add by their TheTVDB ids", missing, err)
 	}
 }

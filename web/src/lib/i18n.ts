@@ -77,6 +77,7 @@ const catalogue = {
   "franchise.sort": "Sort",
   "franchise.sort.name": "Name",
   "franchise.sort.items": "Most items",
+  "franchise.sort.missing": "Most missing",
   "franchise.sort.newest": "Newest work",
   "franchise.sort.monitored": "Monitored first",
   "franchise.view.poster": "Posters",

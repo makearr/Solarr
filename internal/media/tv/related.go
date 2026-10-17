@@ -149,6 +149,14 @@ func compatible(a, b *library.Traits) bool {
 			return true
 		}
 	}
+	return sameKind(a, b)
+}
+
+// sameKind says two works share a third of the genres they have between them: two documentaries, not a documentary and a drama.
+func sameKind(a, b *library.Traits) bool {
+	if a == nil || b == nil {
+		return false
+	}
 	shared := 0
 	for _, genre := range a.Genres {
 		if slices.Contains(b.Genres, genre) {
@@ -438,10 +446,12 @@ type franchisePlan struct {
 	Rename  bool
 }
 
-// planFranchises makes each connected family one collection and answers the ones Solarr made whose family is gone; how
-// they are kept and named is in documentation/metadata-providers.md ("Every pass works the families out again").
+// planFranchises makes each connected family one collection and answers the ones whose family is gone; listed is what
+// Wikidata says its collections hold, nil when it could not be read (then they are kept as they are). How they are kept
+// and named is in documentation/metadata-providers.md ("Every pass works the families out again").
 func planFranchises(
-	works []library.WorkName, collections []library.FranchiseSummary, memberships []library.Membership, extra [][2]int64, unrelated map[[2]int64]bool,
+	works []library.WorkName, collections []library.FranchiseSummary, memberships []library.Membership, listed map[int64][]int64,
+	extra [][2]int64, unrelated map[[2]int64]bool,
 ) ([]franchisePlan, []int64) {
 	byID := make(map[int64]library.WorkName, len(works))
 	for _, work := range works {
@@ -450,6 +460,15 @@ func planFranchises(
 	source := make(map[int64]string, len(collections))
 	for _, collection := range collections {
 		source[collection.ID] = collection.Source
+	}
+	// rebuilt are the collections whose members follow the evidence: Solarr's own, and Wikidata's when it was read.
+	rebuilt := func(id int64) bool {
+		return source[id] == library.AutoSource || listed != nil && source[id] == ProviderWikidata
+	}
+	// stale are Wikidata's collections it no longer names.
+	stale := func(id int64) bool {
+		_, named := listed[id]
+		return listed != nil && source[id] == ProviderWikidata && !named
 	}
 	held := map[int64][]int64{}
 	for _, membership := range memberships {
@@ -462,8 +481,11 @@ func planFranchises(
 		}
 	}
 	for id, members := range held {
-		if source[id] == library.AutoSource {
+		switch {
+		case source[id] == library.AutoSource:
 			continue
+		case rebuilt(id):
+			members = listed[id]
 		}
 		for _, edge := range chain(members) {
 			if !unrelated[edge] {
@@ -491,7 +513,7 @@ func planFranchises(
 		}
 		var present []library.FranchiseSummary
 		for _, collection := range collections {
-			if !used[collection.ID] && count(collection.ID) > 0 {
+			if !used[collection.ID] && !stale(collection.ID) && count(collection.ID) > 0 {
 				present = append(present, collection)
 			}
 		}
@@ -521,24 +543,43 @@ func planFranchises(
 					plan.Merge, used[other.ID] = append(plan.Merge, other.ID), true
 				}
 			}
-			if keep.Source == library.AutoSource {
+			if rebuilt(keep.ID) {
 				for _, member := range held[keep.ID] {
 					if !inFamily[member] {
 						plan.Remove = append(plan.Remove, member)
 					}
 				}
-			} else if stem, shared := sharedStem(members); shared {
-				plan.Name = stem
-			} else if !placeholderName.MatchString(keep.Name) && keep.Name != "" && !namesASeries(keep.Name, members) {
-				plan.Name = keep.Name
+			}
+			if keep.Source != library.AutoSource {
+				if stem, shared := sharedStem(members); shared {
+					plan.Name = stem
+				} else if !placeholderName.MatchString(keep.Name) && keep.Name != "" {
+					plan.Name = keep.Name
+				}
 			}
 			plan.Rename = plan.Name != keep.Name
 		}
 		plans = append(plans, plan)
 	}
+	// A collection of Wikidata's with one series of the library keeps only what Wikidata lists.
+	for _, collection := range collections {
+		if used[collection.ID] || !rebuilt(collection.ID) || collection.Source == library.AutoSource || stale(collection.ID) {
+			continue
+		}
+		plan := franchisePlan{Keep: collection.ID, Members: listed[collection.ID], Name: collection.Name}
+		for _, member := range held[collection.ID] {
+			if !slices.Contains(listed[collection.ID], member) {
+				plan.Remove = append(plan.Remove, member)
+			}
+		}
+		if len(plan.Remove) > 0 {
+			plans = append(plans, plan)
+		}
+	}
 	var drop []int64
 	for _, collection := range collections {
-		if collection.Source == library.AutoSource && !used[collection.ID] {
+		gone := collection.Source == library.AutoSource && !used[collection.ID] || stale(collection.ID) && !collection.Monitored
+		if gone {
 			drop = append(drop, collection.ID)
 		}
 	}
@@ -551,22 +592,19 @@ func sharedStem(members []library.WorkName) (string, bool) {
 	if len(members) < 2 {
 		return "", false
 	}
-	stem := cleanTitle(slices.MinFunc(members, olderFirst).Title)
-	if index := strings.Index(stem, ":"); index > 0 {
-		stem = strings.TrimSpace(stem[:index])
+	whole := cleanTitle(slices.MinFunc(members, olderFirst).Title)
+	stems := []string{whole}
+	if index := strings.Index(whole, ":"); index > 0 {
+		stems = append(stems, strings.TrimSpace(whole[:index]))
 	}
-	want := words(stem)
-	for _, member := range members {
-		if have := words(member.Title); len(want) == 0 || !slices.Equal(have, want) && !hasPrefix(have, want) {
-			return "", false
+	for _, stem := range stems {
+		want := words(stem)
+		if len(want) > 0 && !slices.ContainsFunc(members, func(member library.WorkName) bool {
+			have := words(member.Title)
+			return !slices.Equal(have, want) && !hasPrefix(have, want)
+		}) {
+			return stem, true
 		}
 	}
-	return stem, true
-}
-
-// namesASeries says a franchise's name is only the title of one of its series.
-func namesASeries(name string, members []library.WorkName) bool {
-	return slices.ContainsFunc(members, func(member library.WorkName) bool {
-		return strings.EqualFold(cleanTitle(member.Title), strings.TrimSpace(name))
-	})
+	return "", false
 }

@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
 func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
@@ -106,7 +105,7 @@ func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 	}
 	// A person said the two Mabel's Angels do not belong together; nothing says Mirrorcase and Driftwater do any more.
 	unrelated := map[[2]int64]bool{{10, 11}: true, {11, 10}: true}
-	plans, drop := planFranchises(works, collections, memberships, titleEdges(works), unrelated)
+	plans, drop := planFranchises(works, collections, memberships, nil, titleEdges(works), unrelated)
 
 	byMember := map[int64]franchisePlan{}
 	for _, plan := range plans {
@@ -189,12 +188,34 @@ func TestSeriesThatShareTheirRegularsOrAreNamedAfterACharacterAreOneFamily(t *te
 	}
 }
 
-func TestAFranchiseWikidataNamesOnlyBySpinOffIsCalledAfterItsOldestSeries(t *testing.T) {
-	members := []wikidata.FranchiseSeries{{Label: "Housemates", Year: 1994}, {Label: "Marlo", Year: 2004}}
-	if got := franchiseName(wikidata.Franchise{Label: "Marlo"}, members); got != "Housemates" {
-		t.Errorf("a spin-off's item names it %q, want the oldest series", got)
+func TestWikidataCollectionsHoldWhatWikidataListsAndGoWhenItNoLongerNamesThem(t *testing.T) {
+	works := []library.WorkName{
+		{WorkID: 1, Title: "Harbourlight", Year: 2001}, {WorkID: 2, Title: "Harbourlight: Tides", Year: 2008},
+		{WorkID: 3, Title: "Talking Harbourlight", Year: 2010}, {WorkID: 4, Title: "Orchard Lane", Year: 1999},
 	}
-	if got := franchiseName(wikidata.Franchise{Label: "Quiververse", Named: true}, members); got != "Quiververse" {
-		t.Errorf("a franchise's own name is %q", got)
+	collections := []library.FranchiseSummary{
+		{ID: 900, Name: "Harbourlight", Source: "wikidata"},
+		{ID: 901, Name: "Old Strand", Source: "wikidata"}, {ID: 902, Name: "Followed Strand", Source: "wikidata", Monitored: true},
+		{ID: 903, Name: "Orchard Lane", Source: "wikidata"},
+	}
+	memberships := []library.Membership{
+		{CollectionID: 900, WorkID: 1}, {CollectionID: 900, WorkID: 2}, {CollectionID: 900, WorkID: 3},
+		{CollectionID: 901, WorkID: 4}, {CollectionID: 902, WorkID: 4}, {CollectionID: 903, WorkID: 4}, {CollectionID: 903, WorkID: 3},
+	}
+	listed := map[int64][]int64{900: {1, 2}, 903: {4}}
+	plans, drop := planFranchises(works, collections, memberships, listed, nil, nil)
+
+	byKeep := map[int64]franchisePlan{}
+	for _, plan := range plans {
+		byKeep[plan.Keep] = plan
+	}
+	if plan := byKeep[900]; !slices.Equal(plan.Members, []int64{1, 2}) || !slices.Equal(plan.Remove, []int64{3}) {
+		t.Errorf("Harbourlight: %+v; want what Wikidata lists, a series added by an earlier pass taken out", plan)
+	}
+	if plan := byKeep[903]; !slices.Equal(plan.Remove, []int64{3}) {
+		t.Errorf("a collection of one series keeps only Wikidata's: %+v", plan)
+	}
+	if !slices.Equal(drop, []int64{901}) {
+		t.Errorf("drop = %v; want the collection Wikidata no longer names, not the followed one", drop)
 	}
 }

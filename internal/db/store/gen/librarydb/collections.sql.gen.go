@@ -1042,13 +1042,14 @@ func (q *Queries) ListFranchiseMembershipsOfType(ctx context.Context, mediaType 
 }
 
 const listFranchisesOfType = `-- name: ListFranchisesOfType :many
-SELECT c.id, c.name, c.source FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id
+SELECT c.id, c.name, c.source, c.monitored FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id
 `
 
 type ListFranchisesOfTypeRow struct {
-	ID     int64
-	Name   string
-	Source string
+	ID        int64
+	Name      string
+	Source    string
+	Monitored int64
 }
 
 func (q *Queries) ListFranchisesOfType(ctx context.Context, mediaType string) ([]ListFranchisesOfTypeRow, error) {
@@ -1060,7 +1061,12 @@ func (q *Queries) ListFranchisesOfType(ctx context.Context, mediaType string) ([
 	items := []ListFranchisesOfTypeRow{}
 	for rows.Next() {
 		var i ListFranchisesOfTypeRow
-		if err := rows.Scan(&i.ID, &i.Name, &i.Source); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Source,
+			&i.Monitored,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1567,40 +1573,32 @@ func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameCo
 	return items, nil
 }
 
-const listSeriesWithoutFranchiseCheck = `-- name: ListSeriesWithoutFranchiseCheck :many
+const listSeriesProviderIDs = `-- name: ListSeriesProviderIDs :many
 SELECT w.id AS work_id,
        CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tvdb' LIMIT 1), '') AS TEXT) AS tvdb,
-       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb,
-       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'anilist' LIMIT 1), '') AS TEXT) AS anilist
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb
 FROM work w
-WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_franchise_check c WHERE c.work_id = w.id)
+WHERE w.media_type = 'tv'
 ORDER BY w.id
-LIMIT ?
 `
 
-type ListSeriesWithoutFranchiseCheckRow struct {
-	WorkID  int64
-	Tvdb    string
-	Tmdb    string
-	Anilist string
+type ListSeriesProviderIDsRow struct {
+	WorkID int64
+	Tvdb   string
+	Tmdb   string
 }
 
-// The series no franchise lookup has been made for yet, with the ids a lookup goes by.
-func (q *Queries) ListSeriesWithoutFranchiseCheck(ctx context.Context, limit int64) ([]ListSeriesWithoutFranchiseCheckRow, error) {
-	rows, err := q.db.QueryContext(ctx, listSeriesWithoutFranchiseCheck, limit)
+// Every series with the ids Wikidata is asked by.
+func (q *Queries) ListSeriesProviderIDs(ctx context.Context) ([]ListSeriesProviderIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSeriesProviderIDs)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListSeriesWithoutFranchiseCheckRow{}
+	items := []ListSeriesProviderIDsRow{}
 	for rows.Next() {
-		var i ListSeriesWithoutFranchiseCheckRow
-		if err := rows.Scan(
-			&i.WorkID,
-			&i.Tvdb,
-			&i.Tmdb,
-			&i.Anilist,
-		); err != nil {
+		var i ListSeriesProviderIDsRow
+		if err := rows.Scan(&i.WorkID, &i.Tvdb, &i.Tmdb); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1907,21 +1905,6 @@ type MarkAnimeCheckedParams struct {
 
 func (q *Queries) MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error {
 	_, err := q.db.ExecContext(ctx, markAnimeChecked, arg.WorkID, arg.CheckedAt)
-	return err
-}
-
-const markFranchiseChecked = `-- name: MarkFranchiseChecked :exec
-INSERT INTO work_franchise_check (work_id, checked_at) VALUES (?, ?)
-ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at
-`
-
-type MarkFranchiseCheckedParams struct {
-	WorkID    int64
-	CheckedAt int64
-}
-
-func (q *Queries) MarkFranchiseChecked(ctx context.Context, arg MarkFranchiseCheckedParams) error {
-	_, err := q.db.ExecContext(ctx, markFranchiseChecked, arg.WorkID, arg.CheckedAt)
 	return err
 }
 

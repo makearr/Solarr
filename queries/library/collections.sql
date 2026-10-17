@@ -384,20 +384,14 @@ SELECT provider, external_id FROM collection_external_id WHERE collection_id = ?
 -- name: SetCollectionPoster :exec
 UPDATE collection SET poster_url = ? WHERE id = ?;
 
--- The series no franchise lookup has been made for yet, with the ids a lookup goes by.
--- name: ListSeriesWithoutFranchiseCheck :many
+-- Every series with the ids Wikidata is asked by.
+-- name: ListSeriesProviderIDs :many
 SELECT w.id AS work_id,
        CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tvdb' LIMIT 1), '') AS TEXT) AS tvdb,
-       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb,
-       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'anilist' LIMIT 1), '') AS TEXT) AS anilist
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb
 FROM work w
-WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_franchise_check c WHERE c.work_id = w.id)
-ORDER BY w.id
-LIMIT ?;
-
--- name: MarkFranchiseChecked :exec
-INSERT INTO work_franchise_check (work_id, checked_at) VALUES (?, ?)
-ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at;
+WHERE w.media_type = 'tv'
+ORDER BY w.id;
 
 -- Every work of a media type with its name, for finding which belong together.
 -- name: ListWorkNamesOfType :many
@@ -442,7 +436,7 @@ WHERE w.media_type = ? AND c.character <> ''
 GROUP BY c.work_id, c.person_id, c.character;
 
 -- name: ListFranchisesOfType :many
-SELECT c.id, c.name, c.source FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id;
+SELECT c.id, c.name, c.source, c.monitored FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id;
 
 -- name: ListFranchiseExternalIDsOfType :many
 SELECT e.collection_id, e.provider, e.external_id FROM collection_external_id e JOIN collection c ON c.id = e.collection_id

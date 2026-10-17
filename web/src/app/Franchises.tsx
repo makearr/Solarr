@@ -23,7 +23,7 @@ import { useNavigate } from "@tanstack/react-router";
 
 type Franchise = components["schemas"]["Franchise"];
 type View = "poster" | "list";
-type Sort = "name" | "items" | "newest" | "monitored";
+type Sort = "name" | "items" | "missing" | "newest" | "monitored";
 
 const inputStyle = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink";
 
@@ -31,10 +31,17 @@ function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
   const sorted = [...franchises];
   const byName = (a: Franchise, b: Franchise) => a.name.localeCompare(b.name);
   if (sort === "items") sorted.sort((a, b) => (b.total ?? b.members.length) - (a.total ?? a.members.length) || b.members.length - a.members.length || byName(a, b));
+  else if (sort === "missing") sorted.sort((a, b) => missingOf(b) - missingOf(a) || byName(a, b));
   else if (sort === "newest") sorted.sort((a, b) => (b.newest_year ?? 0) - (a.newest_year ?? 0) || byName(a, b));
   else if (sort === "monitored") sorted.sort((a, b) => Number(b.monitored) - Number(a.monitored) || byName(a, b));
   else sorted.sort(byName);
   return sorted;
+}
+
+/** How many works of a collection the library lacks, as far as the providers say. */
+function missingOf(franchise: Franchise): number {
+  const held = franchise.members.filter((member) => member.work_id).length;
+  return Math.max((franchise.total ?? held) - held, 0);
 }
 
 /** "3 / 7 in your library": what the library holds of the works that exist, as far as the providers say. */
@@ -109,6 +116,7 @@ export function FranchiseIndex() {
             <select className={inputStyle} value={sort} onChange={(event) => setSort(event.target.value as Sort)}>
               <option value="name">{t("franchise.sort.name")}</option>
               <option value="items">{t("franchise.sort.items")}</option>
+              <option value="missing">{t("franchise.sort.missing")}</option>
               <option value="newest">{t("franchise.sort.newest")}</option>
               <option value="monitored">{t("franchise.sort.monitored")}</option>
             </select>

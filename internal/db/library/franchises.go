@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -263,39 +264,40 @@ func (f Franchises) SetPoster(ctx context.Context, id int64, posterURL string) e
 	return nil
 }
 
-// UncheckedSeries is a series no franchise lookup has been made for, with the ids a lookup goes by.
-type UncheckedSeries struct {
+// SeriesIDs is a series with the ids Wikidata knows it by, 0 for one it lacks.
+type SeriesIDs struct {
 	WorkID     int64
 	TVDB, TMDB int64
-	// AniList is the series' AniList id, 0 when it has none.
-	AniList int64
 }
 
-// SeriesWithoutFranchiseCheck lists up to limit series the franchise pass has not asked about yet.
-func (f Franchises) SeriesWithoutFranchiseCheck(ctx context.Context, limit int64) ([]UncheckedSeries, error) {
-	rows, err := librarydb.New(f.store.Read()).ListSeriesWithoutFranchiseCheck(ctx, limit)
+// SeriesIDs lists every series with its TheTVDB and TMDB ids.
+func (f Franchises) SeriesIDs(ctx context.Context) ([]SeriesIDs, error) {
+	rows, err := librarydb.New(f.store.Read()).ListSeriesProviderIDs(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("library: series without a franchise check: %w", err)
+		return nil, fmt.Errorf("library: series ids: %w", err)
 	}
-	out := make([]UncheckedSeries, len(rows))
+	out := make([]SeriesIDs, len(rows))
 	for index, row := range rows {
-		out[index] = UncheckedSeries{WorkID: row.WorkID}
+		out[index] = SeriesIDs{WorkID: row.WorkID}
 		out[index].TVDB, _ = strconv.ParseInt(row.Tvdb, 10, 64)
 		out[index].TMDB, _ = strconv.ParseInt(row.Tmdb, 10, 64)
-		out[index].AniList, _ = strconv.ParseInt(row.Anilist, 10, 64)
 	}
 	return out, nil
 }
 
-// MarkChecked records that the franchise lookup was made for the series.
-func (f Franchises) MarkChecked(ctx context.Context, workID int64) error {
-	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).MarkFranchiseChecked(ctx, librarydb.MarkFranchiseCheckedParams{WorkID: workID, CheckedAt: f.store.Now().Unix()})
-	})
+// MembersOf lists the works of a collection.
+func (f Franchises) MembersOf(ctx context.Context, id int64) ([]int64, error) {
+	rows, err := librarydb.New(f.store.Read()).ListCollectionMembers(ctx, id)
 	if err != nil {
-		return fmt.Errorf("library: franchise check of work %d: %w", workID, err)
+		return nil, fmt.Errorf("library: members of collection %d: %w", id, err)
 	}
-	return nil
+	var out []int64
+	for _, row := range rows {
+		if row.PartID == 0 && !slices.Contains(out, row.WorkID) {
+			out = append(out, row.WorkID)
+		}
+	}
+	return out, nil
 }
 
 // posterOf is the poster address in a work's stored pictures (a JSON list of kind and url), empty when there is none.
@@ -392,6 +394,7 @@ type FranchiseSummary struct {
 	ID          int64
 	Name        string
 	Source      string
+	Monitored   bool
 	ExternalIDs []string
 }
 
@@ -405,7 +408,7 @@ func (f Franchises) Summaries(ctx context.Context, mediaType string) ([]Franchis
 	out := make([]FranchiseSummary, len(rows))
 	at := make(map[int64]int, len(rows))
 	for index, row := range rows {
-		out[index] = FranchiseSummary{ID: row.ID, Name: row.Name, Source: row.Source}
+		out[index] = FranchiseSummary{ID: row.ID, Name: row.Name, Source: row.Source, Monitored: row.Monitored == 1}
 		at[row.ID] = index
 	}
 	ids, err := queries.ListFranchiseExternalIDsOfType(ctx, mediaType)

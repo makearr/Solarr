@@ -704,10 +704,10 @@ type Querier interface {
 	// broadcast twice, with what tells them apart (lengths, the people credited on each, how many are the same).
 	ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
+	// Every series with the ids Wikidata is asked by.
+	ListSeriesProviderIDs(ctx context.Context) ([]ListSeriesProviderIDsRow, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
 	ListSeriesTitles(ctx context.Context, arg ListSeriesTitlesParams) ([]ListSeriesTitlesRow, error)
-	// The series no franchise lookup has been made for yet, with the ids a lookup goes by.
-	ListSeriesWithoutFranchiseCheck(ctx context.Context, limit int64) ([]ListSeriesWithoutFranchiseCheckRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files whose probe predates what the probe now reads of every file (below_version), read once more.
@@ -836,7 +836,6 @@ type Querier interface {
 	// single transaction exceeds the write budget (Invariant 2), and self-terminating:
 	// it stops reporting rows once nothing is left clean.
 	MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int64) (int64, error)
-	MarkFranchiseChecked(ctx context.Context, arg MarkFranchiseCheckedParams) error
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
 	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 	// never one UPDATE over the whole root.

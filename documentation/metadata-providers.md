@@ -86,10 +86,19 @@ after the one who plays it is a cameo; hosts, narrators and walk-ons count for n
 genre, a network or a maker. A crossover show joins no family: one whose characters belong to three families or more,
 or to two when most of its characters are other series'.
 
-Every pass works the families out again: a franchise a provider names is evidence and keeps its name unless all its
-series share one (a family of "Vulcano Park: …" series is "Vulcano Park"); Solarr's own collections are rebuilt from the evidence and go when it does.
-Wikidata names a franchise only by "part of the series" or "media franchise"; one tied by a spin-off or a sequel claim
-is called after its oldest series, the ones the library lacks included.
+Every pass reads Wikidata for the whole library in a few bulk queries (`TiesOf`, `FranchiseMembers` in
+`internal/metadata/wikidata/ties.go`) and works the families out again:
+
+- A franchise item ("part of the series", "media franchise") is a collection named by Wikidata, holding the series
+  Wikidata lists in it; a franchise that is part (P361) of another the library also has a series of joins it.
+- An item that is itself a series is a programme strand, not a franchise: the series in it relate to the strand only.
+- Spin-off and follows/followed-by claims are evidence between series, and name nothing.
+- Episodes listed under two series count once each; one shared broadcast needs a genre in common as well.
+- Solarr's own collections, and Wikidata's, are rebuilt from the evidence of the run and go when it does; when
+  Wikidata cannot be read, its collections stay as they are.
+- A family is called by the name all its series share ("Vulcano Park" for "Vulcano Park: …" series), else by its
+  provider's, else by its oldest series.
+- What a collection lacks, and the Y of "X / Y", are the series Wikidata ties to its members that the library lacks.
 
 **TMDB ids** are stored under one key per kind, because TMDB numbers each kind on its own: `tmdb` for series, people
 and networks, `tmdb:movie` for films, `tmdb:company` for studios, `tmdb:collection` for collections
