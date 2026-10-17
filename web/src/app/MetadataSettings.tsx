@@ -5,59 +5,38 @@ import { ArrowDown, ArrowUp, Info } from "lucide-react";
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { Chip } from "@/ui/Chip";
 import { Card, Toggle } from "./SettingsCard";
 
-type MetadataSource = components["schemas"]["MetadataSource"];
 type Settings = components["schemas"]["MetadataSettings"];
-type CoverSource = NonNullable<Settings["cover_sources"]>[number];
-type TVSource = NonNullable<Settings["tv_sources"]>[number];
-type TVProvider = components["schemas"]["TVProvider"];
+type Provider = components["schemas"]["MetadataProviderInfo"];
 
-const COVER_SOURCES: readonly SourceEntry<CoverSource>[] = [
-  {
-    id: "coverartarchive",
-    label: "Cover Art Archive",
-    note: "MusicBrainz's cover archive, fetched by release and then by release group.",
-  },
-  {
-    id: "embedded",
-    label: "Embedded art",
-    note: "The picture already inside your files, used where nothing earlier found a cover.",
-  },
-  {
-    id: "theaudiodb",
-    label: "TheAudioDB",
-    note: "Album covers from theaudiodb.com, by release group, where nothing earlier found one.",
-  },
-];
+const LIBRARY_LABEL: Record<string, string> = { music: "Music", tv: "Series", movie: "Movies" };
 
-/** What each source is, and what using it means. The BrainzMash note is a
- *  privacy disclosure: it is a third party, and searches from this library
- *  reach it. */
-const SOURCES: readonly SourceEntry<MetadataSource>[] = [
-  {
-    id: "brainzmash",
-    label: "BrainzMash",
-    note:
-      "A third-party service, not run by this project and not by MusicBrainz. Artist and album " +
-      "searches from your library are sent to it, and its operator can see them. It is fast and " +
-      "answers more than direct MusicBrainz, which is why it is tried first by default.",
-  },
-  {
-    id: "musicbrainz-proxy",
-    label: "Lidarr metadata server",
-    note: "The Servarr project's own MusicBrainz proxy. Searches reach it rather than MusicBrainz directly.",
-  },
-  {
-    id: "musicbrainz",
-    label: "MusicBrainz",
-    note:
-      "The upstream database the others proxy. Rate-limited to one request a second, so it is " +
-      "slower, but it always answers. It cannot be removed from the order, only moved.",
-  },
-];
+/** What a provider is beyond what it carries. BrainzMash's is a privacy disclosure: a third party sees the searches. */
+const NOTES: Record<string, string> = {
+  wikidata:
+    "Comes first in every library by default: the ids its item records (TheTVDB, TMDB, IMDb, TVmaze, AniList) steer the other " +
+    "providers to the right entry. It also finds franchises and spin-offs for collections, matches people across libraries " +
+    "and gives artists photos and biographies. No key.",
+  brainzmash:
+    "A third-party service, not run by this project and not by MusicBrainz. Artist and album searches from your library are " +
+    "sent to it, and its operator can see them. It is fast and answers more than direct MusicBrainz.",
+  "musicbrainz-proxy": "The Servarr project's own MusicBrainz proxy. Searches reach it rather than MusicBrainz directly.",
+  musicbrainz: "The upstream database the others proxy: one request a second, but it always answers, so it stays on.",
+  skyhook: "Sonarr's own service: series, seasons, episodes and their numbering, as Sonarr has them. No key.",
+  tmdb: "Cast, crew, guest stars, artwork, certifications, studios and collections, for series and films. Free, needs your own key.",
+  tvdb: "Episodes in TheTVDB's other orderings (DVD, absolute) and its artwork. Works with Solarr's own key.",
+  tvmaze: "Air times with their time zone, networks and cast. No key.",
+  anilist: "Anime: titles in every language, cours, sequels and spin-offs. No key.",
+  radarr: "Radarr's own service: TMDB's films with IMDb, Rotten Tomatoes and Metacritic ratings and release dates. No key.",
+  theaudiodb: "Artist photos and biographies where Wikidata has none, and album covers. Works with the free public key.",
+  coverartarchive: "MusicBrainz's cover archive, by release and then by release group.",
+  acoustid: "Identifies a file by its sound when its tags and folder name cannot. Needs a free key.",
+};
 
-/** The metadata providers' own settings. Advanced tier, like Network: a working library needs none of it changed. */
+/** One overview of every metadata provider: what it serves, whether it is on, and its key. The order a library asks them
+ *  in is the library's own, under its Settings, Metadata. */
 export function MetadataSettings() {
   const tier = useTier();
   const queryClient = useQueryClient();
@@ -69,200 +48,49 @@ export function MetadataSettings() {
       return data;
     },
   });
-
-  const categories = useQuery({
-    queryKey: ["categories"],
+  const providers = useQuery({
+    queryKey: ["metadata-providers"],
     queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
+      const { data, error } = await api.GET("/metadata/providers");
       if (error) throw error;
-      return data;
+      return data.providers;
     },
   });
-
-  // brainzmash_user_agent is required on every PATCH, so each change carries the stored one.
-  const patch = useMutation({
-    mutationFn: async (change: Partial<Settings>) => {
-      const { error } = await api.PATCH("/metadata/settings", {
-        body: { brainzmash_user_agent: metadata.data?.brainzmash_user_agent ?? "", ...change },
-      });
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
-  });
-
-  const saveTheAudioDBKey = useMutation({
-    mutationFn: async (key: string) => {
-      const { error } = await api.POST("/metadata/theaudiodb/apikey", { body: { api_key: key } });
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
-  });
-
-  const saveTMDBKey = useMutation({
-    mutationFn: async (key: string) => {
-      const { error } = await api.POST("/metadata/tmdb/apikey", { body: { api_key: key } });
+  const patch = usePatchMetadataSettings(metadata.data);
+  const switchProvider = useMutation({
+    mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
+      const { error } = await api.PUT("/metadata/providers/{key}", { params: { path: { key } }, body: { enabled } });
       if (error) throw error;
     },
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["metadata-providers"] });
       void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
-      void queryClient.invalidateQueries({ queryKey: ["tv-providers"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraryMetadataSources"] });
     },
   });
-
-  const saveTVDBKey = useMutation({
-    mutationFn: async (key: string) => {
-      const { error } = await api.POST("/metadata/tvdb/apikey", { body: { api_key: key } });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
-      void queryClient.invalidateQueries({ queryKey: ["tv-providers"] });
-    },
-  });
-
-  const saveAcoustIDKey = useMutation({
-    mutationFn: async (key: string) => {
-      const { error } = await api.POST("/metadata/acoustid/apikey", { body: { api_key: key } });
-      if (error) throw error;
-    },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
-  });
-
-  const advanced = isTierVisible(tier, "advanced");
-  if (metadata.error !== null || !metadata.data) return null;
-
+  if (metadata.error !== null || !metadata.data || !providers.data) return null;
   const settings = metadata.data;
-  const musicLibraries = (categories.data ?? [])
-    .filter((category) => category.media_type === "music")
-    .map((category) => category.name);
-
   return (
     <section className="flex flex-col gap-4">
-      {advanced && (
-        <>
       <p className="max-w-2xl text-sm text-ink-muted">
-        Where artist and album facts, covers and photos come from. Sources are set per media type; every library of that type uses
-        them. {musicLibraries.length === 0 ? "No music library uses these yet." : `Music is used by ${musicLibraries.join(", ")}.`}
+        Every provider Solarr can ask. One switched off is asked by no library; its key stays stored. The order a library asks them in is
+        set under the library itself, Settings, Metadata.
       </p>
-
-      <Card title="Artists and albums" help="Asked from each source in turn until one answers. MusicBrainz always answers as a last resort.">
-        <OrderedSources
-          title="Source order"
-          sources={SOURCES}
-          order={(settings.source_order ?? []) as MetadataSource[]}
-          required="musicbrainz"
-          requiredNote="MusicBrainz always answers as a last resort"
-          busy={patch.isPending}
-          onChange={(order) => patch.mutate({ source_order: order })}
-        />
-        <UserAgentForm
-          key={settings.brainzmash_user_agent}
-          stored={settings.brainzmash_user_agent}
-          onSave={(agent) => patch.mutate({ brainzmash_user_agent: agent })}
-          busy={patch.isPending}
-        />
-      </Card>
-
-      <Card title="Covers" help="Each source in turn; a later one only fills what the earlier ones left missing.">
-        <OrderedSources
-          title="Cover sources"
-          sources={COVER_SOURCES}
-          order={settings.cover_sources ?? []}
-          busy={patch.isPending}
-          onChange={(order) => patch.mutate({ cover_sources: order })}
-        />
-      </Card>
-
-      <Card title="Artist photos and biographies" help="Filled in the background, a few artists at a time.">
-        <Switch
-          label="Wikidata"
-          note="Artist photos and biographies."
-          checked={settings.wikidata ?? true}
-          busy={patch.isPending}
-          onChange={(wikidata) => patch.mutate({ wikidata })}
-        />
-        <Switch
-          label="TheAudioDB"
-          note="Artist photos and biographies where Wikidata has none."
-          checked={settings.theaudiodb ?? true}
-          busy={patch.isPending}
-          onChange={(theaudiodb) => patch.mutate({ theaudiodb })}
-        />
-        <BackfillForm
-          key={settings.people_backfill_per_run ?? 200}
-          stored={settings.people_backfill_per_run ?? 200}
-          onSave={(perRun) => patch.mutate({ people_backfill_per_run: perRun })}
-          busy={patch.isPending}
-        />
-        <ApiKeyForm
-          key={`theaudiodb-${String(settings.theaudiodb_api_key?.has_value ?? false)}`}
-          label="TheAudioDB API key"
-          unset="the free public key is used"
-          stored={settings.theaudiodb_api_key?.has_value ?? false}
-          onSave={(apiKey) => saveTheAudioDBKey.mutate(apiKey)}
-          busy={saveTheAudioDBKey.isPending}
-        >
-          Optional. TheAudioDB works without one; a supporter key from theaudiodb.com replaces the public key and its limits.
-        </ApiKeyForm>
-        {saveTheAudioDBKey.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
-      </Card>
-
-      <Card
-        title="Fingerprints"
-        help="Identifies a file by its sound when its tags and folder name cannot. Needs the key below."
-        toggle={<Toggle label="Use AcoustID" checked={settings.acoustid ?? true} disabled={patch.isPending} onChange={(acoustid) => patch.mutate({ acoustid })} />}
-      >
-        <ApiKeyForm
-          key={`acoustid-${String(settings.acoustid_api_key?.has_value ?? false)}`}
-          label="AcoustID API key"
-          unset="not set"
-          stored={settings.acoustid_api_key?.has_value ?? false}
-          onSave={(apiKey) => saveAcoustIDKey.mutate(apiKey)}
-          busy={saveAcoustIDKey.isPending}
-        >
-          Without a key that step is skipped and everything else still works. Free, and it takes a minute: register an
-          application at{" "}
-          <a
-            href="https://acoustid.org/new-application"
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent underline underline-offset-2"
-          >
-            acoustid.org/new-application
-          </a>
-          . The key it gives you is the one to paste here; the key on your own account page is a different one, for submitting
-          fingerprints, and lookups refuse it.
-        </ApiKeyForm>
-        {saveAcoustIDKey.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
-      </Card>
-        </>
-      )}
-      <Card title="Movies" help="A film's text, ratings and artwork come from these providers in turn; the next only fills what the first leaves out. A library can choose its own order under its Settings, Metadata.">
-        <OrderedSources
-          title="Source order: the first to hold a field supplies it"
-          sources={[
-            { id: "tmdb", label: "TMDB", note: "Overview, cast and crew, artwork, certification, studios and collections. Free, needs your own key." },
-            { id: "radarr", label: "Radarr's metadata service", note: "TMDB's films with IMDb, Rotten Tomatoes and Metacritic ratings and release dates; no key needed." },
-          ]}
-          order={(settings.movie_sources ?? ["tmdb", "radarr"]) as ("tmdb" | "radarr")[]}
-          busy={patch.isPending}
-          onChange={(order) => patch.mutate({ movie_sources: order })}
-        />
-      </Card>
-      <TVProvidersCard
-        settings={settings}
-        advanced={advanced}
-        busy={patch.isPending}
-        onOrder={(order) => patch.mutate({ tv_sources: order })}
-        onWikidata={(wikidata) => patch.mutate({ wikidata })}
-        saveTMDB={(key) => saveTMDBKey.mutate(key)}
-        savingTMDB={saveTMDBKey.isPending}
-        failedTMDB={saveTMDBKey.isError}
-        saveTVDB={(key) => saveTVDBKey.mutate(key)}
-        savingTVDB={saveTVDBKey.isPending}
-        failedTVDB={saveTVDBKey.isError}
-      />
-      {advanced && settings.availability_grace_hours && (
+      <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+        {providers.data.map((provider) => (
+          <ProviderRow
+            key={provider.key}
+            provider={provider}
+            settings={settings}
+            busy={switchProvider.isPending && switchProvider.variables?.key === provider.key}
+            onSwitch={(enabled) => switchProvider.mutate({ key: provider.key, enabled })}
+            onPatch={(change) => patch.mutate(change)}
+            patching={patch.isPending}
+          />
+        ))}
+      </ul>
+      {(switchProvider.isError || patch.isError) && <p className="text-sm text-danger">That change was refused.</p>}
+      {isTierVisible(tier, "advanced") && settings.availability_grace_hours && (
         <Card
           title="Air times"
           help="How long after an episode airs it is waited for before it counts as missing and is searched for: releases need a while to appear."
@@ -275,44 +103,187 @@ export function MetadataSettings() {
           />
         </Card>
       )}
-      {patch.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
   );
 }
 
-const KEY_NOTE: Record<TVProvider["key"], string> = {
-  not_needed: "no key needed",
-  missing: "needs your key",
-  stored: "your key is stored",
-  built_in: "built-in key in use",
-};
+/** Changes the metadata settings; the BrainzMash User-Agent is required on every change, so each carries the stored one. */
+export function usePatchMetadataSettings(stored: Settings | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (change: Partial<Settings>) => {
+      const { error } = await api.PATCH("/metadata/settings", { body: { brainzmash_user_agent: stored?.brainzmash_user_agent ?? "", ...change } });
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
+  });
+}
 
-/** The TV providers, what each adds and whether it can be used; TMDB and TheTVDB take the user's own key. */
-function TVProvidersCard({
+function useKeySaver(path: "/metadata/tmdb/apikey" | "/metadata/tvdb/apikey" | "/metadata/theaudiodb/apikey" | "/metadata/acoustid/apikey") {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await api.POST(path, { body: { api_key: key } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
+      void queryClient.invalidateQueries({ queryKey: ["tv-providers"] });
+    },
+  });
+}
+
+/** Whether a provider has what it needs, in a word: its key, or none needed. */
+function keyState(key: string, settings: Settings): { label: string; tone?: "warn" } | undefined {
+  switch (key) {
+    case "tmdb":
+      return settings.tmdb_api_key?.has_value ? { label: "your key" } : { label: "needs your key", tone: "warn" };
+    case "tvdb":
+      return { label: settings.tvdb_api_key?.has_value ? "your key" : "built-in key" };
+    case "theaudiodb":
+      return { label: settings.theaudiodb_api_key?.has_value ? "your key" : "public key" };
+    case "acoustid":
+      return settings.acoustid_api_key?.has_value ? { label: "your key" } : { label: "needs your key", tone: "warn" };
+  }
+  return undefined;
+}
+
+function ProviderRow({
+  provider,
   settings,
-  advanced,
   busy,
-  onOrder,
-  onWikidata,
-  saveTMDB,
-  savingTMDB,
-  failedTMDB,
-  saveTVDB,
-  savingTVDB,
-  failedTVDB,
+  onSwitch,
+  onPatch,
+  patching,
 }: {
+  provider: Provider;
   settings: Settings;
-  advanced: boolean;
   busy: boolean;
-  onOrder: (order: TVSource[]) => void;
-  onWikidata: (on: boolean) => void;
-  saveTMDB: (key: string) => void;
-  savingTMDB: boolean;
-  failedTMDB: boolean;
-  saveTVDB: (key: string) => void;
-  savingTVDB: boolean;
-  failedTVDB: boolean;
+  onSwitch: (enabled: boolean) => void;
+  onPatch: (change: Partial<Settings>) => void;
+  patching: boolean;
 }) {
+  const [open, setOpen] = useState(false);
+  const libraries = [...new Set([...provider.media_types, ...provider.also_for])];
+  const state = keyState(provider.key, settings);
+  return (
+    <li className="flex flex-col gap-2 p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="text-left text-sm font-medium hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+        >
+          {provider.label}
+        </button>
+        {libraries.map((library) => (
+          <Chip key={library}>{LIBRARY_LABEL[library] ?? library}</Chip>
+        ))}
+        {state && <Chip tone={state.tone}>{state.label}</Chip>}
+        <span className="min-w-0 flex-1 truncate text-xs text-ink-muted" title={provider.carries.join(", ")}>
+          {provider.carries.join(", ")}
+        </span>
+        {provider.can_disable ? (
+          <Toggle label={provider.enabled ? "On" : "Off"} checked={provider.enabled} disabled={busy} onChange={onSwitch} />
+        ) : (
+          <span className="text-xs text-ink-muted">always on</span>
+        )}
+      </div>
+      {open && (
+        <div className="flex flex-col gap-3 pl-1">
+          {NOTES[provider.key] && <p className="max-w-2xl text-xs text-ink-muted">{NOTES[provider.key]}</p>}
+          <ProviderDetails providerKey={provider.key} settings={settings} onPatch={onPatch} patching={patching} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+/** What a provider asks of its owner: a key, a User-Agent, how much it fills per run. */
+function ProviderDetails({
+  providerKey,
+  settings,
+  onPatch,
+  patching,
+}: {
+  providerKey: string;
+  settings: Settings;
+  onPatch: (change: Partial<Settings>) => void;
+  patching: boolean;
+}) {
+  const tmdb = useKeySaver("/metadata/tmdb/apikey");
+  const tvdb = useKeySaver("/metadata/tvdb/apikey");
+  const audiodb = useKeySaver("/metadata/theaudiodb/apikey");
+  const acoustid = useKeySaver("/metadata/acoustid/apikey");
+  const failed = <p className="text-xs text-danger">That key could not be stored.</p>;
+  switch (providerKey) {
+    case "brainzmash":
+      return <UserAgentForm key={settings.brainzmash_user_agent} stored={settings.brainzmash_user_agent} onSave={(agent) => onPatch({ brainzmash_user_agent: agent })} busy={patching} />;
+    case "wikidata":
+      return (
+        <BackfillForm
+          key={settings.people_backfill_per_run ?? 200}
+          stored={settings.people_backfill_per_run ?? 200}
+          onSave={(perRun) => onPatch({ people_backfill_per_run: perRun })}
+          busy={patching}
+        />
+      );
+    case "tmdb":
+      return (
+        <>
+          <ApiKeyForm key={`tmdb-${String(settings.tmdb_api_key?.has_value ?? false)}`} label="TMDB key" unset="not set" stored={settings.tmdb_api_key?.has_value ?? false} onSave={(key) => tmdb.mutate(key)} busy={tmdb.isPending} maxLength={512}>
+            Free: create an account at{" "}
+            <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+              themoviedb.org/settings/api
+            </a>{" "}
+            and paste either the API Read Access Token (the long one) or the API key.
+          </ApiKeyForm>
+          {tmdb.isError && failed}
+          <ProviderTest />
+        </>
+      );
+    case "tvdb":
+      return (
+        <>
+          <ApiKeyForm key={`tvdb-${String(settings.tvdb_api_key?.has_value ?? false)}`} label="TheTVDB key" unset="the built-in key is used" stored={settings.tvdb_api_key?.has_value ?? false} onSave={(key) => tvdb.mutate(key)} busy={tvdb.isPending}>
+            Optional. TheTVDB works with Solarr&apos;s own project key; a key of your own from thetvdb.com replaces it.
+          </ApiKeyForm>
+          {tvdb.isError && failed}
+        </>
+      );
+    case "theaudiodb":
+      return (
+        <>
+          <ApiKeyForm key={`theaudiodb-${String(settings.theaudiodb_api_key?.has_value ?? false)}`} label="TheAudioDB API key" unset="the free public key is used" stored={settings.theaudiodb_api_key?.has_value ?? false} onSave={(key) => audiodb.mutate(key)} busy={audiodb.isPending}>
+            Optional. A supporter key from theaudiodb.com replaces the public key and its limits.
+          </ApiKeyForm>
+          {audiodb.isError && failed}
+        </>
+      );
+    case "acoustid":
+      return (
+        <>
+          <ApiKeyForm key={`acoustid-${String(settings.acoustid_api_key?.has_value ?? false)}`} label="AcoustID API key" unset="not set" stored={settings.acoustid_api_key?.has_value ?? false} onSave={(key) => acoustid.mutate(key)} busy={acoustid.isPending}>
+            Without a key that step is skipped and everything else still works. Register an application at{" "}
+            <a href="https://acoustid.org/new-application" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+              acoustid.org/new-application
+            </a>
+            ; the key it gives you is the one to paste here, not the one on your account page.
+          </ApiKeyForm>
+          {acoustid.isError && failed}
+        </>
+      );
+    case "skyhook":
+    case "tvmaze":
+    case "anilist":
+      return <ProviderTest />;
+  }
+  return null;
+}
+
+/** Asks every series provider once and says which answered. */
+function ProviderTest() {
   const providers = useQuery({
     queryKey: ["tv-providers"],
     queryFn: async () => {
@@ -329,121 +300,28 @@ function TVProvidersCard({
     },
   });
   const results = new Map((test.data ?? []).map((result) => [result.id, result]));
-
   return (
-    <Card
-      title="TV series"
-      help="Series, episodes, cast and artwork come from these providers in turn. TMDB adds cast, crew, guest stars and artwork; it is free and needs your own key."
-    >
-      <OrderedSources
-        title="Source order: the first to hold a field supplies it"
-        sources={(providers.data ?? []).map((provider) => ({
-          id: provider.id as TVSource,
-          label: `${provider.name} (${KEY_NOTE[provider.key]})`,
-          note: provider.adds,
-        }))}
-        order={(settings.tv_sources ?? []) as TVSource[]}
-        busy={busy}
-        onChange={onOrder}
-      />
-      <p className="text-[0.6875rem] text-ink-muted">
-        The default follows a measurement of the providers (fastest and fullest first): Skyhook, then TMDB, TheTVDB and TVmaze, then AniList
-        (anime only). Numbering and episode names always follow TheTVDB, whatever the order.
-      </p>
-      <Switch
-        label="Wikidata"
-        note="Recognises the same person in TV and music, and fills photos and biographies. It is not a series source; it bridges people between libraries."
-        checked={settings.wikidata ?? true}
-        busy={busy}
-        onChange={onWikidata}
-      />
-      {results.size > 0 && (
-        <ul className="flex flex-col gap-0.5 text-xs">
-          {(providers.data ?? []).map((provider) => {
-            const result = results.get(provider.id);
-            return result ? (
-              <li key={provider.id} className="flex gap-2">
-                <span className="text-ink">{provider.name}</span>
-                <span className={result.ok ? "text-ok" : "text-danger"}>{result.message}</span>
-              </li>
-            ) : null;
-          })}
-        </ul>
-      )}
-      <div>
-        <button
-          type="button"
-          disabled={test.isPending}
-          onClick={() => test.mutate()}
-          className="w-fit rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          {test.isPending ? "Testing..." : "Test the providers"}
-        </button>
-        {test.isError && <span className="ml-2 text-xs text-danger">The test could not run.</span>}
-      </div>
-      <ApiKeyForm
-        key={`tmdb-${String(settings.tmdb_api_key?.has_value ?? false)}`}
-        label="TMDB key"
-        unset="not set"
-        stored={settings.tmdb_api_key?.has_value ?? false}
-        onSave={saveTMDB}
-        busy={savingTMDB}
-        maxLength={512}
+    <div className="flex flex-col gap-1 text-xs">
+      <button
+        type="button"
+        disabled={test.isPending}
+        onClick={() => test.mutate()}
+        className="w-fit rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink disabled:opacity-50
+                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
-        Free: create an account at{" "}
-        <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
-          themoviedb.org/settings/api
-        </a>{" "}
-        and paste either the API Read Access Token (the long one) or the API key.
-      </ApiKeyForm>
-      {failedTMDB && <p className="text-xs text-danger">That key could not be stored.</p>}
-      {advanced && (
-        <>
-          <ApiKeyForm
-            key={`tvdb-${String(settings.tvdb_api_key?.has_value ?? false)}`}
-            label="TheTVDB key"
-            unset="the built-in key is used"
-            stored={settings.tvdb_api_key?.has_value ?? false}
-            onSave={saveTVDB}
-            busy={savingTVDB}
-          >
-            Optional. TheTVDB works with Solarr&apos;s own project key; a key of your own from thetvdb.com replaces it.
-          </ApiKeyForm>
-          {failedTVDB && <p className="text-xs text-danger">That key could not be stored.</p>}
-        </>
-      )}
-    </Card>
-  );
-}
-
-function Switch({
-  label,
-  note,
-  checked,
-  busy,
-  onChange,
-}: {
-  label: string;
-  note: string;
-  checked: boolean;
-  busy: boolean;
-  onChange: (checked: boolean) => void;
-}) {
-  return (
-    <label className="flex items-start gap-2 text-xs">
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={busy}
-        className="mt-0.5"
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <span className="flex flex-col">
-        <span className="text-ink">{label}</span>
-        <span className="text-[0.6875rem] text-ink-muted">{note}</span>
-      </span>
-    </label>
+        {test.isPending ? "Testing..." : "Test the series providers"}
+      </button>
+      {test.isError && <span className="text-danger">The test could not run.</span>}
+      {(providers.data ?? []).map((provider) => {
+        const result = results.get(provider.id);
+        return result ? (
+          <span key={provider.id} className="flex gap-2">
+            <span className="text-ink">{provider.name}</span>
+            <span className={result.ok ? "text-ok" : "text-danger"}>{result.message}</span>
+          </span>
+        ) : null;
+      })}
+    </div>
   );
 }
 
@@ -529,12 +407,12 @@ function ApiKeyForm({
   );
 }
 
-type SourceEntry<T extends string> = { id: T; label: string; note: string };
+export type SourceEntry<T extends string> = { id: T; label: string; note: string };
 
 /** The order sources are tried in, Lidarr's indexer-priority shape. Each row
  *  carries an info button whose tooltip says what the source is -- for
  *  BrainzMash that is a privacy disclosure. */
-function OrderedSources<T extends string>({
+export function OrderedSources<T extends string>({
   title,
   sources,
   order,

@@ -8,6 +8,8 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
+import { useLibrary } from "@/lib/useLibrary";
+import { OrderedSources, usePatchMetadataSettings } from "./MetadataSettings";
 
 type Sources = components["schemas"]["LibraryMetadataSources"];
 
@@ -16,6 +18,7 @@ type Sources = components["schemas"]["LibraryMetadataSources"];
 export function LibraryMetadata() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const id = Number(categoryId);
+  const library = useLibrary(categoryId);
   const queryClient = useQueryClient();
   const key = ["libraryMetadataSources", id];
   const saved = useQuery({
@@ -59,10 +62,10 @@ export function LibraryMetadata() {
         <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold">Order</h2>
-            <Chip>{custom ? "this library's own" : "the instance's order"}</Chip>
+            <Chip>{custom ? "this library's own" : "the default for its kind"}</Chip>
             {custom && (
               <Button className="ml-auto" busy={save.isPending} onClick={() => save.mutate([])}>
-                Follow the instance
+                Use the default order
               </Button>
             )}
           </div>
@@ -95,20 +98,59 @@ export function LibraryMetadata() {
                 <div key={provider.key} className="flex flex-wrap items-center gap-2">
                   <span>{provider.label}</span>
                   <span className="min-w-0 flex-1 text-xs text-ink-muted">{provider.carries.join(", ")}</span>
-                  <Button busy={save.isPending} onClick={() => save.mutate([...sources, provider.key])}>
-                    Use last
-                  </Button>
+                  {provider.enabled ? (
+                    <Button busy={save.isPending} onClick={() => save.mutate([...sources, provider.key])}>
+                      Use last
+                    </Button>
+                  ) : (
+                    <Chip tone="warn">switched off under Settings, Metadata</Chip>
+                  )}
                 </div>
               ))}
             </div>
           )}
           {save.isError && <p className="text-xs text-danger">That could not be saved.</p>}
         </section>
+        {library?.media_type === "music" && <CoverOrder />}
         <p className="text-xs text-ink-muted">
-          A new library starts with the providers that suit its kind. Providers are switched on, and their keys given, under Settings, Metadata.
-          Music lookups follow the instance's order for now; the choice here is kept for when they read it.
+          A library starts with the providers that suit its kind, Wikidata first: the ids its item records steer the others to the right
+          entry. Providers are switched on and off, and their keys given, under Settings, Metadata. Music is looked up once for every
+          music library, in the first music library&apos;s order.
         </p>
       </div>
     </div>
+  );
+}
+
+const COVER_SOURCES = [
+  { id: "coverartarchive", label: "Cover Art Archive", note: "MusicBrainz's cover archive, fetched by release and then by release group." },
+  { id: "embedded", label: "Embedded art", note: "The picture already inside your files, used where nothing earlier found a cover." },
+  { id: "theaudiodb", label: "TheAudioDB", note: "Album covers from theaudiodb.com, by release group, where nothing earlier found one." },
+] as const;
+
+/** Where album covers come from, in order; one for every music library. */
+function CoverOrder() {
+  const metadata = useQuery({
+    queryKey: ["metadata-settings"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/metadata/settings");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const patch = usePatchMetadataSettings(metadata.data);
+  if (!metadata.data) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+      <h2 className="text-sm font-semibold">Covers</h2>
+      <OrderedSources
+        title="Each source in turn; a later one only fills what the earlier ones left missing. One order for every music library."
+        sources={COVER_SOURCES}
+        order={metadata.data.cover_sources ?? []}
+        busy={patch.isPending}
+        onChange={(order) => patch.mutate({ cover_sources: order })}
+      />
+      {patch.isError && <p className="text-xs text-danger">That could not be saved.</p>}
+    </section>
   );
 }

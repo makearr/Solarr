@@ -1389,6 +1389,45 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /metadata/providers:
+    get:
+      operationId: listMetadataProviders
+      tags: [settings]
+      summary: Every metadata provider, what it is for and whether it is switched on.
+      responses:
+        "200":
+          description: The providers.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [providers]
+                properties:
+                  providers: { type: array, items: { $ref: "#/components/schemas/MetadataProviderInfo" } }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /metadata/providers/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setMetadataProviderEnabled
+      tags: [settings]
+      summary: Switch a provider on or off for every library. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "204": { description: Switched. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /metadata/settings:
     get:
       operationId: getMetadataSettings
@@ -7137,12 +7176,16 @@ components:
 
     MetadataProviderInfo:
       type: object
-      required: [key, label, carries, needs_key]
+      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for]
       properties:
         key: { type: string }
         label: { type: string }
         carries: { type: array, items: { type: string }, description: What the provider supplies. }
         needs_key: { type: boolean }
+        enabled: { type: boolean, description: Switched on for every library. }
+        can_disable: { type: boolean, description: False for MusicBrainz, which always answers. }
+        media_types: { type: array, items: { type: string }, description: The libraries whose order it takes a place in. }
+        also_for: { type: array, items: { type: string }, description: The libraries it serves outside their order. }
 
     LibraryQualityWrite:
       type: object

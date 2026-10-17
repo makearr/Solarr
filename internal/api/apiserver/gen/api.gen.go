@@ -2921,11 +2921,23 @@ type MediaTypeInfoWorkImage string
 
 // MetadataProviderInfo defines model for MetadataProviderInfo.
 type MetadataProviderInfo struct {
+	// AlsoFor The libraries it serves outside their order.
+	AlsoFor []string `json:"also_for"`
+
+	// CanDisable False for MusicBrainz
+	CanDisable bool `json:"can_disable"`
+
 	// Carries What the provider supplies.
-	Carries  []string `json:"carries"`
-	Key      string   `json:"key"`
-	Label    string   `json:"label"`
-	NeedsKey bool     `json:"needs_key"`
+	Carries []string `json:"carries"`
+
+	// Enabled Switched on for every library.
+	Enabled bool   `json:"enabled"`
+	Key     string `json:"key"`
+	Label   string `json:"label"`
+
+	// MediaTypes The libraries whose order it takes a place in.
+	MediaTypes []string `json:"media_types"`
+	NeedsKey   bool     `json:"needs_key"`
 }
 
 // MetadataSettings The metadata providers' own settings.
@@ -4933,6 +4945,11 @@ type SetAcoustIDAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
 }
 
+// SetMetadataProviderEnabledJSONBody defines parameters for SetMetadataProviderEnabled.
+type SetMetadataProviderEnabledJSONBody struct {
+	Enabled bool `json:"enabled"`
+}
+
 // SetTheAudioDBAPIKeyJSONBody defines parameters for SetTheAudioDBAPIKey.
 type SetTheAudioDBAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
@@ -5598,6 +5615,9 @@ type SetMyTierJSONRequestBody SetMyTierJSONBody
 // SetAcoustIDAPIKeyJSONRequestBody defines body for SetAcoustIDAPIKey for application/json ContentType.
 type SetAcoustIDAPIKeyJSONRequestBody SetAcoustIDAPIKeyJSONBody
 
+// SetMetadataProviderEnabledJSONRequestBody defines body for SetMetadataProviderEnabled for application/json ContentType.
+type SetMetadataProviderEnabledJSONRequestBody SetMetadataProviderEnabledJSONBody
+
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
 
@@ -6152,6 +6172,12 @@ type ServerInterface interface {
 	// Replace or clear the AcoustID application key. Administrator only. A separate endpoint from PATCH /metadata/settings, the same shape an indexer's own key uses: resealing the credential on every unrelated edit would be silent, pointless churn. An empty api_key clears it, which disables the fingerprint rung rather than failing it.
 	// (POST /metadata/acoustid/apikey)
 	SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request)
+	// Every metadata provider, what it is for and whether it is switched on.
+	// (GET /metadata/providers)
+	ListMetadataProviders(w http.ResponseWriter, r *http.Request)
+	// Switch a provider on or off for every library. Administrator only.
+	// (PUT /metadata/providers/{key})
+	SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Request, key string)
 	// The metadata providers' own settings.
 	// (GET /metadata/settings)
 	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
@@ -7367,6 +7393,18 @@ func (_ Unimplemented) ListMediaTypes(w http.ResponseWriter, r *http.Request) {
 // Replace or clear the AcoustID application key. Administrator only. A separate endpoint from PATCH /metadata/settings, the same shape an indexer's own key uses: resealing the credential on every unrelated edit would be silent, pointless churn. An empty api_key clears it, which disables the fingerprint rung rather than failing it.
 // (POST /metadata/acoustid/apikey)
 func (_ Unimplemented) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every metadata provider, what it is for and whether it is switched on.
+// (GET /metadata/providers)
+func (_ Unimplemented) ListMetadataProviders(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Switch a provider on or off for every library. Administrator only.
+// (PUT /metadata/providers/{key})
+func (_ Unimplemented) SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Request, key string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12644,6 +12682,61 @@ func (siw *ServerInterfaceWrapper) SetAcoustIDAPIKey(w http.ResponseWriter, r *h
 	handler.ServeHTTP(w, r)
 }
 
+// ListMetadataProviders operation middleware
+func (siw *ServerInterfaceWrapper) ListMetadataProviders(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListMetadataProviders(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetMetadataProviderEnabled operation middleware
+func (siw *ServerInterfaceWrapper) SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMetadataProviderEnabled(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -17493,6 +17586,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/metadata/acoustid/apikey", wrapper.SetAcoustIDAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/metadata/providers", wrapper.ListMetadataProviders)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/metadata/providers/{key}", wrapper.SetMetadataProviderEnabled)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/metadata/settings", wrapper.GetMetadataSettings)

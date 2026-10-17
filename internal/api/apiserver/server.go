@@ -706,6 +706,10 @@ func New(config Config) (*Server, error) {
 			secured.Post("/recyclebin/empty", server.EmptyRecycleBin)
 			secured.Get("/priority", server.GetPrioritySettings)
 			secured.Patch("/priority", server.UpdatePrioritySettings)
+			secured.Get("/metadata/providers", server.ListMetadataProviders)
+			secured.Put("/metadata/providers/{key}", func(w http.ResponseWriter, r *http.Request) {
+				server.SetMetadataProviderEnabled(w, r, chi.URLParam(r, "key"))
+			})
 			secured.Get("/metadata/settings", server.GetMetadataSettings)
 			secured.Patch("/metadata/settings", server.UpdateMetadataSettings)
 			secured.Post("/metadata/acoustid/apikey", server.SetAcoustIDAPIKey)

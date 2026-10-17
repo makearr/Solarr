@@ -18,6 +18,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
@@ -84,7 +85,9 @@ type Service struct {
 	KindOf func(categoryID int64) string
 	// Orderings lists a series in TheTVDB's other orderings (DVD, absolute, ...); nil offers the aired one only.
 	Orderings OrderingSource
-	Series    library.Series
+	// Wikidata gives the ids its item records, steering the other providers to the right entry; nil asks none.
+	Wikidata IDBridge
+	Series   library.Series
 	// Exclusions are the works the user removed and asked not to see again.
 	Exclusions library.Exclusions
 	Reader     library.SeriesReader
@@ -116,7 +119,7 @@ func (s Service) order(categoryID int64) []string {
 
 // fetch is Fetch; recentOnly asks TMDB for the guest stars of the newest seasons only, which is all a refresh needs.
 func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []string) (Series, error) {
-	ids = s.completeIDs(ctx, ids)
+	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
 	var sources []Series
 	bySource := map[string]Series{}
 	if ids.TVDB > 0 && s.Skyhook != nil && slices.Contains(order, settings.TVSourceSkyhook) {
@@ -235,6 +238,46 @@ func (s Service) completeIDs(ctx context.Context, ids IDs) IDs {
 	ids.TVDB = series.ExternalIDs.TVDB
 	if ids.IMDb == "" {
 		ids.IMDb = series.ExternalIDs.IMDb
+	}
+	return ids
+}
+
+// IDBridge is Wikidata as a fetch asks it: the ids its item records for a series.
+type IDBridge interface {
+	SeriesIDs(ctx context.Context, known wikidata.WorkIDs) (wikidata.WorkIDs, bool, error)
+}
+
+// bridgeIDs fills in the ids Wikidata's item records and the series lacks; first in the library's order, Wikidata also
+// replaces the ones it disagrees with. TheTVDB's id, which found the item, is never changed.
+func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
+	at := slices.Index(order, settings.SourceWikidata)
+	if s.Wikidata == nil || at < 0 {
+		return ids
+	}
+	found, ok, err := s.Wikidata.SeriesIDs(ctx, wikidata.WorkIDs{TVDB: ids.TVDB, TMDB: ids.TMDB, IMDb: ids.IMDb})
+	if err != nil {
+		s.warn("wikidata", ids.TVDB, err)
+		return ids
+	}
+	if !ok {
+		return ids
+	}
+	leads := at == 0
+	pick := func(have, theirs int64) int64 {
+		if theirs > 0 && (have == 0 || leads) {
+			return theirs
+		}
+		return have
+	}
+	if ids.TVDB == 0 {
+		ids.TVDB = found.TVDB
+	}
+	ids.TMDB, ids.TVmaze = pick(ids.TMDB, found.TMDB), pick(ids.TVmaze, found.TVmaze)
+	if found.IMDb != "" && (ids.IMDb == "" || leads) {
+		ids.IMDb = found.IMDb
+	}
+	if len(ids.AniList) == 0 {
+		ids.AniList = found.AniList
 	}
 	return ids
 }

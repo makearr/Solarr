@@ -345,7 +345,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/media/knownfor",
 		"internal/db/library", "internal/db/settings", "internal/db/store/gen/librarydb", "internal/identify/model",
 		"internal/identify/parsemovie", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
-		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media", "internal/metadata/radarrmeta", "internal/metadata/tmdb",
+		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media", "internal/metadata/radarrmeta", "internal/metadata/tmdb", "internal/metadata/wikidata",
 		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge",
 		"internal/acquiring/releasefacts", "internal/acquiring/plan", "internal/acquiring/rss", "internal/moving/mover", "internal/moving/naming", "internal/moving/placement",
 		"internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/filekind", "internal/platform/fsx", "internal/platform/keyedlock",

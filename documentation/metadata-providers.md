@@ -1,9 +1,16 @@
 # Metadata providers
 
 What each provider carries and which library it can serve. *Built* is in Solarr today; *not built* is a candidate. A
-library asks its providers in order (Settings, Metadata for the instance's order; a library's Settings, Metadata for its
-own): the first provider that holds a field supplies it, each later one only fills what the earlier ones left empty,
-and a provider left out is not asked. A new library starts with the providers that suit its type (anime asks AniList first).
+library asks its providers in its own order (the library's Settings, Metadata): the first provider that holds a field
+supplies it, each later one only fills what the earlier ones left empty, and a provider left out is not asked. A
+library starts with the providers that suit its type and kind, Wikidata first (anime then asks AniList). Settings,
+Metadata is one overview: every provider, the libraries it serves, its key, and a switch that takes it out of every
+library's order. Music is looked up once for every music library, in the first music library's order.
+
+**Wikidata steers the others.** Before the other providers are asked, the ids Wikidata's item records for the work
+(TheTVDB, TMDB, IMDb, TVmaze, AniList for a series; TMDB, IMDb for a film) fill in what is missing; first in the order,
+they also replace the ones they disagree with. The id that found the item (a series' TheTVDB id, a film's TMDB id) is
+never changed, and an id two items claim says nothing (`bridgeIDs` in the TV and movie services).
 
 ## What the upstream projects use
 
@@ -41,7 +48,7 @@ documentation states is from memory and should be checked before relying on it.
 | TMDB | overview, cast and crew, guest stars per episode, networks, keywords, certification, episode groups, artwork, external ids (Wikidata, IMDb, TheTVDB) | yes | a free key |
 | TVmaze | air times with time zones, networks, cast, images, runtimes | yes | no key; alone knows the zone |
 | AniList | titles in every language, synonyms, cours, format, status, genres, covers, banners, **relations** (sequel, prequel, spin-off) | yes | anime |
-| Wikidata | franchises (part of the series, media franchise, spin-off, follows), ids of TheTVDB and TMDB | yes | collections of series |
+| Wikidata | the ids every other provider knows a series by, franchises (part of the series, media franchise, spin-off, follows) | yes | first by default; collections of series |
 | AniDB, Kitsu, MyAnimeList | anime titles, episodes, relations, ratings | no | AniDB bans heavy clients |
 | Trakt | lists, ratings, calendars, related shows | no | a key; popular lists |
 | IMDb datasets | ratings, episode lists, crew | no | files, not an API |
@@ -54,6 +61,9 @@ documentation states is from memory and should be checked before relying on it.
 |---|---|---|---|
 | TMDB | overview, cast and crew, releases and certification by country, studios, keywords, translations, **collections**, artwork | yes | a free key |
 | Radarr's metadata service | TMDB's films with IMDb, Rotten Tomatoes, Metacritic and Trakt ratings, release dates, collections | yes | no key; the fallback behind TMDB |
+| Wikidata | the ids TMDB and IMDb know a film by | yes | first by default; no key |
+| MDBList | ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes, Metacritic in one call | no | a free key |
+| Trakt | ratings, related films, lists | no | a free key |
 | TheTVDB (movies) | films, artwork, remote ids | no | |
 | OMDb | ratings, English plots | no | |
 | fanart.tv | clear logos, banners, disc art | no | |

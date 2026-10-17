@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -39,6 +40,8 @@ type ProxySource interface {
 type Service struct {
 	TMDB  TMDBSource
 	Proxy ProxySource
+	// Wikidata gives the ids its item records, steering the other providers to the right film; nil asks none.
+	Wikidata IDBridge
 	// Priority is the instance's provider order, PriorityFor a library's own; nil follows the next, then TMDB before Radarr.
 	Priority    func() []string
 	PriorityFor func(categoryID int64) []string
@@ -92,7 +95,7 @@ func (s Service) order(categoryID int64) []string {
 // one only filling what is missing. A failing source is skipped; only all failing is an error.
 func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie, error) {
 	order := s.order(categoryID)
-	ids = s.completeIDs(ctx, ids)
+	ids = s.completeIDs(ctx, s.bridgeIDs(ctx, ids, order))
 	answers := map[string]Movie{}
 	if ids.TMDB > 0 && s.TMDB != nil && s.TMDB.Configured() && slices.Contains(order, settings.MovieSourceTMDB) {
 		answer, err := s.TMDB.Movie(ctx, ids.TMDB)
@@ -135,6 +138,35 @@ func (s Service) askProxy(ctx context.Context, ids IDs) (radarrmeta.Movie, error
 		return s.Proxy.Movie(ctx, ids.TMDB)
 	}
 	return s.Proxy.ByIMDb(ctx, ids.IMDb)
+}
+
+// IDBridge is Wikidata as a fetch asks it: the ids its item records for a film.
+type IDBridge interface {
+	MovieIDs(ctx context.Context, tmdb int64, imdb string) (wikidata.WorkIDs, bool, error)
+}
+
+// bridgeIDs fills in the ids Wikidata's item records and the film lacks; first in the library's order, Wikidata also
+// replaces the IMDb id it disagrees with. TMDB's id, when known, is what found the item and is never changed.
+func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
+	at := slices.Index(order, settings.SourceWikidata)
+	if s.Wikidata == nil || at < 0 {
+		return ids
+	}
+	found, ok, err := s.Wikidata.MovieIDs(ctx, ids.TMDB, ids.IMDb)
+	if err != nil {
+		s.warn("wikidata", ids.TMDB, err)
+		return ids
+	}
+	if !ok {
+		return ids
+	}
+	if ids.TMDB == 0 {
+		ids.TMDB = found.TMDB
+	}
+	if found.IMDb != "" && (ids.IMDb == "" || at == 0) {
+		ids.IMDb = found.IMDb
+	}
+	return ids
 }
 
 // completeIDs finds TMDB's id from an IMDb id when only that is known and TMDB can map it.

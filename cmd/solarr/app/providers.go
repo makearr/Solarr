@@ -101,7 +101,7 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 // than at construction: the jobs hold one Provider for the life of the
 // process, so a captured order would stay stale until a restart.
 func (p *process) liveMetadataSourceOrder() []string {
-	return p.cache.Snapshot().MetadataSettings().SourceOrder
+	return p.cache.Snapshot().MusicSourceOrder()
 }
 
 // musicBrainzSources builds every source config.yml enables. Which of them are
@@ -258,8 +258,10 @@ func (p *process) tvService() tv.Service {
 		p.anilistShared = anilist.New(client(providerAniList))
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
 		p.tvShared = tv.Service{
-			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared,
-			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().TVSources },
+			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFetcher(),
+			Priority: func() []string {
+				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: tv.MediaType})
+			},
 			PriorityFor: func(categoryID int64) []string {
 				snapshot := p.cache.Snapshot()
 				category, found := snapshot.Category(categoryID)
@@ -290,7 +292,10 @@ func (p *process) movieService() movie.Service {
 		p.tvService()
 		proxy := radarrmeta.New(p.providerClient(providerRadarrMeta, nil, httpx.ClientConfig{}))
 		p.movieShared = movie.Service{
-			Priority: func() []string { return p.cache.Snapshot().MetadataSettings().MovieSources },
+			Wikidata: p.wikidataFetcher(),
+			Priority: func() []string {
+				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: movie.MediaType})
+			},
 			PriorityFor: func(categoryID int64) []string {
 				snapshot := p.cache.Snapshot()
 				category, found := snapshot.Category(categoryID)

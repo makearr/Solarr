@@ -937,6 +937,42 @@ export interface paths {
         patch: operations["updatePrioritySettings"];
         trace?: never;
     };
+    "/metadata/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every metadata provider, what it is for and whether it is switched on. */
+        get: operations["listMetadataProviders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/metadata/providers/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Switch a provider on or off for every library. Administrator only. */
+        put: operations["setMetadataProviderEnabled"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metadata/settings": {
         parameters: {
             query?: never;
@@ -4485,6 +4521,14 @@ export interface components {
             /** @description What the provider supplies. */
             carries: string[];
             needs_key: boolean;
+            /** @description Switched on for every library. */
+            enabled: boolean;
+            /** @description False for MusicBrainz */
+            can_disable: boolean;
+            /** @description The libraries whose order it takes a place in. */
+            media_types: string[];
+            /** @description The libraries it serves outside their order. */
+            also_for: string[];
         };
         LibraryQualityWrite: {
             /** @description The profiles the library accepts, earlier preferred. */
@@ -9052,6 +9096,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PrioritySettings"];
                 };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    listMetadataProviders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The providers. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        providers: components["schemas"]["MetadataProviderInfo"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setMetadataProviderEnabled: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    enabled: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Switched. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];

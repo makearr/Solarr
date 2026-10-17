@@ -347,13 +347,19 @@ func NewDefaultRegistry() *Registry {
 		Key: KeyMetadataTVSources, Kind: KindStringList, Tier: TierAdvanced,
 		Name:     "TV source order",
 		HelpText: "Which TV provider supplies a series' text, genres, rating and artwork first; one left out is not used. Numbering stays with TheTVDB's.",
-		Default:  `["skyhook","tmdb","tvdb","tvmaze","anilist"]`,
+		Default:  `["wikidata","skyhook","tmdb","tvdb","tvmaze","anilist"]`,
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyMetadataMovieSources, Kind: KindStringList, Tier: TierAdvanced,
 		Name:     "Movie source order",
 		HelpText: "Which movie provider supplies a film's text, ratings and artwork first; the next fills what is missing, one left out is not used.",
-		Default:  `["tmdb","radarr"]`,
+		Default:  `["wikidata","tmdb","radarr"]`,
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyMetadataDisabledProviders, Kind: KindStringList, Tier: TierNormal,
+		Name:     "Metadata providers switched off",
+		HelpText: "Providers no library asks; their keys stay stored.",
+		Default:  `[]`,
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyMetadataWikidata, Kind: KindBool, Tier: TierAdvanced,
