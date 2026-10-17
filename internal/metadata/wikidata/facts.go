@@ -22,7 +22,9 @@ const (
 
 // WorkFacts are what Wikidata's item, and its English Wikipedia article, say of a film, a series or an album.
 type WorkFacts struct {
-	QID           string
+	QID string
+	// IDs are the ids other providers know the work by, as its item records them; QID is set when one item answered.
+	IDs           WorkIDs
 	OriginalTitle string
 	// Date is the earliest publication (a series' start), "YYYY-MM-DD".
 	Date       string
@@ -57,7 +59,9 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 		query := `SELECT ?id ?item (SAMPLE(?title) AS ?original) (MIN(?date) AS ?first) (SAMPLE(?runtime) AS ?minutes)
   (GROUP_CONCAT(DISTINCT ?genreLabel; separator="|") AS ?genres) (GROUP_CONCAT(DISTINCT ?language; separator="|") AS ?languages)
   (GROUP_CONCAT(DISTINCT ?country; separator="|") AS ?countries) (GROUP_CONCAT(DISTINCT ?labelName; separator="|") AS ?labels)
-  (GROUP_CONCAT(DISTINCT ?makerName; separator="|") AS ?makers) WHERE {
+  (GROUP_CONCAT(DISTINCT ?makerName; separator="|") AS ?makers) (SAMPLE(?tvdb) AS ?tvdbID) (SAMPLE(?tmdbSeries) AS ?tmdbSeriesID)
+  (SAMPLE(?tmdbFilm) AS ?tmdbFilmID) (SAMPLE(?imdb) AS ?imdbID) (SAMPLE(?tvmaze) AS ?tvmazeID)
+  (GROUP_CONCAT(DISTINCT ?anilist; separator="|") AS ?anilistIDs) WHERE {
   VALUES ?id { ` + strings.Join(values, " ") + ` } ?item wdt:` + string(kind) + ` ?id .
   OPTIONAL { ?item wdt:P1476 ?title }
   OPTIONAL { ?item wdt:P577|wdt:P580 ?date }
@@ -67,6 +71,8 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
   OPTIONAL { ?item wdt:P495 ?countryItem . ?countryItem wdt:P297 ?country }
   OPTIONAL { ?item wdt:P264 ?label . ?label rdfs:label ?labelName . FILTER(LANG(?labelName) = "en") }
   OPTIONAL { ?item wdt:P57|wdt:P170|wdt:P175 ?maker . ?maker rdfs:label ?makerName . FILTER(LANG(?makerName) = "en") }
+  OPTIONAL { ?item wdt:P4835 ?tvdb } OPTIONAL { ?item wdt:P4983 ?tmdbSeries } OPTIONAL { ?item wdt:P4947 ?tmdbFilm }
+  OPTIONAL { ?item wdt:P345 ?imdb } OPTIONAL { ?item wdt:P8600 ?tvmaze } OPTIONAL { ?item wdt:P8729 ?anilist }
 } GROUP BY ?id ?item`
 		rows, err := f.sparql(ctx, query)
 		if err != nil {
@@ -84,6 +90,7 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 			}
 			facts := WorkFacts{QID: qid, OriginalTitle: row["original"].Value, Languages: split(row["languages"].Value),
 				Countries: split(row["countries"].Value), Labels: split(row["labels"].Value), Makers: split(row["makers"].Value)}
+			facts.IDs = factIDs(kind, qid, row)
 			if first := row["first"].Value; len(first) >= 10 {
 				facts.Date = first[:10]
 			}
@@ -119,6 +126,29 @@ func (f Fetcher) addSummaries(ctx context.Context, facts map[string]WorkFacts) e
 		facts[id] = one
 	}
 	return nil
+}
+
+// factIDs reads the ids a facts row carries; TMDB's is the film's or the series' as the kind says, the two being apart.
+func factIDs(kind FactKind, qid string, row map[string]struct {
+	Value string `json:"value"`
+}) WorkIDs {
+	ids := WorkIDs{QID: qid}
+	ids.TVDB, _ = strconv.ParseInt(row["tvdbID"].Value, 10, 64)
+	ids.TVmaze, _ = strconv.ParseInt(row["tvmazeID"].Value, 10, 64)
+	tmdb := row["tmdbSeriesID"].Value
+	if kind == FactFilm {
+		tmdb = row["tmdbFilmID"].Value
+	}
+	ids.TMDB, _ = strconv.ParseInt(tmdb, 10, 64)
+	if imdb := row["imdbID"].Value; imdbPattern.MatchString(imdb) {
+		ids.IMDb = imdb
+	}
+	for _, anilist := range split(row["anilistIDs"].Value) {
+		if id, err := strconv.ParseInt(anilist, 10, 64); err == nil {
+			ids.AniList = append(ids.AniList, id)
+		}
+	}
+	return ids
 }
 
 func split(joined string) []string {

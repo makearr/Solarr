@@ -22,6 +22,11 @@ things it does not lead: titles, which name folders and match releases, so they 
 film and series genres, which are too fine ("time-travel film", "crime drama television series") and only fill where
 no provider names any; songs, which are rarely on Wikidata and stay MusicBrainz's.
 
+Wikidata is read in bulk: one facts query answers 40 works with their ids as well, so the id bridge and the facts
+come from one answer, and a process-wide cache (`wikidata.Cached`, six hours) keeps it. A TV or movie refresh sweep
+warms the cache with every work it is about to read whose library asks Wikidata (`WarmWikidata`), so each refresh
+then asks nothing; an add or a manual refresh reads its one work and keeps it too, a work Wikidata lacks included.
+
 ## What the upstream projects use
 
 | Project | Source of metadata | Notes |

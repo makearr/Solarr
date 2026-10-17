@@ -66,6 +66,14 @@ func (p *process) wikidataFetcher() wikidata.Fetcher {
 	})
 }
 
+// wikidataFacts is the process's one cache of what Wikidata says of films and series: refresh sweeps fill it in bulk.
+func (p *process) wikidataFacts() *wikidata.Cached {
+	p.wikidataOnce.Do(func() {
+		p.wikidataShared = wikidata.NewCached(p.wikidataFetcher(), clock.NewSystem(), 6*time.Hour)
+	})
+	return p.wikidataShared
+}
+
 // acoustIDLookup answers the process's one AcoustID client: ADR-29's fingerprint
 // rung, on its own ADR-13 bucket at the 3 req/s acoustid.org publishes.
 func (p *process) acoustIDLookup() acoustid.Client {
@@ -262,7 +270,7 @@ func (p *process) tvService() tv.Service {
 		p.anilistShared = anilist.New(client(providerAniList))
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
 		p.tvShared = tv.Service{
-			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFetcher(),
+			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
 			Priority: func() []string {
 				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: tv.MediaType})
 			},
@@ -296,7 +304,7 @@ func (p *process) movieService() movie.Service {
 		p.tvService()
 		proxy := radarrmeta.New(p.providerClient(providerRadarrMeta, nil, httpx.ClientConfig{}))
 		p.movieShared = movie.Service{
-			Wikidata: p.wikidataFetcher(),
+			Wikidata: p.wikidataFacts(),
 			MDBList:  mdblist.New(p.providerClient(providerMDBList, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceMDBList)),
 			OMDb:     omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
 			Fanart:   fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),

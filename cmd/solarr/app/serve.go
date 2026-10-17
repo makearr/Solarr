@@ -36,6 +36,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -124,6 +125,9 @@ type process struct {
 	// movieOnce builds the movie providers once, on the same TMDB bucket as TV.
 	movieOnce   sync.Once
 	movieShared movie.Service
+	// wikidataOnce builds the one cache of what Wikidata says of works, shared by TV and movies.
+	wikidataOnce   sync.Once
+	wikidataShared *wikidata.Cached
 	// The shared clients behind tvShared, for the provider test and the people pages.
 	skyhookShared skyhook.Client
 	tvmazeShared  tvmaze.Client

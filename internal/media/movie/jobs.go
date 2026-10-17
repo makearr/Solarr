@@ -63,6 +63,7 @@ func (j *RefreshJob) Run(ctx context.Context, _ jobs.Job) error {
 	if err != nil {
 		return fmt.Errorf("movie: refresh sweep: %w", err)
 	}
+	j.config.Service.WarmWikidata(ctx, due)
 	outcomes := parallel.Do(ctx, len(due), refreshWorkers, func(ctx context.Context, index int) error {
 		if err := ctx.Err(); err != nil {
 			return err

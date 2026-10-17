@@ -272,6 +272,32 @@ type IDBridge interface {
 	FactsOf(ctx context.Context, kind wikidata.FactKind, ids []string) (map[string]wikidata.WorkFacts, error)
 }
 
+// Warmer is Wikidata read in bulk ahead of the lookups that follow.
+type Warmer interface {
+	Warm(ctx context.Context, kind wikidata.FactKind, ids []string) error
+}
+
+// WarmWikidata reads at once what Wikidata says of every series about to be refreshed whose library asks it, so each
+// refresh finds it kept instead of asking on its own.
+func (s Service) WarmWikidata(ctx context.Context, due []library.RefreshCandidate) {
+	warmer, bulk := s.Wikidata.(Warmer)
+	if !bulk {
+		return
+	}
+	var ids []string
+	for _, candidate := range due {
+		if !slices.Contains(s.order(candidate.CategoryID), settings.SourceWikidata) {
+			continue
+		}
+		if provider, err := s.Reader.ProviderIDs(ctx, candidate.WorkID); err == nil && provider[ProviderTVDB] != "" {
+			ids = append(ids, provider[ProviderTVDB])
+		}
+	}
+	if err := warmer.Warm(ctx, wikidata.FactSeries, ids); err != nil {
+		s.warn("wikidata", 0, err)
+	}
+}
+
 // bridgeIDs fills in the ids Wikidata's item records and the series lacks; first in the library's order, Wikidata also
 // replaces the ones it disagrees with. TheTVDB's id, which found the item, is never changed.
 func (s Service) bridgeIDs(ctx context.Context, ids IDs, order []string) IDs {
