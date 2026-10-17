@@ -73,7 +73,7 @@ func atAddNow() clock.Clock {
 
 func TestSearchJudgesOnlyReleasesOfTheMovieAndAsksByIDFirst(t *testing.T) {
 	cache := settingsCache(t)
-	service, opened := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, nil)
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
 	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: movieProfile(t, cache, "Movie HD 1080p"), Monitor: movie.MonitorMovieOnly})
 	if err != nil {
 		t.Fatal(err)
@@ -82,10 +82,10 @@ func TestSearchJudgesOnlyReleasesOfTheMovieAndAsksByIDFirst(t *testing.T) {
 		return indexer.RawItem{Title: title, GUID: guid, Link: "https://example.test/" + guid, SizeBytes: size}
 	}
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"movie": {
-		raw("The.Tonhut.1999.1080p.BluRay.x264-GRP", "right", 9e9),
-		raw("The.Tonhut.Tufoatoj.2003.1080p.BluRay.x264-GRP", "sequel", 9e9),
-		raw("The.Tonhut.1995.1080p.BluRay.x264-GRP", "wrong-year", 9e9),
-		raw("The.Tonhut.1999.480p.DVDRip.x264-GRP", "small", 7e8),
+		raw("The.Example.Film.1999.1080p.BluRay.x264-GRP", "right", 9e9),
+		raw("The.Example.Sequel.2003.1080p.BluRay.x264-GRP", "sequel", 9e9),
+		raw("The.Example.Film.1995.1080p.BluRay.x264-GRP", "wrong-year", 9e9),
+		raw("The.Example.Film.1999.480p.DVDRip.x264-GRP", "small", 7e8),
 	}}}
 	search := movie.Search{
 		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
@@ -104,17 +104,17 @@ func TestSearchJudgesOnlyReleasesOfTheMovieAndAsksByIDFirst(t *testing.T) {
 	if second := result.Decisions[1]; second.ReleaseCandidate.GUID != "small" || second.Decision.Outcome != "REJECT" {
 		t.Errorf("second = %s %s, want the DVDRip rejected by the profile's resolution gate", second.ReleaseCandidate.GUID, second.Decision.Outcome)
 	}
-	if len(fake.requests) == 0 || fake.requests[0].Function != "movie" || fake.requests[0].Extra["imdbid"] != "0133093" {
+	if len(fake.requests) == 0 || fake.requests[0].Function != "movie" || fake.requests[0].Extra["imdbid"] != "0000001" {
 		t.Errorf("the id query goes first: %+v", fake.requests)
 	}
 }
 
 func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 	cache := settingsCache(t)
-	service, opened := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, nil)
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
 	added, _ := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: movieProfile(t, cache, "Movie Any"), Monitor: movie.MonitorMovieOnly})
 	fake := &fakeIndexer{byFunction: map[string][]indexer.RawItem{"search": {
-		{Title: "The Tonhut 1999 720p BluRay x264-GRP", GUID: "g", Link: "https://example.test/g"},
+		{Title: "The Example Film 1999 720p BluRay x264-GRP", GUID: "g", Link: "https://example.test/g"},
 	}}}
 	search := movie.Search{
 		Desired: library.NewDesired(opened), Reader: library.NewSeriesReader(opened), Candidates: statistics.NewCandidates(statisticstest.Open(t)),
@@ -128,7 +128,7 @@ func TestSearchWidensToTextWhenTheIDQueryFindsNothing(t *testing.T) {
 		t.Fatalf("tier %v, decisions %d; want the text tier with the year", result.TierUsed, len(result.Decisions))
 	}
 	last := fake.requests[len(fake.requests)-1]
-	if last.Query != "The Tonhut 1999" {
+	if last.Query != "The Example Film 1999" {
 		t.Errorf("last query = %q, want the title with its year", last.Query)
 	}
 }

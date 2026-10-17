@@ -42,7 +42,7 @@ func (noAcquisition) Get(context.Context, int64) (library.Acquisition, error) {
 
 func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspect.File) {
 	t.Helper()
-	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Tonhut", "1999-03-30")}}, nil)
+	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, nil)
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
 	fsys := fsx.NewMem(fake)
@@ -80,9 +80,9 @@ func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspe
 
 func TestImportPlacesTheBiggestFileUnderTheMovieFolderAndLeavesTheSample(t *testing.T) {
 	importer, fsys, write := newImporter(t)
-	unit := inspect.Unit{Directory: "The.Tonhut.1999.1080p.BluRay.x264-GRP", Media: []inspect.File{
-		write("The.Tonhut.1999.1080p.BluRay.x264-GRP/The.Tonhut.1999.1080p.BluRay.x264-GRP.mkv"),
-		write("The.Tonhut.1999.1080p.BluRay.x264-GRP/sample.mkv"),
+	unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p.BluRay.x264-GRP", Media: []inspect.File{
+		write("The.Example.Film.1999.1080p.BluRay.x264-GRP/The.Example.Film.1999.1080p.BluRay.x264-GRP.mkv"),
+		write("The.Example.Film.1999.1080p.BluRay.x264-GRP/sample.mkv"),
 	}}
 	result, err := importer.ImportBatch(t.Context(), batch.Request{
 		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5},
@@ -92,12 +92,12 @@ func TestImportPlacesTheBiggestFileUnderTheMovieFolderAndLeavesTheSample(t *test
 	}
 	decision := result.Decisions[0]
 	if decision.Decision != library.UnitCommit || decision.WorkID == nil {
-		t.Fatalf("decision = %+v, want a commit to The Tonhut", decision)
+		t.Fatalf("decision = %+v, want a commit to The Example Film", decision)
 	}
 	if placement := result.Placements[0]; placement == nil || len(placement.MediaObjectIDs) != 1 {
 		t.Fatalf("placement = %+v, want the one film file", result.Placements[0])
 	}
-	if _, err := fsys.Stat("/library/The Tonhut (1999)/The Tonhut (1999).mkv"); err != nil {
+	if _, err := fsys.Stat("/library/The Example Film (1999)/The Example Film (1999).mkv"); err != nil {
 		t.Errorf("film not placed under its movie folder: %v", err)
 	}
 

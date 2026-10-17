@@ -13,14 +13,14 @@ import (
 type trilogy struct{ fakeTMDB }
 
 func (trilogy) Movie(_ context.Context, id int64) (tmdb.Movie, error) {
-	film := theMatrix()
-	film.ID, film.Title, film.IMDbID = id, map[int64]string{603: "The Tonhut", 604: "The Tonhut Tufoatoj"}[id], ""
+	film := theExample()
+	film.ID, film.Title, film.IMDbID = id, map[int64]string{603: "The Example Film", 604: "The Example Sequel"}[id], ""
 	return film, nil
 }
 
 func (trilogy) Collection(context.Context, int64) (tmdb.CollectionDetail, error) {
-	return tmdb.CollectionDetail{ID: 2344, Name: "The Tonhut Collection", Parts: []tmdb.MovieHit{
-		{ID: 603, Title: "The Tonhut"}, {ID: 604, Title: "The Tonhut Tufoatoj"},
+	return tmdb.CollectionDetail{ID: 2344, Name: "The Example Collection", Parts: []tmdb.MovieHit{
+		{ID: 603, Title: "The Example Film"}, {ID: 604, Title: "The Example Sequel"},
 	}}, nil
 }
 
@@ -31,7 +31,7 @@ func TestMonitoringAFranchiseAddsTheFilmsTheLibraryLacks(t *testing.T) {
 	}
 	catalog := movie.Catalog{Service: service, Categories: categories{}, FranchiseStore: library.NewFranchises(opened)}
 	listed, err := catalog.FranchiseStore.InCategory(t.Context(), movie.MediaType, 5)
-	if err != nil || len(listed) != 1 || len(listed[0].Members) != 1 || listed[0].Monitored || listed[0].Name != "The Tonhut Collection" {
+	if err != nil || len(listed) != 1 || len(listed[0].Members) != 1 || listed[0].Monitored || listed[0].Name != "The Example Collection" {
 		t.Fatalf("franchises = %+v, %v; want one unmonitored collection holding one film", listed, err)
 	}
 
@@ -44,7 +44,7 @@ func TestMonitoringAFranchiseAddsTheFilmsTheLibraryLacks(t *testing.T) {
 		t.Errorf("after following: %+v, want both films, monitored, of two", listed)
 	}
 	for _, member := range listed[0].Members {
-		if member.Title == "The Tonhut Tufoatoj" && !member.Monitored {
+		if member.Title == "The Example Sequel" && !member.Monitored {
 			t.Errorf("the added film is monitored: %+v", member)
 		}
 	}

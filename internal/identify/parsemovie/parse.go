@@ -22,7 +22,7 @@ type Info struct {
 	Year int
 	// Edition is a cut or edition the name states ("Director's Cut", "Extended"), as people write it; empty for the plain film.
 	Edition string
-	// IMDb and TMDB are ids the name carries ({imdb-tt0133093}, [tmdbid-603]).
+	// IMDb and TMDB are ids the name carries ({imdb-tt0000001}, [tmdbid-603]).
 	IMDb         string
 	TMDB         int64
 	ReleaseGroup string
@@ -155,7 +155,7 @@ func qualityStartIndex(work string) int {
 }
 
 // splitTitle cuts the name at its year, or where the technical half begins; the year is the last one before that
-// point that has a title in front of it, so "2001 A Cfago Utenkoa 1968" and "Nhasi Huvcem 2049 (2017)" read right.
+// point that has a title in front of it, so "2001 A Cfago Utenkoa 1968" and "Sample Runner 2049 (2017)" read right.
 func splitTitle(work string) (title string, year int) {
 	limit := len(work)
 	if cut := qualityStartIndex(work); cut >= 0 {

@@ -10,17 +10,17 @@ import (
 
 func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
 	titles := []string{
-		"PLUH", "PLUH: Los Angeles", "PLUH: Origins", // 1-3
-		"Tzul Nmex: Discovery", "Tzul Nmex: Picard", "Tzul Suxc: Elfox", // 4-6
-		"Ppamir Vetl Z", "Ppamir Vetl Super", "Ppamir Vetl PH", // 7-9
-		"Risube", "Risube Dxihnorir", "Boruto: Risube Next Generations", // 10-12
-		"Kdihep Uisbl", "Kdihep Uisbl II", "Kdihep Uisbl III", // 13-15
-		"NarCilet (1985)", "NarCilet (2016)", // 16-17
-		"Ovalevag Zuk!", "American Horror Story", // 18-19
-		"FBI", "FBI: Most Wanted", "Tobmad", "Tobmad: New Blood", // 20-23
+		"Quill", "Quill: North", "Quill: Origins", // 1-3
+		"Void Rangers: Alpha", "Void Rangers: Beta", "Void Wars: Delta", // 4-6
+		"Ember Orb Z", "Ember Orb Super", "Ember Orb GT", // 7-9
+		"Kitsu", "Kitsu Storm", "Zoru: Kitsu Next", // 10-12
+		"Blue Globe", "Blue Globe II", "Blue Globe III", // 13-15
+		"Fixit (1985)", "Fixit (2016)", // 16-17
+		"Midland Dad!", "Midland Horror Story", // 18-19
+		"BRX", "BRX: Most Sought", "Corvin", "Corvin: Reborn", // 20-23
 		"Love", "Lovecraft Country", // 24-25: a word that only starts another word is no prefix
-		"Jzamkie's Orpigv", "Jzamkie's Orpigv (2011)", // 26-27
-		"Huuva of Waofe", "Huuva of the Ppamir", "Gag pb. Mewj", "Gag Pb Sua", // 28-31: a connector ends no name
+		"Mabel's Angels", "Mabel's Angels (2011)", // 26-27
+		"House of Mice", "House of the Vxixa", "Man vs. Beast", "Man Vs Bug", // 28-31: a connector ends no name
 	}
 	var works []library.WorkName
 	for index, title := range titles {
@@ -41,7 +41,7 @@ func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
 			t.Errorf("group %d = %v, want %v", index, groups[index], want[index])
 		}
 	}
-	for index, name := range map[int]string{0: "PLUH", 1: "Tzul Nmex", 3: "Kdihep Uisbl", 5: "FBI", 7: "Jzamkie's Orpigv"} {
+	for index, name := range map[int]string{0: "Quill", 1: "Void Rangers", 3: "Blue Globe", 5: "BRX", 7: "Mabel's Angels"} {
 		var members []library.WorkName
 		for _, id := range groups[index] {
 			members = append(members, library.WorkName{WorkID: id, Title: byTitle[id]})
@@ -63,7 +63,7 @@ func TestNamesAloneAreNotEnoughTwoWorksNeedAGenreANetworkOrACreatorInCommon(t *t
 	drama := &library.Traits{Genres: []string{"Drama", "Action & Adventure"}}
 	cartoon := &library.Traits{Genres: []string{"Animation", "Kids", "Action & Adventure", "Comedy"}}
 	if compatible(drama, cartoon) {
-		t.Error("Kung Fu and Logt Po Nidxo share one genre of six and nothing else")
+		t.Error("Kung Fu and Kung Fu Pup share one genre of six and nothing else")
 	}
 	if !compatible(drama, &library.Traits{Genres: []string{"Drama", "Crime"}}) {
 		t.Error("two dramas share a third of their genres")
@@ -78,19 +78,19 @@ func TestNamesAloneAreNotEnoughTwoWorksNeedAGenreANetworkOrACreatorInCommon(t *t
 
 func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 	works := []library.WorkName{
-		{WorkID: 1, Title: "Hik 10", Year: 2005}, {WorkID: 2, Title: "Hik 10: Ihaol Force", Year: 2008}, {WorkID: 3, Title: "Hik 10: Omniverse", Year: 2012},
-		{WorkID: 4, Title: "Ketkpobxom Rimixtomu (2003)", Year: 2005}, {WorkID: 5, Title: "Ladvuxi", Year: 2010},
-		{WorkID: 6, Title: "PLUH: Los Angeles", Year: 2009}, {WorkID: 7, Title: "PLUH: Hawai'i", Year: 2021},
-		{WorkID: 8, Title: "Tzul Nmex: Voyager", Year: 1995}, {WorkID: 9, Title: "Tzul Nmex: Discovery", Year: 2017},
-		{WorkID: 10, Title: "Jzamkie's Orpigv", Year: 1976}, {WorkID: 11, Title: "Jzamkie's Orpigv (2011)", Year: 2011},
+		{WorkID: 1, Title: "Zed 10", Year: 2005}, {WorkID: 2, Title: "Zed 10: Force", Year: 2008}, {WorkID: 3, Title: "Zed 10: Multi", Year: 2012},
+		{WorkID: 4, Title: "Star Cruiser (2003)", Year: 2005}, {WorkID: 5, Title: "Tiber", Year: 2010},
+		{WorkID: 6, Title: "Quill: North", Year: 2009}, {WorkID: 7, Title: "Quill: East", Year: 2021},
+		{WorkID: 8, Title: "Void Rangers: Gamma", Year: 1995}, {WorkID: 9, Title: "Void Rangers: Alpha", Year: 2017},
+		{WorkID: 10, Title: "Mabel's Angels", Year: 1976}, {WorkID: 11, Title: "Mabel's Angels (2011)", Year: 2011},
 		{WorkID: 12, Title: "Vulcano Park: Camp Lava", Year: 2020}, {WorkID: 13, Title: "Vulcano Park: Ember Theory", Year: 2024},
 		{WorkID: 14, Title: "Mirrorcase", Year: 2001}, {WorkID: 15, Title: "Driftwater", Year: 2004},
 	}
 	collections := []library.FranchiseSummary{
-		{ID: 584, Name: "Q5594233", Source: "wikidata"}, {ID: 585, Name: "Hik 10: Ihaol Force", Source: "wikidata"},
-		{ID: 643, Name: "Ketkpobxom Rimixtomu", Source: "wikidata"}, {ID: 650, Name: "Ketkpobxom Rimixtomu", Source: "wikidata"},
-		{ID: 700, Name: "PLUH", Source: "auto"}, {ID: 701, Name: "PLUH", Source: "auto"},
-		{ID: 628, Name: "Tzul Nmex", Source: "wikidata"},
+		{ID: 584, Name: "Q5594233", Source: "wikidata"}, {ID: 585, Name: "Zed 10: Force", Source: "wikidata"},
+		{ID: 643, Name: "Star Cruiser", Source: "wikidata"}, {ID: 650, Name: "Star Cruiser", Source: "wikidata"},
+		{ID: 700, Name: "Quill", Source: "auto"}, {ID: 701, Name: "Quill", Source: "auto"},
+		{ID: 628, Name: "Void Rangers", Source: "wikidata"},
 		{ID: 590, Name: "Charlies Angels", Source: "auto"},
 		{ID: 710, Name: "Vulcano Land", Source: "wikidata"},
 		{ID: 724, Name: "Mirrorcase", Source: "auto"},
@@ -104,7 +104,7 @@ func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 		{CollectionID: 710, WorkID: 12}, {CollectionID: 710, WorkID: 13},
 		{CollectionID: 724, WorkID: 14}, {CollectionID: 724, WorkID: 15},
 	}
-	// A person said the two Jzamkie's Orpigv do not belong together; nothing says Mirrorcase and Driftwater do any more.
+	// A person said the two Mabel's Angels do not belong together; nothing says Mirrorcase and Driftwater do any more.
 	unrelated := map[[2]int64]bool{{10, 11}: true, {11, 10}: true}
 	plans, drop := planFranchises(works, collections, memberships, titleEdges(works), unrelated)
 
@@ -114,16 +114,16 @@ func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 			byMember[id] = plan
 		}
 	}
-	if plan := byMember[1]; plan.Keep != 584 || !slices.Equal(plan.Merge, []int64{585}) || plan.Name != "Hik 10" || !plan.Rename {
-		t.Errorf("Hik 10: %+v; want the larger kept, the other merged, an item id replaced by the name its series share", plan)
+	if plan := byMember[1]; plan.Keep != 584 || !slices.Equal(plan.Merge, []int64{585}) || plan.Name != "Zed 10" || !plan.Rename {
+		t.Errorf("Zed 10: %+v; want the larger kept, the other merged, an item id replaced by the name its series share", plan)
 	}
-	if plan := byMember[4]; plan.Keep != 650 || !slices.Equal(plan.Merge, []int64{643}) || plan.Name != "Ketkpobxom Rimixtomu" {
-		t.Errorf("Ketkpobxom Rimixtomu appeared twice: %+v", plan)
+	if plan := byMember[4]; plan.Keep != 650 || !slices.Equal(plan.Merge, []int64{643}) || plan.Name != "Star Cruiser" {
+		t.Errorf("Star Cruiser appeared twice: %+v", plan)
 	}
-	if plan := byMember[6]; plan.Keep != 701 || plan.Merge != nil || !slices.Equal(plan.Remove, []int64{9}) || plan.Name != "PLUH" {
-		t.Errorf("PLUH: %+v; want Solarr's fuller one kept and rebuilt from the evidence", plan)
+	if plan := byMember[6]; plan.Keep != 701 || plan.Merge != nil || !slices.Equal(plan.Remove, []int64{9}) || plan.Name != "Quill" {
+		t.Errorf("Quill: %+v; want Solarr's fuller one kept and rebuilt from the evidence", plan)
 	}
-	if plan := byMember[8]; plan.Keep != 628 || plan.Rename || plan.Name != "Tzul Nmex" {
+	if plan := byMember[8]; plan.Keep != 628 || plan.Rename || plan.Name != "Void Rangers" {
 		t.Errorf("a provider's name that is no series' title stays: %+v", plan)
 	}
 	if plan := byMember[12]; plan.Keep != 710 || plan.Name != "Vulcano Park" || !plan.Rename {

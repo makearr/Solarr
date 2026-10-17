@@ -486,7 +486,7 @@ func (f Franchising) poster(ctx context.Context, member wikidata.FranchiseSeries
 }
 
 // resolve finds the TMDB id of a series Wikidata names but has no TheTVDB or TMDB id for, by its name and first year: the
-// original PLUH has none there. A name that matches nothing closely stays unresolved.
+// original Quill has none there. A name that matches nothing closely stays unresolved.
 func (f Franchising) resolve(ctx context.Context, member wikidata.FranchiseSeries) wikidata.FranchiseSeries {
 	if f.Pictures == nil || f.Service.TMDB == nil || !f.Service.TMDB.Configured() || member.Label == "" {
 		return member

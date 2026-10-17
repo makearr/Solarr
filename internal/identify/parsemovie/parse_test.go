@@ -14,17 +14,17 @@ func TestParse(t *testing.T) {
 		edition string
 		group   string
 	}{
-		{"The.Tonhut.1999.1080p.BluRay.x264-GROUP", "The Tonhut", 1999, "", "GROUP"},
-		{"The Tonhut (1999)", "The Tonhut", 1999, "", ""},
-		{"The Tonhut (1999).mkv", "The Tonhut", 1999, "", ""},
-		{"Nhasi.Huvcem.2049.2017.2160p.UHD.BluRay.x265-TERMINAL", "Nhasi Huvcem 2049", 2017, "", "TERMINAL"},
+		{"The.Example.Film.1999.1080p.BluRay.x264-GROUP", "The Example Film", 1999, "", "GROUP"},
+		{"The Example Film (1999)", "The Example Film", 1999, "", ""},
+		{"The Example Film (1999).mkv", "The Example Film", 1999, "", ""},
+		{"Sample.Runner.2049.2017.2160p.UHD.BluRay.x265-TERMINAL", "Sample Runner 2049", 2017, "", "TERMINAL"},
 		{"2001.A.Cfago.Utenkoa.1968.1080p.BluRay.x264-AMIABLE", "2001 A Cfago Utenkoa", 1968, "", "AMIABLE"},
 		{"1917.2019.1080p.BluRay.x264-SPARKS", "1917", 2019, "", "SPARKS"},
 		{"1917 (2019)", "1917", 2019, "", ""},
 		{"2012.2009.720p.BluRay.x264", "2012", 2009, "", ""},
 		{"10,000 XS (2008).mp4", "10,000 XS", 2008, "", ""},
 		{"Xio Afgumm! The Koffbi Dotuo (2018).mkv", "Xio Afgumm! The Koffbi Dotuo", 2018, "", ""},
-		{"Nhasi.Huvcem.1982.Final.Cut.1080p.BluRay.x264-GRP", "Nhasi Huvcem", 1982, "Final Cut", "GRP"},
+		{"Sample.Runner.1982.Final.Cut.1080p.BluRay.x264-GRP", "Sample Runner", 1982, "Final Cut", "GRP"},
 		{"Utiokm.1986.Directors.Cut.1080p.BluRay.x264-GRP", "Utiokm", 1986, "Director's Cut", "GRP"},
 		{"Alibaxuwgi Sed (1979) {edition-Redux}", "Alibaxuwgi Sed", 1979, "Redux", ""},
 		{"Cige.2021.IMAX.2160p.WEB-DL.DDP5.1.Atmos.HDR.H.265-FLUX", "Cige", 2021, "IMAX", "FLUX"},
@@ -57,8 +57,8 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseIDsAndClaims(t *testing.T) {
-	info, _ := parsemovie.Parse("The Tonhut (1999) {imdb-tt0133093} {tmdb-603} [1080p]")
-	if info.IMDb != "tt0133093" || info.TMDB != 603 || info.Title != "The Tonhut" || info.Year != 1999 {
+	info, _ := parsemovie.Parse("The Example Film (1999) {imdb-tt0000001} {tmdb-603} [1080p]")
+	if info.IMDb != "tt0000001" || info.TMDB != 603 || info.Title != "The Example Film" || info.Year != 1999 {
 		t.Errorf("ids: %+v", info)
 	}
 	claims, _ := parsemovie.Parse("Cige.2021.2160p.WEB-DL.DDP5.1.HDR.H.265-FLUX")

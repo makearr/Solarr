@@ -85,7 +85,7 @@ func TestCrossoverEpisodesAreFoundByCastLengthAndAnEpisodeTitle(t *testing.T) {
 
 	// Two series of one network that list one specific title on one day, of one length: the same broadcast, cast data or not.
 	f.show("Docs", "3", "Channel One", map[string]crossoverPart{"s01:e01": {"A Long Night On The Moon", 59, nil}})
-	f.show("Horizon", "4", "Channel One", map[string]crossoverPart{"s01:e01": {"A Long Night On The Moon", 60, nil}})
+	f.show("Sunrise", "4", "Channel One", map[string]crossoverPart{"s01:e01": {"A Long Night On The Moon", 60, nil}})
 
 	found, err := f.crossovers.Suggestions(t.Context(), "tv", 1, 50)
 	if err != nil {

@@ -74,12 +74,12 @@ func (f fakeProxy) Search(context.Context, string, int) ([]radarrmeta.Movie, err
 	return []radarrmeta.Movie{f.movie}, f.err
 }
 
-func theMatrix() tmdb.Movie {
-	movie := tmdb.Movie{ID: 603, IMDbID: "tt0133093", Title: "The Tonhut", OriginalTitle: "The Tonhut", Overview: "A hacker.", ReleaseDate: "1999-03-30",
+func theExample() tmdb.Movie {
+	movie := tmdb.Movie{ID: 603, IMDbID: "tt0000001", Title: "The Example Film", OriginalTitle: "The Example Film", Overview: "A hacker.", ReleaseDate: "1999-03-30",
 		Runtime: 136, OriginalLanguage: "en", VoteAverage: 8.2, VoteCount: 100, PosterPath: "/p.jpg", Genres: []tmdb.Genre{{ID: 1, Name: "Action"}}}
-	movie.Collection = &tmdb.Collection{ID: 2344, Name: "The Tonhut Collection"}
-	movie.Credits.Cast = []tmdb.MovieCast{{ID: 6384, Name: "Kaira Reeves", Character: "Neo", Order: 0}}
-	movie.Credits.Crew = []tmdb.MovieCrew{{ID: 9340, Name: "Lana Wachowski", Job: "Director"}}
+	movie.Collection = &tmdb.Collection{ID: 2344, Name: "The Example Collection"}
+	movie.Credits.Cast = []tmdb.MovieCast{{ID: 6384, Name: "Jane Actor", Character: "Neo", Order: 0}}
+	movie.Credits.Crew = []tmdb.MovieCrew{{ID: 9340, Name: "Sam Director", Job: "Director"}}
 	movie.ReleaseDates.Results = []struct {
 		Country string             `json:"iso_3166_1"`
 		Dates   []tmdb.ReleaseDate `json:"release_dates"`
@@ -102,7 +102,7 @@ func newService(t *testing.T, source movie.TMDBSource, proxy movie.ProxySource) 
 }
 
 func TestAddStoresTheMovieItsOneWantedItemItsReleaseDayAndFranchise(t *testing.T) {
-	service, opened := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, nil)
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
 	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: 1, Monitor: movie.MonitorMovieOnly})
 	if err != nil {
 		t.Fatal(err)
@@ -114,13 +114,13 @@ func TestAddStoresTheMovieItsOneWantedItemItsReleaseDayAndFranchise(t *testing.T
 	if err != nil || item.SatisfactionKind != "SET" || item.Monitored != 1 || !item.RequiredCount.Valid || item.RequiredCount.Int64 != 1 {
 		t.Errorf("item = %+v, %v; want a monitored SET item needing one file", item, err)
 	}
-	if work, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.MediaType, movie.ProviderIMDb, "tt0133093"); err != nil || !found || work != added.WorkID {
+	if work, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.MediaType, movie.ProviderIMDb, "tt0000001"); err != nil || !found || work != added.WorkID {
 		t.Errorf("work by imdb id = %d %v %v", work, found, err)
 	}
 	if id, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.MediaType, movie.ProviderTMDB, "603"); err != nil || !found || id != added.WorkID {
 		t.Errorf("work by tmdb id = %d %v %v", id, found, err)
 	}
-	collections, err := library.NewFranchises(opened).Join(t.Context(), movie.MediaType, movie.ProviderCollection, "2344", "The Tonhut Collection", added.WorkID)
+	collections, err := library.NewFranchises(opened).Join(t.Context(), movie.MediaType, movie.ProviderCollection, "2344", "The Example Collection", added.WorkID)
 	if err != nil || collections == 0 {
 		t.Errorf("the add already joined the franchise; joining again = %d, %v", collections, err)
 	}
@@ -130,7 +130,7 @@ func TestAddStoresTheMovieItsOneWantedItemItsReleaseDayAndFranchise(t *testing.T
 }
 
 func TestAddWithNoMonitoringLeavesTheItemUnmonitored(t *testing.T) {
-	service, opened := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, nil)
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
 	added, err := service.Add(t.Context(), movie.AddRequest{IDs: movie.IDs{TMDB: 603}, CategoryID: 5, ProfileID: 1, Monitor: movie.MonitorNone})
 	if err != nil {
 		t.Fatal(err)
@@ -141,10 +141,10 @@ func TestAddWithNoMonitoringLeavesTheItemUnmonitored(t *testing.T) {
 }
 
 func TestFetchFallsBackToRadarrsServiceWhenTMDBHasNoKey(t *testing.T) {
-	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, IMDbID: "tt0133093", Title: "The Tonhut", Year: 1999, InCinemas: "1999-03-31T00:00:00Z", PhysicalRelease: "1999-11-25T00:00:00Z"}}
+	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, IMDbID: "tt0000001", Title: "The Example Film", Year: 1999, InCinemas: "1999-03-31T00:00:00Z", PhysicalRelease: "1999-11-25T00:00:00Z"}}
 	service, _ := newService(t, fakeTMDB{configured: false}, proxy)
 	fetched, err := service.Fetch(t.Context(), movie.IDs{TMDB: 603})
-	if err != nil || fetched.Title != "The Tonhut" || fetched.Physical != "1999-11-25" || len(fetched.Sources) != 1 || fetched.Sources[0] != "radarr" {
+	if err != nil || fetched.Title != "The Example Film" || fetched.Physical != "1999-11-25" || len(fetched.Sources) != 1 || fetched.Sources[0] != "radarr" {
 		t.Errorf("fetched = %+v, %v", fetched, err)
 	}
 	none, _ := newService(t, fakeTMDB{configured: false}, nil)
@@ -154,21 +154,21 @@ func TestFetchFallsBackToRadarrsServiceWhenTMDBHasNoKey(t *testing.T) {
 }
 
 func TestFetchMergesTMDBAndTheProxyWithTMDBFirst(t *testing.T) {
-	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "Matrix (other)", DigitalRelease: "2001-03-19T00:00:00Z",
+	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "Example (other)", DigitalRelease: "2001-03-19T00:00:00Z",
 		MovieRatings: map[string]radarrmeta.Rating{"Imdb": {Count: 10, Value: 8.7}}}}
-	service, _ := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, proxy)
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theExample()}, proxy)
 	fetched, err := service.Fetch(t.Context(), movie.IDs{TMDB: 603})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fetched.Title != "The Tonhut" || fetched.Digital != "2001-03-19" || len(fetched.Ratings) != 2 {
+	if fetched.Title != "The Example Film" || fetched.Digital != "2001-03-19" || len(fetched.Ratings) != 2 {
 		t.Errorf("merged = %+v: TMDB's title wins, the proxy fills the digital date and adds IMDb's rating", fetched)
 	}
 }
 
 func TestSearchPrefersTMDBAndFallsBackToTheProxy(t *testing.T) {
-	service, _ := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, fakeProxy{})
-	if got, err := service.Search(t.Context(), "matrix", 1999, 10); err != nil || len(got) != 1 || got[0].TMDBID != 603 || got[0].Year != 1999 {
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theExample()}, fakeProxy{})
+	if got, err := service.Search(t.Context(), "example", 1999, 10); err != nil || len(got) != 1 || got[0].TMDBID != 603 || got[0].Year != 1999 {
 		t.Errorf("tmdb search = %+v, %v", got, err)
 	}
 	proxyOnly, _ := newService(t, fakeTMDB{configured: false}, fakeProxy{movie: radarrmeta.Movie{TMDBID: 1, Title: "Only Here", Year: 2020}})
@@ -178,21 +178,21 @@ func TestSearchPrefersTMDBAndFallsBackToTheProxy(t *testing.T) {
 }
 
 func TestALibrarysOrderDecidesWhoSuppliesAndWhoOnlyFills(t *testing.T) {
-	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "Matrix (other)", DigitalRelease: "2001-03-19T00:00:00Z"}}
-	service, _ := newService(t, fakeTMDB{configured: true, movie: theMatrix()}, proxy)
+	proxy := fakeProxy{movie: radarrmeta.Movie{TMDBID: 603, Title: "Example (other)", DigitalRelease: "2001-03-19T00:00:00Z"}}
+	service, _ := newService(t, fakeTMDB{configured: true, movie: theExample()}, proxy)
 	orders := map[int64][]string{1: {"radarr", "tmdb"}, 2: {"tmdb"}, 3: {"radarr"}}
 	service.PriorityFor = func(categoryID int64) []string { return orders[categoryID] }
 
 	first, _ := service.FetchFor(t.Context(), 1, movie.IDs{TMDB: 603})
-	if first.Title != "Matrix (other)" || first.RuntimeMin == 0 {
+	if first.Title != "Example (other)" || first.RuntimeMin == 0 {
 		t.Errorf("radarr first: %q runtime %d min; want its title, with what it lacks filled from TMDB", first.Title, first.RuntimeMin)
 	}
 	onlyTMDB, _ := service.FetchFor(t.Context(), 2, movie.IDs{TMDB: 603})
-	if onlyTMDB.Title != "The Tonhut" || onlyTMDB.Digital != "" {
+	if onlyTMDB.Title != "The Example Film" || onlyTMDB.Digital != "" {
 		t.Errorf("a provider left out is not asked: %+v", onlyTMDB)
 	}
 	onlyRadarr, _ := service.FetchFor(t.Context(), 3, movie.IDs{TMDB: 603})
-	if onlyRadarr.Title != "Matrix (other)" || len(onlyRadarr.Sources) != 1 {
+	if onlyRadarr.Title != "Example (other)" || len(onlyRadarr.Sources) != 1 {
 		t.Errorf("only radarr: %+v", onlyRadarr)
 	}
 }

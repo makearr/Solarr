@@ -10,7 +10,7 @@ import (
 )
 
 func TestAQueuedFileIsPlacedOnTheMovieAPersonNames(t *testing.T) {
-	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Tonhut", "1999-03-30")}}, nil)
+	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, nil)
 	physical := library.NewPhysical(opened)
 	unidentified := library.NewUnidentified(opened)
 	registered, err := physical.RegisterBatch(t.Context(), 9, []library.PhysicalFile{{RelPath: "mystery/film.mkv", SizeBytes: 5, QuickHash: "q", FirstSeenAt: addNow}})

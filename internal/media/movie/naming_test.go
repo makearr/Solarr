@@ -13,7 +13,7 @@ func TestTheDefaultNamingNamesAMovieAsItsLibraryFolderDoes(t *testing.T) {
 		file  string
 		want  string
 	}{
-		{movie.FileNaming{Title: "The Tonhut", Year: 1999}, "x.mkv", "The Tonhut (1999)/The Tonhut (1999).mkv"},
+		{movie.FileNaming{Title: "The Example Film", Year: 1999}, "x.mkv", "The Example Film (1999)/The Example Film (1999).mkv"},
 		{movie.FileNaming{Title: "Wjibxajmu's Leb", Year: 2006}, "x.mp4", "Wjibxajmu's Leb (2006)/Wjibxajmu's Leb (2006).mp4"},
 		{movie.FileNaming{Title: "Fojgouk: Omjetzojco", Year: 1996}, "x.mkv", "Fojgouk Omjetzojco (1996)/Fojgouk Omjetzojco (1996).mkv"},
 		{movie.FileNaming{Title: "Heat", Year: 1995}, "x.mkv", "Heat (1995)/Heat (1995).mkv"},
@@ -28,12 +28,12 @@ func TestTheDefaultNamingNamesAMovieAsItsLibraryFolderDoes(t *testing.T) {
 }
 
 func TestPresetsRenderEditionsAndIDsOnlyWhenThereAreSome(t *testing.T) {
-	plain := movie.FileNaming{Title: "Nhasi Huvcem", Year: 1982, IDs: movie.IDs{IMDb: "tt0083658", TMDB: 78}}
+	plain := movie.FileNaming{Title: "Sample Runner", Year: 1982, IDs: movie.IDs{IMDb: "tt0083658", TMDB: 78}}
 	cut := plain
 	cut.Edition = "Final Cut"
 	for preset, want := range map[string][2]string{
-		"Plex":     {"Nhasi Huvcem (1982) {imdb-tt0083658}/Nhasi Huvcem (1982).mkv", "Nhasi Huvcem (1982) {imdb-tt0083658}/Nhasi Huvcem (1982) {edition-Final Cut}.mkv"},
-		"Jellyfin": {"Nhasi Huvcem (1982) [tmdbid-78]/Nhasi Huvcem (1982).mkv", "Nhasi Huvcem (1982) [tmdbid-78]/Nhasi Huvcem (1982) - Final Cut.mkv"},
+		"Plex":     {"Sample Runner (1982) {imdb-tt0083658}/Sample Runner (1982).mkv", "Sample Runner (1982) {imdb-tt0083658}/Sample Runner (1982) {edition-Final Cut}.mkv"},
+		"Jellyfin": {"Sample Runner (1982) [tmdbid-78]/Sample Runner (1982).mkv", "Sample Runner (1982) [tmdbid-78]/Sample Runner (1982) - Final Cut.mkv"},
 	} {
 		var formats map[string]string
 		for _, candidate := range movie.NamingScheme.Presets {

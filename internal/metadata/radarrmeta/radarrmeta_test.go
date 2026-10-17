@@ -37,12 +37,12 @@ func newClient(t *testing.T, transport http.RoundTripper) radarrmeta.Client {
 }
 
 func TestMovieReadsDatesCreditsAndCollection(t *testing.T) {
-	transport := &canned{body: `{"TmdbId":603,"ImdbId":"tt0133093","Title":"The Tonhut","Year":1999,"Runtime":136,
+	transport := &canned{body: `{"TmdbId":603,"ImdbId":"tt0000001","Title":"The Example Film","Year":1999,"Runtime":136,
 		"InCinema":"1999-03-31T00:00:00Z","PhysicalRelease":"1999-11-25T00:00:00Z","DigitalRelease":"2001-03-19T00:00:00Z",
 		"Genres":["Action"],"Studio":"Village Roadshow Pictures","Certifications":[{"Country":"US","Certification":"R"}],
 		"MovieRatings":{"Imdb":{"Count":2285560,"Value":8.7}},
-		"Credits":{"Cast":[{"Name":"Kaira Reeves","Order":0,"Character":"Neo","TmdbId":6384}],"Crew":[{"Name":"Lana Wachowski","Job":"Director","Department":"Directing","TmdbId":9340}]},
-		"Collection":{"TmdbId":2344,"Name":"The Tonhut Collection"}}`}
+		"Credits":{"Cast":[{"Name":"Jane Actor","Order":0,"Character":"Neo","TmdbId":6384}],"Crew":[{"Name":"Sam Director","Job":"Director","Department":"Directing","TmdbId":9340}]},
+		"Collection":{"TmdbId":2344,"Name":"The Example Collection"}}`}
 	movie, err := newClient(t, transport).Movie(t.Context(), 603)
 	if err != nil {
 		t.Fatal(err)
@@ -57,16 +57,16 @@ func TestMovieReadsDatesCreditsAndCollection(t *testing.T) {
 }
 
 func TestSearchAndByIMDbAndNotFound(t *testing.T) {
-	transport := &canned{body: `[{"TmdbId":603,"Title":"The Tonhut","Year":1999}]`}
+	transport := &canned{body: `[{"TmdbId":603,"Title":"The Example Film","Year":1999}]`}
 	client := newClient(t, transport)
-	hits, err := client.Search(t.Context(), "the tonhut", 1999)
+	hits, err := client.Search(t.Context(), "the example film", 1999)
 	if err != nil || len(hits) != 1 {
 		t.Fatalf("search = %+v, %v", hits, err)
 	}
-	if query := transport.requested[0].URL.Query(); query.Get("q") != "the tonhut" || query.Get("year") != "1999" {
+	if query := transport.requested[0].URL.Query(); query.Get("q") != "the example film" || query.Get("year") != "1999" {
 		t.Errorf("query = %v", query)
 	}
-	if movie, err := client.ByIMDb(t.Context(), "tt0133093"); err != nil || movie.TMDBID != 603 {
+	if movie, err := client.ByIMDb(t.Context(), "tt0000001"); err != nil || movie.TMDBID != 603 {
 		t.Errorf("by imdb = %+v, %v", movie, err)
 	}
 	if _, err := newClient(t, &canned{body: `[]`}).ByIMDb(t.Context(), "tt1"); !errors.Is(err, radarrmeta.ErrNotFound) {

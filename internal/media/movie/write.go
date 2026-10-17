@@ -165,7 +165,7 @@ func fieldWrites(movie Movie, source string, now time.Time) []library.SeriesFiel
 	return fields
 }
 
-// SortTitle lowercases a title, collapses whitespace and drops a leading article, so "The Tonhut" sorts under M.
+// SortTitle lowercases a title, collapses whitespace and drops a leading article, so "The Example Film" sorts under M.
 func SortTitle(title string) string {
 	lowered := strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(title))), " ")
 	for _, article := range []string{"the ", "a ", "an "} {

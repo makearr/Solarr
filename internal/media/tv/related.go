@@ -24,7 +24,7 @@ func words(title string) []string {
 	return fields
 }
 
-// beforeColon is the part of a title before its first colon or spaced dash: "PLUH: Los Angeles" is of "PLUH".
+// beforeColon is the part of a title before its first colon or spaced dash: "Quill: North" is of "Quill".
 func beforeColon(title string) []string {
 	for _, separator := range []string{":", " - "} {
 		if index := strings.Index(title, separator); index > 0 {
@@ -38,10 +38,10 @@ func hasPrefix(long, short []string) bool {
 	return len(short) < len(long) && slices.Equal(long[:len(short)], short)
 }
 
-// titleEdges pairs the works whose names say they belong together: one named like the start of another ("Risube" and
-// "Risube Dxihnorir", "Kdihep Uisbl" and "Kdihep Uisbl II"), the same name before a colon ("Tzul Nmex: Discovery" and
-// "Tzul Nmex: Picard"), the same name in two years (NarCilet 1985 and 2016) or the same two first words ("Ppamir Vetl Z"
-// and "Ppamir Vetl Super"). A single shared word proves nothing: Tzul Suxc and Tzul Nmex.
+// titleEdges pairs the works whose names say they belong together: one named like the start of another ("Kitsu" and
+// "Kitsu Storm", "Blue Globe" and "Blue Globe II"), the same name before a colon ("Void Rangers: Alpha" and
+// "Void Rangers: Beta"), the same name in two years (Fixit 1985 and 2016) or the same two first words ("Ember Orb Z"
+// and "Ember Orb Super"). A single shared word proves nothing: Void Wars and Void Rangers.
 func titleEdges(works []library.WorkName) [][2]int64 {
 	type entry struct {
 		id    int64
@@ -134,7 +134,7 @@ func groupsOf(edges [][2]int64) [][]int64 {
 }
 
 // compatible says two works that share a name also share something else: a genre in common (a third of those they have
-// between them), a network or studio, or someone who made both. "Kung Fu" and "Logt Po Nidxo" share a name and nothing else.
+// between them), a network or studio, or someone who made both. "Kung Fu" and "Kung Fu Pup" share a name and nothing else.
 func compatible(a, b *library.Traits) bool {
 	if a == nil || b == nil {
 		return false
@@ -339,7 +339,7 @@ func cleanTitle(title string) string {
 	return strings.TrimSpace(title)
 }
 
-// stemOf is what comes before a colon when every title in the group has it or is it ("PLUH" for "PLUH: Los Angeles").
+// stemOf is what comes before a colon when every title in the group has it or is it ("Quill" for "Quill: North").
 func stemOf(title string, others []string) string {
 	index := strings.Index(title, ":")
 	if index <= 0 {
@@ -367,7 +367,7 @@ func olderFirst(a, b library.WorkName) int {
 	return cmp.Compare(a.Year, b.Year)
 }
 
-// familyName names a family after its oldest series, the stem its titles share when they do: "Hik 10", not "Hik 10:
+// familyName names a family after its oldest series, the stem its titles share when they do: "Zed 10", not "Zed 10:
 // Ihaol Force".
 func familyName(members []library.WorkName) string {
 	sorted := slices.Clone(members)

@@ -125,15 +125,15 @@ func workTitles(t *testing.T, opened *store.Store, categoryID int64) map[string]
 }
 
 func TestScanAddsTheMovieAndAttachesItsFile(t *testing.T) {
-	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Tonhut", "1999-03-30")}}, settings.TVMonitorExisting)
-	batch := []scan.Observed{writeVideo(t, fsys, "The Tonhut (1999)/The Tonhut (1999).mkv")}
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, settings.TVMonitorExisting)
+	batch := []scan.Observed{writeVideo(t, fsys, "The Example Film (1999)/The Example Film (1999).mkv")}
 	if err := consumer.Observe(t.Context(), root(), 3, batch); err != nil {
 		t.Fatal(err)
 	}
 	works := workTitles(t, opened, 3)
-	id, found := works["The Tonhut"]
+	id, found := works["The Example Film"]
 	if !found {
-		t.Fatalf("works = %v, want The Tonhut", works)
+		t.Fatalf("works = %v, want The Example Film", works)
 	}
 	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), id)
 	if err != nil || len(items) != 1 || items[0].Monitored != 1 || items[0].PresentCount != 1 || items[0].State != "COMPLETE" {
@@ -142,14 +142,14 @@ func TestScanAddsTheMovieAndAttachesItsFile(t *testing.T) {
 }
 
 func TestScanFindsAMovieByTheIDInItsNameWithoutSearching(t *testing.T) {
-	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Tonhut", "1999-03-30"), simpleMovie(604, "The Tonhut Tufoatoj", "2003-05-15")}}, settings.TVMonitorExisting)
-	batch := []scan.Observed{writeVideo(t, fsys, "My Copy/matrix.mkv")}
-	writeText(t, fsys, "My Copy/matrix.nfo", `<movie><uniqueid type="tmdb" default="true">604</uniqueid></movie>`)
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30"), simpleMovie(604, "The Example Sequel", "2003-05-15")}}, settings.TVMonitorExisting)
+	batch := []scan.Observed{writeVideo(t, fsys, "My Copy/example.mkv")}
+	writeText(t, fsys, "My Copy/example.nfo", `<movie><uniqueid type="tmdb" default="true">604</uniqueid></movie>`)
 	if err := consumer.Observe(t.Context(), root(), 3, batch); err != nil {
 		t.Fatal(err)
 	}
-	if works := workTitles(t, opened, 3); len(works) != 1 || works["The Tonhut Tufoatoj"] == 0 {
-		t.Errorf("works = %v, want only The Tonhut Tufoatoj, taken from the nfo", works)
+	if works := workTitles(t, opened, 3); len(works) != 1 || works["The Example Sequel"] == 0 {
+		t.Errorf("works = %v, want only The Example Sequel, taken from the nfo", works)
 	}
 }
 
@@ -184,10 +184,10 @@ func TestScanTakesTheBetterRankedOfTwoFilmsWithTheSameTitleAndYear(t *testing.T)
 }
 
 func TestScanKeepsTwoEditionsAsFilesOfOneMovie(t *testing.T) {
-	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(78, "Nhasi Huvcem", "1982-06-25")}}, settings.TVMonitorExisting)
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(78, "Sample Runner", "1982-06-25")}}, settings.TVMonitorExisting)
 	batch := []scan.Observed{
-		writeVideo(t, fsys, "Nhasi Huvcem (1982)/Nhasi Huvcem (1982).mkv"),
-		writeVideo(t, fsys, "Nhasi Huvcem (1982)/Nhasi Huvcem (1982) {edition-Final Cut}.mkv"),
+		writeVideo(t, fsys, "Sample Runner (1982)/Sample Runner (1982).mkv"),
+		writeVideo(t, fsys, "Sample Runner (1982)/Sample Runner (1982) {edition-Final Cut}.mkv"),
 	}
 	if err := consumer.Observe(t.Context(), root(), 3, batch); err != nil {
 		t.Fatal(err)
@@ -210,8 +210,8 @@ func TestScanKeepsTwoEditionsAsFilesOfOneMovie(t *testing.T) {
 }
 
 func TestScanWithTheNonePolicyAddsTheMovieUnmonitored(t *testing.T) {
-	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Tonhut", "1999-03-30")}}, settings.TVMonitorNone)
-	if err := consumer.Observe(t.Context(), root(), 3, []scan.Observed{writeVideo(t, fsys, "The Tonhut (1999)/The Tonhut (1999).mkv")}); err != nil {
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, settings.TVMonitorNone)
+	if err := consumer.Observe(t.Context(), root(), 3, []scan.Observed{writeVideo(t, fsys, "The Example Film (1999)/The Example Film (1999).mkv")}); err != nil {
 		t.Fatal(err)
 	}
 	var id int64

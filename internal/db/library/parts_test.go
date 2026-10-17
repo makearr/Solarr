@@ -106,7 +106,7 @@ func TestOneRecordingOnTwoAlbumsResolvesToBothParts(t *testing.T) {
 func TestAbsoluteNumberingResolvesWithinItsSeriesOnly(t *testing.T) {
 	opened, queries := newLibrary(t)
 	first := createWork(t, opened, "tv", "Iho Hiaru")
-	second := createWork(t, opened, "tv", "Risube")
+	second := createWork(t, opened, "tv", "Kitsu")
 
 	firstPart := createPart(t, opened, first.ID, "s07e12", "0007-0012", "Watch Out")
 	secondPart := createPart(t, opened, second.ID, "s04e01", "0004-0001", "Homecoming")

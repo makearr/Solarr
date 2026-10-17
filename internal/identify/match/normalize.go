@@ -30,7 +30,7 @@ func foldAccents(s string) string {
 }
 
 // trailingArticleSuffixes catches "Tonhut, The" so it normalizes the same as
-// "The Tonhut" -- section 10.2's own leading-article example.
+// "The Example" -- section 10.2's own leading-article example.
 var trailingArticleSuffixes = []string{", the", ", an", ", a"}
 
 func moveTrailingArticle(s string) string {
