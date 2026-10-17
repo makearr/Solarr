@@ -7,8 +7,10 @@ const (
 	// LevelCrossovers lists the events across series and the episodes listed under two (T23).
 	LevelCrossovers = "crossovers"
 	LevelSeries     = "series"
-	LevelPeople     = "people"
-	LevelNetworks   = "networks"
+	// LevelCollections lists a series with its spin-offs and continuations, and the collections made by hand.
+	LevelCollections = "collections"
+	LevelPeople      = "people"
+	LevelNetworks    = "networks"
 )
 
 // Navigation is TV's ADR-54 declaration. Seasons and episodes live inside the series page, as in Sonarr.
@@ -19,6 +21,7 @@ func (Navigation) Levels() []model.Level {
 	return []model.Level{
 		{Key: LevelSeries, Label: "Series", Entity: model.LevelEntityWork, DefaultSort: "title"},
 		{Key: LevelPeople, Label: "Cast", Entity: model.LevelEntityPerson, DefaultSort: "name"},
+		{Key: LevelCollections, Label: "Collections", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
 		{Key: LevelNetworks, Label: "Networks", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 		{Key: LevelCrossovers, Label: "Crossovers", Entity: model.LevelEntityCollection, DefaultSort: "name"},
 	}

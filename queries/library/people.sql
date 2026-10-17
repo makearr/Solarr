@@ -178,6 +178,12 @@ ON CONFLICT (work_id, organisation_id, role) DO NOTHING;
 SELECT work_id, organisation_id, role
 FROM work_organisation WHERE work_id = ? ORDER BY role, organisation_id;
 
+-- The organisations a work is made or aired by, named.
+-- name: ListNamedOrganisationsForWork :many
+SELECT wo.organisation_id, o.name, wo.role
+FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id
+WHERE wo.work_id = ? ORDER BY wo.role, o.name COLLATE NOCASE, o.id;
+
 -- name: CreateTag :one
 INSERT INTO tag (name, slug, parent_id, description, source)
 VALUES (?, ?, ?, ?, ?)

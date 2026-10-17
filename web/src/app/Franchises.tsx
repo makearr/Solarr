@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, LayoutGrid, List } from "lucide-react";
+import { Film, LayoutGrid, List, Trash2 } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -12,6 +12,11 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
+import { Dialog } from "@/ui/Dialog";
+import { useLibrary } from "@/lib/useLibrary";
+import { AddToLibrary } from "./work/AddWork";
+import { CoverArt } from "./CoverArt";
 import { usePreference } from "@/lib/usePreference";
 
 type Franchise = components["schemas"]["Franchise"];
@@ -41,6 +46,7 @@ export function FranchiseIndex() {
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>("name");
   const [open, setOpen] = useState<number | undefined>();
+  const [creating, setCreating] = useState(false);
   const list = useQuery({
     queryKey: ["franchises", categoryId],
     queryFn: async () => {
@@ -85,7 +91,8 @@ export function FranchiseIndex() {
               <option value="monitored">{t("franchise.sort.monitored")}</option>
             </select>
           </label>
-          <span className="ml-auto flex gap-1">
+          <span className="ml-auto flex items-center gap-1">
+            {administrator && <Button onClick={() => setCreating(true)}>{t("collection.new")}</Button>}
             <Button variant="icon" aria-label={t("franchise.view.poster")} aria-pressed={view === "poster"} onClick={() => setView("poster")}>
               <LayoutGrid aria-hidden className="size-4" />
             </Button>
@@ -94,6 +101,7 @@ export function FranchiseIndex() {
             </Button>
           </span>
         </div>
+        {creating && <NewCollection categoryId={categoryId} onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setOpen(id); }} />}
         {shown.length === 0 && <EmptyState title={t("franchise.none")} />}
         {view === "poster" ? (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-4">
@@ -142,35 +150,230 @@ export function FranchiseIndex() {
           </ul>
         )}
         {opened && (
-          <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
-            <div className="flex flex-wrap items-center gap-3">
-              <h2 className="font-medium">{opened.name}</h2>
-              <span className="text-xs text-ink-muted">{heldLabel(opened)}</span>
-              {administrator && (
-                <Button className="ml-auto" busy={monitor.isPending && monitor.variables?.id === opened.id} onClick={() => monitor.mutate(opened)}>
-                  {opened.monitored ? t("franchise.monitored") : t("franchise.monitor")}
-                </Button>
-              )}
-            </div>
-            {monitor.isSuccess && monitor.variables?.id === opened.id && (
-              <p className="text-xs text-ink-muted">{monitor.data?.added ? t("franchise.added", { count: monitor.data.added }) : opened.monitored ? "" : t("franchise.noKey")}</p>
-            )}
-            <ul className="flex flex-col divide-y divide-border-subtle text-sm">
-              {opened.members.map((member) => (
-                <li key={member.work_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5">
-                  <Link to="/library/$categoryId/works/$workId/$tab" params={{ categoryId, workId: String(member.work_id), tab: "overview" }} className="hover:underline">
-                    {member.title}
-                  </Link>
-                  {member.year ? <span className="text-xs text-ink-muted">{member.year}</span> : null}
-                  <span className={`ml-auto text-xs ${member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}`}>
-                    {member.has_file ? t("franchise.onDisk") : member.monitored ? t("franchise.missing") : t("franchise.unmonitored")}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </section>
+          <CollectionDetail
+            key={opened.id}
+            categoryId={categoryId}
+            summary={opened}
+            administrator={administrator}
+            monitor={monitor}
+            onGone={() => setOpen(undefined)}
+          />
         )}
       </div>
     </div>
+  );
+}
+
+/** One collection: the works it holds to open, the ones the provider lists that the library lacks to add, and for a
+ *  collection made by hand its name and what is in it. */
+function CollectionDetail({
+  categoryId, summary, administrator, monitor, onGone,
+}: {
+  categoryId: string;
+  summary: Franchise;
+  administrator: boolean;
+  monitor: { mutate: (franchise: Franchise) => void; isPending: boolean; variables?: Franchise; isSuccess: boolean; data?: { added: number } };
+  onGone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const library = useLibrary(categoryId);
+  const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [name, setName] = useState(summary.name);
+  const [adding, setAdding] = useState<string | undefined>();
+  const detail = useQuery({
+    queryKey: ["franchise", categoryId, summary.id],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } } });
+      if (error) throw error;
+      return data;
+    },
+  });
+  const changed = () => {
+    void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
+    void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, summary.id] });
+  };
+  const rename = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.PATCH("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } }, body: { name } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      setRenaming(false);
+      changed();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.DELETE("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } } });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      changed();
+      onGone();
+    },
+  });
+  const take = useMutation({
+    mutationFn: async (workId: number) => {
+      const { error } = await api.DELETE("/franchises/{id}/members/{workId}", { params: { path: { id: summary.id, workId }, query: { category_id: Number(categoryId) } } });
+      if (error) throw error;
+    },
+    onSuccess: changed,
+  });
+  const franchise = detail.data ?? summary;
+  const custom = franchise.kind === "custom";
+  const words = library?.media_type === "movie" ? "films" : "works";
+  return (
+    <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="font-medium">{franchise.name}</h2>
+        <span className="text-xs text-ink-muted">{heldLabel(franchise)}</span>
+        {custom && <Chip>{t("collection.mine")}</Chip>}
+        {administrator && custom && (
+          <span className="ml-auto flex gap-2">
+            <Button onClick={() => setRenaming(true)}>{t("collection.rename")}</Button>
+            <Button variant="icon" aria-label={t("collection.delete")} title={t("collection.delete")} onClick={() => setDeleting(true)}>
+              <Trash2 aria-hidden className="size-4" />
+            </Button>
+          </span>
+        )}
+        {administrator && !custom && (
+          <Button className="ml-auto" busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
+            {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
+          </Button>
+        )}
+      </div>
+      {monitor.isSuccess && monitor.variables?.id === franchise.id && !custom && (
+        <p className="text-xs text-ink-muted">{monitor.data?.added ? t("franchise.added", { count: monitor.data.added }) : franchise.monitored ? "" : t("franchise.noKey")}</p>
+      )}
+      {franchise.members.length === 0 && <p className="text-sm text-ink-muted">{t("collection.empty")}</p>}
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
+        {franchise.members.map((member) => {
+          const key = member.work_id ? `w${member.work_id}` : `${member.provider}:${member.external_id}`;
+          const caption = (
+            <>
+              <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-canvas">
+                {member.poster_url ? (
+                  <img src={remoteImage(member.poster_url, "small")} alt="" loading="lazy" className={`size-full object-cover ${member.work_id ? "" : "opacity-60"}`} />
+                ) : member.work_id ? (
+                  <CoverArt workId={member.work_id} title={member.title} size="small" className="size-full object-cover" />
+                ) : (
+                  <span className="flex size-full items-center justify-center text-ink-muted">
+                    <Film aria-hidden className="size-8" />
+                  </span>
+                )}
+              </span>
+              <span className="truncate text-sm font-medium">
+                {member.title}
+                {member.year ? <span className="font-normal text-ink-muted"> ({member.year})</span> : null}
+              </span>
+            </>
+          );
+          return member.work_id ? (
+            <div key={key} className="flex flex-col gap-1">
+              <Link to="/library/$categoryId/works/$workId/$tab" params={{ categoryId, workId: String(member.work_id), tab: "overview" }} className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
+                {caption}
+              </Link>
+              <span className="flex items-center gap-2 text-xs">
+                <span className={member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}>
+                  {member.has_file ? t("franchise.onDisk") : member.monitored ? t("franchise.missing") : t("franchise.unmonitored")}
+                </span>
+                {administrator && custom && (
+                  <button type="button" className="ml-auto text-ink-muted hover:text-ink" title={t("collection.remove")} onClick={() => take.mutate(member.work_id as number)}>
+                    ✕
+                  </button>
+                )}
+              </span>
+            </div>
+          ) : (
+            <div key={key} className="flex flex-col gap-1">
+              {caption}
+              {member.provider && member.external_id && (
+                <>
+                  <button
+                    type="button"
+                    aria-expanded={adding === key}
+                    onClick={() => setAdding(adding === key ? undefined : key)}
+                    className="w-fit rounded-md border border-border-subtle px-2 py-0.5 text-xs text-accent hover:border-accent"
+                  >
+                    {t("collection.request")}
+                  </button>
+                  {adding === key && (
+                    <AddToLibrary
+                      candidate={{ provider: member.provider, external_id: member.external_id, title: member.title }}
+                      categoryId={categoryId}
+                      onDone={() => {
+                        setAdding(undefined);
+                        changed();
+                      }}
+                    />
+                  )}
+                </>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-ink-muted">{words}</p>
+      {renaming && (
+        <Dialog
+          title={t("collection.rename")}
+          onClose={() => setRenaming(false)}
+          actions={
+            <>
+              <Button onClick={() => setRenaming(false)}>{t("action.cancel")}</Button>
+              <Button variant="primary" busy={rename.isPending} disabled={!name.trim()} onClick={() => rename.mutate()}>
+                {t("collection.rename")}
+              </Button>
+            </>
+          }
+        >
+          <input className={inputStyle + " w-full"} value={name} onChange={(event) => setName(event.target.value)} />
+        </Dialog>
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title={t("collection.delete")}
+          consequence={t("collection.deleteConsequence")}
+          confirmLabel={t("collection.delete")}
+          danger
+          busy={remove.isPending}
+          onCancel={() => setDeleting(false)}
+          onConfirm={() => remove.mutate()}
+        />
+      )}
+    </section>
+  );
+}
+
+function NewCollection({ categoryId, onClose, onCreated }: { categoryId: string; onClose: () => void; onCreated: (id: number) => void }) {
+  const queryClient = useQueryClient();
+  const [name, setName] = useState("");
+  const create = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await api.POST("/franchises", { body: { category_id: Number(categoryId), name } });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
+      onCreated(data.id);
+    },
+  });
+  return (
+    <Dialog
+      title={t("collection.new")}
+      onClose={onClose}
+      actions={
+        <>
+          <Button onClick={onClose}>{t("action.cancel")}</Button>
+          <Button variant="primary" busy={create.isPending} disabled={!name.trim()} onClick={() => create.mutate()}>
+            {t("collection.new")}
+          </Button>
+        </>
+      }
+    >
+      <input className={inputStyle + " w-full"} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("collection.add.placeholder")} />
+    </Dialog>
   );
 }

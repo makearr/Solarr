@@ -223,6 +223,12 @@ const (
 	FileManagementSharedFileFallbackSymlink FileManagementSharedFileFallback = "symlink"
 )
 
+// Defines values for FranchiseKind.
+const (
+	FranchiseKindCustom    FranchiseKind = "custom"
+	FranchiseKindFranchise FranchiseKind = "franchise"
+)
+
 // Defines values for HealthCheckSeverity.
 const (
 	HealthCheckSeverityError   HealthCheckSeverity = "error"
@@ -1981,7 +1987,10 @@ type FollowRequest struct {
 
 // Franchise defines model for Franchise.
 type Franchise struct {
-	Id        int64             `json:"id"`
+	Id int64 `json:"id"`
+
+	// Kind franchise is a provider's, custom was made by hand.
+	Kind      FranchiseKind     `json:"kind"`
 	Members   []FranchiseMember `json:"members"`
 	Monitored bool              `json:"monitored"`
 	Name      string            `json:"name"`
@@ -1993,13 +2002,23 @@ type Franchise struct {
 	Total *int `json:"total,omitempty"`
 }
 
+// FranchiseKind franchise is a provider's, custom was made by hand.
+type FranchiseKind string
+
 // FranchiseMember defines model for FranchiseMember.
 type FranchiseMember struct {
-	HasFile   bool   `json:"has_file"`
-	Monitored bool   `json:"monitored"`
-	Title     string `json:"title"`
-	WorkId    int64  `json:"work_id"`
-	Year      *int   `json:"year,omitempty"`
+	ExternalId *string `json:"external_id,omitempty"`
+	HasFile    bool    `json:"has_file"`
+	Monitored  bool    `json:"monitored"`
+	PosterUrl  *string `json:"poster_url,omitempty"`
+
+	// Provider With external_id
+	Provider *string `json:"provider,omitempty"`
+	Title    string  `json:"title"`
+
+	// WorkId The library's work; absent for one it lacks.
+	WorkId *int64 `json:"work_id,omitempty"`
+	Year   *int   `json:"year,omitempty"`
 }
 
 // GateResult A hard requirement, evaluated before any comparison (ADR-40 stage 1).
@@ -4356,6 +4375,9 @@ type WorkDetail struct {
 	// OnDisk Whether this work is linked to any root folder at all. The coarsest possible "is there really a file for this" signal -- per-track presence needs a media_object-to-work_part link this project does not have yet.
 	OnDisk bool `json:"on_disk"`
 
+	// Organisations The studios, networks or labels the work belongs to.
+	Organisations *[]WorkOrganisation `json:"organisations,omitempty"`
+
 	// PartCount How many parts the work has; the parts themselves are paged from GET /works/{id}/parts.
 	PartCount int64 `json:"part_count"`
 
@@ -4434,6 +4456,13 @@ type WorkMergeSuggestion struct {
 	IntoWorkId int64   `json:"into_work_id"`
 	LeadName   *string `json:"lead_name,omitempty"`
 	Title      string  `json:"title"`
+}
+
+// WorkOrganisation defines model for WorkOrganisation.
+type WorkOrganisation struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+	Role string `json:"role"`
 }
 
 // WorkPage defines model for WorkPage.
@@ -4664,6 +4693,42 @@ type StreamEventsParams struct {
 
 // ListFranchisesParams defines parameters for ListFranchises.
 type ListFranchisesParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// CreateFranchiseJSONBody defines parameters for CreateFranchise.
+type CreateFranchiseJSONBody struct {
+	CategoryId int64  `json:"category_id"`
+	Name       string `json:"name"`
+}
+
+// DeleteFranchiseParams defines parameters for DeleteFranchise.
+type DeleteFranchiseParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// GetFranchiseParams defines parameters for GetFranchise.
+type GetFranchiseParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// RenameFranchiseJSONBody defines parameters for RenameFranchise.
+type RenameFranchiseJSONBody struct {
+	Name string `json:"name"`
+}
+
+// RenameFranchiseParams defines parameters for RenameFranchise.
+type RenameFranchiseParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// RemoveFranchiseMemberParams defines parameters for RemoveFranchiseMember.
+type RemoveFranchiseMemberParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
+// AddFranchiseMemberParams defines parameters for AddFranchiseMember.
+type AddFranchiseMemberParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
 }
 
@@ -5413,6 +5478,12 @@ type UpdateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 // RemoveAndBlockFileJSONRequestBody defines body for RemoveAndBlockFile for application/json ContentType.
 type RemoveAndBlockFileJSONRequestBody = RemoveAndBlockRequest
 
+// CreateFranchiseJSONRequestBody defines body for CreateFranchise for application/json ContentType.
+type CreateFranchiseJSONRequestBody CreateFranchiseJSONBody
+
+// RenameFranchiseJSONRequestBody defines body for RenameFranchise for application/json ContentType.
+type RenameFranchiseJSONRequestBody RenameFranchiseJSONBody
+
 // MonitorFranchiseJSONRequestBody defines body for MonitorFranchise for application/json ContentType.
 type MonitorFranchiseJSONRequestBody MonitorFranchiseJSONBody
 
@@ -5850,6 +5921,24 @@ type ServerInterface interface {
 	// A library's franchises (a movie's collections) with the films of each it holds.
 	// (GET /franchises)
 	ListFranchises(w http.ResponseWriter, r *http.Request, params ListFranchisesParams)
+	// Make an empty collection of the library by hand. Needs the library's manage permission.
+	// (POST /franchises)
+	CreateFranchise(w http.ResponseWriter, r *http.Request)
+	// Delete a collection made by hand; the works in it stay. Needs the library's manage permission.
+	// (DELETE /franchises/{id})
+	DeleteFranchise(w http.ResponseWriter, r *http.Request, id int64, params DeleteFranchiseParams)
+	// One franchise with every film the provider lists, those the library lacks included.
+	// (GET /franchises/{id})
+	GetFranchise(w http.ResponseWriter, r *http.Request, id int64, params GetFranchiseParams)
+	// Rename a collection made by hand. Needs the library's manage permission.
+	// (PATCH /franchises/{id})
+	RenameFranchise(w http.ResponseWriter, r *http.Request, id int64, params RenameFranchiseParams)
+	// Take a work out of a collection made by hand. Needs the library's manage permission.
+	// (DELETE /franchises/{id}/members/{workId})
+	RemoveFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params RemoveFranchiseMemberParams)
+	// Put a work in a collection made by hand. Needs the library's manage permission.
+	// (PUT /franchises/{id}/members/{workId})
+	AddFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params AddFranchiseMemberParams)
 	// Follow or stop following a franchise; following adds the films of it the library lacks.
 	// (POST /franchises/{id}/monitor)
 	MonitorFranchise(w http.ResponseWriter, r *http.Request, id int64)
@@ -6858,6 +6947,42 @@ func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request
 // A library's franchises (a movie's collections) with the films of each it holds.
 // (GET /franchises)
 func (_ Unimplemented) ListFranchises(w http.ResponseWriter, r *http.Request, params ListFranchisesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Make an empty collection of the library by hand. Needs the library's manage permission.
+// (POST /franchises)
+func (_ Unimplemented) CreateFranchise(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Delete a collection made by hand; the works in it stay. Needs the library's manage permission.
+// (DELETE /franchises/{id})
+func (_ Unimplemented) DeleteFranchise(w http.ResponseWriter, r *http.Request, id int64, params DeleteFranchiseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One franchise with every film the provider lists, those the library lacks included.
+// (GET /franchises/{id})
+func (_ Unimplemented) GetFranchise(w http.ResponseWriter, r *http.Request, id int64, params GetFranchiseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Rename a collection made by hand. Needs the library's manage permission.
+// (PATCH /franchises/{id})
+func (_ Unimplemented) RenameFranchise(w http.ResponseWriter, r *http.Request, id int64, params RenameFranchiseParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Take a work out of a collection made by hand. Needs the library's manage permission.
+// (DELETE /franchises/{id}/members/{workId})
+func (_ Unimplemented) RemoveFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params RemoveFranchiseMemberParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Put a work in a collection made by hand. Needs the library's manage permission.
+// (PUT /franchises/{id}/members/{workId})
+func (_ Unimplemented) AddFranchiseMember(w http.ResponseWriter, r *http.Request, id int64, workId int64, params AddFranchiseMemberParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10409,6 +10534,301 @@ func (siw *ServerInterfaceWrapper) ListFranchises(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListFranchises(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// CreateFranchise operation middleware
+func (siw *ServerInterfaceWrapper) CreateFranchise(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CreateFranchise(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DeleteFranchise operation middleware
+func (siw *ServerInterfaceWrapper) DeleteFranchise(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params DeleteFranchiseParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DeleteFranchise(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetFranchise operation middleware
+func (siw *ServerInterfaceWrapper) GetFranchise(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetFranchiseParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFranchise(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RenameFranchise operation middleware
+func (siw *ServerInterfaceWrapper) RenameFranchise(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RenameFranchiseParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RenameFranchise(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveFranchiseMember operation middleware
+func (siw *ServerInterfaceWrapper) RemoveFranchiseMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workId" -------------
+	var workId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workId", chi.URLParam(r, "workId"), &workId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params RemoveFranchiseMemberParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveFranchiseMember(w, r, id, workId, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddFranchiseMember operation middleware
+func (siw *ServerInterfaceWrapper) AddFranchiseMember(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "workId" -------------
+	var workId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "workId", chi.URLParam(r, "workId"), &workId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "workId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params AddFranchiseMemberParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddFranchiseMember(w, r, id, workId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16698,6 +17118,24 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/franchises", wrapper.ListFranchises)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/franchises", wrapper.CreateFranchise)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/franchises/{id}", wrapper.DeleteFranchise)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/franchises/{id}", wrapper.GetFranchise)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/franchises/{id}", wrapper.RenameFranchise)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/franchises/{id}/members/{workId}", wrapper.RemoveFranchiseMember)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/franchises/{id}/members/{workId}", wrapper.AddFranchiseMember)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/franchises/{id}/monitor", wrapper.MonitorFranchise)

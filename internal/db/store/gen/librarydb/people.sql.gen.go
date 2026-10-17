@@ -1149,6 +1149,42 @@ func (q *Queries) ListGenresForPersonDiscography(ctx context.Context, personID i
 	return items, nil
 }
 
+const listNamedOrganisationsForWork = `-- name: ListNamedOrganisationsForWork :many
+SELECT wo.organisation_id, o.name, wo.role
+FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id
+WHERE wo.work_id = ? ORDER BY wo.role, o.name COLLATE NOCASE, o.id
+`
+
+type ListNamedOrganisationsForWorkRow struct {
+	OrganisationID int64
+	Name           string
+	Role           string
+}
+
+// The organisations a work is made or aired by, named.
+func (q *Queries) ListNamedOrganisationsForWork(ctx context.Context, workID int64) ([]ListNamedOrganisationsForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listNamedOrganisationsForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNamedOrganisationsForWorkRow{}
+	for rows.Next() {
+		var i ListNamedOrganisationsForWorkRow
+		if err := rows.Scan(&i.OrganisationID, &i.Name, &i.Role); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganisationExternalIDs = `-- name: ListOrganisationExternalIDs :many
 SELECT provider, external_id FROM organisation_external_id WHERE organisation_id = ? ORDER BY provider, external_id
 `

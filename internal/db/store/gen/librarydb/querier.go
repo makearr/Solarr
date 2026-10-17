@@ -189,6 +189,7 @@ type Querier interface {
 	CreateBlockedContent(ctx context.Context, arg CreateBlockedContentParams) (BlockedContent, error)
 	// Collections, the ready queue, artwork, statistics and reputation.
 	CreateCollection(ctx context.Context, arg CreateCollectionParams) (Collection, error)
+	CreateCustomCollection(ctx context.Context, arg CreateCustomCollectionParams) (int64, error)
 	// Desired state. Column lists follow table order, or sqlc stops reusing models.
 	CreateDesiredItem(ctx context.Context, arg CreateDesiredItemParams) (DesiredItem, error)
 	CreateEdition(ctx context.Context, arg CreateEditionParams) (Edition, error)
@@ -223,6 +224,7 @@ type Querier interface {
 	DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error
 	DeleteCollection(ctx context.Context, id int64) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
+	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
 	DeleteDesiredItemsForWork(ctx context.Context, workID int64) error
 	// Import revert's own use (todo 4.9): only ever called for an edition
@@ -496,7 +498,11 @@ type Querier interface {
 	// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
 	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
+	// The works of a library in the collections, monitored as the library's own item says, files counted.
+	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
+	// A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
+	ListCollectionsInCategory(ctx context.Context, arg ListCollectionsInCategoryParams) ([]ListCollectionsInCategoryRow, error)
 	ListCollectionsOfKind(ctx context.Context, arg ListCollectionsOfKindParams) ([]Collection, error)
 	ListCollectionsOfWorkParts(ctx context.Context, arg ListCollectionsOfWorkPartsParams) ([]Collection, error)
 	ListCountersForScope(ctx context.Context, scope string) ([]Counter, error)
@@ -544,8 +550,6 @@ type Querier interface {
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
-	// A library's franchises with the films of each it holds: monitored per film as the library's own item says, files counted.
-	ListFranchiseMembersInCategory(ctx context.Context, arg ListFranchiseMembersInCategoryParams) ([]ListFranchiseMembersInCategoryRow, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
@@ -605,6 +609,8 @@ type Querier interface {
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.
 	ListMoveJobs(ctx context.Context, arg ListMoveJobsParams) ([]MoveJob, error)
+	// The organisations a work is made or aired by, named.
+	ListNamedOrganisationsForWork(ctx context.Context, workID int64) ([]ListNamedOrganisationsForWorkRow, error)
 	ListOrganisationExternalIDs(ctx context.Context, organisationID int64) ([]ListOrganisationExternalIDsRow, error)
 	// "Monitor this studio and everything beneath it" needs the whole subtree, and
 	// imprints and sub-labels are real in every domain (ADR-32).
@@ -683,6 +689,8 @@ type Querier interface {
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
 	ListSeriesTitles(ctx context.Context, arg ListSeriesTitlesParams) ([]ListSeriesTitlesRow, error)
+	// The series no franchise lookup has been made for yet, with the ids a lookup goes by.
+	ListSeriesWithoutFranchiseCheck(ctx context.Context, limit int64) ([]ListSeriesWithoutFranchiseCheckRow, error)
 	// Every live path of every media object that lives at more than one place; roots are filtered in Go.
 	ListSharedObjectPaths(ctx context.Context) ([]ListSharedObjectPathsRow, error)
 	// Files whose probe predates what the probe now reads of every file (below_version), read once more.
@@ -806,6 +814,7 @@ type Querier interface {
 	// single transaction exceeds the write budget (Invariant 2), and self-terminating:
 	// it stops reporting rows once nothing is left clean.
 	MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int64) (int64, error)
+	MarkFranchiseChecked(ctx context.Context, arg MarkFranchiseCheckedParams) error
 	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
 	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 	// never one UPDATE over the whole root.
@@ -914,9 +923,11 @@ type Querier interface {
 	// rather than trusting a silent no-op.
 	RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPathParams) (int64, error)
 	RemoveBlockedContent(ctx context.Context, id int64) error
+	RemoveCollectionMember(ctx context.Context, arg RemoveCollectionMemberParams) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
 	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
+	RenameCustomCollection(ctx context.Context, arg RenameCustomCollectionParams) (int64, error)
 	RenameUserTag(ctx context.Context, arg RenameUserTagParams) (int64, error)
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work

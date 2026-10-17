@@ -51,6 +51,34 @@ type Module struct {
 	media.Passes
 	// Searching is TV's part of a search a person asks for.
 	Searching
+	// Franchise is TV's part of a series' collections; nil leaves them to hand.
+	Franchise media.Franchising
+	// FranchisePass finds the franchises series belong to; nil leaves the job unregistered.
+	FranchisePass *FranchisePass
+}
+
+// MissingFranchiseMembers implements media.Franchising.
+func (m Module) MissingFranchiseMembers(ctx context.Context, categoryID, franchiseID int64) ([]media.FranchiseMember, error) {
+	if m.Franchise == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Franchise.MissingFranchiseMembers(ctx, categoryID, franchiseID)
+}
+
+// FranchisePictures implements media.Franchising.
+func (m Module) FranchisePictures(ctx context.Context, franchises []media.FranchiseRef) map[int64]string {
+	if m.Franchise == nil {
+		return nil
+	}
+	return m.Franchise.FranchisePictures(ctx, franchises)
+}
+
+// MonitorFranchise implements media.Franchising.
+func (m Module) MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (int, error) {
+	if m.Franchise == nil {
+		return 0, media.ErrNotWired
+	}
+	return m.Franchise.MonitorFranchise(ctx, categoryID, franchiseID, monitored)
 }
 
 // ScanSweep implements media.Scanning.
@@ -170,6 +198,11 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 	}
 	if m.SharedFiles != nil {
 		if err := register(SharedFilesDefinition, m.SharedFiles); err != nil {
+			return err
+		}
+	}
+	if m.FranchisePass != nil {
+		if err := register(FranchisePassDefinition, m.FranchisePass); err != nil {
 			return err
 		}
 	}

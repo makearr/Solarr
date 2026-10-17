@@ -212,6 +212,11 @@ func (p *process) tvModule() tv.Module {
 			Clock: clock.NewSystem(), Logger: p.logger,
 		}},
 		Searching: tv.Searching{Acquire: p.tvGrab(), Conns: p.tvIndexerConns, Clock: clock.NewSystem()},
+		Franchise: tv.Franchising{
+			Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Series: p.tvService().Series, Service: p.tvService(),
+			DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		},
+		FranchisePass: &tv.FranchisePass{Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Series: p.tvService().Series, Logger: p.logger},
 		Following: tv.Following{
 			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,
 			Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
@@ -465,4 +470,9 @@ func (p *process) movieHunt(ctx context.Context, itemID int64) (plan.Outcome, er
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 	}
 	return plan.OutcomeSearched, nil
+}
+
+// enqueueFranchisePass submits the pass that finds the franchises series belong to.
+func (p *process) enqueueFranchisePass(ctx context.Context) (jobs.EnqueueResult, error) {
+	return tv.EnqueueFranchisePass(ctx, p.queue)
 }

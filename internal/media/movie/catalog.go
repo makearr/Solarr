@@ -128,25 +128,6 @@ func (c Catalog) Refresh(ctx context.Context, categoryID, workID int64) error {
 
 var _ media.Franchising = Catalog{}
 
-// Franchises implements media.Franchising: the library's franchises and the films of each it holds.
-func (c Catalog) Franchises(ctx context.Context, categoryID int64) ([]media.Franchise, error) {
-	rows, err := c.FranchiseStore.InCategory(ctx, MediaType, categoryID)
-	if err != nil {
-		return nil, err
-	}
-	c.fillPosters(ctx, rows)
-	out := make([]media.Franchise, len(rows))
-	for index, row := range rows {
-		out[index] = media.Franchise{ID: row.ID, Name: row.Name, Monitored: row.Monitored, Total: int(row.Total), PosterURL: row.PosterURL}
-		for _, member := range row.Members {
-			out[index].Members = append(out[index].Members, media.FranchiseMember{
-				WorkID: member.WorkID, Title: member.Title, Year: int(member.Year), Monitored: member.Monitored, HasFile: member.Files > 0,
-			})
-		}
-	}
-	return out, nil
-}
-
 // MonitorFranchise implements media.Franchising: following adds every film of the franchise the library lacks and does
 // not exclude, monitored; without a TMDB key only the flag is kept, since only TMDB lists a franchise's films.
 func (c Catalog) MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (int, error) {
@@ -221,31 +202,64 @@ func franchiseMembers(rows []library.FranchiseRow, id int64) []library.Franchise
 	return nil
 }
 
-// postersPerList bounds the provider calls one listing makes to fill in franchise pictures; the rest follow next time.
-const postersPerList = 15
-
-// fillPosters asks TMDB for the picture of franchises that have none yet, keeping what it answers.
-func (c Catalog) fillPosters(ctx context.Context, rows []library.FranchiseRow) {
+// FranchisePictures implements media.Franchising: TMDB's picture of each franchise it names.
+func (c Catalog) FranchisePictures(ctx context.Context, franchises []media.FranchiseRef) map[int64]string {
+	found := map[int64]string{}
 	if c.Service.TMDB == nil || !c.Service.TMDB.Configured() {
-		return
+		return found
 	}
-	asked := 0
-	for index := range rows {
-		if rows[index].PosterURL != "" || asked >= postersPerList {
-			continue
-		}
-		id, _ := strconv.ParseInt(rows[index].ExternalID, 10, 64)
+	for _, franchise := range franchises {
+		id, _ := strconv.ParseInt(franchise.ExternalID, 10, 64)
 		if id <= 0 {
 			continue
 		}
-		asked++
-		detail, err := c.Service.TMDB.Collection(ctx, id)
-		if err != nil || detail.PosterPath == "" {
-			continue
-		}
-		poster := tmdb.ImageURL(detail.PosterPath)
-		if err := c.FranchiseStore.SetPoster(ctx, rows[index].ID, poster); err == nil {
-			rows[index].PosterURL = poster
+		if detail, err := c.Service.TMDB.Collection(ctx, id); err == nil && detail.PosterPath != "" {
+			found[franchise.ID] = tmdb.ImageURL(detail.PosterPath)
 		}
 	}
+	return found
+}
+
+// MissingFranchiseMembers implements media.Franchising: the films TMDB lists in the franchise that the library lacks and
+// does not exclude.
+func (c Catalog) MissingFranchiseMembers(ctx context.Context, categoryID, franchiseID int64) ([]media.FranchiseMember, error) {
+	row, err := c.FranchiseStore.Get(ctx, franchiseID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, media.ErrNoFranchise
+	}
+	if err != nil {
+		return nil, err
+	}
+	id, _ := strconv.ParseInt(row.ExternalID, 10, 64)
+	if id <= 0 || c.Service.TMDB == nil || !c.Service.TMDB.Configured() {
+		return nil, nil
+	}
+	detail, err := c.Service.TMDB.Collection(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
+	}
+	rows, err := c.FranchiseStore.InCategory(ctx, MediaType, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	held := map[int64]bool{}
+	for _, member := range franchiseMembers(rows, franchiseID) {
+		if ids, err := c.Service.Reader.ProviderIDs(ctx, member.WorkID); err == nil {
+			if tmdbID, err := strconv.ParseInt(ids[ProviderTMDB], 10, 64); err == nil {
+				held[tmdbID] = true
+			}
+		}
+	}
+	var missing []media.FranchiseMember
+	for _, part := range detail.Parts {
+		if held[part.ID] || c.Service.IsExcluded(ctx, IDs{TMDB: part.ID}) {
+			continue
+		}
+		member := media.FranchiseMember{Title: part.Title, Provider: ProviderTMDB, ExternalID: strconv.FormatInt(part.ID, 10), PosterURL: tmdb.ImageURL(part.PosterPath)}
+		if len(part.ReleaseDate) >= 4 {
+			member.Year, _ = strconv.Atoi(part.ReleaseDate[:4])
+		}
+		missing = append(missing, member)
+	}
+	return missing, nil
 }

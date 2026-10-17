@@ -82,6 +82,13 @@
   ],
   "media_type": "tv",
   "on_disk": true,
+  "organisations": [
+    {
+      "id": 1,
+      "name": "Northern Channel",
+      "role": "network"
+    }
+  ],
   "part_count": 4,
   "pictures": {
     "poster": "https://artworks.thetvdb.com/marble-1.jpg"

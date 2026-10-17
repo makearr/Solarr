@@ -783,7 +783,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Crossovers: adapters.Crossovers{
 			Crossovers: library.NewCrossovers(p.library), Desired: library.NewDesired(p.library), SharedFiles: p.enqueueSharedFiles,
 		},
-		Franchises:         adapters.LibraryFranchises{Cache: p.cache, Registry: p.media},
+		Franchises:         adapters.LibraryFranchises{Cache: p.cache, Registry: p.media, Store: library.NewFranchises(p.library)},
 		WorkNumbering:      adapters.WorkNumbering{Works: library.NewWorks(p.library), Registry: p.media},
 		WorkReleaseFilters: adapters.WorkReleaseFilters{Works: library.NewWorks(p.library), Filters: library.NewReleaseFilters(p.library), Registry: p.media},
 		WorkMerger: adapters.WorkMerger{

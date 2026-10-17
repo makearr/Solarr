@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -95,35 +96,118 @@ type FranchiseMember struct {
 	Files     int64
 }
 
-// FranchiseRow is a franchise as a library holds it: its members, and the member count the provider states.
+// FranchiseRow is a collection as a library holds it: its members, and the member count the provider states.
 type FranchiseRow struct {
 	ID         int64
 	Name       string
+	Kind       string
 	ExternalID string
 	Monitored  bool
 	PosterURL  string
-	// Total is the films the provider says the franchise has, 0 when unknown.
+	// Total is the works the provider says the franchise has, 0 when unknown.
 	Total   int64
 	Members []FranchiseMember
 }
 
-// InCategory lists a library's franchises with the films of each it holds, by name.
+// CustomKind is the kind of a collection a person made by hand.
+const CustomKind = "custom"
+
+// InCategory lists a library's collections with the works of each it holds, by name: the provider's franchises that
+// have a work of the library, and the library's own hand-made ones, empty or not.
 func (f Franchises) InCategory(ctx context.Context, mediaType string, categoryID int64) ([]FranchiseRow, error) {
-	rows, err := librarydb.New(f.store.Read()).ListFranchiseMembersInCategory(ctx, librarydb.ListFranchiseMembersInCategoryParams{MediaType: mediaType, CategoryID: categoryID})
+	queries := librarydb.New(f.store.Read())
+	collections, err := queries.ListCollectionsInCategory(ctx, librarydb.ListCollectionsInCategoryParams{MediaType: mediaType, CategoryID: categoryID})
 	if err != nil {
-		return nil, fmt.Errorf("library: franchises of category %d: %w", categoryID, err)
+		return nil, fmt.Errorf("library: collections of category %d: %w", categoryID, err)
 	}
-	var out []FranchiseRow
-	for _, row := range rows {
-		if len(out) == 0 || out[len(out)-1].ID != row.CollectionID {
-			out = append(out, FranchiseRow{
-				ID: row.CollectionID, Name: row.CollectionName, ExternalID: row.ExternalID, Monitored: row.CollectionMonitored == 1, Total: row.Total.Int64, PosterURL: row.PosterUrl,
-			})
-		}
-		last := &out[len(out)-1]
-		last.Members = append(last.Members, FranchiseMember{WorkID: row.WorkID, Title: row.Title, Year: row.Year, Monitored: row.Monitored > 0, Files: row.Files})
+	out := make([]FranchiseRow, len(collections))
+	ids := make([]int64, len(collections))
+	at := make(map[int64]int, len(collections))
+	for index, row := range collections {
+		out[index] = FranchiseRow{ID: row.ID, Name: row.Name, Kind: row.Kind, ExternalID: row.ExternalID, Monitored: row.Monitored == 1, Total: row.Total.Int64, PosterURL: row.PosterUrl}
+		ids[index], at[row.ID] = row.ID, index
+	}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	members, err := queries.ListCollectionMembersInCategory(ctx, librarydb.ListCollectionMembersInCategoryParams{CollectionIds: ids, CategoryID: categoryID})
+	if err != nil {
+		return nil, fmt.Errorf("library: collection members of category %d: %w", categoryID, err)
+	}
+	for _, row := range members {
+		entry := &out[at[row.CollectionID]]
+		entry.Members = append(entry.Members, FranchiseMember{WorkID: row.WorkID, Title: row.Title, Year: row.Year, Monitored: row.Monitored > 0, Files: row.Files})
 	}
 	return out, nil
+}
+
+// Create makes an empty collection of the library, by hand, and answers its id.
+func (f Franchises) Create(ctx context.Context, mediaType string, categoryID int64, name string) (int64, error) {
+	var id int64
+	err := f.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		id, err = librarydb.New(tx).CreateCustomCollection(ctx, librarydb.CreateCustomCollectionParams{
+			MediaType: mediaType, Name: name, AddedAt: f.store.Now().Unix(), CategoryID: categoryID,
+		})
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: create collection: %w", err)
+	}
+	return id, nil
+}
+
+// ErrNotCustomCollection is a collection that is not a hand-made one, or none: only those are renamed, deleted or filled by hand.
+var ErrNotCustomCollection = errors.New("library: not a collection made by hand")
+
+// Rename renames a hand-made collection.
+func (f Franchises) Rename(ctx context.Context, id int64, name string) error {
+	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) {
+		return queries.RenameCustomCollection(ctx, librarydb.RenameCustomCollectionParams{Name: name, ID: id})
+	})
+}
+
+// Delete removes a hand-made collection, never the works in it.
+func (f Franchises) Delete(ctx context.Context, id int64) error {
+	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) { return queries.DeleteCustomCollection(ctx, id) })
+}
+
+// AddMember puts a work in a hand-made collection.
+func (f Franchises) AddMember(ctx context.Context, id, workID int64) error {
+	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) {
+		collection, err := queries.GetCollection(ctx, id)
+		if err != nil || collection.Kind != CustomKind {
+			return 0, err
+		}
+		return 1, queries.AddCollectionMember(ctx, librarydb.AddCollectionMemberParams{CollectionID: id, WorkID: workID, PartID: 0})
+	})
+}
+
+// RemoveMember takes a work out of a hand-made collection.
+func (f Franchises) RemoveMember(ctx context.Context, id, workID int64) error {
+	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) {
+		collection, err := queries.GetCollection(ctx, id)
+		if err != nil || collection.Kind != CustomKind {
+			return 0, err
+		}
+		return 1, queries.RemoveCollectionMember(ctx, librarydb.RemoveCollectionMemberParams{CollectionID: id, WorkID: workID})
+	})
+}
+
+func (f Franchises) customWrite(ctx context.Context, id int64, write func(*librarydb.Queries) (int64, error)) error {
+	var changed int64
+	err := f.store.Write(ctx, store.PrioInteractive, func(_ context.Context, tx *sql.Tx) error {
+		var err error
+		changed, err = write(librarydb.New(tx))
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("library: collection %d: %w", id, err)
+	}
+	if changed == 0 {
+		return ErrNotCustomCollection
+	}
+	return nil
 }
 
 // Get reads one franchise's name, monitoring and provider id; sql.ErrNoRows wrapped when it is none.
@@ -133,7 +217,7 @@ func (f Franchises) Get(ctx context.Context, id int64) (FranchiseRow, error) {
 	if err != nil {
 		return FranchiseRow{}, fmt.Errorf("library: franchise %d: %w", id, err)
 	}
-	row := FranchiseRow{ID: collection.ID, Name: collection.Name, Monitored: collection.Monitored == 1, Total: collection.CompleteAt.Int64}
+	row := FranchiseRow{ID: collection.ID, Name: collection.Name, Kind: collection.Kind, Monitored: collection.Monitored == 1, Total: collection.CompleteAt.Int64}
 	if external, err := queries.GetCollectionExternalIDOf(ctx, id); err == nil {
 		row.ExternalID = external.ExternalID
 	}
@@ -165,6 +249,38 @@ func (f Franchises) SetPoster(ctx context.Context, id int64, posterURL string) e
 	})
 	if err != nil {
 		return fmt.Errorf("library: franchise %d poster: %w", id, err)
+	}
+	return nil
+}
+
+// UncheckedSeries is a series no franchise lookup has been made for, with the ids a lookup goes by.
+type UncheckedSeries struct {
+	WorkID     int64
+	TVDB, TMDB int64
+}
+
+// SeriesWithoutFranchiseCheck lists up to limit series the franchise pass has not asked about yet.
+func (f Franchises) SeriesWithoutFranchiseCheck(ctx context.Context, limit int64) ([]UncheckedSeries, error) {
+	rows, err := librarydb.New(f.store.Read()).ListSeriesWithoutFranchiseCheck(ctx, limit)
+	if err != nil {
+		return nil, fmt.Errorf("library: series without a franchise check: %w", err)
+	}
+	out := make([]UncheckedSeries, len(rows))
+	for index, row := range rows {
+		out[index] = UncheckedSeries{WorkID: row.WorkID}
+		out[index].TVDB, _ = strconv.ParseInt(row.Tvdb, 10, 64)
+		out[index].TMDB, _ = strconv.ParseInt(row.Tmdb, 10, 64)
+	}
+	return out, nil
+}
+
+// MarkChecked records that the franchise lookup was made for the series.
+func (f Franchises) MarkChecked(ctx context.Context, workID int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).MarkFranchiseChecked(ctx, librarydb.MarkFranchiseCheckedParams{WorkID: workID, CheckedAt: f.store.Now().Unix()})
+	})
+	if err != nil {
+		return fmt.Errorf("library: franchise check of work %d: %w", workID, err)
 	}
 	return nil
 }

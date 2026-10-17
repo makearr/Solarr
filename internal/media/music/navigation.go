@@ -9,6 +9,8 @@ const (
 	LevelAlbums  = "albums"
 	LevelTracks  = "tracks"
 	LevelLabels  = "labels"
+	// LevelCollections lists the collections made by hand, such as one composer's works.
+	LevelCollections = "collections"
 )
 
 // Navigation is music's ADR-54 NavigationLevels declaration: Artists, Albums,
@@ -21,6 +23,7 @@ func (Navigation) Levels() []model.Level {
 		{Key: LevelArtists, Label: "Artists", Entity: model.LevelEntityPerson, DefaultSort: "name"},
 		{Key: LevelAlbums, Label: "Albums", Entity: model.LevelEntityWork, DefaultSort: "title"},
 		{Key: LevelTracks, Label: "Tracks", Entity: model.LevelEntityWorkPart, DefaultSort: "artist"},
+		{Key: LevelCollections, Label: "Collections", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
 		{Key: LevelLabels, Label: "Labels", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 	}
 }

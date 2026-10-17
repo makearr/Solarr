@@ -160,6 +160,14 @@ type WorkDetailRow struct {
 	Pictures map[string]string
 	// Files are the files of a work with no parts.
 	Files []PartFileRow
+	// Organisations are the studios, networks or labels the work belongs to.
+	Organisations []WorkOrganisationRow
+}
+
+// WorkOrganisationRow is one organisation of a work.
+type WorkOrganisationRow struct {
+	ID         int64
+	Name, Role string
 }
 
 // BulkSelection is a selection as a query (section 21.7): every work visible under RootFolderIDs or CategoryIDs
@@ -622,6 +630,13 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 	view.Facets, view.Groups = &facets, &groups
 	if len(row.Pictures) > 0 {
 		view.Pictures = &row.Pictures
+	}
+	if len(row.Organisations) > 0 {
+		organisations := make([]gen.WorkOrganisation, len(row.Organisations))
+		for index, organisation := range row.Organisations {
+			organisations[index] = gen.WorkOrganisation{Id: organisation.ID, Name: organisation.Name, Role: organisation.Role}
+		}
+		view.Organisations = &organisations
 	}
 	if len(row.Files) > 0 {
 		files := make([]gen.PartFile, len(row.Files))

@@ -3604,8 +3604,55 @@ export interface paths {
         /** A library's franchises (a movie's collections) with the films of each it holds. */
         get: operations["listFranchises"];
         put?: never;
-        post?: never;
+        /** Make an empty collection of the library by hand. Needs the library's manage permission. */
+        post: operations["createFranchise"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/franchises/{id}": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One franchise with every film the provider lists, those the library lacks included. */
+        get: operations["getFranchise"];
+        put?: never;
+        post?: never;
+        /** Delete a collection made by hand; the works in it stay. Needs the library's manage permission. */
+        delete: operations["deleteFranchise"];
+        options?: never;
+        head?: never;
+        /** Rename a collection made by hand. Needs the library's manage permission. */
+        patch: operations["renameFranchise"];
+        trace?: never;
+    };
+    "/franchises/{id}/members/{workId}": {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                workId: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Put a work in a collection made by hand. Needs the library's manage permission. */
+        put: operations["addFranchiseMember"];
+        post?: never;
+        /** Take a work out of a collection made by hand. Needs the library's manage permission. */
+        delete: operations["removeFranchiseMember"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4847,6 +4894,11 @@ export interface components {
             /** Format: int64 */
             id: number;
             name: string;
+            /**
+             * @description franchise is a provider's, custom was made by hand.
+             * @enum {string}
+             */
+            kind: "franchise" | "custom";
             monitored: boolean;
             /** @description The films the provider says the franchise has; absent when it has not said. */
             total?: number;
@@ -4855,8 +4907,15 @@ export interface components {
             members: components["schemas"]["FranchiseMember"][];
         };
         FranchiseMember: {
-            /** Format: int64 */
-            work_id: number;
+            /**
+             * Format: int64
+             * @description The library's work; absent for one it lacks.
+             */
+            work_id?: number;
+            /** @description With external_id */
+            provider?: string;
+            external_id?: string;
+            poster_url?: string;
             title: string;
             year?: number;
             monitored: boolean;
@@ -6064,6 +6123,13 @@ export interface components {
             file?: components["schemas"]["PartFile"] | null;
             external_ids: components["schemas"]["ExternalID"][];
         };
+        WorkOrganisation: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /** @example studio */
+            role: string;
+        };
         /** @description The file covering one part, and what probing measured of it. */
         PartFile: {
             /** Format: int64 */
@@ -6188,6 +6254,8 @@ export interface components {
             next_cursor?: string;
         };
         WorkDetail: {
+            /** @description The studios, networks or labels the work belongs to. */
+            organisations?: components["schemas"]["WorkOrganisation"][];
             /** @description The files of a work with no parts (a movie), one per version. */
             files?: components["schemas"]["PartFile"][];
             /**
@@ -13667,6 +13735,170 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    createFranchise: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    category_id: number;
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Franchise"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getFranchise: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The franchise. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Franchise"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    deleteFranchise: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    renameFranchise: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Renamed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    addFranchiseMember: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                workId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Added. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    removeFranchiseMember: {
+        parameters: {
+            query: {
+                category_id: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                workId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     monitorFranchise: {

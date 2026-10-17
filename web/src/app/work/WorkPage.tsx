@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePen, Filter, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
+import { FilePen, Filter, Layers, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
 
 import { api } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -13,6 +13,7 @@ import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
+import { AddToCollection } from "./AddToCollection";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
@@ -185,6 +186,8 @@ function WorkHeader({
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const library = useLibrary(categoryId ?? "");
   const [numbering, setNumbering] = useState(false);
   const [filtering, setFiltering] = useState(false);
   const numberings = useNumberingChoices(work.id, administrator);
@@ -261,7 +264,26 @@ function WorkHeader({
                 {facts.length > 0 && "·"}
               </>
             )}
-            {facts.join(" · ")}
+            {facts.map((fact, index) => {
+              const organisation = work.organisations?.find((entry) => entry.name === fact);
+              const link = organisation
+                ? categoryId
+                  ? ({ to: "/library/$categoryId/organisations/$organisationId", params: { categoryId, organisationId: String(organisation.id) } } as const)
+                  : ({ to: "/organisations/$id", params: { id: String(organisation.id) } } as const)
+                : undefined;
+              return (
+                <span key={`${fact}-${index}`}>
+                  {index > 0 && " · "}
+                  {link ? (
+                    <Link {...link} className="hover:text-ink hover:underline">
+                      {fact}
+                    </Link>
+                  ) : (
+                    fact
+                  )}
+                </span>
+              );
+            })}
           </span>
         }
         facts={
@@ -333,6 +355,11 @@ function WorkHeader({
                 {t("action.edit")}
               </Button>
             )}
+            {administrator && categoryId !== undefined && library?.levels.some((level) => level.entity === "franchise") && (
+              <Button icon={<Layers aria-hidden className="size-4" />} onClick={() => setCollecting(true)}>
+                {t("collection.add.button")}
+              </Button>
+            )}
             {administrator && categoryId !== undefined && (
               <Button icon={<FilePen aria-hidden className="size-4" />} onClick={() => setRenaming(true)}>
                 {t("action.renamePreview")}
@@ -367,6 +394,7 @@ function WorkHeader({
           <RenamePlanner categoryId={Number(categoryId)} workId={work.id} previewAtOnce />
         </Dialog>
       )}
+      {collecting && categoryId !== undefined && <AddToCollection categoryId={categoryId} workId={work.id} title={work.title} onClose={() => setCollecting(false)} />}
       {removing && (
         <ConfirmDialog
           title={t("work.remove.title", { title: work.title })}
@@ -416,7 +444,7 @@ function headerFacts(work: Work, info: MediaTypeInfo | undefined): string[] {
 
 /** Who made it, one line per role the type declares for a whole work, the lead and the cast strip's actors aside. */
 function PeopleLine({ work, info, categoryId }: { work: Work; info: MediaTypeInfo | undefined; categoryId: string | undefined }) {
-  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && (!role.lead || !work.lead_id) && !role.character);
+  const roles = (info?.roles ?? []).filter((role) => !role.part_scoped && (!role.lead || !work.lead_id || info?.work_image === "poster") && !role.character);
   const lines = roles
     .map((role) => ({ role, people: work.credits.filter((credit, index, all) => credit.role === role.key && all.findIndex((other) => other.role === role.key && other.person_id === credit.person_id) === index) }))
     .filter((line) => line.people.length > 0);

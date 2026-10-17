@@ -189,12 +189,20 @@ func (Module) Descriptor() media.Descriptor {
 // GuessFloor is the least confidence a held folder's guessed movie is placed at by "Commit anyway".
 const GuessFloor = 0.75
 
-// Franchises implements media.Franchising.
-func (m Module) Franchises(ctx context.Context, categoryID int64) ([]media.Franchise, error) {
+// MissingFranchiseMembers implements media.Franchising.
+func (m Module) MissingFranchiseMembers(ctx context.Context, categoryID, franchiseID int64) ([]media.FranchiseMember, error) {
 	if m.Franchise == nil {
 		return nil, media.ErrNotWired
 	}
-	return m.Franchise.Franchises(ctx, categoryID)
+	return m.Franchise.MissingFranchiseMembers(ctx, categoryID, franchiseID)
+}
+
+// FranchisePictures implements media.Franchising.
+func (m Module) FranchisePictures(ctx context.Context, franchises []media.FranchiseRef) map[int64]string {
+	if m.Franchise == nil {
+		return nil
+	}
+	return m.Franchise.FranchisePictures(ctx, franchises)
 }
 
 // MonitorFranchise implements media.Franchising.

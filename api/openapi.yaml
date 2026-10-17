@@ -5813,6 +5813,96 @@ paths:
                   franchises: { type: array, items: { $ref: "#/components/schemas/Franchise" } }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+    post:
+      operationId: createFranchise
+      tags: [library]
+      summary: Make an empty collection of the library by hand. Needs the library's manage permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id, name]
+              properties:
+                category_id: { type: integer, format: int64 }
+                name: { type: string, minLength: 1 }
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Franchise" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /franchises/{id}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+    patch:
+      operationId: renameFranchise
+      tags: [library]
+      summary: Rename a collection made by hand. Needs the library's manage permission.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1 }
+      responses:
+        "204": { description: Renamed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: deleteFranchise
+      tags: [library]
+      summary: Delete a collection made by hand; the works in it stay. Needs the library's manage permission.
+      responses:
+        "204": { description: Deleted. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    get:
+      operationId: getFranchise
+      tags: [library]
+      summary: One franchise with every film the provider lists, those the library lacks included.
+      responses:
+        "200":
+          description: The franchise.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Franchise" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /franchises/{id}/members/{workId}:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      - { name: workId, in: path, required: true, schema: { type: integer, format: int64 } }
+      - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+    put:
+      operationId: addFranchiseMember
+      tags: [library]
+      summary: Put a work in a collection made by hand. Needs the library's manage permission.
+      responses:
+        "204": { description: Added. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: removeFranchiseMember
+      tags: [library]
+      summary: Take a work out of a collection made by hand. Needs the library's manage permission.
+      responses:
+        "204": { description: Removed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /franchises/{id}/monitor:
     parameters:
@@ -7616,10 +7706,11 @@ components:
 
     Franchise:
       type: object
-      required: [id, name, monitored, members]
+      required: [id, name, kind, monitored, members]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
+        kind: { type: string, enum: [franchise, custom], description: "franchise is a provider's, custom was made by hand." }
         monitored: { type: boolean }
         total: { type: integer, description: "The films the provider says the franchise has; absent when it has not said." }
         poster_url: { type: string, description: The provider's picture of the franchise. }
@@ -7629,9 +7720,12 @@ components:
 
     FranchiseMember:
       type: object
-      required: [work_id, title, monitored, has_file]
+      required: [title, monitored, has_file]
       properties:
-        work_id: { type: integer, format: int64 }
+        work_id: { type: integer, format: int64, description: The library's work; absent for one it lacks. }
+        provider: { type: string, description: With external_id, how to add one the library lacks. }
+        external_id: { type: string }
+        poster_url: { type: string }
         title: { type: string }
         year: { type: integer }
         monitored: { type: boolean }
@@ -9006,6 +9100,14 @@ components:
           type: array
           items: { $ref: "#/components/schemas/ExternalID" }
 
+    WorkOrganisation:
+      type: object
+      required: [id, name, role]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        role: { type: string, example: "studio" }
+
     PartFile:
       type: object
       description: The file covering one part, and what probing measured of it.
@@ -9160,6 +9262,7 @@ components:
         - credits
         - genres
       properties:
+        organisations: { type: array, items: { $ref: "#/components/schemas/WorkOrganisation" }, description: "The studios, networks or labels the work belongs to." }
         files: { type: array, items: { $ref: "#/components/schemas/PartFile" }, description: "The files of a work with no parts (a movie), one per version." }
         lead_id: { type: integer, format: int64, description: "The person the work is listed under (an album's artist)." }
         pictures:

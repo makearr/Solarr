@@ -47,6 +47,9 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		RootFolderIDs: detail.RootFolderIDs,
 		CategoryIDs:   detail.CategoryIDs,
 	}
+	for _, organisation := range detail.Organisations {
+		row.Organisations = append(row.Organisations, apiserver.WorkOrganisationRow{ID: organisation.ID, Name: organisation.Name, Role: organisation.Role})
+	}
 	for _, file := range detail.Files {
 		row.Files = append(row.Files, partFileRow(&file))
 	}

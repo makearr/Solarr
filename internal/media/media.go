@@ -208,33 +208,35 @@ type Renumbering interface {
 	ApplyNumbering(ctx context.Context, workID int64, basis string) (NumberingPlan, error)
 }
 
-// Franchising is the capability of a media type whose works belong to franchises a provider names (a movie's
-// collection): they are listed with the works the library holds, and followed as a whole.
+// Franchising is the capability of a media type whose provider groups works into franchises (a movie's collection, a
+// series with its spin-offs): what the library lacks of one, its picture, and following it. Hand-made collections need none.
 type Franchising interface {
-	Franchises(ctx context.Context, categoryID int64) ([]Franchise, error)
+	// MissingFranchiseMembers lists the works the provider says belong to the franchise that the library lacks.
+	MissingFranchiseMembers(ctx context.Context, categoryID, franchiseID int64) ([]FranchiseMember, error)
+	// FranchisePictures answers the provider's picture of each franchise it has one for, by franchise id.
+	FranchisePictures(ctx context.Context, franchises []FranchiseRef) map[int64]string
 	// MonitorFranchise follows or stops following a franchise; following adds the works of it the library lacks, and
 	// answers how many were added.
 	MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (added int, err error)
 }
 
-// Franchise is one franchise as a library holds it.
-type Franchise struct {
-	ID        int64
-	Name      string
-	Monitored bool
-	// Total is how many works the provider says it has, 0 when not known.
-	Total     int
-	PosterURL string
-	Members   []FranchiseMember
+// FranchiseRef names a franchise to a provider: its id here and its id there.
+type FranchiseRef struct {
+	ID         int64
+	ExternalID string
 }
 
-// FranchiseMember is a work of a franchise the library holds.
+// FranchiseMember is a work of a franchise: the library's own, or one it lacks, which is a request away.
 type FranchiseMember struct {
-	WorkID    int64
-	Title     string
-	Year      int
-	Monitored bool
-	HasFile   bool
+	// WorkID is the library's work, 0 for one the library lacks (add it by Provider and ExternalID).
+	WorkID     int64
+	Title      string
+	Year       int
+	Monitored  bool
+	HasFile    bool
+	Provider   string
+	ExternalID string
+	PosterURL  string
 }
 
 // ErrNoFranchise is an id that names no franchise.

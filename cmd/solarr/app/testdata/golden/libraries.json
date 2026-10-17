@@ -22,6 +22,12 @@
       },
       {
         "default_sort": "name",
+        "entity": "franchise",
+        "key": "collections",
+        "label": "Collections"
+      },
+      {
+        "default_sort": "name",
         "entity": "organisation",
         "key": "labels",
         "label": "Labels"
@@ -45,6 +51,12 @@
         "entity": "person",
         "key": "people",
         "label": "Cast"
+      },
+      {
+        "default_sort": "name",
+        "entity": "franchise",
+        "key": "collections",
+        "label": "Collections"
       },
       {
         "default_sort": "name",

@@ -117,8 +117,16 @@ type WorkDetail struct {
 	Wanted *DesiredItemStatus
 	// Files are the files of a work with no parts, one per version.
 	Files []PartFile
+	// Organisations are the studios, networks or labels the work belongs to.
+	Organisations []WorkOrganisation
 	// Groups are the work's SET items: an album's one, with no ref, or a series' seasons.
 	Groups []GroupStatus
+}
+
+// WorkOrganisation is one organisation a work belongs to, in its role there.
+type WorkOrganisation struct {
+	ID         int64
+	Name, Role string
 }
 
 // GroupStatus is one SET item of a work: the parts "<Ref>:..." below it, or every part for an empty Ref.
@@ -277,9 +285,18 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		}
 	}
 
+	organisations, err := queries.ListNamedOrganisationsForWork(ctx, id)
+	if err != nil {
+		return WorkDetail{}, fmt.Errorf("library: work detail: organisations: %w", err)
+	}
+	var named []WorkOrganisation
+	for _, row := range organisations {
+		named = append(named, WorkOrganisation{ID: row.OrganisationID, Name: row.Name, Role: row.Role})
+	}
+
 	return WorkDetail{
-		Files: wholeFiles,
-		Work:  work, ExternalIDs: externalIDs, Editions: editionDetails,
+		Files: wholeFiles, Organisations: named,
+		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,
 		CategoryIDs: categoryIDs, Wanted: wanted, Groups: groups, HasFiles: hasFiles == 1,
 	}, nil

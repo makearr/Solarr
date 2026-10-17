@@ -30,7 +30,7 @@ func TestMonitoringAFranchiseAddsTheFilmsTheLibraryLacks(t *testing.T) {
 		t.Fatal(err)
 	}
 	catalog := movie.Catalog{Service: service, Categories: categories{}, FranchiseStore: library.NewFranchises(opened)}
-	listed, err := catalog.Franchises(t.Context(), 5)
+	listed, err := catalog.FranchiseStore.InCategory(t.Context(), movie.MediaType, 5)
 	if err != nil || len(listed) != 1 || len(listed[0].Members) != 1 || listed[0].Monitored || listed[0].Name != "The Tonhut Collection" {
 		t.Fatalf("franchises = %+v, %v; want one unmonitored collection holding one film", listed, err)
 	}
@@ -39,7 +39,7 @@ func TestMonitoringAFranchiseAddsTheFilmsTheLibraryLacks(t *testing.T) {
 	if err != nil || added != 1 {
 		t.Fatalf("monitor = %d, %v; want the second film added", added, err)
 	}
-	listed, _ = catalog.Franchises(t.Context(), 5)
+	listed, _ = catalog.FranchiseStore.InCategory(t.Context(), movie.MediaType, 5)
 	if len(listed) != 1 || !listed[0].Monitored || len(listed[0].Members) != 2 || listed[0].Total != 2 {
 		t.Errorf("after following: %+v, want both films, monitored, of two", listed)
 	}

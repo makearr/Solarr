@@ -138,7 +138,7 @@ const createCollection = `-- name: CreateCollection :one
 
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id
 `
 
 type CreateCollectionParams struct {
@@ -173,8 +173,34 @@ func (q *Queries) CreateCollection(ctx context.Context, arg CreateCollectionPara
 		&i.CompleteAt,
 		&i.AddedAt,
 		&i.PosterUrl,
+		&i.CategoryID,
 	)
 	return i, err
+}
+
+const createCustomCollection = `-- name: CreateCustomCollection :one
+INSERT INTO collection (media_type, name, kind, source, monitored, added_at, category_id)
+VALUES (?, ?, 'custom', 'user', 0, ?, ?)
+RETURNING id
+`
+
+type CreateCustomCollectionParams struct {
+	MediaType  string
+	Name       string
+	AddedAt    int64
+	CategoryID int64
+}
+
+func (q *Queries) CreateCustomCollection(ctx context.Context, arg CreateCustomCollectionParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, createCustomCollection,
+		arg.MediaType,
+		arg.Name,
+		arg.AddedAt,
+		arg.CategoryID,
+	)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
 }
 
 const deleteCollection = `-- name: DeleteCollection :exec
@@ -193,6 +219,18 @@ DELETE FROM collection_member WHERE collection_id = ?
 func (q *Queries) DeleteCollectionMembers(ctx context.Context, collectionID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteCollectionMembers, collectionID)
 	return err
+}
+
+const deleteCustomCollection = `-- name: DeleteCustomCollection :execrows
+DELETE FROM collection WHERE id = ? AND kind = 'custom'
+`
+
+func (q *Queries) DeleteCustomCollection(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteCustomCollection, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const deleteRelationship = `-- name: DeleteRelationship :exec
@@ -301,7 +339,7 @@ func (q *Queries) GetArtwork(ctx context.Context, arg GetArtworkParams) (string,
 }
 
 const getCollection = `-- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url FROM collection WHERE id = ?
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id FROM collection WHERE id = ?
 `
 
 func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, error) {
@@ -317,12 +355,13 @@ func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, erro
 		&i.CompleteAt,
 		&i.AddedAt,
 		&i.PosterUrl,
+		&i.CategoryID,
 	)
 	return i, err
 }
 
 const getCollectionByExternalID = `-- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?
 `
@@ -346,6 +385,7 @@ func (q *Queries) GetCollectionByExternalID(ctx context.Context, arg GetCollecti
 		&i.CompleteAt,
 		&i.AddedAt,
 		&i.PosterUrl,
+		&i.CategoryID,
 	)
 	return i, err
 }
@@ -518,8 +558,75 @@ func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64)
 	return items, nil
 }
 
+const listCollectionMembersInCategory = `-- name: ListCollectionMembersInCategory :many
+SELECT m.collection_id, w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
+       CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1), 0) AS INTEGER) AS monitored,
+       CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files
+FROM collection_member m
+JOIN work w ON w.id = m.work_id
+WHERE m.collection_id IN (/*SLICE:collection_ids*/?)
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
+ORDER BY m.collection_id, m.ord, w.year, w.id
+`
+
+type ListCollectionMembersInCategoryParams struct {
+	CategoryID    int64
+	CollectionIds []int64
+}
+
+type ListCollectionMembersInCategoryRow struct {
+	CollectionID int64
+	WorkID       int64
+	Title        string
+	Year         int64
+	Monitored    int64
+	Files        int64
+}
+
+// The works of a library in the collections, monitored as the library's own item says, files counted.
+func (q *Queries) ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error) {
+	query := listCollectionMembersInCategory
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.CategoryID)
+	if len(arg.CollectionIds) > 0 {
+		for _, v := range arg.CollectionIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:collection_ids*/?", strings.Repeat(",?", len(arg.CollectionIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:collection_ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCollectionMembersInCategoryRow{}
+	for rows.Next() {
+		var i ListCollectionMembersInCategoryRow
+		if err := rows.Scan(
+			&i.CollectionID,
+			&i.WorkID,
+			&i.Title,
+			&i.Year,
+			&i.Monitored,
+			&i.Files,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCollectionsForWork = `-- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name
@@ -544,6 +651,65 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 			&i.CompleteAt,
 			&i.AddedAt,
 			&i.PosterUrl,
+			&i.CategoryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCollectionsInCategory = `-- name: ListCollectionsInCategory :many
+SELECT c.id, c.name, c.kind, c.monitored, c.complete_at AS total, c.poster_url,
+       CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id
+FROM collection c
+WHERE c.kind IN ('franchise', 'custom') AND c.media_type = ?1
+  AND (c.category_id = ?2
+       OR EXISTS (SELECT 1 FROM collection_member m JOIN desired_item d ON d.work_id = m.work_id AND d.category_id = ?2
+                  WHERE m.collection_id = c.id))
+ORDER BY c.name, c.id
+`
+
+type ListCollectionsInCategoryParams struct {
+	MediaType  string
+	CategoryID int64
+}
+
+type ListCollectionsInCategoryRow struct {
+	ID         int64
+	Name       string
+	Kind       string
+	Monitored  int64
+	Total      sql.NullInt64
+	PosterUrl  string
+	ExternalID string
+}
+
+// A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
+func (q *Queries) ListCollectionsInCategory(ctx context.Context, arg ListCollectionsInCategoryParams) ([]ListCollectionsInCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCollectionsInCategory, arg.MediaType, arg.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCollectionsInCategoryRow{}
+	for rows.Next() {
+		var i ListCollectionsInCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Kind,
+			&i.Monitored,
+			&i.Total,
+			&i.PosterUrl,
+			&i.ExternalID,
 		); err != nil {
 			return nil, err
 		}
@@ -559,7 +725,7 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 }
 
 const listCollectionsOfKind = `-- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id
 FROM collection WHERE kind = ?1 AND media_type = ?2 ORDER BY name, id
 `
 
@@ -587,6 +753,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 			&i.CompleteAt,
 			&i.AddedAt,
 			&i.PosterUrl,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -602,7 +769,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 }
 
 const listCollectionsOfWorkParts = `-- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ?1 AND m.part_id <> 0 AND c.kind = ?2
 ORDER BY c.name, c.id
@@ -632,75 +799,7 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 			&i.CompleteAt,
 			&i.AddedAt,
 			&i.PosterUrl,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listFranchiseMembersInCategory = `-- name: ListFranchiseMembersInCategory :many
-SELECT c.id AS collection_id, c.name AS collection_name, c.monitored AS collection_monitored, c.complete_at AS total, c.poster_url AS poster_url,
-       CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id,
-       w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
-       CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1), 0) AS INTEGER) AS monitored,
-       CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files
-FROM collection c
-JOIN collection_member m ON m.collection_id = c.id
-JOIN work w ON w.id = m.work_id
-WHERE c.kind = 'franchise' AND c.media_type = ?2
-  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1)
-ORDER BY c.name, c.id, w.year, w.id
-`
-
-type ListFranchiseMembersInCategoryParams struct {
-	CategoryID int64
-	MediaType  string
-}
-
-type ListFranchiseMembersInCategoryRow struct {
-	CollectionID        int64
-	CollectionName      string
-	CollectionMonitored int64
-	Total               sql.NullInt64
-	PosterUrl           string
-	ExternalID          string
-	WorkID              int64
-	Title               string
-	Year                int64
-	Monitored           int64
-	Files               int64
-}
-
-// A library's franchises with the films of each it holds: monitored per film as the library's own item says, files counted.
-func (q *Queries) ListFranchiseMembersInCategory(ctx context.Context, arg ListFranchiseMembersInCategoryParams) ([]ListFranchiseMembersInCategoryRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFranchiseMembersInCategory, arg.CategoryID, arg.MediaType)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListFranchiseMembersInCategoryRow{}
-	for rows.Next() {
-		var i ListFranchiseMembersInCategoryRow
-		if err := rows.Scan(
-			&i.CollectionID,
-			&i.CollectionName,
-			&i.CollectionMonitored,
-			&i.Total,
-			&i.PosterUrl,
-			&i.ExternalID,
-			&i.WorkID,
-			&i.Title,
-			&i.Year,
-			&i.Monitored,
-			&i.Files,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -1092,6 +1191,46 @@ func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameCo
 	return items, nil
 }
 
+const listSeriesWithoutFranchiseCheck = `-- name: ListSeriesWithoutFranchiseCheck :many
+SELECT w.id AS work_id,
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tvdb' LIMIT 1), '') AS TEXT) AS tvdb,
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb
+FROM work w
+WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_franchise_check c WHERE c.work_id = w.id)
+ORDER BY w.id
+LIMIT ?
+`
+
+type ListSeriesWithoutFranchiseCheckRow struct {
+	WorkID int64
+	Tvdb   string
+	Tmdb   string
+}
+
+// The series no franchise lookup has been made for yet, with the ids a lookup goes by.
+func (q *Queries) ListSeriesWithoutFranchiseCheck(ctx context.Context, limit int64) ([]ListSeriesWithoutFranchiseCheckRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSeriesWithoutFranchiseCheck, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSeriesWithoutFranchiseCheckRow{}
+	for rows.Next() {
+		var i ListSeriesWithoutFranchiseCheckRow
+		if err := rows.Scan(&i.WorkID, &i.Tvdb, &i.Tmdb); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStatRollup = `-- name: ListStatRollup :many
 SELECT metric, dimension, period, value, count, computed_at
 FROM stat_rollup
@@ -1303,6 +1442,21 @@ func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg L
 	return items, nil
 }
 
+const markFranchiseChecked = `-- name: MarkFranchiseChecked :exec
+INSERT INTO work_franchise_check (work_id, checked_at) VALUES (?, ?)
+ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at
+`
+
+type MarkFranchiseCheckedParams struct {
+	WorkID    int64
+	CheckedAt int64
+}
+
+func (q *Queries) MarkFranchiseChecked(ctx context.Context, arg MarkFranchiseCheckedParams) error {
+	_, err := q.db.ExecContext(ctx, markFranchiseChecked, arg.WorkID, arg.CheckedAt)
+	return err
+}
+
 const nextReady = `-- name: NextReady :many
 SELECT candidate_id, desired_item_id, priority, queued_at, expires_at, size_bytes, origin,
        indexer_id, guid, title, download_url, protocol, score
@@ -1393,6 +1547,20 @@ func (q *Queries) RecordGroupObservation(ctx context.Context, arg RecordGroupObs
 	return err
 }
 
+const removeCollectionMember = `-- name: RemoveCollectionMember :exec
+DELETE FROM collection_member WHERE collection_id = ? AND work_id = ? AND part_id = 0
+`
+
+type RemoveCollectionMemberParams struct {
+	CollectionID int64
+	WorkID       int64
+}
+
+func (q *Queries) RemoveCollectionMember(ctx context.Context, arg RemoveCollectionMemberParams) error {
+	_, err := q.db.ExecContext(ctx, removeCollectionMember, arg.CollectionID, arg.WorkID)
+	return err
+}
+
 const renameCollection = `-- name: RenameCollection :exec
 UPDATE collection SET name = ?, monitored = ? WHERE id = ?
 `
@@ -1406,6 +1574,23 @@ type RenameCollectionParams struct {
 func (q *Queries) RenameCollection(ctx context.Context, arg RenameCollectionParams) error {
 	_, err := q.db.ExecContext(ctx, renameCollection, arg.Name, arg.Monitored, arg.ID)
 	return err
+}
+
+const renameCustomCollection = `-- name: RenameCustomCollection :execrows
+UPDATE collection SET name = ? WHERE id = ? AND kind = 'custom'
+`
+
+type RenameCustomCollectionParams struct {
+	Name string
+	ID   int64
+}
+
+func (q *Queries) RenameCustomCollection(ctx context.Context, arg RenameCustomCollectionParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, renameCustomCollection, arg.Name, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setCollectionComplete = `-- name: SetCollectionComplete :exec

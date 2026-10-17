@@ -3,7 +3,7 @@
 -- name: CreateCollection :one
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url;
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id;
 
 -- name: AddCollectionMember :exec
 INSERT INTO collection_member (collection_id, work_id, part_id, ord)
@@ -27,7 +27,7 @@ WHERE c.id = ?
 GROUP BY c.id;
 
 -- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name;
@@ -235,17 +235,17 @@ WHERE m.collection_id IN (sqlc.slice(collection_ids))
 ORDER BY m.collection_id, m.ord, m.part_id;
 
 -- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id
 FROM collection WHERE kind = sqlc.arg(kind) AND media_type = sqlc.arg(media_type) ORDER BY name, id;
 
 -- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = sqlc.arg(work_id) AND m.part_id <> 0 AND c.kind = sqlc.arg(kind)
 ORDER BY c.name, c.id;
 
 -- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url FROM collection WHERE id = ?;
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id FROM collection WHERE id = ?;
 
 -- name: RenameCollection :exec
 UPDATE collection SET name = ?, monitored = ? WHERE id = ?;
@@ -324,7 +324,7 @@ ORDER BY a.work_id, a.sort_key, b.id;
 
 -- A collection a provider names, found by its id there: a movie's franchise.
 -- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?;
 
@@ -341,22 +341,58 @@ UPDATE collection SET monitored = ? WHERE id = ?;
 -- name: SetCollectionComplete :exec
 UPDATE collection SET complete_at = ? WHERE id = ?;
 
--- A library's franchises with the films of each it holds: monitored per film as the library's own item says, files counted.
--- name: ListFranchiseMembersInCategory :many
-SELECT c.id AS collection_id, c.name AS collection_name, c.monitored AS collection_monitored, c.complete_at AS total, c.poster_url AS poster_url,
-       CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id,
-       w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
+-- A library's collections: the provider's franchises with a work of the library, and the hand-made ones of the library.
+-- name: ListCollectionsInCategory :many
+SELECT c.id, c.name, c.kind, c.monitored, c.complete_at AS total, c.poster_url,
+       CAST(COALESCE((SELECT e.external_id FROM collection_external_id e WHERE e.collection_id = c.id LIMIT 1), '') AS TEXT) AS external_id
+FROM collection c
+WHERE c.kind IN ('franchise', 'custom') AND c.media_type = sqlc.arg(media_type)
+  AND (c.category_id = sqlc.arg(category_id)
+       OR EXISTS (SELECT 1 FROM collection_member m JOIN desired_item d ON d.work_id = m.work_id AND d.category_id = sqlc.arg(category_id)
+                  WHERE m.collection_id = c.id))
+ORDER BY c.name, c.id;
+
+-- The works of a library in the collections, monitored as the library's own item says, files counted.
+-- name: ListCollectionMembersInCategory :many
+SELECT m.collection_id, w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
        CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id)), 0) AS INTEGER) AS monitored,
        CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files
-FROM collection c
-JOIN collection_member m ON m.collection_id = c.id
+FROM collection_member m
 JOIN work w ON w.id = m.work_id
-WHERE c.kind = 'franchise' AND c.media_type = sqlc.arg(media_type)
+WHERE m.collection_id IN (sqlc.slice(collection_ids))
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category_id = sqlc.arg(category_id))
-ORDER BY c.name, c.id, w.year, w.id;
+ORDER BY m.collection_id, m.ord, w.year, w.id;
+
+-- name: CreateCustomCollection :one
+INSERT INTO collection (media_type, name, kind, source, monitored, added_at, category_id)
+VALUES (?, ?, 'custom', 'user', 0, ?, ?)
+RETURNING id;
+
+-- name: RenameCustomCollection :execrows
+UPDATE collection SET name = ? WHERE id = ? AND kind = 'custom';
+
+-- name: DeleteCustomCollection :execrows
+DELETE FROM collection WHERE id = ? AND kind = 'custom';
+
+-- name: RemoveCollectionMember :exec
+DELETE FROM collection_member WHERE collection_id = ? AND work_id = ? AND part_id = 0;
 
 -- name: GetCollectionExternalIDOf :one
 SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider LIMIT 1;
 
 -- name: SetCollectionPoster :exec
 UPDATE collection SET poster_url = ? WHERE id = ?;
+
+-- The series no franchise lookup has been made for yet, with the ids a lookup goes by.
+-- name: ListSeriesWithoutFranchiseCheck :many
+SELECT w.id AS work_id,
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tvdb' LIMIT 1), '') AS TEXT) AS tvdb,
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb
+FROM work w
+WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_franchise_check c WHERE c.work_id = w.id)
+ORDER BY w.id
+LIMIT ?;
+
+-- name: MarkFranchiseChecked :exec
+INSERT INTO work_franchise_check (work_id, checked_at) VALUES (?, ?)
+ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at;

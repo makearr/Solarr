@@ -177,6 +177,7 @@ type Collection struct {
 	CompleteAt sql.NullInt64
 	AddedAt    int64
 	PosterUrl  string
+	CategoryID int64
 }
 
 type CollectionExternalID struct {
@@ -809,6 +810,11 @@ type WorkFile struct {
 	WorkID        int64
 	MediaObjectID int64
 	FirstSeenAt   int64
+}
+
+type WorkFranchiseCheck struct {
+	WorkID    int64
+	CheckedAt int64
 }
 
 type WorkMergeSuggestion struct {
