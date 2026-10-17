@@ -542,6 +542,7 @@ func New(config Config) (*Server, error) {
 			secured.Put("/crossovers/{id}", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.UpdateCrossover) })
 			secured.Delete("/crossovers/{id}", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.DeleteCrossover) })
 			secured.Post("/crossovers/{id}/monitor", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.MonitorCrossover) })
+			secured.Get("/works/{id}/franchises", server.routeListWorkFranchises)
 			secured.Get("/works/{id}/crossovers", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.GetWorkCrossovers) })
 			secured.Post("/parts/{id}/same-content", func(w http.ResponseWriter, r *http.Request) { server.routeCrossoverID(w, r, server.LinkSameContent) })
 			secured.Delete("/parts/{id}/same-content", server.routeUnlinkSameContent)

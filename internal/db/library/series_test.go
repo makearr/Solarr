@@ -127,6 +127,38 @@ func TestSeriesUpsertNeverStealsAnIDAndKeepsAManualTitle(t *testing.T) {
 	}
 }
 
+func TestAMovieIsNeverWrittenOverASeriesItSharesAnIDWith(t *testing.T) {
+	opened, queries := newLibrary(t)
+	series := library.NewSeries(opened)
+	show := sampleSeries()
+	show.IDs = []library.ExternalIDWrite{{Provider: "tmdb", ExternalID: "7001"}, {Provider: "imdb", ExternalID: "tt9000001"}}
+	held, err := series.Upsert(t.Context(), seriesAt, show)
+	if err != nil {
+		t.Fatal(err)
+	}
+	film := library.SeriesWrite{
+		Work: library.WorkIdentity{MediaType: "movie", CanonicalTitle: "Example Film", SortTitle: "example film"},
+		IDs:  []library.ExternalIDWrite{{Provider: "tmdb:movie", ExternalID: "7001"}, {Provider: "imdb", ExternalID: "tt9000001"}},
+	}
+	added, err := series.Upsert(t.Context(), seriesAt, film)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !added.Created || added.WorkID == held.WorkID {
+		t.Fatalf("film = %+v, series = %+v: a movie is its own work even where an id is the series'", added, held)
+	}
+	work, _ := queries.GetWork(t.Context(), held.WorkID)
+	if work.CanonicalTitle != "Example Show" {
+		t.Errorf("series title = %q", work.CanonicalTitle)
+	}
+	for mediaType, want := range map[string]int64{"tv": held.WorkID, "movie": 0} {
+		id, found, err := series.WorkByProviderID(t.Context(), mediaType, "tmdb", "7001")
+		if err != nil || id != want || found != (want != 0) {
+			t.Errorf("WorkByProviderID(%s, tmdb) = %d %v %v, want %d", mediaType, id, found, err, want)
+		}
+	}
+}
+
 func TestSeasonItemsCountOnlyTheirOwnMonitoredParts(t *testing.T) {
 	opened, queries := newLibrary(t)
 	write := sampleSeries()

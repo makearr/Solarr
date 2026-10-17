@@ -33,6 +33,7 @@ import { ReleaseFiltersDialog } from "./ReleaseFiltersDialog";
 import { grabNote } from "./grabNote";
 import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFormat";
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
+import { WorkCollections } from "./WorkCollections";
 import { WorkSearchTab } from "./WorkSearchTab";
 
 type Work = components["schemas"]["WorkDetail"];
@@ -521,6 +522,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
   return (
     <div className="flex flex-col gap-4">
       <CastStrip work={work} info={info} categoryId={categoryId} />
+      {categoryId && <WorkCollections workId={work.id} categoryId={categoryId} />}
       {crossoverPart && categoryId && <CrossoverDialog part={crossoverPart} categoryId={categoryId} onClose={() => setCrossoverPart(undefined)} />}
       {grouped ? (
         groups.map((group) => (

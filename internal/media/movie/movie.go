@@ -3,14 +3,18 @@
 // items only, so the vocabulary here stays in this package (ADR-23).
 package movie
 
-import "time"
+import (
+	"time"
+
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
+)
 
 // MediaType is the work media type of a movie.
 const MediaType = "movie"
 
 // Provider names, as stored in work_external_id and work_field.
 const (
-	ProviderTMDB = "tmdb"
+	ProviderTMDB = tmdb.KeyMovie
 	ProviderIMDb = "imdb"
 	// ProviderCollection is TMDB's collection id, kept on the collection's own row.
 	ProviderCollection = "tmdb:collection"

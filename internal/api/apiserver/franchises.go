@@ -19,6 +19,8 @@ import (
 // spin-offs) and the ones people make by hand.
 type Franchises interface {
 	List(ctx context.Context, categoryID int64) ([]gen.Franchise, error)
+	// OfWork lists the collections of the library a work is part of.
+	OfWork(ctx context.Context, categoryID, workID int64) ([]gen.Franchise, error)
 	// Get answers one collection with every work of it, those the library lacks included.
 	Get(ctx context.Context, categoryID, franchiseID int64) (gen.Franchise, error)
 	// Create makes an empty collection by hand.
@@ -86,6 +88,22 @@ func (s *Server) ListFranchises(w http.ResponseWriter, r *http.Request, params g
 			s.writeFranchiseError(w, err)
 			return
 		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, struct {
+		Franchises []gen.Franchise `json:"franchises"`
+	}{franchises})
+}
+
+// ListWorkFranchises answers the collections a work is part of.
+func (s *Server) ListWorkFranchises(w http.ResponseWriter, r *http.Request, id int64, params gen.ListWorkFranchisesParams) {
+	category, ok := s.franchiseCategory(w, r, params.CategoryId, settings.PermissionRead)
+	if !ok {
+		return
+	}
+	franchises, err := s.franchises.OfWork(r.Context(), category.ID, id)
+	if err != nil {
+		s.writeFranchiseError(w, err)
+		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Franchises []gen.Franchise `json:"franchises"`
@@ -239,6 +257,12 @@ func (s *Server) routeListFranchises(w http.ResponseWriter, r *http.Request) {
 func (s *Server) routeGetFranchise(w http.ResponseWriter, r *http.Request) {
 	s.franchiseRoute(func(w http.ResponseWriter, r *http.Request, id, category int64) {
 		s.GetFranchise(w, r, id, gen.GetFranchiseParams{CategoryId: category})
+	})(w, r)
+}
+
+func (s *Server) routeListWorkFranchises(w http.ResponseWriter, r *http.Request) {
+	s.franchiseRoute(func(w http.ResponseWriter, r *http.Request, id, category int64) {
+		s.ListWorkFranchises(w, r, id, gen.ListWorkFranchisesParams{CategoryId: category})
 	})(w, r)
 }
 

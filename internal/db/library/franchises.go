@@ -614,6 +614,57 @@ func (f Franchises) WorkTraits(ctx context.Context, mediaType string) (map[int64
 	return traits, nil
 }
 
+// CharacterCredit is a character someone plays in a work; Regular when they play it in the series itself, not only in
+// an episode, Episodes the episodes it is credited in, and Billing its place among the series' cast, -1 when it has none.
+type CharacterCredit struct {
+	WorkID, PersonID  int64
+	Person, Character string
+	Regular           bool
+	Episodes, Billing int64
+}
+
+// CharacterCredits lists who plays whom in every work of the media type.
+func (f Franchises) CharacterCredits(ctx context.Context, mediaType string) ([]CharacterCredit, error) {
+	rows, err := librarydb.New(f.store.Read()).ListCharacterCreditsOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: characters: %w", err)
+	}
+	out := make([]CharacterCredit, len(rows))
+	for index, row := range rows {
+		out[index] = CharacterCredit{WorkID: row.WorkID, PersonID: row.PersonID, Person: row.PersonName, Character: row.Character, Regular: row.Regular == 1,
+			Episodes: row.Appearances - row.Regular, Billing: row.Billing}
+	}
+	return out, nil
+}
+
+// RemoveFromFranchise takes works out of a franchise Solarr made, without remembering anything: the evidence for them is gone.
+func (f Franchises) RemoveFromFranchise(ctx context.Context, id int64, workIDs []int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, workID := range workIDs {
+			if err := queries.RemoveCollectionMember(ctx, librarydb.RemoveCollectionMemberParams{CollectionID: id, WorkID: workID}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: remove from franchise %d: %w", id, err)
+	}
+	return nil
+}
+
+// DropFranchise deletes a franchise Solarr made whose family is gone; unlike DeleteFranchise it remembers nothing.
+func (f Franchises) DropFranchise(ctx context.Context, id int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).DeleteCollection(ctx, id)
+	})
+	if err != nil {
+		return fmt.Errorf("library: drop franchise %d: %w", id, err)
+	}
+	return nil
+}
+
 // SetFranchiseName gives a franchise the name its works share.
 func (f Franchises) SetFranchiseName(ctx context.Context, id int64, name string) error {
 	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

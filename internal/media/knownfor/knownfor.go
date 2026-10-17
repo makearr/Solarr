@@ -14,8 +14,6 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
-const providerTMDB = "tmdb"
-
 func parseID(externalID string) (int64, bool) {
 	id, err := strconv.ParseInt(externalID, 10, 64)
 	return id, err == nil && id > 0
@@ -42,7 +40,7 @@ func (p Profiling) KnownFor(ctx context.Context, personID, categoryID int64) ([]
 	if p.Source == nil || !p.Source.Configured() {
 		return nil, nil
 	}
-	external, found, err := p.People.ExternalIDFor(ctx, personID, providerTMDB)
+	external, found, err := p.People.ExternalIDFor(ctx, personID, tmdb.KeyPerson)
 	if err != nil || !found {
 		return nil, err
 	}
@@ -80,11 +78,11 @@ func (p Profiling) keep(ctx context.Context, personID int64, remote tmdb.Person)
 // knownFor lists TMDB's titles, marking the library's series by TMDB id, else by title and first-aired year: a person
 // is known for series the library has even where their credit in it is missing.
 func (p Profiling) knownFor(ctx context.Context, personID, categoryID int64, remote tmdb.Person) []media.KnownFor {
-	heldTV, err := p.Reader.HeldTMDBOf(ctx, "tv")
+	heldTV, err := p.Reader.HeldIDsOf(ctx, "tv", tmdb.KeySeries)
 	if err != nil {
 		heldTV = map[int64]int64{}
 	}
-	heldMovies, err := p.Reader.HeldTMDBOf(ctx, "movie")
+	heldMovies, err := p.Reader.HeldIDsOf(ctx, "movie", tmdb.KeyMovie)
 	if err != nil {
 		heldMovies = map[int64]int64{}
 	}
@@ -95,12 +93,12 @@ func (p Profiling) knownFor(ctx context.Context, personID, categoryID int64, rem
 			if err != nil {
 				continue
 			}
-			if id, ok := parseID(ids[providerTMDB]); ok {
-				if credit.MediaType == "movie" {
+			if credit.MediaType == "movie" {
+				if id, ok := parseID(ids[tmdb.KeyMovie]); ok {
 					heldMovies[id] = credit.ID
-				} else {
-					held[id] = credit.ID
 				}
+			} else if id, ok := parseID(ids[tmdb.KeySeries]); ok {
+				held[id] = credit.ID
 			}
 		}
 	}
@@ -123,8 +121,12 @@ func (p Profiling) knownFor(ctx context.Context, personID, categoryID int64, rem
 		if kind == "movie" {
 			title, date = credit.Title, credit.ReleaseDate
 		}
+		provider := tmdb.KeySeries
+		if kind == "movie" {
+			provider = tmdb.KeyMovie
+		}
 		entry := media.KnownFor{
-			Provider: providerTMDB, ExternalID: strconv.FormatInt(credit.ID, 10), Kind: kind, Title: title,
+			Provider: provider, ExternalID: strconv.FormatInt(credit.ID, 10), Kind: kind, Title: title,
 			PosterURL: tmdb.ImageURL(credit.PosterPath), Role: role,
 		}
 		if len(date) >= 4 {

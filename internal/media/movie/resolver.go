@@ -88,12 +88,12 @@ func (r Resolver) warn(message, title string, err error) {
 // byID places a name that carries a TMDB or IMDb id: the movie held under it, else the one added from it.
 func (r Resolver) byID(ctx context.Context, categoryID int64, ids IDs) int64 {
 	if ids.TMDB > 0 {
-		if id, held, err := r.Service.Series.WorkByProviderID(ctx, ProviderTMDB, strconv.FormatInt(ids.TMDB, 10)); err == nil && held {
+		if id, held, err := r.Service.Series.WorkByProviderID(ctx, MediaType, ProviderTMDB, strconv.FormatInt(ids.TMDB, 10)); err == nil && held {
 			return id
 		}
 	}
 	if ids.IMDb != "" {
-		if id, held, err := r.Service.Series.WorkByProviderID(ctx, ProviderIMDb, ids.IMDb); err == nil && held {
+		if id, held, err := r.Service.Series.WorkByProviderID(ctx, MediaType, ProviderIMDb, ids.IMDb); err == nil && held {
 			return id
 		}
 	}

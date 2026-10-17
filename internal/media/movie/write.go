@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
 // MonitorOption is Radarr's "Monitor" choice when a movie is added.
@@ -88,7 +89,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 			continue
 		}
 		write.MoreNetworks = append(write.MoreNetworks, library.SeriesNetworkWrite{
-			Name: studio.Name, Country: studio.Country, Provider: ProviderTMDB, ExternalID: idString(studio.TMDBID), LogoURL: studio.Logo,
+			Name: studio.Name, Country: studio.Country, Provider: tmdb.KeyCompany, ExternalID: idString(studio.TMDBID), LogoURL: studio.Logo,
 		})
 	}
 	for i, rating := range movie.Ratings {
@@ -110,7 +111,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 			continue
 		}
 		write.Credits = append(write.Credits, library.SeriesCreditWrite{
-			Provider: ProviderTMDB, ExternalID: strconv.FormatInt(credit.TMDBID, 10), Name: credit.Name, ImageURL: credit.Image,
+			Provider: tmdb.KeyPerson, ExternalID: strconv.FormatInt(credit.TMDBID, 10), Name: credit.Name, ImageURL: credit.Image,
 			Role: credit.Role, Character: credit.Character, Ord: credit.Order,
 		})
 	}

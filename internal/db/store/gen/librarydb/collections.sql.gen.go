@@ -562,6 +562,57 @@ func (q *Queries) ListArtworkForSubject(ctx context.Context, arg ListArtworkForS
 	return items, nil
 }
 
+const listCharacterCreditsOfType = `-- name: ListCharacterCreditsOfType :many
+SELECT c.work_id, c.person_id, p.name AS person_name, c.character, CAST(MIN(c.part_id) = 0 AS INTEGER) AS regular,
+       CAST(COUNT(DISTINCT c.part_id) AS INTEGER) AS appearances,
+       CAST(COALESCE(MIN(CASE WHEN c.part_id = 0 THEN c.ord END), -1) AS INTEGER) AS billing
+FROM credit c JOIN work w ON w.id = c.work_id JOIN person p ON p.id = c.person_id
+WHERE w.media_type = ? AND c.character <> ''
+GROUP BY c.work_id, c.person_id, c.character
+`
+
+type ListCharacterCreditsOfTypeRow struct {
+	WorkID      int64
+	PersonID    int64
+	PersonName  string
+	Character   string
+	Regular     int64
+	Appearances int64
+	Billing     int64
+}
+
+// Who plays whom in each work of a media type, once per work: a character two series share makes them one family.
+func (q *Queries) ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCharacterCreditsOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCharacterCreditsOfTypeRow{}
+	for rows.Next() {
+		var i ListCharacterCreditsOfTypeRow
+		if err := rows.Scan(
+			&i.WorkID,
+			&i.PersonID,
+			&i.PersonName,
+			&i.Character,
+			&i.Regular,
+			&i.Appearances,
+			&i.Billing,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCollectionMembers = `-- name: ListCollectionMembers :many
 SELECT collection_id, work_id, part_id, ord
 FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id, part_id

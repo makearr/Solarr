@@ -178,7 +178,7 @@ func TestScanTakesTheBetterRankedOfTwoFilmsWithTheSameTitleAndYear(t *testing.T)
 		held = id
 	}
 	ids, err := library.NewSeriesReader(opened).ProviderIDs(t.Context(), held)
-	if err != nil || ids["tmdb"] != "329865" {
+	if err != nil || ids[movie.ProviderTMDB] != "329865" {
 		t.Errorf("provider ids = %v, %v; want the first-ranked film, 329865", ids, err)
 	}
 }

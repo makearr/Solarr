@@ -71,9 +71,26 @@ ScreenScraper. None is built; a media type is only as viable as its source (ADR-
 | Movies | TMDB collections | the films of a franchise, with the ones the library lacks to add |
 | Series | Wikidata claims (part of the series, media franchise, spin-off, follows) | the series of a franchise, with those the library lacks to add |
 | Anime | AniList relations (sequel, prequel, spin-off, side story, parent, alternative) | the series of a franchise the library holds |
-| Series | names that say they belong together ("PLUH" and "PLUH: Los Angeles", "Ppamir Vetl Z" and "Ppamir Vetl Super") and crossover episodes | grouped by Solarr itself, in a collection of its own |
+| Series | names that say they belong together ("PLUH" and "PLUH: Los Angeles", "Ppamir Vetl Z" and "Ppamir Vetl Super"), characters they share and crossover episodes | grouped by Solarr itself, in a collection of its own |
 | Any | made by hand | any works of the library |
 
 Crossover episodes are linked without asking when an episode pair has a title that names the episode (not "Pilot"),
 lengths within 5% and a near identical cast; anything less is only suggested, and what a person unlinks is never
 linked again.
+
+**Shared characters** (`characterEdges` in `internal/media/tv/related.go`) are a character played by the same person
+in two series. Two series are one family when they share three such characters that are regulars (series cast, not one
+episode's) in both, or when the newer one is named after a lead (billed in the first ten) or a character in three
+episodes of the older one ("Young Brannock" after Brannock Vale). A guest spot is a crossover, not a family; a part named
+after the one who plays it is a cameo; hosts, narrators and walk-ons count for nothing; and the two series must share a
+genre, a network or a maker. A crossover show joins no family: one whose characters belong to three families or more,
+or to two when most of its characters are other series'.
+
+Every pass works the families out again: a franchise a provider names is evidence and keeps its name unless all its
+series share one (a family of "Vulcano Park: …" series is "Vulcano Park"); Solarr's own collections are rebuilt from the evidence and go when it does.
+Wikidata names a franchise only by "part of the series" or "media franchise"; one tied by a spin-off or a sequel claim
+is called after its oldest series, the ones the library lacks included.
+
+**TMDB ids** are stored under one key per kind, because TMDB numbers each kind on its own: `tmdb` for series, people
+and networks, `tmdb:movie` for films, `tmdb:company` for studios, `tmdb:collection` for collections
+(`internal/metadata/tmdb/keys.go`). A lookup by provider id also names the media type it wants.

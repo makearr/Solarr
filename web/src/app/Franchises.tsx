@@ -38,7 +38,7 @@ function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
 }
 
 /** "3 / 7 in your library": what the library holds of the works that exist, as far as the providers say. */
-function heldLabel(franchise: Franchise): string {
+export function heldLabel(franchise: Franchise): string {
   const held = franchise.members.filter((member) => member.work_id).length;
   return franchise.total ? t("franchise.held", { held, total: Math.max(franchise.total, held) }) : t("franchise.heldUnknown", { held });
 }

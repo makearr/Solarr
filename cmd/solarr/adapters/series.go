@@ -43,7 +43,7 @@ func (c SeriesCatalog) LookupWorks(ctx context.Context, lookup media.AddLookup) 
 		if series.TVDBID == 0 {
 			candidate.Provider, candidate.ExternalID = tv.ProviderTMDB, strconv.FormatInt(series.TMDBID, 10)
 		}
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, candidate.Provider, candidate.ExternalID); err == nil && held {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, tv.MediaType, candidate.Provider, candidate.ExternalID); err == nil && held {
 			candidate.LibraryID = id
 		}
 		candidates[i] = candidate

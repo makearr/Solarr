@@ -87,7 +87,7 @@ func findOrAddSeries(
 	if external == 0 {
 		provider, external = ProviderTMDB, ids.TMDB
 	}
-	if id, held, err := service.Series.WorkByProviderID(ctx, provider, strconv.FormatInt(external, 10)); err != nil {
+	if id, held, err := service.Series.WorkByProviderID(ctx, MediaType, provider, strconv.FormatInt(external, 10)); err != nil {
 		return 0, err
 	} else if held {
 		return id, nil

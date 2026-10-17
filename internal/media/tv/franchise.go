@@ -128,7 +128,7 @@ func (p FranchisePass) relateAnime(ctx context.Context, entry library.UncheckedA
 			}
 			seen[relation.ID] = true
 			queue = append(queue, relation.ID)
-			if workID, found, err := p.Series.WorkByProviderID(ctx, ProviderAniList, strconv.FormatInt(relation.ID, 10)); err == nil && found && workID != entry.WorkID {
+			if workID, found, err := p.Series.WorkByProviderID(ctx, MediaType, ProviderAniList, strconv.FormatInt(relation.ID, 10)); err == nil && found && workID != entry.WorkID {
 				if err := p.Franchises.Relate(ctx, entry.WorkID, workID); err != nil {
 					p.Logger.Warn("relation not kept", slog.Any("error", err))
 				}
@@ -144,6 +144,10 @@ const franchisesPerRun = 60
 // readWikidata asks Wikidata for the franchise of the next series and puts the series the library holds in it.
 func (p FranchisePass) readWikidata(ctx context.Context) (int, error) {
 	unchecked, err := p.Franchises.SeriesWithoutFranchiseCheck(ctx, franchisesPerRun)
+	if err != nil {
+		return 0, err
+	}
+	unrelated, err := p.Franchises.UnrelatedPairs(ctx, MediaType)
 	if err != nil {
 		return 0, err
 	}
@@ -171,9 +175,14 @@ func (p FranchisePass) readWikidata(ctx context.Context) (int, error) {
 		held := p.heldWorks(ctx, members)
 		if len(members) >= 2 {
 			held[series.WorkID] = true
+			name := franchiseName(franchise, members)
 			var id int64
 			for workID := range held {
-				if id, err = p.Franchises.Join(ctx, MediaType, ProviderWikidata, franchise.QID, franchise.Label, workID); err != nil {
+				// A series a person took out of the franchise stays out.
+				if workID != series.WorkID && unrelated[[2]int64{series.WorkID, workID}] {
+					continue
+				}
+				if id, err = p.Franchises.Join(ctx, MediaType, ProviderWikidata, franchise.QID, name, workID); err != nil {
 					return found, err
 				}
 			}
@@ -194,6 +203,21 @@ func (p FranchisePass) readWikidata(ctx context.Context) (int, error) {
 	return found, nil
 }
 
+// franchiseName is what Wikidata calls a franchise; a series the others are spin-offs or sequels of names none, so the
+// oldest of them names it: the original series, not the spin-off the claim is on.
+func franchiseName(franchise wikidata.Franchise, members []wikidata.FranchiseSeries) string {
+	if franchise.Named {
+		return franchise.Label
+	}
+	oldest := wikidata.FranchiseSeries{Label: franchise.Label}
+	for _, member := range members {
+		if member.Year > 0 && member.Label != "" && (oldest.Year == 0 || member.Year < oldest.Year) {
+			oldest = member
+		}
+	}
+	return oldest.Label
+}
+
 // heldWorks is the library's work for each member it holds, found by TheTVDB or TMDB id.
 func (p FranchisePass) heldWorks(ctx context.Context, members []wikidata.FranchiseSeries) map[int64]bool {
 	held := map[int64]bool{}
@@ -207,21 +231,20 @@ func (p FranchisePass) heldWorks(ctx context.Context, members []wikidata.Franchi
 
 func heldMember(ctx context.Context, series library.Series, member wikidata.FranchiseSeries) (int64, bool) {
 	if member.TVDB > 0 {
-		if id, found, err := series.WorkByProviderID(ctx, ProviderTVDB, strconv.FormatInt(member.TVDB, 10)); err == nil && found {
+		if id, found, err := series.WorkByProviderID(ctx, MediaType, ProviderTVDB, strconv.FormatInt(member.TVDB, 10)); err == nil && found {
 			return id, true
 		}
 	}
 	if member.TMDB > 0 {
-		if id, found, err := series.WorkByProviderID(ctx, ProviderTMDB, strconv.FormatInt(member.TMDB, 10)); err == nil && found {
+		if id, found, err := series.WorkByProviderID(ctx, MediaType, ProviderTMDB, strconv.FormatInt(member.TMDB, 10)); err == nil && found {
 			return id, true
 		}
 	}
 	return 0, false
 }
 
-// Reconcile gathers everything that says series belong together (the franchises already kept, names, AniList's
-// relations, crossover episodes, a creator and a network in common) and makes each family one collection: the
-// franchise a provider named when there is one, its duplicates merged into it, named after what is known of it.
+// Reconcile gathers everything that says series belong together (providers' franchises, names, AniList, crossover
+// episodes, shared characters) and makes each family one collection; one Solarr made whose evidence is gone goes with it.
 func (p FranchisePass) Reconcile(ctx context.Context) (int, error) {
 	works, err := p.Franchises.WorkNames(ctx, MediaType)
 	if err != nil {
@@ -237,7 +260,15 @@ func (p FranchisePass) Reconcile(ctx context.Context) (int, error) {
 			edges = append(edges, edge)
 		}
 	}
-	edges = append(edges, sameMakers(traits)...)
+	characters, err := p.Franchises.CharacterCredits(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	for _, edge := range characterEdges(characters, works) {
+		if compatible(traits[edge[0]], traits[edge[1]]) {
+			edges = append(edges, edge)
+		}
+	}
 	related, err := p.Franchises.RelatedPairs(ctx, MediaType)
 	if err != nil {
 		return 0, err
@@ -262,8 +293,9 @@ func (p FranchisePass) Reconcile(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	plans, drop := planFranchises(works, collections, memberships, edges, unrelated)
 	changed := 0
-	for _, plan := range planFranchises(works, collections, memberships, edges, unrelated) {
+	for _, plan := range plans {
 		keep := plan.Keep
 		if keep == 0 {
 			if keep, err = p.Franchises.CreateAuto(ctx, MediaType, plan.Name); err != nil {
@@ -276,10 +308,19 @@ func (p FranchisePass) Reconcile(ctx context.Context) (int, error) {
 		if err := p.Franchises.AddToFranchise(ctx, keep, plan.Members); err != nil {
 			return changed, err
 		}
+		if err := p.Franchises.RemoveFromFranchise(ctx, keep, plan.Remove); err != nil {
+			return changed, err
+		}
 		if plan.Rename {
 			if err := p.Franchises.SetFranchiseName(ctx, keep, plan.Name); err != nil {
 				return changed, err
 			}
+		}
+		changed++
+	}
+	for _, id := range drop {
+		if err := p.Franchises.DropFranchise(ctx, id); err != nil {
+			return changed, err
 		}
 		changed++
 	}

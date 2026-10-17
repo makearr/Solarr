@@ -114,10 +114,10 @@ func TestAddStoresTheMovieItsOneWantedItemItsReleaseDayAndFranchise(t *testing.T
 	if err != nil || item.SatisfactionKind != "SET" || item.Monitored != 1 || !item.RequiredCount.Valid || item.RequiredCount.Int64 != 1 {
 		t.Errorf("item = %+v, %v; want a monitored SET item needing one file", item, err)
 	}
-	if work, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.ProviderIMDb, "tt0133093"); err != nil || !found || work != added.WorkID {
+	if work, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.MediaType, movie.ProviderIMDb, "tt0133093"); err != nil || !found || work != added.WorkID {
 		t.Errorf("work by imdb id = %d %v %v", work, found, err)
 	}
-	if id, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.ProviderTMDB, "603"); err != nil || !found || id != added.WorkID {
+	if id, found, err := library.NewSeries(opened).WorkByProviderID(t.Context(), movie.MediaType, movie.ProviderTMDB, "603"); err != nil || !found || id != added.WorkID {
 		t.Errorf("work by tmdb id = %d %v %v", id, found, err)
 	}
 	collections, err := library.NewFranchises(opened).Join(t.Context(), movie.MediaType, movie.ProviderCollection, "2344", "The Tonhut Collection", added.WorkID)

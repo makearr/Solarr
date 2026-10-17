@@ -87,6 +87,29 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 	return views, nil
 }
 
+// OfWork implements apiserver.Franchises.
+func (a LibraryFranchises) OfWork(ctx context.Context, categoryID, workID int64) ([]gen.Franchise, error) {
+	category, err := a.category(categoryID)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := a.Store.InCategory(ctx, category.MediaType, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	views := []gen.Franchise{}
+	for _, row := range rows {
+		if !slices.ContainsFunc(row.Members, func(member library.FranchiseMember) bool { return member.WorkID == workID }) {
+			continue
+		}
+		if row.PosterURL == "" {
+			row.PosterURL = firstPoster(row.Members)
+		}
+		views = append(views, franchiseView(row, nil))
+	}
+	return views, nil
+}
+
 // Get implements apiserver.Franchises.
 func (a LibraryFranchises) Get(ctx context.Context, categoryID, franchiseID int64) (gen.Franchise, error) {
 	category, err := a.category(categoryID)

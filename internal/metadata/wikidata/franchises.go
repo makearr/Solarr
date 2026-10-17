@@ -21,8 +21,12 @@ type FranchiseSeries struct {
 	Year       int
 }
 
-// Franchise is the media franchise Wikidata puts a series in.
-type Franchise struct{ QID, Label string }
+// Franchise is the media franchise Wikidata puts a series in. Named when the item is a franchise ("part of the series",
+// "media franchise"), not a series the series is tied to by a spin-off or a sequel claim.
+type Franchise struct {
+	QID, Label string
+	Named      bool
+}
 
 type sparqlResponse struct {
 	Results struct {
@@ -58,8 +62,10 @@ func (f Fetcher) SeriesFranchise(ctx context.Context, tvdb, tmdb int64) (Franchi
 	default:
 		return Franchise{}, false, nil
 	}
-	rows, err := f.sparql(ctx, `SELECT ?f ?fLabel WHERE { `+match+` { ?s wdt:P179 ?f } UNION { ?s wdt:P8345 ?f } UNION { ?s wdt:P2512 ?f } UNION { ?f wdt:P2512 ?s } UNION { ?s wdt:P155 ?f } UNION { ?s wdt:P156 ?f }
-  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 5`)
+	rows, err := f.sparql(ctx, `SELECT ?f ?fLabel ?named WHERE { `+match+`
+  { { ?s wdt:P179 ?f } UNION { ?s wdt:P8345 ?f } BIND(1 AS ?named) } UNION
+  { { ?s wdt:P2512 ?f } UNION { ?f wdt:P2512 ?s } UNION { ?s wdt:P155 ?f } UNION { ?s wdt:P156 ?f } BIND(0 AS ?named) }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } ORDER BY DESC(?named) LIMIT 5`)
 	if err != nil || len(rows) == 0 {
 		return Franchise{}, false, err
 	}
@@ -67,7 +73,7 @@ func (f Fetcher) SeriesFranchise(ctx context.Context, tvdb, tmdb int64) (Franchi
 	if !qidPattern.MatchString(qid) {
 		return Franchise{}, false, nil
 	}
-	return Franchise{QID: qid, Label: rows[0]["fLabel"].Value}, true, nil
+	return Franchise{QID: qid, Label: rows[0]["fLabel"].Value, Named: rows[0]["named"].Value == "1"}, true, nil
 }
 
 // FranchiseSeriesOf lists the television series of a franchise: those that are part of it, and the franchise item

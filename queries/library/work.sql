@@ -23,6 +23,15 @@ FROM work w
 JOIN work_external_id e ON e.work_id = w.id
 WHERE e.provider = ? AND e.external_id = ?;
 
+-- A provider id is looked up within one media type: TMDB numbers its movies and series apart.
+-- name: GetWorkOfTypeByExternalID :one
+SELECT w.id, w.media_type, w.canonical_title, w.sort_title, w.original_language,
+       w.year, w.runtime_ms, w.added_at, w.updated_at, w.added_by, w.description,
+       w.lead_person_id, w.lead_person_sort_name, w.subtype
+FROM work w
+JOIN work_external_id e ON e.work_id = w.id
+WHERE e.provider = ? AND e.external_id = ? AND w.media_type = ?;
+
 -- An import names an album it already knows by the canonical title and artist, never the tags.
 -- name: GetWorkNamingByExternalID :one
 SELECT w.canonical_title, w.year, p.name AS lead_person_name

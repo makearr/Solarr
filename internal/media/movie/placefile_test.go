@@ -25,10 +25,10 @@ func TestAQueuedFileIsPlacedOnTheMovieAPersonNames(t *testing.T) {
 		Series:   library.NewSeries(opened), Unidentified: unidentified, Clock: atAddNow(),
 	}
 
-	if _, _, err := files.PlaceFile(t.Context(), 5, registered[0].MediaObjectID, media.Placement{Provider: "tmdb", ExternalID: "nonsense"}, false); err == nil {
+	if _, _, err := files.PlaceFile(t.Context(), 5, registered[0].MediaObjectID, media.Placement{Provider: movie.ProviderTMDB, ExternalID: "nonsense"}, false); err == nil {
 		t.Error("an id that is no id is refused")
 	}
-	workID, placed, err := files.PlaceFile(t.Context(), 5, registered[0].MediaObjectID, media.Placement{Provider: "tmdb", ExternalID: "603"}, false)
+	workID, placed, err := files.PlaceFile(t.Context(), 5, registered[0].MediaObjectID, media.Placement{Provider: movie.ProviderTMDB, ExternalID: "603"}, false)
 	if err != nil || workID == 0 || placed != 1 {
 		t.Fatalf("placed = %d on work %d, %v", placed, workID, err)
 	}

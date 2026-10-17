@@ -197,7 +197,9 @@ func (s Series) existingPartRefs(ctx context.Context, workID int64) (map[string]
 
 func upsertSeriesWork(ctx context.Context, queries *librarydb.Queries, at time.Time, write SeriesWrite) (workID int64, created bool, skipped int, err error) {
 	for _, id := range write.IDs {
-		found, err := queries.GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{Provider: id.Provider, ExternalID: id.ExternalID})
+		found, err := queries.GetWorkOfTypeByExternalID(ctx, librarydb.GetWorkOfTypeByExternalIDParams{
+			Provider: id.Provider, ExternalID: id.ExternalID, MediaType: write.Work.MediaType,
+		})
 		if err == nil {
 			workID = found.ID
 			break
@@ -460,9 +462,11 @@ func orDefault(value, fallback string) string {
 	return value
 }
 
-// WorkByProviderID answers the series a provider id names, if the library has one.
-func (s Series) WorkByProviderID(ctx context.Context, provider, externalID string) (int64, bool, error) {
-	work, err := librarydb.New(s.store.Read()).GetWorkByExternalID(ctx, librarydb.GetWorkByExternalIDParams{Provider: provider, ExternalID: externalID})
+// WorkByProviderID answers the work of the media type a provider id names, if the library has one.
+func (s Series) WorkByProviderID(ctx context.Context, mediaType, provider, externalID string) (int64, bool, error) {
+	work, err := librarydb.New(s.store.Read()).GetWorkOfTypeByExternalID(ctx, librarydb.GetWorkOfTypeByExternalIDParams{
+		Provider: provider, ExternalID: externalID, MediaType: mediaType,
+	})
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
 	}

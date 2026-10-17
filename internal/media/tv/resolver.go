@@ -130,7 +130,7 @@ func (c Resolver) ResolveFolder(ctx context.Context, categoryID int64, folder st
 	}
 
 	if guess.TVDBID > 0 {
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, ProviderTVDB, strconv.FormatInt(guess.TVDBID, 10)); err == nil && held {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, MediaType, ProviderTVDB, strconv.FormatInt(guess.TVDBID, 10)); err == nil && held {
 			return id, nil
 		}
 		return c.add(ctx, categoryID, IDs{TVDB: guess.TVDBID}), nil
@@ -159,13 +159,13 @@ func (c Resolver) ResolveFolder(ctx context.Context, categoryID int64, folder st
 // falls back to searching by title, as when TMDB is not configured to map an IMDb id.
 func (c Resolver) byNamedID(ctx context.Context, categoryID int64, guess FolderGuess) int64 {
 	if guess.TMDBID > 0 {
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, ProviderTMDB, strconv.FormatInt(guess.TMDBID, 10)); err == nil && held {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, MediaType, ProviderTMDB, strconv.FormatInt(guess.TMDBID, 10)); err == nil && held {
 			return id
 		}
 		return c.add(ctx, categoryID, IDs{TMDB: guess.TMDBID})
 	}
 	if guess.IMDbID != "" {
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, ProviderIMDb, guess.IMDbID); err == nil && held {
+		if id, held, err := c.Service.Series.WorkByProviderID(ctx, MediaType, ProviderIMDb, guess.IMDbID); err == nil && held {
 			return id
 		}
 		return c.add(ctx, categoryID, IDs{IMDb: guess.IMDbID})

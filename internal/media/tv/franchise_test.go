@@ -32,7 +32,7 @@ func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *te
 		t.Fatal(err)
 	}
 	source := fakeFranchises{
-		franchise: wikidata.Franchise{QID: "Q4321", Label: "Example Franchise"},
+		franchise: wikidata.Franchise{QID: "Q4321", Label: "Example Franchise", Named: true},
 		members: []wikidata.FranchiseSeries{
 			{QID: "Q4321", Label: "Example Show", TVDB: 1234, Year: 2020},
 			{QID: "Q9", Label: "Example: Next Generation", TVDB: 999, Year: 2024},

@@ -97,7 +97,7 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 		return nil, err
 	}
 	for i := range candidates {
-		_, held, err := f.Service.Series.WorkByProviderID(ctx, ProviderTMDB, candidates[i].ExternalID)
+		_, held, err := f.Service.Series.WorkByProviderID(ctx, MediaType, ProviderTMDB, candidates[i].ExternalID)
 		if err != nil {
 			return nil, err
 		}

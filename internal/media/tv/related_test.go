@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
 func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
@@ -40,21 +41,21 @@ func TestSeriesWithRelatedNamesAreGroupedAndUnrelatedOnesAreNot(t *testing.T) {
 			t.Errorf("group %d = %v, want %v", index, groups[index], want[index])
 		}
 	}
-	for index, name := range map[int]string{0: "PLUH", 1: "Tzul Nmex", 2: "Ppamir Vetl", 3: "Kdihep Uisbl", 5: "FBI", 7: "Charlies Angels"} {
-		if got := groupName(byTitle, groups[index]); got != name {
+	for index, name := range map[int]string{0: "PLUH", 1: "Tzul Nmex", 3: "Kdihep Uisbl", 5: "FBI", 7: "Jzamkie's Orpigv"} {
+		var members []library.WorkName
+		for _, id := range groups[index] {
+			members = append(members, library.WorkName{WorkID: id, Title: byTitle[id]})
+		}
+		if got := familyName(members); got != name {
 			t.Errorf("group %d is named %q, want %q", index, got, name)
 		}
 	}
 }
 
 func TestGroupsFollowEdgesFromProvidersAndCrossovers(t *testing.T) {
-	titles := map[int64]string{1: "Eureka", 2: "Sifuruowu 13", 3: "Huwjin Jacg Riud", 4: "Jbaepuvz Giv"}
 	groups := groupsOf([][2]int64{{1, 2}, {3, 4}, {2, 1}})
 	if len(groups) != 2 || !slices.Equal(groups[0], []int64{1, 2}) || !slices.Equal(groups[1], []int64{3, 4}) {
 		t.Fatalf("groups = %v", groups)
-	}
-	if got := groupName(titles, groups[0]); got != "Eureka / Sifuruowu 13" {
-		t.Errorf("a group whose names share nothing is named by them: %q", got)
 	}
 }
 
@@ -82,6 +83,8 @@ func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 		{WorkID: 6, Title: "PLUH: Los Angeles", Year: 2009}, {WorkID: 7, Title: "PLUH: Hawai'i", Year: 2021},
 		{WorkID: 8, Title: "Tzul Nmex: Voyager", Year: 1995}, {WorkID: 9, Title: "Tzul Nmex: Discovery", Year: 2017},
 		{WorkID: 10, Title: "Jzamkie's Orpigv", Year: 1976}, {WorkID: 11, Title: "Jzamkie's Orpigv (2011)", Year: 2011},
+		{WorkID: 12, Title: "Vulcano Park: Camp Lava", Year: 2020}, {WorkID: 13, Title: "Vulcano Park: Ember Theory", Year: 2024},
+		{WorkID: 14, Title: "Mirrorcase", Year: 2001}, {WorkID: 15, Title: "Driftwater", Year: 2004},
 	}
 	collections := []library.FranchiseSummary{
 		{ID: 584, Name: "Q5594233", Source: "wikidata"}, {ID: 585, Name: "Hik 10: Ihaol Force", Source: "wikidata"},
@@ -89,17 +92,21 @@ func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 		{ID: 700, Name: "PLUH", Source: "auto"}, {ID: 701, Name: "PLUH", Source: "auto"},
 		{ID: 628, Name: "Tzul Nmex", Source: "wikidata"},
 		{ID: 590, Name: "Charlies Angels", Source: "auto"},
+		{ID: 710, Name: "Vulcano Land", Source: "wikidata"},
+		{ID: 724, Name: "Mirrorcase", Source: "auto"},
 	}
 	memberships := []library.Membership{
 		{CollectionID: 584, WorkID: 1}, {CollectionID: 584, WorkID: 2}, {CollectionID: 584, WorkID: 3}, {CollectionID: 585, WorkID: 1}, {CollectionID: 585, WorkID: 2},
 		{CollectionID: 643, WorkID: 4}, {CollectionID: 650, WorkID: 4}, {CollectionID: 650, WorkID: 5},
-		{CollectionID: 700, WorkID: 6}, {CollectionID: 701, WorkID: 6}, {CollectionID: 701, WorkID: 7},
+		{CollectionID: 700, WorkID: 6}, {CollectionID: 701, WorkID: 6}, {CollectionID: 701, WorkID: 7}, {CollectionID: 701, WorkID: 9},
 		{CollectionID: 628, WorkID: 8}, {CollectionID: 628, WorkID: 9},
 		{CollectionID: 590, WorkID: 10}, {CollectionID: 590, WorkID: 11},
+		{CollectionID: 710, WorkID: 12}, {CollectionID: 710, WorkID: 13},
+		{CollectionID: 724, WorkID: 14}, {CollectionID: 724, WorkID: 15},
 	}
-	// A person said the two Jzamkie's Orpigv do not belong together.
+	// A person said the two Jzamkie's Orpigv do not belong together; nothing says Mirrorcase and Driftwater do any more.
 	unrelated := map[[2]int64]bool{{10, 11}: true, {11, 10}: true}
-	plans := planFranchises(works, collections, memberships, nil, unrelated)
+	plans, drop := planFranchises(works, collections, memberships, titleEdges(works), unrelated)
 
 	byMember := map[int64]franchisePlan{}
 	for _, plan := range plans {
@@ -108,32 +115,85 @@ func TestOneFamilyIsOneCollectionNamedAfterItsOldestSeries(t *testing.T) {
 		}
 	}
 	if plan := byMember[1]; plan.Keep != 584 || !slices.Equal(plan.Merge, []int64{585}) || plan.Name != "Hik 10" || !plan.Rename {
-		t.Errorf("Hik 10: %+v; want the larger kept, the other merged, an item id replaced by the oldest series' name", plan)
+		t.Errorf("Hik 10: %+v; want the larger kept, the other merged, an item id replaced by the name its series share", plan)
 	}
 	if plan := byMember[4]; plan.Keep != 650 || !slices.Equal(plan.Merge, []int64{643}) || plan.Name != "Ketkpobxom Rimixtomu" {
 		t.Errorf("Ketkpobxom Rimixtomu appeared twice: %+v", plan)
 	}
-	if plan := byMember[6]; plan.Keep != 701 || !slices.Equal(plan.Merge, []int64{700}) || plan.Name != "PLUH" {
-		t.Errorf("PLUH: %+v; want one collection, named for the stem its series share", plan)
+	if plan := byMember[6]; plan.Keep != 701 || plan.Merge != nil || !slices.Equal(plan.Remove, []int64{9}) || plan.Name != "PLUH" {
+		t.Errorf("PLUH: %+v; want Solarr's fuller one kept and rebuilt from the evidence", plan)
 	}
 	if plan := byMember[8]; plan.Keep != 628 || plan.Rename || plan.Name != "Tzul Nmex" {
 		t.Errorf("a provider's name that is no series' title stays: %+v", plan)
 	}
+	if plan := byMember[12]; plan.Keep != 710 || plan.Name != "Vulcano Park" || !plan.Rename {
+		t.Errorf("Vulcano Park: %+v; want the name its series share over the provider's", plan)
+	}
 	if _, grouped := byMember[10]; grouped {
 		t.Errorf("a pair a person ruled out is no family: %+v", byMember[10])
 	}
+	if _, grouped := byMember[14]; grouped {
+		t.Errorf("Solarr's own collection is no evidence for itself: %+v", byMember[14])
+	}
+	slices.Sort(drop)
+	if !slices.Equal(drop, []int64{590, 700, 724}) {
+		t.Errorf("drop = %v; want Solarr's collections no family keeps", drop)
+	}
 }
 
-func TestSameCreatorOnTheSameNetworkInTheSameKindOfShowMakesAFamily(t *testing.T) {
-	animated := []string{"Animation", "Comedy"}
-	traits := map[int64]*library.Traits{
-		1: {Creators: []string{"7", "8"}, Organisations: []int64{3}, Genres: animated},
-		2: {Creators: []string{"7"}, Organisations: []int64{3}, Genres: animated},
-		3: {Creators: []string{"7"}, Organisations: []int64{4}, Genres: animated},
-		4: {Creators: []string{"7"}, Organisations: []int64{3}, Genres: []string{"Drama"}},
+func TestSeriesThatShareTheirRegularsOrAreNamedAfterACharacterAreOneFamily(t *testing.T) {
+	works := []library.WorkName{
+		{WorkID: 1, Title: "Kitsuro", Year: 2002}, {WorkID: 2, Title: "Kitsuro Senpu", Year: 2007},
+		{WorkID: 3, Title: "The Lattice Hour", Year: 2007}, {WorkID: 4, Title: "Young Brannock", Year: 2017},
+		{WorkID: 5, Title: "The Pemberlys", Year: 1989}, {WorkID: 6, Title: "Harbour Folk", Year: 1999},
+		{WorkID: 7, Title: "Quill and Pebble", Year: 2013}, {WorkID: 8, Title: "Governor Tandry", Year: 2026},
+		{WorkID: 13, Title: "Mopp and Dibble", Year: 2007}, {WorkID: 14, Title: "Gravel and the Agents of B.O.U.L.D.E.R.", Year: 2013},
+		{WorkID: 9, Title: "Tinyverse", Year: 2022}, {WorkID: 10, Title: "Marshlands", Year: 2019}, {WorkID: 11, Title: "Goose Tales", Year: 2017}, {WorkID: 12, Title: "Small Town Reds", Year: 2018},
 	}
-	edges := sameMakers(traits)
-	if len(edges) != 1 || edges[0] != [2]int64{1, 2} {
-		t.Errorf("edges = %v; want only the two animated comedies of one network and creator", edges)
+	regular := func(work, person int64, name, character string) library.CharacterCredit {
+		return library.CharacterCredit{WorkID: work, PersonID: person, Person: name, Character: character, Regular: true, Billing: 1}
+	}
+	guest := func(work, person int64, name, character string, episodes int64) library.CharacterCredit {
+		return library.CharacterCredit{WorkID: work, PersonID: person, Person: name, Character: character, Episodes: episodes, Billing: -1}
+	}
+	credits := []library.CharacterCredit{
+		regular(1, 1, "Aiko Morane", "Kitsuro Hayame (voice)"), regular(2, 1, "Aiko Morane", "Kitsuro Hayame"),
+		regular(1, 2, "Ren Usagawa", "Rin Tokara"), regular(2, 2, "Ren Usagawa", "Rin Tokara"),
+		regular(1, 3, "Kei Tomura", "Jiro Hasaki"), regular(2, 3, "Kei Tomura", "Jiro Hasaki"),
+		// Young Brannock is named after a regular of the older series, played by the same actor.
+		regular(3, 4, "Tobin Ashe", "Brannock Vale"), regular(4, 4, "Tobin Ashe", "Brannock Vale / Narrator"),
+		// A crossover episode and a cameo as oneself prove no family.
+		regular(5, 5, "Dale Corvin", "Bert Pemberly"), guest(6, 5, "Dale Corvin", "Bert Pemberly", 1),
+		regular(5, 6, "Silas Marrow", "Dougal Harrow"), guest(6, 6, "Silas Marrow", "Dougal Harrow", 1),
+		guest(5, 7, "Orla Fenwick", "Orla Fenwick", 2), guest(3, 7, "Orla Fenwick", "Orla Fenwick", 2),
+		regular(5, 8, "Some Actor", "Narrator"), regular(6, 8, "Some Actor", "Narrator"), regular(3, 8, "Some Actor", "Narrator"),
+		// Governor Tandry recurs on Quill and Pebble before getting his own series.
+		guest(7, 9, "Basil Okoro", "Governor Tandry", 5), regular(8, 9, "Basil Okoro", "Governor Tandry"),
+		// Gravel, billed far down Mopp and Dibble for one episode, names no spin-off of it.
+		{WorkID: 13, PersonID: 10, Person: "Ferris Tate", Character: "Gravel (voice)", Regular: true, Episodes: 1, Billing: 649},
+		regular(14, 10, "Ferris Tate", "Gravel"),
+	}
+	// Tinyverse has three regulars of each of three series that share nothing else.
+	for index, show := range []int64{10, 11, 12} {
+		for n := range 3 {
+			person := int64(100 + index*10 + n)
+			name := "Character " + string(rune('A'+index)) + string(rune('a'+n))
+			credits = append(credits, regular(9, person, "Actor", name), regular(show, person, "Actor", name))
+		}
+	}
+	edges := characterEdges(credits, works)
+	want := [][2]int64{{1, 2}, {3, 4}, {7, 8}}
+	if !slices.Equal(edges, want) {
+		t.Errorf("edges = %v, want %v", edges, want)
+	}
+}
+
+func TestAFranchiseWikidataNamesOnlyBySpinOffIsCalledAfterItsOldestSeries(t *testing.T) {
+	members := []wikidata.FranchiseSeries{{Label: "Housemates", Year: 1994}, {Label: "Marlo", Year: 2004}}
+	if got := franchiseName(wikidata.Franchise{Label: "Marlo"}, members); got != "Housemates" {
+		t.Errorf("a spin-off's item names it %q, want the oldest series", got)
+	}
+	if got := franchiseName(wikidata.Franchise{Label: "Quiververse", Named: true}, members); got != "Quiververse" {
+		t.Errorf("a franchise's own name is %q", got)
 	}
 }

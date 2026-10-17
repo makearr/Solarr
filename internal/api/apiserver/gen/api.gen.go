@@ -5348,6 +5348,11 @@ type SendCandidateParams struct {
 	Part *SearchPart `form:"part,omitempty" json:"part,omitempty"`
 }
 
+// ListWorkFranchisesParams defines parameters for ListWorkFranchises.
+type ListWorkFranchisesParams struct {
+	CategoryId int64 `form:"category_id" json:"category_id"`
+}
+
 // GrabWorkParams defines parameters for GrabWork.
 type GrabWorkParams struct {
 	// Group The group of the work a search is for, by its ref (a season); absent is the work's own item.
@@ -6480,6 +6485,9 @@ type ServerInterface interface {
 	// Save an album's Edit dialog in one call.
 	// (PUT /works/{id}/edit)
 	SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64)
+	// The collections a work is part of, with the works of each the library holds.
+	// (GET /works/{id}/franchises)
+	ListWorkFranchises(w http.ResponseWriter, r *http.Request, id int64, params ListWorkFranchisesParams)
 	// Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 	// (POST /works/{id}/grab)
 	GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams)
@@ -8025,6 +8033,12 @@ func (_ Unimplemented) GetWorkEdit(w http.ResponseWriter, r *http.Request, id in
 // Save an album's Edit dialog in one call.
 // (PUT /works/{id}/edit)
 func (_ Unimplemented) SaveWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The collections a work is part of, with the works of each the library holds.
+// (GET /works/{id}/franchises)
+func (_ Unimplemented) ListWorkFranchises(w http.ResponseWriter, r *http.Request, id int64, params ListWorkFranchisesParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16354,6 +16368,57 @@ func (siw *ServerInterfaceWrapper) SaveWorkEdit(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkFranchises operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkFranchises(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListWorkFranchisesParams
+
+	// ------------- Required query parameter "category_id" -------------
+
+	if paramValue := r.URL.Query().Get("category_id"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "category_id"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "category_id", r.URL.Query(), &params.CategoryId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "category_id", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkFranchises(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GrabWork operation middleware
 func (siw *ServerInterfaceWrapper) GrabWork(w http.ResponseWriter, r *http.Request) {
 
@@ -17761,6 +17826,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/works/{id}/edit", wrapper.SaveWorkEdit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/franchises", wrapper.ListWorkFranchises)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/grab", wrapper.GrabWork)

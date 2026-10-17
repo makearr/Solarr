@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
 // radarrSource walks Radarr's movies, four at once: each is added by its TMDB id. A movie Solarr already holds is
@@ -75,7 +76,7 @@ func radarrAvailability(value string) string {
 }
 
 func (a ArrSync) syncMovie(ctx context.Context, importID, categoryID int64, radarr arrimport.RadarrMovie, profileNames map[int64]string) (bool, error) {
-	provider, externalID := "tmdb", strconv.FormatInt(radarr.TMDBID, 10)
+	provider, externalID := tmdb.KeyMovie, strconv.FormatInt(radarr.TMDBID, 10)
 	switch {
 	case radarr.TMDBID != 0:
 	case radarr.IMDbID != "":

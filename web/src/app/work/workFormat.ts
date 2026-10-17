@@ -70,6 +70,7 @@ const LINKS: Record<string, { label: string; url: (id: string) => string }> = {
   tvmaze: { label: "TVmaze", url: (id) => `https://www.tvmaze.com/shows/${id}` },
   imdb: { label: "IMDb", url: (id) => `https://www.imdb.com/title/${id}/` },
   tmdb: { label: "TMDB", url: (id) => `https://www.themoviedb.org/tv/${id}` },
+  "tmdb:movie": { label: "TMDB", url: (id) => `https://www.themoviedb.org/movie/${id}` },
   "musicbrainz:release-group": { label: "MusicBrainz", url: (id) => `https://musicbrainz.org/release-group/${id}` },
 };
 

@@ -399,6 +399,8 @@ type Querier interface {
 	GetWorkMergeSuggestion(ctx context.Context, workID int64) (GetWorkMergeSuggestionRow, error)
 	// An import names an album it already knows by the canonical title and artist, never the tags.
 	GetWorkNamingByExternalID(ctx context.Context, arg GetWorkNamingByExternalIDParams) (GetWorkNamingByExternalIDRow, error)
+	// A provider id is looked up within one media type: TMDB numbers its movies and series apart.
+	GetWorkOfTypeByExternalID(ctx context.Context, arg GetWorkOfTypeByExternalIDParams) (Work, error)
 	GetWorkPart(ctx context.Context, id int64) (WorkPart, error)
 	// The ids a user's image picker asks the providers with.
 	GetWorkReleaseGroupMBID(ctx context.Context, workID int64) (string, error)
@@ -499,6 +501,8 @@ type Querier interface {
 	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
 	// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
 	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
+	// Who plays whom in each work of a media type, once per work: a character two series share makes them one family.
+	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	// The works of a library in the collections, monitored as the library's own item says, files counted.
 	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)

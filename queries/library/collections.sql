@@ -432,6 +432,15 @@ SELECT wo.work_id, wo.organisation_id FROM work_organisation wo JOIN work w ON w
 SELECT DISTINCT c.work_id, c.person_id FROM credit c JOIN work w ON w.id = c.work_id
 WHERE w.media_type = ? AND c.part_id = 0 AND c.role IN ('creator', 'showrunner');
 
+-- Who plays whom in each work of a media type, once per work: a character two series share makes them one family.
+-- name: ListCharacterCreditsOfType :many
+SELECT c.work_id, c.person_id, p.name AS person_name, c.character, CAST(MIN(c.part_id) = 0 AS INTEGER) AS regular,
+       CAST(COUNT(DISTINCT c.part_id) AS INTEGER) AS appearances,
+       CAST(COALESCE(MIN(CASE WHEN c.part_id = 0 THEN c.ord END), -1) AS INTEGER) AS billing
+FROM credit c JOIN work w ON w.id = c.work_id JOIN person p ON p.id = c.person_id
+WHERE w.media_type = ? AND c.character <> ''
+GROUP BY c.work_id, c.person_id, c.character;
+
 -- name: ListFranchisesOfType :many
 SELECT c.id, c.name, c.source FROM collection c WHERE c.kind = 'franchise' AND c.media_type = ? ORDER BY c.id;
 

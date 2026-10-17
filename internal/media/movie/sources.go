@@ -57,7 +57,7 @@ func FromTMDB(in tmdb.Movie, country string) Movie {
 		movie.Studio = movie.Studios[0].Name
 	}
 	if in.VoteAverage > 0 {
-		movie.Ratings = []Rating{{Provider: ProviderTMDB, Score: in.VoteAverage, Votes: int64(in.VoteCount)}}
+		movie.Ratings = []Rating{{Provider: sourceTMDB, Score: in.VoteAverage, Votes: int64(in.VoteCount)}}
 	}
 	if in.Collection != nil && in.Collection.ID != 0 {
 		movie.Collection = &Collection{TMDBID: in.Collection.ID, Name: in.Collection.Name, PosterURL: tmdb.ImageURL(in.Collection.PosterPath)}

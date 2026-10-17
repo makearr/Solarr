@@ -6090,6 +6090,27 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/franchises:
+    parameters:
+      - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      - { name: category_id, in: query, required: true, schema: { type: integer, format: int64 } }
+    get:
+      operationId: listWorkFranchises
+      tags: [library]
+      summary: The collections a work is part of, with the works of each the library holds.
+      responses:
+        "200":
+          description: The collections, by name.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [franchises]
+                properties:
+                  franchises: { type: array, items: { $ref: "#/components/schemas/Franchise" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/crossovers:
     parameters:
       - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
