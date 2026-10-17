@@ -3,8 +3,10 @@ package movie
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -159,14 +161,25 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 const rankedWell = 3
 
 // pickCandidate chooses the first hit with the named title and a year that agrees, when it is among the provider's top
-// few; with no year named, or no such hit, it chooses none.
+// few. With no year named it chooses the one hit of that title, if no other hit shares it; with no such hit, the
+// provider's first, when its year is exactly the named one and one title is the other's beginning or end.
 func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, bool) {
-	if info.Year == 0 {
-		return Candidate{}, false
-	}
 	wanted := map[string]bool{}
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
 		wanted[parsetv.CleanTitle(title)] = true
+	}
+	if info.Year == 0 {
+		var sole Candidate
+		same := 0
+		for rank, candidate := range candidates {
+			if rank < rankedWell && wanted[parsetv.CleanTitle(candidate.Title)] {
+				sole, same = candidate, same+1
+			}
+		}
+		if same != 1 {
+			return Candidate{}, false
+		}
+		return sole, true
 	}
 	// An exact year beats a year off by one, wherever each sits in the first few.
 	for _, exactYear := range []bool{true, false} {
@@ -180,7 +193,21 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 			}
 		}
 	}
+	if len(candidates) > 0 && candidates[0].Year == info.Year && (wordsBound(info.Title, candidates[0].Title) || wordsBound(candidates[0].Title, info.Title)) {
+		return candidates[0], true
+	}
 	return Candidate{}, false
+}
+
+// wordsBound says the shorter title is the longer one's first or last words and has at least two ("Borat Subsequent
+// Moviefilm" and its provider title with the full Kazakh subtitle, "Almeeg of Vix 3 Dguzoli Haheix" and "Dguzoli Haheix").
+func wordsBound(long, short string) bool {
+	isWord := func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
+	longWords, shortWords := strings.FieldsFunc(strings.ToLower(long), isWord), strings.FieldsFunc(strings.ToLower(short), isWord)
+	if len(shortWords) < 2 || len(shortWords) >= len(longWords) {
+		return false
+	}
+	return slices.Equal(longWords[:len(shortWords)], shortWords) || slices.Equal(longWords[len(longWords)-len(shortWords):], shortWords)
 }
 
 func identifications(candidates []Candidate) []model.Identification {
