@@ -11,8 +11,12 @@ import (
 
 // Source names, as listed in Movie.Sources.
 const (
-	sourceTMDB  = "tmdb"
-	sourceRadar = "radarr"
+	sourceTMDB    = "tmdb"
+	sourceRadar   = "radarr"
+	sourceMDBList = "mdblist"
+	sourceOMDb    = "omdb"
+	sourceFanart  = "fanart"
+	sourceTVDB    = "tvdb"
 )
 
 const (

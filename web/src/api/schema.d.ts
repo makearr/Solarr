@@ -954,6 +954,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metadata/providers/{key}/apikey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Store or clear the owner's key for a provider that takes one. Administrator only. */
+        put: operations["setMetadataProviderKey"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metadata/providers/{key}": {
         parameters: {
             query?: never;
@@ -4524,6 +4543,8 @@ export interface components {
             needs_key: boolean;
             /** @description Switched on for every library. */
             enabled: boolean;
+            /** @description The owner's own key for it is stored. */
+            key_stored: boolean;
             /** @description False for MusicBrainz */
             can_disable: boolean;
             /** @description The libraries whose order it takes a place in. */
@@ -9124,6 +9145,38 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    setMetadataProviderKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description Empty clears it. */
+                    api_key?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Stored. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     setMetadataProviderEnabled: {

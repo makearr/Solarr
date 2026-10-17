@@ -19,8 +19,11 @@ import (
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
@@ -294,6 +297,10 @@ func (p *process) movieService() movie.Service {
 		proxy := radarrmeta.New(p.providerClient(providerRadarrMeta, nil, httpx.ClientConfig{}))
 		p.movieShared = movie.Service{
 			Wikidata: p.wikidataFetcher(),
+			MDBList:  mdblist.New(p.providerClient(providerMDBList, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceMDBList)),
+			OMDb:     omdb.New(p.providerClient(providerOMDb, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceOMDb)),
+			Fanart:   fanart.New(p.providerClient(providerFanart, nil, httpx.ClientConfig{}), p.providerKey(settings.MovieSourceFanart)),
+			TVDB:     p.tvdbShared,
 			Priority: func() []string {
 				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: movie.MediaType})
 			},
@@ -330,6 +337,18 @@ func (p *process) seriesCatalog() adapters.SeriesCatalog {
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
 		Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(),
 		Remover: p.fileRemover(),
+	}
+}
+
+// providerKey answers, on every call, the owner's key for a provider: a key stored later is used without a restart.
+func (p *process) providerKey(provider string) func() string {
+	return func() string {
+		key, err := p.cache.ProviderKey(provider)
+		if err != nil {
+			p.logger.Warn("provider key could not be opened", "provider", provider, "error", err)
+			return ""
+		}
+		return string(key)
 	}
 }
 

@@ -2933,7 +2933,10 @@ type MetadataProviderInfo struct {
 	// Enabled Switched on for every library.
 	Enabled bool   `json:"enabled"`
 	Key     string `json:"key"`
-	Label   string `json:"label"`
+
+	// KeyStored The owner's own key for it is stored.
+	KeyStored bool   `json:"key_stored"`
+	Label     string `json:"label"`
 
 	// MediaTypes The libraries whose order it takes a place in.
 	MediaTypes []string `json:"media_types"`
@@ -4952,6 +4955,12 @@ type SetMetadataProviderEnabledJSONBody struct {
 	Enabled bool `json:"enabled"`
 }
 
+// SetMetadataProviderKeyJSONBody defines parameters for SetMetadataProviderKey.
+type SetMetadataProviderKeyJSONBody struct {
+	// ApiKey Empty clears it.
+	ApiKey *string `json:"api_key,omitempty"`
+}
+
 // SetTheAudioDBAPIKeyJSONBody defines parameters for SetTheAudioDBAPIKey.
 type SetTheAudioDBAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
@@ -5620,6 +5629,9 @@ type SetAcoustIDAPIKeyJSONRequestBody SetAcoustIDAPIKeyJSONBody
 // SetMetadataProviderEnabledJSONRequestBody defines body for SetMetadataProviderEnabled for application/json ContentType.
 type SetMetadataProviderEnabledJSONRequestBody SetMetadataProviderEnabledJSONBody
 
+// SetMetadataProviderKeyJSONRequestBody defines body for SetMetadataProviderKey for application/json ContentType.
+type SetMetadataProviderKeyJSONRequestBody SetMetadataProviderKeyJSONBody
+
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
 
@@ -6180,6 +6192,9 @@ type ServerInterface interface {
 	// Switch a provider on or off for every library. Administrator only.
 	// (PUT /metadata/providers/{key})
 	SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Request, key string)
+	// Store or clear the owner's key for a provider that takes one. Administrator only.
+	// (PUT /metadata/providers/{key}/apikey)
+	SetMetadataProviderKey(w http.ResponseWriter, r *http.Request, key string)
 	// The metadata providers' own settings.
 	// (GET /metadata/settings)
 	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
@@ -7407,6 +7422,12 @@ func (_ Unimplemented) ListMetadataProviders(w http.ResponseWriter, r *http.Requ
 // Switch a provider on or off for every library. Administrator only.
 // (PUT /metadata/providers/{key})
 func (_ Unimplemented) SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Request, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Store or clear the owner's key for a provider that takes one. Administrator only.
+// (PUT /metadata/providers/{key}/apikey)
+func (_ Unimplemented) SetMetadataProviderKey(w http.ResponseWriter, r *http.Request, key string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12739,6 +12760,39 @@ func (siw *ServerInterfaceWrapper) SetMetadataProviderEnabled(w http.ResponseWri
 	handler.ServeHTTP(w, r)
 }
 
+// SetMetadataProviderKey operation middleware
+func (siw *ServerInterfaceWrapper) SetMetadataProviderKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMetadataProviderKey(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -17594,6 +17648,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/metadata/providers/{key}", wrapper.SetMetadataProviderEnabled)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/metadata/providers/{key}/apikey", wrapper.SetMetadataProviderKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/metadata/settings", wrapper.GetMetadataSettings)

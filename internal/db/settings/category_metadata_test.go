@@ -15,7 +15,7 @@ func TestALibraryStartsWithTheProvidersOfItsTypeAndMayReorderThem(t *testing.T) 
 	}
 	snapshot := cache.Snapshot()
 	created, _ := snapshot.Category(movies.ID)
-	if !slices.Equal(snapshot.MetadataSourcesFor(created), []string{"wikidata", "tmdb", "radarr"}) {
+	if !slices.Equal(snapshot.MetadataSourcesFor(created), []string{"wikidata", "tmdb", "radarr", "mdblist", "omdb", "tvdb", "fanart"}) {
 		t.Fatalf("a new movie library starts with %v", snapshot.MetadataSourcesFor(created))
 	}
 	if err := cache.SetCategoryMetadataSources(t.Context(), movies.ID, []string{"radarr", "tmdb"}); err != nil {
@@ -54,7 +54,7 @@ func TestAProviderSwitchedOffIsAskedByNoLibraryAndMusicBrainzStaysOn(t *testing.
 	}
 	snapshot := cache.Snapshot()
 	category, _ := snapshot.Category(movies.ID)
-	if got := snapshot.MetadataSourcesFor(category); !slices.Equal(got, []string{"tmdb"}) {
+	if got := snapshot.MetadataSourcesFor(category); !slices.Equal(got, []string{"tmdb", "mdblist", "omdb", "tvdb", "fanart"}) {
 		t.Errorf("sources = %v; want what is still switched on", got)
 	}
 	if *snapshot.MetadataSettings().Wikidata {

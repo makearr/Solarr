@@ -1406,6 +1406,29 @@ paths:
                   providers: { type: array, items: { $ref: "#/components/schemas/MetadataProviderInfo" } }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /metadata/providers/{key}/apikey:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setMetadataProviderKey
+      tags: [settings]
+      summary: Store or clear the owner's key for a provider that takes one. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                api_key: { type: string, maxLength: 512, description: Empty clears it. }
+      responses:
+        "204": { description: Stored. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /metadata/providers/{key}:
     parameters:
       - { name: key, in: path, required: true, schema: { type: string } }
@@ -7176,13 +7199,14 @@ components:
 
     MetadataProviderInfo:
       type: object
-      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for]
+      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for, key_stored]
       properties:
         key: { type: string }
         label: { type: string }
         carries: { type: array, items: { type: string }, description: What the provider supplies. }
         needs_key: { type: boolean, description: The provider waits for a key of the owner's own that is not stored yet. }
         enabled: { type: boolean, description: Switched on for every library. }
+        key_stored: { type: boolean, description: The owner's own key for it is stored. }
         can_disable: { type: boolean, description: False for MusicBrainz, which always answers. }
         media_types: { type: array, items: { type: string }, description: The libraries whose order it takes a place in. }
         also_for: { type: array, items: { type: string }, description: The libraries it serves outside their order. }

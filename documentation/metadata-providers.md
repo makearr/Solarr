@@ -62,11 +62,11 @@ documentation states is from memory and should be checked before relying on it.
 | TMDB | overview, cast and crew, releases and certification by country, studios, keywords, translations, **collections**, artwork | yes | a free key |
 | Radarr's metadata service | TMDB's films with IMDb, Rotten Tomatoes, Metacritic and Trakt ratings, release dates, collections | yes | no key; the fallback behind TMDB |
 | Wikidata | the ids TMDB and IMDb know a film by | yes | first by default; no key |
-| MDBList | ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes, Metacritic in one call | no | a free key |
+| MDBList | ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes, Metacritic in one call | yes | a free key, 1,000 requests a day |
 | Trakt | ratings, related films, lists | no | a free key |
-| TheTVDB (movies) | films, artwork, remote ids | no | |
-| OMDb | ratings, English plots | no | |
-| fanart.tv | clear logos, banners, disc art | no | |
+| TheTVDB (movies) | English overview, genres, runtime, posters, backgrounds, banners, clear logos, remote ids | yes | Solarr's own key; found by IMDb id, else TMDB's |
+| OMDb | IMDb, Rotten Tomatoes and Metacritic ratings, the full English plot | yes | a free key, 1,000 requests a day |
+| fanart.tv | clear logos, clear art, disc art, banners, backgrounds (best liked, English first) | yes | a free personal key |
 | Trakt, Letterboxd, IMDb lists | lists to import from, not metadata | no | import lists |
 
 ## Other media types (planned)

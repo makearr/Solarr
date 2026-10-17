@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
+	"cmd/solarr/app": {"internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -345,7 +345,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/media/knownfor",
 		"internal/db/library", "internal/db/settings", "internal/db/store/gen/librarydb", "internal/identify/model",
 		"internal/identify/parsemovie", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
-		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media", "internal/metadata/radarrmeta", "internal/metadata/tmdb", "internal/metadata/wikidata",
+		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media", "internal/metadata/radarrmeta", "internal/metadata/tmdb", "internal/metadata/wikidata", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/metadata/tvdb",
 		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge",
 		"internal/acquiring/releasefacts", "internal/acquiring/plan", "internal/acquiring/rss", "internal/moving/mover", "internal/moving/naming", "internal/moving/placement",
 		"internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/filekind", "internal/platform/fsx", "internal/platform/keyedlock",
@@ -353,6 +353,9 @@ var allowedInternalImports = map[string][]string{
 	},
 	// Radarr's own keyless movie metadata service, the fallback behind TMDB.
 	"internal/metadata/radarrmeta": {"internal/platform/httpx"},
+	"internal/metadata/mdblist":    {"internal/platform/httpx"},
+	"internal/metadata/omdb":       {},
+	"internal/metadata/fanart":     {"internal/platform/httpx"},
 	// A movie release or file name: title, year, edition and ids, reading claims through parsetv's.
 	"internal/identify/parsemovie": {"internal/identify/parsetv"},
 	// What a video release name claims, as the facts a profile judges; TV and movies read it the same way.

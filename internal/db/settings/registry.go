@@ -405,6 +405,24 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMDBListAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "MDBList key",
+		HelpText: "Your own free key from mdblist.com: every site's rating of a film in one request.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyOMDbAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "OMDb key",
+		HelpText: "Your own free key from omdbapi.com: IMDb, Rotten Tomatoes and Metacritic ratings and English plots.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyFanartAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "fanart.tv key",
+		HelpText: "Your own free personal key from fanart.tv: clear logos, clear art, disc art and banners.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",

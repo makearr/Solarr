@@ -11,8 +11,12 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/mdblist"
+	"github.com/makearr/Solarr/internal/metadata/omdb"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
+	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -42,6 +46,11 @@ type Service struct {
 	Proxy ProxySource
 	// Wikidata gives the ids its item records, steering the other providers to the right film; nil asks none.
 	Wikidata IDBridge
+	// MDBList, OMDb, Fanart and TVDB are asked where the library's order lists them; nil asks none.
+	MDBList RatingsSource
+	OMDb    PlotSource
+	Fanart  ArtSource
+	TVDB    TVDBSource
 	// Priority is the instance's provider order, PriorityFor a library's own; nil follows the next, then TMDB before Radarr.
 	Priority    func() []string
 	PriorityFor func(categoryID int64) []string
@@ -115,6 +124,11 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 			s.warn("radarr", ids.TMDB, err)
 		}
 	}
+	for _, name := range order {
+		if answer, ok := s.askMore(ctx, name, ids); ok {
+			answers[name] = answer
+		}
+	}
 	var movie Movie
 	found := false
 	for _, name := range order {
@@ -131,6 +145,54 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 		return Movie{}, ErrNoSource
 	}
 	return movie, nil
+}
+
+// askMore asks one of the providers beyond TMDB and Radarr's service; one without a key, or that knows nothing, answers none.
+func (s Service) askMore(ctx context.Context, name string, ids IDs) (Movie, bool) {
+	report := func(err error, missing ...error) bool {
+		for _, quiet := range missing {
+			if errors.Is(err, quiet) {
+				return false
+			}
+		}
+		if err != nil {
+			s.warn(name, ids.TMDB, err)
+			return false
+		}
+		return true
+	}
+	switch name {
+	case settings.MovieSourceMDBList:
+		if s.MDBList != nil && s.MDBList.Configured() {
+			media, err := s.MDBList.Movie(ctx, ids.TMDB, ids.IMDb)
+			return FromMDBList(media), report(err, mdblist.ErrNotFound)
+		}
+	case settings.MovieSourceOMDb:
+		if s.OMDb != nil && s.OMDb.Configured() && ids.IMDb != "" {
+			movie, err := s.OMDb.Movie(ctx, ids.IMDb)
+			return FromOMDb(movie), report(err, omdb.ErrNotFound)
+		}
+	case settings.MovieSourceFanart:
+		if s.Fanart != nil && s.Fanart.Configured() {
+			art, err := s.Fanart.Movie(ctx, ids.TMDB, ids.IMDb)
+			return FromFanart(art), report(err, fanart.ErrNotFound)
+		}
+	case settings.TVSourceTVDB:
+		if s.TVDB == nil {
+			return Movie{}, false
+		}
+		remote := ids.IMDb
+		if remote == "" && ids.TMDB > 0 {
+			remote = strconv.FormatInt(ids.TMDB, 10)
+		}
+		id, found, err := s.TVDB.MovieByRemoteID(ctx, remote)
+		if !report(err, tvdb.ErrNotFound) || !found {
+			return Movie{}, false
+		}
+		movie, err := s.TVDB.Movie(ctx, id)
+		return FromTVDB(movie), report(err, tvdb.ErrNotFound)
+	}
+	return Movie{}, false
 }
 
 func (s Service) askProxy(ctx context.Context, ids IDs) (radarrmeta.Movie, error) {

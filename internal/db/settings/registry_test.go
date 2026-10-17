@@ -111,7 +111,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeySearchesPerHour, settings.KeyHuntMode, settings.KeyPriorityNewReleaseDays, settings.KeyRSSFreshHours,
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,
-		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID, settings.KeyMetadataDisabledProviders,
+		settings.KeyMetadataCoverSources, settings.KeyMetadataTVSources, settings.KeyMetadataMovieSources, settings.KeyMetadataWikidata, settings.KeyMetadataAcoustID, settings.KeyMetadataDisabledProviders, settings.KeyMDBListAPIKey, settings.KeyOMDbAPIKey, settings.KeyFanartAPIKey,
 		settings.KeyAcoustIDAPIKey, settings.KeyMetadataTheAudioDB, settings.KeyTheAudioDBAPIKey,
 		settings.KeyMetadataPeopleBackfillPerRun, settings.KeyTMDBAPIKey, settings.KeyTVDBAPIKey,
 		// The non-scalar audit's own KindEntity additions (2026-09-12): each

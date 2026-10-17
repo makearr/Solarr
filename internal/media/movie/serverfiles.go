@@ -31,7 +31,9 @@ type ServerFiles struct {
 }
 
 // artworkFiles are the movie pictures by kind, under the names both servers read in a movie folder.
-var artworkFiles = []struct{ kind, name string }{{"poster", "poster"}, {"fanart", "fanart"}, {"logo", "clearlogo"}}
+var artworkFiles = []struct{ kind, name string }{
+	{"poster", "poster"}, {"fanart", "fanart"}, {"logo", "clearlogo"}, {"clearart", "clearart"}, {"disc", "disc"}, {"banner", "banner"},
+}
 
 type movieNFO struct {
 	XMLName       xml.Name           `xml:"movie"`

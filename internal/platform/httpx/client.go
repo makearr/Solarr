@@ -2,10 +2,12 @@ package httpx
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sync/atomic"
 	"time"
 
@@ -260,6 +262,37 @@ func (c *Client) Get(ctx context.Context, url string) (*http.Response, error) {
 		return nil, fmt.Errorf("httpx: build request: %w", err)
 	}
 	return c.Do(ctx, request)
+}
+
+// ErrNotFound is a 404 GetJSON met: the provider knows nothing under what was asked.
+var ErrNotFound = errors.New("httpx: not found")
+
+// GetJSON fetches a URL and decodes its JSON body, read up to limit bytes; a 404 answers ErrNotFound.
+func (c *Client) GetJSON(ctx context.Context, address string, limit int64, into any) error {
+	response, err := c.Get(ctx, address)
+	if err != nil {
+		var refused *StatusError
+		if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
+			return ErrNotFound
+		}
+		return err
+	}
+	defer func() { _ = response.Body.Close() }()
+	shown := address
+	if parsed, err := url.Parse(address); err == nil {
+		shown = RedactURL(parsed)
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	if err != nil {
+		return fmt.Errorf("httpx: read %s: %w", shown, err)
+	}
+	if int64(len(body)) > limit {
+		return fmt.Errorf("httpx: %s: answer over %d bytes", shown, limit)
+	}
+	if err := json.Unmarshal(body, into); err != nil {
+		return fmt.Errorf("httpx: decode %s: %w", shown, err)
+	}
+	return nil
 }
 
 // Provider reports the bucket key this client shares with its siblings.

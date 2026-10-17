@@ -14,8 +14,11 @@ import (
 
 // The movie providers.
 const (
-	MovieSourceTMDB   = "tmdb"
-	MovieSourceRadarr = "radarr"
+	MovieSourceTMDB    = "tmdb"
+	MovieSourceRadarr  = "radarr"
+	MovieSourceMDBList = "mdblist"
+	MovieSourceOMDb    = "omdb"
+	MovieSourceFanart  = "fanart"
 )
 
 // SourceWikidata is Wikidata in a library's order: the ids its item records steer the other providers to the right entry.
@@ -35,7 +38,7 @@ const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 const KeyMetadataMovieSources = "metadata.movie_sources"
 
 // DefaultMovieSources is Wikidata to steer, TMDB, then Radarr's keyless service, which answers where there is no key.
-var DefaultMovieSources = []string{SourceWikidata, MovieSourceTMDB, MovieSourceRadarr}
+var DefaultMovieSources = []string{SourceWikidata, MovieSourceTMDB, MovieSourceRadarr, MovieSourceMDBList, MovieSourceOMDb, TVSourceTVDB, MovieSourceFanart}
 
 // MetadataProvider is one source of metadata: where it is useful and what it carries. The list is in
 // documentation/metadata-providers.md, with the sources not built yet.
@@ -59,10 +62,13 @@ var MetadataProviders = []MetadataProvider{
 	{Key: SourceMusicBrainz, Label: "MusicBrainz", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"}},
 	{Key: TVSourceSkyhook, Label: "Sonarr's SkyHook", MediaTypes: []string{"tv"}, Carries: []string{"series", "seasons", "episodes", "air dates", "images", "ids"}},
 	{Key: TVSourceTMDB, Label: "TMDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"overview", "cast and crew", "guest stars", "images", "certification", "networks and studios", "collections", "ids"}, NeedsKey: true},
-	{Key: TVSourceTVDB, Label: "TheTVDB", MediaTypes: []string{"tv"}, Carries: []string{"series", "episodes", "other orderings", "images", "cast", "ids"}},
+	{Key: TVSourceTVDB, Label: "TheTVDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"series", "episodes", "other orderings", "images", "cast", "ids"}},
 	{Key: TVSourceTVmaze, Label: "TVmaze", MediaTypes: []string{"tv"}, Carries: []string{"air times and time zones", "networks", "cast", "images"}},
 	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"}},
 	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"}},
+	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true},
+	{Key: MovieSourceOMDb, Label: "OMDb", MediaTypes: []string{"movie"}, Carries: []string{"IMDb, Rotten Tomatoes and Metacritic ratings", "English plots"}, NeedsKey: true},
+	{Key: MovieSourceFanart, Label: "fanart.tv", MediaTypes: []string{"movie"}, Carries: []string{"clear logos", "clear art", "disc art", "banners", "backgrounds"}, NeedsKey: true},
 	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"}},
 	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"}},
 	{Key: SourceAcoustID, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true},

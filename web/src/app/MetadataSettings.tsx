@@ -33,6 +33,16 @@ const NOTES: Record<string, string> = {
   theaudiodb: "Artist photos and biographies where Wikidata has none, and album covers. Works with the free public key.",
   coverartarchive: "MusicBrainz's cover archive, by release and then by release group.",
   acoustid: "Identifies a file by its sound when its tags and folder name cannot. Needs a free key.",
+  mdblist: "Every site's rating of a film in one request: IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes, Metacritic. Free key, 1,000 requests a day.",
+  omdb: "IMDb, Rotten Tomatoes and Metacritic ratings and the full English plot of a film. Free key, 1,000 requests a day.",
+  fanart: "Clear logos, clear art, disc art and banners of films, as media servers show them. Free personal key.",
+};
+
+/** Where the owner gets the key of a provider that takes one through the generic key endpoint. */
+const KEY_SIGNUP: Record<string, { url: string; label: string }> = {
+  mdblist: { url: "https://mdblist.com/preferences/", label: "mdblist.com/preferences" },
+  omdb: { url: "https://www.omdbapi.com/apikey.aspx", label: "omdbapi.com/apikey.aspx" },
+  fanart: { url: "https://fanart.tv/get-an-api-key/", label: "fanart.tv/get-an-api-key" },
 };
 
 /** One overview of every metadata provider: what it serves, whether it is on, and its key. The order a library asks them
@@ -134,8 +144,9 @@ function useKeySaver(path: "/metadata/tmdb/apikey" | "/metadata/tvdb/apikey" | "
 }
 
 /** Whether a provider has what it needs, in a word: its key, or none needed. */
-function keyState(key: string, settings: Settings): { label: string; tone?: "warn" } | undefined {
-  switch (key) {
+function keyState(provider: Provider, settings: Settings): { label: string; tone?: "warn" } | undefined {
+  if (KEY_SIGNUP[provider.key]) return provider.key_stored ? { label: "your key" } : { label: "needs your key", tone: "warn" };
+  switch (provider.key) {
     case "tmdb":
       return settings.tmdb_api_key?.has_value ? { label: "your key" } : { label: "needs your key", tone: "warn" };
     case "tvdb":
@@ -165,7 +176,7 @@ function ProviderRow({
 }) {
   const [open, setOpen] = useState(false);
   const libraries = [...new Set([...provider.media_types, ...provider.also_for])];
-  const state = keyState(provider.key, settings);
+  const state = keyState(provider, settings);
   return (
     <li className="flex flex-col gap-2 p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -193,7 +204,11 @@ function ProviderRow({
       {open && (
         <div className="flex flex-col gap-3 pl-1">
           {NOTES[provider.key] && <p className="max-w-2xl text-xs text-ink-muted">{NOTES[provider.key]}</p>}
-          <ProviderDetails providerKey={provider.key} settings={settings} onPatch={onPatch} patching={patching} />
+          {KEY_SIGNUP[provider.key] ? (
+            <GenericKeyForm provider={provider} />
+          ) : (
+            <ProviderDetails providerKey={provider.key} settings={settings} onPatch={onPatch} patching={patching} />
+          )}
         </div>
       )}
     </li>
@@ -280,6 +295,31 @@ function ProviderDetails({
       return <ProviderTest />;
   }
   return null;
+}
+
+/** The key of a provider stored through the one key endpoint every newer provider shares. */
+function GenericKeyForm({ provider }: { provider: Provider }) {
+  const queryClient = useQueryClient();
+  const save = useMutation({
+    mutationFn: async (key: string) => {
+      const { error } = await api.PUT("/metadata/providers/{key}/apikey", { params: { path: { key: provider.key } }, body: { api_key: key } });
+      if (error) throw error;
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["metadata-providers"] }),
+  });
+  const signup = KEY_SIGNUP[provider.key];
+  return (
+    <>
+      <ApiKeyForm key={`${provider.key}-${String(provider.key_stored)}`} label={`${provider.label} key`} unset="not set" stored={provider.key_stored} onSave={(key) => save.mutate(key)} busy={save.isPending}>
+        Free: get one at{" "}
+        <a href={signup?.url} target="_blank" rel="noreferrer" className="text-accent underline underline-offset-2">
+          {signup?.label}
+        </a>
+        . Without a key the provider is simply not asked.
+      </ApiKeyForm>
+      {save.isError && <p className="text-xs text-danger">That key could not be stored.</p>}
+    </>
+  );
 }
 
 /** Asks every series provider once and says which answered. */

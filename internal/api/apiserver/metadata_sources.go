@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -9,7 +10,9 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 func (s *Server) routeGetLibraryMetadataSources(w http.ResponseWriter, r *http.Request) {
@@ -43,19 +46,28 @@ func providerInfo(snapshot *settings.Snapshot, provider settings.MetadataProvide
 	return gen.MetadataProviderInfo{
 		Key: provider.Key, Label: provider.Label, Carries: provider.Carries, NeedsKey: provider.NeedsKey && !keyStored(snapshot, provider.Key),
 		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: provider.Key != settings.SourceMusicBrainz,
+		KeyStored:  snapshot.ProviderKeyStored(provider.Key),
 		MediaTypes: orEmpty(provider.MediaTypes), AlsoFor: orEmpty(provider.AlsoFor),
 	}
 }
 
 // keyStored says the owner's key for a provider that needs one is in place.
-func keyStored(snapshot *settings.Snapshot, key string) bool {
-	switch key {
-	case settings.TVSourceTMDB:
-		return snapshot.TMDBConfigured()
-	case settings.SourceAcoustID:
-		return snapshot.AcoustIDConfigured()
+func keyStored(snapshot *settings.Snapshot, key string) bool { return snapshot.ProviderKeyStored(key) }
+
+// SetMetadataProviderKey stores or clears the owner's key for a provider.
+func (s *Server) SetMetadataProviderKey(w http.ResponseWriter, r *http.Request, key string) {
+	setting, takesKey := settings.ProviderKeySetting(key)
+	if !takesKey {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "that provider takes no key")
+		return
 	}
-	return false
+	if err := s.auth.Registry.LookupAll(setting); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	s.setProviderKey(w, r, setting, func(ctx context.Context, cl clock.Clock, secret secrets.Secret) error {
+		return s.auth.Settings.SetProviderKey(ctx, cl, key, secret)
+	})
 }
 
 func orEmpty(values []string) []string {
