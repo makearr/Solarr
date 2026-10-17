@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -151,6 +152,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 	}
 	var rich Series
 	haveRich := false
+	var wrongTVmaze atomic.Int64
 	asked := slices.DeleteFunc([]string{settings.TVSourceTMDB, settings.TVSourceAniList, settings.TVSourceTVmaze}, func(source string) bool { return !slices.Contains(order, source) })
 	answers := metaresolve.AskAll(ctx, asked,
 		func(ctx context.Context, source string) (fetched, error) {
@@ -165,7 +167,10 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 			if s.TVmaze == nil {
 				return fetched{}, nil
 			}
-			show, found := s.findShow(ctx, ids)
+			show, found, rejected := s.findShow(ctx, ids)
+			if rejected > 0 {
+				wrongTVmaze.Store(rejected)
+			}
 			if !found {
 				return fetched{}, nil
 			}
@@ -193,6 +198,9 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 		return Series{}, ErrNoSource
 	}
 	merged := Merge(inOrder(sources, bySource, order)...)
+	if wrong := wrongTVmaze.Load(); wrong > 0 && merged.IDs.TVmaze == wrong {
+		merged.IDs.TVmaze = 0
+	}
 	merged.Type = DetectType(merged)
 	if merged.AirTime != nil && merged.AirTime.Timezone == "" {
 		if zone := GuessZone(merged.OriginalCountry); zone != "" {
@@ -426,24 +434,40 @@ func guardEpisodeCredits(credits []Credit, episodes []Episode) []Credit {
 	return kept
 }
 
-func (s Service) findShow(ctx context.Context, ids IDs) (tvmaze.Show, bool) {
-	var show tvmaze.Show
+// findShow asks TVmaze for the series; an id another provider supplied is trusted only while the show's own TheTVDB and
+// IMDb ids agree (Skyhook lists the 2013 "Sua and XavpaRov" as TVmaze's id for its 2022 sequel), else rejected is that id.
+func (s Service) findShow(ctx context.Context, ids IDs) (show tvmaze.Show, found bool, rejected int64) {
 	var err error
 	switch {
 	case ids.TVmaze > 0:
 		show, err = s.TVmaze.Show(ctx, ids.TVmaze)
+		if err == nil && contradicts(show, ids) {
+			rejected = ids.TVmaze
+			if ids.TVDB == 0 {
+				return tvmaze.Show{}, false, rejected
+			}
+			show, err = s.TVmaze.LookupTVDB(ctx, ids.TVDB)
+		}
 	case ids.TVDB > 0:
 		show, err = s.TVmaze.LookupTVDB(ctx, ids.TVDB)
 	default:
-		return tvmaze.Show{}, false
+		return tvmaze.Show{}, false, 0
 	}
 	if err != nil {
 		if !errors.Is(err, tvmaze.ErrNotFound) {
 			s.warn("tvmaze", firstNonZero(ids.TVmaze, ids.TVDB), err)
 		}
-		return tvmaze.Show{}, false
+		return tvmaze.Show{}, false, rejected
 	}
-	return show, true
+	return show, true, rejected
+}
+
+// contradicts is a TVmaze show naming a TheTVDB or IMDb id other than the one the series is known by.
+func contradicts(show tvmaze.Show, ids IDs) bool {
+	if show.Externals.TheTVDB != nil && ids.TVDB > 0 && *show.Externals.TheTVDB != ids.TVDB {
+		return true
+	}
+	return show.Externals.IMDb != "" && ids.IMDb != "" && show.Externals.IMDb != ids.IMDb
 }
 
 func (s Service) fromShow(ctx context.Context, show tvmaze.Show) Series {

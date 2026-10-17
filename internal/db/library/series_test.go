@@ -127,6 +127,29 @@ func TestSeriesUpsertNeverStealsAnIDAndKeepsAManualTitle(t *testing.T) {
 	}
 }
 
+func TestASeriesWithAnotherTVDBIDIsNotFoldedIntoOneSharingAWrongTVmazeID(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+
+	original := sampleSeries()
+	original.Parts = nil
+	first, err := series.Upsert(t.Context(), seriesAt, original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sequel := sampleSeries()
+	sequel.Parts = nil
+	sequel.Work.CanonicalTitle = "Example Show: Sequel"
+	sequel.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "5678"}, {Provider: "tvmaze", ExternalID: "42"}}
+	second, err := series.Upsert(t.Context(), seriesAt, sequel)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.WorkID == first.WorkID || !second.Created {
+		t.Fatalf("first = %+v, second = %+v: the sequel is its own work", first, second)
+	}
+}
+
 func TestAMovieIsNeverWrittenOverASeriesItSharesAnIDWith(t *testing.T) {
 	opened, queries := newLibrary(t)
 	series := library.NewSeries(opened)

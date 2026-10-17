@@ -201,6 +201,13 @@ func upsertSeriesWork(ctx context.Context, queries *librarydb.Queries, at time.T
 			Provider: id.Provider, ExternalID: id.ExternalID, MediaType: write.Work.MediaType,
 		})
 		if err == nil {
+			conflict, err := holdsOtherID(ctx, queries, found.ID, write.IDs[0])
+			if err != nil {
+				return 0, false, 0, err
+			}
+			if conflict {
+				continue
+			}
 			workID = found.ID
 			break
 		}
@@ -240,6 +247,26 @@ func upsertSeriesWork(ctx context.Context, queries *librarydb.Queries, at time.T
 		}
 	}
 	return workID, created, skipped, nil
+}
+
+// holdsOtherID is a work that already carries ids of the anchor's provider, none of them the anchor: a second id of another
+// provider must not fold two series into one (a wrong cross-reference once joined a show to its sequel).
+func holdsOtherID(ctx context.Context, queries *librarydb.Queries, workID int64, anchor ExternalIDWrite) (bool, error) {
+	held, err := queries.ListWorkExternalIDs(ctx, workID)
+	if err != nil {
+		return false, fmt.Errorf("library: read work ids: %w", err)
+	}
+	other := false
+	for _, id := range held {
+		if id.Provider != anchor.Provider {
+			continue
+		}
+		if id.ExternalID == anchor.ExternalID {
+			return false, nil
+		}
+		other = true
+	}
+	return other, nil
 }
 
 func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, write SeriesWrite) error {

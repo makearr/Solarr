@@ -220,6 +220,16 @@ func TestFetchSurvivesOneSourceFailingButNotBoth(t *testing.T) {
 	}
 }
 
+func TestATVmazeIDThatNamesAnotherTVDBSeriesIsDropped(t *testing.T) {
+	other := int64(272090)
+	sky := fixtureSkyhook()
+	service, _ := newService(t, fakeSkyhook{series: sky}, fakeTVmaze{show: tvmaze.Show{ID: 42, Name: "The Older Show", Externals: tvmaze.Externals{TheTVDB: &other}}})
+	series, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234})
+	if err != nil || series.IDs.TVmaze != 0 {
+		t.Fatalf("tvmaze id = %d, %v: the show TVmaze lists under another TheTVDB id is not this series", series.IDs.TVmaze, err)
+	}
+}
+
 func TestSearchAnswersCandidatesUpToTheLimit(t *testing.T) {
 	sky := skyhook.Series{TVDBID: 5, Title: "Alpha", FirstAired: "2019-04-01", Network: "Net", Status: "Ended",
 		Images: []skyhook.Image{{CoverType: "Banner", URL: "b"}, {CoverType: "Poster", URL: "p"}}}
