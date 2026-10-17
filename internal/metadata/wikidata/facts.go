@@ -70,9 +70,7 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 } GROUP BY ?id ?item`
 		rows, err := f.sparql(ctx, query)
 		if err != nil {
-			if rows, err = f.sparql(ctx, query); err != nil {
-				return out, fmt.Errorf("wikidata: facts: %w", err)
-			}
+			return out, fmt.Errorf("wikidata: facts: %w", err)
 		}
 		claimed := map[string]int{}
 		for _, row := range rows {

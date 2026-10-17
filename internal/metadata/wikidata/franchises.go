@@ -2,10 +2,14 @@ package wikidata
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
+	"time"
+
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // sparqlEndpoint is Wikidata's query service, a separate host from the entity API.
@@ -40,12 +44,25 @@ type sparqlResponse struct {
 func (f Fetcher) sparql(ctx context.Context, query string) ([]map[string]struct {
 	Value string `json:"value"`
 }, error) {
-	var answer sparqlResponse
 	address := sparqlEndpoint + "?" + url.Values{"query": {query}, "format": {"json"}}.Encode()
-	if err := getJSON(ctx, f.wikidataClient, address, &answer); err != nil {
-		return nil, fmt.Errorf("wikidata: sparql: %w", err)
+	for attempt := 0; ; attempt++ {
+		var answer sparqlResponse
+		err := getJSON(ctx, f.wikidataClient, address, &answer)
+		if err == nil {
+			return answer.Results.Bindings, nil
+		}
+		// An overloaded query service answers 502 or 429 for a while; a pause and another try usually gets through.
+		var refused *httpx.StatusError
+		if attempt >= len(sparqlRetryWaits) || !errors.As(err, &refused) || refused.Class != httpx.ClassRetryable || f.clock == nil {
+			return nil, fmt.Errorf("wikidata: sparql: %w", err)
+		}
+		if err := f.clock.Sleep(ctx, sparqlRetryWaits[attempt]); err != nil {
+			return nil, fmt.Errorf("wikidata: sparql: %w", err)
+		}
 	}
-	return answer.Results.Bindings, nil
 }
+
+// sparqlRetryWaits are the pauses before each further try of a query the service refused while overloaded.
+var sparqlRetryWaits = []time.Duration{5 * time.Second, 15 * time.Second, 30 * time.Second}
 
 func qidOf(entityURL string) string { return entityURL[strings.LastIndex(entityURL, "/")+1:] }

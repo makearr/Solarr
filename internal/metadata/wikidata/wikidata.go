@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
@@ -118,6 +119,7 @@ type summaryResponse struct {
 type Fetcher struct {
 	wikidataClient  *httpx.Client
 	wikipediaClient *httpx.Client
+	clock           clock.Clock
 }
 
 // Config is what a Fetcher needs. Two clients, not one: musicbrainz.org's own
@@ -127,11 +129,17 @@ type Fetcher struct {
 type Config struct {
 	WikidataClient  *httpx.Client
 	WikipediaClient *httpx.Client
+	// Clock paces the retries of an overloaded query service; nil is the system clock.
+	Clock clock.Clock
 }
 
 // New builds a Fetcher.
 func New(config Config) Fetcher {
-	return Fetcher{wikidataClient: config.WikidataClient, wikipediaClient: config.WikipediaClient}
+	paced := config.Clock
+	if paced == nil {
+		paced = clock.NewSystem()
+	}
+	return Fetcher{wikidataClient: config.WikidataClient, wikipediaClient: config.WikipediaClient, clock: paced}
 }
 
 // maxEntitiesPerRequest is wbgetentities' own limit on ids in one call.

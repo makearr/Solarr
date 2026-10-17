@@ -4,10 +4,14 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
+	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // queryTransport answers a SPARQL request by what it asks for: what ties series together, or the series of franchises.
@@ -62,5 +66,51 @@ func TestTiesAndFranchiseMembersAreReadInBulkFromSPARQL(t *testing.T) {
 		if strings.Contains(query, "DROP") {
 			t.Error("an id that is no item id never reaches a query")
 		}
+	}
+}
+
+// overloadedOnce answers a query 502 the first time, then as queryTransport does.
+type overloadedOnce struct {
+	queryTransport
+	refused bool
+}
+
+func (o *overloadedOnce) RoundTrip(request *http.Request) (*http.Response, error) {
+	if !o.refused {
+		o.refused = true
+		return &http.Response{StatusCode: http.StatusBadGateway, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("")), Request: request}, nil
+	}
+	return o.queryTransport.RoundTrip(request)
+}
+
+func TestAQueryTheOverloadedServiceRefusesIsTriedAgainAfterAPause(t *testing.T) {
+	transport := &overloadedOnce{}
+	paced := clock.NewFakeAtEpoch()
+	client := httpx.NewClient(paced, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(paced, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewBreaker(paced, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}), httpx.ClientConfig{Provider: "wikidata", UserAgent: "test", Transport: transport})
+	fetcher := wikidata.New(wikidata.Config{WikidataClient: client, WikipediaClient: client, Clock: paced})
+	done := make(chan error, 1)
+	var ties map[wikidata.SeriesRef]wikidata.SeriesTies
+	go func() {
+		var err error
+		ties, err = fetcher.TiesOf(t.Context(), []wikidata.SeriesRef{{TVDB: 81797}})
+		done <- err
+	}()
+	// The pause and the limiter's own backoff both wait on the clock; it is moved on until the query is answered.
+	var err error
+	for answered := false; !answered; {
+		select {
+		case err = <-done:
+			answered = true
+		default:
+			paced.Advance(time.Second)
+			runtime.Gosched()
+		}
+	}
+	if err != nil {
+		t.Fatalf("TiesOf: %v", err)
+	}
+	if len(ties[wikidata.SeriesRef{TVDB: 81797}].Franchises) != 1 || len(transport.requests) != 1 {
+		t.Errorf("ties = %+v after %d answered requests; want the second try's answer", ties, len(transport.requests))
 	}
 }

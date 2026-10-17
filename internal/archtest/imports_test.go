@@ -322,7 +322,7 @@ var allowedInternalImports = map[string][]string{
 	// already extracts one) to a biography. No cache of its own -- see the
 	// package doc comment.
 	"internal/metadata/theaudiodb": {"internal/platform/httpx"},
-	"internal/metadata/wikidata":   {"internal/platform/parallel", "internal/platform/httpx"},
+	"internal/metadata/wikidata":   {"internal/platform/parallel", "internal/platform/httpx", "internal/platform/clock"},
 	// Stage 8's keyless TV source (T4): a client over httpx, nothing else.
 	"internal/metadata/tvmaze":  {"internal/platform/httpx"},
 	"internal/metadata/tmdb":    {"internal/platform/httpx"},

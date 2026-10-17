@@ -43,11 +43,8 @@ func (f Fetcher) TiesOf(ctx context.Context, series []SeriesRef) (map[SeriesRef]
 		}
 		for start := 0; start < len(ids); start += tiesPerQuery {
 			batch := ids[start:min(start+tiesPerQuery, len(ids))]
-			// The query service drops a query now and then when busy; one more try before the stage gives up.
 			if err := f.tiesBatch(ctx, property, batch, refs, out); err != nil {
-				if err := f.tiesBatch(ctx, property, batch, refs, out); err != nil {
-					return out, err
-				}
+				return out, err
 			}
 		}
 	}
@@ -112,9 +109,6 @@ func (f Fetcher) FranchiseMembers(ctx context.Context, qids []string) (map[strin
   OPTIONAL { ?m wdt:P580 ?start }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`
 		rows, err := f.sparql(ctx, query)
-		if err != nil {
-			rows, err = f.sparql(ctx, query)
-		}
 		if err != nil {
 			return out, fmt.Errorf("wikidata: franchise members: %w", err)
 		}
