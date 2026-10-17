@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"errors"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
@@ -54,7 +55,15 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 		if len(asked) > 0 {
 			pictures := provider.FranchisePictures(ctx, asked)
 			for index := range rows {
-				if poster := pictures[rows[index].ID]; poster != "" {
+				if !slices.ContainsFunc(asked, func(ref media.FranchiseRef) bool { return ref.ID == rows[index].ID }) {
+					continue
+				}
+				// The provider had none: the first of its works that has one stands in, and is kept so it is not asked again.
+				poster := pictures[rows[index].ID]
+				if poster == "" {
+					poster = firstPoster(rows[index].Members)
+				}
+				if poster != "" {
 					if err := a.Store.SetPoster(ctx, rows[index].ID, poster); err == nil {
 						rows[index].PosterURL = poster
 					}
@@ -64,6 +73,9 @@ func (a LibraryFranchises) List(ctx context.Context, categoryID int64) ([]gen.Fr
 	}
 	views := make([]gen.Franchise, len(rows))
 	for index, row := range rows {
+		if row.PosterURL == "" {
+			row.PosterURL = firstPoster(row.Members)
+		}
 		views[index] = franchiseView(row, nil)
 	}
 	return views, nil
@@ -166,6 +178,7 @@ func franchiseView(row library.FranchiseRow, missing []media.FranchiseMember) ge
 	for _, member := range row.Members {
 		workID := member.WorkID
 		entry := gen.FranchiseMember{WorkId: &workID, Title: member.Title, Monitored: member.Monitored, HasFile: member.Files > 0}
+		setString(&entry.PosterUrl, member.PosterURL)
 		if member.Year > 0 {
 			year := int(member.Year)
 			entry.Year = &year
@@ -184,4 +197,13 @@ func franchiseView(row library.FranchiseRow, missing []media.FranchiseMember) ge
 		view.Members = append(view.Members, entry)
 	}
 	return view
+}
+
+func firstPoster(members []library.FranchiseMember) string {
+	for _, member := range members {
+		if member.PosterURL != "" {
+			return member.PosterURL
+		}
+	}
+	return ""
 }

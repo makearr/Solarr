@@ -1,40 +1,119 @@
 package library_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
 )
 
-func TestSameContentSuggestionsNeedMoreThanOneTitleOnOneDay(t *testing.T) {
-	opened, _ := newLibrary(t)
-	series := library.NewSeries(opened)
-	desired := library.NewDesired(opened)
-	minutes := func(m int64) *int64 { v := m * 60_000; return &v }
-	add := func(title, id string, parts ...library.SeriesPartWrite) {
-		write := sampleSeries()
-		write.Work.CanonicalTitle, write.Work.SortTitle = title, title
-		write.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: id}}
-		write.Parts = parts
-		result, err := series.Upsert(t.Context(), seriesAt, write)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err := desired.EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", SortKey: "s01", CategoryID: 1, ProfileID: 1, Monitored: true}); err != nil {
-			t.Fatal(err)
-		}
-	}
-	part := func(ref, title string, runtime *int64) library.SeriesPartWrite {
-		return library.SeriesPartWrite{MediaRef: ref, SortKey: ref, Title: title, RuntimeMs: runtime, Date: "2016-03-31", MonitoredIfNew: true}
-	}
-	add("Show A", "1", part("s01:e05", "Episode 5", minutes(45)), part("s01:e06", "The Big Crossover", minutes(44)), part("s01:e07", "Long Special Night", minutes(40)))
-	add("Show B", "2", part("s01:e05", "Episode 5", minutes(45)), part("s01:e06", "The Big Crossover", minutes(45)), part("s01:e07", "Long Special Night", minutes(95)))
+type crossoverFixture struct {
+	t          *testing.T
+	series     library.Series
+	desired    library.Desired
+	crossovers library.Crossovers
+}
 
-	found, err := library.NewCrossovers(opened).Suggestions(t.Context(), "tv", 1, 50)
+func newCrossoverFixture(t *testing.T) crossoverFixture {
+	opened, _ := newLibrary(t)
+	return crossoverFixture{t: t, series: library.NewSeries(opened), desired: library.NewDesired(opened), crossovers: library.NewCrossovers(opened)}
+}
+
+func minutes(m int64) *int64 { v := m * 60_000; return &v }
+
+// show adds a series of the parts, each with the people credited on it.
+func (f crossoverFixture) show(title, id string, parts map[string]crossoverPart) {
+	write := sampleSeries()
+	write.Work.CanonicalTitle, write.Work.SortTitle = title, title
+	write.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: id}}
+	write.Parts = nil
+	write.Credits = nil
+	for ref, part := range parts {
+		write.Parts = append(write.Parts, library.SeriesPartWrite{MediaRef: ref, SortKey: ref, Title: part.title, RuntimeMs: minutes(part.minutes), Date: "2016-03-31", MonitoredIfNew: true})
+		for _, person := range part.people {
+			write.Credits = append(write.Credits, library.SeriesCreditWrite{
+				Provider: "tmdb", ExternalID: person, Name: "Person " + person, Role: "guest_star", PartRef: ref,
+			})
+		}
+	}
+	result, err := f.series.Upsert(f.t.Context(), seriesAt, write)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	if _, err := f.desired.EnsureSeasonItem(f.t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", SortKey: "s01", CategoryID: 1, ProfileID: 1, Monitored: true}); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
+type crossoverPart struct {
+	title   string
+	minutes int64
+	people  []string
+}
+
+func cast(n int, skip ...int) []string {
+	var out []string
+next:
+	for i := 1; i <= n; i++ {
+		for _, s := range skip {
+			if s == i {
+				continue next
+			}
+		}
+		out = append(out, fmt.Sprint("p", i))
+	}
+	return out
+}
+
+func TestCrossoverEpisodesAreFoundByCastLengthAndAnEpisodeTitle(t *testing.T) {
+	f := newCrossoverFixture(t)
+	f.show("Show A", "1", map[string]crossoverPart{
+		"s01:e01": {"Pilot", 45, cast(5)},
+		"s01:e02": {"The Big Crossover", 44, cast(5)},
+		"s01:e03": {"Long Night", 40, cast(5)},
+		"s01:e04": {"Same Name Different Cast", 45, cast(5)},
+		"s01:e05": {"No Cast Data", 45, nil},
+	})
+	f.show("Show B", "2", map[string]crossoverPart{
+		"s01:e01": {"Pilot", 45, cast(5)},
+		"s01:e02": {"The Big Crossover", 45, cast(5, 5)},
+		"s01:e03": {"Long Night", 95, cast(5)},
+		"s01:e04": {"Same Name Different Cast", 45, []string{"x1", "x2", "x3", "x4", "x5"}},
+		"s01:e05": {"No Cast Data", 45, nil},
+	})
+
+	found, err := f.crossovers.Suggestions(t.Context(), "tv", 1, 50)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(found) != 1 || found[0].Title != "The Big Crossover" {
-		t.Errorf("suggestions = %+v; want only the specific title of about the same length (not \"Episode 5\", not a 40 and a 95 minute episode)", found)
+	titles := map[string]bool{}
+	for _, suggestion := range found {
+		titles[suggestion.Title] = suggestion.Certain()
+	}
+	if len(titles) != 2 || !titles["The Big Crossover"] || titles["No Cast Data"] {
+		t.Errorf("suggestions = %v; want the crossover (certain) and the one with no cast data (only a suggestion), not a pilot, not a 40 and a 95 minute episode, not casts that share no one", titles)
+	}
+
+	linked, err := f.crossovers.LinkCertain(t.Context(), "tv", 1)
+	if err != nil || linked != 1 {
+		t.Fatalf("linked %d, %v; want the one pair the evidence settles", linked, err)
+	}
+	after, _ := f.crossovers.Suggestions(t.Context(), "tv", 1, 50)
+	if len(after) != 1 || after[0].Title != "No Cast Data" {
+		t.Fatalf("after linking: %+v", after)
+	}
+
+	// A person who unlinks it is believed: detection does not link the pair again.
+	pair := found[0]
+	for _, suggestion := range found {
+		if suggestion.Certain() {
+			pair = suggestion
+		}
+	}
+	if err := f.crossovers.UnlinkSameContent(t.Context(), pair.PartID, pair.OtherPartID); err != nil {
+		t.Fatal(err)
+	}
+	if again, err := f.crossovers.LinkCertain(t.Context(), "tv", 1); err != nil || again != 0 {
+		t.Errorf("an unlinked pair was linked again: %d, %v", again, err)
 	}
 }

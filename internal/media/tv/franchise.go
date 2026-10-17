@@ -6,12 +6,16 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
 
@@ -36,13 +40,28 @@ var FranchisePassDefinition = jobs.Definition{
 // franchisesPerRun bounds one pass: Wikimedia asks for polite use of its query service, so a library is worked off over days.
 const franchisesPerRun = 25
 
-// FranchisePass puts each series in the franchise Wikidata says it is part of, with the other series of it the library holds.
+// AnimeRelations is AniList as the franchise pass asks it: what an anime is a sequel, prequel or spin-off of.
+type AnimeRelations interface {
+	Related(ctx context.Context, id int64) ([]anilist.Relation, error)
+}
+
+// FranchisePass puts each series in the franchise Wikidata says it is part of, with the other series of it the library
+// holds; anime go by AniList's relations, and series whose names or crossover episodes say they belong together are
+// grouped by Solarr itself.
 type FranchisePass struct {
 	Source     FranchiseSource
+	Anime      AnimeRelations
 	Franchises library.Franchises
+	Crossovers library.Crossovers
 	Series     library.Series
 	Logger     *slog.Logger
 }
+
+// relatedTypes are the AniList relations that put two entries in one franchise.
+var relatedTypes = map[string]bool{"SEQUEL": true, "PREQUEL": true, "SPIN_OFF": true, "SIDE_STORY": true, "PARENT": true, "ALTERNATIVE": true}
+
+// animeCrawlBudget bounds the AniList calls one series' relations may take.
+const animeCrawlBudget = 12
 
 // Run implements jobs.Handler: it asks about the next series; a failing query ends the run to be tried again later.
 func (p FranchisePass) Run(ctx context.Context, _ jobs.Job) error {
@@ -55,6 +74,7 @@ func (p FranchisePass) Run(ctx context.Context, _ jobs.Job) error {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("tv.franchises.context", string(FranchisePassJobType), err)
 		}
+		p.relateAnime(ctx, series)
 		franchise, ok, err := p.Source.SeriesFranchise(ctx, series.TVDB, series.TMDB)
 		if err != nil {
 			p.Logger.Warn("franchise lookup failed", slog.Int64("work_id", series.WorkID), slog.Any("error", err))
@@ -90,8 +110,99 @@ func (p FranchisePass) Run(ctx context.Context, _ jobs.Job) error {
 			return err
 		}
 	}
-	p.Logger.Info("franchise pass finished", slog.Int("asked", len(unchecked)), slog.Int("franchises", found))
+	grouped, err := p.groupByName(ctx)
+	if err != nil {
+		return err
+	}
+	p.Logger.Info("franchise pass finished", slog.Int("asked", len(unchecked)), slog.Int("franchises", found), slog.Int("grouped", grouped))
 	return nil
+}
+
+// relateAnime walks AniList's relations from the series' entry a few steps and records the library's series it reaches.
+func (p FranchisePass) relateAnime(ctx context.Context, series library.UncheckedSeries) {
+	if p.Anime == nil || series.AniList == 0 {
+		return
+	}
+	seen := map[int64]bool{series.AniList: true}
+	queue := []int64{series.AniList}
+	for calls := 0; len(queue) > 0 && calls < animeCrawlBudget; calls++ {
+		id := queue[0]
+		queue = queue[1:]
+		related, err := p.Anime.Related(ctx, id)
+		if err != nil {
+			p.Logger.Warn("anime relations not read", slog.Int64("anilist", id), slog.Any("error", err))
+			return
+		}
+		for _, relation := range related {
+			if !relatedTypes[relation.Type] || seen[relation.ID] {
+				continue
+			}
+			seen[relation.ID] = true
+			queue = append(queue, relation.ID)
+			if workID, found, err := p.Series.WorkByProviderID(ctx, ProviderAniList, strconv.FormatInt(relation.ID, 10)); err == nil && found && workID != series.WorkID {
+				if err := p.Franchises.Relate(ctx, series.WorkID, workID); err != nil {
+					p.Logger.Warn("relation not kept", slog.Any("error", err))
+				}
+			}
+		}
+	}
+}
+
+// groupByName puts together the series that names, AniList's relations or crossover episodes say belong together, unless a
+// franchise a provider named already holds them all; it answers how many groups it kept.
+func (p FranchisePass) groupByName(ctx context.Context) (int, error) {
+	works, err := p.Franchises.WorkNames(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	edges := titleEdges(works)
+	related, err := p.Franchises.RelatedPairs(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	edges = append(edges, related...)
+	crossovers, err := p.Crossovers.Pairs(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	for _, pair := range crossovers {
+		edges = append(edges, [2]int64{pair.WorkID, pair.OtherWorkID})
+	}
+	memberships, err := p.Franchises.FranchiseMemberships(ctx, MediaType)
+	if err != nil {
+		return 0, err
+	}
+	titles := make(map[int64]string, len(works))
+	for _, work := range works {
+		titles[work.WorkID] = work.Title
+	}
+	kept := 0
+	for _, group := range groupsOf(edges) {
+		if heldTogether(memberships, group) {
+			continue
+		}
+		if _, err := p.Franchises.JoinGroup(ctx, MediaType, groupName(titles, group), group, memberships); err != nil {
+			return kept, err
+		}
+		kept++
+	}
+	return kept, nil
+}
+
+// heldTogether says one franchise a provider named already holds every work of the group.
+func heldTogether(memberships []library.Membership, group []int64) bool {
+	count := map[int64]int{}
+	for _, membership := range memberships {
+		if membership.Source != library.AutoSource && slices.Contains(group, membership.WorkID) {
+			count[membership.CollectionID]++
+		}
+	}
+	for _, held := range count {
+		if held == len(group) {
+			return true
+		}
+	}
+	return false
 }
 
 // heldWorks is the library's work for each member it holds, found by TheTVDB or TMDB id.
@@ -136,6 +247,8 @@ type Franchising struct {
 		Category(id int64) (settings.Category, bool)
 		ProfileFor(category settings.Category, fallback int64) int64
 	}
+	// Pictures keeps the pictures found for series the library lacks; nil asks every time.
+	Pictures *MissingPictures
 }
 
 var _ media.Franchising = Franchising{}
@@ -173,6 +286,7 @@ func (f Franchising) MissingFranchiseMembers(ctx context.Context, _, franchiseID
 		if member.TVDB == 0 {
 			out[index].Provider, out[index].ExternalID = ProviderTMDB, strconv.FormatInt(member.TMDB, 10)
 		}
+		out[index].PosterURL = f.poster(ctx, member)
 	}
 	return out, nil
 }
@@ -209,4 +323,43 @@ func (f Franchising) MonitorFranchise(ctx context.Context, categoryID, franchise
 		return added, err
 	}
 	return added, nil
+}
+
+// MissingPictures remembers the pictures found for series the library lacks, by provider id, so each is asked for once.
+type MissingPictures struct {
+	mu      sync.Mutex
+	posters map[string]string
+}
+
+// NewMissingPictures builds an empty cache.
+func NewMissingPictures() *MissingPictures { return &MissingPictures{posters: map[string]string{}} }
+
+func (f Franchising) poster(ctx context.Context, member wikidata.FranchiseSeries) string {
+	if f.Pictures == nil || f.Service.TMDB == nil || !f.Service.TMDB.Configured() {
+		return ""
+	}
+	key := strconv.FormatInt(member.TVDB, 10) + "/" + strconv.FormatInt(member.TMDB, 10)
+	f.Pictures.mu.Lock()
+	cached, known := f.Pictures.posters[key]
+	asked := len(f.Pictures.posters)
+	f.Pictures.mu.Unlock()
+	if known || asked >= 5000 {
+		return cached
+	}
+	var path string
+	switch {
+	case member.TMDB > 0:
+		if series, err := f.Service.TMDB.Series(ctx, member.TMDB); err == nil {
+			path = series.PosterPath
+		}
+	case member.TVDB > 0:
+		if hit, err := f.Service.TMDB.FindByTVDB(ctx, member.TVDB); err == nil {
+			path = hit.PosterPath
+		}
+	}
+	poster := tmdb.ImageURL(path)
+	f.Pictures.mu.Lock()
+	f.Pictures.posters[key] = poster
+	f.Pictures.mu.Unlock()
+	return poster
 }

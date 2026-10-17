@@ -550,6 +550,8 @@ type Querier interface {
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	// Who belongs to which franchise, of a media type: the provider's and the automatic ones.
+	ListFranchiseMembershipsOfType(ctx context.Context, mediaType string) ([]ListFranchiseMembershipsOfTypeRow, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
@@ -676,6 +678,8 @@ type Querier interface {
 	// in a WHERE, and decoding one bounded page in Go is the same discipline every
 	// cross-database composition here already uses.
 	ListQueuedWithNewestAttempt(ctx context.Context, arg ListQueuedWithNewestAttemptParams) ([]ListQueuedWithNewestAttemptRow, error)
+	// Pairs of works a provider says are related (an anime's sequel, its spin-off).
+	ListRelatedWorkPairs(ctx context.Context, mediaType string) ([]ListRelatedWorkPairsRow, error)
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
@@ -684,7 +688,8 @@ type Querier interface {
 	ListSameContentPairs(ctx context.Context, mediaType string) ([]ListSameContentPairsRow, error)
 	// The parts one part is the same broadcast as, either way round, with what a list shows of them.
 	ListSameContentParts(ctx context.Context, arg ListSameContentPartsParams) ([]ListSameContentPartsRow, error)
-	// Episodes of different works with the same title on the same day, not yet linked: likely one broadcast twice.
+	// Episodes of different works with the same title on the same day, not linked and not ruled out: candidates for one
+	// broadcast twice, with what tells them apart (lengths, the people credited on each, how many are the same).
 	ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error)
 	ListScanStates(ctx context.Context) ([]ScanState, error)
 	// Every title a library's series answers to, canonical and alias, for matching folder names (ADR-41).
@@ -764,6 +769,8 @@ type Querier interface {
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
 	// The works a file counts towards.
 	ListWorkIDsOfObject(ctx context.Context, mediaObjectID int64) ([]int64, error)
+	// Every work of a media type with its name, for finding which belong together.
+	ListWorkNamesOfType(ctx context.Context, mediaType string) ([]ListWorkNamesOfTypeRow, error)
 	ListWorkOrganisationIDsInRole(ctx context.Context, arg ListWorkOrganisationIDsInRoleParams) ([]int64, error)
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWorkPartRefsRow, error)
@@ -847,6 +854,7 @@ type Querier interface {
 	MergeWorkRootFolders(ctx context.Context, arg MergeWorkRootFoldersParams) error
 	MergeWorkTags(ctx context.Context, arg MergeWorkTagsParams) error
 	MoveAcquisitionsToItem(ctx context.Context, arg MoveAcquisitionsToItemParams) error
+	MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error
 	// An item the kept work has no counterpart for moves over whole, without the dropped work's edition.
 	MoveDesiredItemToWork(ctx context.Context, arg MoveDesiredItemToWorkParams) error
 	// A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.

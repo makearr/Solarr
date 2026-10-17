@@ -39,7 +39,7 @@ func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *te
 		},
 	}
 	franchises := library.NewFranchises(opened)
-	pass := tv.FranchisePass{Source: source, Franchises: franchises, Series: service.Series, Logger: slog.New(slog.DiscardHandler)}
+	pass := tv.FranchisePass{Source: source, Franchises: franchises, Crossovers: library.NewCrossovers(opened), Series: service.Series, Logger: slog.New(slog.DiscardHandler)}
 	if err := pass.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatal(err)
 	}

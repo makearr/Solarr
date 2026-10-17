@@ -76,15 +76,15 @@ func (m Media) Titles() []string {
 	return names
 }
 
-// Media reads one anime by AniList id.
-func (c Client) Media(ctx context.Context, id int64) (Media, error) {
-	body, err := json.Marshal(map[string]any{"query": query, "variables": map[string]any{"id": id}})
+// post asks one GraphQL question and answers the raw reply.
+func (c Client) post(ctx context.Context, question string, id int64) ([]byte, error) {
+	body, err := json.Marshal(map[string]any{"query": question, "variables": map[string]any{"id": id}})
 	if err != nil {
-		return Media{}, fmt.Errorf("anilist: %d: %w", id, err)
+		return nil, fmt.Errorf("anilist: %d: %w", id, err)
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
-		return Media{}, fmt.Errorf("anilist: %d: %w", id, err)
+		return nil, fmt.Errorf("anilist: %d: %w", id, err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
@@ -92,14 +92,23 @@ func (c Client) Media(ctx context.Context, id int64) (Media, error) {
 	if err != nil {
 		var refused *httpx.StatusError
 		if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
-			return Media{}, ErrNotFound
+			return nil, ErrNotFound
 		}
-		return Media{}, fmt.Errorf("anilist: %d: %w", id, err)
+		return nil, fmt.Errorf("anilist: %d: %w", id, err)
 	}
 	defer func() { _ = response.Body.Close() }()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
 	if err != nil {
-		return Media{}, fmt.Errorf("anilist: %d: read: %w", id, err)
+		return nil, fmt.Errorf("anilist: %d: read: %w", id, err)
+	}
+	return raw, nil
+}
+
+// Media reads one anime by AniList id.
+func (c Client) Media(ctx context.Context, id int64) (Media, error) {
+	raw, err := c.post(ctx, query, id)
+	if err != nil {
+		return Media{}, err
 	}
 	var answer struct {
 		Data struct {
@@ -113,6 +122,63 @@ func (c Client) Media(ctx context.Context, id int64) (Media, error) {
 		return Media{}, ErrNotFound
 	}
 	return *answer.Data.Media, nil
+}
+
+// Relation is another entry AniList says an anime is related to, and how.
+type Relation struct {
+	// Type is AniList's word: SEQUEL, PREQUEL, SIDE_STORY, SPIN_OFF, PARENT, ALTERNATIVE, ADAPTATION, SUMMARY, ...
+	Type   string
+	ID     int64
+	Format string
+	Title  string
+}
+
+const relationsQuery = `query($id:Int){Media(id:$id,type:ANIME){id relations{edges{relationType node{id type format title{romaji english}}}}}}`
+
+// Related lists the anime entries this one is related to; entries of other kinds (the manga it adapts) are left out.
+func (c Client) Related(ctx context.Context, id int64) ([]Relation, error) {
+	raw, err := c.post(ctx, relationsQuery, id)
+	if err != nil {
+		return nil, err
+	}
+	var answer struct {
+		Data struct {
+			Media *struct {
+				Relations struct {
+					Edges []struct {
+						RelationType string `json:"relationType"`
+						Node         struct {
+							ID     int64  `json:"id"`
+							Type   string `json:"type"`
+							Format string `json:"format"`
+							Title  struct {
+								Romaji  string `json:"romaji"`
+								English string `json:"english"`
+							} `json:"title"`
+						} `json:"node"`
+					} `json:"edges"`
+				} `json:"relations"`
+			} `json:"Media"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &answer); err != nil {
+		return nil, fmt.Errorf("anilist: %d: decode: %w", id, err)
+	}
+	if answer.Data.Media == nil {
+		return nil, ErrNotFound
+	}
+	var out []Relation
+	for _, edge := range answer.Data.Media.Relations.Edges {
+		if edge.Node.Type != "ANIME" {
+			continue
+		}
+		title := edge.Node.Title.English
+		if title == "" {
+			title = edge.Node.Title.Romaji
+		}
+		out = append(out, Relation{Type: edge.RelationType, ID: edge.Node.ID, Format: edge.Node.Format, Title: title})
+	}
+	return out, nil
 }
 
 // Ping asks for a well-known entry, for the connection test.

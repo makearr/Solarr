@@ -214,9 +214,24 @@ func (p *process) tvModule() tv.Module {
 		Searching: tv.Searching{Acquire: p.tvGrab(), Conns: p.tvIndexerConns, Clock: clock.NewSystem()},
 		Franchise: tv.Franchising{
 			Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Series: p.tvService().Series, Service: p.tvService(),
-			DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+			DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Pictures: tv.NewMissingPictures(),
 		},
-		FranchisePass: &tv.FranchisePass{Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Series: p.tvService().Series, Logger: p.logger},
+		Crossovers: &tv.CrossoverJob{
+			Crossovers: library.NewCrossovers(p.library), Logger: p.logger,
+			Libraries: func() []int64 {
+				var ids []int64
+				for _, category := range p.cache.Snapshot().Categories() {
+					if category.MediaType == tv.MediaType {
+						ids = append(ids, category.ID)
+					}
+				}
+				return ids
+			},
+		},
+		FranchisePass: &tv.FranchisePass{
+			Source: p.wikidataFetcher(), Anime: p.aniListClient(), Franchises: library.NewFranchises(p.library), Crossovers: library.NewCrossovers(p.library),
+			Series: p.tvService().Series, Logger: p.logger,
+		},
 		Following: tv.Following{
 			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,
 			Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
@@ -475,4 +490,9 @@ func (p *process) movieHunt(ctx context.Context, itemID int64) (plan.Outcome, er
 // enqueueFranchisePass submits the pass that finds the franchises series belong to.
 func (p *process) enqueueFranchisePass(ctx context.Context) (jobs.EnqueueResult, error) {
 	return tv.EnqueueFranchisePass(ctx, p.queue)
+}
+
+// enqueueCrossoverPass submits the pass that finds crossover episodes.
+func (p *process) enqueueCrossoverPass(ctx context.Context) (jobs.EnqueueResult, error) {
+	return tv.EnqueueCrossoverPass(ctx, p.queue)
 }

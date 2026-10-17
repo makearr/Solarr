@@ -396,3 +396,9 @@ func (p *process) unidentifiedTV() adapters.UnidentifiedTV {
 		Unidentified: queue, Exclusions: adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
 	}
 }
+
+// aniListClient is the process's one AniList client, built with the TV providers it shares a bucket with.
+func (p *process) aniListClient() anilist.Client {
+	p.tvService()
+	return p.anilistShared
+}

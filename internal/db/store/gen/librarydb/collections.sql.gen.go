@@ -561,7 +561,8 @@ func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64)
 const listCollectionMembersInCategory = `-- name: ListCollectionMembersInCategory :many
 SELECT m.collection_id, w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year,
        CAST(COALESCE((SELECT MAX(d.monitored) FROM desired_item d WHERE d.work_id = w.id AND d.category_id = ?1), 0) AS INTEGER) AS monitored,
-       CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files
+       CAST((SELECT COUNT(*) FROM work_file f WHERE f.work_id = w.id) AS INTEGER) AS files,
+       CAST(COALESCE((SELECT f.value FROM work_field f WHERE f.work_id = w.id AND f.field = 'images' ORDER BY f.provider LIMIT 1), '') AS TEXT) AS images
 FROM collection_member m
 JOIN work w ON w.id = m.work_id
 WHERE m.collection_id IN (/*SLICE:collection_ids*/?)
@@ -581,6 +582,7 @@ type ListCollectionMembersInCategoryRow struct {
 	Year         int64
 	Monitored    int64
 	Files        int64
+	Images       string
 }
 
 // The works of a library in the collections, monitored as the library's own item says, files counted.
@@ -611,6 +613,7 @@ func (q *Queries) ListCollectionMembersInCategory(ctx context.Context, arg ListC
 			&i.Year,
 			&i.Monitored,
 			&i.Files,
+			&i.Images,
 		); err != nil {
 			return nil, err
 		}
@@ -814,6 +817,43 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 	return items, nil
 }
 
+const listFranchiseMembershipsOfType = `-- name: ListFranchiseMembershipsOfType :many
+SELECT c.id AS collection_id, c.source AS source, m.work_id
+FROM collection c JOIN collection_member m ON m.collection_id = c.id
+WHERE c.kind = 'franchise' AND c.media_type = ? AND m.part_id = 0
+ORDER BY c.id, m.work_id
+`
+
+type ListFranchiseMembershipsOfTypeRow struct {
+	CollectionID int64
+	Source       string
+	WorkID       int64
+}
+
+// Who belongs to which franchise, of a media type: the provider's and the automatic ones.
+func (q *Queries) ListFranchiseMembershipsOfType(ctx context.Context, mediaType string) ([]ListFranchiseMembershipsOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFranchiseMembershipsOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFranchiseMembershipsOfTypeRow{}
+	for rows.Next() {
+		var i ListFranchiseMembershipsOfTypeRow
+		if err := rows.Scan(&i.CollectionID, &i.Source, &i.WorkID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listGroupObservations = `-- name: ListGroupObservations :many
 SELECT id, release_group, media_object_id, outcome, cause, observed_at, was_exploration
 FROM group_observation
@@ -979,6 +1019,41 @@ func (q *Queries) ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNe
 	return items, nil
 }
 
+const listRelatedWorkPairs = `-- name: ListRelatedWorkPairs :many
+SELECT r.from_id, r.to_id FROM relationship r
+JOIN work a ON a.id = r.from_id AND a.media_type = ?
+WHERE r.kind = 'related_series' AND r.from_type = 'work' AND r.to_type = 'work'
+`
+
+type ListRelatedWorkPairsRow struct {
+	FromID int64
+	ToID   int64
+}
+
+// Pairs of works a provider says are related (an anime's sequel, its spin-off).
+func (q *Queries) ListRelatedWorkPairs(ctx context.Context, mediaType string) ([]ListRelatedWorkPairsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRelatedWorkPairs, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRelatedWorkPairsRow{}
+	for rows.Next() {
+		var i ListRelatedWorkPairsRow
+		if err := rows.Scan(&i.FromID, &i.ToID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSameContentPairs = `-- name: ListSameContentPairs :many
 SELECT a.id AS part_id, a.work_id, a.media_ref, CAST(COALESCE(a.title, '') AS TEXT) AS title,
        CAST(COALESCE(a.date, '') AS TEXT) AS date, b.id AS other_part_id, b.work_id AS other_work_id, b.media_ref AS other_ref,
@@ -1113,27 +1188,23 @@ func (q *Queries) ListSameContentParts(ctx context.Context, arg ListSameContentP
 const listSameContentSuggestions = `-- name: ListSameContentSuggestions :many
 SELECT a.id AS part_id, a.work_id, wa.canonical_title AS work_title, a.media_ref, CAST(COALESCE(a.title, '') AS TEXT) AS title,
        b.id AS other_part_id, b.work_id AS other_work_id, wb.canonical_title AS other_work_title, b.media_ref AS other_ref,
-       CAST(COALESCE(a.date, '') AS TEXT) AS date
+       CAST(COALESCE(a.date, '') AS TEXT) AS date,
+       CAST(COALESCE(a.runtime_ms, 0) AS INTEGER) AS runtime_ms, CAST(COALESCE(b.runtime_ms, 0) AS INTEGER) AS other_runtime_ms,
+       CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca WHERE ca.part_id = a.id) AS INTEGER) AS people,
+       CAST((SELECT COUNT(DISTINCT cb.person_id) FROM credit cb WHERE cb.part_id = b.id) AS INTEGER) AS other_people,
+       CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id
+             WHERE ca.part_id = a.id) AS INTEGER) AS shared_people
 FROM work_part a
 JOIN work_part b ON b.date = a.date AND LOWER(b.title) = LOWER(a.title) AND b.work_id > a.work_id
 JOIN work wa ON wa.id = a.work_id
 JOIN work wb ON wb.id = b.work_id
 WHERE a.date IS NOT NULL AND a.title IS NOT NULL AND LENGTH(a.title) > 3 AND wa.media_type = ?1
   AND wb.media_type = wa.media_type
-  -- A title every series has ("Episode 5", "Special") says nothing: two shows can air a numbered episode on one day.
-  AND LOWER(a.title) NOT GLOB 'episode [0-9]*' AND LOWER(a.title) NOT GLOB 'episode' AND LOWER(a.title) NOT GLOB 'special*'
-  AND LOWER(a.title) NOT GLOB 'part [0-9]*' AND LOWER(a.title) NOT GLOB 'trailer*' AND LOWER(a.title) NOT GLOB 'tba' AND LOWER(a.title) NOT GLOB 'tbd'
-  -- One broadcast runs one length, give or take the cuts a network makes.
-  AND (a.runtime_ms IS NULL OR b.runtime_ms IS NULL OR a.runtime_ms = 0 OR b.runtime_ms = 0
-       OR ABS(a.runtime_ms - b.runtime_ms) * 100 <= 20 * MAX(a.runtime_ms, b.runtime_ms))
-  -- Where both episodes name people, at least one is the same person.
-  AND (NOT EXISTS (SELECT 1 FROM credit ca WHERE ca.part_id = a.id) OR NOT EXISTS (SELECT 1 FROM credit cb WHERE cb.part_id = b.id)
-       OR EXISTS (SELECT 1 FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id WHERE ca.part_id = a.id))
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = a.work_id AND d.category_id = ?2)
   AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = b.work_id AND d.category_id = ?2)
-  AND NOT EXISTS (SELECT 1 FROM relationship r WHERE r.kind = 'same_content'
+  AND NOT EXISTS (SELECT 1 FROM relationship r WHERE r.kind IN ('same_content', 'different_content')
                   AND ((r.from_id = a.id AND r.to_id = b.id) OR (r.from_id = b.id AND r.to_id = a.id)))
-ORDER BY a.date DESC
+ORDER BY a.date DESC, a.id
 LIMIT ?3
 `
 
@@ -1154,9 +1225,15 @@ type ListSameContentSuggestionsRow struct {
 	OtherWorkTitle string
 	OtherRef       string
 	Date           string
+	RuntimeMs      int64
+	OtherRuntimeMs int64
+	People         int64
+	OtherPeople    int64
+	SharedPeople   int64
 }
 
-// Episodes of different works with the same title on the same day, not yet linked: likely one broadcast twice.
+// Episodes of different works with the same title on the same day, not linked and not ruled out: candidates for one
+// broadcast twice, with what tells them apart (lengths, the people credited on each, how many are the same).
 func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameContentSuggestionsParams) ([]ListSameContentSuggestionsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listSameContentSuggestions, arg.MediaType, arg.CategoryID, arg.PageSize)
 	if err != nil {
@@ -1177,6 +1254,11 @@ func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameCo
 			&i.OtherWorkTitle,
 			&i.OtherRef,
 			&i.Date,
+			&i.RuntimeMs,
+			&i.OtherRuntimeMs,
+			&i.People,
+			&i.OtherPeople,
+			&i.SharedPeople,
 		); err != nil {
 			return nil, err
 		}
@@ -1194,7 +1276,8 @@ func (q *Queries) ListSameContentSuggestions(ctx context.Context, arg ListSameCo
 const listSeriesWithoutFranchiseCheck = `-- name: ListSeriesWithoutFranchiseCheck :many
 SELECT w.id AS work_id,
        CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tvdb' LIMIT 1), '') AS TEXT) AS tvdb,
-       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'tmdb' LIMIT 1), '') AS TEXT) AS tmdb,
+       CAST(COALESCE((SELECT e.external_id FROM work_external_id e WHERE e.work_id = w.id AND e.provider = 'anilist' LIMIT 1), '') AS TEXT) AS anilist
 FROM work w
 WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_franchise_check c WHERE c.work_id = w.id)
 ORDER BY w.id
@@ -1202,9 +1285,10 @@ LIMIT ?
 `
 
 type ListSeriesWithoutFranchiseCheckRow struct {
-	WorkID int64
-	Tvdb   string
-	Tmdb   string
+	WorkID  int64
+	Tvdb    string
+	Tmdb    string
+	Anilist string
 }
 
 // The series no franchise lookup has been made for yet, with the ids a lookup goes by.
@@ -1217,7 +1301,12 @@ func (q *Queries) ListSeriesWithoutFranchiseCheck(ctx context.Context, limit int
 	items := []ListSeriesWithoutFranchiseCheckRow{}
 	for rows.Next() {
 		var i ListSeriesWithoutFranchiseCheckRow
-		if err := rows.Scan(&i.WorkID, &i.Tvdb, &i.Tmdb); err != nil {
+		if err := rows.Scan(
+			&i.WorkID,
+			&i.Tvdb,
+			&i.Tmdb,
+			&i.Anilist,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1263,6 +1352,41 @@ func (q *Queries) ListStatRollup(ctx context.Context, arg ListStatRollupParams) 
 			&i.Count,
 			&i.ComputedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkNamesOfType = `-- name: ListWorkNamesOfType :many
+SELECT w.id AS work_id, w.canonical_title AS title, CAST(COALESCE(w.year, 0) AS INTEGER) AS year
+FROM work w WHERE w.media_type = ? ORDER BY w.id
+`
+
+type ListWorkNamesOfTypeRow struct {
+	WorkID int64
+	Title  string
+	Year   int64
+}
+
+// Every work of a media type with its name, for finding which belong together.
+func (q *Queries) ListWorkNamesOfType(ctx context.Context, mediaType string) ([]ListWorkNamesOfTypeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkNamesOfType, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkNamesOfTypeRow{}
+	for rows.Next() {
+		var i ListWorkNamesOfTypeRow
+		if err := rows.Scan(&i.WorkID, &i.Title, &i.Year); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1454,6 +1578,21 @@ type MarkFranchiseCheckedParams struct {
 
 func (q *Queries) MarkFranchiseChecked(ctx context.Context, arg MarkFranchiseCheckedParams) error {
 	_, err := q.db.ExecContext(ctx, markFranchiseChecked, arg.WorkID, arg.CheckedAt)
+	return err
+}
+
+const moveCollectionMembers = `-- name: MoveCollectionMembers :exec
+INSERT OR IGNORE INTO collection_member (collection_id, work_id, part_id, ord)
+SELECT ?1, cm.work_id, cm.part_id, cm.ord FROM collection_member cm WHERE cm.collection_id = ?2
+`
+
+type MoveCollectionMembersParams struct {
+	IntoID int64
+	FromID int64
+}
+
+func (q *Queries) MoveCollectionMembers(ctx context.Context, arg MoveCollectionMembersParams) error {
+	_, err := q.db.ExecContext(ctx, moveCollectionMembers, arg.IntoID, arg.FromID)
 	return err
 }
 

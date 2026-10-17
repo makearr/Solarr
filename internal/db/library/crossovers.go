@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -22,7 +24,9 @@ func NewCrossovers(opened *store.Store) Crossovers { return Crossovers{store: op
 const (
 	CrossoverKind   = "crossover"
 	SameContentKind = "same_content"
-	partSubject     = "part"
+	// DifferentContentKind remembers two parts a person said are not one broadcast, so detection never links them again.
+	DifferentContentKind = "different_content"
+	partSubject          = "part"
 )
 
 // ErrNotACrossover is an id that is no crossover.
@@ -236,7 +240,8 @@ func (c Crossovers) LinkSameContent(ctx context.Context, partID, otherPartID int
 	return nil
 }
 
-// UnlinkSameContent forgets two parts were one broadcast; what each holds stays until a scan says otherwise.
+// UnlinkSameContent forgets two parts were one broadcast, and that they are not, so detection leaves them be; what each
+// holds stays until a scan says otherwise.
 func (c Crossovers) UnlinkSameContent(ctx context.Context, partID, otherPartID int64) error {
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
@@ -247,7 +252,9 @@ func (c Crossovers) UnlinkSameContent(ctx context.Context, partID, otherPartID i
 				return err
 			}
 		}
-		return nil
+		return queries.AddRelationship(ctx, librarydb.AddRelationshipParams{
+			FromType: partSubject, FromID: partID, ToType: partSubject, ToID: otherPartID, Kind: DifferentContentKind,
+		})
 	})
 	if err != nil {
 		return fmt.Errorf("library: unlink parts %d and %d: %w", partID, otherPartID, err)
@@ -271,30 +278,102 @@ func (c Crossovers) SameContentOf(ctx context.Context, partIDs []int64) ([]SameC
 	return links, nil
 }
 
-// SameContentSuggestion is a pair of parts of two works with one title on one day: likely one broadcast twice.
+// SameContentSuggestion is a pair of parts of two works with one title on one day: a candidate for one broadcast twice,
+// with what tells whether it is.
 type SameContentSuggestion struct {
-	PartID, WorkID                   int64
-	WorkTitle, MediaRef, Title, Date string
-	OtherPartID, OtherWorkID         int64
-	OtherWorkTitle, OtherRef         string
+	PartID, WorkID                    int64
+	WorkTitle, MediaRef, Title, Date  string
+	OtherPartID, OtherWorkID          int64
+	OtherWorkTitle, OtherRef          string
+	RuntimeMs, OtherRuntimeMs         int64
+	People, OtherPeople, SharedPeople int64
 }
 
-// Suggestions answers up to limit likely same-broadcast pairs in a library not linked yet; nothing is linked.
+// Certain says the evidence is enough to link without asking: a title that names an episode, lengths within 5% and a
+// cast that is near identical, three people at the least.
+func (s SameContentSuggestion) Certain() bool {
+	if genericTitle(s.Title) || s.RuntimeMs <= 0 || s.OtherRuntimeMs <= 0 || !within(s.RuntimeMs, s.OtherRuntimeMs, 5) {
+		return false
+	}
+	union := s.People + s.OtherPeople - s.SharedPeople
+	return s.SharedPeople >= 3 && union > 0 && s.SharedPeople*100 >= 80*union
+}
+
+// Plausible is false for a pair that cannot be one broadcast: a title every series has, lengths far apart, or casts that
+// share no one.
+func (s SameContentSuggestion) Plausible() bool {
+	if genericTitle(s.Title) {
+		return false
+	}
+	if s.RuntimeMs > 0 && s.OtherRuntimeMs > 0 && !within(s.RuntimeMs, s.OtherRuntimeMs, 20) {
+		return false
+	}
+	return s.People == 0 || s.OtherPeople == 0 || s.SharedPeople > 0
+}
+
+// within says two lengths differ by no more than percent of the longer.
+func within(a, b, percent int64) bool {
+	longer := max(a, b)
+	return max(a, b)-min(a, b) <= longer*percent/100
+}
+
+var genericTitles = regexp.MustCompile(`^(the )?(pilot|premiere|finale|series premiere|series finale|season premiere|season finale|special|specials|trailer|recap|tba|tbd|untitled|christmas special|holiday special|(episode|part|chapter|special|part one|part two|part three)( ?[0-9ivx]+)?|[0-9]+)$`)
+
+// genericTitle says a title any series may have, which says nothing about two episodes being one.
+func genericTitle(title string) bool {
+	return genericTitles.MatchString(strings.ToLower(strings.TrimSpace(title)))
+}
+
+// Suggestions answers up to limit plausible same-broadcast pairs in a library not linked or ruled out; nothing is linked.
 func (c Crossovers) Suggestions(ctx context.Context, mediaType string, categoryID int64, limit int64) ([]SameContentSuggestion, error) {
 	rows, err := librarydb.New(c.store.Read()).ListSameContentSuggestions(ctx, librarydb.ListSameContentSuggestionsParams{
-		MediaType: mediaType, CategoryID: categoryID, PageSize: limit,
+		MediaType: mediaType, CategoryID: categoryID, PageSize: limit * 4,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: same-broadcast suggestions: %w", err)
 	}
-	suggestions := make([]SameContentSuggestion, len(rows))
-	for i, row := range rows {
-		suggestions[i] = SameContentSuggestion{
+	var suggestions []SameContentSuggestion
+	for _, row := range rows {
+		suggestion := SameContentSuggestion{
 			PartID: row.PartID, WorkID: row.WorkID, WorkTitle: row.WorkTitle, MediaRef: row.MediaRef, Title: row.Title, Date: row.Date,
 			OtherPartID: row.OtherPartID, OtherWorkID: row.OtherWorkID, OtherWorkTitle: row.OtherWorkTitle, OtherRef: row.OtherRef,
+			RuntimeMs: row.RuntimeMs, OtherRuntimeMs: row.OtherRuntimeMs,
+			People: row.People, OtherPeople: row.OtherPeople, SharedPeople: row.SharedPeople,
+		}
+		if suggestion.Plausible() {
+			suggestions = append(suggestions, suggestion)
+		}
+		if int64(len(suggestions)) >= limit {
+			break
 		}
 	}
 	return suggestions, nil
+}
+
+// LinkCertain links every pair the evidence settles (SameContentSuggestion.Certain) and answers how many, so crossover
+// episodes are found without being asked; what a person rules out stays out.
+func (c Crossovers) LinkCertain(ctx context.Context, mediaType string, categoryID int64) (int, error) {
+	linked := 0
+	for {
+		batch, err := c.Suggestions(ctx, mediaType, categoryID, 200)
+		if err != nil {
+			return linked, err
+		}
+		progressed := false
+		for _, suggestion := range batch {
+			if !suggestion.Certain() {
+				continue
+			}
+			if err := c.LinkSameContent(ctx, suggestion.PartID, suggestion.OtherPartID); err != nil {
+				return linked, err
+			}
+			linked++
+			progressed = true
+		}
+		if !progressed {
+			return linked, nil
+		}
+	}
 }
 
 // coverLinkedTx lets each of the parts' files cover every part it is the same broadcast as, re-counts their works, and

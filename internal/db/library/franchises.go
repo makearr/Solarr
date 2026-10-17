@@ -3,8 +3,10 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/store"
@@ -94,6 +96,8 @@ type FranchiseMember struct {
 	Year      int64
 	Monitored bool
 	Files     int64
+	// PosterURL is the work's picture at its provider, empty when it has none.
+	PosterURL string
 }
 
 // FranchiseRow is a collection as a library holds it: its members, and the member count the provider states.
@@ -136,7 +140,7 @@ func (f Franchises) InCategory(ctx context.Context, mediaType string, categoryID
 	}
 	for _, row := range members {
 		entry := &out[at[row.CollectionID]]
-		entry.Members = append(entry.Members, FranchiseMember{WorkID: row.WorkID, Title: row.Title, Year: row.Year, Monitored: row.Monitored > 0, Files: row.Files})
+		entry.Members = append(entry.Members, FranchiseMember{WorkID: row.WorkID, Title: row.Title, Year: row.Year, Monitored: row.Monitored > 0, Files: row.Files, PosterURL: posterOf(row.Images)})
 	}
 	return out, nil
 }
@@ -257,6 +261,8 @@ func (f Franchises) SetPoster(ctx context.Context, id int64, posterURL string) e
 type UncheckedSeries struct {
 	WorkID     int64
 	TVDB, TMDB int64
+	// AniList is the series' AniList id, 0 when it has none.
+	AniList int64
 }
 
 // SeriesWithoutFranchiseCheck lists up to limit series the franchise pass has not asked about yet.
@@ -270,6 +276,7 @@ func (f Franchises) SeriesWithoutFranchiseCheck(ctx context.Context, limit int64
 		out[index] = UncheckedSeries{WorkID: row.WorkID}
 		out[index].TVDB, _ = strconv.ParseInt(row.Tvdb, 10, 64)
 		out[index].TMDB, _ = strconv.ParseInt(row.Tmdb, 10, 64)
+		out[index].AniList, _ = strconv.ParseInt(row.Anilist, 10, 64)
 	}
 	return out, nil
 }
@@ -283,4 +290,147 @@ func (f Franchises) MarkChecked(ctx context.Context, workID int64) error {
 		return fmt.Errorf("library: franchise check of work %d: %w", workID, err)
 	}
 	return nil
+}
+
+// posterOf is the poster address in a work's stored pictures (a JSON list of kind and url), empty when there is none.
+func posterOf(encoded string) string {
+	if encoded == "" {
+		return ""
+	}
+	var images []struct {
+		Kind string `json:"kind"`
+		URL  string `json:"url"`
+	}
+	if json.Unmarshal([]byte(encoded), &images) != nil {
+		return ""
+	}
+	for _, image := range images {
+		if image.Kind == "poster" && image.URL != "" {
+			return image.URL
+		}
+	}
+	return ""
+}
+
+// WorkName is a work with its name and year, for finding which belong together.
+type WorkName struct {
+	WorkID int64
+	Title  string
+	Year   int64
+}
+
+// WorkNames lists every work of the media type.
+func (f Franchises) WorkNames(ctx context.Context, mediaType string) ([]WorkName, error) {
+	rows, err := librarydb.New(f.store.Read()).ListWorkNamesOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: work names: %w", err)
+	}
+	out := make([]WorkName, len(rows))
+	for index, row := range rows {
+		out[index] = WorkName{WorkID: row.WorkID, Title: row.Title, Year: row.Year}
+	}
+	return out, nil
+}
+
+// Membership is a work's place in a franchise, and where the franchise comes from.
+type Membership struct {
+	CollectionID, WorkID int64
+	Source               string
+}
+
+// FranchiseMemberships lists who belongs to which franchise of the media type.
+func (f Franchises) FranchiseMemberships(ctx context.Context, mediaType string) ([]Membership, error) {
+	rows, err := librarydb.New(f.store.Read()).ListFranchiseMembershipsOfType(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: franchise memberships: %w", err)
+	}
+	out := make([]Membership, len(rows))
+	for index, row := range rows {
+		out[index] = Membership{CollectionID: row.CollectionID, WorkID: row.WorkID, Source: row.Source}
+	}
+	return out, nil
+}
+
+// RelatedKind is the relationship between two works a provider says belong together.
+const RelatedKind = "related_series"
+
+// AutoSource is the source of a franchise Solarr worked out itself.
+const AutoSource = "auto"
+
+// Relate records that a provider says two works belong together.
+func (f Franchises) Relate(ctx context.Context, workID, otherID int64) error {
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).AddRelationship(ctx, librarydb.AddRelationshipParams{FromType: "work", FromID: workID, ToType: "work", ToID: otherID, Kind: RelatedKind})
+	})
+	if err != nil {
+		return fmt.Errorf("library: relate works %d and %d: %w", workID, otherID, err)
+	}
+	return nil
+}
+
+// RelatedPairs lists the works of the media type a provider said belong together.
+func (f Franchises) RelatedPairs(ctx context.Context, mediaType string) ([][2]int64, error) {
+	rows, err := librarydb.New(f.store.Read()).ListRelatedWorkPairs(ctx, mediaType)
+	if err != nil {
+		return nil, fmt.Errorf("library: related works: %w", err)
+	}
+	out := make([][2]int64, len(rows))
+	for index, row := range rows {
+		out[index] = [2]int64{row.FromID, row.ToID}
+	}
+	return out, nil
+}
+
+// JoinGroup puts the works in one franchise Solarr worked out: the lowest-numbered automatic franchise any of them is
+// already in (the others of theirs merge into it), else a new one. It answers the franchise's id.
+func (f Franchises) JoinGroup(ctx context.Context, mediaType, name string, workIDs []int64, existing []Membership) (int64, error) {
+	var keep int64
+	var merge []int64
+	for _, membership := range existing {
+		if membership.Source != AutoSource || !slices.Contains(workIDs, membership.WorkID) {
+			continue
+		}
+		switch {
+		case keep == 0 || membership.CollectionID < keep:
+			if keep != 0 {
+				merge = append(merge, keep)
+			}
+			keep = membership.CollectionID
+		case membership.CollectionID != keep && !slices.Contains(merge, membership.CollectionID):
+			merge = append(merge, membership.CollectionID)
+		}
+	}
+	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if keep == 0 {
+			created, err := queries.CreateCollection(ctx, librarydb.CreateCollectionParams{
+				MediaType: mediaType, Name: name, Kind: FranchiseKind, Source: AutoSource, AddedAt: f.store.Now().Unix(),
+			})
+			if err != nil {
+				return err
+			}
+			keep = created.ID
+			if err := queries.LinkCollectionExternalID(ctx, librarydb.LinkCollectionExternalIDParams{Provider: AutoSource, ExternalID: strconv.FormatInt(keep, 10), CollectionID: keep}); err != nil {
+				return err
+			}
+		}
+		for _, other := range merge {
+			if err := queries.MoveCollectionMembers(ctx, librarydb.MoveCollectionMembersParams{IntoID: keep, FromID: other}); err != nil {
+				return err
+			}
+			if err := queries.DeleteCollection(ctx, other); err != nil {
+				return err
+			}
+		}
+		for _, workID := range workIDs {
+			if err := queries.AddCollectionMember(ctx, librarydb.AddCollectionMemberParams{CollectionID: keep, WorkID: workID, PartID: 0}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: franchise %q: %w", name, err)
+	}
+	return keep, nil
 }

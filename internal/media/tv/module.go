@@ -55,6 +55,8 @@ type Module struct {
 	Franchise media.Franchising
 	// FranchisePass finds the franchises series belong to; nil leaves the job unregistered.
 	FranchisePass *FranchisePass
+	// Crossovers finds the episodes that are one broadcast under two series; nil leaves the job unregistered.
+	Crossovers *CrossoverJob
 }
 
 // MissingFranchiseMembers implements media.Franchising.
@@ -198,6 +200,11 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 	}
 	if m.SharedFiles != nil {
 		if err := register(SharedFilesDefinition, m.SharedFiles); err != nil {
+			return err
+		}
+	}
+	if m.Crossovers != nil {
+		if err := register(CrossoverDefinition, m.Crossovers); err != nil {
 			return err
 		}
 	}

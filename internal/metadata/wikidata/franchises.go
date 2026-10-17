@@ -45,7 +45,8 @@ func (f Fetcher) sparql(ctx context.Context, query string) ([]map[string]struct 
 
 func qidOf(entityURL string) string { return entityURL[strings.LastIndex(entityURL, "/")+1:] }
 
-// SeriesFranchise answers the franchise (a "part of the series" or "media franchise" claim) of the series that has
+// SeriesFranchise answers the franchise of the series (a "part of the series", "media franchise", spin-off or
+// follows/followed-by claim: the item the series is tied to) that has
 // this TheTVDB or TMDB id, and whether it has one.
 func (f Fetcher) SeriesFranchise(ctx context.Context, tvdb, tmdb int64) (Franchise, bool, error) {
 	var match string
@@ -57,7 +58,7 @@ func (f Fetcher) SeriesFranchise(ctx context.Context, tvdb, tmdb int64) (Franchi
 	default:
 		return Franchise{}, false, nil
 	}
-	rows, err := f.sparql(ctx, `SELECT ?f ?fLabel WHERE { `+match+` { ?s wdt:P179 ?f } UNION { ?s wdt:P8345 ?f }
+	rows, err := f.sparql(ctx, `SELECT ?f ?fLabel WHERE { `+match+` { ?s wdt:P179 ?f } UNION { ?s wdt:P8345 ?f } UNION { ?s wdt:P2512 ?f } UNION { ?f wdt:P2512 ?s } UNION { ?s wdt:P155 ?f } UNION { ?s wdt:P156 ?f }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } } LIMIT 5`)
 	if err != nil || len(rows) == 0 {
 		return Franchise{}, false, err
@@ -76,7 +77,8 @@ func (f Fetcher) FranchiseSeriesOf(ctx context.Context, qid string) ([]Franchise
 		return nil, fmt.Errorf("wikidata: %q is not an item id", qid)
 	}
 	rows, err := f.sparql(ctx, `SELECT DISTINCT ?m ?mLabel ?tvdb ?tmdb ?start WHERE {
-  { ?m wdt:P179 wd:`+qid+` } UNION { ?m wdt:P8345 wd:`+qid+` } UNION { BIND(wd:`+qid+` AS ?m) }
+  { ?m wdt:P179 wd:`+qid+` } UNION { ?m wdt:P8345 wd:`+qid+` } UNION { ?m wdt:P2512 wd:`+qid+` } UNION { wd:`+qid+` wdt:P2512 ?m } UNION
+  { ?m wdt:P155 wd:`+qid+` } UNION { ?m wdt:P156 wd:`+qid+` } UNION { BIND(wd:`+qid+` AS ?m) }
   ?m wdt:P31/wdt:P279* wd:Q5398426 .
   OPTIONAL { ?m wdt:P4835 ?tvdb } OPTIONAL { ?m wdt:P4983 ?tmdb } OPTIONAL { ?m wdt:P580 ?start }
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en". } }`)
