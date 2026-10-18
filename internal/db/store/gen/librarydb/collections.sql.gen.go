@@ -938,6 +938,70 @@ func (q *Queries) ListCreatorLinksOfType(ctx context.Context, mediaType string) 
 	return items, nil
 }
 
+const listCrossoverMemberParts = `-- name: ListCrossoverMemberParts :many
+SELECT m.part_id
+FROM collection_member m
+JOIN collection c ON c.id = m.collection_id
+WHERE c.kind = 'crossover' AND c.media_type = ? AND m.part_id != 0
+`
+
+// The episodes already in an event of a media type.
+func (q *Queries) ListCrossoverMemberParts(ctx context.Context, mediaType string) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listCrossoverMemberParts, mediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var part_id int64
+		if err := rows.Scan(&part_id); err != nil {
+			return nil, err
+		}
+		items = append(items, part_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDifferentContentPairs = `-- name: ListDifferentContentPairs :many
+SELECT from_id, to_id FROM relationship WHERE kind = 'different_content' AND from_type = 'part' AND to_type = 'part'
+`
+
+type ListDifferentContentPairsRow struct {
+	FromID int64
+	ToID   int64
+}
+
+// Every pair of episodes a person said are not one broadcast.
+func (q *Queries) ListDifferentContentPairs(ctx context.Context) ([]ListDifferentContentPairsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listDifferentContentPairs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListDifferentContentPairsRow{}
+	for rows.Next() {
+		var i ListDifferentContentPairsRow
+		if err := rows.Scan(&i.FromID, &i.ToID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listExternalIDsOfCollection = `-- name: ListExternalIDsOfCollection :many
 SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider, external_id
 `
@@ -957,6 +1021,62 @@ func (q *Queries) ListExternalIDsOfCollection(ctx context.Context, collectionID 
 	for rows.Next() {
 		var i ListExternalIDsOfCollectionRow
 		if err := rows.Scan(&i.Provider, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFranchiseEpisodes = `-- name: ListFranchiseEpisodes :many
+SELECT p.id AS part_id, p.work_id, p.media_ref, CAST(p.title AS TEXT) AS title, CAST(p.date AS TEXT) AS date, f.collection_id AS franchise_id
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+JOIN collection_member f ON f.work_id = p.work_id AND f.part_id = 0
+JOIN collection c ON c.id = f.collection_id AND c.kind = 'franchise'
+WHERE w.media_type = ?1 AND p.title IS NOT NULL AND p.date IS NOT NULL AND LENGTH(p.title) > 6
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = p.work_id AND d.category_id = ?2)
+  AND (SELECT COUNT(*) FROM collection_member m WHERE m.collection_id = f.collection_id AND m.part_id = 0) > 1
+`
+
+type ListFranchiseEpisodesParams struct {
+	MediaType  string
+	CategoryID int64
+}
+
+type ListFranchiseEpisodesRow struct {
+	PartID      int64
+	WorkID      int64
+	MediaRef    string
+	Title       string
+	Date        string
+	FranchiseID int64
+}
+
+// Episodes of the series in a franchise of two or more series of a library, to find the events that run across them.
+func (q *Queries) ListFranchiseEpisodes(ctx context.Context, arg ListFranchiseEpisodesParams) ([]ListFranchiseEpisodesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listFranchiseEpisodes, arg.MediaType, arg.CategoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListFranchiseEpisodesRow{}
+	for rows.Next() {
+		var i ListFranchiseEpisodesRow
+		if err := rows.Scan(
+			&i.PartID,
+			&i.WorkID,
+			&i.MediaRef,
+			&i.Title,
+			&i.Date,
+			&i.FranchiseID,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

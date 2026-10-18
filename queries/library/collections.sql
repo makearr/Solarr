@@ -465,3 +465,25 @@ ON CONFLICT (work_id) DO UPDATE SET checked_at = excluded.checked_at;
 
 -- name: ListExternalIDsOfCollection :many
 SELECT provider, external_id FROM collection_external_id WHERE collection_id = ? ORDER BY provider, external_id;
+
+-- Episodes of the series in a franchise of two or more series of a library, to find the events that run across them.
+-- name: ListFranchiseEpisodes :many
+SELECT p.id AS part_id, p.work_id, p.media_ref, CAST(p.title AS TEXT) AS title, CAST(p.date AS TEXT) AS date, f.collection_id AS franchise_id
+FROM work_part p
+JOIN work w ON w.id = p.work_id
+JOIN collection_member f ON f.work_id = p.work_id AND f.part_id = 0
+JOIN collection c ON c.id = f.collection_id AND c.kind = 'franchise'
+WHERE w.media_type = sqlc.arg(media_type) AND p.title IS NOT NULL AND p.date IS NOT NULL AND LENGTH(p.title) > 6
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = p.work_id AND d.category_id = sqlc.arg(category_id))
+  AND (SELECT COUNT(*) FROM collection_member m WHERE m.collection_id = f.collection_id AND m.part_id = 0) > 1;
+
+-- The episodes already in an event of a media type.
+-- name: ListCrossoverMemberParts :many
+SELECT m.part_id
+FROM collection_member m
+JOIN collection c ON c.id = m.collection_id
+WHERE c.kind = 'crossover' AND c.media_type = ? AND m.part_id != 0;
+
+-- Every pair of episodes a person said are not one broadcast.
+-- name: ListDifferentContentPairs :many
+SELECT from_id, to_id FROM relationship WHERE kind = 'different_content' AND from_type = 'part' AND to_type = 'part';

@@ -209,6 +209,7 @@ other series' own folder (the folder of its unlinked episodes, else its rendered
 reflink, then hardlink, else the library's `shared_file_fallback` (copy or symlink), recorded as a further
 `library_path` of the same `media_object` (Invariant 92). An episode with a file in its own series' folder is left
 alone, an existing name is never replaced, and the Jellyfin/Kodi pass skips a shared file outside the series' folders.
+The crossover pass also makes the events itself (`Crossovers.DetectEvents`, source `auto`): episodes of two or more series of one franchise whose titles are the same bar a part marker (`(2)`, `Part Two`), aired within 60 days, at most twelve; a found event a person deletes rules its episodes out and is not found again.
 Not built yet: suggestions from file hashes or TMDB episode notes, a release named after one series searched for the
 other's want, and a rename moving both paths.
 

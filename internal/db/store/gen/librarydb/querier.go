@@ -526,6 +526,8 @@ type Querier interface {
 	// the person's name, and a second round-trip per credit is not worth saving
 	// a join for.
 	ListCreditsForWorkWithPerson(ctx context.Context, workID int64) ([]ListCreditsForWorkWithPersonRow, error)
+	// The episodes already in an event of a media type.
+	ListCrossoverMemberParts(ctx context.Context, mediaType string) ([]int64, error)
 	ListDecisionRollup(ctx context.Context, desiredItemID int64) ([]DecisionRollup, error)
 	// A decision's library is its item's: the copy stores it so the statistics need no join back.
 	ListDecisionsAfter(ctx context.Context, arg ListDecisionsAfterParams) ([]ListDecisionsAfterRow, error)
@@ -540,6 +542,8 @@ type Querier interface {
 	// What a file belongs to. A scan needs this to recognise bytes it has seen.
 	ListDesiredItemsForFile(ctx context.Context, mediaObjectID int64) ([]DesiredItemFile, error)
 	ListDesiredItemsForWork(ctx context.Context, workID int64) ([]DesiredItem, error)
+	// Every pair of episodes a person said are not one broadcast.
+	ListDifferentContentPairs(ctx context.Context) ([]ListDifferentContentPairsRow, error)
 	// The planner reads the dirty set, not the whole library (ADR-6).
 	ListDirtyDesiredItems(ctx context.Context, arg ListDirtyDesiredItemsParams) ([]DesiredItem, error)
 	// Which of an album's files a Solarr download brought in: placed by an import session a download
@@ -558,6 +562,8 @@ type Querier interface {
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
+	// Episodes of the series in a franchise of two or more series of a library, to find the events that run across them.
+	ListFranchiseEpisodes(ctx context.Context, arg ListFranchiseEpisodesParams) ([]ListFranchiseEpisodesRow, error)
 	ListFranchiseExternalIDsOfType(ctx context.Context, mediaType string) ([]ListFranchiseExternalIDsOfTypeRow, error)
 	// Who belongs to which franchise, of a media type: the provider's and the automatic ones.
 	ListFranchiseMembershipsOfType(ctx context.Context, mediaType string) ([]ListFranchiseMembershipsOfTypeRow, error)

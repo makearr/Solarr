@@ -18,7 +18,8 @@ var CrossoverDefinition = jobs.Definition{
 }
 
 // CrossoverJob links the episodes the evidence settles in each TV library (same title and day, lengths within 5%, a near
-// identical cast), so a crossover is found without being asked; a person may still link or unlink by hand.
+// identical cast) and makes an event of numbered episodes that run across a franchise's series, so a crossover is found
+// without being asked; a person may still link, unlink or delete by hand.
 type CrossoverJob struct {
 	Crossovers library.Crossovers
 	// Libraries answers the ids of the TV libraries.
@@ -28,15 +29,20 @@ type CrossoverJob struct {
 
 // Run implements jobs.Handler.
 func (j CrossoverJob) Run(ctx context.Context, _ jobs.Job) error {
-	linked := 0
+	linked, events := 0, 0
 	for _, categoryID := range j.Libraries() {
 		made, err := j.Crossovers.LinkCertain(ctx, MediaType, categoryID)
 		if err != nil {
 			return err
 		}
 		linked += made
+		found, err := j.Crossovers.DetectEvents(ctx, MediaType, categoryID)
+		if err != nil {
+			return err
+		}
+		events += found
 	}
-	j.Logger.Info("crossover pass finished", slog.Int("linked", linked))
+	j.Logger.Info("crossover pass finished", slog.Int("linked", linked), slog.Int("events", events))
 	return nil
 }
 

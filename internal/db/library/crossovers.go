@@ -101,8 +101,15 @@ func (c Crossovers) Update(ctx context.Context, id int64, name string, partIDs [
 func (c Crossovers) Delete(ctx context.Context, id int64) error {
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		if _, err := crossoverTx(ctx, queries, id); err != nil {
+		event, err := crossoverTx(ctx, queries, id)
+		if err != nil {
 			return err
+		}
+		if event.Source == AutoCrossoverSource {
+			// A found event a person deletes is not found again: its episodes are ruled out as one broadcast, as unlinking does.
+			if err := ruleOutEventTx(ctx, queries, id); err != nil {
+				return err
+			}
 		}
 		return queries.DeleteCollection(ctx, id)
 	})
@@ -442,4 +449,24 @@ func (c Crossovers) SameContentOfWork(ctx context.Context, workID int64) ([]Same
 		ids[i] = part.ID
 	}
 	return c.SameContentOf(ctx, ids)
+}
+
+func ruleOutEventTx(ctx context.Context, queries *librarydb.Queries, id int64) error {
+	members, err := queries.ListCollectionMembers(ctx, id)
+	if err != nil {
+		return err
+	}
+	for i, a := range members {
+		for _, b := range members[i+1:] {
+			if a.PartID == 0 || b.PartID == 0 {
+				continue
+			}
+			if err := queries.AddRelationship(ctx, librarydb.AddRelationshipParams{
+				FromType: partSubject, FromID: a.PartID, ToType: partSubject, ToID: b.PartID, Kind: DifferentContentKind,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
