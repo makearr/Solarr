@@ -1,6 +1,7 @@
 package movie
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
@@ -34,5 +35,24 @@ func TestPickCandidateTakesALoneTitleWithoutAYearAndABoundedTitleInTheExactYear(
 		if (c.want != 0) != ok || got.TMDBID != c.want {
 			t.Errorf("%s: picked %+v (%v), want id %d", c.name, got, ok, c.want)
 		}
+	}
+}
+
+func TestPlanUniversesJoinsPartsOfAUniverseAndKeepsWhatTMDBLacks(t *testing.T) {
+	direct := map[string][]int64{
+		"Q-alien":  {1, 2, 3},
+		"Q-mcu":    {10, 11},
+		"Q-phase1": {10, 11, 12},
+		"Q-hero":   {11, 13},
+		"Q-solo":   {20},
+		"Q-trio":   {30, 31},
+	}
+	labels := map[string]string{"Q-alien": "Ihaol", "Q-mcu": "Marvel Cinematic Universe", "Q-phase1": "Phase One", "Q-hero": "Ikon Gag", "Q-solo": "Solo", "Q-trio": "Trio"}
+	parents := map[string][]string{"Q-phase1": {"Q-mcu"}, "Q-hero": {"Q-mcu", "Q-multiverse"}}
+	held := [][]int64{{1, 2}, {30, 31}}
+	got := planUniverses(direct, labels, parents, held)
+	want := []Universe{{QID: "Q-mcu", Name: "Marvel Cinematic Universe", Works: []int64{10, 11, 12, 13}}, {QID: "Q-alien", Name: "Ihaol", Works: []int64{1, 2, 3}}}
+	if len(got) != 2 || got[1].QID != "Q-alien" || got[0].QID != "Q-mcu" || !reflect.DeepEqual(got[0].Works, want[0].Works) || !reflect.DeepEqual(got[1].Works, want[1].Works) {
+		t.Fatalf("universes = %+v\nwant %+v: the phases and heroes join the Marvel one, Ihaol holds a film TMDB's collection lacks, a lone film and a TMDB collection's own films make none", got, want)
 	}
 }

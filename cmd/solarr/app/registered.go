@@ -451,6 +451,9 @@ func (p *process) movieJobs() []media.JobRegistration {
 		{Definition: movie.RefreshDefinition, Handler: movie.NewRefreshJob(movie.RefreshConfig{
 			Reader: library.NewSeriesReader(p.library), Service: p.movieService(), Clock: clock.NewSystem(), Logger: p.logger,
 		})},
+		{Definition: movie.UniversePassDefinition, Handler: &movie.UniversePass{
+			Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Logger: p.logger,
+		}},
 		{Definition: movie.ArtworkDefinition, Handler: movie.NewArtworkJob(movie.ArtworkConfig{
 			Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger,
 		})},
@@ -491,6 +494,11 @@ func (p *process) movieHunt(ctx context.Context, itemID int64) (plan.Outcome, er
 		p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
 	}
 	return plan.OutcomeSearched, nil
+}
+
+// enqueueUniversePass submits the pass that groups films into Wikidata's franchises and universes.
+func (p *process) enqueueUniversePass(ctx context.Context) (jobs.EnqueueResult, error) {
+	return movie.EnqueueUniversePass(ctx, p.queue)
 }
 
 // enqueueFranchisePass submits the pass that finds the franchises series belong to.

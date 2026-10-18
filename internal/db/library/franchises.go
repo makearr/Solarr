@@ -285,6 +285,19 @@ func (f Franchises) SeriesIDs(ctx context.Context) ([]SeriesIDs, error) {
 	return out, nil
 }
 
+// WorkProviderIDs lists the works of a media type with the id a provider knows them by, work -> id.
+func (f Franchises) WorkProviderIDs(ctx context.Context, mediaType, provider string) (map[int64]string, error) {
+	rows, err := librarydb.New(f.store.Read()).ListWorkProviderIDs(ctx, librarydb.ListWorkProviderIDsParams{MediaType: mediaType, Provider: provider})
+	if err != nil {
+		return nil, fmt.Errorf("library: %s ids of %s works: %w", provider, mediaType, err)
+	}
+	out := make(map[int64]string, len(rows))
+	for _, row := range rows {
+		out[row.WorkID] = row.ExternalID
+	}
+	return out, nil
+}
+
 // MembersOf lists the works of a collection.
 func (f Franchises) MembersOf(ctx context.Context, id int64) ([]int64, error) {
 	rows, err := librarydb.New(f.store.Read()).ListCollectionMembers(ctx, id)

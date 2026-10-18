@@ -27,6 +27,12 @@ func (q *queryTransport) RoundTrip(request *http.Request) (*http.Response, error
 		  {"id":{"value":"81797"},"f":{"value":"http://www.wikidata.org/entity/Q4321"},"fLabel":{"value":"Example Franchise"},"named":{"value":"1"}},
 		  {"id":{"value":"81797"},"f":{"value":"http://www.wikidata.org/entity/Q9"},"fLabel":{"value":"Example: Spin-off"},"named":{"value":"0"},"tvdb":{"value":"100"},"start":{"value":"2009-09-22T00:00:00Z"}},
 		  {"id":{"value":"81797"},"f":{"value":"http://www.wikidata.org/entity/Q77"},"fLabel":{"value":"Example: The Film"},"named":{"value":"0"}}]}}`
+	case strings.Contains(query, `VALUES ?id { "348" "70981" }`):
+		body = `{"results":{"bindings":[
+		  {"id":{"value":"348"},"f":{"value":"http://www.wikidata.org/entity/Q1990792"},"fLabel":{"value":"Ihaol"}},
+		  {"id":{"value":"70981"},"f":{"value":"http://www.wikidata.org/entity/Q1990792"},"fLabel":{"value":"Ihaol"}},
+		  {"id":{"value":"70981"},"f":{"value":"http://www.wikidata.org/entity/Q6"},"fLabel":{"value":"Sfozutvaew series"},"parent":{"value":"http://www.wikidata.org/entity/Q1990792"}},
+		  {"id":{"value":"70981"},"f":{"value":"http://www.wikidata.org/entity/Q6"},"fLabel":{"value":"Sfozutvaew series"},"parent":{"value":"http://www.wikidata.org/entity/Q1990792"}}]}}`
 	case strings.Contains(query, "wd:Q4321"):
 		body = `{"results":{"bindings":[
 		  {"q":{"value":"http://www.wikidata.org/entity/Q4321"},"m":{"value":"http://www.wikidata.org/entity/Q1"},"mLabel":{"value":"Example"},"tvdb":{"value":"81797"},"start":{"value":"2003-09-23T00:00:00Z"}},
@@ -112,5 +118,21 @@ func TestAQueryTheOverloadedServiceRefusesIsTriedAgainAfterAPause(t *testing.T) 
 	}
 	if len(ties[wikidata.SeriesRef{TVDB: 81797}].Franchises) != 1 || len(transport.requests) != 1 {
 		t.Errorf("ties = %+v after %d answered requests; want the second try's answer", ties, len(transport.requests))
+	}
+}
+
+func TestFilmFranchisesAreReadByTMDBIdWithTheirParents(t *testing.T) {
+	transport := &queryTransport{}
+	fetcher := wikidata.New(wikidata.Config{WikidataClient: newTestClient(t, transport, "wikidata"), WikipediaClient: newTestClient(t, transport, "wikipedia")})
+	got, err := fetcher.FilmFranchises(t.Context(), []int64{348, 70981})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[int64][]wikidata.Franchise{
+		348:   {{QID: "Q1990792", Label: "Ihaol", Named: true}},
+		70981: {{QID: "Q1990792", Label: "Ihaol", Named: true}, {QID: "Q6", Label: "Sfozutvaew series", Named: true, Parents: []string{"Q1990792"}}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("franchises = %+v, want %+v", got, want)
 	}
 }

@@ -94,6 +94,7 @@ ScreenScraper. None is built; a media type is only as viable as its source (ADR-
 | Library | Source | What it gives |
 |---|---|---|
 | Movies | TMDB collections | the films of a franchise, with the ones the library lacks to add |
+| Movies | Wikidata ("part of the series", "media franchise") | a universe or franchise beyond TMDB's collections: Ihaol with Sfozutvaew and Romulus, the Marvel Cinematic Universe with its phases; kept only where it holds a film no single TMDB collection does (`movie.UniversePass`, daily) |
 | Series | Wikidata claims (part of the series, media franchise, spin-off, follows) | the series of a franchise, with those the library lacks to add |
 | Anime | AniList relations (sequel, prequel, spin-off, side story, parent, alternative) | the series of a franchise the library holds |
 | Series | names that say they belong together ("PLUH" and "PLUH: Los Angeles", "Ppamir Vetl Z" and "Ppamir Vetl Super"), characters they share and crossover episodes | grouped by Solarr itself, in a collection of its own |

@@ -1849,6 +1849,47 @@ func (q *Queries) ListWorkNamesOfType(ctx context.Context, mediaType string) ([]
 	return items, nil
 }
 
+const listWorkProviderIDs = `-- name: ListWorkProviderIDs :many
+SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS external_id
+FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = ?1
+WHERE w.media_type = ?2
+ORDER BY w.id
+`
+
+type ListWorkProviderIDsParams struct {
+	Provider  string
+	MediaType string
+}
+
+type ListWorkProviderIDsRow struct {
+	WorkID     int64
+	ExternalID string
+}
+
+// The works of a media type with the id a provider knows them by, to ask Wikidata which franchise each is part of.
+func (q *Queries) ListWorkProviderIDs(ctx context.Context, arg ListWorkProviderIDsParams) ([]ListWorkProviderIDsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkProviderIDs, arg.Provider, arg.MediaType)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkProviderIDsRow{}
+	for rows.Next() {
+		var i ListWorkProviderIDsRow
+		if err := rows.Scan(&i.WorkID, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorksNeedingArtwork = `-- name: ListWorksNeedingArtwork :many
 SELECT e.work_id AS work_id, x.external_id AS release_mbid
 FROM edition e

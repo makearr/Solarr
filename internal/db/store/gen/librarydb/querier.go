@@ -802,6 +802,8 @@ type Querier interface {
 	ListWorkPartsPage(ctx context.Context, arg ListWorkPartsPageParams) ([]WorkPart, error)
 	// One work's files on one root, each by its primary path: a rename scoped to one work.
 	ListWorkPathsOnRoot(ctx context.Context, arg ListWorkPathsOnRootParams) ([]ListWorkPathsOnRootRow, error)
+	// The works of a media type with the id a provider knows them by, to ask Wikidata which franchise each is part of.
+	ListWorkProviderIDs(ctx context.Context, arg ListWorkProviderIDsParams) ([]ListWorkProviderIDsRow, error)
 	// A work's release filters (stage 8 T2c): required, denied and preferred words, allowed and denied release groups.
 	ListWorkReleaseFilters(ctx context.Context, workID int64) ([]WorkReleaseFilter, error)
 	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)

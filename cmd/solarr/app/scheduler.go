@@ -43,6 +43,7 @@ const (
 	rssScheduleCron                = "*/15 * * * *"  // every 15 minutes, as Lidarr's RSS Sync
 	huntScheduleCron               = "*/15 * * * *"  // every 15 minutes, within the hourly budget
 	crossoverPassScheduleCron      = "10 5 * * *"    // daily at 05:10, after the night's refreshes
+	universePassScheduleCron       = "40 4 * * *"    // daily; one bulk read of Wikidata for the whole film library
 	franchisePassScheduleCron      = "20 */4 * * *"  // every four hours; 60 series a run, Wikidata asks for polite use
 	bridgeScheduleCron             = "50 3 * * *"    // daily at 03:50; 300 people a run, after the night's refreshes
 	tvRetryScheduleCron            = "30 4 * * *"    // daily at 04:30: providers learn new series and fix old data overnight
@@ -84,6 +85,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(jobs.Task{
 		Key: "tv_franchises", Name: "Find the franchises series belong to", DefaultCadence: franchisePassScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueFranchisePass,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "movie_universes", Name: "Group films into franchises and universes", DefaultCadence: universePassScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueUniversePass,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "people_bridge", Name: "Match people across libraries", DefaultCadence: bridgeScheduleCron,

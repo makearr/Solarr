@@ -489,3 +489,10 @@ WHERE c.kind = 'crossover' AND c.media_type = ? AND m.part_id != 0;
 -- Every pair of episodes a person said are not one broadcast.
 -- name: ListDifferentContentPairs :many
 SELECT from_id, to_id FROM relationship WHERE kind = 'different_content' AND from_type = 'part' AND to_type = 'part';
+
+-- The works of a media type with the id a provider knows them by, to ask Wikidata which franchise each is part of.
+-- name: ListWorkProviderIDs :many
+SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS external_id
+FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = sqlc.arg(provider)
+WHERE w.media_type = sqlc.arg(media_type)
+ORDER BY w.id;
