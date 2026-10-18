@@ -290,10 +290,10 @@ SELECT a.id AS part_id, a.work_id, wa.canonical_title AS work_title, a.media_ref
        b.id AS other_part_id, b.work_id AS other_work_id, wb.canonical_title AS other_work_title, b.media_ref AS other_ref,
        CAST(COALESCE(a.date, '') AS TEXT) AS date,
        CAST(COALESCE(a.runtime_ms, 0) AS INTEGER) AS runtime_ms, CAST(COALESCE(b.runtime_ms, 0) AS INTEGER) AS other_runtime_ms,
-       CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca WHERE ca.part_id = a.id) AS INTEGER) AS people,
-       CAST((SELECT COUNT(DISTINCT cb.person_id) FROM credit cb WHERE cb.part_id = b.id) AS INTEGER) AS other_people,
-       CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id
-             WHERE ca.part_id = a.id) AS INTEGER) AS shared_people,
+       CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca WHERE ca.part_id = a.id AND ca.part_id != 0) AS INTEGER) AS people,
+       CAST((SELECT COUNT(DISTINCT cb.person_id) FROM credit cb WHERE cb.part_id = b.id AND cb.part_id != 0) AS INTEGER) AS other_people,
+       CAST((SELECT COUNT(DISTINCT ca.person_id) FROM credit ca JOIN credit cb ON cb.person_id = ca.person_id AND cb.part_id = b.id AND cb.part_id != 0
+             WHERE ca.part_id = a.id AND ca.part_id != 0) AS INTEGER) AS shared_people,
        CAST(COALESCE(a.available_at, 0) AS INTEGER) AS available_at, CAST(COALESCE(b.available_at, 0) AS INTEGER) AS other_available_at,
        CAST((SELECT COUNT(*) FROM work_organisation oa JOIN work_organisation ob ON ob.organisation_id = oa.organisation_id AND ob.work_id = b.work_id
              WHERE oa.work_id = a.work_id) AS INTEGER) AS shared_organisations
