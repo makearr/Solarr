@@ -452,11 +452,13 @@ JOIN work a ON a.id = r.from_id AND a.media_type = ?
 WHERE r.kind = 'unrelated_series' AND r.from_type = 'work' AND r.to_type = 'work';
 
 -- The anime (series with an AniList id) whose relations have not been read yet.
+-- One entry per series: the crawl follows sequels and prequels from it to the rest of the franchise.
 -- name: ListAnimeWithoutRelationCheck :many
-SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS anilist
+SELECT w.id AS work_id, CAST(MIN(e.external_id) AS TEXT) AS anilist
 FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = 'anilist'
 WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_anime_check c WHERE c.work_id = w.id)
-ORDER BY w.id, e.external_id
+GROUP BY w.id
+ORDER BY w.id
 LIMIT ?;
 
 -- name: MarkAnimeChecked :exec

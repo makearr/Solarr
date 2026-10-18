@@ -55,6 +55,8 @@ type FranchisePass struct {
 	Crossovers library.Crossovers
 	Series     library.Series
 	Logger     *slog.Logger
+	// Again asks for another pass soon, when AniList's time ran out with entries still unread; nil asks none.
+	Again func(ctx context.Context)
 }
 
 // relatedTypes are the AniList relations that put two entries in one franchise.
@@ -121,6 +123,12 @@ func (p FranchisePass) readAnime(ctx context.Context) error {
 		if err := p.Franchises.MarkAnimeChecked(ctx, workID); err != nil {
 			return err
 		}
+	}
+	// A pass that made progress and ran out of time is followed by another soon, so a new library's anime are read in an
+	// hour rather than over days of the schedule.
+	unread := len(done) < len(entries) || len(entries) == animePerRun
+	if p.Again != nil && len(done) > 0 && unread {
+		p.Again(ctx)
 	}
 	return nil
 }

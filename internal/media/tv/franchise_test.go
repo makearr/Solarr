@@ -2,12 +2,14 @@ package tv_test
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
@@ -69,5 +71,39 @@ func TestTheFranchisePassGathersTheSeriesTheLibraryHoldsAndOffersTheOthers(t *te
 	missing, err := provider.MissingFranchiseMembers(t.Context(), 7, listed[0].ID)
 	if err != nil || len(missing) != 2 || missing[0].Provider != "tvdb" || missing[0].ExternalID != "888" || missing[1].ExternalID != "999" {
 		t.Errorf("missing = %+v, %v; want the series the library lacks, to add by their TheTVDB ids", missing, err)
+	}
+}
+
+// failingAnime reads the first series' relations and then fails, as AniList does when it answers 429.
+type failingAnime struct{ calls *int }
+
+func (f failingAnime) Related(context.Context, int64) ([]anilist.Relation, error) {
+	*f.calls++
+	if *f.calls > 1 {
+		return nil, errors.New("anilist returned 429")
+	}
+	return nil, nil
+}
+
+func TestTheFranchisePassAsksForAnotherWhenAniListLeavesAnimeUnread(t *testing.T) {
+	service, opened := newService(t, fakeSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	for _, id := range []string{"1", "2"} {
+		if _, err := service.Series.Upsert(t.Context(), addNow, library.SeriesWrite{
+			Work: library.WorkIdentity{MediaType: tv.MediaType, CanonicalTitle: "Anime " + id, SortTitle: "anime " + id},
+			IDs:  []library.ExternalIDWrite{{Provider: tv.ProviderAniList, ExternalID: id}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	calls, asked := 0, 0
+	pass := tv.FranchisePass{
+		Source: fakeFranchises{}, Anime: failingAnime{calls: &calls}, Franchises: library.NewFranchises(opened), Crossovers: library.NewCrossovers(opened),
+		Series: service.Series, Logger: slog.New(slog.DiscardHandler), Again: func(context.Context) { asked++ },
+	}
+	if err := pass.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatal(err)
+	}
+	if asked != 1 {
+		t.Errorf("another pass asked %d times, want once: one anime was read and one was not", asked)
 	}
 }

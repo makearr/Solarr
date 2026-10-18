@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
@@ -231,6 +232,11 @@ func (p *process) tvModule() tv.Module {
 		FranchisePass: &tv.FranchisePass{
 			Source: p.wikidataFetcher(), Anime: p.aniListClient(), Franchises: library.NewFranchises(p.library), Crossovers: library.NewCrossovers(p.library),
 			Series: p.tvService().Series, Logger: p.logger,
+			Again: func(ctx context.Context) {
+				_, _ = p.queue.Enqueue(ctx, jobs.Request{
+					Type: tv.FranchisePassJobType, ActionKey: "tv.franchises.continue", Priority: jobs.PriorityLow, RunAfter: clock.NewSystem().Now().Add(5 * time.Minute),
+				})
+			},
 		},
 		Following: tv.Following{
 			People: library.NewPeople(p.library), Subscriptions: library.NewSubscriptions(p.library), Source: p.tmdbShared,

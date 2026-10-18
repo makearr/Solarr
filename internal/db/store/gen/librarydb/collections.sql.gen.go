@@ -483,10 +483,11 @@ func (q *Queries) ListAllStatRollup(ctx context.Context) ([]StatRollup, error) {
 }
 
 const listAnimeWithoutRelationCheck = `-- name: ListAnimeWithoutRelationCheck :many
-SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS anilist
+SELECT w.id AS work_id, CAST(MIN(e.external_id) AS TEXT) AS anilist
 FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = 'anilist'
 WHERE w.media_type = 'tv' AND NOT EXISTS (SELECT 1 FROM work_anime_check c WHERE c.work_id = w.id)
-ORDER BY w.id, e.external_id
+GROUP BY w.id
+ORDER BY w.id
 LIMIT ?
 `
 
@@ -496,6 +497,7 @@ type ListAnimeWithoutRelationCheckRow struct {
 }
 
 // The anime (series with an AniList id) whose relations have not been read yet.
+// One entry per series: the crawl follows sequels and prequels from it to the rest of the franchise.
 func (q *Queries) ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error) {
 	rows, err := q.db.QueryContext(ctx, listAnimeWithoutRelationCheck, limit)
 	if err != nil {

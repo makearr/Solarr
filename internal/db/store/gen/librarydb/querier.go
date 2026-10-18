@@ -467,6 +467,7 @@ type Querier interface {
 	// A part's number under one other scheme ("absolute" for anime), for a whole work.
 	ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersForWorkParams) ([]ListAltNumbersForWorkRow, error)
 	// The anime (series with an AniList id) whose relations have not been read yet.
+	// One entry per series: the crawl follows sequels and prequels from it to the rest of the franchise.
 	ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	// Revert's own lookup (library.ArrImportRevert): every item this run itself
