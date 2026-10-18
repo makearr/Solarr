@@ -119,6 +119,17 @@ func ParsePath(rel string) (Info, bool) {
 	return info, ok
 }
 
+// ParseFolderOf reads the name of the folder a path sits in, for a file named differently from its folder: the folder is
+// then the second opinion on which film it is.
+func ParseFolderOf(rel string) (Info, bool) {
+	dir, _ := path.Split(strings.ReplaceAll(rel, "\\", "/"))
+	folder := path.Base(strings.TrimSuffix(dir, "/"))
+	if folder == "" || folder == "." || folder == "/" {
+		return Info{}, false
+	}
+	return Parse(folder)
+}
+
 func readIDs(info *Info, work string) string {
 	if m := imdbRe.FindStringSubmatch(work); m != nil {
 		info.IMDb = strings.ToLower(m[1])

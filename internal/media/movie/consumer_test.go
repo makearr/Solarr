@@ -222,3 +222,17 @@ func TestScanWithTheNonePolicyAddsTheMovieUnmonitored(t *testing.T) {
 		t.Errorf("items = %+v, want one unmonitored item", items)
 	}
 }
+
+func TestScanTakesTheFoldersYearWhenTheFileIsNamedAnotherYear(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, settings.TVMonitorExisting)
+	batch := []scan.Observed{writeVideo(t, fsys, "The Example Film (1999)/The Example Film (2025).mkv")}
+	if err := consumer.Observe(t.Context(), root(), 3, batch); err != nil {
+		t.Fatal(err)
+	}
+	if works := workTitles(t, opened, 3); works["The Example Film"] == 0 {
+		t.Errorf("works = %v, want The Example Film placed through its folder", works)
+	}
+	if queue, err := library.NewUnidentified(opened).Count(t.Context()); err != nil || queue != 0 {
+		t.Errorf("review queue = %d, %v; want none", queue, err)
+	}
+}

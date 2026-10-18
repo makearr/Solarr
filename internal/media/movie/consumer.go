@@ -93,7 +93,16 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 			queued = append(queued, c.queueEntry(registered[i].MediaObjectID, root.ID, observed.File.RelPath, nil, now.Unix()))
 			continue
 		}
-		workID, candidates := c.resolver.Resolve(ctx, categoryID, info, NFOIDs(c.config.FS, path.Join(root.Path, observed.File.RelPath)))
+		named := NFOIDs(c.config.FS, path.Join(root.Path, observed.File.RelPath))
+		workID, candidates := c.resolver.Resolve(ctx, categoryID, info, named)
+		if folderInfo, found := parsemovie.ParseFolderOf(observed.File.RelPath); workID == 0 && found && folderInfo.Title != "" && (folderInfo.Year != info.Year || folderInfo.Title != info.Title) {
+			// A file named after another year or spelling than its folder ("The Xbsebbxog Zxkuketjaz (2025)" in "... (2018)").
+			if foundID, more := c.resolver.Resolve(ctx, categoryID, folderInfo, named); foundID != 0 {
+				workID = foundID
+			} else if len(candidates) == 0 {
+				candidates = more
+			}
+		}
 		switch workID {
 		case ExcludedMovie:
 			continue
