@@ -269,6 +269,10 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 	seen := map[int64]int64{}
 	qualified := map[int64]bool{}
 	for _, title := range titles {
+		// An alias names another series as well ("Tzul Suxc: Jzari Suxc" is TVmaze's for The Clone Wars of 2008, which is not the 2003 series).
+		if !title.Canonical {
+			continue
+		}
 		if parsetv.CleanTitle(title.Title) == want || parsetv.CleanTitle(trailingBrackets.ReplaceAllString(title.Title, "")) == want {
 			seen[title.WorkID] = title.Year
 			qualified[title.WorkID] = qualified[title.WorkID] || (guess.Year > 0 && strings.Contains(title.Title, "("+strconv.Itoa(guess.Year)+")"))
