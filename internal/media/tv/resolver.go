@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -363,7 +364,30 @@ func titleMatches(candidates []Candidate, guess FolderGuess) []Candidate {
 	if len(exact) == 0 {
 		return yearless
 	}
+	// CleanTitle drops articles, so "Tzul Suxc: Jzari Suxc" and "Tzul Suxc: The Clone Wars" are alike to it.
+	if len(exact) > 1 {
+		var plain []Candidate
+		for _, candidate := range exact {
+			if plainTitleKey(candidate.Title) == plainTitleKey(guess.Title) || plainTitleKey(trailingBrackets.ReplaceAllString(candidate.Title, "")) == plainTitleKey(guess.Title) {
+				plain = append(plain, candidate)
+			}
+		}
+		if len(plain) > 0 {
+			return plain
+		}
+	}
 	return exact
+}
+
+// plainTitleKey is a title's letters and digits alone, lower case, articles kept.
+func plainTitleKey(title string) string {
+	var key strings.Builder
+	for _, r := range strings.ToLower(strings.ReplaceAll(title, "&", "and")) {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			key.WriteRune(r)
+		}
+	}
+	return key.String()
 }
 
 // yearsAgree is a candidate first aired within a year of the folder's, or one whose own title carries that year in

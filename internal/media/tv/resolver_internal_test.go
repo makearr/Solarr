@@ -17,3 +17,11 @@ func TestLooksLikeRelease(t *testing.T) {
 		}
 	}
 }
+
+func TestAFolderNamedWithoutAnArticlePrefersTheSeriesTitledSo(t *testing.T) {
+	candidates := []Candidate{{TVDBID: 83268, Title: "Tzul Suxc: The Clone Wars", Year: 2008}, {TVDBID: 72244, Title: "Tzul Suxc: Jzari Suxc", Year: 2003}}
+	got := titleMatches(candidates, FolderGuess{Title: "Tzul Suxc - Jzari Suxc"})
+	if len(got) != 1 || got[0].TVDBID != 72244 {
+		t.Errorf("matches = %+v, want only Tzul Suxc: Jzari Suxc", got)
+	}
+}
