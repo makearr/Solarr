@@ -69,7 +69,7 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsemovie
 	}
 	if len(candidates) == 0 && err == nil && info.Year > 0 {
 		// The provider filters by exact year; a film dated a year off by one is only found without it.
-		candidates, err = r.Service.Search(ctx, info.Title, 0, searchLimit)
+		candidates, _ = r.Service.Search(ctx, info.Title, 0, searchLimit)
 	}
 	for _, alternative := range info.AllTitles[min(1, len(info.AllTitles)):] {
 		more, altErr := r.Service.Search(ctx, alternative, info.Year, searchLimit)
