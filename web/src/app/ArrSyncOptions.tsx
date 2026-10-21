@@ -12,17 +12,27 @@ type Rewrite = { from: string; to: string };
 const input = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs";
 const button = "rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50";
 
-/** What one Lidarr import brings in (asked 2026-09-30): its library's folders, monitored and unmonitored
+// Each app's library type, what it monitors, and an example of its root folder.
+const APP_WORDS: Partial<Record<ArrInstance["app"], { mediaType: string; monitored: string; path: string }>> = {
+  lidarr: { mediaType: "music", monitored: "Monitored artists and albums", path: "/music" },
+  sonarr: { mediaType: "tv", monitored: "Monitored series", path: "/tv" },
+  radarr: { mediaType: "movie", monitored: "Monitored movies", path: "/movies" },
+};
+
+/** What one *Arr import brings in (asked 2026-09-30): its library's folders, monitored and unmonitored
  *  items, which albums, and how its paths read here. */
 export function ArrSyncOptions({
   instance,
   onStarted,
   onCancel,
+  cancelLabel = "Cancel",
 }: {
   instance: ArrInstance;
   onStarted: (run: ArrImportRun) => void;
   onCancel: () => void;
+  cancelLabel?: string;
 }) {
+  const words = APP_WORDS[instance.app] ?? APP_WORDS.lidarr!;
   const [monitored, setMonitored] = useState(true);
   const [unmonitored, setUnmonitored] = useState(false);
   const [albums, setAlbums] = useState<"all" | "missing" | "complete">("all");
@@ -86,7 +96,7 @@ export function ArrSyncOptions({
     onSuccess: onStarted,
   });
 
-  const musicLibraries = (libraries.data ?? []).filter((library) => library.media_type === "music");
+  const appLibraries = (libraries.data ?? []).filter((library) => library.media_type === words.mediaType);
   return (
     <section className="flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-xs">
       <h3 className="font-medium text-ink">Import from {instance.name}</h3>
@@ -101,7 +111,7 @@ export function ArrSyncOptions({
           className={input}
         >
           <option value="">Choose a library</option>
-          {musicLibraries.map((library) => (
+          {appLibraries.map((library) => (
             <option key={library.id} value={library.id}>
               {library.name}
             </option>
@@ -113,13 +123,15 @@ export function ArrSyncOptions({
         <p className="pl-6 font-mono text-ink-muted">{(folders.data ?? []).map((folder) => rewrite(folder.path)).join(" · ")}</p>
       )}
       <div className="flex flex-col gap-1">
-        <span className="text-ink-muted">Its paths read here as (Lidarr's /media/music is /mnt/media/music here, say)</span>
+        <span className="text-ink-muted">
+          Its paths read here as ({instance.name}'s {words.path} is /mnt/media{words.path} here, say)
+        </span>
         {rewrites.map((entry, index) => (
           <div key={index} className="flex items-center gap-1">
-            <input className={input} placeholder="/media/music" value={entry.from}
+            <input className={input} placeholder={words.path} value={entry.from}
               onChange={(event) => setRewrites(rewrites.map((old, i) => (i === index ? { ...old, from: event.target.value } : old)))} />
             <span className="text-ink-muted">→</span>
-            <input className={input} placeholder="/mnt/media/music" value={entry.to}
+            <input className={input} placeholder={`/mnt/media${words.path}`} value={entry.to}
               onChange={(event) => setRewrites(rewrites.map((old, i) => (i === index ? { ...old, to: event.target.value } : old)))} />
             <button type="button" aria-label="Remove this path" onClick={() => setRewrites(rewrites.filter((_, i) => i !== index))} className={button}>
               <X aria-hidden className="size-3" />
@@ -133,13 +145,13 @@ export function ArrSyncOptions({
       <div className="flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={monitored} onChange={(event) => setMonitored(event.target.checked)} />
-          {instance.app === "sonarr" ? "Monitored series" : "Monitored artists and albums"}
+          {words.monitored}
         </label>
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={unmonitored} onChange={(event) => setUnmonitored(event.target.checked)} />
           Unmonitored ones (they stay unmonitored)
         </label>
-        {instance.app !== "sonarr" && (
+        {instance.app === "lidarr" && (
         <label className="flex items-center gap-1.5">
           Albums
           <select value={albums} onChange={(event) => setAlbums(event.target.value as typeof albums)} className={input}>
@@ -160,7 +172,7 @@ export function ArrSyncOptions({
           {start.isPending ? "Starting…" : "Start import"}
         </button>
         <button type="button" onClick={onCancel} className={button}>
-          Cancel
+          {cancelLabel}
         </button>
         {start.isError && <span className="text-danger">{(start.error as { detail?: string }).detail ?? "The import could not start."}</span>}
       </div>

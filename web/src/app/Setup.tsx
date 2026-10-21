@@ -6,11 +6,13 @@ import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
+import { ArrSyncOptions } from "./ArrSyncOptions";
 import { KindSelect } from "./LibraryKindSelect";
 
 // The wizard connects an app to make a library from it; Prowlarr has none, so it is added under Connections.
 type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
 type MediaType = components["schemas"]["MediaType"];
+type ArrInstance = components["schemas"]["ArrInstance"];
 
 const ARR_APPS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "readarr", "whisparr"];
 
@@ -74,9 +76,13 @@ const LIBRARY_SUGGESTION: Record<ArrApp, { name: string; mediaType: MediaType }>
 };
 
 interface ConnectOutcome {
+  instance: ArrInstance;
   rootFoldersImported: boolean;
   rootFolderErrors: string[];
 }
+
+// Where an app's content comes from; Readarr and Whisparr connect for later, their import is not built.
+const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr"];
 
 function ConnectArr({
   onSkip,
@@ -96,8 +102,11 @@ function ConnectArr({
   const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
   const [connectKind, setConnectKind] = useState("");
   const [importRootFolders, setImportRootFolders] = useState(true);
-  const [importContent, setImportContent] = useState(false);
   const [outcome, setOutcome] = useState<ConnectOutcome | null>(null);
+  // Every *Arr connected in this step, and the one whose import is being chosen.
+  const [connected, setConnected] = useState<ConnectOutcome[]>([]);
+  const [importing, setImporting] = useState<ArrInstance | null>(null);
+  const anyRootFolders = connected.some((entry) => entry.rootFoldersImported);
 
   const changeApp = (value: ArrApp) => {
     setApp(value);
@@ -152,31 +161,69 @@ function ConnectArr({
         }
       }
 
-      if (importContent) {
-        const { error: syncError } = await api.POST("/arr/instances/{id}/sync", {
-          params: { path: { id: instance!.id } },
-        });
-        if (syncError) rootFolderErrors.push("Connected, but the import could not be started.");
-      }
-
-      return { rootFoldersImported, rootFolderErrors };
+      return { instance: instance!, rootFoldersImported, rootFolderErrors };
     },
     onSuccess: (result) => {
       setOutcome(result);
-      if (result.rootFolderErrors.length === 0) onConnected(result.rootFoldersImported);
+      setConnected((before) => [...before, result]);
+      if (SYNCS.includes(result.instance.app as ArrApp)) setImporting(result.instance);
+      // Ready for the next one: the first app not connected yet, its own library suggestion.
+      const next = ARR_APPS.find((candidate) => ![...connected, result].some((entry) => entry.instance.app === candidate));
+      setName("");
+      setBaseUrl("");
+      setApiKey("");
+      setLibraryNameTouched(false);
+      setMediaTypeTouched(false);
+      setConnectKind("");
+      if (next) {
+        setApp(next);
+        setLibraryName(LIBRARY_SUGGESTION[next].name);
+        setMediaType(LIBRARY_SUGGESTION[next].mediaType);
+      }
     },
   });
 
+  if (importing) {
+    return (
+      <Panel
+        title={`Step 2 — Import from ${importing.name}`}
+        description="Choose what comes in. Its root folders are already this library's; the import runs in the background."
+      >
+        {outcome && outcome.rootFolderErrors.length > 0 && (
+          <div className="space-y-1 rounded-md border border-warn/40 bg-warn/10 p-2 text-xs text-warn">
+            {outcome.rootFolderErrors.map((message, index) => (
+              <p key={index}>{message}</p>
+            ))}
+          </div>
+        )}
+        <ArrSyncOptions
+          instance={importing}
+          cancelLabel="Not now"
+          onCancel={() => setImporting(null)}
+          onStarted={() => setImporting(null)}
+        />
+      </Panel>
+    );
+  }
+
   return (
     <Panel
-      title="Step 2 — Import from an *Arr application"
+      title="Step 2 — Import from Lidarr, Sonarr or Radarr"
       description={
-        "Already run Lidarr (or one of the others)? Connect it now and what it monitors " +
-        "comes in as intent -- artists become monitored people, albums become wanted items. " +
-        "Only Lidarr syncs for real yet; the rest can still be connected for when their own " +
-        "stage ships."
+        "Already run Lidarr, Sonarr or Radarr? Connect each one: its root folders become a library here, and " +
+        "its artists, series and movies come in with their monitoring. Readarr and Whisparr can be connected " +
+        "now; their import comes later."
       }
     >
+      {connected.length > 0 && (
+        <ul className="space-y-1 text-xs">
+          {connected.map((entry) => (
+            <li key={entry.instance.id} className="text-ink-muted">
+              Connected: <span className="text-ink">{entry.instance.name}</span> ({entry.instance.app})
+            </li>
+          ))}
+        </ul>
+      )}
       <form
         className="space-y-3"
         onSubmit={(event) => {
@@ -265,14 +312,6 @@ function ConnectArr({
           />
           Import the root folder(s) from {app}
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={importContent}
-            onChange={(event) => setImportContent(event.target.checked)}
-          />
-          Import content now (artists and albums; can take a while for a large library)
-        </label>
 
         {connect.isError && <Problem error={connect.error} />}
         {outcome && outcome.rootFolderErrors.length > 0 && (
@@ -292,18 +331,15 @@ function ConnectArr({
             }
             className={primaryButtonStyle}
           >
-            {connect.isPending ? "Connecting…" : "Connect"}
+            {connect.isPending ? "Connecting…" : connected.length > 0 ? "Connect another" : "Connect"}
           </button>
-          <button type="button" onClick={onSkip} className={quietButtonStyle}>
-            Skip for now
-          </button>
-          {outcome && outcome.rootFolderErrors.length > 0 && (
-            <button
-              type="button"
-              onClick={() => onConnected(outcome.rootFoldersImported)}
-              className={quietButtonStyle}
-            >
-              Continue anyway
+          {connected.length > 0 ? (
+            <button type="button" onClick={() => onConnected(anyRootFolders)} className={quietButtonStyle}>
+              Continue
+            </button>
+          ) : (
+            <button type="button" onClick={onSkip} className={quietButtonStyle}>
+              Skip for now
             </button>
           )}
         </div>
