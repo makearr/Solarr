@@ -88,8 +88,8 @@ func TestLimiter_SearchRSSAndMetadataShareOneProviderBucket(t *testing.T) {
 
 	fake.BlockUntilWaiters(1)
 	select {
-	case <-blocked:
-		t.Fatal("a fourth request went through; the three subsystems did not share a bucket")
+	case err := <-blocked:
+		t.Fatalf("a fourth request went through; the three subsystems did not share a bucket (err %v)", err)
 	default:
 	}
 
@@ -175,8 +175,8 @@ func TestLimiter_PerProviderConcurrencyCap(t *testing.T) {
 	}()
 
 	select {
-	case <-second:
-		t.Fatal("a second concurrent request to the same provider went through with a cap of 1")
+	case err := <-second:
+		t.Fatalf("a second concurrent request to the same provider went through with a cap of 1 (err %v)", err)
 	case <-time.After(20 * time.Millisecond):
 	}
 
@@ -350,12 +350,14 @@ func TestLimiter_ReleaseIsIdempotent(t *testing.T) {
 	}()
 
 	select {
-	case <-third:
-		t.Fatal("the global cap of 1 was exceeded; a double release freed an extra slot")
+	case err := <-third:
+		t.Fatalf("the global cap of 1 was exceeded; a double release freed an extra slot (err %v)", err)
 	case <-time.After(20 * time.Millisecond):
 	}
 	firstRelease()
-	<-third
+	if err := <-third; err != nil {
+		t.Fatalf("third Acquire after the slot freed: %v", err)
+	}
 }
 
 func newCancellableContext(t *testing.T) (context.Context, context.CancelFunc) {
