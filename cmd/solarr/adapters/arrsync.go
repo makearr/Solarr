@@ -55,6 +55,9 @@ type ArrSync struct {
 	// Movies adds the movies a Radarr import maps.
 	Movies     media.Adding
 	Categories Categories
+	// WarmFilms and WarmSeries read in bulk what Wikidata says of the films (TMDB ids) and series (TheTVDB ids) an
+	// import is about to add, so each add finds it kept instead of one serial query apiece. Nil warms nothing.
+	WarmFilms, WarmSeries func(ctx context.Context, ids []string) error
 	// Progress holds the live figure of running imports; nil keeps none.
 	Progress *ArrProgress
 	Logger   *slog.Logger
@@ -513,4 +516,19 @@ func albumWanted(album arrimport.LidarrAlbum, which string) bool {
 	default:
 		return true
 	}
+}
+
+// warm reads Wikidata in bulk ahead of a walk; a failure only costs speed, each add still asks on its own.
+func (a ArrSync) warm(ctx context.Context, what string, warm func(context.Context, []string) error, ids []string) {
+	logger := a.Logger
+	if logger == nil {
+		logger = slog.Default()
+	}
+	started := a.Clock.Now()
+	if err := warm(ctx, ids); err != nil {
+		logger.WarnContext(ctx, "arr import: warming wikidata failed", slog.String("works", what), slog.Any("error", err))
+		return
+	}
+	logger.InfoContext(ctx, "arr import: wikidata warmed", slog.String("works", what), slog.Int("ids", len(ids)),
+		slog.Duration("took", a.Clock.Now().Sub(started)))
 }

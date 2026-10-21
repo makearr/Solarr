@@ -35,7 +35,17 @@ func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient) arr
 		},
 		list: func(ctx context.Context) ([]arrimport.SonarrSeries, error) {
 			profileNames = sonarrProfileNames(ctx, client)
-			return client.Series(ctx)
+			series, err := client.Series(ctx)
+			if err == nil && a.WarmSeries != nil {
+				ids := make([]string, 0, len(series))
+				for _, one := range series {
+					if one.TVDBID != 0 {
+						ids = append(ids, strconv.FormatInt(one.TVDBID, 10))
+					}
+				}
+				a.warm(ctx, "series", a.WarmSeries, ids)
+			}
+			return series, err
 		},
 		describe: func(series arrimport.SonarrSeries) arrItem {
 			return arrItem{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored}

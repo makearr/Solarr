@@ -696,6 +696,12 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			),
 			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
 			TV: p.tvService(), Movies: p.movieCatalog(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
+			WarmFilms: func(ctx context.Context, ids []string) error {
+				return p.wikidataFacts().Warm(ctx, wikidata.FactFilm, ids)
+			},
+			WarmSeries: func(ctx context.Context, ids []string) error {
+				return p.wikidataFacts().Warm(ctx, wikidata.FactSeries, ids)
+			},
 		},
 		Prowlarr: adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{

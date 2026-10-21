@@ -28,7 +28,17 @@ func (a ArrSync) radarrSource(importID int64, client arrimport.RadarrClient) arr
 		},
 		list: func(ctx context.Context) ([]arrimport.RadarrMovie, error) {
 			profileNames = radarrProfileNames(ctx, client)
-			return client.Movies(ctx)
+			movies, err := client.Movies(ctx)
+			if err == nil && a.WarmFilms != nil {
+				ids := make([]string, 0, len(movies))
+				for _, movie := range movies {
+					if movie.TMDBID != 0 {
+						ids = append(ids, strconv.FormatInt(movie.TMDBID, 10))
+					}
+				}
+				a.warm(ctx, "films", a.WarmFilms, ids)
+			}
+			return movies, err
 		},
 		describe: func(radarr arrimport.RadarrMovie) arrItem {
 			return arrItem{Name: radarr.Title, RootFolder: radarr.RootFolderPath, Monitored: radarr.Monitored}
