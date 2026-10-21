@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"slices"
 	"testing"
 	"time"
 
@@ -368,4 +369,58 @@ func runCutoff(t *testing.T, desired library.Desired, cache *settings.Cache, che
 		Sources: func(int64) []cutoff.Source { return []cutoff.Source{{Name: "test", Check: check}} },
 	})
 	return job.Run(t.Context(), jobs.Job{Type: cutoff.JobType, Payload: payload})
+}
+
+// A file on its track stays there when a realign looks for an unfilled one: "Mercy" moved to an unfilled "Mercy
+// (acoustic)" because the folder's 16th file is another song (found live 2026-10-21).
+func TestAlignClaimedFiles_AFileOnItsTrackIsNoCandidateForAnother(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Bivoru", 2016, losslessFirstRules)
+	registered, err := library.NewPhysical(env.library).RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "Nosi Zada/Bivoru/01 - Mercy.flac", SizeBytes: 1, QuickHash: "mercy", FirstSeenAt: time.Unix(1, 0)},
+		{RelPath: "Nosi Zada/Bivoru/02 - Cold Coast.flac", SizeBytes: 1, QuickHash: "cold", FirstSeenAt: time.Unix(1, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	mercy, cold := registered[0].MediaObjectID, registered[1].MediaObjectID
+	if err := env.library.Write(t.Context(), store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		// Track 1 comes with the work; track 2 is the edition's acoustic bonus the folder does not have.
+		if _, err := queries.CreateWorkPart(ctx, librarydb.CreateWorkPartParams{
+			WorkID: item.WorkID, MediaRef: "disc1:track2", SortKey: "0002",
+			Title: sql.NullString{String: "Mercy (acoustic)", Valid: true}, Monitored: 1,
+		}); err != nil {
+			return err
+		}
+		for _, object := range []int64{mercy, cold} {
+			if err := queries.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: item.WorkID, MediaObjectID: object, FirstSeenAt: 1}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatalf("create parts and links: %v", err)
+	}
+	if err := library.NewDesired(env.library).RecordTrackClaims(t.Context(), []library.TrackClaim{
+		{MediaObjectID: mercy, Disc: 1, Track: 1, Title: "Mercy"}, {MediaObjectID: cold, Disc: 1, Track: 2, Title: "Cold Coast"},
+	}); err != nil {
+		t.Fatalf("RecordTrackClaims: %v", err)
+	}
+	for range 2 {
+		if err := music.AlignClaimedFiles(t.Context(), &env.desired, env.clock, item.WorkID); err != nil {
+			t.Fatalf("AlignClaimedFiles: %v", err)
+		}
+	}
+	files, err := librarydb.New(env.library.Read()).ListFilesForDesiredItem(t.Context(), item.ID)
+	if err != nil {
+		t.Fatalf("ListFilesForDesiredItem: %v", err)
+	}
+	var got []string
+	for _, file := range files {
+		got = append(got, fmt.Sprintf("%d@%s", file.MediaObjectID, file.MediaRef))
+	}
+	if want := []string{fmt.Sprintf("%d@disc1:track1", mercy)}; !slices.Equal(got, want) {
+		t.Errorf("attached = %v, want %v", got, want)
+	}
 }

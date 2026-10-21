@@ -395,6 +395,21 @@ func (d Desired) UnfilledParts(ctx context.Context, itemID, workID int64) ([]lib
 	return unfilled, nil
 }
 
+// AttachedFiles is every media object already attached to one of the item's parts.
+func (d Desired) AttachedFiles(ctx context.Context, itemID int64) (map[int64]bool, error) {
+	files, err := librarydb.New(d.store.Read()).ListFilesForDesiredItem(ctx, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("library: attached files: %w", err)
+	}
+	attached := make(map[int64]bool, len(files))
+	for _, file := range files {
+		if file.Role == "primary" {
+			attached[file.MediaObjectID] = true
+		}
+	}
+	return attached, nil
+}
+
 // ExternalIDsFor returns the given parts' external ids for one provider, keyed
 // by part id -- a part with none is simply absent. Kept provider-agnostic
 // (ADR-23): a media type names which provider it means (internal/media/music's

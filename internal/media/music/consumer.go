@@ -1162,6 +1162,12 @@ func alignAlbum(
 	if err != nil {
 		return fmt.Errorf("recording mbids for work %d: %w", workID, err)
 	}
+	attached, err := desired.AttachedFiles(ctx, itemID)
+	if err != nil {
+		return fmt.Errorf("attached files for work %d: %w", workID, err)
+	}
+	// A file already on a track is no candidate for another: "Mercy" moved to an unfilled "Mercy (acoustic)" (2026-10-21).
+	candidates = slices.DeleteFunc(slices.Clone(candidates), func(file TrackFile) bool { return attached[file.MediaObjectID] })
 	parts := make([]Part, len(unfilled))
 	for index, part := range unfilled {
 		parts[index] = Part{
