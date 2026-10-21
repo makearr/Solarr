@@ -122,6 +122,12 @@ func TestAddStoresTheFallbackWhenNoSourceKnowsTheMovie(t *testing.T) {
 			t.Errorf("work by %s = %d %v %v", provider, work, found, err)
 		}
 	}
+	// A source that answers without a title is no answer either.
+	untitled, _ := newService(t, fakeTMDB{configured: true, movie: tmdb.Movie{ID: 779452, ReleaseDate: "2010-06-01"}}, nil)
+	request.IDs.TMDB, request.Fallback.IDs.TMDB = 779452, 779452
+	if named, err := untitled.Add(t.Context(), request); err != nil || named.Movie.Title != "A Short Return" {
+		t.Errorf("an untitled answer: %q, %v; want the fallback's title", named.Movie.Title, err)
+	}
 	var title string
 	var year sql.NullInt64
 	if err := opened.Read().QueryRowContext(t.Context(), "SELECT canonical_title, year FROM work WHERE id = ?", added.WorkID).Scan(&title, &year); err != nil ||

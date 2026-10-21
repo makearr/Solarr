@@ -142,9 +142,11 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs) (Movie
 			movie = Merge(movie, answer)
 		}
 	}
-	if !found {
+	// A film no source could name is not known: Wikidata alone answered six films of a Radarr with a date and no title.
+	if !found || movie.Title == "" {
 		return Movie{}, ErrNoSource
 	}
+	movie.IDs.TMDB, movie.IDs.IMDb = cmp.Or(movie.IDs.TMDB, ids.TMDB), cmp.Or(movie.IDs.IMDb, ids.IMDb)
 	movie.Year = cmp.Or(movie.Year, movie.spareYear)
 	if len(movie.Genres) == 0 {
 		movie.Genres = movie.spareGenres
