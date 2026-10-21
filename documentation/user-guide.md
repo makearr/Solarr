@@ -29,7 +29,9 @@ of your music (see [container-runtime.md](container-runtime.md)). Open `http://<
 ## 2. First run
 
 The setup wizard creates the first administrator and your first library: a name ("Music") and
-the root folder it lives in (`/music`). Attaching a root folder scans it: albums whose files carry
+the root folder it lives in (`/music`). Already running Lidarr, Sonarr or Radarr? Connect each one there in turn:
+its root folders become a library, and you choose what its import brings in (monitored and unmonitored items,
+which albums, how its paths read here). Attaching a root folder scans it: albums whose files carry
 MusicBrainz tags are recognised at once, others by their tracklists and names. Covers and artist
 pictures arrive over the following minutes.
 
@@ -70,7 +72,9 @@ Monitoring an album later from its own page also searches it at once while that 
 
 **Edit** (the pencil on an album's poster or row, as in Radarr) sets monitored, the album's **own quality
 profile** (used instead of the library's profiles when it is searched or upgraded; the library's cutoff
-still decides whether it counts as upgradable) and your **tags** (new ones are created as you type).
+still decides whether it counts as upgradable) and your **tags** (new ones are created as you type). In a library
+with several root folders it also sets the **root folder**: choosing another one shows how many files move and
+moves them on Save (all or none, through the same copy-verify-delete as every move); later downloads follow.
 Tags a metadata provider assigned are never touched. With albums selected (Table view, or Select all
 matching), **Edit** in the toolbar applies only what you change to all of them, after showing the count.
 **Fresh** means released within a week, or shown by an RSS feed within 48 hours whatever the release date
