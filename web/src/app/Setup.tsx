@@ -91,6 +91,7 @@ function ConnectArr({
   onSkip: () => void;
   onConnected: (rootFoldersImported: boolean) => void;
 }) {
+  const queryClient = useQueryClient();
   const [app, setApp] = useState<ArrApp>("lidarr");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -163,12 +164,14 @@ function ConnectArr({
 
       return { instance: instance!, rootFoldersImported, rootFolderErrors };
     },
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      // The import options list the libraries; this connection just made one.
+      await queryClient.invalidateQueries({ queryKey: ["libraries"] });
       setOutcome(result);
       setConnected((before) => [...before, result]);
       if (SYNCS.includes(result.instance.app as ArrApp)) setImporting(result.instance);
-      // Ready for the next one: the first app not connected yet, its own library suggestion.
-      const next = ARR_APPS.find((candidate) => ![...connected, result].some((entry) => entry.instance.app === candidate));
+      // Ready for the next one: the first of Lidarr, Sonarr and Radarr not connected yet, its own library suggestion.
+      const next = SYNCS.find((candidate) => ![...connected, result].some((entry) => entry.instance.app === candidate));
       setName("");
       setBaseUrl("");
       setApiKey("");
@@ -199,8 +202,14 @@ function ConnectArr({
         <ArrSyncOptions
           instance={importing}
           cancelLabel="Not now"
-          onCancel={() => setImporting(null)}
-          onStarted={() => setImporting(null)}
+          onCancel={() => {
+            setImporting(null);
+            setOutcome(null);
+          }}
+          onStarted={() => {
+            setImporting(null);
+            setOutcome(null);
+          }}
         />
       </Panel>
     );
@@ -414,7 +423,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   const [label, setLabel] = useState("");
   // A root folder belongs to a library (2026-09-19): one created here with
   // no library attached is invisible to every import and scan afterwards.
-  const [categoryId, setCategoryId] = useState<number | "new">("new");
+  const [chosenCategory, setCategoryId] = useState<number | "new" | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>("music");
   const [kind, setKind] = useState("");
   const mediaTypes = useMediaTypes();
@@ -431,6 +440,8 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   });
 
   const existing = categories.data ?? [];
+  // A library the *Arr step just made is the likely home of this folder; a new one only when there is none.
+  const categoryId = chosenCategory ?? existing[0]?.id ?? "new";
   const changeMediaType = (value: MediaType) => {
     setMediaType(value);
     if (!libraryNameTouched) setLibraryName(mediaTypeName(value));

@@ -123,9 +123,11 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
       onClose={onClose}
       actions={
         <>
-          <Button variant="ghost" onClick={onClose}>
-            {t("action.cancel")}
-          </Button>
+          {!moving && (
+            <Button variant="ghost" onClick={onClose}>
+              {t("action.cancel")}
+            </Button>
+          )}
           {moving ? (
             <>
               <span className="mr-auto text-sm">
