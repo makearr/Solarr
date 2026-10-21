@@ -388,7 +388,7 @@ func evaluateRawItems(
 			}
 		}
 		distance := match.Compute(claimed, against, nil)
-		if distance.Total > maxCandidateMatchDistance {
+		if distance.Total > maxCandidateMatchDistance || albumTitleSimilarity(claimed.Title, against) < minReleaseTitleSimilarity {
 			continue
 		}
 		// A single or EP named like the wanted album plus words ("I Am Happy" for "I Am") is another record.
@@ -417,6 +417,19 @@ func withoutLeadingArtist(name, artist string) (string, bool) {
 // videoMarkerRe matches scene tokens only a video release carries; a concert DVD rip was accepted
 // for an album by the first automatic search (2026-09-29).
 var videoMarkerRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:dvd-?rip|dvd[r59]|bd-?rip|br-?rip|blu-?ray|web-?dl|web-?rip|hdtv|hdrip|x26[45]|h\.?26[45]|xvid|divx|hevc|(?:480|576|720|1080|2160)[pi])(?:$|[^a-z0-9])`)
+
+// minReleaseTitleSimilarity drops a release whose album title is another record's: a matching year alone carried
+// "Discography" and a single's title under the distance cut-off for a self-titled album (2026-10-21).
+const minReleaseTitleSimilarity = 0.75
+
+// albumTitleSimilarity is how alike a claimed title is to the album's title or any of its alternate titles.
+func albumTitleSimilarity(claimed string, album match.Candidate) float64 {
+	best := match.TitleSimilarity(claimed, album.Title)
+	for _, alternate := range album.AlternateTitles {
+		best = max(best, match.TitleSimilarity(claimed, alternate))
+	}
+	return best
+}
 
 // smallFormatRe matches the scene tokens of a single or EP.
 var smallFormatRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(?:single|ep|maxi)(?:$|[^a-z0-9])`)

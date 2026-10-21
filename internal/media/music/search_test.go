@@ -348,6 +348,36 @@ func TestSearchItem_ASingleWithExtraTitleWordsIsNoMatch(t *testing.T) {
 	}
 }
 
+// A self-titled album's year let a discography pack and a single through (accepted live 2026-10-21).
+func TestSearchItem_ADiscographyOrAnotherTitleIsNoMatchForASelfTitledAlbum(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Andi Grammel", "Andi Grammel", 2011, alwaysAcceptRules)
+	searcher := &fakeIndexerSearcher{
+		responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+			return []indexer.RawItem{
+				rawItem("guid-pack", "Andi Grammel - Discography (2011-2017) [16.44 FLAC]"),
+				rawItem("guid-named-pack", "Andi Grammel - Andi Grammel Discography 2011-2017 FLAC"),
+				rawItem("guid-single", "Andi Grammel - Miss Me (2011) iTunes m4a"),
+				rawItem("guid-own", "Andi Grammel - Andi Grammel (2011)"),
+				rawItem("guid-deluxe", "Andi Grammel - Andi Grammel (Deluxe Edition) 2011 FLAC"),
+			}, nil
+		},
+	}
+	result, err := env.search().SearchItem(t.Context(), item.ID,
+		[]music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchItem: %v", err)
+	}
+	var guids []string
+	for _, decision := range result.Decisions {
+		guids = append(guids, decision.ReleaseCandidate.GUID)
+	}
+	slices.Sort(guids)
+	if want := []string{"guid-deluxe", "guid-own"}; !slices.Equal(guids, want) {
+		t.Errorf("decided on %v, want %v", guids, want)
+	}
+}
+
 // A concert video named like the album is no album: a DVD rip was accepted live (2026-09-29).
 func TestSearchItem_AVideoReleaseIsNoMatch(t *testing.T) {
 	env := newSearchTestEnv(t)
