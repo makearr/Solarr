@@ -747,6 +747,34 @@ func TestCommitMatchedUnit_UsesTheMatchedReleaseAndDiscPrefixedNames(t *testing.
 	}
 }
 
+// A new album takes MusicBrainz's spelling at import, as enrichment would: tags saying "Come The Runts" showed up
+// as a rename to "Come the Runts" right after the import (found live 2026-10-21).
+func TestCommitMatchedUnit_NamesANewAlbumAsMusicBrainzSpellsIt(t *testing.T) {
+	committer, _, fsys := newCommitter(t, true)
+	content := []byte("passion bytes")
+	writeCommitSourceFile(t, fsys, "Tamuvo/02-passion.flac", content)
+	unit := testUnit("Tamuvo", []inspect.File{{RelPath: "Tamuvo/02-passion.flac", SizeBytes: int64(len(content))}})
+	tags := music.UnitTagSourceFor(commitSourceRoot, []mediatool.Probe{{
+		Path: path.Join(commitSourceRoot, "Tamuvo/02-passion.flac"), Tags: mediatool.Tags{
+			"album": "Here Come The Kites", "artist": "TAMUVO", "date": "2018", "tracknumber": "2", "title": "Passion (Album Version)"},
+	}})
+	best := model.Identification{
+		Strategy: "parse", Confidence: 0.95,
+		ExternalID: &model.ExternalID{Provider: "musicbrainz:release-group", ExternalID: releaseGroupMBID, Confidence: 0.95},
+	}
+	matched := &music.AlbumPlacement{
+		ReleaseMBID: "release-of-kites", AlbumTitle: "Here Come the Kites", ArtistName: "Tamuvo", DiscCount: 1,
+		Tracks: map[string]music.ReleaseTrack{"Tamuvo/02-passion.flac": {Disc: 1, Position: 2, Title: "Passion"}},
+	}
+	if _, err := committer.CommitMatchedUnit(t.Context(), commitSourceRoot, unit, best, tags, commitCategoryID, matched, nil); err != nil {
+		t.Fatalf("CommitMatchedUnit: %v", err)
+	}
+	want := "Tamuvo/Here Come the Kites (2018)/Tamuvo - 02 - Passion.flac"
+	if _, err := fsys.Stat(path.Join(commitDestRoot, want)); err != nil {
+		t.Errorf("%q was not placed: %v", want, err)
+	}
+}
+
 // Rename-on-import off is Lidarr's own "rename tracks" switch: the template
 // still decides the folders, the file keeps the name it arrived with.
 func TestCommitUnit_KeepsTheSourceFileNameWhenRenamingIsOff(t *testing.T) {

@@ -201,8 +201,11 @@ var errNoExternalID = errors.New("music: identification has no external id to re
 // discs that release spans, and which track each file is, keyed by the file's own RelPath.
 type AlbumPlacement struct {
 	ReleaseMBID string
-	DiscCount   int
-	Tracks      map[string]ReleaseTrack
+	// AlbumTitle and ArtistName are the release's as MusicBrainz spells them, what enrichment names the album by.
+	AlbumTitle string
+	ArtistName string
+	DiscCount  int
+	Tracks     map[string]ReleaseTrack
 }
 
 // PlacementOf is the album decision as a unit's placement; nil unless an album was identified.
@@ -212,6 +215,8 @@ func PlacementOf(decision AlbumDecision, relPaths []string) *AlbumPlacement {
 	}
 	placement := &AlbumPlacement{
 		ReleaseMBID: decision.Best.Candidate.Release.MBID,
+		AlbumTitle:  decision.Best.Candidate.Release.Title,
+		ArtistName:  decision.Best.Candidate.ArtistCredit,
 		DiscCount:   len(decision.Best.Candidate.Release.Media),
 		Tracks:      make(map[string]ReleaseTrack, len(relPaths)),
 	}
@@ -234,7 +239,7 @@ func (p *AlbumPlacement) trackOf(relPath string, tags mediatool.Tags) (TrackFile
 		return claimed, p.DiscCount
 	}
 	claimed.Disc, claimed.Track, claimed.RecordingMBID = matched.Disc, matched.Position, matched.RecordingMBID
-	if claimed.Title == "" {
+	if matched.Title != "" {
 		claimed.Title = matched.Title
 	}
 	return claimed, p.DiscCount
@@ -329,6 +334,12 @@ func (c Committer) CommitMatchedUnit(
 		}
 		if year == nil {
 			year = known.Year
+		}
+	} else if matched != nil && matched.AlbumTitle != "" {
+		// A new album is named as enrichment will name it, or every import showed up as a rename at once.
+		work.CanonicalTitle, work.SortTitle = matched.AlbumTitle, SortTitle(matched.AlbumTitle)
+		if matched.ArtistName != "" {
+			artist = matched.ArtistName
 		}
 	}
 
@@ -712,8 +723,7 @@ func unitEditionLink(tags mediatool.Tags) *library.EditionLink {
 	}
 }
 
-// importRelPath renders one file's destination from its claimed tags: a work created this
-// instant has no WorkDetail yet, so enrichment's canonical names show up later as a rename diff.
+// importRelPath renders one file's destination: MusicBrainz's names where album matching found the release, else tags.
 func importRelPath(
 	names Naming, work library.WorkIdentity, artist string, year *int64, track TrackFile, discCount int,
 	sourceRelPath string,
