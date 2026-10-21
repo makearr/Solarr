@@ -4,7 +4,9 @@ package rss
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -94,6 +96,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		}
 		releases := 0
 		var total Tally
+		read := make([]string, 0, len(conns))
 		for _, conn := range conns {
 			if err := ctx.Err(); err != nil {
 				return err
@@ -110,13 +113,13 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 			}
 			unread := j.unread(readMark{source: source.Name, indexerID: conn.ID}, raws)
 			releases += len(unread)
+			read = append(read, fmt.Sprintf("%s %d new of %d", conn.Name, len(unread), len(raws)))
 			tally := source.Feed.OfferFeed(ctx, conn, unread, j.config.Clock.Now())
 			total.Judged, total.Sent, total.Held = total.Judged+tally.Judged, total.Sent+tally.Sent, total.Held+tally.Held
 		}
-		if total.Judged > 0 {
-			j.config.Logger.Info("rss sync: done", "media_type", source.Name, "releases", releases,
-				"items_judged", total.Judged, "sent", total.Sent, "held", total.Held)
-		}
+		// Logged when nothing matched too: the feed being read is what tells a working RSS from a broken one.
+		j.config.Logger.Info("rss sync: done", "media_type", source.Name, "releases", releases, "indexers", strings.Join(read, ", "),
+			"items_judged", total.Judged, "sent", total.Sent, "held", total.Held)
 	}
 	return nil
 }
