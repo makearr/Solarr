@@ -187,6 +187,30 @@ func TestLidarrClient_DownloadClientsReadsAddressAndCategory(t *testing.T) {
 	}
 }
 
+// Sonarr and Radarr keep the category under their own media's field name, on the v3 path.
+func TestSonarrAndRadarrClients_DownloadClientsReadTheirCategoryField(t *testing.T) {
+	transport := &fakeTransport{responses: map[string]fakeResponse{
+		"http://sonarr.local/api/v3/downloadclient": {status: 200, body: `[{"name":"SAB","implementation":"Sabnzbd",` +
+			`"protocol":"usenet","enable":true,"fields":[{"name":"host","value":"sab"},{"name":"port","value":8080},{"name":"tvCategory","value":"tv"}]}]`},
+		"http://radarr.local/api/v3/downloadclient": {status: 200, body: `[{"name":"SAB","implementation":"Sabnzbd",` +
+			`"protocol":"usenet","enable":true,"fields":[{"name":"host","value":"sab"},{"name":"port","value":8080},{"name":"movieCategory","value":"movies"}]}]`},
+	}}
+	sonarr, err := arrimport.NewLidarrClient(newTestClient(t, transport), "http://sonarr.local", "key").Sonarr().DownloadClients(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	radarr, err := arrimport.NewRadarrClient(newTestClient(t, transport), "http://radarr.local", "key").DownloadClients(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := func(category string) []arrimport.DownloadClient {
+		return []arrimport.DownloadClient{{Name: "SAB", Implementation: "Sabnzbd", Protocol: "usenet", Enabled: true, Host: "sab", Port: 8080, Category: category}}
+	}
+	if !reflect.DeepEqual(sonarr, want("tv")) || !reflect.DeepEqual(radarr, want("movies")) {
+		t.Errorf("sonarr = %+v, radarr = %+v", sonarr, radarr)
+	}
+}
+
 func TestSonarrClient_SeriesReadsTheV3APIWithTheKey(t *testing.T) {
 	transport := &fakeTransport{responses: map[string]fakeResponse{
 		"http://sonarr.local/api/v3/series": {status: 200, body: `[{"id":7,"title":"Show","tvdbId":123,"monitored":true,` +

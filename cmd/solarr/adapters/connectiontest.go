@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/qbittorrent"
@@ -35,6 +36,9 @@ type ConnectionTester struct {
 	Indexer    IndexerClientFactory
 	Downloader DownloaderHTTPFactory
 	Clock      clock.Clock
+	// SharedCategories answers the categories connected *Arrs send under on a client, with each *Arr's name; nil
+	// skips the check.
+	SharedCategories func(ctx context.Context, baseURL string) map[string]string
 }
 
 // TestIndexer fetches t=caps and records the response the same way a
@@ -99,9 +103,9 @@ func (c ConnectionTester) testDownloader(
 ) apiserver.ConnectionTestResult {
 	switch impl {
 	case ImplSABnzbd:
-		return c.testSABnzbd(ctx, sabnzbd.NewClient(client, baseURL, credentials), options)
+		return c.warnShared(ctx, baseURL, options, c.testSABnzbd(ctx, sabnzbd.NewClient(client, baseURL, credentials), options))
 	case ImplQBittorrent:
-		return c.testQBittorrent(ctx, qbittorrent.NewClient(client, baseURL, credentials), options)
+		return c.warnShared(ctx, baseURL, options, c.testQBittorrent(ctx, qbittorrent.NewClient(client, baseURL, credentials), options))
 	}
 	return apiserver.ConnectionTestResult{Message: fmt.Sprintf("%q is not a download client Solarr knows", impl), TestedAt: c.Clock.Now()}
 }
@@ -150,6 +154,25 @@ func (c ConnectionTester) testSABnzbd(ctx context.Context, client sabnzbd.Client
 		}
 	}
 	return apiserver.ConnectionTestResult{OK: true, Message: message, TestedAt: at, DownloadFolder: folder}
+}
+
+// warnShared fails a connected client whose send category a connected *Arr also uses: that *Arr would import
+// Solarr's downloads into its own library before Solarr sees them.
+func (c ConnectionTester) warnShared(
+	ctx context.Context, baseURL string, options settings.DownloaderOptions, result apiserver.ConnectionTestResult,
+) apiserver.ConnectionTestResult {
+	if !result.OK || c.SharedCategories == nil {
+		return result
+	}
+	shared := c.SharedCategories(ctx, baseURL)
+	for _, category := range c.sendCategories(options) {
+		if name, found := shared[strings.ToLower(category)]; found {
+			result.OK = false
+			result.Message += fmt.Sprintf(" %s also downloads into the %q category on this client and would import what Solarr sends"+
+				" there: give Solarr a category of its own.", name, category)
+		}
+	}
+	return result
 }
 
 // countAvailable counts how many of a caps response's own search modes are

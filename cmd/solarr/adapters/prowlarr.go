@@ -3,11 +3,13 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -105,13 +107,14 @@ func (a Prowlarr) UseInstanceIndexers(ctx context.Context, instanceID int64, pro
 	return added, nil
 }
 
-// InstanceDownloadClients reads a Lidarr's or Prowlarr's download clients (their shared v1 API).
+// InstanceDownloadClients reads one *Arr's download clients.
 func (a Prowlarr) InstanceDownloadClients(ctx context.Context, instanceID int64) ([]apiserver.ArrDownloadClientRow, error) {
-	instance, key, err := a.connection(ctx, instanceID, settings.ArrAppProwlarr, settings.ArrAppLidarr)
+	instance, key, err := a.connection(ctx, instanceID,
+		settings.ArrAppProwlarr, settings.ArrAppLidarr, settings.ArrAppSonarr, settings.ArrAppRadarr)
 	if err != nil {
 		return nil, err
 	}
-	clients, err := a.Lidarr(instance.BaseURL, key).DownloadClients(ctx)
+	clients, err := a.downloadClients(ctx, instance, key)
 	if err != nil {
 		return nil, err
 	}
@@ -133,4 +136,59 @@ func (a Prowlarr) InstanceDownloadClients(ctx context.Context, instanceID int64)
 		}
 	}
 	return rows, nil
+}
+
+// downloadClients reads an instance's download clients through its own app's API version.
+func (a Prowlarr) downloadClients(ctx context.Context, instance settings.ArrInstance, key string) ([]arrimport.DownloadClient, error) {
+	client := a.Lidarr(instance.BaseURL, key)
+	switch instance.App {
+	case settings.ArrAppSonarr:
+		return client.Sonarr().DownloadClients(ctx)
+	case settings.ArrAppRadarr:
+		return client.Radarr().DownloadClients(ctx)
+	default:
+		return client.DownloadClients(ctx)
+	}
+}
+
+// SharedCategories answers, for the client at baseURL, each category a connected *Arr also sends under, with the
+// *Arr's name: that *Arr imports whatever lands there. An *Arr that cannot be read is skipped.
+func (a Prowlarr) SharedCategories(ctx context.Context, baseURL string) map[string]string {
+	instances, err := a.Cache.ArrInstances(ctx)
+	if err != nil {
+		return nil
+	}
+	shared := map[string]string{}
+	for _, instance := range instances {
+		if !instance.Enabled || instance.App == settings.ArrAppProwlarr {
+			continue
+		}
+		key, err := a.Cache.DecryptedAPIKey(ctx, instance.ID)
+		if err != nil {
+			continue
+		}
+		clients, err := a.downloadClients(ctx, instance, key.Reveal())
+		if err != nil {
+			continue
+		}
+		for _, client := range clients {
+			if client.Category != "" && SameClientAddress(client.BaseURL(), baseURL) {
+				shared[strings.ToLower(client.Category)] = instance.Name
+			}
+		}
+	}
+	return shared
+}
+
+// SameClientAddress compares two client URLs by host and port, ignoring scheme, case and URL base.
+func SameClientAddress(a, b string) bool {
+	hostPort := func(raw string) string {
+		parsed, err := url.Parse(strings.TrimSpace(raw))
+		if err != nil {
+			return ""
+		}
+		return strings.ToLower(parsed.Host)
+	}
+	left := hostPort(a)
+	return left != "" && left == hostPort(b)
 }

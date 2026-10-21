@@ -708,6 +708,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		DownloaderTester: adapters.ConnectionTester{
 			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
 			Clock: clock.NewSystem(),
+			SharedCategories: adapters.Prowlarr{
+				Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
+			}.SharedCategories,
 		},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),

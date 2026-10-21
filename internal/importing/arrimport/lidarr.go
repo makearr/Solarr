@@ -196,8 +196,13 @@ type downloadClientWire struct {
 
 // DownloadClients answers the instance's download clients, their address and category.
 func (c LidarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, error) {
+	return c.downloadClients(ctx, "/api/v1/downloadclient")
+}
+
+// downloadClients reads one *Arr's download clients from its own API version's path; the field shapes are shared.
+func (c LidarrClient) downloadClients(ctx context.Context, path string) ([]DownloadClient, error) {
 	var wire []downloadClientWire
-	if err := c.get(ctx, "/api/v1/downloadclient", &wire); err != nil {
+	if err := c.get(ctx, path, &wire); err != nil {
 		return nil, err
 	}
 	clients := make([]DownloadClient, len(wire))
@@ -217,7 +222,7 @@ func (c LidarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, er
 				_ = json.Unmarshal(field.Value, &client.URLBase)
 			case "username":
 				_ = json.Unmarshal(field.Value, &client.Username)
-			case "category", "musicCategory":
+			case "category", "musicCategory", "tvCategory", "movieCategory":
 				var category string
 				if json.Unmarshal(field.Value, &category) == nil && category != "" && client.Category == "" {
 					client.Category = category

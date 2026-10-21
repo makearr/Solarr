@@ -396,9 +396,12 @@ function OptionFields({
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 text-xs">
-      <label className="flex min-w-32 flex-col gap-1 text-ink-muted">
+      <label
+        className="flex min-w-32 flex-col gap-1 text-ink-muted"
+        title="Empty sends each library's downloads under solarr-music, solarr-tv and so on. Never use a category Lidarr, Sonarr or Radarr download into: they would import Solarr's downloads."
+      >
         Category
-        <input className={inputStyle} value={category} placeholder="music" onChange={(event) => onCategory(event.target.value)} />
+        <input className={inputStyle} value={category} placeholder="solarr-music" onChange={(event) => onCategory(event.target.value)} />
       </label>
       <label className="flex items-center gap-2 pb-2 text-ink-muted">
         <input type="checkbox" checked={removeCompleted} onChange={(event) => onRemoveCompleted(event.target.checked)} />

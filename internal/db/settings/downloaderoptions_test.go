@@ -24,13 +24,13 @@ func TestDownloaderOptions_MapsOnlyPathsUnderTheRemoteFolder(t *testing.T) {
 	}
 }
 
-// Like Lidarr, music goes to the client's "music" category unless the client names another.
-func TestDownloaderOptions_CategoryDefaultsToTheMediaType(t *testing.T) {
+// Solarr's own category by default, never an *Arr's ("music"), unless the client names another.
+func TestDownloaderOptions_CategoryDefaultsToSolarrsOwn(t *testing.T) {
 	got := []string{
 		settings.Downloader{}.Options().CategoryFor("music"),
 		settings.Downloader{SettingsJSON: `{"category":"lidarr"}`}.Options().CategoryFor("music"),
 	}
-	want := []string{"music", "lidarr"}
+	want := []string{"solarr-music", "lidarr"}
 	if !slices.Equal(got, want) {
 		t.Errorf("CategoryFor = %v, want %v", got, want)
 	}

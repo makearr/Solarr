@@ -30,10 +30,9 @@ type PathRewrite struct{ From, To string }
 // DefaultArrSyncOptions is what a sync did before it had options: monitored items, every album.
 var DefaultArrSyncOptions = ArrSyncOptions{Monitored: true, Albums: "all"}
 
-// ErrArrAppNotYetSupported means Sync was asked to run a connection for an
-// app that only connects and parks today (ADR-52) -- Lidarr is the only one
-// with a real mapping this pass.
-var ErrArrAppNotYetSupported = errors.New("apiserver: this *Arr app is not yet wired for a real sync")
+// ErrArrAppNotYetSupported means a connection was asked for something its app does not offer here yet
+// (Readarr's sync, Sonarr's indexers): Prowlarr holds the indexers, Lidarr/Sonarr/Radarr sync.
+var ErrArrAppNotYetSupported = errors.New("apiserver: this *Arr app does not offer that here")
 
 // ErrArrImportNotDone mirrors library.ErrArrImportNotDone at this package's
 // own boundary, the same shape ErrImportSessionReverted's own pair keeps.

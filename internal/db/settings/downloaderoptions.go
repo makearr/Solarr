@@ -129,12 +129,13 @@ func (o DownloaderOptions) SendsRSSGrabs() bool {
 	return o.AlwaysSendRSSGrabs == nil || *o.AlwaysSendRSSGrabs
 }
 
-// CategoryFor is the client category a download of mediaType is sent under.
+// CategoryFor is the client category a download of mediaType is sent under; the default is Solarr's own, since the
+// *Arrs' defaults ("music", "tv", "movies") would hand Solarr's downloads to an *Arr running beside it.
 func (o DownloaderOptions) CategoryFor(mediaType string) string {
 	if o.Category != "" {
 		return o.Category
 	}
-	return mediaType
+	return "solarr-" + mediaType
 }
 
 // LocalPathFor maps a path the client reported to where Solarr sees it; unmapped paths pass through.

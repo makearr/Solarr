@@ -66,3 +66,8 @@ func (c RadarrClient) QualityProfiles(ctx context.Context) ([]SonarrQualityProfi
 	}
 	return profiles, nil
 }
+
+// DownloadClients answers the instance's download clients, their address and category.
+func (c RadarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, error) {
+	return c.inner.downloadClients(ctx, "/api/v3/downloadclient")
+}

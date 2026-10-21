@@ -42,7 +42,9 @@ advanced): automatic downloads stop before they would eat into it.
   URL (`http://prowlarr:9696/<id>`) and Prowlarr's API key. **Music categories** (default 3000, Audio)
   are what every search and RSS read asks for; narrow them (3040 is lossless) if you only want some.
 - **Connections → Download clients → Add**: SABnzbd, with its API key. Solarr uses its own category
-  in the client and only ever touches downloads in it.
+  in the client (`solarr-music`, `solarr-tv`, `solarr-movie` unless you name one) and only ever touches downloads in
+  it. Never give it a category Lidarr, Sonarr or Radarr download into: they would import Solarr's downloads. The
+  connection test fails when a connected *Arr uses the same category on the same client.
   **qBittorrent** (torrents) is added the same way, with a user name and password (empty when it lets Solarr's
   address in); Lidarr's qBittorrent can be taken from its Connections page, its user name filled in for you. A torrent is followed by its info hash; it is not removed after import unless you tick that
   (it keeps seeding). With that ticked, **Seed to ratio** and **Seed for (minutes)** keep an imported torrent in qBittorrent until it has shared that much or seeded that long, whichever comes first, and only then remove it with its files; neither set removes it at once. A torrent you removed in qBittorrent yourself is simply considered done. If qBittorrent names its download folder differently from Solarr, set the path
