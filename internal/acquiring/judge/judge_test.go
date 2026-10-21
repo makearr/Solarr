@@ -2,6 +2,7 @@ package judge_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -126,6 +127,44 @@ func TestAskSkipsQueriesAnIndexerCannotTakeAndDeduplicatesByGUID(t *testing.T) {
 	}
 	if len(answers[0].Raws) != 2 {
 		t.Errorf("a release listed by both queries is one: %+v", answers[0].Raws)
+	}
+}
+
+// An indexer without TVDB ids is asked by text even though another found the season by id (found live 2026-10-21:
+// The Pirate Bay was never asked for TV while NZBgeek answered); one that found stops widening.
+func TestAskThroughTiersWidensEachIndexerOnItsOwn(t *testing.T) {
+	byID := &fakeSearcher{items: []indexer.RawItem{{GUID: "id-1"}}}
+	textOnly := &fakeSearcher{items: []indexer.RawItem{{GUID: "text-1"}}}
+	empty := &fakeSearcher{}
+	conns := []judge.Conn{
+		{ID: 1, Client: byID, Params: map[string][]string{"tvsearch": {"q", "tvdbid", "season"}}},
+		{ID: 2, Client: textOnly, Params: map[string][]string{"tvsearch": {"q", "season"}}},
+		{ID: 3, Client: empty, Params: map[string][]string{"tvsearch": {"q", "tvdbid", "season"}}},
+	}
+	tiers := [][]judge.Query{
+		{{Function: "tvsearch", Extra: map[string]string{"tvdbid": "1", "season": "1"}, Needs: []string{"tvdbid", "season"}}},
+		{{Function: "search", Text: "show s01"}},
+	}
+	walk, err := judge.AskThroughTiers(t.Context(), conns, tiers, time.Second, func(conn judge.Conn, raws []indexer.RawItem) ([]judge.Find, error) {
+		finds := make([]judge.Find, len(raws))
+		for index, raw := range raws {
+			finds[index] = judge.Find{Conn: conn, Raw: raw}
+		}
+		return finds, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var guids []string
+	for _, find := range walk.Finds {
+		guids = append(guids, find.Raw.GUID)
+	}
+	if !slices.Equal(guids, []string{"id-1", "text-1"}) || walk.TierUsed == nil || *walk.TierUsed != 0 {
+		t.Errorf("finds = %v, tier used = %v", guids, walk.TierUsed)
+	}
+	asked := []int{len(byID.seen), len(textOnly.seen), len(empty.seen)}
+	if !slices.Equal(asked, []int{1, 1, 2}) || textOnly.seen[0].Query != "show s01" {
+		t.Errorf("requests per indexer = %v (want 1, 1, 2), text-only asked %+v", asked, textOnly.seen)
 	}
 }
 

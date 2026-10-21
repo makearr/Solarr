@@ -52,8 +52,8 @@ type Pipeline struct {
 	Deadline time.Duration
 }
 
-// Search widens through tiers until one finds a release for the item: every indexer is asked a tier's queries at
-// once, and the first tier with a find records all of them and ends the search.
+// Search widens each indexer through the tiers until it finds a release for the item (AskThroughTiers), then records
+// every find at once.
 func (p Pipeline) Search(ctx context.Context, itemID int64, conns []Conn, tiers [][]Query, evaluate Evaluate, at time.Time) (Result, error) {
 	result, err := p.search(ctx, itemID, conns, tiers, evaluate, at)
 	if err != nil {
@@ -75,36 +75,94 @@ func (p Pipeline) logSearch(ctx context.Context, itemID int64, result Result, at
 }
 
 func (p Pipeline) search(ctx context.Context, itemID int64, conns []Conn, tiers [][]Query, evaluate Evaluate, at time.Time) (Result, error) {
-	var result Result
-	for tierIndex, queries := range tiers {
-		answers, err := AskEveryIndexer(ctx, conns, queries, cmp.Or(p.Deadline, GroupDeadline))
+	walk, err := AskThroughTiers(ctx, conns, tiers, cmp.Or(p.Deadline, GroupDeadline), func(conn Conn, raws []indexer.RawItem) ([]Find, error) {
+		kept, err := p.withoutBlocklisted(ctx, conn.ID, raws, at)
 		if err != nil {
-			return result, err
+			return nil, err
 		}
-		// Merged in indexer order, so a duplicate keeps the best-priority indexer's copy.
-		var finds []Find
-		for index, answer := range answers {
-			conn := conns[index]
-			if answer.Err != nil {
-				result.IndexerErrors = append(result.IndexerErrors, IndexerError{
-					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.Err.Error(), TooSlow: answer.TooSlow,
-				})
-			}
-			raws, err := p.withoutBlocklisted(ctx, conn.ID, answer.Raws, at)
-			if err != nil {
-				return result, err
-			}
-			finds = append(finds, evaluate(raws, conn)...)
-		}
-		if len(finds) == 0 {
-			continue
-		}
-		tier := tierIndex
-		result.TierUsed = &tier
-		result.Decisions, err = p.decide(ctx, itemID, finds, "search", at)
+		return evaluate(kept, conn), nil
+	})
+	result := Result{TierUsed: walk.TierUsed, IndexerErrors: walk.IndexerErrors}
+	if err != nil || len(walk.Finds) == 0 {
 		return result, err
 	}
-	return result, nil
+	result.Decisions, err = p.decide(ctx, itemID, walk.Finds, "search", at)
+	return result, err
+}
+
+// TierWalk is what asking through the tiers found: every indexer's finds in indexer order, the first tier that found
+// anything, and the indexers that failed.
+type TierWalk struct {
+	Finds         []Find
+	TierUsed      *int
+	IndexerErrors []IndexerError
+}
+
+// AskThroughTiers widens each indexer on its own (Sonarr's per-indexer search): a tier asks the indexers still looking
+// that can take one of its queries, and each stops at its first tier with a find or a failure.
+func AskThroughTiers(
+	ctx context.Context, conns []Conn, tiers [][]Query, deadline time.Duration, evaluate func(Conn, []indexer.RawItem) ([]Find, error),
+) (TierWalk, error) {
+	var walk TierWalk
+	found := make([][]Find, len(conns))
+	looking := make([]bool, len(conns))
+	for index := range looking {
+		looking[index] = true
+	}
+	for tierIndex, queries := range tiers {
+		var asked []int
+		for index, conn := range conns {
+			if looking[index] && takesAny(conn, queries) {
+				asked = append(asked, index)
+			}
+		}
+		if len(asked) == 0 {
+			continue
+		}
+		askedConns := make([]Conn, len(asked))
+		for position, index := range asked {
+			askedConns[position] = conns[index]
+		}
+		answers, err := AskEveryIndexer(ctx, askedConns, queries, deadline)
+		if err != nil {
+			return walk, err
+		}
+		for position, answer := range answers {
+			index, conn := asked[position], askedConns[position]
+			if answer.Err != nil {
+				walk.IndexerErrors = append(walk.IndexerErrors, IndexerError{
+					IndexerID: conn.ID, IndexerName: conn.Name, Error: answer.Err.Error(), TooSlow: answer.TooSlow,
+				})
+				looking[index] = false
+			}
+			finds, err := evaluate(conn, answer.Raws)
+			if err != nil {
+				return walk, err
+			}
+			if len(finds) > 0 {
+				found[index], looking[index] = finds, false
+				if walk.TierUsed == nil {
+					tier := tierIndex
+					walk.TierUsed = &tier
+				}
+			}
+		}
+	}
+	// Merged in indexer order, so a duplicate keeps the best-priority indexer's copy.
+	for _, finds := range found {
+		walk.Finds = append(walk.Finds, finds...)
+	}
+	return walk, nil
+}
+
+// takesAny reports whether the indexer can take at least one of a tier's queries.
+func takesAny(conn Conn, queries []Query) bool {
+	for _, query := range queries {
+		if len(query.Needs) == 0 || conn.Takes(query.Function, query.Needs) {
+			return true
+		}
+	}
+	return false
 }
 
 // Feed judges releases an RSS sync read from one indexer, exactly as a search's would be; nothing is asked.
