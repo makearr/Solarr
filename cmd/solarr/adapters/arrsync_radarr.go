@@ -96,8 +96,14 @@ func (a ArrSync) syncMovie(ctx context.Context, importID, categoryID int64, rada
 	}
 	category, _ := a.Cache.Snapshot().Category(categoryID)
 	profile := a.movieProfile(category, radarr, profileNames)
+	// Radarr's own record stands in when no metadata source knows the film (shorts, TV specials: 48 of 3,964 live).
+	fallback := &media.Fallback{Title: radarr.Title, Year: radarr.Year, ExternalIDs: map[string]string{}}
+	if radarr.IMDbID != "" {
+		fallback.ExternalIDs["imdb"] = radarr.IMDbID
+	}
 	request := media.AddRequest{
 		CategoryID: categoryID, Provider: provider, ExternalID: externalID, Monitored: radarr.Monitored, ProfileID: &profile,
+		Fallback: fallback,
 	}
 	if availability := radarrAvailability(radarr.MinimumAvailability); availability != "" {
 		request.Choices = map[string]string{"minimum_availability": availability}

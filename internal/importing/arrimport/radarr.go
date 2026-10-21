@@ -10,6 +10,7 @@ import (
 type RadarrMovie struct {
 	ID                  int64   `json:"id"`
 	Title               string  `json:"title"`
+	Year                int     `json:"year"`
 	TMDBID              int64   `json:"tmdbId"`
 	IMDbID              string  `json:"imdbId"`
 	Monitored           bool    `json:"monitored"`

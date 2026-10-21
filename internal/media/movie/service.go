@@ -360,6 +360,8 @@ type AddRequest struct {
 	// Availability is the person's own choice of when the movie is wanted; empty takes the library's.
 	Availability Availability
 	AddedBy      *int64
+	// Fallback is stored when no metadata source knows the movie; nil refuses the add then.
+	Fallback *Movie
 }
 
 // AddResult is what an add stored.
@@ -394,6 +396,9 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, fmt.Errorf("movie: unknown monitor option %q", monitor)
 	}
 	movie, err := s.FetchFor(ctx, request.CategoryID, request.IDs)
+	if errors.Is(err, ErrNoSource) && request.Fallback != nil {
+		movie, err = *request.Fallback, nil
+	}
 	if err != nil {
 		return AddResult{}, err
 	}

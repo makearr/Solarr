@@ -107,7 +107,18 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 	if availability != "" && !availability.Valid() {
 		return media.AddResult{}, fmt.Errorf("%w: %q is not a minimum availability", media.ErrInvalidAdd, availability)
 	}
-	result, err := c.Service.Add(ctx, AddRequest{IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, Availability: availability, AddedBy: addedBy})
+	var fallback *Movie
+	if request.Fallback != nil {
+		known := ids
+		if known.IMDb == "" {
+			known.IMDb = request.Fallback.ExternalIDs[ProviderIMDb]
+		}
+		fallback = &Movie{IDs: known, Title: request.Fallback.Title, Year: request.Fallback.Year}
+	}
+	result, err := c.Service.Add(ctx, AddRequest{
+		IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, Availability: availability, AddedBy: addedBy,
+		Fallback: fallback,
+	})
 	if errors.Is(err, ErrNoSource) {
 		return media.AddResult{}, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}

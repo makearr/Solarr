@@ -174,6 +174,15 @@ type AddRequest struct {
 	Search    bool
 	// Choices are the type's own add-form answers by key ("minimum_availability" for a movie); unknown keys are ignored.
 	Choices map[string]string
+	// Fallback is what the caller already knows of the work, stored when no metadata source answers; nil refuses then.
+	Fallback *Fallback
+}
+
+// Fallback names a work from another app's own record (an *Arr import), with its other ids by provider.
+type Fallback struct {
+	Title       string
+	Year        int
+	ExternalIDs map[string]string
 }
 
 // AddResult is what an add stored.

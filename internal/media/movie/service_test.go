@@ -2,6 +2,8 @@ package movie_test
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -99,6 +101,33 @@ func newService(t *testing.T, source movie.TMDBSource, proxy movie.ProxySource) 
 		TMDB: source, Proxy: proxy, Series: library.NewSeries(opened), Reader: library.NewSeriesReader(opened),
 		Desired: library.NewDesired(opened), Franchises: library.NewFranchises(opened), Exclusions: library.NewExclusions(opened), Clock: fake,
 	}, opened
+}
+
+// A film no source knows is refused, unless the caller knows it: Radarr's own title, year and ids (48 live films of a
+// real Radarr, shorts and TV specials, were refused on import 2026-10-21).
+func TestAddStoresTheFallbackWhenNoSourceKnowsTheMovie(t *testing.T) {
+	service, opened := newService(t, fakeTMDB{configured: true, err: tmdb.ErrNotFound}, nil)
+	request := movie.AddRequest{IDs: movie.IDs{TMDB: 779451}, CategoryID: 5, ProfileID: 1, Monitor: movie.MonitorMovieOnly}
+	if _, err := service.Add(t.Context(), request); !errors.Is(err, movie.ErrNoSource) {
+		t.Fatalf("without a fallback: err = %v, want ErrNoSource", err)
+	}
+	request.Fallback = &movie.Movie{IDs: movie.IDs{TMDB: 779451, IMDb: "tt7524614"}, Title: "A Short Return", Year: 2017}
+	added, err := service.Add(t.Context(), request)
+	if err != nil || !added.Created {
+		t.Fatalf("with a fallback: %+v, %v", added, err)
+	}
+	series := library.NewSeries(opened)
+	for provider, id := range map[string]string{movie.ProviderTMDB: "779451", movie.ProviderIMDb: "tt7524614"} {
+		if work, found, err := series.WorkByProviderID(t.Context(), movie.MediaType, provider, id); err != nil || !found || work != added.WorkID {
+			t.Errorf("work by %s = %d %v %v", provider, work, found, err)
+		}
+	}
+	var title string
+	var year sql.NullInt64
+	if err := opened.Read().QueryRowContext(t.Context(), "SELECT canonical_title, year FROM work WHERE id = ?", added.WorkID).Scan(&title, &year); err != nil ||
+		title != "A Short Return" || year.Int64 != 2017 {
+		t.Errorf("work = %q %v, %v", title, year, err)
+	}
 }
 
 func TestAddStoresTheMovieItsOneWantedItemItsReleaseDayAndFranchise(t *testing.T) {
