@@ -2,6 +2,7 @@ package movie_test
 
 import (
 	"context"
+	"fmt"
 	"path"
 	"testing"
 
@@ -40,7 +41,7 @@ func (noAcquisition) Get(context.Context, int64) (library.Acquisition, error) {
 	return library.Acquisition{}, nil
 }
 
-func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspect.File) {
+func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity) {
 	t.Helper()
 	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, nil)
 	fake := clock.NewFakeAtEpoch()
@@ -75,11 +76,11 @@ func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspe
 		}),
 		Resolver:   movie.Resolver{Service: service, Reader: reader, DefaultProfileID: 1, Categories: categories{}},
 		Categories: categories{}, Clock: fake,
-	}), fsys, write
+	}), fsys, write, identity
 }
 
 func TestImportPlacesTheBiggestFileUnderTheMovieFolderAndLeavesTheSample(t *testing.T) {
-	importer, fsys, write := newImporter(t)
+	importer, fsys, write, _ := newImporter(t)
 	unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p.BluRay.x264-GRP", Media: []inspect.File{
 		write("The.Example.Film.1999.1080p.BluRay.x264-GRP/The.Example.Film.1999.1080p.BluRay.x264-GRP.mkv"),
 		write("The.Example.Film.1999.1080p.BluRay.x264-GRP/sample.mkv"),
@@ -110,12 +111,46 @@ func TestImportPlacesTheBiggestFileUnderTheMovieFolderAndLeavesTheSample(t *test
 }
 
 func TestImportQueuesAFolderItCannotNameAFilm(t *testing.T) {
-	importer, _, write := newImporter(t)
+	importer, _, write, _ := newImporter(t)
 	unit := inspect.Unit{Directory: "holiday", Media: []inspect.File{write("holiday/clip.mkv")}}
 	result, err := importer.ImportBatch(t.Context(), batch.Request{
 		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{7},
 	})
 	if err != nil || result.Decisions[0].Decision != library.UnitQueue || result.Placements[0] != nil {
 		t.Errorf("decision = %+v, %v; want the unit held for a person", result.Decisions[0], err)
+	}
+}
+
+// twoRoots is a library over roots 9 and 10.
+type twoRoots struct{}
+
+func (twoRoots) RootFolder(id int64) (settings.RootFolder, bool) {
+	free := int64(1 << 40)
+	return settings.RootFolder{ID: id, Path: fmt.Sprintf("/library%d", id), Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free},
+		id == 9 || id == 10
+}
+func (twoRoots) CategoryRoots() []settings.CategoryRoot {
+	return []settings.CategoryRoot{{CategoryID: 3, RootFolderID: 9, AcceptsNew: true}, {CategoryID: 3, RootFolderID: 10, AcceptsNew: true}}
+}
+
+// A work's next file goes where its files are, not where an affinity recorded before a move says (Sonarr's Edit ->
+// root folder moves the files; the next episode must follow them).
+func TestChooseRootFollowsTheWorksFilesOverAStaleAffinity(t *testing.T) {
+	importer, _, write, identity := newImporter(t)
+	unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{write("The.Example.Film.1999.1080p/film.mkv")}}
+	result, err := importer.ImportBatch(t.Context(), batch.Request{
+		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5},
+	})
+	if err != nil || result.Decisions[0].WorkID == nil {
+		t.Fatalf("import: %+v, %v", result.Decisions, err)
+	}
+	stale := memoryAffinity{"movie:the example film:1999": 10}
+	chooser := placer.New(placer.Config{Roots: twoRoots{}, Affinity: stale, Identity: identity, Clock: clock.NewFakeAtEpoch()})
+	root, err := chooser.ChooseRoot(t.Context(), 3, *result.Decisions[0].WorkID, "movie:the example film:1999", 1)
+	if err != nil {
+		t.Fatalf("ChooseRoot: %v", err)
+	}
+	if root.ID != 9 || stale["movie:the example film:1999"] != 9 {
+		t.Errorf("chose root %d, affinity now %d; want 9, where the film's file is", root.ID, stale["movie:the example film:1999"])
 	}
 }

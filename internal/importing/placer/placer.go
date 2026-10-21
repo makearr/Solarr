@@ -128,20 +128,18 @@ func (p Placer) CheckBlocked(ctx context.Context, sourceRoot string, files []Fil
 	return hashes, nil
 }
 
-// ChooseRoot keeps a work where it already is: its recorded affinity, else the root of a file it already has, else the
-// placement strategy's choice among the library's roots. An empty affinityKey switches affinity off.
+// ChooseRoot keeps a work where it already is: the root of a file it has, else its recorded affinity, else the
+// placement strategy's choice. Files first, so a work moved to another root receives its next file there too.
 func (p Placer) ChooseRoot(ctx context.Context, categoryID, workID int64, affinityKey string, bytes int64) (settings.RootFolder, error) {
 	var existing *int64
-	if affinityKey != "" {
+	if roots, err := p.config.Identity.WorkFileRoots(ctx, workID); err == nil && len(roots) > 0 {
+		rootID := roots[0].RootFolderID
+		existing = &rootID
+	}
+	if existing == nil && affinityKey != "" {
 		if rootID, found, err := p.config.Affinity.PlacementAffinity(ctx, categoryID, affinityKey); err != nil {
 			return settings.RootFolder{}, err
 		} else if found {
-			existing = &rootID
-		}
-	}
-	if existing == nil {
-		if roots, err := p.config.Identity.WorkFileRoots(ctx, workID); err == nil && len(roots) > 0 {
-			rootID := roots[0].RootFolderID
 			existing = &rootID
 		}
 	}

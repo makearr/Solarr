@@ -61,10 +61,10 @@ func (f *fakeWorkEditor) ListTags(context.Context) ([]string, error) {
 func TestWorkEdit_ReadsAndSavesTheWholeDialog(t *testing.T) {
 	fixture, cookies := visibleWorksFixture(t)
 	profile := int64(4)
-	fixture.workEditor.row = apiserver.WorkEditRow{Monitored: true, ProfileID: &profile, Tags: []string{"Sleep"}}
+	fixture.workEditor.row = apiserver.WorkEditRow{Monitored: true, ProfileID: &profile, Tags: []string{"Sleep"}, RootFolderIDs: []int64{2}}
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/1/edit"))
-	if recorder.Code != http.StatusOK || recorder.Body.String() != "{\"monitored\":true,\"profile_id\":4,\"tags\":[\"Sleep\"]}\n" {
+	if recorder.Code != http.StatusOK || recorder.Body.String() != "{\"monitored\":true,\"profile_id\":4,\"root_folder_ids\":[2],\"tags\":[\"Sleep\"]}\n" {
 		t.Fatalf("get: status %d, body %q", recorder.Code, recorder.Body)
 	}
 

@@ -1695,6 +1695,45 @@ paths:
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/move:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: moveWork
+      tags: [library]
+      summary: Move one work's files to another root folder of its library. Administrator only.
+      description: >-
+        Sonarr's and Radarr's Edit -> root folder: every file of the work on the other roots of the target's
+        libraries moves to the target under the same relative path, through the one move engine (copy, verify,
+        repoint, unlink). All or nothing: `preview: true`, or a plan that refuses any file, persists nothing and
+        `accepted` is false. The work's next file then goes to the target too.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [root_folder_id]
+              properties:
+                root_folder_id: { type: integer, format: int64 }
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: The plan; accepted once the move job is created and enqueued.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrainPlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The work has no file off that root.
+
   /rootfolders/{id}/rename:
     parameters:
       - name: id
@@ -4155,7 +4194,7 @@ paths:
         `category_id` leaves every unit decided but unplaced, since placement
         has nowhere to put anything. Poll `GET /import/sessions/{id}` for
         progress. A retry of an interrupted run resumes the same session
-        rather than starting over. Session revert is not built yet.
+        rather than starting over; POST /import/sessions/{id}/revert undoes it.
       requestBody:
         required: true
         content:
@@ -7450,7 +7489,7 @@ components:
       required: [id, reason, state, files_total, files_done, bytes_total, bytes_done, created_at]
       properties:
         id: { type: integer, format: int64 }
-        reason: { type: string, enum: [RENAME, CATEGORY, REBALANCE, DRAIN] }
+        reason: { type: string, enum: [RENAME, CATEGORY, REBALANCE, DRAIN, MOVE] }
         source_root_id: { type: integer, format: int64 }
         state: { type: string, enum: [PLANNED, RUNNING, PAUSED, DONE, FAILED] }
         files_total: { type: integer, format: int64 }
@@ -9337,6 +9376,11 @@ components:
           description: >-
             The type's editable facets the user set, by facet key (a series' type); empty or absent is the sources'
             value. Saving names only the facets it changes.
+        root_folder_ids:
+          type: array
+          readOnly: true
+          items: { type: integer, format: int64 }
+          description: The root folders holding the work's files; moving it is POST /works/{id}/move.
 
     Wanted:
       type: object

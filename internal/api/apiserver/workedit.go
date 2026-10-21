@@ -37,6 +37,8 @@ type WorkEditRow struct {
 	Tags      []string
 	// Fields are the type's editable facets the user set, by facet key; "" returns one to its sources.
 	Fields map[string]string
+	// RootFolderIDs are the roots holding the work's files; read only.
+	RootFolderIDs []int64
 }
 
 // WorkEditor reads and writes the Edit dialog. Defined here and implemented by the caller.
@@ -110,7 +112,11 @@ func (s *Server) GetWorkEdit(w http.ResponseWriter, r *http.Request, id int64) {
 		s.writeWorkEditError(w, err)
 		return
 	}
-	view := gen.WorkEdit{Monitored: row.Monitored, ProfileId: row.ProfileID, Tags: row.Tags}
+	roots := row.RootFolderIDs
+	if roots == nil {
+		roots = []int64{}
+	}
+	view := gen.WorkEdit{Monitored: row.Monitored, ProfileId: row.ProfileID, Tags: row.Tags, RootFolderIds: &roots}
 	if len(row.Fields) > 0 {
 		view.Fields = &row.Fields
 	}

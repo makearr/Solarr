@@ -30,6 +30,17 @@ type DrainStarter interface {
 	StopDrain(ctx context.Context, rootFolderID int64) error
 }
 
+// ErrNothingToMove means the work has no file off the root it was asked to move to.
+var ErrNothingToMove = errors.New("the work has no files to move to that root folder")
+
+// ErrRootNotInWorkLibrary means a work was asked to move to a root folder none of its libraries use.
+var ErrRootNotInWorkLibrary = errors.New("that root folder is not one of the work's libraries")
+
+// WorkMover moves one work's files onto one root folder of its library (Sonarr's Edit -> root folder).
+type WorkMover interface {
+	StartWorkMove(ctx context.Context, workID, rootFolderID int64, preview bool) (DrainPlanResult, error)
+}
+
 // MoveJobLister reads ADR-51 move jobs.
 type MoveJobLister interface {
 	ListMoveJobs(ctx context.Context, filterReason, filterState string) ([]MoveJobRow, error)
@@ -145,6 +156,37 @@ func (s *Server) DrainRootFolder(w http.ResponseWriter, r *http.Request, id int6
 	preview := body.Preview != nil && *body.Preview
 
 	result, err := s.drainStarter.StartDrain(r.Context(), id, preview)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, drainPlanView(result))
+}
+
+func (s *Server) routeMoveWork(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a work id must be a number")
+		return
+	}
+	s.MoveWork(w, r, id)
+}
+
+// MoveWork moves one work's files to another root folder of its library, administrator only.
+func (s *Server) MoveWork(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.workMover == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "moving a work is not available")
+		return
+	}
+	var body gen.MoveWorkJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxDrainBody)).Decode(&body); err != nil || body.RootFolderId == 0 {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "name the root folder to move to")
+		return
+	}
+	result, err := s.workMover.StartWorkMove(r.Context(), id, body.RootFolderId, body.Preview != nil && *body.Preview)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return

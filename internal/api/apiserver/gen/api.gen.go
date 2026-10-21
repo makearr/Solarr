@@ -454,6 +454,7 @@ const (
 const (
 	MoveJobReasonCATEGORY  MoveJobReason = "CATEGORY"
 	MoveJobReasonDRAIN     MoveJobReason = "DRAIN"
+	MoveJobReasonMOVE      MoveJobReason = "MOVE"
 	MoveJobReasonREBALANCE MoveJobReason = "REBALANCE"
 	MoveJobReasonRENAME    MoveJobReason = "RENAME"
 )
@@ -4457,6 +4458,9 @@ type WorkEdit struct {
 	// ProfileId The album's own quality profile; null is its library's.
 	ProfileId *int64 `json:"profile_id"`
 
+	// RootFolderIds The root folders holding the work's files; moving it is POST /works/{id}/move.
+	RootFolderIds *[]int64 `json:"root_folder_ids,omitempty"`
+
 	// Tags Tags the user assigned, by name.
 	Tags []string `json:"tags"`
 }
@@ -5415,6 +5419,12 @@ type SetWorkMonitoredJSONBody struct {
 	Specials *bool `json:"specials,omitempty"`
 }
 
+// MoveWorkJSONBody defines parameters for MoveWork.
+type MoveWorkJSONBody struct {
+	Preview      *bool `json:"preview,omitempty"`
+	RootFolderId int64 `json:"root_folder_id"`
+}
+
 // SetWorkNumberingJSONBody defines parameters for SetWorkNumbering.
 type SetWorkNumberingJSONBody struct {
 	Basis   string `json:"basis"`
@@ -5748,6 +5758,9 @@ type MergeWorkJSONRequestBody MergeWorkJSONBody
 
 // SetWorkMonitoredJSONRequestBody defines body for SetWorkMonitored for application/json ContentType.
 type SetWorkMonitoredJSONRequestBody SetWorkMonitoredJSONBody
+
+// MoveWorkJSONRequestBody defines body for MoveWork for application/json ContentType.
+type MoveWorkJSONRequestBody MoveWorkJSONBody
 
 // SetWorkNumberingJSONRequestBody defines body for SetWorkNumbering for application/json ContentType.
 type SetWorkNumberingJSONRequestBody SetWorkNumberingJSONBody
@@ -6543,6 +6556,9 @@ type ServerInterface interface {
 	// Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 	// (POST /works/{id}/monitor)
 	SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64)
+	// Move one work's files to another root folder of its library. Administrator only.
+	// (POST /works/{id}/move)
+	MoveWork(w http.ResponseWriter, r *http.Request, id int64)
 	// The lists a work can be numbered by (a series by TheTVDB's DVD or absolute order) and the one it is.
 	// (GET /works/{id}/numbering)
 	GetWorkNumbering(w http.ResponseWriter, r *http.Request, id int64)
@@ -8124,6 +8140,12 @@ func (_ Unimplemented) GetWorkMergeSuggestion(w http.ResponseWriter, r *http.Req
 // Monitor or unmonitor a work, one of its groups, some of its parts, or apply one of its type's monitor options.
 // (POST /works/{id}/monitor)
 func (_ Unimplemented) SetWorkMonitored(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Move one work's files to another root folder of its library. Administrator only.
+// (POST /works/{id}/move)
+func (_ Unimplemented) MoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16719,6 +16741,39 @@ func (siw *ServerInterfaceWrapper) SetWorkMonitored(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// MoveWork operation middleware
+func (siw *ServerInterfaceWrapper) MoveWork(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MoveWork(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetWorkNumbering operation middleware
 func (siw *ServerInterfaceWrapper) GetWorkNumbering(w http.ResponseWriter, r *http.Request) {
 
@@ -17999,6 +18054,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/monitor", wrapper.SetWorkMonitored)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/move", wrapper.MoveWork)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/works/{id}/numbering", wrapper.GetWorkNumbering)

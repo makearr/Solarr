@@ -33,6 +33,40 @@ func (a Drain) StartDrain(ctx context.Context, rootFolderID int64, preview bool)
 	return drainPlanResult(result), nil
 }
 
+// WorkMove satisfies apiserver.WorkMover over drainjob.StartWorkMove.
+type WorkMove struct {
+	Config drainjob.Config
+	Files  drainjob.WorkFiles
+	Works  library.Works
+	Cache  *settings.Cache
+}
+
+func (a WorkMove) StartWorkMove(ctx context.Context, workID, rootFolderID int64, preview bool) (apiserver.DrainPlanResult, error) {
+	mediaType, err := a.Works.MediaTypeOf(ctx, workID)
+	if err != nil {
+		return apiserver.DrainPlanResult{}, err
+	}
+	snapshot := a.Cache.Snapshot()
+	inLibrary := false
+	for _, attachment := range snapshot.CategoryRoots() {
+		category, found := snapshot.Category(attachment.CategoryID)
+		inLibrary = inLibrary || (attachment.RootFolderID == rootFolderID && found && category.MediaType == mediaType)
+	}
+	if !inLibrary {
+		return apiserver.DrainPlanResult{}, apiserver.ErrRootNotInWorkLibrary
+	}
+	result, err := drainjob.StartWorkMove(ctx, a.Config, a.Files, workID, rootFolderID, preview)
+	switch {
+	case errors.Is(err, drainjob.ErrRootFolderNotFound):
+		return apiserver.DrainPlanResult{}, settings.ErrNotFound
+	case errors.Is(err, drainjob.ErrNothingToMove):
+		return apiserver.DrainPlanResult{}, apiserver.ErrNothingToMove
+	case err != nil:
+		return apiserver.DrainPlanResult{}, err
+	}
+	return drainPlanResult(result), nil
+}
+
 // StopDrain clears drain_state and restores accepts_new -- the settings-only
 // half of ADR-51's own "stop draining", not a cancellation of any move job
 // already running (DELETE /moves/{id} is that, once it exists).

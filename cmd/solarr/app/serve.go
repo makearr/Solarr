@@ -664,7 +664,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorksMonitor: p.worksMonitor(),
 		WorkEditor: adapters.WorkEdit{
 			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
-			Settings: p.cache, Facets: adapters.MediaTypes{Registry: p.media}.Facets,
+			Settings: p.cache, Identity: library.NewIdentity(p.library), Facets: adapters.MediaTypes{Registry: p.media}.Facets,
 			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf,
 		},
 		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media},
@@ -786,6 +786,13 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 				MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
 			},
 			Cache: p.cache,
+		},
+		WorkMover: adapters.WorkMove{
+			Config: drainjob.Config{
+				Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),
+				MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
+			},
+			Files: library.NewPhysical(p.library), Works: library.NewWorks(p.library), Cache: p.cache,
 		},
 		VanishedFiles: p.vanishedFiles(),
 		Crossovers: adapters.Crossovers{

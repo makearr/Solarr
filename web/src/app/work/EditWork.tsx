@@ -20,12 +20,13 @@ interface Draft {
   fields: Record<string, string>;
   option: string;
   specials: boolean;
+  rootFolderId: number;
 }
 
 const field = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm";
 
 /** Radarr's and Sonarr's Edit: monitored, a monitor option where the type has them, the work's own quality profile,
- *  its tags and the type's editable fields (a series' type). */
+ *  its tags, the type's editable fields (a series' type) and its root folder, whose files move after a confirmation. */
 export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeInfo | undefined; onClose: () => void }) {
   const queryClient = useQueryClient();
   const edit = useQuery({
@@ -44,6 +45,20 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
       return data;
     },
   });
+  const rootFolders = useQuery({
+    queryKey: ["rootfolders"],
+    queryFn: async () => {
+      const { data, error } = await api.GET("/rootfolders");
+      if (error) throw error;
+      return data;
+    },
+  });
+  const libraryRoots = (rootFolders.data ?? []).filter((root) =>
+    (root.categories ?? []).some((category) => (work.library_ids ?? []).includes(category.id)),
+  );
+  const currentRoot = edit.data?.root_folder_ids?.[0] ?? 0;
+  // The move a changed root folder needs, previewed before anything is saved: Sonarr's "Move files?".
+  const [moving, setMoving] = useState<{ files: number; rootPath: string } | null>(null);
   const editable = (info?.facets ?? []).filter((facet) => facet.editable);
   const [draft, setDraft] = useState<Draft>();
   const form: Draft | undefined =
@@ -55,12 +70,26 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
       fields: Object.fromEntries(editable.map((facet) => [facet.key, edit.data.fields?.[facet.key] ?? ""])),
       option: "",
       specials: false,
+      rootFolderId: currentRoot,
     });
   const change = (next: Partial<Draft>) => form && setDraft({ ...form, ...next });
 
+  const moveTo = (preview: boolean) =>
+    api.POST("/works/{id}/move", { params: { path: { id: work.id } }, body: { root_folder_id: form!.rootFolderId, preview } });
+  const rootChanged = !!form && form.rootFolderId !== 0 && form.rootFolderId !== currentRoot;
+
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (confirmedMove: boolean) => {
       if (!form) return;
+      if (rootChanged && !confirmedMove) {
+        const { data, error } = await moveTo(true);
+        if (error) throw error;
+        const refusal = data.refused[0];
+        if (refusal) throw { detail: refusal.reason };
+        const target = libraryRoots.find((root) => root.id === form.rootFolderId);
+        setMoving({ files: data.files_total, rootPath: target?.path ?? "" });
+        return "confirm";
+      }
       const tags = form.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
       const { error } = await api.PUT("/works/{id}/edit", {
         params: { path: { id: work.id } },
@@ -74,8 +103,13 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
         });
         if (optionError) throw optionError;
       }
+      if (rootChanged) {
+        const { error: moveError } = await moveTo(false);
+        if (moveError) throw moveError;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
+      if (result === "confirm") return;
       void queryClient.invalidateQueries({ queryKey: ["work", work.id] });
       void queryClient.invalidateQueries({ queryKey: ["work-edit", work.id] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -92,9 +126,23 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
           <Button variant="ghost" onClick={onClose}>
             {t("action.cancel")}
           </Button>
-          <Button variant="primary" busy={save.isPending} disabled={!form} onClick={() => save.mutate()}>
-            Save
-          </Button>
+          {moving ? (
+            <>
+              <span className="mr-auto text-sm">
+                Move {moving.files} {moving.files === 1 ? "file" : "files"} to {moving.rootPath}?
+              </span>
+              <Button variant="ghost" onClick={() => setMoving(null)}>
+                Back
+              </Button>
+              <Button variant="primary" busy={save.isPending} busyLabel="Moving…" onClick={() => save.mutate(true)}>
+                Move and save
+              </Button>
+            </>
+          ) : (
+            <Button variant="primary" busy={save.isPending} disabled={!form} onClick={() => save.mutate(false)}>
+              Save
+            </Button>
+          )}
         </>
       }
     >
@@ -156,6 +204,26 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
               </select>
             </label>
           ))}
+          {currentRoot !== 0 && libraryRoots.length > 1 && (
+            <label className="flex flex-col gap-1">
+              <span className="text-xs text-ink-muted">Root folder</span>
+              <select
+                value={form.rootFolderId}
+                onChange={(event) => {
+                  setMoving(null);
+                  change({ rootFolderId: Number(event.target.value) });
+                }}
+                className={field}
+              >
+                {libraryRoots.map((root) => (
+                  <option key={root.id} value={root.id}>
+                    {root.path}
+                  </option>
+                ))}
+              </select>
+              {rootChanged && <span className="text-xs text-ink-muted">Its files move there when you save.</span>}
+            </label>
+          )}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-ink-muted">Tags, separated by commas</span>
             <input value={form.tags} onChange={(event) => change({ tags: event.target.value })} className={field} />

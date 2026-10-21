@@ -158,6 +158,8 @@ type Config struct {
 	// DrainStarter starts and stops ADR-51's own drain. Optional: without
 	// it, DrainRootFolder/StopDrainingRootFolder answer 503.
 	DrainStarter DrainStarter
+	// WorkMover moves one work to another root folder. Optional: without it MoveWork answers 503.
+	WorkMover WorkMover
 	// Franchises are the groups a provider puts works in. Optional: without it every library lists none.
 	Franchises Franchises
 	// Crossovers are events across works and one broadcast listed twice. Optional: without it, 503.
@@ -302,6 +304,7 @@ type Server struct {
 	importInspector         ImportInspector
 	fingerprintRetrier      FingerprintRetrier
 	drainStarter            DrainStarter
+	workMover               WorkMover
 	vanishedFiles           VanishedFiles
 	workMerger              WorkMerger
 	workNumbering           WorkNumbering
@@ -414,6 +417,7 @@ func New(config Config) (*Server, error) {
 		importInspector:         config.ImportInspector,
 		fingerprintRetrier:      config.FingerprintRetrier,
 		drainStarter:            config.DrainStarter,
+		workMover:               config.WorkMover,
 		vanishedFiles:           config.VanishedFiles,
 		workMerger:              config.WorkMerger,
 		workNumbering:           config.WorkNumbering,
@@ -723,6 +727,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/metadata/tv/providers/test", server.TestTVProviders)
 			secured.Post("/cache/clear", server.ClearCache)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
+			secured.Post("/works/{id}/move", server.routeMoveWork)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
 			secured.Get("/moves", server.routeListMoveJobs)
 			secured.Post("/rootfolders/{id}/rename", server.routeRenameRootFolder)

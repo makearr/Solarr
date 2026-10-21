@@ -29,6 +29,8 @@ const (
 	ReasonCategory  Reason = "CATEGORY"
 	ReasonRebalance Reason = "REBALANCE"
 	ReasonDrain     Reason = "DRAIN"
+	// ReasonMove is a person moving one work to another root, Sonarr's and Radarr's Edit -> root folder.
+	ReasonMove Reason = "MOVE"
 )
 
 // FileToMove is one file Plan considers, exactly as the caller already read

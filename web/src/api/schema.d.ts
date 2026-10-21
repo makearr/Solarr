@@ -1162,6 +1162,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move one work's files to another root folder of its library. Administrator only.
+         * @description Sonarr's and Radarr's Edit -> root folder: every file of the work on the other roots of the target's libraries moves to the target under the same relative path, through the one move engine (copy, verify, repoint, unlink). All or nothing: `preview: true`, or a plan that refuses any file, persists nothing and `accepted` is false. The work's next file then goes to the target too.
+         */
+        post: operations["moveWork"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rootfolders/{id}/rename": {
         parameters: {
             query?: never;
@@ -2611,7 +2633,7 @@ export interface paths {
         put?: never;
         /**
          * Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
-         * @description Enqueues `import.inspect` (WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/ SHAPE/DECIDE) over `source_path`. A unit whose confidence clears the threshold is placed immediately when `category_id` is given: the file is placed into that category's own library (reflink/hardlink/copy, never the source touched) and its work/edition resolved -- `work_id`/ `edition_id` on the unit becoming non-null is what "actually in the library" means, not the `COMMIT` decision alone. Omitting `category_id` leaves every unit decided but unplaced, since placement has nowhere to put anything. Poll `GET /import/sessions/{id}` for progress. A retry of an interrupted run resumes the same session rather than starting over. Session revert is not built yet.
+         * @description Enqueues `import.inspect` (WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/ SHAPE/DECIDE) over `source_path`. A unit whose confidence clears the threshold is placed immediately when `category_id` is given: the file is placed into that category's own library (reflink/hardlink/copy, never the source touched) and its work/edition resolved -- `work_id`/ `edition_id` on the unit becoming non-null is what "actually in the library" means, not the `COMMIT` decision alone. Omitting `category_id` leaves every unit decided but unplaced, since placement has nowhere to put anything. Poll `GET /import/sessions/{id}` for progress. A retry of an interrupted run resumes the same session rather than starting over; POST /import/sessions/{id}/revert undoes it.
          */
         post: operations["inspectImport"];
         delete?: never;
@@ -4711,7 +4733,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            reason: "RENAME" | "CATEGORY" | "REBALANCE" | "DRAIN";
+            reason: "RENAME" | "CATEGORY" | "REBALANCE" | "DRAIN" | "MOVE";
             /** Format: int64 */
             source_root_id?: number;
             /** @enum {string} */
@@ -6324,6 +6346,8 @@ export interface components {
             fields?: {
                 [key: string]: string;
             };
+            /** @description The root folders holding the work's files; moving it is POST /works/{id}/move. */
+            readonly root_folder_ids?: number[];
         };
         /** @description The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge. */
         Wanted: {
@@ -9511,6 +9535,43 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    moveWork: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    root_folder_id: number;
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description The plan; accepted once the move job is created and enqueued. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrainPlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The work has no file off that root. */
+            409: components["responses"]["Problem"];
         };
     };
     renameRootFolder: {

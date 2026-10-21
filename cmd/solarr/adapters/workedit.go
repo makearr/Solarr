@@ -20,6 +20,8 @@ type WorkEdit struct {
 	Desired  library.Desired
 	People   library.People
 	Settings *settings.Cache
+	// Identity answers which roots hold a work's files.
+	Identity library.Identity
 	// Facets answers a media type's facets; the editable ones are the dialog's fields. Nil edits none.
 	Facets func(mediaType string) []media.Facet
 	// Refreshing answers a media type's refresh, for a field the type derives other data from; nil refreshes nothing.
@@ -46,7 +48,16 @@ func (a WorkEdit) GetWorkEdit(ctx context.Context, workID int64) (apiserver.Work
 	if err != nil {
 		return apiserver.WorkEditRow{}, err
 	}
-	row := apiserver.WorkEditRow{Tags: []string{}}
+	row := apiserver.WorkEditRow{Tags: []string{}, RootFolderIDs: []int64{}}
+	roots, err := a.Identity.WorkFileRoots(ctx, workID)
+	if err != nil {
+		return apiserver.WorkEditRow{}, err
+	}
+	for _, root := range roots {
+		if !slices.Contains(row.RootFolderIDs, root.RootFolderID) {
+			row.RootFolderIDs = append(row.RootFolderIDs, root.RootFolderID)
+		}
+	}
 	if editable := a.editable(mediaType); len(editable) > 0 {
 		manual, err := a.Monitor.Works.ManualFields(ctx, workID)
 		if err != nil {
