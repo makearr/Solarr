@@ -1,6 +1,7 @@
 import { X } from "lucide-react";
 
 import { LANGUAGES, languageName } from "@/lib/languages";
+import { labelStyle } from "@/ui/form";
 
 /** A set of languages chosen from a list: the chosen ones as chips, the rest in a drop-down. */
 export function LanguagePicker({
@@ -16,7 +17,7 @@ export function LanguagePicker({
 }) {
   const remaining = LANGUAGES.filter((language) => !value.includes(language.code));
   return (
-    <div className="flex flex-col gap-1 text-xs text-ink-muted">
+    <div className={labelStyle}>
       <span>{label}</span>
       <div className="flex flex-wrap items-center gap-1">
         {value.map((code) => (

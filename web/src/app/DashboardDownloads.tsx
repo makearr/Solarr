@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 
 import { appendSample, sparkPath, totalSpeed, type SpeedSample } from "@/lib/speedHistory";
+import { labelStyle } from "@/ui/form";
 
 import { formatBytes, formatDuration, ProgressBar, statusLabel, useQueue } from "./Queue";
 
@@ -49,7 +50,7 @@ export function DashboardDownloads() {
         <SpeedGraph samples={samples} />
       </div>
 
-      <ul className="flex flex-col gap-1 text-xs text-ink-muted">
+      <ul className={labelStyle}>
         {queue.data.clients.map((client) => (
           <li key={client.id} className="flex flex-wrap gap-x-2">
             <span className="text-ink">{client.name}</span>

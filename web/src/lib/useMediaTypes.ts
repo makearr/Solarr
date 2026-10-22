@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 export type MediaTypeInfo = components["schemas"]["MediaTypeInfo"];
@@ -13,11 +13,7 @@ export function useMediaTypes(): readonly MediaTypeInfo[] {
   const mediaTypes = useQuery({
     queryKey: ["mediaTypes"],
     staleTime: Infinity,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/mediatypes");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/mediatypes")),
   });
   return mediaTypes.data ?? NONE;
 }

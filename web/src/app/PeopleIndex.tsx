@@ -3,7 +3,7 @@ import { useMemo, useRef } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { User } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import type { AlbumStatus } from "@/lib/albumStatus";
 import { remoteImage } from "@/lib/remoteImage";
@@ -108,7 +108,7 @@ export function PeopleIndex() {
       itemsPerRow: mode === "poster" ? metrics.columns : 1,
       fetchPage: async ({ cursor, query, signal }) => {
         const filters = query.filters;
-        const { data, error } = await api.GET("/people", {
+        return ok(api.GET("/people", {
           params: {
             query: {
               category: categoryId ? Number(categoryId) : undefined,
@@ -124,9 +124,7 @@ export function PeopleIndex() {
             },
           },
           signal,
-        });
-        if (error) throw error;
-        return data;
+        }));
       },
     },
     view,

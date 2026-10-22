@@ -17,6 +17,13 @@ export const api = createClient<paths>({
   credentials: "same-origin",
 });
 
+/** ok answers a call's data or throws its problem: what every query and mutation wants of a response. */
+export async function ok<T>(call: Promise<{ data?: T; error?: unknown }>): Promise<T> {
+  const { data, error } = await call;
+  if (error) throw error;
+  return data as T;
+}
+
 // The stable part of the RFC 7807 contract: callers branch on this.
 export type ProblemType =
   paths["/me"]["get"]["responses"][401]["content"]["application/problem+json"]["type"];

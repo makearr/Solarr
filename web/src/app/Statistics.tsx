@@ -1,7 +1,7 @@
 import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { vocabularyOf } from "@/lib/i18n";
 import { useLibrary } from "@/lib/useLibrary";
@@ -110,11 +110,7 @@ export function Statistics() {
   const stats = useQuery({
     queryKey: ["statistics", categoryId],
     enabled: categoryId !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/statistics", { params: { path: { id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/statistics", { params: { path: { id: Number(categoryId) } } })),
   });
   const data = stats.data;
   const library = useLibrary(categoryId ?? "");

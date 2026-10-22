@@ -2,8 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, Download, File, Folder, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useCategories, useDownloadFolders, useImportSettings } from "@/lib/resources";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { TransferLadderEditor, type TransferMethod } from "./Import";
 
@@ -16,30 +19,15 @@ export function DownloadFolders() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
 
-  const folders = useQuery({
-    queryKey: ["downloadfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/downloadfolders");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const folders = useDownloadFolders();
 
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const categories = useCategories();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["downloadfolders"] });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/downloadfolders/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/downloadfolders/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -103,25 +91,17 @@ function DownloadFolderCard({
   busy: boolean;
 }) {
   const queryClient = useQueryClient();
-  const importSettings = useQuery({
-    queryKey: ["import-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const importSettings = useImportSettings();
   const update = useMutation({
     mutationFn: async (change: Partial<Pick<DownloadFolder, "category_id" | "watch" | "transfer_ladder">>) => {
       const next = { ...folder, ...change };
-      const { error } = await api.PATCH("/downloadfolders/{id}", {
+      await ok(api.PATCH("/downloadfolders/{id}", {
         params: { path: { id: folder.id } },
         body: {
           label: next.label, category_id: next.category_id ?? undefined, watch: next.watch,
           transfer_ladder: next.transfer_ladder ?? undefined,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloadfolders"] }),
   });
@@ -130,13 +110,9 @@ function DownloadFolderCard({
   const contents = useQuery({
     queryKey: ["downloadfolders", folder.id, "contents"],
     enabled: expanded,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/downloadfolders/{id}/contents", {
-        params: { path: { id: folder.id } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/downloadfolders/{id}/contents", {
+      params: { path: { id: folder.id } },
+    })),
   });
 
   return (
@@ -278,14 +254,13 @@ function AddDownloadFolder({
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/downloadfolders", {
+      await ok(api.POST("/downloadfolders", {
         body: {
           path,
           label: label || undefined,
           category_id: categoryId ? Number(categoryId) : undefined,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       setPath("");
@@ -323,7 +298,7 @@ function AddDownloadFolder({
           onChange={(event) => setLabel(event.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
           <option value="">All libraries</option>
@@ -334,14 +309,13 @@ function AddDownloadFolder({
           ))}
         </select>
       </label>
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={!path.trim() || create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {create.isPending ? "Adding…" : "Watch folder"}
-      </button>
+      </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
           That path could not be used -- check it exists and is mounted inside the container.
@@ -350,7 +324,3 @@ function AddDownloadFolder({
     </form>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

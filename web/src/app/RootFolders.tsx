@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { HardDrive, Pencil, Plus, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useCategories, useRootFolders } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { EditCategoryForm } from "./Categories";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 import { KindSelect } from "./LibraryKindSelect";
 import { MoveJobList, RootMoveControls } from "./Moves";
 
@@ -23,43 +26,27 @@ const NEW_LIBRARY = "__new__";
  *  not assumed" (section 11.7). */
 export function RootFolders() {
   const queryClient = useQueryClient();
-  const roots = useQuery({
-    queryKey: ["rootfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/rootfolders");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const roots = useRootFolders();
 
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const categories = useCategories();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["rootfolders"] });
 
   const attachCategory = useMutation({
     mutationFn: async (args: { rootFolderId: number; categoryId: number }) => {
-      const { error } = await api.POST("/categories/{id}/rootfolders", {
+      await ok(api.POST("/categories/{id}/rootfolders", {
         params: { path: { id: args.categoryId } },
         body: { root_folder_id: args.rootFolderId },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const detachCategory = useMutation({
     mutationFn: async (args: { rootFolderId: number; categoryId: number }) => {
-      const { error } = await api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
+      await ok(api.DELETE("/categories/{id}/rootfolders/{rootFolderId}", {
         params: { path: { id: args.categoryId, rootFolderId: args.rootFolderId } },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
@@ -92,22 +79,20 @@ export function RootFolders() {
 
   const setPolicy = useMutation({
     mutationFn: async (args: { id: number; readOnly: boolean; allowRename: boolean; minFreeBytes: number }) => {
-      const { error } = await api.PATCH("/rootfolders/{id}", {
+      await ok(api.PATCH("/rootfolders/{id}", {
         params: { path: { id: args.id } },
         body: { read_only: args.readOnly, allow_rename: args.allowRename, min_free_bytes: args.minFreeBytes },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const setOnline = useMutation({
     mutationFn: async (args: { id: number; online: boolean }) => {
-      const { error } = await api.PATCH("/rootfolders/{id}/online", {
+      await ok(api.PATCH("/rootfolders/{id}/online", {
         params: { path: { id: args.id } },
         body: { online: args.online },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
@@ -116,8 +101,7 @@ export function RootFolders() {
   // from every category first (settings.ErrInUse, via the general handler).
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/rootfolders/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/rootfolders/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -672,7 +656,7 @@ function AddRootFolder({
               }}
             />
           </label>
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             Media type
             <select
               className={inputStyle}
@@ -694,16 +678,14 @@ function AddRootFolder({
           <KindSelect mediaType={newLibraryMediaType} value={newLibraryKind} onChange={setNewLibraryKind} />
         </>
       )}
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={!ready || create.isPending}
-        className="flex items-center gap-1 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink
-                   disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                   focus-visible:outline-accent"
       >
         <Plus aria-hidden className="size-3.5" />
         {create.isPending ? "Adding…" : "Add root folder"}
-      </button>
+      </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
           That could not be added -- check the path exists and is mounted inside the container,
@@ -721,8 +703,7 @@ function VanishedHeld({ root }: { root: RootFolder }) {
   const [confirming, setConfirming] = useState(false);
   const accept = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/rootfolders/{id}/vanished/accept", { params: { path: { id: root.id } } });
-      if (error) throw error;
+      await ok(api.POST("/rootfolders/{id}/vanished/accept", { params: { path: { id: root.id } } }));
     },
     onSuccess: () => {
       setConfirming(false);
@@ -788,10 +769,6 @@ function formatBytes(bytes: number): string {
   const value = bytes / 1024 ** exponent;
   return `${value >= 10 || exponent === 0 ? Math.round(value) : value.toFixed(1)} ${units[exponent]}`;
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 function MoveToLibrary({
   from,

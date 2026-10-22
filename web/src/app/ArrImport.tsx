@@ -2,8 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useCategories } from "@/lib/resources";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { ArrConnectionTools } from "./ArrConnectionTools";
 import { ArrSyncOptions } from "./ArrSyncOptions";
@@ -25,28 +28,16 @@ export function ArrImport() {
 
   const instances = useQuery({
     queryKey: ["arr-instances"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/arr/instances");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/arr/instances")),
   });
 
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const categories = useCategories();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["arr-instances"] });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/arr/instances/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/arr/instances/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -236,11 +227,7 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
   const queryClient = useQueryClient();
   const runs = useQuery({
     queryKey: ["arr-imports", instanceId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/arr/imports", { params: { query: { instance_id: instanceId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/arr/imports", { params: { query: { instance_id: instanceId } } })),
     // Sync starts in the background and can take minutes over a real
     // library (POST /arr/instances/{id}/sync's own doc comment) -- poll
     // while anything is still RUNNING, stop once nothing is.
@@ -250,8 +237,7 @@ function InstanceHistory({ instanceId }: { instanceId: number }) {
 
   const revert = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.POST("/arr/imports/{id}/revert", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.POST("/arr/imports/{id}/revert", { params: { path: { id } } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["arr-imports", instanceId] }),
   });
@@ -309,7 +295,7 @@ function AddInstance({
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/arr/instances", {
+      await ok(api.POST("/arr/instances", {
         body: {
           app,
           name,
@@ -318,8 +304,7 @@ function AddInstance({
           category_id: categoryId ? Number(categoryId) : undefined,
           enabled: true,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       setName("");
@@ -338,7 +323,7 @@ function AddInstance({
         create.mutate();
       }}
     >
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         App
         <select className={inputStyle} value={app} onChange={(event) => setApp(event.target.value as ArrApp)}>
           {APPS.map((value) => (
@@ -378,7 +363,7 @@ function AddInstance({
           onChange={(event) => setApiKey(event.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Library
         <select className={inputStyle} value={categoryId} onChange={(event) => setCategoryId(event.target.value)}>
           <option value="">Match by root folder path</option>
@@ -389,21 +374,16 @@ function AddInstance({
           ))}
         </select>
       </label>
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={!name.trim() || !baseUrl.trim() || !apiKey.trim() || create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {create.isPending ? "Connecting…" : "Connect"}
-      </button>
+      </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">That connection could not be created.</p>
       )}
     </form>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

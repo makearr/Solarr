@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, type Vocabulary } from "@/lib/i18n";
 import { useIsAdministrator } from "@/lib/useAdministrator";
@@ -32,40 +32,26 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
   const candidates = useQuery({
     queryKey: ["work", work.id, "candidates", query],
     enabled: group !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}/candidates", { params: { path: { id: work.id }, query } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/{id}/candidates", { params: { path: { id: work.id }, query } })),
   });
   const changed = () => void queryClient.invalidateQueries({ queryKey: ["work", work.id] });
   const search = useMutation({
-    mutationFn: async (terms?: Record<string, string>) => {
-      const { data, error } = await api.POST("/works/{id}/search", { params: { path: { id: work.id }, query }, body: terms });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (terms?: Record<string, string>) => ok(api.POST("/works/{id}/search", { params: { path: { id: work.id }, query }, body: terms })),
     onSuccess: changed,
   });
   const grab = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/works/{id}/grab", { params: { path: { id: work.id }, query } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/works/{id}/grab", { params: { path: { id: work.id }, query } })),
     onSuccess: changed,
   });
   const send = useMutation({
     mutationFn: async (decisionId: number) => {
-      const { error } = await api.POST("/works/{id}/candidates/{decisionId}/send", { params: { path: { id: work.id, decisionId }, query } });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/candidates/{decisionId}/send", { params: { path: { id: work.id, decisionId }, query } }));
     },
     onSuccess: changed,
   });
   const blocklist = useMutation({
     mutationFn: async (decisionId: number) => {
-      const { error } = await api.POST("/works/{id}/candidates/{decisionId}/blocklist", { params: { path: { id: work.id, decisionId }, query } });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/candidates/{decisionId}/blocklist", { params: { path: { id: work.id, decisionId }, query } }));
     },
     onSuccess: changed,
   });

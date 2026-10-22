@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useLanguageProfiles } from "@/lib/resources";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
 import { Card } from "./SettingsCard";
@@ -21,21 +24,13 @@ export function LanguageProfiles() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
 
-  const profiles = useQuery({
-    queryKey: ["languageProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/languageprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const profiles = useLanguageProfiles();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["languageProfiles"] });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/languageprofiles/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/languageprofiles/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -186,7 +181,7 @@ function LanguageProfileForm({
         save.mutate();
       }}
     >
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Name
         <input
           className={inputStyle}
@@ -226,14 +221,13 @@ function LanguageProfileForm({
         </p>
       )}
       <div className="flex gap-2">
-        <button
+        <Button
+          variant="primary"
           type="submit"
           disabled={!name.trim() || save.isPending}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={onCancel}
@@ -247,7 +241,3 @@ function LanguageProfileForm({
     </form>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 type UnprobedFile = components["schemas"]["UnprobedFile"];
@@ -20,11 +20,7 @@ type CategoryOfflineFiles = components["schemas"]["CategoryOfflineFiles"];
 export function LibraryHealth() {
   const health = useQuery({
     queryKey: ["library-health"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/library/health");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/library/health")),
   });
 
   if (health.isLoading) return <Placeholder>Loading…</Placeholder>;

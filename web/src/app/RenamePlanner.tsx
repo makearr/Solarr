@@ -2,8 +2,9 @@ import { type ReactNode, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { Button } from "@/ui/Button";
 
 type LibraryRenamePlan = components["schemas"]["LibraryRenamePlan"];
 
@@ -23,14 +24,10 @@ export function RenamePlanner({
 }) {
   const [plan, setPlan] = useState<LibraryRenamePlan | undefined>();
   const run = useMutation({
-    mutationFn: async (preview: boolean) => {
-      const { data, error } = await api.POST("/categories/{id}/rename", {
-        params: { path: { id: categoryId } },
-        body: { preview, work_id: workId },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (preview: boolean) => ok(api.POST("/categories/{id}/rename", {
+      params: { path: { id: categoryId } },
+      body: { preview, work_id: workId },
+    })),
     onSuccess: (data) => setPlan(data),
   });
 
@@ -87,14 +84,14 @@ export function RenamePlanner({
             ))}
           </ul>
           <div>
-            <button
+            <Button
+              variant="primary"
               type="button"
               disabled={run.isPending}
               onClick={() => run.mutate(false)}
-              className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
             >
               {run.isPending && !run.variables ? "Starting…" : `Rename ${moves.length} ${moves.length === 1 ? "file" : "files"}`}
-            </button>
+            </Button>
           </div>
         </>
       )}

@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { albumStatusLabel } from "@/lib/albumStatus";
 import { t, vocabularyOf } from "@/lib/i18n";
@@ -155,23 +155,19 @@ export function WorkIndex() {
         : view === "overview" ? OVERVIEW_ROW_HEIGHT : narrow ? CARD_HEIGHT : TABLE_ROW_HEIGHT,
       itemsPerRow: isPoster ? metrics.columns : 1,
       idOf: (work) => work.id,
-      fetchPage: async ({ cursor, query, signal }) => {
-        const { data, error } = await api.GET("/works", {
-          params: {
-            query: {
-              cursor, limit: 100, category_id: Number(categoryId),
-              fresh: query.filters.fresh === "1" ? true : undefined,
-              where: whereWithTitle(query.filters.where, query.filters.q),
-              sort: query.sort ?? defaultSort,
-              dir: query.direction === "desc" ? "desc" : undefined,
-              from: query.filters.from || undefined,
-            },
+      fetchPage: ({ cursor, query, signal }) => ok(api.GET("/works", {
+        params: {
+          query: {
+            cursor, limit: 100, category_id: Number(categoryId),
+            fresh: query.filters.fresh === "1" ? true : undefined,
+            where: whereWithTitle(query.filters.where, query.filters.q),
+            sort: query.sort ?? defaultSort,
+            dir: query.direction === "desc" ? "desc" : undefined,
+            from: query.filters.from || undefined,
           },
-          signal,
-        });
-        if (error) throw error;
-        return data;
-      },
+        },
+        signal,
+      })),
     },
     listView,
   );
@@ -373,13 +369,11 @@ function BulkBar({
   const apply = useMutation({
     mutationFn: async () => {
       if (confirm?.kind === "option") {
-        const { error } = await api.POST("/works/bulk/edit", { body: { ...selectionBody(request), monitor_option: confirm.option } });
-        if (error) throw error;
+        await ok(api.POST("/works/bulk/edit", { body: { ...selectionBody(request), monitor_option: confirm.option } }));
         return;
       }
       if (confirm?.kind === "monitor") {
-        const { error } = await api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored: confirm.monitored } });
-        if (error) throw error;
+        await ok(api.POST("/works/bulk/monitor", { body: { ...selectionBody(request), monitored: confirm.monitored } }));
         return;
       }
       let failed = 0;
@@ -482,16 +476,11 @@ function Exclusions({ mediaType, words }: { mediaType: string | undefined; words
     queryKey: ["work-exclusions", mediaType],
     enabled: administrator && mediaType !== undefined,
     retry: false,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/exclusions", { params: { query: { media_type: mediaType ?? "" } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/exclusions", { params: { query: { media_type: mediaType ?? "" } } })),
   });
   const allow = useMutation({
     mutationFn: async (entry: { provider: string; external_id: string }) => {
-      const { error } = await api.DELETE("/works/exclusions", { params: { query: { media_type: mediaType ?? "", ...entry } } });
-      if (error) throw error;
+      await ok(api.DELETE("/works/exclusions", { params: { query: { media_type: mediaType ?? "", ...entry } } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["work-exclusions", mediaType] }),
   });

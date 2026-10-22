@@ -2,9 +2,12 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { joinCredentials } from "@/lib/downloadCredentials";
+import { useDownloadFolders } from "@/lib/resources";
 import type { components } from "@/api/schema";
+import { Button } from "@/ui/Button";
+import { inputStyle } from "@/ui/form";
 
 type Downloader = components["schemas"]["Downloader"];
 
@@ -19,33 +22,27 @@ export function Downloaders() {
 
   const downloaders = useQuery({
     queryKey: ["downloaders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/downloaders");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/downloaders")),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["downloaders"] });
 
   const setEnabled = useMutation({
     mutationFn: async (args: { downloader: Downloader; enabled: boolean }) => {
-      const { error } = await api.PATCH("/downloaders/{id}", {
+      await ok(api.PATCH("/downloaders/{id}", {
         params: { path: { id: args.downloader.id } },
         body: {
           name: args.downloader.name, impl: args.downloader.impl, base_url: args.downloader.base_url,
           protocol: args.downloader.protocol, enabled: args.enabled,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/downloaders/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/downloaders/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -202,13 +199,9 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const [localFolder, setLocalFolder] = useState("");
 
   const test = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/downloaders/test", {
-        body: { impl: kind, base_url: baseUrl, credentials: secret || undefined, options: { category: category || undefined } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/downloaders/test", {
+      body: { impl: kind, base_url: baseUrl, credentials: secret || undefined, options: { category: category || undefined } },
+    })),
     onSuccess: (result) => setLocalFolder(result.download_folder ?? ""),
   });
   const reported = test.data?.ok ? (test.data.download_folder ?? "") : "";
@@ -349,14 +342,13 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         >
           {test.isPending ? "Testing…" : "Test"}
         </button>
-        <button
+        <Button
+          variant="primary"
           type="submit"
           disabled={!name.trim() || !baseUrl.trim() || create.isPending}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {create.isPending ? "Adding…" : "Add"}
-        </button>
+        </Button>
       </div>
       {create.isError && (
         <p className="text-xs text-danger">{(create.error as Error).message || "The client could not be added."}</p>
@@ -472,14 +464,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   // The folder this client's finished downloads are in, as Solarr sees it, becomes a download folder (a client added
   // before the folder was a step of adding it has none).
   const folderPath = localPath || remotePath;
-  const folders = useQuery({
-    queryKey: ["downloadfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/downloadfolders");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const folders = useDownloadFolders();
   const queryClient = useQueryClient();
   const hasFolder = folderPath !== "" && (folders.data ?? []).some((folder) => folder.path.replace(/\/$/, "") === folderPath.replace(/\/$/, ""));
   const addFolder = useMutation({
@@ -498,7 +483,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
         });
         if (changed.error) throw changed.error;
       }
-      const { error } = await api.PATCH("/downloaders/{id}", {
+      await ok(api.PATCH("/downloaders/{id}", {
         params: { path: { id: downloader.id } },
         body: {
           name: downloader.name, impl: downloader.impl, base_url: downloader.base_url, protocol: downloader.protocol,
@@ -512,8 +497,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
             stall_cleanup: stall,
           },
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: onDone,
   });
@@ -643,7 +627,3 @@ function StallFields({ stall, onChange }: { stall: StallCleanup; onChange: (stal
     </fieldset>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

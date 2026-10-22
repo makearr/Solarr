@@ -4,11 +4,12 @@ import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, ListFilter, Search } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCanRequest } from "@/lib/useLibraryPermission";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { vocabularyOf } from "@/lib/i18n";
+import { useLibraries } from "@/lib/resources";
 
 import { InteractiveSearch } from "../InteractiveSearch";
 import { grabNote } from "./grabNote";
@@ -75,30 +76,19 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
 
   const works = useQuery({
     queryKey: ["wanted", categoryId, view, sort, dir, size, cursors[page]],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works", {
-        params: {
-          query: {
-            cursor: cursors[page], limit: size, sort, dir,
-            wanted: view === "missing", cutoff_unmet: view === "cutoff",
-            category_id: categoryId ? Number(categoryId) : undefined,
-          },
+    queryFn: () => ok(api.GET("/works", {
+      params: {
+        query: {
+          cursor: cursors[page], limit: size, sort, dir,
+          wanted: view === "missing", cutoff_unmet: view === "cutoff",
+          category_id: categoryId ? Number(categoryId) : undefined,
         },
-      });
-      if (error) throw error;
-      return data;
-    },
+      },
+    })),
   });
 
   // The total comes from the library's counter, as every count does (section 21.12).
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   const total =
     view === "missing" ? libraries.data?.find((library) => String(library.id) === categoryId)?.wanted : undefined;
   const pages = total === undefined ? undefined : Math.max(1, Math.ceil(total / size));
@@ -112,11 +102,7 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
 
   const [rowResult, setRowResult] = useState<Record<number, string>>({});
   const grab = useMutation({
-    mutationFn: async (workId: number) => {
-      const { data, error } = await api.POST("/works/{id}/grab", { params: { path: { id: workId } } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (workId: number) => ok(api.POST("/works/{id}/grab", { params: { path: { id: workId } } })),
     onMutate: (workId) => setRowResult((held) => ({ ...held, [workId]: "Searching…" })),
     onSuccess: (data, workId) => {
       const message = grabNote(data);
@@ -130,12 +116,10 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
   const searchLibrary = useMutation({
     mutationFn: async (workIds?: number[]) => {
       if (!categoryId) return undefined;
-      const { data, error } = await api.POST("/categories/{id}/search", {
+      return ok(api.POST("/categories/{id}/search", {
         params: { path: { id: Number(categoryId) } },
         body: workIds ? { work_ids: workIds } : view === "cutoff" ? { cutoff_unmet: true } : undefined,
-      });
-      if (error) throw error;
-      return data;
+      }));
     },
   });
 

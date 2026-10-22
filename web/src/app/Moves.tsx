@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { Button } from "@/ui/Button";
 
 type RootFolder = components["schemas"]["RootFolder"];
 type DrainPlan = components["schemas"]["DrainPlan"];
@@ -40,14 +41,10 @@ export function RootMoveControls({ root }: { root: RootFolder }) {
   });
 
   const commit = useMutation({
-    mutationFn: async (action: "drain" | "rename") => {
-      const { data, error } = await api.POST(endpoint(action), {
-        params: { path: { id: root.id } },
-        body: { preview: false },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (action: "drain" | "rename") => ok(api.POST(endpoint(action), {
+      params: { path: { id: root.id } },
+      body: { preview: false },
+    })),
     onSuccess: (data) => {
       setPlan(data);
       queryClient.invalidateQueries({ queryKey: ["rootfolders"] });
@@ -57,10 +54,9 @@ export function RootMoveControls({ root }: { root: RootFolder }) {
 
   const stop = useMutation({
     mutationFn: async () => {
-      const { error } = await api.DELETE("/rootfolders/{id}/drain", {
+      await ok(api.DELETE("/rootfolders/{id}/drain", {
         params: { path: { id: root.id } },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       setPlan(null);
@@ -205,15 +201,14 @@ function DrainPreview({
           {plan.files_total} files total, {formatBytes(plan.bytes_total)}
         </span>
         <span className="flex-1" />
-        <button
+        <Button
+          variant="primary"
           type="button"
           onClick={onCommit}
           disabled={committing}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {committing ? "Starting…" : actionLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -222,11 +217,7 @@ function DrainPreview({
 export function MoveJobList() {
   const jobs = useQuery({
     queryKey: ["move-jobs"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/moves");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/moves")),
     refetchInterval: 5000,
   });
 

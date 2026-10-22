@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 const LEVELS = ["", "debug", "info", "warn", "error"] as const;
@@ -17,19 +17,15 @@ export function Logs() {
 
   const records = useQuery({
     queryKey: ["logs", level, debounced],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/system/logs", {
-        params: {
-          query: {
-            ...(level === "" ? {} : { level }),
-            ...(debounced === "" ? {} : { q: debounced }),
-            limit: 500,
-          },
+    queryFn: () => ok(api.GET("/system/logs", {
+      params: {
+        query: {
+          ...(level === "" ? {} : { level }),
+          ...(debounced === "" ? {} : { q: debounced }),
+          limit: 500,
         },
-      });
-      if (error) throw error;
-      return data;
-    },
+      },
+    })),
     refetchInterval: 5000,
   });
 

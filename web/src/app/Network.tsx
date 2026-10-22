@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card, SaveBar, Toggle } from "./SettingsCard";
 
@@ -22,17 +23,12 @@ export function Network() {
   const queryClient = useQueryClient();
   const network = useQuery({
     queryKey: ["network"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/network");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/network")),
   });
 
   const update = useMutation({
     mutationFn: async (body: NetworkUpdate) => {
-      const { error } = await api.PATCH("/network", { body });
-      if (error) throw error;
+      await ok(api.PATCH("/network", { body }));
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["network"] }),
   });
@@ -130,7 +126,7 @@ function NetworkForm({
         toggle={<Toggle label="Use a proxy" checked={proxyEnabled} disabled={busy} onChange={setProxyEnabled} />}
       >
         <div className={`flex flex-col gap-3 ${proxyEnabled ? "" : "opacity-60"}`}>
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             Proxy address
             <input
               type="text"
@@ -142,7 +138,7 @@ function NetworkForm({
             />
             <span>http, https or socks5, with a port.</span>
           </label>
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             Bypass
             <textarea
               rows={4}
@@ -187,7 +183,3 @@ function splitLines(value: string): string[] {
     .map((line) => line.trim())
     .filter((line) => line !== "");
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

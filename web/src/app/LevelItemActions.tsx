@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 
 import { grabNote } from "./work/grabNote";
 
@@ -31,8 +31,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
         if (error) throw error;
         return grabNote(data);
       }
-      const { error } = await api.POST("/people/{id}/search", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.POST("/people/{id}/search", { params: { path: { id } } }));
       return "Searching missing albums";
     },
     onMutate: () => setNote("Searching…"),
@@ -41,8 +40,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
   });
   const monitor = useMutation({
     mutationFn: async (next: boolean) => {
-      const { error } = await api.POST("/works/{id}/monitor", { params: { path: { id } }, body: { monitored: next } });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/monitor", { params: { path: { id } }, body: { monitored: next } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("library-level") }),
     onError: () => setNote("Monitoring could not be changed"),

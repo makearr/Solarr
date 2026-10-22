@@ -3,7 +3,7 @@ import { Link, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { API_PREFIX, api } from "@/api/client";
+import { api, API_PREFIX, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useNarrow } from "@/list/useNarrow";
 import { addDays, DayView, DaysView, entryKey, entryTarget, isoDate, MonthView, parseIso, weekStart } from "./CalendarViews";
@@ -149,25 +149,16 @@ function FeedPanel() {
   const [copied, setCopied] = useState(false);
   const feed = useQuery({
     queryKey: ["calendarFeed"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me/calendar-feed");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me/calendar-feed")),
   });
   const update = (data: { token?: string }) => queryClient.setQueryData(["calendarFeed"], data);
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/me/calendar-feed");
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/me/calendar-feed")),
     onSuccess: update,
   });
   const revoke = useMutation({
     mutationFn: async () => {
-      const { error } = await api.DELETE("/me/calendar-feed");
-      if (error) throw error;
+      await ok(api.DELETE("/me/calendar-feed"));
     },
     onSuccess: () => update({}),
   });
@@ -249,13 +240,9 @@ function YearView({ year }: { year: number }) {
   const [picked, setPicked] = useState<Pick | undefined>();
   const dates = useQuery({
     queryKey: ["calendar", "dates", year],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/calendar/dates", {
-        params: { query: { from: String(year), to: `${year}-12-31` } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/calendar/dates", {
+      params: { query: { from: String(year), to: `${year}-12-31` } },
+    })),
   });
 
   const counts = new Map<string, number>();
@@ -400,13 +387,9 @@ function MonthSquare({
 function PickedReleases({ pick, onClose }: { pick: Pick; onClose: () => void }) {
   const entries = useQuery({
     queryKey: ["calendar", pick.from, pick.to],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/calendar", {
-        params: { query: { from: pick.from, to: pick.to, limit: 500 } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/calendar", {
+      params: { query: { from: pick.from, to: pick.to, limit: 500 } },
+    })),
   });
   return (
     <section className="flex flex-col gap-2">
@@ -430,13 +413,9 @@ function ListView() {
 
   const entries = useQuery({
     queryKey: ["calendar", from, to],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/calendar", {
-        params: { query: { from, to, limit: 300 } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/calendar", {
+      params: { query: { from, to, limit: 300 } },
+    })),
   });
 
   return (

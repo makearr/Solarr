@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Link2, Search, Trash2, User } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { t, type Vocabulary } from "@/lib/i18n";
@@ -23,13 +23,9 @@ export function useAllParts(workId: number, group: string | undefined, enabled =
     queryKey: ["work", workId, "parts", group ?? null],
     enabled,
     initialPageParam: "",
-    queryFn: async ({ pageParam }) => {
-      const { data, error } = await api.GET("/works/{id}/parts", {
-        params: { path: { id: workId }, query: { limit: 200, ...(group !== undefined ? { group } : {}), ...(pageParam ? { cursor: pageParam } : {}) } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: ({ pageParam }) => ok(api.GET("/works/{id}/parts", {
+      params: { path: { id: workId }, query: { limit: 200, ...(group !== undefined ? { group } : {}), ...(pageParam ? { cursor: pageParam } : {}) } },
+    })),
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = parts;

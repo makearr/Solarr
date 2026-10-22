@@ -6,6 +6,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { remoteImage } from "@/lib/remoteImage";
+import { useLibraries } from "@/lib/resources";
 
 type Follow = components["schemas"]["Follow"];
 type FollowRequest = components["schemas"]["FollowRequest"];
@@ -14,14 +15,7 @@ type Subject = "person" | "organisation";
 
 /** "Add their new works for me": a follow of a person or organisation into each library it can go to. */
 export function FollowPanel({ subject, subjectId, libraryIds }: { subject: Subject; subjectId: number; libraryIds: readonly number[] }) {
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   const follows = useQuery({
     queryKey: ["follows", subject, subjectId],
     queryFn: async () => {

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useCategories } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
@@ -28,11 +29,7 @@ export function Setup({ onDone }: { onDone: () => void }) {
 
   const status = useQuery({
     queryKey: ["setup"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/setup");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/setup")),
   });
 
   if (status.isPending) return <Centered>Checking what still needs doing…</Centered>;
@@ -363,13 +360,9 @@ function CreateAdministrator() {
   const [password, setPassword] = useState("");
 
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/setup/admin", {
-        body: { username, password },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/setup/admin", {
+      body: { username, password },
+    })),
     onSuccess: () => queryClient.invalidateQueries(),
   });
 
@@ -430,14 +423,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   const [libraryName, setLibraryName] = useState(mediaTypeName("music"));
   const [libraryNameTouched, setLibraryNameTouched] = useState(false);
 
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const categories = useCategories();
 
   const existing = categories.data ?? [];
   // A library the *Arr step just made is the likely home of this folder; a new one only when there is none.

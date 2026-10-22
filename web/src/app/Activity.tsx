@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { ListGrid } from "@/list/ListGrid";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
@@ -35,20 +35,16 @@ export function Activity() {
     rowHeight: narrow ? CARD_HEIGHT : undefined,
     idOf: (job) => job.id,
     topics: ["job"],
-    fetchPage: async ({ cursor, query, signal }) => {
-      const { data, error } = await api.GET("/jobs", {
-        params: {
-          query: {
-            cursor,
-            limit: 100,
-            ...(query.filters.state ? { state: query.filters.state as Job["state"] } : {}),
-          },
+    fetchPage: ({ cursor, query, signal }) => ok(api.GET("/jobs", {
+      params: {
+        query: {
+          cursor,
+          limit: 100,
+          ...(query.filters.state ? { state: query.filters.state as Job["state"] } : {}),
         },
-        signal,
-      });
-      if (error) throw error;
-      return data;
-    },
+      },
+      signal,
+    })),
   }, useRouteView(FILTER_KEYS));
 
   return (

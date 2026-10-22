@@ -3,11 +3,12 @@ import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { type Vocabulary, vocabularyOf } from "@/lib/i18n";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { Button } from "@/ui/Button";
 
 import { formatBytes } from "./Queue";
 
@@ -25,16 +26,11 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
   const [queued, setQueued] = useState(false);
   const plan = useQuery({
     queryKey: ["links", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/links", { params: { path: { id: categoryId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/links", { params: { path: { id: categoryId } } })),
   });
   const start = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/categories/{id}/links", { params: { path: { id: categoryId } } });
-      if (error) throw error;
+      await ok(api.POST("/categories/{id}/links", { params: { path: { id: categoryId } } }));
     },
     onSuccess: () => {
       setQueued(true);
@@ -82,14 +78,14 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
       )}
       {data.total > 0 && (
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="primary"
             type="button"
             disabled={start.isPending || queued}
             onClick={() => start.mutate()}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
           >
             {queued ? "Queued" : "Link identical files"}
-          </button>
+          </Button>
           {start.isError && <span className="text-xs text-danger">Not queued: this needs manage access to the library.</span>}
           {queued && <span className="text-xs text-ink-muted">Running in the background; see Activity.</span>}
         </div>
@@ -125,14 +121,10 @@ function GroupCard({ group, categoryId, words, onDone }: { group: Group; categor
     return chosen ?? (linkable(copy, keep) ? "link" : "recycle");
   };
   const apply = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/categories/{id}/duplicates/resolve", {
-        params: { path: { id: categoryId } },
-        body: { keep_media_object_id: keep.media_object_id, drop: others.map((copy) => ({ media_object_id: copy.media_object_id, action: actionFor(copy) })) },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/categories/{id}/duplicates/resolve", {
+      params: { path: { id: categoryId } },
+      body: { keep_media_object_id: keep.media_object_id, drop: others.map((copy) => ({ media_object_id: copy.media_object_id, action: actionFor(copy) })) },
+    })),
   });
   const freed = others.reduce((total, copy) => total + copy.size_bytes, 0);
   const done = apply.data;
@@ -281,11 +273,7 @@ export function Duplicates() {
   const report = useQuery({
     queryKey: ["duplicates", categoryId],
     enabled: categoryId !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/duplicates", { params: { path: { id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/duplicates", { params: { path: { id: Number(categoryId) } } })),
   });
   const data = report.data;
   return (

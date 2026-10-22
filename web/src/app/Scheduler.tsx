@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Play, Plus, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
@@ -122,11 +122,7 @@ export function Scheduler() {
   const tier = useTier();
   const schedules = useQuery({
     queryKey: ["schedules"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/schedules");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/schedules")),
     refetchInterval: 15_000,
   });
 
@@ -134,21 +130,19 @@ export function Scheduler() {
 
   const update = useMutation({
     mutationFn: async (args: { key: string; cadences?: string[]; enabled?: boolean; runAtStartup?: boolean }) => {
-      const { error } = await api.PATCH("/schedules/{key}", {
+      await ok(api.PATCH("/schedules/{key}", {
         params: { path: { key: args.key } },
         body: { cadences: args.cadences, enabled: args.enabled, run_at_startup: args.runAtStartup },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const run = useMutation({
     mutationFn: async (args: { key: string; full?: boolean }) => {
-      const { error } = await api.POST("/schedules/{key}/run", {
+      await ok(api.POST("/schedules/{key}/run", {
         params: { path: { key: args.key }, query: args.full ? { full: true } : undefined },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
@@ -545,16 +539,11 @@ function BackupRetentionEditor() {
   const queryClient = useQueryClient();
   const saved = useQuery({
     queryKey: ["settings", "backups"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/settings/backups");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/settings/backups")),
   });
   const save = useMutation({
     mutationFn: async (body: BackupRetention) => {
-      const { error } = await api.PUT("/settings/backups", { body });
-      if (error) throw error;
+      await ok(api.PUT("/settings/backups", { body }));
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["settings", "backups"] }),
   });

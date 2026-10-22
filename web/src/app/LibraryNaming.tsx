@@ -3,8 +3,9 @@ import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleHelp, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { inputStyle } from "@/ui/form";
 
 import { useDebouncedValue } from "./useDebouncedValue";
 import { RenamePlanner } from "./RenamePlanner";
@@ -46,11 +47,7 @@ export function LibraryNaming() {
   const naming = useQuery({
     queryKey: ["libraryNaming", id],
     enabled: id !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/naming", { params: { path: { id: id! } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/naming", { params: { path: { id: id! } } })),
   });
 
   const [draft, setDraft] = useState<NamingSettings | undefined>();
@@ -62,24 +59,16 @@ export function LibraryNaming() {
   const examples = useQuery({
     queryKey: ["libraryNaming", id, "examples", debouncedDraft],
     enabled: id !== undefined && debouncedDraft !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.POST("/categories/{id}/naming/examples", {
-        params: { path: { id: id! } },
-        body: debouncedDraft!,
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.POST("/categories/{id}/naming/examples", {
+      params: { path: { id: id! } },
+      body: debouncedDraft!,
+    })),
   });
 
   const tagging = useQuery({
     queryKey: ["libraryTagging", id],
     enabled: id !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/tagging", { params: { path: { id: id! } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/tagging", { params: { path: { id: id! } } })),
   });
   const [taggingDraft, setTaggingDraft] = useState<Tagging | undefined>();
   useEffect(() => {
@@ -539,7 +528,3 @@ function ApplyToLibrary({ categoryId, unsaved }: { categoryId: number; unsaved: 
 export function Message({ children }: { children: React.ReactNode }) {
   return <p className="p-6 text-sm text-ink-muted">{children}</p>;
 }
-
-export const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

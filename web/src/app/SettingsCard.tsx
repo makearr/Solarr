@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 
+import { Button } from "@/ui/Button";
+
 /** One group of related settings: a heading, what it does, an optional on/off switch and the fields. */
 export function Card({
   title,
@@ -84,15 +86,14 @@ export function SaveBar({
 }) {
   return (
     <div className="sticky bottom-0 -mx-1 flex items-center gap-3 border-t border-border-subtle bg-canvas/95 px-1 py-3 backdrop-blur">
-      <button
+      <Button
+        variant="primary"
         type="button"
         disabled={busy || !dirty}
         onClick={onSave}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {busy ? "Saving…" : "Save"}
-      </button>
+      </Button>
       {dirty && onUndo && (
         <button type="button" onClick={onUndo} className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink">
           Undo

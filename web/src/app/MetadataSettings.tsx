@@ -2,9 +2,10 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Info } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { useMetadataSettings } from "@/lib/resources";
 import { Chip } from "@/ui/Chip";
 import { Card, Toggle } from "./SettingsCard";
 
@@ -50,14 +51,7 @@ const KEY_SIGNUP: Record<string, { url: string; label: string }> = {
 export function MetadataSettings() {
   const tier = useTier();
   const queryClient = useQueryClient();
-  const metadata = useQuery({
-    queryKey: ["metadata-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/metadata/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const metadata = useMetadataSettings();
   const providers = useQuery({
     queryKey: ["metadata-providers"],
     queryFn: async () => {
@@ -69,8 +63,7 @@ export function MetadataSettings() {
   const patch = usePatchMetadataSettings(metadata.data);
   const switchProvider = useMutation({
     mutationFn: async ({ key, enabled }: { key: string; enabled: boolean }) => {
-      const { error } = await api.PUT("/metadata/providers/{key}", { params: { path: { key } }, body: { enabled } });
-      if (error) throw error;
+      await ok(api.PUT("/metadata/providers/{key}", { params: { path: { key } }, body: { enabled } }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["metadata-providers"] });
@@ -122,8 +115,7 @@ export function usePatchMetadataSettings(stored: Settings | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (change: Partial<Settings>) => {
-      const { error } = await api.PATCH("/metadata/settings", { body: { brainzmash_user_agent: stored?.brainzmash_user_agent ?? "", ...change } });
-      if (error) throw error;
+      await ok(api.PATCH("/metadata/settings", { body: { brainzmash_user_agent: stored?.brainzmash_user_agent ?? "", ...change } }));
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["metadata-settings"] }),
   });
@@ -133,8 +125,7 @@ function useKeySaver(path: "/metadata/tmdb/apikey" | "/metadata/tvdb/apikey" | "
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (key: string) => {
-      const { error } = await api.POST(path, { body: { api_key: key } });
-      if (error) throw error;
+      await ok(api.POST(path, { body: { api_key: key } }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["metadata-settings"] });
@@ -302,8 +293,7 @@ function GenericKeyForm({ provider }: { provider: Provider }) {
   const queryClient = useQueryClient();
   const save = useMutation({
     mutationFn: async (key: string) => {
-      const { error } = await api.PUT("/metadata/providers/{key}/apikey", { params: { path: { key: provider.key } }, body: { api_key: key } });
-      if (error) throw error;
+      await ok(api.PUT("/metadata/providers/{key}/apikey", { params: { path: { key: provider.key } }, body: { api_key: key } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["metadata-providers"] }),
   });
@@ -326,18 +316,10 @@ function GenericKeyForm({ provider }: { provider: Provider }) {
 function ProviderTest() {
   const providers = useQuery({
     queryKey: ["tv-providers"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/metadata/tv/providers");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/metadata/tv/providers")),
   });
   const test = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/metadata/tv/providers/test");
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/metadata/tv/providers/test")),
   });
   const results = new Map((test.data ?? []).map((result) => [result.id, result]));
   return (

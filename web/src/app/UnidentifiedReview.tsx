@@ -2,10 +2,11 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { vocabularyOf } from "@/lib/i18n";
 import { attemptLabel, outcomeLabel, passLabel } from "@/lib/identificationEvidence";
+import { useLibraries, useRootFolders } from "@/lib/resources";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { IdentificationCandidates, type IdentificationCandidateView } from "./IdentificationCandidates";
@@ -24,33 +25,15 @@ export function UnidentifiedReview() {
   const [confirmingNotMedia, setConfirmingNotMedia] = useState(false);
 
   // The file is placed in its root folder's first library, as that library's type places files.
-  const roots = useQuery({
-    queryKey: ["rootfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/rootfolders");
-      if (error) throw error;
-      return data;
-    },
-  });
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const roots = useRootFolders();
+  const libraries = useLibraries();
 
   const review = useQuery({
     queryKey: ["unidentified", mediaObjectId, "attempts"],
     enabled: mediaObjectId !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/library/unidentified/{mediaObjectId}/attempts", {
-        params: { path: { mediaObjectId: mediaObjectId as number } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/library/unidentified/{mediaObjectId}/attempts", {
+      params: { path: { mediaObjectId: mediaObjectId as number } },
+    })),
   });
 
   const mediaTypes = useMediaTypes();
@@ -60,7 +43,7 @@ export function UnidentifiedReview() {
   const choose = useMutation({
     mutationFn: async (candidate: Partial<IdentityChoice>) => {
       if (candidate.provider === undefined || candidate.external_id === undefined) return;
-      const { error } = await api.POST("/library/unidentified/{mediaObjectId}/resolve", {
+      await ok(api.POST("/library/unidentified/{mediaObjectId}/resolve", {
         params: { path: { mediaObjectId: mediaObjectId as number } },
         body: {
           ...(library ? { category_id: library.id } : {}),
@@ -70,8 +53,7 @@ export function UnidentifiedReview() {
           parts: candidate.parts,
           whole_folder: wholeFolder,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
@@ -81,10 +63,9 @@ export function UnidentifiedReview() {
 
   const notMedia = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/library/unidentified/{mediaObjectId}/not-media", {
+      await ok(api.POST("/library/unidentified/{mediaObjectId}/not-media", {
         params: { path: { mediaObjectId: mediaObjectId as number } },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["unidentified"] });

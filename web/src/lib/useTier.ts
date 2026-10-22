@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 export type Tier = components["schemas"]["Me"]["tier"];
@@ -17,11 +17,7 @@ const TIER_RANK: Record<Tier, number> = { normal: 0, advanced: 1, expert: 2 };
 export function useTier(): Tier {
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me")),
   });
   return me.data?.tier ?? "expert";
 }
@@ -40,11 +36,7 @@ export function isTierVisible(tier: Tier, required: Tier): boolean {
 export function useSetMyTier() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (tier: Tier) => {
-      const { data, error } = await api.PATCH("/me/tier", { body: { tier } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (tier: Tier) => ok(api.PATCH("/me/tier", { body: { tier } })),
     onSuccess: () => queryClient.invalidateQueries(),
   });
 }

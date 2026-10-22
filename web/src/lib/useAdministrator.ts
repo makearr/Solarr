@@ -1,17 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 
 /** Whether the caller is an administrator, the one role every configuration write needs.
  *  Reads the shared ["me"] query; open while it loads, as useTier is -- the server refuses anyway. */
 export function useIsAdministrator(): boolean {
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me")),
   });
   return me.data === undefined || me.data.role === "admin";
 }

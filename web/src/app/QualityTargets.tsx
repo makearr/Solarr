@@ -2,19 +2,18 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useMediaTypes } from "@/lib/useMediaTypes";
+import { Button } from "@/ui/Button";
+import { inputStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
 import { Card } from "./SettingsCard";
 
 type QualityTarget = components["schemas"]["QualityTarget"];
 
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 const smallButton = "rounded-md border border-border-subtle px-2.5 py-1 text-xs text-ink-muted hover:text-ink";
 
 const AUDIO_MEDIA = new Set(["music", "audiobook", "podcast"]);
@@ -221,9 +220,9 @@ function TargetForm({ initial, onDone, onCancel }: { initial?: QualityTarget; on
       </div>
       <TargetFields target={target} onChange={setTarget} />
       <div className="flex items-center gap-2">
-        <button type="button" disabled={save.isPending} onClick={() => save.mutate()} className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50">
+        <Button variant="primary" type="button" disabled={save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         <button type="button" onClick={onCancel} className={smallButton}>
           Cancel
         </button>
@@ -255,16 +254,11 @@ export function QualityTargetsSection() {
   const [editing, setEditing] = useState<number | "new" | null>(null);
   const targets = useQuery({
     queryKey: ["qualityTargets"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualitytargets");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/qualitytargets")),
   });
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/qualitytargets/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/qualitytargets/{id}", { params: { path: { id } } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["qualityTargets"] }),
   });

@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link2, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { useIsAdministrator } from "@/lib/useAdministrator";
@@ -12,13 +12,12 @@ import { Chip } from "@/ui/Chip";
 import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
+import { inputStyle } from "@/ui/form";
 
 type Crossover = components["schemas"]["Crossover"];
 type Member = Crossover["members"][number];
 type Suggestion = components["schemas"]["SameContentSuggestion"];
 type SameContent = components["schemas"]["SameContentLink"];
-
-const inputStyle = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink";
 
 /** "S01E05" for a part ref "s01:e05"; anything else as it is. */
 export function refLabel(ref: string): string {
@@ -39,16 +38,11 @@ export function CrossoverIndex() {
   const queryClient = useQueryClient();
   const list = useQuery({
     queryKey: ["crossovers", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/crossovers", { params: { query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/crossovers", { params: { query: { category_id: Number(categoryId) } } })),
   });
   const link = useMutation({
     mutationFn: async (suggestion: Suggestion) => {
-      const { error } = await api.POST("/parts/{id}/same-content", { params: { path: { id: suggestion.part_id } }, body: { part_id: suggestion.other_part_id } });
-      if (error) throw error;
+      await ok(api.POST("/parts/{id}/same-content", { params: { path: { id: suggestion.part_id } }, body: { part_id: suggestion.other_part_id } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["crossovers", categoryId] }),
   });
@@ -129,11 +123,7 @@ export function CrossoverPage() {
   const navigate = useNavigate();
   const event = useQuery({
     queryKey: ["crossover", id],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/crossovers/{id}", { params: { path: { id: Number(id) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/crossovers/{id}", { params: { path: { id: Number(id) } } })),
   });
   const changed = (data?: Crossover) => {
     if (data) queryClient.setQueryData(["crossover", id], data);
@@ -141,28 +131,19 @@ export function CrossoverPage() {
     void queryClient.invalidateQueries({ queryKey: ["work-crossovers"] });
   };
   const monitor = useMutation({
-    mutationFn: async (monitored: boolean) => {
-      const { data, error } = await api.POST("/crossovers/{id}/monitor", { params: { path: { id: Number(id) } }, body: { monitored } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (monitored: boolean) => ok(api.POST("/crossovers/{id}/monitor", { params: { path: { id: Number(id) } }, body: { monitored } })),
     onSuccess: changed,
   });
   const update = useMutation({
-    mutationFn: async (members: readonly Member[]) => {
-      const { data, error } = await api.PUT("/crossovers/{id}", {
-        params: { path: { id: Number(id) } },
-        body: { name: event.data!.name, part_ids: members.map((member) => member.part_id) },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (members: readonly Member[]) => ok(api.PUT("/crossovers/{id}", {
+      params: { path: { id: Number(id) } },
+      body: { name: event.data!.name, part_ids: members.map((member) => member.part_id) },
+    })),
     onSuccess: changed,
   });
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await api.DELETE("/crossovers/{id}", { params: { path: { id: Number(id) } } });
-      if (error) throw error;
+      await ok(api.DELETE("/crossovers/{id}", { params: { path: { id: Number(id) } } }));
     },
     onSuccess: () => {
       changed();
@@ -205,11 +186,7 @@ export function useWorkCrossovers(workId: number, enabled: boolean) {
   return useQuery({
     queryKey: ["work-crossovers", workId],
     enabled,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}/crossovers", { params: { path: { id: workId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/{id}/crossovers", { params: { path: { id: workId } } })),
   });
 }
 
@@ -247,30 +224,20 @@ export function CrossoverDialog({ part, categoryId, onClose }: { part: { id: num
   const [otherPart, setOtherPart] = useState<number>();
   const events = useQuery({
     queryKey: ["crossovers", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/crossovers", { params: { query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/crossovers", { params: { query: { category_id: Number(categoryId) } } })),
   });
   const series = useQuery({
     queryKey: ["crossover-series", categoryId, query],
     enabled: query.trim().length >= 2,
     queryFn: async () => {
       const where = JSON.stringify([{ field: "title", op: "contains", value: query.trim() }]);
-      const { data, error } = await api.GET("/works", { params: { query: { category_id: Number(categoryId), where, limit: 20 } } });
-      if (error) throw error;
-      return data;
+      return ok(api.GET("/works", { params: { query: { category_id: Number(categoryId), where, limit: 20 } } }));
     },
   });
   const episodes = useQuery({
     queryKey: ["crossover-episodes", seriesId],
     enabled: seriesId !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}/parts", { params: { path: { id: seriesId! }, query: { limit: 500 } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/{id}/parts", { params: { path: { id: seriesId! }, query: { limit: 500 } } })),
   });
   const done = () => {
     void queryClient.invalidateQueries({ queryKey: ["crossovers"] });
@@ -281,24 +248,21 @@ export function CrossoverDialog({ part, categoryId, onClose }: { part: { id: num
   const join = useMutation({
     mutationFn: async () => {
       if (eventChoice === "new") {
-        const { error } = await api.POST("/crossovers", { body: { category_id: Number(categoryId), name: name.trim(), part_ids: [part.id] } });
-        if (error) throw error;
+        await ok(api.POST("/crossovers", { body: { category_id: Number(categoryId), name: name.trim(), part_ids: [part.id] } }));
         return;
       }
       const event = events.data?.events.find((entry) => String(entry.id) === eventChoice);
       if (!event) return;
-      const { error } = await api.PUT("/crossovers/{id}", {
+      await ok(api.PUT("/crossovers/{id}", {
         params: { path: { id: event.id } },
         body: { name: event.name, part_ids: [...event.members.map((member) => member.part_id).filter((id) => id !== part.id), part.id] },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: done,
   });
   const link = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/parts/{id}/same-content", { params: { path: { id: part.id } }, body: { part_id: otherPart! } });
-      if (error) throw error;
+      await ok(api.POST("/parts/{id}/same-content", { params: { path: { id: part.id } }, body: { part_id: otherPart! } }));
     },
     onSuccess: done,
   });

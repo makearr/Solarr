@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { FilePen, Filter, Layers, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { HistoryKind, historySource, historyWhen } from "@/lib/downloadHistory";
 import { t, vocabularyOf, type Vocabulary } from "@/lib/i18n";
@@ -53,11 +53,7 @@ export function WorkPage() {
   const detail = useQuery({
     queryKey: ["work", id],
     enabled: Number.isFinite(id),
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}", { params: { path: { id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/{id}", { params: { path: { id } } })),
   });
   const info = useMediaTypes().find((entry) => entry.key === detail.data?.media_type);
   if (detail.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>;
@@ -111,9 +107,7 @@ function MergeSuggestion({ work, words, categoryId }: { work: Work; words: Vocab
   const merge = useMutation({
     mutationFn: async (preview: boolean) => {
       const into = suggestion.data?.into_work_id ?? 0;
-      const { data, error } = await api.POST("/works/{id}/merge", { params: { path: { id: work.id } }, body: { into, preview } });
-      if (error) throw error;
-      return data;
+      return ok(api.POST("/works/{id}/merge", { params: { path: { id: work.id } }, body: { into, preview } }));
     },
     onSuccess: (result, preview) => {
       if (preview || !result) return;
@@ -197,8 +191,7 @@ function WorkHeader({
 
   const monitor = useMutation({
     mutationFn: async (next: boolean) => {
-      const { error } = await api.POST("/works/{id}/monitor", { params: { path: { id: work.id } }, body: { monitored: next, search: next && searchOnMonitor } });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/monitor", { params: { path: { id: work.id } }, body: { monitored: next, search: next && searchOnMonitor } }));
     },
     onSuccess: changed,
   });
@@ -217,17 +210,12 @@ function WorkHeader({
   });
   const refresh = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/works/{id}/refresh", { params: { path: { id: work.id } } });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/refresh", { params: { path: { id: work.id } } }));
     },
     onSuccess: changed,
   });
   const remove = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/works/{id}/remove", { params: { path: { id: work.id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/works/{id}/remove", { params: { path: { id: work.id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } })),
     onSuccess: (result) => {
       setRemoving(false);
       void queryClient.invalidateQueries({ queryKey: ["works"] });
@@ -478,8 +466,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
 
   const monitor = useMutation({
     mutationFn: async (body: { monitored: boolean; group?: string; parts?: number[] }) => {
-      const { error } = await api.POST("/works/{id}/monitor", { params: { path: { id: work.id } }, body });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/monitor", { params: { path: { id: work.id } }, body }));
     },
     onSuccess: changed,
   });
@@ -497,8 +484,7 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
   });
   const removePart = useMutation({
     mutationFn: async ({ partId, deleteFiles }: { partId: number; deleteFiles: boolean }) => {
-      const { error } = await api.POST("/works/{id}/parts/{partId}/remove", { params: { path: { id: work.id, partId } }, body: { delete_files: deleteFiles } });
-      if (error) throw error;
+      await ok(api.POST("/works/{id}/parts/{partId}/remove", { params: { path: { id: work.id, partId } }, body: { delete_files: deleteFiles } }));
     },
     onSuccess: changed,
   });

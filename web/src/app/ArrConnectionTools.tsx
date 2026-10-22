@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { joinCredentials } from "@/lib/downloadCredentials";
 import type { components } from "@/api/schema";
 
@@ -31,24 +31,16 @@ function UseIndexers({ instanceId }: { instanceId: number }) {
   const found = useQuery({
     queryKey: ["arr-indexers", instanceId],
     enabled: open,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/arr/instances/{id}/indexers", { params: { path: { id: instanceId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/arr/instances/{id}/indexers", { params: { path: { id: instanceId } } })),
   });
   // Offered by default, as the Indexers page does: enabled usenet indexers with music, not yet used.
   const offered = (found.data ?? []).filter((entry) => entry.enabled && entry.music && !entry.already_added && entry.impl === "newznab");
   const selected = chosen ?? new Set(offered.map((entry) => entry.prowlarr_id));
   const use = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/arr/instances/{id}/indexers", {
-        params: { path: { id: instanceId } },
-        body: { prowlarr_ids: [...selected] },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/arr/instances/{id}/indexers", {
+      params: { path: { id: instanceId } },
+      body: { prowlarr_ids: [...selected] },
+    })),
     onSuccess: () => {
       setChosen(null);
       void queryClient.invalidateQueries({ queryKey: ["arr-indexers", instanceId] });
@@ -106,11 +98,7 @@ function UseDownloadClients({ instanceId, app }: { instanceId: number; app: ArrA
   const found = useQuery({
     queryKey: ["arr-downloadclients", instanceId],
     enabled: open,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/arr/instances/{id}/downloadclients", { params: { path: { id: instanceId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/arr/instances/{id}/downloadclients", { params: { path: { id: instanceId } } })),
   });
   if (!open) {
     return (

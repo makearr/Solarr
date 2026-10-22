@@ -3,12 +3,14 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { parseAudioRules } from "@/lib/qualityRules";
 import { useLibrary } from "@/lib/useLibrary";
 
 import { summariseTarget } from "./QualityTargets";
 import type { components } from "@/api/schema";
+import { Button } from "@/ui/Button";
+import { inputStyle } from "@/ui/form";
 
 /** A library's own quality: which shared profiles it accepts, in order, where upgrades stop, and
  *  the one quality it aims for. The profiles themselves are made under Quality profiles. */
@@ -76,11 +78,7 @@ function LibraryQualityEditor() {
   const quality = useQuery({
     queryKey: ["libraryQuality", id],
     enabled: id !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/quality", { params: { path: { id: id! } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/quality", { params: { path: { id: id! } } })),
   });
 
   const [order, setOrder] = useState<number[] | undefined>();
@@ -101,14 +99,10 @@ function LibraryQualityEditor() {
   }, [quality.data]);
 
   const save = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.PUT("/categories/{id}/quality", {
-        params: { path: { id: id! } },
-        body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetId, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.PUT("/categories/{id}/quality", {
+      params: { path: { id: id! } },
+      body: { profile_ids: order ?? [], cutoff_profile_id: cutoff, target_id: targetId, upgrades_allowed: upgrades, preferred_protocol: preferred, protocol_delay_minutes: delayMinutes },
+    })),
     onSuccess: (data: LibraryQuality) => {
       queryClient.setQueryData(["libraryQuality", id], data);
       void queryClient.invalidateQueries({ queryKey: ["category", categoryId] });
@@ -313,14 +307,14 @@ function LibraryQualityEditor() {
       ))}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
+          variant="primary"
           type="button"
           disabled={!dirty || save.isPending}
           onClick={() => save.mutate()}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
         >
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         {dirty && (
           <button
             type="button"
@@ -346,7 +340,3 @@ function LibraryQualityEditor() {
     </div>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

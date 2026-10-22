@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import type { components } from "@/api/schema";
 
@@ -44,11 +44,7 @@ export function Queue() {
 export function useQueue(workId?: number) {
   return useQuery({
     queryKey: ["queue", workId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/queue", { params: { query: { work_id: workId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/queue", { params: { query: { work_id: workId } } })),
     refetchInterval: REFRESH_MS,
   });
 }
@@ -89,10 +85,9 @@ function PauseMine({ client, items }: { client: QueueClient; items: readonly Que
   const allPaused = waiting.length > 0 && waiting.every((item) => item.client_state === "paused");
   const toggle = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/queue/clients/{id}/{action}", {
+      await ok(api.POST("/queue/clients/{id}/{action}", {
         params: { path: { id: client.id, action: allPaused ? "resume" : "pause" } },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["queue"] }),
   });
@@ -139,10 +134,9 @@ function QueueRow({ item }: { item: QueueItem }) {
   const [blocklist, setBlocklist] = useState(false);
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await api.DELETE("/queue/{id}", {
+      await ok(api.DELETE("/queue/{id}", {
         params: { path: { id: item.id }, query: { blocklist } },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       setConfirming(false);

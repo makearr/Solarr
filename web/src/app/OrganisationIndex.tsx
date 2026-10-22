@@ -4,9 +4,10 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Building2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { remoteImage } from "@/lib/remoteImage";
+import { useLibraries } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
@@ -53,25 +54,21 @@ export function OrganisationIndex() {
       idOf: (organisation) => organisation.id,
       rowHeight: mode === "list" ? 44 : posterRowHeight({ ...options, showAvailability: false }, metrics.cellWidth),
       itemsPerRow: mode === "list" ? 1 : metrics.columns,
-      fetchPage: async ({ cursor, query, signal }) => {
-        const { data, error } = await api.GET("/organisations", {
-          params: {
-            query: {
-              category: Number(categoryId),
-              q: query.filters.q || undefined,
-              from: query.filters.from || undefined,
-              monitored: query.filters.monitored ? query.filters.monitored === "true" : undefined,
-              sort: sort as "name" | "works" | "latest",
-              dir: descending ? "desc" : "asc",
-              cursor,
-              limit: 100,
-            },
+      fetchPage: ({ cursor, query, signal }) => ok(api.GET("/organisations", {
+        params: {
+          query: {
+            category: Number(categoryId),
+            q: query.filters.q || undefined,
+            from: query.filters.from || undefined,
+            monitored: query.filters.monitored ? query.filters.monitored === "true" : undefined,
+            sort: sort as "name" | "works" | "latest",
+            dir: descending ? "desc" : "asc",
+            cursor,
+            limit: 100,
           },
-          signal,
-        });
-        if (error) throw error;
-        return data;
-      },
+        },
+        signal,
+      })),
     },
     view,
   );
@@ -161,20 +158,9 @@ export function OrganisationPage() {
   const detail = useQuery({
     queryKey: ["organisation", id],
     enabled: Number.isFinite(id),
-    queryFn: async () => {
-      const { data, error } = await api.GET("/organisations/{id}", { params: { path: { id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/organisations/{id}", { params: { path: { id } } })),
   });
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   if (detail.isLoading) return <p className="p-4 text-sm text-ink-muted">Loading…</p>;
   if (detail.isError || !detail.data) return <p className="p-4 text-sm text-danger">This could not be found.</p>;
 

@@ -2,29 +2,25 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { useMediaTypes } from "@/lib/useMediaTypes";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
+import { AddLibraryForm } from "./AddLibraryForm";
 import { KindSelect } from "./LibraryKindSelect";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
-type MediaType = components["schemas"]["MediaType"];
 type MonitorDiscovered = components["schemas"]["CategorySettings"]["monitor_discovered"];
 
 /** What a library of each media type is called when its own name is left
  *  blank -- "the default library name should always be the category, for
  *  example Music" (2026-09-19). Also what the media-type picker shows, so
  *  the two can never drift apart. */
-export const MEDIA_TYPE_NAME: Record<MediaType, string> = {
-  music: "Music", tv: "TV", movie: "Movies", audiobook: "Audiobooks", book: "Books",
-  adult: "Adult", comic: "Comics", rom: "ROMs", podcast: "Podcasts", news: "News",
-  youtube: "YouTube",
-};
-
 const MONITOR_DISCOVERED_OPTIONS: readonly MonitorDiscovered[] = ["monitored", "unmonitored", "none"];
 
 type TVMonitor = NonNullable<components["schemas"]["CategorySettings"]["tv_monitor"]>;
@@ -45,21 +41,13 @@ const TV_MONITOR_OPTIONS: readonly { value: TVMonitor; label: string }[] = [
 export function Categories() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<number | null>(null);
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const categories = useCategories();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["categories"] });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/categories/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/categories/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -125,7 +113,7 @@ export function Categories() {
         </p>
       )}
 
-      <AddCategory onAdded={invalidate} />
+      <AddLibraryForm />
     </Card>
   );
 }
@@ -210,28 +198,10 @@ export function EditCategoryForm({
 }) {
   const detail = useQuery({
     queryKey: ["category", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}", { params: { path: { id: categoryId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}", { params: { path: { id: categoryId } } })),
   });
-  const qualityProfiles = useQuery({
-    queryKey: ["qualityProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualityprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
-  const languageProfiles = useQuery({
-    queryKey: ["languageProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/languageprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const qualityProfiles = useQualityProfiles();
+  const languageProfiles = useLanguageProfiles();
 
   if (detail.isLoading) return <p className="text-xs text-ink-muted">Loading…</p>;
   if (detail.error !== null || !detail.data) {
@@ -277,7 +247,7 @@ function EditCategoryFields({
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await api.PATCH("/categories/{id}", {
+      await ok(api.PATCH("/categories/{id}", {
         params: { path: { id: categoryId } },
         body: {
           name,
@@ -288,8 +258,7 @@ function EditCategoryFields({
           tv_monitor: isTV ? tvMonitor : undefined,
           kind: kind || undefined,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       // The sidebar tree reads "libraries", not "categories"; a rename must reach both.
@@ -309,7 +278,7 @@ function EditCategoryFields({
       }}
     >
       <div className="grid grid-cols-2 gap-2">
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Name
           <input
             className={inputStyle}
@@ -319,7 +288,7 @@ function EditCategoryFields({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Priority rank
           <input
             className={inputStyle}
@@ -329,7 +298,7 @@ function EditCategoryFields({
             onChange={(event) => setPriorityRank(Number(event.target.value))}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Quality profile
           <select
             className={inputStyle}
@@ -344,7 +313,7 @@ function EditCategoryFields({
             ))}
           </select>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Language profile
           <select
             className={inputStyle}
@@ -361,7 +330,7 @@ function EditCategoryFields({
         </label>
         <KindSelect mediaType={initial.media_type} value={kind} onChange={setKind} />
         {isTV ? (
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             {initial.media_type === "movie" ? "Monitor movies found by a scan" : "Monitor series found by a scan"}
             <select className={inputStyle} value={tvMonitor} onChange={(event) => setTvMonitor(event.target.value as TVMonitor)}>
               {TV_MONITOR_OPTIONS.map((option) => (
@@ -372,7 +341,7 @@ function EditCategoryFields({
             </select>
           </label>
         ) : (
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             Monitor discovered
             <select
               className={inputStyle}
@@ -394,14 +363,13 @@ function EditCategoryFields({
         </p>
       )}
       <div className="flex gap-2">
-        <button
+        <Button
+          variant="primary"
           type="submit"
           disabled={!name.trim() || save.isPending}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         <button
           type="button"
           onClick={onCancel}
@@ -415,80 +383,3 @@ function EditCategoryFields({
     </form>
   );
 }
-
-function AddCategory({ onAdded }: { onAdded: () => void }) {
-  const [name, setName] = useState("");
-  const [mediaType, setMediaType] = useState<MediaType>("music");
-  const [kind, setKind] = useState("");
-  const mediaTypes = useMediaTypes();
-
-  const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/categories", {
-        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType, kind: kind || undefined },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      setName("");
-      onAdded();
-    },
-  });
-
-  return (
-    <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        create.mutate();
-      }}
-    >
-      <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
-        Name
-        <input
-          className={inputStyle}
-          value={name}
-          autoComplete="off"
-          placeholder={MEDIA_TYPE_NAME[mediaType]}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Media type
-        <select
-          className={inputStyle}
-          value={mediaType}
-          onChange={(event) => {
-            setMediaType(event.target.value as MediaType);
-            setKind("");
-          }}
-        >
-          {mediaTypes.map((type) => (
-            <option key={type.key} value={type.key}>
-              {type.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <KindSelect mediaType={mediaType} value={kind} onChange={setKind} />
-      <button
-        type="submit"
-        disabled={create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        {create.isPending ? "Adding…" : "Add library"}
-      </button>
-      {create.isError && (
-        <p className="w-full text-xs text-danger">
-          That category could not be created. Check the name is not empty.
-        </p>
-      )}
-    </form>
-  );
-}
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

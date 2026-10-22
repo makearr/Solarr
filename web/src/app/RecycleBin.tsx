@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
+import { Button } from "@/ui/Button";
+import { inputStyle } from "@/ui/form";
 
-import { inputStyle } from "./LibraryNaming";
 import { formatBytes } from "./Queue";
 
 const GB = 1024 * 1024 * 1024;
@@ -14,11 +15,7 @@ export function RecycleBin() {
   const queryClient = useQueryClient();
   const limits = useQuery({
     queryKey: ["recycleBinLimits"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/recyclebin");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/recyclebin")),
   });
   const [maxGB, setMaxGB] = useState(0);
   const [percent, setPercent] = useState(0);
@@ -30,29 +27,17 @@ export function RecycleBin() {
 
   const contents = useQuery({
     queryKey: ["recycleBinEntries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/recyclebin/entries");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/recyclebin/entries")),
   });
   const empty = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/recyclebin/empty");
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/recyclebin/empty")),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["recycleBinEntries"] }),
   });
 
   const save = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.PATCH("/recyclebin", {
-        body: { max_bytes: maxGB * GB, max_percent_of_root: percent },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.PATCH("/recyclebin", {
+      body: { max_bytes: maxGB * GB, max_percent_of_root: percent },
+    })),
     onSuccess: (data) => queryClient.setQueryData(["recycleBinLimits"], data),
   });
 
@@ -79,14 +64,14 @@ export function RecycleBin() {
         </label>
       </section>
       <div className="flex items-center gap-2">
-        <button
+        <Button
+          variant="primary"
           type="button"
           disabled={!dirty || save.isPending}
           onClick={() => save.mutate()}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50"
         >
           {save.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
         {save.isError && <span className="text-xs text-danger">That was not saved -- the limits have a problem.</span>}
         {save.isSuccess && !dirty && <span className="text-xs text-ink-muted">Saved; the next cleanup applies it.</span>}
       </div>

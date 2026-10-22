@@ -3,7 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { vocabularyOf } from "@/lib/i18n";
@@ -32,13 +32,9 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
   const pages = useInfiniteQuery({
     queryKey: ["wanted", "parts", categoryId, view],
     initialPageParam: "",
-    queryFn: async ({ pageParam }) => {
-      const { data, error } = await api.GET("/wanted/parts", {
-        params: { query: { category_id: Number(categoryId), limit: 100, view, ...(pageParam ? { cursor: pageParam } : {}) } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: ({ pageParam }) => ok(api.GET("/wanted/parts", {
+      params: { query: { category_id: Number(categoryId), limit: 100, view, ...(pageParam ? { cursor: pageParam } : {}) } },
+    })),
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
   const rows = (pages.data?.pages ?? []).flatMap((page) => page.items);

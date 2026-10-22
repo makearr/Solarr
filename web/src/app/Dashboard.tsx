@@ -2,8 +2,9 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Plus, XCircle } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useLibraries } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
@@ -26,38 +27,19 @@ const RECENT_LIMIT = 10;
 export function Dashboard() {
   const summary = useQuery({
     queryKey: ["dashboard"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/dashboard");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/dashboard")),
   });
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   const recent = useQuery({
     queryKey: ["works", "recent"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works", {
-        params: { query: { sort: "imported", dir: "desc", limit: RECENT_LIMIT } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works", {
+      params: { query: { sort: "imported", dir: "desc", limit: RECENT_LIMIT } },
+    })),
   });
 
   const health = useQuery({
     queryKey: ["system-health"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/system/health");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/system/health")),
   });
 
   const firstLibrary = libraries.data?.[0];

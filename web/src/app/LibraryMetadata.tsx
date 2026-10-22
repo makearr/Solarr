@@ -2,13 +2,14 @@ import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMetadataSettings } from "@/lib/resources";
 import { OrderedSources, usePatchMetadataSettings } from "./MetadataSettings";
 
 type Sources = components["schemas"]["LibraryMetadataSources"];
@@ -23,18 +24,10 @@ export function LibraryMetadata() {
   const key = ["libraryMetadataSources", id];
   const saved = useQuery({
     queryKey: key,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/metadata-sources", { params: { path: { id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/metadata-sources", { params: { path: { id } } })),
   });
   const save = useMutation({
-    mutationFn: async (sources: string[]) => {
-      const { data, error } = await api.PUT("/categories/{id}/metadata-sources", { params: { path: { id } }, body: { sources } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (sources: string[]) => ok(api.PUT("/categories/{id}/metadata-sources", { params: { path: { id } }, body: { sources } })),
     onSuccess: (data: Sources) => queryClient.setQueryData(key, data),
   });
   if (saved.isLoading) return <p className="p-6 text-sm text-ink-muted">Loading…</p>;
@@ -130,14 +123,7 @@ const COVER_SOURCES = [
 
 /** Where album covers come from, in order; one for every music library. */
 function CoverOrder() {
-  const metadata = useQuery({
-    queryKey: ["metadata-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/metadata/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const metadata = useMetadataSettings();
   const patch = usePatchMetadataSettings(metadata.data);
   if (!metadata.data) return null;
   return (

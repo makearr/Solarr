@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleHelp, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 type Indexer = components["schemas"]["Indexer"];
 type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
@@ -19,11 +21,7 @@ export function Indexers() {
 
   const indexers = useQuery({
     queryKey: ["indexers"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/indexers");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/indexers")),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["indexers"] });
@@ -34,7 +32,7 @@ export function Indexers() {
       // has to be resent from the current row or toggling "enabled" would
       // silently wipe it (the same staleness shape todo 4.6's category edit
       // already found once, avoided here by construction).
-      const { error } = await api.PATCH("/indexers/{id}", {
+      await ok(api.PATCH("/indexers/{id}", {
         params: { path: { id: args.indexer.id } },
         body: {
           name: args.indexer.name, impl: args.indexer.impl, base_url: args.indexer.base_url,
@@ -42,8 +40,7 @@ export function Indexers() {
           egress_proxy_url: args.indexer.egress_proxy_url,
           music_categories: args.indexer.music_categories,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
@@ -60,8 +57,7 @@ export function Indexers() {
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/indexers/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/indexers/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -193,14 +189,13 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
 
   const create = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/indexers", {
+      await ok(api.POST("/indexers", {
         body: {
           name, impl, base_url: baseUrl, api_key: apiKey || undefined, priority, enabled: true,
           egress_proxy_url: egressProxyUrl || undefined,
           music_categories: parseCategories(categories),
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       setName("");
@@ -220,7 +215,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
         create.mutate();
       }}
     >
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Type
         <select className={inputStyle} value={impl} onChange={(event) => setImpl(event.target.value)}>
           <option value="newznab">newznab</option>
@@ -257,7 +252,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
           onChange={(event) => setApiKey(event.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Music categories
         <input
           className={`${inputStyle} w-28`}
@@ -266,7 +261,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
           onChange={(event) => setCategories(event.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Priority
         <input
           className={`${inputStyle} w-20`}
@@ -289,14 +284,13 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
           />
         </label>
       )}
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={!name.trim() || !baseUrl.trim() || create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {create.isPending ? "Connecting…" : "Connect"}
-      </button>
+      </Button>
       {create.isError && <p className="w-full text-xs text-danger">That connection could not be created.</p>}
     </form>
   );
@@ -311,11 +305,7 @@ function AddFromProwlarr({ onAdded }: { onAdded: () => void }) {
   const [chosen, setChosen] = useState<Set<number>>(new Set());
 
   const load = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/indexers/prowlarr", { body: { base_url: baseUrl, api_key: apiKey } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/indexers/prowlarr", { body: { base_url: baseUrl, api_key: apiKey } })),
     // Offered by default: usenet indexers that can find music and are enabled in Prowlarr.
     // Torrents wait for a torrent client, which Solarr does not have yet.
     onSuccess: (found) =>
@@ -330,10 +320,9 @@ function AddFromProwlarr({ onAdded }: { onAdded: () => void }) {
   const add = useMutation({
     mutationFn: async (entries: ProwlarrIndexer[]) => {
       for (const entry of entries) {
-        const { error } = await api.POST("/indexers", {
+        await ok(api.POST("/indexers", {
           body: { name: entry.name, impl: entry.impl, base_url: entry.base_url, api_key: apiKey, enabled: true, priority: 25 },
-        });
-        if (error) throw error;
+        }));
       }
     },
     onSuccess: () => {
@@ -424,10 +413,6 @@ function Badge({ tone, children }: { tone: "ok" | "warn"; children: React.ReactN
   );
 }
 
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
-
 /** "3000, 3040" as numbers; anything that is not a number is dropped. */
 function parseCategories(text: string): number[] {
   return text
@@ -442,15 +427,14 @@ function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () =
   const [text, setText] = useState(current);
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await api.PATCH("/indexers/{id}", {
+      await ok(api.PATCH("/indexers/{id}", {
         params: { path: { id: indexer.id } },
         body: {
           name: indexer.name, impl: indexer.impl, base_url: indexer.base_url, priority: indexer.priority,
           enabled: indexer.enabled, egress_proxy_url: indexer.egress_proxy_url,
           music_categories: parseCategories(text),
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: onSaved,
   });

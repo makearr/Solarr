@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 type Library = components["schemas"]["Library"];
@@ -16,11 +16,7 @@ export function canRequestIn(libraries: readonly Library[], which: (library: Lib
 export function useCanRequest(which: (library: Library) => boolean): boolean {
   const libraries = useQuery({
     queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/libraries")),
   });
   return libraries.data === undefined || canRequestIn(libraries.data, which);
 }

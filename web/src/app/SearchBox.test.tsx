@@ -5,7 +5,8 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SearchBox } from "./SearchBox";
 
 const get = vi.fn();
-vi.mock("@/api/client", () => ({
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
   api: { GET: (...args: unknown[]) => get(...args) },
   API_PREFIX: "/api/v1",
 }));

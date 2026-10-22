@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 type Pack = components["schemas"]["Pack"];
@@ -18,11 +18,7 @@ export function Packs() {
 
   const packs = useQuery({
     queryKey: ["packs"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/packs", { params: { query: { limit: 100 } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/packs", { params: { query: { limit: 100 } } })),
   });
 
   return (
@@ -85,11 +81,7 @@ function PackRow({ pack, expanded, onToggle }: { pack: Pack; expanded: boolean; 
 function PackItems({ packId }: { packId: number }) {
   const detail = useQuery({
     queryKey: ["pack", packId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/packs/{id}", { params: { path: { id: packId } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/packs/{id}", { params: { path: { id: packId } } })),
   });
 
   return (

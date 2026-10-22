@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
-
-const inputStyle = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 /** Puts a work in one of the library's collections made by hand, or in a new one. */
 export function AddToCollection({ categoryId, workId, title, onClose }: { categoryId: string; workId: number; title: string; onClose: () => void }) {
@@ -15,11 +14,7 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
   const [name, setName] = useState("");
   const list = useQuery({
     queryKey: ["franchises", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } })),
   });
   const mine = (list.data?.franchises ?? []).filter((franchise) => franchise.kind === "custom");
   const add = useMutation({
@@ -30,8 +25,7 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
         if (error) throw error;
         id = data.id;
       }
-      const { error } = await api.PUT("/franchises/{id}/members/{workId}", { params: { path: { id, workId }, query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
+      await ok(api.PUT("/franchises/{id}/members/{workId}", { params: { path: { id, workId }, query: { category_id: Number(categoryId) } } }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
@@ -55,7 +49,7 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
     >
       <div className="flex flex-col gap-3">
         {mine.length > 0 && (
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             {t("collection.add.existing")}
             <select className={inputStyle} value={chosen} onChange={(event) => setChosen(event.target.value)}>
               <option value="">{t("collection.add.new")}</option>
@@ -68,7 +62,7 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
           </label>
         )}
         {chosen === "" && (
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             {t("collection.add.name")}
             <input className={inputStyle} value={name} onChange={(event) => setName(event.target.value)} placeholder={t("collection.add.placeholder")} />
           </label>

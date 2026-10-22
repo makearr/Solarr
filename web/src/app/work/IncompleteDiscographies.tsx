@@ -1,26 +1,21 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 
 /** Library-derived discovery: artists the library holds an album of whose discography has albums it does not. */
 export function IncompleteDiscographies({ categoryId }: { categoryId: number }) {
   const queryClient = useQueryClient();
   const artists = useQuery({
     queryKey: ["discover-incomplete", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/discover/incomplete", { params: { query: { category_id: categoryId, limit: 30 } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/discover/incomplete", { params: { query: { category_id: categoryId, limit: 30 } } })),
   });
   const follow = useMutation({
     mutationFn: async (personId: number) => {
-      const { error } = await api.PUT("/people/{id}/follow", {
+      await ok(api.PUT("/people/{id}/follow", {
         params: { path: { id: personId } },
         body: { category_id: categoryId, search: true },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["discover-incomplete", categoryId] });

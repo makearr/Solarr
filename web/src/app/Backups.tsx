@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { API_PREFIX, api } from "@/api/client";
+import { api, API_PREFIX, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { Card } from "./SettingsCard";
@@ -15,17 +15,12 @@ export function Backups() {
 
   const files = useQuery({
     queryKey: ["backups"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/system/backups");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/system/backups")),
   });
 
   const runNow = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/system/backups", {});
-      if (error) throw error;
+      await ok(api.POST("/system/backups", {}));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["backups"] }),
   });

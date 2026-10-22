@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** AGPL section 13's own screen (documentation/licence-compliance.md): build
@@ -11,31 +11,19 @@ import { ThemeToggle } from "./ThemeToggle";
 export function About() {
   const about = useQuery({
     queryKey: ["about"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/about");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/about")),
     staleTime: Infinity,
   });
 
   const license = useQuery({
     queryKey: ["about", "license"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/about/license");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/about/license")),
     staleTime: Infinity,
   });
 
   const attribution = useQuery({
     queryKey: ["about", "attribution"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/about/attribution");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/about/attribution")),
     staleTime: Infinity,
   });
 

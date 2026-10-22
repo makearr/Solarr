@@ -3,7 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, LayoutGrid, List, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { remoteImage } from "@/lib/remoteImage";
 import { t } from "@/lib/i18n";
@@ -19,13 +19,12 @@ import { AddToLibrary } from "./work/AddWork";
 import { CoverArt } from "./CoverArt";
 import { usePreference } from "@/lib/usePreference";
 import { LetterRail } from "@/ui/LetterRail";
+import { inputStyle } from "@/ui/form";
 import { useNavigate } from "@tanstack/react-router";
 
 type Franchise = components["schemas"]["Franchise"];
 type View = "poster" | "list";
 type Sort = "name" | "items" | "missing" | "newest" | "monitored";
-
-const inputStyle = "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink";
 
 function sortOf(franchises: Franchise[], sort: Sort): Franchise[] {
   const sorted = [...franchises];
@@ -70,21 +69,13 @@ export function FranchiseIndex() {
   const [creating, setCreating] = useState(false);
   const list = useQuery({
     queryKey: ["franchises", categoryId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } })),
   });
   const monitor = useMutation({
-    mutationFn: async (franchise: Franchise) => {
-      const { data, error } = await api.POST("/franchises/{id}/monitor", {
-        params: { path: { id: franchise.id } },
-        body: { category_id: Number(categoryId), monitored: !franchise.monitored },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (franchise: Franchise) => ok(api.POST("/franchises/{id}/monitor", {
+      params: { path: { id: franchise.id } },
+      body: { category_id: Number(categoryId), monitored: !franchise.monitored },
+    })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
       void queryClient.invalidateQueries({ queryKey: ["works"] });
@@ -204,11 +195,7 @@ function CollectionDetail({
   const [adding, setAdding] = useState<string | undefined>();
   const detail = useQuery({
     queryKey: ["franchise", categoryId, summary.id],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } } })),
   });
   const changed = () => {
     void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
@@ -216,8 +203,7 @@ function CollectionDetail({
   };
   const rename = useMutation({
     mutationFn: async () => {
-      const { error } = await api.PATCH("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } }, body: { name } });
-      if (error) throw error;
+      await ok(api.PATCH("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } }, body: { name } }));
     },
     onSuccess: () => {
       setRenaming(false);
@@ -226,8 +212,7 @@ function CollectionDetail({
   });
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await api.DELETE("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
+      await ok(api.DELETE("/franchises/{id}", { params: { path: { id: summary.id }, query: { category_id: Number(categoryId) } } }));
     },
     onSuccess: () => {
       changed();
@@ -236,8 +221,7 @@ function CollectionDetail({
   });
   const take = useMutation({
     mutationFn: async (workId: number) => {
-      const { error } = await api.DELETE("/franchises/{id}/members/{workId}", { params: { path: { id: summary.id, workId }, query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
+      await ok(api.DELETE("/franchises/{id}/members/{workId}", { params: { path: { id: summary.id, workId }, query: { category_id: Number(categoryId) } } }));
     },
     onSuccess: changed,
   });
@@ -371,11 +355,7 @@ function NewCollection({ categoryId, onClose, onCreated }: { categoryId: string;
   const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/franchises", { body: { category_id: Number(categoryId), name } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/franchises", { body: { category_id: Number(categoryId), name } })),
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
       onCreated(data.id);
@@ -407,21 +387,13 @@ export function CollectionPage() {
   const queryClient = useQueryClient();
   const detail = useQuery({
     queryKey: ["franchise", categoryId, Number(franchiseId)],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/franchises/{id}", { params: { path: { id: Number(franchiseId) }, query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/franchises/{id}", { params: { path: { id: Number(franchiseId) }, query: { category_id: Number(categoryId) } } })),
   });
   const monitor = useMutation({
-    mutationFn: async (franchise: Franchise) => {
-      const { data, error } = await api.POST("/franchises/{id}/monitor", {
-        params: { path: { id: franchise.id } },
-        body: { category_id: Number(categoryId), monitored: !franchise.monitored },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (franchise: Franchise) => ok(api.POST("/franchises/{id}/monitor", {
+      params: { path: { id: franchise.id } },
+      body: { category_id: Number(categoryId), monitored: !franchise.monitored },
+    })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
       void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, Number(franchiseId)] });

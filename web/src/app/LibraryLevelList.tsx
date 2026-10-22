@@ -4,7 +4,7 @@ import type { LinkProps } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { ArrowDown, ArrowUp, Check, Columns3 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
 import { usePreference } from "@/lib/usePreference";
 import { useLibraryList } from "@/list/useLibraryList";
@@ -163,7 +163,7 @@ export function LibraryLevelList() {
       idOf: (item) => item.id,
       fetchPage: async ({ cursor, query, signal }) => {
         const monitored = query.filters.monitored;
-        const { data, error } = await api.GET("/libraries/{id}/{level}", {
+        return ok(api.GET("/libraries/{id}/{level}", {
           params: {
             path: { id: Number(categoryId), level: level ?? "" },
             query: {
@@ -172,9 +172,7 @@ export function LibraryLevelList() {
             },
           },
           signal,
-        });
-        if (error) throw error;
-        return data;
+        }));
       },
     },
     useRouteView(FILTER_KEYS),

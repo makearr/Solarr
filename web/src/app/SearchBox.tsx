@@ -3,12 +3,13 @@ import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Plus, Search } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { isSearchShortcut } from "@/lib/searchShortcut";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useLibraries } from "@/lib/resources";
 
 import { CoverArt } from "./CoverArt";
 import { useDebouncedValue } from "./useDebouncedValue";
@@ -50,13 +51,9 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
 
   const results = useQuery({
     queryKey: ["search", debounced],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/search", {
-        params: { query: { q: debounced, limit: 20 } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/search", {
+      params: { query: { q: debounced, limit: 20 } },
+    })),
     enabled: searchable,
     staleTime: 30_000,
   });
@@ -75,14 +72,7 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
 
   // Beyond the library (asked 2026-09-30, ADR-56's global half): artists and albums not in it yet,
   // searched in a library the person may add to; with several, they choose which.
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   const mediaTypes = useMediaTypes();
   const kindsOf = (library: Library) => mediaTypes.find((info) => info.key === library.media_type)?.add_kinds ?? [];
   const addable = (libraries.data ?? []).filter(

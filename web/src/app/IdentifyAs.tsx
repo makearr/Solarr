@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import { useLibrary } from "@/lib/useLibrary";
@@ -81,11 +81,7 @@ export function IdentifyAs({
   const results = useQuery({
     queryKey: ["identify-as", categoryId, kind, query],
     enabled: kind !== undefined && query.length >= 2,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/lookup", { params: { query: { category_id: categoryId, q: query, kind, limit: 15 } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/lookup", { params: { query: { category_id: categoryId, q: query, kind, limit: 15 } } })),
   });
   const parsed = parseParts(parts);
   const explicit = placesParts && parts.trim() !== "";

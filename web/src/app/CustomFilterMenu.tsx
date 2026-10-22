@@ -4,6 +4,7 @@ import { Check, Filter, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { usePreference } from "@/lib/usePreference";
+import { Button } from "@/ui/Button";
 import { describe, OPERATORS, parseWhere, toWhere, type Condition, type FilterField, type SavedFilter } from "@/list/customFilter";
 
 const control = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm text-ink";
@@ -219,9 +220,9 @@ function FilterBuilder({
             <Plus aria-hidden className="size-3.5" /> Add a condition
           </button>
           <div className="flex items-center gap-2">
-            <button type="button" disabled={!complete} onClick={() => finish(true)} className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50">
+            <Button variant="primary" type="button" disabled={!complete} onClick={() => finish(true)}>
               {name.trim() ? "Save and apply" : "Apply"}
-            </button>
+            </Button>
             {initial.id && (
               <button
                 type="button"

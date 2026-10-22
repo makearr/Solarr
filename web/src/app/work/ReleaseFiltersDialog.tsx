@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
@@ -29,9 +29,7 @@ export function ReleaseFiltersDialog({ workId, title, onClose }: { workId: numbe
   const save = useMutation({
     mutationFn: async () => {
       const body = rules.filter((rule) => rule.value.trim() !== "");
-      const { data, error } = await api.PUT("/works/{id}/release-filters", { params: { path: { id: workId } }, body });
-      if (error) throw error;
-      return data;
+      return ok(api.PUT("/works/{id}/release-filters", { params: { path: { id: workId } }, body }));
     },
     onSuccess: (saved) => {
       setEdited(undefined);

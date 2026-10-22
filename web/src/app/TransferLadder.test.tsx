@@ -6,7 +6,8 @@ import { TransferLadderControl } from "./Import";
 
 const get = vi.fn();
 const patch = vi.fn();
-vi.mock("@/api/client", () => ({
+vi.mock("@/api/client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/api/client")>()),
   api: {
     GET: (...args: unknown[]) => get(...args),
     PATCH: (...args: unknown[]) => patch(...args),

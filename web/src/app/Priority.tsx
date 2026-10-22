@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card, Field, SaveBar } from "./SettingsCard";
 
@@ -24,17 +25,12 @@ export function Priority() {
   const queryClient = useQueryClient();
   const priority = useQuery({
     queryKey: ["priority"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/priority");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/priority")),
   });
 
   const update = useMutation({
     mutationFn: async (body: PrioritySettings) => {
-      const { error } = await api.PATCH("/priority", { body });
-      if (error) throw error;
+      await ok(api.PATCH("/priority", { body }));
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["priority"] }),
   });
@@ -192,7 +188,7 @@ function WeightField({
   busy: boolean;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-xs text-ink-muted">
+    <label className={labelStyle}>
       {label}
       <input
         type="number"
@@ -205,7 +201,3 @@ function WeightField({
     </label>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

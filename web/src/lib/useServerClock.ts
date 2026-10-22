@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 
 export interface ServerClock {
   /** Formatted in the server's zone, or null until the offset is known. */
@@ -21,11 +21,7 @@ export const SKEW_TOLERANCE_MS = 60_000;
 export function useServerClock(): ServerClock {
   const about = useQuery({
     queryKey: ["about"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/about");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/about")),
     staleTime: Infinity,
   });
 

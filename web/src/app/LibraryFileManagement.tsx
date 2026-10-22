@@ -2,13 +2,14 @@ import { useEffect, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { useLibrary } from "@/lib/useLibrary";
 import type { components } from "@/api/schema";
 
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { inputStyle } from "@/ui/form";
 
-import { Message, Toggle, inputStyle } from "./LibraryNaming";
+import { Message, Toggle } from "./LibraryNaming";
 import { SaveBar, SettingRow } from "./SettingsCard";
 
 type FileManagement = components["schemas"]["FileManagement"];
@@ -29,11 +30,7 @@ export function LibraryFileManagement() {
   const saved = useQuery({
     queryKey: ["libraryFileManagement", id],
     enabled: id !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories/{id}/file-management", { params: { path: { id: id! } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/categories/{id}/file-management", { params: { path: { id: id! } } })),
   });
   const [draft, setDraft] = useState<FileManagement | undefined>();
   useEffect(() => {

@@ -4,10 +4,11 @@ import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, Tv } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
 import { remoteImage } from "@/lib/remoteImage";
+import { useLibraries } from "@/lib/resources";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
@@ -93,27 +94,15 @@ export function PersonPage() {
   const detail = useQuery({
     queryKey: ["person", id],
     enabled: Number.isFinite(id),
-    queryFn: async () => {
-      const { data, error } = await api.GET("/people/{id}", { params: { path: { id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/people/{id}", { params: { path: { id } } })),
   });
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   const searchMissing = usePersonAction(id, "/people/{id}/search");
   const refresh = usePersonAction(id, "/people/{id}/refresh");
   const monitorAll = usePersonAction(id, "/people/{id}/monitor-all");
   const remove = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/people/{id}/remove", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.POST("/people/{id}/remove", { params: { path: { id } } }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["people"] });
@@ -275,11 +264,7 @@ export function PersonPage() {
 function usePersonAction(id: number, path: "/people/{id}/search" | "/people/{id}/refresh" | "/people/{id}/monitor-all") {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST(path, { params: { path: { id } } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST(path, { params: { path: { id } } })),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["person", id] }),
   });
 }

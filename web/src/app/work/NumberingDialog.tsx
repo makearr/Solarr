@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
+import { labelStyle } from "@/ui/form";
 
 type Plan = components["schemas"]["NumberingPlan"];
 
@@ -29,11 +30,7 @@ export function NumberingDialog({ workId, title, onClose }: { workId: number; ti
   const [basis, setBasis] = useState<string>();
   const chosen = basis ?? numbering.data?.current ?? "";
   const change = useMutation({
-    mutationFn: async (preview: boolean) => {
-      const { data, error } = await api.POST("/works/{id}/numbering", { params: { path: { id: workId } }, body: { basis: chosen, preview } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (preview: boolean) => ok(api.POST("/works/{id}/numbering", { params: { path: { id: workId } }, body: { basis: chosen, preview } })),
     onSuccess: (_, preview) => {
       if (preview) return;
       void queryClient.invalidateQueries({ queryKey: ["work", workId] });
@@ -46,7 +43,7 @@ export function NumberingDialog({ workId, title, onClose }: { workId: number; ti
     <Dialog title={t("numbering.title")} description={title} width="wide" onClose={onClose}>
       {numbering.data ? (
         <div className="flex flex-col gap-3 text-sm">
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             {t("numbering.by")}
             <select
               className="rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink"

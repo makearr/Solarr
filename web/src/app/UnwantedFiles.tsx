@@ -2,9 +2,11 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
 
@@ -33,18 +35,14 @@ function ExclusionPatterns() {
   const queryClient = useQueryClient();
   const patterns = useQuery({
     queryKey: ["exclusions"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/exclusions");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/exclusions")),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["exclusions"] });
 
   const update = useMutation({
     mutationFn: async (pattern: ExclusionPattern) => {
-      const { error } = await api.PATCH("/exclusions/{id}", {
+      await ok(api.PATCH("/exclusions/{id}", {
         params: { path: { id: pattern.id } },
         body: {
           pattern: pattern.pattern,
@@ -54,16 +52,14 @@ function ExclusionPatterns() {
           note: pattern.note,
           enabled: pattern.enabled,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/exclusions/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/exclusions/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -170,13 +166,9 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
   const [note, setNote] = useState("");
 
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/exclusions", {
-        body: { pattern, action, note: note || undefined, enabled: true },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/exclusions", {
+      body: { pattern, action, note: note || undefined, enabled: true },
+    })),
     onSuccess: () => {
       setPattern("");
       setNote("");
@@ -202,7 +194,7 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
           onChange={(event) => setPattern(event.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
+      <label className={labelStyle}>
         Action
         <select
           className={inputStyle}
@@ -226,14 +218,13 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
           onChange={(event) => setNote(event.target.value)}
         />
       </label>
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={!pattern.trim() || create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {create.isPending ? "Adding…" : "Add pattern"}
-      </button>
+      </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
           That pattern could not be created. Check the pattern and action are valid.
@@ -247,17 +238,12 @@ function BlockedContent() {
   const queryClient = useQueryClient();
   const blocked = useQuery({
     queryKey: ["blocked"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/blocked");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/blocked")),
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/blocked/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/blocked/{id}", { params: { path: { id } } }));
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["blocked"] }),
   });
@@ -330,7 +316,3 @@ function BlockedRow({
     </li>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

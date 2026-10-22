@@ -2,8 +2,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChevronUp, Clock, Folder, FolderOpen } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { usePreference } from "@/lib/usePreference";
+import { inputStyle } from "@/ui/form";
 
 import { useDebouncedValue } from "./useDebouncedValue";
 
@@ -65,13 +66,9 @@ export function PathPicker({
   const listing = useQuery({
     queryKey: ["browse", debounced],
     enabled: open,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/storage/browse", {
-        params: { query: { path: debounced === "" ? undefined : debounced, dirs_only: true } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/storage/browse", {
+      params: { query: { path: debounced === "" ? undefined : debounced, dirs_only: true } },
+    })),
     retry: false,
   });
 
@@ -175,7 +172,3 @@ function Row({
     </button>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

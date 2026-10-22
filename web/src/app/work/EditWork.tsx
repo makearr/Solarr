@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
+import { useQualityProfiles, useRootFolders } from "@/lib/resources";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Pencil } from "lucide-react";
 
@@ -31,28 +32,10 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
   const queryClient = useQueryClient();
   const edit = useQuery({
     queryKey: ["work-edit", work.id],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}/edit", { params: { path: { id: work.id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/{id}/edit", { params: { path: { id: work.id } } })),
   });
-  const profiles = useQuery({
-    queryKey: ["qualityProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualityprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
-  const rootFolders = useQuery({
-    queryKey: ["rootfolders"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/rootfolders");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const profiles = useQualityProfiles();
+  const rootFolders = useRootFolders();
   const libraryRoots = (rootFolders.data ?? []).filter((root) =>
     (root.categories ?? []).some((category) => (work.library_ids ?? []).includes(category.id)),
   );
@@ -91,11 +74,10 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
         return "confirm";
       }
       const tags = form.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
-      const { error } = await api.PUT("/works/{id}/edit", {
+      await ok(api.PUT("/works/{id}/edit", {
         params: { path: { id: work.id } },
         body: { monitored: form.monitored, profile_id: form.profileId, tags, fields: form.fields },
-      });
-      if (error) throw error;
+      }));
       if (form.option) {
         const { error: optionError } = await api.POST("/works/{id}/monitor", {
           params: { path: { id: work.id } },
@@ -263,11 +245,7 @@ export function EditWorkButton({ id }: { id: number }) {
 function EditLoadedWork({ id, onClose }: { id: number; onClose: () => void }) {
   const work = useQuery({
     queryKey: ["work", id],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/{id}", { params: { path: { id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/{id}", { params: { path: { id } } })),
   });
   const info = useMediaTypes().find((entry) => entry.key === work.data?.media_type);
   if (!work.data) return null;
@@ -306,14 +284,7 @@ export function BulkEditWork({
   const [fields, setFields] = useState<Record<string, string>>({});
   const [count, setCount] = useState<number | null>(null);
   const editable = (info?.facets ?? []).filter((facet) => facet.editable);
-  const profiles = useQuery({
-    queryKey: ["qualityProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualityprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const profiles = useQualityProfiles();
   const names = (raw: string) => raw.split(",").map((name) => name.trim()).filter((name) => name !== "");
   const send = useMutation({
     mutationFn: async (preview: boolean) => {

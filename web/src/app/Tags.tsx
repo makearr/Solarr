@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 
 import { Card } from "./SettingsCard";
@@ -15,11 +15,7 @@ export function Tags() {
 
   const tags = useQuery({
     queryKey: ["tags", "own"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/tags/own");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/tags/own")),
   });
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -37,8 +33,7 @@ export function Tags() {
   });
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/tags/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/tags/{id}", { params: { path: { id } } }));
     },
     onSuccess: refresh,
   });

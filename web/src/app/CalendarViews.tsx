@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { CoverArt } from "./CoverArt";
@@ -34,11 +34,7 @@ const WEEKDAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const
 function useReleases(from: string, to: string) {
   return useQuery({
     queryKey: ["calendar", from, to],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/calendar", { params: { query: { from, to, limit: 500 } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/calendar", { params: { query: { from, to, limit: 500 } } })),
   });
 }
 

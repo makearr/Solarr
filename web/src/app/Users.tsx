@@ -2,10 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { useSetMyTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
+import { useCategories, useUserDefaults } from "@/lib/resources";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
 
@@ -38,11 +41,7 @@ const TIERS: readonly { id: Tier; label: string; blurb: string }[] = [
 export function UserSettings() {
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me")),
   });
 
   return (
@@ -111,11 +110,7 @@ function APIKeysSection() {
   const queryClient = useQueryClient();
   const keys = useQuery({
     queryKey: ["me", "apikeys"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me/apikeys");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me/apikeys")),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["me", "apikeys"] });
@@ -124,11 +119,7 @@ function APIKeysSection() {
   const [name, setName] = useState("");
 
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/me/apikeys", { body: { name } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/me/apikeys", { body: { name } })),
     onSuccess: (created) => {
       if (created) setJustCreated({ name: created.name, key: created.key });
       setName("");
@@ -138,8 +129,7 @@ function APIKeysSection() {
 
   const revoke = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/me/apikeys/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/me/apikeys/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -217,14 +207,13 @@ function APIKeysSection() {
             onChange={(event) => setName(event.target.value)}
           />
         </label>
-        <button
+        <Button
+          variant="primary"
           type="submit"
           disabled={name.trim() === "" || create.isPending}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {create.isPending ? "Creating…" : "New key"}
-        </button>
+        </Button>
       </form>
     </Card>
   );
@@ -304,7 +293,7 @@ function AccessSection() {
       </div>
 
       {needsPassword && (
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Password for{" "}
           <span className="font-mono text-ink">{policy.data.administrator ?? "the administrator"}</span>
           <input
@@ -359,50 +348,33 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   const queryClient = useQueryClient();
   const users = useQuery({
     queryKey: ["users"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/users");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/users")),
   });
-  const categories = useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const categories = useCategories();
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["users"] });
 
   const update = useMutation({
-    mutationFn: async (change: { id: number; role?: Role; password?: string; limits?: UserLimits }) => {
-      const { data, error } = await api.PATCH("/users/{id}", {
-        params: { path: { id: change.id } },
-        body: { role: change.role, password: change.password, limits: change.limits },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (change: { id: number; role?: Role; password?: string; limits?: UserLimits }) => ok(api.PATCH("/users/{id}", {
+      params: { path: { id: change.id } },
+      body: { role: change.role, password: change.password, limits: change.limits },
+    })),
     onSuccess: invalidate,
   });
 
   const grant = useMutation({
     mutationFn: async (change: { id: number; categoryId: number; permission: Permission }) => {
-      const { error } = await api.PUT("/users/{id}/access", {
+      await ok(api.PUT("/users/{id}/access", {
         params: { path: { id: change.id } },
         body: { category_id: change.categoryId, permission: change.permission },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/users/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/users/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
   });
@@ -449,18 +421,10 @@ type Library = { id: number; name: string; media_type: string };
 /** What a new account is offered for libraries created after it. */
 function NewLibraryDefault() {
   const queryClient = useQueryClient();
-  const defaults = useQuery({
-    queryKey: ["user-defaults"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/settings/users");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const defaults = useUserDefaults();
   const save = useMutation({
     mutationFn: async (permission: Permission) => {
-      const { error } = await api.PUT("/settings/users", { body: { new_library_permission: permission } });
-      if (error) throw error;
+      await ok(api.PUT("/settings/users", { body: { new_library_permission: permission } }));
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["user-defaults"] }),
   });
@@ -800,14 +764,7 @@ function Row({
 }
 
 function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdded: () => void }) {
-  const defaults = useQuery({
-    queryKey: ["user-defaults"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/settings/users");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const defaults = useUserDefaults();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<Role>("readonly");
@@ -820,13 +777,9 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
   };
 
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/users", {
-        body: { username, password, role, access: grants, limits: shownLimits },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/users", {
+      body: { username, password, role, access: grants, limits: shownLimits },
+    })),
     onSuccess: () => {
       setUsername("");
       setPassword("");
@@ -868,7 +821,7 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
             onChange={(event) => setPassword(event.target.value)}
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Role
           <select
             className={inputStyle}
@@ -908,14 +861,13 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
       />
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
+          variant="primary"
           type="submit"
           disabled={!username.trim() || password === "" || create.isPending}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                     focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         >
           {create.isPending ? "Adding…" : "Add user"}
-        </button>
+        </Button>
         {create.isError && (
           <p className="text-xs text-danger">
             That account could not be created. The username may already be taken.
@@ -925,7 +877,3 @@ function AddUser({ libraries, onAdded }: { libraries: readonly Library[]; onAdde
     </form>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

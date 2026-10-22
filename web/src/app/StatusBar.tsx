@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Globe, LoaderCircle } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { SKEW_TOLERANCE_MS, useServerClock } from "@/lib/useServerClock";
 import { describe, historyNotification, useNotifications, type Connection } from "@/lib/useNotifications";
@@ -18,11 +18,7 @@ export function StatusBar() {
   // Shares useServerClock's own ["about"] query cache -- one request either way.
   const about = useQuery({
     queryKey: ["about"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/about");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/about")),
     staleTime: Infinity,
   });
 
@@ -31,11 +27,7 @@ export function StatusBar() {
   // interval, so this only has to read the cached answer.
   const egress = useQuery({
     queryKey: ["egress"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/system/egress");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/system/egress")),
     staleTime: 5 * 60_000,
     retry: false,
   });

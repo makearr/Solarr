@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 
 const KEY = ["me", "preferences"] as const;
 
@@ -14,20 +14,15 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
   const queryClient = useQueryClient();
   const stored = useQuery({
     queryKey: KEY,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me/preferences");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me/preferences")),
   });
 
   const save = useMutation({
     mutationFn: async (value: T) => {
-      const { error } = await api.PUT("/me/preferences/{key}", {
+      await ok(api.PUT("/me/preferences/{key}", {
         params: { path: { key } },
         body: { value: JSON.stringify(value) },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: KEY }),
   });

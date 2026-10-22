@@ -3,10 +3,11 @@ import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Plus, Search } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
+import { useQualityProfiles } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
@@ -41,13 +42,9 @@ export function AddWork() {
   const results = useQuery({
     queryKey: ["work-lookup", categoryId, kind, debounced],
     enabled: searchable,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/works/lookup", {
-        params: { query: { category_id: Number(categoryId), q: debounced, kind, limit: 20 } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/works/lookup", {
+      params: { query: { category_id: Number(categoryId), q: debounced, kind, limit: 20 } },
+    })),
   });
 
   if (!library || !info) return null;
@@ -181,14 +178,7 @@ function AddPanel({
   const [profileId, setProfileId] = useState(0);
   // Lidarr's and Sonarr's "Start search for missing", remembered per person (D13).
   const [search, setSearch] = usePreference("discover.search_on_add", true);
-  const profiles = useQuery({
-    queryKey: ["qualityProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualityprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const profiles = useQualityProfiles();
   const add = useMutation({
     mutationFn: async () => {
       const { data, error } = await api.POST("/works", {

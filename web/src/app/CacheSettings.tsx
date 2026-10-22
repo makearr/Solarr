@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
@@ -45,11 +45,7 @@ export function CacheSettings() {
   const queryClient = useQueryClient();
   const report = useQuery({
     queryKey: ["cache"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/cache");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/cache")),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["cache"] });
@@ -61,16 +57,14 @@ export function CacheSettings() {
       images_share_percent: number;
       metadata_share_percent: number;
     }) => {
-      const { error } = await api.PATCH("/cache", { body: budget });
-      if (error) throw error;
+      await ok(api.PATCH("/cache", { body: budget }));
     },
     onSuccess: invalidate,
   });
 
   const clear = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/cache/clear", {});
-      if (error) throw error;
+      await ok(api.POST("/cache/clear", {}));
     },
     onSuccess: invalidate,
   });

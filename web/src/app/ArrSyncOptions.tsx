@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { useLibraries } from "@/lib/resources";
 
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrImportRun = components["schemas"]["ArrImportRun"];
@@ -41,21 +42,10 @@ export function ArrSyncOptions({
   const [libraryId, setLibraryId] = useState<number | undefined>(instance.category_id ?? undefined);
   const [notes, setNotes] = useState<string[]>([]);
 
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
   const folders = useQuery({
     queryKey: ["arr-rootfolders", instance.id],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/arr/instances/{id}/rootfolders", { params: { path: { id: instance.id } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/arr/instances/{id}/rootfolders", { params: { path: { id: instance.id } } })),
   });
   const rewrite = (path: string) => {
     for (const { from, to } of rewrites) {

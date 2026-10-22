@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { LanguageProfiles } from "./LanguageProfiles";
 import { Card } from "./SettingsCard";
 import { QualityTargetsSection } from "./QualityTargets";
@@ -12,7 +12,9 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 import {
   buildAudioRules, buildVideoRules, containerOf, parseAudioRules, parseVideoRules, summarise, type AudioRules, type Range, type VideoRules,
 } from "@/lib/qualityRules";
+import { useQualityProfiles } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
+import { labelStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
 
@@ -67,18 +69,10 @@ const SAMPLE_RATE_FALLBACK = { min: "44100", ideal: "48000", max: "96000" };
 export function QualityProfilesPage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState<number | "new" | null>(null);
-  const profiles = useQuery({
-    queryKey: ["qualityProfiles"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/qualityprofiles");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const profiles = useQualityProfiles();
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/qualityprofiles/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/qualityprofiles/{id}", { params: { path: { id } } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["qualityProfiles"] }),
   });
@@ -213,7 +207,7 @@ function ProfileForm({
           Name
           <input required value={name} onChange={(event) => setName(event.target.value)} className={input} />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Media type
           <select
             value={mediaType}
@@ -233,7 +227,7 @@ function ProfileForm({
       {hasForm && !asJSON && !isVideo && <AudioRulesForm rules={rules} onChange={setRules} />}
       {hasForm && !asJSON && isVideo && <VideoRulesForm rules={video} onChange={setVideo} />}
       {(!hasForm || asJSON) && (
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           {hasForm ? "Rules (JSON)" : `${mediaTypeName(mediaType)} is not built yet, so its rules are written as JSON.`}
           <textarea value={json} onChange={(event) => setJson(event.target.value)} className={`${input} h-40 font-mono`} />
         </label>
@@ -649,7 +643,7 @@ function RangeInputs({ value, onChange }: { value: Range; onChange: (range: Rang
   return (
     <>
       {(["min", "ideal", "max"] as const).map((key) => (
-        <label key={key} className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label key={key} className={labelStyle}>
           {key === "min" ? "Lowest" : key === "ideal" ? "Ideal" : "Highest"}
           <input
             inputMode="numeric"

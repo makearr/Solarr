@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { t } from "@/lib/i18n";
 import { Dialog } from "@/ui/Dialog";
 
@@ -30,20 +30,15 @@ export function InteractiveSearch({
   // A query, not a mutation: opening the dialog is the search, and reopening reuses it for a minute.
   const found = useQuery({
     queryKey: ["work", workId, "interactive-search", query],
-    queryFn: async () => {
-      const { data, error } = await api.POST("/works/{id}/search", { params: { path: { id: workId }, query } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.POST("/works/{id}/search", { params: { path: { id: workId }, query } })),
     staleTime: 60_000,
     retry: false,
   });
   const send = useMutation({
     mutationFn: async (decisionId: number) => {
-      const { error } = await api.POST("/works/{id}/candidates/{decisionId}/send", {
+      await ok(api.POST("/works/{id}/candidates/{decisionId}/send", {
         params: { path: { id: workId, decisionId }, query },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["wanted"] });

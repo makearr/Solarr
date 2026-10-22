@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
+import { Button } from "@/ui/Button";
+import { inputStyle, labelStyle } from "@/ui/form";
 import { ThemeToggle } from "./ThemeToggle";
 
 /** Shown when there is an account but no session. Never shown when the server
@@ -13,13 +15,9 @@ export function Login() {
   const [remember, setRemember] = useState(false);
 
   const signIn = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/auth/login", {
-        body: { username, password, remember },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/auth/login", {
+      body: { username, password, remember },
+    })),
     onSuccess: () => queryClient.invalidateQueries(),
   });
 
@@ -44,7 +42,7 @@ export function Login() {
         >
           <h1 className="text-sm font-medium">Sign in</h1>
 
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             Username
             <input
               className={inputStyle}
@@ -55,7 +53,7 @@ export function Login() {
             />
           </label>
 
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label className={labelStyle}>
             Password
             <input
               className={inputStyle}
@@ -84,24 +82,18 @@ export function Login() {
             </p>
           )}
 
-          <button
+          <Button
+            variant="primary"
             type="submit"
             disabled={signIn.isPending || username === "" || password === ""}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink
-                       disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                       focus-visible:outline-accent"
           >
             {signIn.isPending ? "Signing in…" : "Sign in"}
-          </button>
+          </Button>
         </form>
       </main>
     </div>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
 
 /** problemType reads an API problem's type slug, if the error is one. */
 function problemType(error: unknown): string | undefined {

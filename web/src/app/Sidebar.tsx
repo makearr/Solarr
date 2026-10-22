@@ -1,5 +1,4 @@
 import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
   ChevronDown,
@@ -14,9 +13,9 @@ import {
   UsersRound,
 } from "lucide-react";
 
-import { api } from "@/api/client";
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
+import { useLibraries } from "@/lib/resources";
 import { useOpenSections } from "@/lib/useOpenSections";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useTier, type Tier } from "@/lib/useTier";
@@ -75,14 +74,7 @@ export function Sidebar() {
   const search = useSearch({ strict: false }) as { category_id?: string };
   const collapsed = useSidebarCollapsed();
 
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
 
   const groups = groupByMediaType(libraries.data ?? []);
   const viewer = { tier, administrator };

@@ -2,7 +2,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, ChevronDown, ChevronRight, CircleUser } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { MODES, SCHEMES, type Mode } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 import { useSetMyTier, type Tier } from "@/lib/useTier";
@@ -87,11 +87,7 @@ export function UserMenu() {
   const setTier = useSetMyTier();
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me")),
   });
   if (!me.data) return null;
   const { tier, tier_max: tierMax, username, auth_required: authRequired } = me.data;

@@ -3,12 +3,14 @@ import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { factsOf } from "@/lib/identificationEvidence";
+import { useCategories, useImportSettings } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Dialog } from "@/ui/Dialog";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 import { IdentificationCandidates } from "./IdentificationCandidates";
 import { IdentifyAs, type IdentityChoice, queryFromPath } from "./IdentifyAs";
@@ -127,24 +129,16 @@ export function Import() {
  *  with. The folder structure comes from the template either way. */
 function RenameOnImportControl() {
   const queryClient = useQueryClient();
-  const settings = useQuery({
-    queryKey: ["import-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const settings = useImportSettings();
 
   const update = useMutation({
     mutationFn: async (rename: boolean) => {
-      const { error } = await api.PATCH("/import/settings", {
+      await ok(api.PATCH("/import/settings", {
         body: {
           auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9,
           rename_on_import: rename,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-settings"] }),
   });
@@ -189,21 +183,13 @@ const THRESHOLD_LEVELS: readonly { value: number; label: string; description: st
 
 function ThresholdControl() {
   const queryClient = useQueryClient();
-  const settings = useQuery({
-    queryKey: ["import-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const settings = useImportSettings();
 
   const update = useMutation({
     mutationFn: async (value: number) => {
-      const { error } = await api.PATCH("/import/settings", {
+      await ok(api.PATCH("/import/settings", {
         body: { auto_commit_confidence: value },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-settings"] }),
   });
@@ -308,24 +294,16 @@ const TRANSFER_METHODS: readonly {
 export function TransferLadderControl() {
   const queryClient = useQueryClient();
 
-  const settings = useQuery({
-    queryKey: ["import-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const settings = useImportSettings();
 
   const update = useMutation({
     mutationFn: async (ladder: TransferMethod[]) => {
-      const { error } = await api.PATCH("/import/settings", {
+      await ok(api.PATCH("/import/settings", {
         body: {
           auto_commit_confidence: settings.data?.auto_commit_confidence ?? 0.9,
           transfer_ladder: ladder,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["import-settings"] }),
   });
@@ -524,11 +502,10 @@ function InspectForm() {
       if (categoryId === "") return;
       const { data: root, error: rootError } = await api.POST("/rootfolders", { body: { path: sourcePath.trim() } });
       if (rootError) throw rootError;
-      const { error } = await api.POST("/categories/{id}/rootfolders", {
+      await ok(api.POST("/categories/{id}/rootfolders", {
         params: { path: { id: categoryId } },
         body: { root_folder_id: root!.id },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       rememberPath(sourcePath);
@@ -540,7 +517,7 @@ function InspectForm() {
 
   const inspect = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/import/inspect", {
+      await ok(api.POST("/import/inspect", {
         body: {
           source_path: sourcePath,
           origin,
@@ -548,8 +525,7 @@ function InspectForm() {
           preview,
           add_unverified: addUnverified && !preview,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       rememberPath(sourcePath);
@@ -580,7 +556,7 @@ function InspectForm() {
           recent={recentPaths}
           placeholder="/downloads/incoming/Artist - Album"
         />
-        <label className="flex flex-col gap-1 text-xs text-ink-muted">
+        <label className={labelStyle}>
           Origin
           <select className={inputStyle} value={origin} onChange={(event) => setOrigin(event.target.value as ImportOrigin)}>
             {ORIGINS.map((entry) => (
@@ -591,7 +567,7 @@ function InspectForm() {
           </select>
         </label>
         <label
-          className="flex flex-col gap-1 text-xs text-ink-muted"
+          className={labelStyle}
           title="Only files that fit the library's content are placed in it. Decide later keeps every unit waiting for a library."
         >
           Only into library
@@ -663,20 +639,6 @@ function InspectForm() {
   );
 }
 
-/** Shared with the per-session "assign a category" action below -- same
- *  query key as Categories.tsx/DownloadFolders.tsx, so the list is cached
- *  once across the whole app. */
-function useCategories() {
-  return useQuery({
-    queryKey: ["categories"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/categories");
-      if (error) throw error;
-      return data;
-    },
-  });
-}
-
 const RUNNING_STATES = new Set<ImportSession["state"]>(["INSPECTING", "CANCELLING"]);
 // A session that has stopped walking: the only kind that can be reverted, and
 // the only kind whose held units are final enough to commit by hand. REVERTED
@@ -719,11 +681,7 @@ function SessionList({
 }) {
   const sessions = useQuery({
     queryKey: ["import-sessions"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/sessions");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/import/sessions")),
     refetchInterval: 5000,
   });
 
@@ -763,16 +721,14 @@ function SessionRow({
 
   const cancel = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/import/sessions/{id}/cancel", { params: { path: { id: session.id } } });
-      if (error) throw error;
+      await ok(api.POST("/import/sessions/{id}/cancel", { params: { path: { id: session.id } } }));
     },
     onSuccess: invalidate,
   });
 
   const revert = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/import/sessions/{id}/revert", { params: { path: { id: session.id } } });
-      if (error) throw error;
+      await ok(api.POST("/import/sessions/{id}/revert", { params: { path: { id: session.id } } }));
     },
     onSuccess: () => {
       invalidate();
@@ -782,21 +738,16 @@ function SessionRow({
 
   const dismiss = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/import/sessions/{id}/dismiss", { params: { path: { id: session.id } } });
-      if (error) throw error;
+      await ok(api.POST("/import/sessions/{id}/dismiss", { params: { path: { id: session.id } } }));
     },
     onSuccess: invalidate,
   });
 
   const commitHeld = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/import/sessions/{id}/commit", {
-        params: { path: { id: session.id } },
-        body: {},
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/import/sessions/{id}/commit", {
+      params: { path: { id: session.id } },
+      body: {},
+    })),
     onSuccess: () => {
       invalidate();
       void queryClient.invalidateQueries({ queryKey: ["import-units", session.id] });
@@ -923,14 +874,10 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
   const [categoryId, setCategoryId] = useState<number | "">("");
 
   const assign = useMutation({
-    mutationFn: async (id: number) => {
-      const { data, error } = await api.POST("/import/sessions/{id}/category", {
-        params: { path: { id: sessionId } },
-        body: { category_id: id },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (id: number) => ok(api.POST("/import/sessions/{id}/category", {
+      params: { path: { id: sessionId } },
+      body: { category_id: id },
+    })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
       void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
@@ -972,33 +919,18 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
 function UnitList({ sessionId }: { sessionId: number }) {
   const units = useQuery({
     queryKey: ["import-units", sessionId],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/sessions/{id}/units", {
-        params: { path: { id: sessionId }, query: { limit: 200 } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/import/sessions/{id}/units", {
+      params: { path: { id: sessionId }, query: { limit: 200 } },
+    })),
   });
 
   const queryClient = useQueryClient();
   const sessions = useQuery({
     queryKey: ["import-sessions"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/sessions");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/import/sessions")),
   });
   const categoryId = sessions.data?.find((session) => session.id === sessionId)?.category_id ?? null;
-  const importSettings = useQuery({
-    queryKey: ["import-settings"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/import/settings");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const importSettings = useImportSettings();
   // "Place all identified" (asked 2026-09-30): every waiting unit matched at or above the import's own
   // confidence; the uncertain ones stay for review.
   const threshold = importSettings.data?.auto_commit_confidence ?? 0.9;
@@ -1008,10 +940,9 @@ function UnitList({ sessionId }: { sessionId: number }) {
   const placeAll = useMutation({
     mutationFn: async (ids: number[]) => {
       for (const unitId of ids) {
-        const { error } = await api.POST("/import/sessions/{id}/units/{unitId}/commit", {
+        await ok(api.POST("/import/sessions/{id}/units/{unitId}/commit", {
           params: { path: { id: sessionId, unitId } },
-        });
-        if (error) throw error;
+        }));
       }
     },
     onSettled: () => {
@@ -1098,11 +1029,10 @@ function UnitRow({ sessionId, unit, categoryId }: { sessionId: number; unit: Imp
 
   const commit = useMutation({
     mutationFn: async (as?: IdentityChoice) => {
-      const { error } = await api.POST("/import/sessions/{id}/units/{unitId}/commit", {
+      await ok(api.POST("/import/sessions/{id}/units/{unitId}/commit", {
         params: { path: { id: sessionId, unitId: unit.id } },
         ...(as ? { body: { provider: as.provider, external_id: as.external_id } } : {}),
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       setIdentifying(false);
@@ -1249,7 +1179,3 @@ function DecisionBadge({ decision }: { decision: ImportUnit["decision"] }) {
 function Message({ children }: { children: React.ReactNode }) {
   return <p className="p-3 text-xs text-ink-muted">{children}</p>;
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

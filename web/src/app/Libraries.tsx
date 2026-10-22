@@ -1,33 +1,20 @@
-import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus } from "lucide-react";
 
-import { api } from "@/api/client";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useLibraries } from "@/lib/resources";
 import type { components } from "@/api/schema";
-import { useMediaTypes } from "@/lib/useMediaTypes";
 
-import { MEDIA_TYPE_NAME } from "./Categories";
-import { KindSelect } from "./LibraryKindSelect";
+import { AddLibraryForm } from "./AddLibraryForm";
 import { defaultLevelKey } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];
-type MediaType = components["schemas"]["MediaType"];
 
 /** The Library section's own landing page (asked for 2026-09-13): the header
  *  in the sidebar is a link now, and this is where it lands -- every library
  *  as a card, and the only place a new one can be created from the interface.
  *  A library is a category (ADR-54), so creating one is POST /categories. */
 export function Libraries() {
-  const libraries = useQuery({
-    queryKey: ["libraries"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries");
-      if (error) throw error;
-      return data;
-    },
-  });
+  const libraries = useLibraries();
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-6">
@@ -51,7 +38,7 @@ export function Libraries() {
         </ul>
       )}
 
-      <AddLibrary />
+      <AddLibraryForm />
     </div>
   );
 }
@@ -96,80 +83,3 @@ function LibraryCard({ library }: { library: LibraryEntry }) {
   );
 }
 
-function AddLibrary() {
-  const queryClient = useQueryClient();
-  const [name, setName] = useState("");
-  const [mediaType, setMediaType] = useState<MediaType>("music");
-  const [kind, setKind] = useState("");
-  const mediaTypes = useMediaTypes();
-
-  const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/categories", {
-        body: { name: name.trim() || MEDIA_TYPE_NAME[mediaType], media_type: mediaType, kind: kind || undefined },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      setName("");
-      void queryClient.invalidateQueries();
-    },
-  });
-
-  return (
-    <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        create.mutate();
-      }}
-    >
-      <label className="flex min-w-32 flex-1 flex-col gap-1 text-xs text-ink-muted">
-        Name
-        <input
-          className={inputStyle}
-          value={name}
-          autoComplete="off"
-          placeholder={MEDIA_TYPE_NAME[mediaType]}
-          onChange={(event) => setName(event.target.value)}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-ink-muted">
-        Media type
-        <select
-          className={inputStyle}
-          value={mediaType}
-          onChange={(event) => {
-            setMediaType(event.target.value as MediaType);
-            setKind("");
-          }}
-        >
-          {mediaTypes.map((type) => (
-            <option key={type.key} value={type.key}>
-              {type.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <KindSelect mediaType={mediaType} value={kind} onChange={setKind} />
-      <button
-        type="submit"
-        disabled={create.isPending}
-        className="flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink
-                   disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                   focus-visible:outline-accent"
-      >
-        <Plus aria-hidden className="size-4" />
-        {create.isPending ? "Adding…" : "Add library"}
-      </button>
-      {create.isError && (
-        <p className="w-full text-xs text-danger">That library could not be created. Check the name is not empty.</p>
-      )}
-    </form>
-  );
-}
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

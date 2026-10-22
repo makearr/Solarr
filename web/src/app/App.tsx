@@ -2,7 +2,7 @@ import { useState } from "react";
 import { RouterProvider } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { About } from "./About";
 import { Login } from "./Login";
 import { router } from "./router";
@@ -16,22 +16,14 @@ export function App() {
 
   const setup = useQuery({
     queryKey: ["setup"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/setup");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/setup")),
   });
 
   // Whether this caller has a session. Also how the interface discovers that the
   // server runs without authentication: there, /me simply answers.
   const me = useQuery({
     queryKey: ["me"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/me");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/me")),
     retry: false,
   });
 

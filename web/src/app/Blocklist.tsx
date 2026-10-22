@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 
 import { Card } from "./SettingsCard";
 
@@ -13,17 +13,12 @@ export function Blocklist() {
 
   const entries = useQuery({
     queryKey: ["blocklist"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/blocklist", { params: { query: { limit: 100 } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/blocklist", { params: { query: { limit: 100 } } })),
   });
 
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      const { error } = await api.DELETE("/blocklist/{id}", { params: { path: { id } } });
-      if (error) throw error;
+      await ok(api.DELETE("/blocklist/{id}", { params: { path: { id } } }));
     },
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["blocklist"] }),
   });

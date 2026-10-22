@@ -3,7 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
@@ -43,11 +43,7 @@ function PartOf({ franchise, workId, categoryId }: { franchise: Franchise; workI
   const [adding, setAdding] = useState<Member>();
   const detail = useQuery({
     queryKey: ["franchise", categoryId, franchise.id],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/franchises/{id}", { params: { path: { id: franchise.id }, query: { category_id: Number(categoryId) } } });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/franchises/{id}", { params: { path: { id: franchise.id }, query: { category_id: Number(categoryId) } } })),
   });
   const changed = () => {
     void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, franchise.id] });
@@ -55,11 +51,7 @@ function PartOf({ franchise, workId, categoryId }: { franchise: Franchise; workI
     void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
   };
   const monitor = useMutation({
-    mutationFn: async (monitored: boolean) => {
-      const { data, error } = await api.POST("/franchises/{id}/monitor", { params: { path: { id: franchise.id } }, body: { category_id: Number(categoryId), monitored } });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: (monitored: boolean) => ok(api.POST("/franchises/{id}/monitor", { params: { path: { id: franchise.id } }, body: { category_id: Number(categoryId), monitored } })),
     onSuccess: changed,
   });
   const shown = detail.data ?? franchise;

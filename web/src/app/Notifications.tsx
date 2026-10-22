@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Bell, CheckCircle2, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 
 import { pageTier } from "./sections";
@@ -25,11 +25,7 @@ function useNotificationCentre() {
   const tier = useTier();
   const health = useQuery({
     queryKey: ["system-health"],
-    queryFn: async () => {
-      const { data, error } = await api.GET("/system/health");
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/system/health")),
     refetchInterval: 60_000,
   });
   const history = useQuery({

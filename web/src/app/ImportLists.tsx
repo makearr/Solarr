@@ -3,8 +3,10 @@ import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { Button } from "@/ui/Button";
+import { inputStyle } from "@/ui/form";
 
 type ImportList = components["schemas"]["ImportList"];
 
@@ -22,20 +24,16 @@ export function ImportLists() {
   const lists = useQuery({
     queryKey: ["importLists", id],
     enabled: id !== undefined,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/libraries/{id}/import-lists", {
-        params: { path: { id: id! } },
-      });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => ok(api.GET("/libraries/{id}/import-lists", {
+      params: { path: { id: id! } },
+    })),
   });
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["importLists", id] });
 
   const update = useMutation({
     mutationFn: async (list: ImportList) => {
-      const { error } = await api.PATCH("/import-lists/{id}", {
+      await ok(api.PATCH("/import-lists/{id}", {
         params: { path: { id: list.id } },
         body: {
           name: list.name,
@@ -47,16 +45,14 @@ export function ImportLists() {
           exclusions: list.exclusions,
           enabled: list.enabled,
         },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: async (listId: number) => {
-      const { error } = await api.DELETE("/import-lists/{id}", { params: { path: { id: listId } } });
-      if (error) throw error;
+      await ok(api.DELETE("/import-lists/{id}", { params: { path: { id: listId } } }));
     },
     onSuccess: invalidate,
   });
@@ -167,14 +163,10 @@ function AddList({ libraryId, onAdded }: { libraryId: number; onAdded: () => voi
   const [cadenceHours, setCadenceHours] = useState(24);
 
   const create = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await api.POST("/libraries/{id}/import-lists", {
-        params: { path: { id: libraryId } },
-        body: { name, type, url: url || undefined, cadence_hours: cadenceHours, monitor: true, enabled: true },
-      });
-      if (error) throw error;
-      return data;
-    },
+    mutationFn: () => ok(api.POST("/libraries/{id}/import-lists", {
+      params: { path: { id: libraryId } },
+      body: { name, type, url: url || undefined, cadence_hours: cadenceHours, monitor: true, enabled: true },
+    })),
     onSuccess: () => {
       setName("");
       setType("");
@@ -232,14 +224,13 @@ function AddList({ libraryId, onAdded }: { libraryId: number; onAdded: () => voi
           onChange={(event) => setCadenceHours(Number(event.target.value))}
         />
       </label>
-      <button
+      <Button
+        variant="primary"
         type="submit"
         disabled={!name.trim() || !type.trim() || create.isPending}
-        className="rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink disabled:opacity-50
-                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
       >
         {create.isPending ? "Adding…" : "Add list"}
-      </button>
+      </Button>
       {create.isError && (
         <p className="w-full text-xs text-danger">
           That import list could not be created. Check the name, type and cadence are valid.
@@ -248,7 +239,3 @@ function AddList({ libraryId, onAdded }: { libraryId: number; onAdded: () => voi
     </form>
   );
 }
-
-const inputStyle =
-  "rounded-md border border-border-subtle bg-canvas px-2 py-1.5 text-sm text-ink " +
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";

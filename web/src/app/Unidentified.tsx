@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-import { api } from "@/api/client";
+import { api, ok } from "@/api/client";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
@@ -36,7 +36,7 @@ export function Unidentified() {
       idOf: (file) => file.media_object_id,
       fetchPage: async ({ cursor, query, signal }) => {
         const categoryId = query.filters.category_id;
-        const { data, error } = await api.GET("/library/unidentified", {
+        return ok(api.GET("/library/unidentified", {
           params: {
             query: {
               cursor,
@@ -45,9 +45,7 @@ export function Unidentified() {
             },
           },
           signal,
-        });
-        if (error) throw error;
-        return data;
+        }));
       },
     },
     useRouteView(FILTER_KEYS),
@@ -57,11 +55,10 @@ export function Unidentified() {
     mutationFn: async (file: UnidentifiedFile) => {
       const best = file.candidates[0];
       if (best?.provider === undefined || best.external_id === undefined) return;
-      const { error } = await api.POST("/library/unidentified/{mediaObjectId}/resolve", {
+      await ok(api.POST("/library/unidentified/{mediaObjectId}/resolve", {
         params: { path: { mediaObjectId: file.media_object_id } },
         body: { provider: best.provider, external_id: best.external_id },
-      });
-      if (error) throw error;
+      }));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["unidentified"] });
