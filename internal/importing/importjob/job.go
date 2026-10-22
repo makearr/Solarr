@@ -1,13 +1,6 @@
-// Package importjob is ADR-48's import.inspect job: the resumable
-// WALK/CLASSIFY/GROUP/EVIDENCE/IDENTIFY/SHAPE/DECIDE pipeline, wired to
-// internal/db/library.ImportSessions -- its first real caller. Job places a
-// COMMIT-decided unit inline, the instant the session has a category to place
-// into (todo 4.9's "COMMIT actually imports"); a COMMIT decision with no
-// category set yet, or a unit DECIDE queued below the confidence threshold,
-// stays merely decided -- ManualCommitter (manualcommit.go, same package) is
-// where the Import screen's own two remaining actions live: place what a
-// session decided before it had a category, and override one unit's own
-// QUEUE decision by hand ("commit what was held").
+// Package importjob is ADR-48's import.inspect job: it walks a folder resumably, records each unit, refuses the ones
+// an exclusion poisons, and hands the rest to their library's media type (importing/batch), which identifies, decides
+// and places them. ManualCommitter is the Import screen's own actions on what the walk held or could not yet place.
 package importjob
 
 import (
@@ -29,13 +22,10 @@ import (
 	"github.com/makearr/Solarr/internal/importing/pack"
 	"github.com/makearr/Solarr/internal/importing/unpack"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/archive"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
-	"github.com/makearr/Solarr/internal/platform/mediatool"
-	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // JobType is the registered type of an import inspection run.
@@ -74,21 +64,6 @@ type Payload struct {
 	Only []string `json:"only,omitempty"`
 }
 
-// UnverifiedCommitter is a Committer that can also place a unit nothing identified as an
-// unverified album (D6); optional, so a committer without it only ever places identified units.
-type UnverifiedCommitter interface {
-	CommitUnverifiedUnit(
-		ctx context.Context, sourceRoot string, unit inspect.Unit, tags music.Resolved, categoryID int64, ladder []string,
-	) (music.Placed, error)
-	// IdentifyUnverified moves an unverified album's placed files onto the album chosen for them.
-	IdentifyUnverified(ctx context.Context, fromWorkID int64, best model.Identification, categoryID int64) (music.Placed, error)
-}
-
-// ReasonPreview is why a unit a preview run would otherwise have committed is
-// waiting, so the Import screen can say so rather than implying IDENTIFY was
-// unsure.
-const ReasonPreview = "held for review"
-
 // Policy is what this job needs from settings.db -- asked fresh per run
 // rather than cached, the same "ask, don't cache" discipline every other
 // job's settings dependency already uses. No internal/db/settings import
@@ -106,17 +81,6 @@ type Policy interface {
 	RefusedByExclusion(name, mediaType string, categoryID *int64) (pattern string, found bool)
 }
 
-// Committer places one COMMIT-decided unit into the library --
-// music.Committer's own shape, narrowed to an interface so a test can fake
-// it without building every real dependency (settings roots, every library
-// store) music.Committer itself needs.
-type Committer interface {
-	CommitMatchedUnit(
-		ctx context.Context, sourceRoot string, unit inspect.Unit, best model.Identification, tags music.Resolved,
-		categoryID int64, matched *music.AlbumPlacement, ladder []string,
-	) (music.Placed, error)
-}
-
 // Job runs one import.inspect execution: walk, identify, shape, decide, record.
 type Job struct {
 	workspace     string
@@ -124,34 +88,13 @@ type Job struct {
 	fsys          fsx.FS
 	sessions      library.ImportSessions
 	policy        Policy
-	tool          mediatool.Tool
-	// search is optional: when nil, IDENTIFY runs MBIDIdentifier alone (the
-	// same scope this pass's own live verification proved). Wiring a real
-	// Searcher is deliberately deferred to whichever caller needs real
-	// auto-resolution against untagged scene content.
-	search music.Searcher
-	// albums is optional: when set, a unit its embedded MBIDs did not identify is matched as an album.
-	albums music.AlbumLookup
-	// provenance answers the release groups a download was grabbed for; nil without one.
-	provenance func(ctx context.Context, acquisitionID int64) ([]string, error)
-	// acoustID is optional: when set, a unit nothing else named is fingerprinted
-	// and looked up (ADR-29's own last rung). Disabled without a key of its own.
-	acoustID music.AcoustIDLookup
-	// committer is optional: nil means a COMMIT decision never places a file,
-	// today's own default for a session with no destination category
-	// (private/questions.md) or a caller (a test) with no real library to
-	// place into.
-	committer Committer
-	// packs is todo 4.11's own detection sink, required like sessions/tool --
-	// unlike committer, detection needs no category and no destination, so
-	// it runs whether or not a session was ever placed.
+	// packs is todo 4.11's own detection sink: detection needs no category, so it runs whether or not anything was placed.
 	packs library.Packs
-	// importers hand a batch to its media type's own identify-and-place, by media type; music has none and uses the
-	// chain above.
+	// importers identify and place a batch, by media type; unassigned names the one a session without a library uses.
 	importers   map[string]importbatch.Importer
 	mediaTypeOf func(categoryID int64) string
-	// events is optional: nil means no progress is published, the same as
-	// every other optional dependency in this codebase.
+	unassigned  string
+	// events is optional: nil means no progress is published.
 	events *events.Bus
 	// onCommitted is optional: told when a finished session placed anything, so new editions enrich now.
 	onCommitted func(context.Context)
@@ -159,24 +102,18 @@ type Job struct {
 	logger      *slog.Logger
 }
 
-// Config is what a Job needs. Every field is required except Search,
-// Committer, Events, OnCommitted and Logger.
+// Config is what a Job needs. Every field is required except MediaTypeOf, Workspace, ArchiveLimits, Events,
+// OnCommitted and Logger.
 type Config struct {
 	FS       fsx.FS
 	Sessions library.ImportSessions
 	Policy   Policy
-	Tool     mediatool.Tool
-	Search   music.Searcher
-	Albums   music.AlbumLookup
-	// Provenance is optional: the release groups an acquisition was grabbed for, which album
-	// identification always scores a download's files against (section 12).
-	Provenance func(ctx context.Context, acquisitionID int64) ([]string, error)
-	AcoustID   music.AcoustIDLookup
-	Committer  Committer
-	Packs      library.Packs
-	// Importers and MediaTypeOf route a batch to a media type other than music; both optional.
+	Packs    library.Packs
+	// Importers identify and place a batch by media type; MediaTypeOf names a library's type. Unassigned is the type
+	// whose importer takes a session with no library yet, identifying without placing.
 	Importers   map[string]importbatch.Importer
 	MediaTypeOf func(categoryID int64) string
+	Unassigned  string
 	// Workspace is where archives are opened (outside every library root); empty leaves archives unopened.
 	Workspace string
 	// ArchiveLimits bounds an expansion; zero is archive.DefaultLimits.
@@ -194,11 +131,9 @@ func NewJob(config Config) *Job {
 		logger = slog.Default()
 	}
 	return &Job{
-		fsys: config.FS, sessions: config.Sessions, policy: config.Policy,
-		tool: config.Tool, search: config.Search, albums: config.Albums, provenance: config.Provenance,
-		acoustID:  config.AcoustID,
-		committer: config.Committer, packs: config.Packs, workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
-		importers: config.Importers, mediaTypeOf: config.MediaTypeOf,
+		fsys: config.FS, sessions: config.Sessions, policy: config.Policy, packs: config.Packs,
+		workspace: config.Workspace, archiveLimits: config.ArchiveLimits,
+		importers: config.Importers, mediaTypeOf: config.MediaTypeOf, unassigned: config.Unassigned,
 		events: config.Events, onCommitted: config.OnCommitted, clock: config.Clock, logger: logger,
 	}
 }
@@ -378,15 +313,11 @@ func (j *Job) runSession(ctx context.Context, job jobs.Job, payload Payload) err
 	j.publishProgress(ctx, sessionID, importPhaseWalking, "")
 	j.reportProgress(ctx, sessionID, job.Progress)
 
-	identifyCfg := model.ChainConfig{
-		AcceptThreshold: music.DefaultAcceptThreshold, AmbiguityThreshold: threshold,
-	}
-	seeds := j.provenanceSeeds(ctx, payload.AcquisitionID)
 	result, err := inspect.NewWalker().Walk(ctx, j.fsys, payload.SourcePath, inspect.WalkState{Cursor: cursor},
 		j.walkOptions(payload.CategoryID, payload.Only),
 		func(ctx context.Context, batch []inspect.Unit) error {
-			err := j.commitCluster(ctx, sessionID, payload.SourcePath, identifyCfg, payload.Preview,
-				unverifiedWanted(payload), payload.TransferLadder, seeds, batch)
+			err := j.commitCluster(ctx, sessionID, payload.SourcePath, threshold, payload.Preview,
+				unverifiedWanted(payload), payload.TransferLadder, batch)
 			j.reportProgress(ctx, sessionID, job.Progress)
 			return err
 		})
@@ -557,131 +488,9 @@ func packItemStateFor(unit library.Unit) string {
 	}
 }
 
-// identifyParallelism bounds IDENTIFY's fan-out across one cluster's units.
-// IDENTIFY is pure CPU today (Search is wired nil in production, cmd/solarr/app/job_import.go)
-// so this has no live payoff yet, but todo 4.21 asks for it built ahead of a
-// real Searcher -- the same mediatool.defaultParallelism figure, for the same
-// reason: a bound worth the same order of magnitude as the machine, not tied
-// to any one identifier's own cost.
-const identifyParallelism = 8
-
-// identifyCluster runs IdentifyUnit for every unit in a cluster concurrently,
-// bounded by identifyParallelism -- writes stay serial (todo 4.21): this
-// returns UnitDecision values, and the caller records them all in one
-// SetUnitDecisions transaction, not one per unit. Every model.Identifier
-// passed in must tolerate concurrent Identify calls across different files;
-// today's only one (MBIDIdentifier) does no more than read-only map lookups.
-// identifyCluster also returns each unit's own model.ChainResult, positionally
-// lined up with the returned decisions -- commitCluster's own placement step
-// needs Best to place a COMMIT-decided unit without re-running IDENTIFY a
-// second time (ADR-48's own speed rule: "probe only what identification will
-// use" applies just as much to a second identify call as to a second probe).
-func identifyCluster(
-	ctx context.Context, ids []int64, batch []inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
-	refine refineUnit,
-) ([]library.UnitDecision, []model.ChainResult, []*music.AlbumPlacement) {
-	decisions := make([]library.UnitDecision, len(batch))
-	results := make([]model.ChainResult, len(batch))
-	placements := make([]*music.AlbumPlacement, len(batch))
-	identified := parallel.Do(ctx, len(batch), identifyParallelism, func(ctx context.Context, i int) error {
-		decisions[i], results[i], placements[i] = identifyUnit(ctx, ids[i], batch[i], identifiers, cfg, refine)
-		return nil
-	})
-	for i, err := range identified {
-		if err != nil {
-			// One bad unit does not fail the batch, a panicking one included.
-			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: string(model.DecisionFailed)}
-		}
-	}
-	return decisions, results, placements
-}
-
-// identifyUnit runs IDENTIFY for one unit and turns DECIDE's outcome into a
-// UnitDecision, ready to record. An IdentifyUnit error (every file in the
-// unit unreadable) becomes DecisionFailed rather than propagating -- the same
-// "one bad unit does not fail the batch" reasoning consumer.go's own
-// identifyBatch already applies at scan time.
-func identifyUnit(
-	ctx context.Context, unitID int64, unit inspect.Unit, identifiers []model.Identifier, cfg model.ChainConfig,
-	refine refineUnit,
-) (library.UnitDecision, model.ChainResult, *music.AlbumPlacement) {
-	result, err := music.IdentifyUnit(ctx, unit, identifiers, cfg)
-	var placement *music.AlbumPlacement
-	if err == nil && refine != nil {
-		result, placement = refine(ctx, unit, result)
-	}
-	decision := model.DecisionFailed
-	var confidence float64
-	var candidatesJSON string
-	if err == nil {
-		decision = model.Decide(result)
-		if result.Best != nil {
-			confidence = result.Best.Confidence
-		}
-		if len(result.Candidates) > 0 {
-			if data, marshalErr := json.Marshal(result.Candidates); marshalErr == nil {
-				candidatesJSON = string(data)
-			}
-		}
-	}
-	return library.UnitDecision{UnitID: unitID, Decision: string(decision), Confidence: confidence, CandidatesJSON: candidatesJSON},
-		result, placement
-}
-
-// refineUnit improves one unit's chain result; it must be safe to call concurrently.
-type refineUnit func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement)
-
-// provenanceSeeds are the release groups a download was grabbed for, empty for any other import;
-// best-effort, since identification works without them.
-func (j *Job) provenanceSeeds(ctx context.Context, acquisitionID *int64) []string {
-	if j.provenance == nil || acquisitionID == nil {
-		return nil
-	}
-	seeds, err := j.provenance(ctx, *acquisitionID)
-	if err != nil {
-		j.logger.Warn("import provenance unreadable", slog.Int64("acquisition_id", *acquisitionID), slog.Any("error", err))
-	}
-	return seeds
-}
-
-// albumRefiner matches units as albums over the cluster's probes, or nil when no lookup is configured.
-// seeds are release groups always scored, whatever the files' names recall.
-func (j *Job) albumRefiner(sourcePath string, relPaths []string, probes []mediatool.Probe, threshold float64, seeds []string) refineUnit {
-	if j.albums == nil {
-		return nil
-	}
-	naming := music.AudioNaming{Fingerprints: j.tool, AcoustID: j.acoustID, Albums: j.albums}
-	byPath := make(map[string]mediatool.Probe, len(probes))
-	for i, probe := range probes {
-		byPath[relPaths[i]] = probe
-	}
-	return func(ctx context.Context, unit inspect.Unit, result model.ChainResult) (model.ChainResult, *music.AlbumPlacement) {
-		refined, placement, err := music.RefineUnitByAlbum(ctx, j.albums, unit, byPath, result, threshold, seeds)
-		if err != nil {
-			j.logger.Warn("import album identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
-		}
-		// Still nothing: name the files from their audio (D12), as a scan does.
-		if refined.Best == nil && placement == nil {
-			audio, audioPlacement, err := music.RefineUnitByAudio(ctx, naming, unit, byPath,
-				func(relPath string) string { return path.Join(sourcePath, relPath) }, refined, threshold, seeds)
-			if err != nil {
-				j.logger.Warn("import audio identification failed", slog.String("unit", unit.Directory), slog.Any("error", err))
-			} else {
-				refined, placement = audio, audioPlacement
-			}
-		}
-		return refined, placement
-	}
-}
-
-// poisonedByExclusion checks every file a unit carries -- Media and Other
-// alike, since a refuse-action file does not have to be classified as media
-// itself (a ".exe" beside audio classifies as ClassUnknown, landing in
-// Other, not Media) -- against ADR-53's refuse action (todo 4.15's import
-// gate). Positionally aligned with batch; an empty string means the unit is
-// not poisoned. Runs before IDENTIFY commits any work to a doomed unit.
-func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []string {
-	const mediaType = "music" // this package is music-coupled today; see the package doc comment
+// poisonedByExclusion checks every file a unit carries, Media and Other alike (a ".exe" beside audio lands in
+// Other), against ADR-53's refuse action; aligned with batch, "" for a unit not poisoned.
+func (j *Job) poisonedByExclusion(batch []inspect.Unit, mediaType string, categoryID *int64) []string {
 	reasons := make([]string, len(batch))
 	for i, unit := range batch {
 		for _, files := range [][]inspect.File{unit.Media, unit.Other} {
@@ -699,24 +508,12 @@ func (j *Job) poisonedByExclusion(batch []inspect.Unit, categoryID *int64) []str
 	return reasons
 }
 
-// commitCluster probes one cluster's media files in a single batched call
-// (ADR-28), identifies and shapes every unit in it, and records the result.
-// AddUnits is called before IDENTIFY runs, not after: a unit's row must exist
-// -- at UnitQueue, the same default the schema already documents -- before
-// SetUnitDecisions has an id to update, and inserting first means a probe
-// failure still leaves the unit visible rather than silently absent.
-//
-// Cancellation is checked first, before any work -- cheaper than probing a whole cluster to discard it.
-//
-// The session's own category is re-read here rather than trusted from the
-// job's own payload (captured once, at Run's own start): todo 4.9's "assign
-// a category later" UI action can PATCH import_session.category_id while
-// this very session is still INSPECTING, and a cluster committed after that
-// PATCH must place into it -- the same "ask, don't cache" rule Policy's own
-// per-run read already follows.
+// commitCluster records one walked cluster's units, refuses those carrying an excluded file, and hands the rest to
+// their media type to identify, decide and place. The session's category is read here rather than taken from the
+// payload: a library assigned while the session walks places every cluster after it.
 func (j *Job) commitCluster(
-	ctx context.Context, sessionID int64, sourcePath string, cfg model.ChainConfig, preview, unverified bool,
-	ladder []string, seeds []string, batch []inspect.Unit,
+	ctx context.Context, sessionID int64, sourcePath string, threshold float64, preview, unverified bool,
+	ladder []string, batch []inspect.Unit,
 ) error {
 	session, err := j.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -725,38 +522,9 @@ func (j *Job) commitCluster(
 	if session.State == library.ImportCancelling {
 		return errCancelled
 	}
-	categoryID := session.CategoryID
-	if importer := j.importerFor(categoryID); importer != nil {
-		return j.importWith(ctx, importer, session, sourcePath, preview, ladder, batch)
-	}
-
-	var relPaths []string
-	for _, unit := range batch {
-		for _, f := range unit.Media {
-			relPaths = append(relPaths, f.RelPath)
-		}
-	}
-	absolute := make([]string, len(relPaths))
-	for i, rel := range relPaths {
-		absolute[i] = path.Join(sourcePath, rel)
-	}
-	probes, err := j.tool.ReadTags(ctx, absolute)
-	if err != nil {
-		return fmt.Errorf("importjob: probe cluster: %w", err)
-	}
-	tagSource := music.UnitTagSourceFor(sourcePath, probes)
-	identifiers := []model.Identifier{music.NewMBIDIdentifier(tagSource)}
-	if j.search != nil {
-		identifiers = append(identifiers,
-			music.NewSearchIdentifier(music.SearchIdentifierConfig{Tags: tagSource, Search: j.search}))
-	}
-	// No Enabled() check here: the identifier answers nothing and decodes nothing
-	// without a key, so one place decides whether the rung is on (D12).
-	if j.acoustID != nil {
-		identifiers = append(identifiers, music.NewAcoustIDIdentifier(music.AcoustIDIdentifierConfig{
-			Fingerprints: j.tool, Lookup: j.acoustID,
-			Absolute: func(relPath string) string { return path.Join(sourcePath, relPath) },
-		}))
+	importer, mediaType := j.importerFor(session.CategoryID)
+	if importer == nil {
+		return fmt.Errorf("importjob: %q libraries have no import", mediaType)
 	}
 
 	newUnits := make([]library.NewUnit, len(batch))
@@ -779,168 +547,61 @@ func (j *Job) commitCluster(
 		return fmt.Errorf("importjob: add units: %w", err)
 	}
 
-	poisonReasons := j.poisonedByExclusion(batch, categoryID)
-
-	decisions, results, placements := identifyCluster(ctx, ids, batch, identifiers, cfg, j.albumRefiner(sourcePath, relPaths, probes, cfg.AmbiguityThreshold, seeds))
-	for i, reason := range poisonReasons {
+	// A refused file poisons its whole unit however confidently it would have resolved, so it never reaches IDENTIFY.
+	decisions := make([]library.UnitDecision, len(batch))
+	var kept []int
+	for i, reason := range j.poisonedByExclusion(batch, mediaType, session.CategoryID) {
 		if reason != "" {
-			// Overrides whatever IDENTIFY decided -- ADR-53's refuse action
-			// poisons the whole unit regardless of how confidently it would
-			// otherwise have resolved.
 			decisions[i] = library.UnitDecision{UnitID: ids[i], Decision: library.UnitSkip, Reason: reason}
+			continue
 		}
+		kept = append(kept, i)
 	}
-	if preview {
-		holdForReview(decisions)
+	placements := make([]*library.Placement, len(batch))
+	if len(kept) > 0 {
+		request := importbatch.Request{
+			SessionID: sessionID, AcquisitionID: session.AcquisitionID, SourcePath: sourcePath,
+			Preview: preview, Ladder: ladder, Threshold: threshold, AddUnidentified: unverified,
+		}
+		if session.CategoryID != nil {
+			request.CategoryID = *session.CategoryID
+		}
+		for _, i := range kept {
+			request.Units = append(request.Units, batch[i])
+			request.UnitIDs = append(request.UnitIDs, ids[i])
+		}
+		result, err := importer.ImportBatch(ctx, request)
+		if err != nil {
+			// A retry resumes after the last unit recorded: this cluster's rows go, so it is inspected again.
+			if deleteErr := j.sessions.DeleteUnits(ctx, sessionID, ids); deleteErr != nil {
+				j.logger.Warn("import: could not forget an unfinished cluster", slog.Int64("session_id", sessionID), slog.Any("error", deleteErr))
+			}
+			return fmt.Errorf("importjob: import batch: %w", err)
+		}
+		for k, i := range kept {
+			decisions[i] = result.Decisions[k]
+			placements[i] = result.Placements[k]
+		}
 	}
 	if err := j.sessions.SetUnitDecisions(ctx, sessionID, decisions); err != nil {
 		return fmt.Errorf("importjob: record decisions: %w", err)
 	}
-	if categoryID != nil && j.committer != nil {
-		j.placeCommitted(ctx, sessionID, *categoryID, sourcePath, tagSource, ids, batch, decisions, results,
-			placements, ladder)
-		if unverified {
-			j.placeUnverified(ctx, *categoryID, sourcePath, tagSource, ids, batch, decisions, ladder)
+	for i, placement := range placements {
+		if placement == nil {
+			continue
+		}
+		if err := j.sessions.RecordPlacement(ctx, ids[i], *placement); err != nil {
+			j.logger.Warn("import commit: could not record placement", slog.Int64("unit_id", ids[i]), slog.Any("error", err))
 		}
 	}
 	j.publishProgress(ctx, sessionID, importPhaseWalking, batch[len(batch)-1].Directory)
 	return nil
 }
 
-// holdForReview is a preview run's own override of DECIDE: every unit that
-// would have committed waits for a human instead. Done here rather than by
-// raising the confidence bar, because album matching answers on its own
-// capped scale (albumConfidence never reaches an embedded MBID's own
-// certainty, deliberately) -- a threshold high enough to hold it would be
-// meaningless against every other strategy's. SKIP and FAILED are left alone:
-// neither was ever going to be placed.
-func holdForReview(decisions []library.UnitDecision) {
-	for i, decision := range decisions {
-		if decision.Decision == library.UnitCommit {
-			decisions[i].Decision = library.UnitQueue
-			decisions[i].Reason = ReasonPreview
-		}
-	}
-}
-
-// placeCommitted is ADR-48's own "COMMIT actually imports": every unit this
-// cluster just decided COMMIT is placed immediately, in the same pass --
-// inline rather than a genuinely separate resumable phase, because a unit's
-// own member file list (inspect.Unit.Media) is not persisted independently
-// of this in-memory batch, only its identity once resolved (import_unit's
-// own columns). A placement failure is logged and the unit is left
-// decided-but-unplaced (work_id stays NULL) rather than failing the
-// cluster -- the same "one bad unit does not fail the batch" tolerance
-// IDENTIFY already has, and matches DEFER's own "structured reason, not a
-// crash" (section 11.7). A crash mid-placement (as opposed to a returned
-// error) can leave a unit stuck decided-but-unplaced with nothing to retry
-// it automatically -- a known, narrow gap (private/notes.md), not handled
-// this pass.
-func (j *Job) placeCommitted(
-	ctx context.Context, sessionID, categoryID int64, sourcePath string, tagSource music.Resolved,
-	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, results []model.ChainResult,
-	placements []*music.AlbumPlacement, ladder []string,
-) {
-	for i, decision := range decisions {
-		if decision.Decision != library.UnitCommit || results[i].Best == nil {
-			continue
-		}
-		placed, err := j.committer.CommitMatchedUnit(ctx, sourcePath, batch[i], *results[i].Best, tagSource, categoryID,
-			placements[i], ladder)
-		if err != nil {
-			// ADR-53 part 2 (todo 4.15): a blocked hash is loud, not a silent
-			// decided-but-unplaced unit indistinguishable from "no root had
-			// room" -- DECIDE already chose COMMIT before the hash was known,
-			// so this is the one case that overrides a decision after
-			// SetUnitDecisions already ran, not before it (unlike the
-			// exclusion-pattern gate above, checked before IDENTIFY).
-			if errors.Is(err, music.ErrBlockedContent) {
-				if setErr := j.sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{
-					{UnitID: ids[i], Decision: library.UnitSkip, Reason: err.Error()},
-				}); setErr != nil {
-					j.logger.Warn("import commit: could not record blocked-content decision",
-						slog.Int64("unit_id", ids[i]), slog.Any("error", setErr))
-				}
-				continue
-			}
-			j.logger.Warn("import commit: could not place unit",
-				slog.Int64("unit_id", ids[i]), slog.String("path", batch[i].Directory), slog.Any("error", err))
-			continue
-		}
-		if err := j.sessions.RecordPlacement(ctx, ids[i], library.Placement{
-			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
-			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
-			MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
-			TransferMethods: placed.TransferMethodNames(), Extras: placedExtras(placed),
-		}); err != nil {
-			j.logger.Warn("import commit: could not record placement",
-				slog.Int64("unit_id", ids[i]), slog.Any("error", err))
-		}
-		logPathWarnings(j.logger, ids[i], placed.PathWarnings)
-		for _, skipped := range placed.ExtrasSkipped {
-			j.logger.Warn("import commit: extra file not placed", slog.Int64("unit_id", ids[i]), slog.String("reason", skipped))
-		}
-	}
-}
-
 // unverifiedWanted is D6's rule: only a run started from the Import screen, not a preview, and not
 // switched off, adds what nothing identified. A finished download was grabbed for a known album.
 func unverifiedWanted(payload Payload) bool {
 	return payload.Origin == library.ImportOriginManual && !payload.Preview && !payload.NoUnverified
-}
-
-// placeUnverified adds every queued unit as an unverified album (D6). The unit stays queued for
-// Review, now holding its placement, so a revert undoes it and a later identification repoints it.
-func (j *Job) placeUnverified(
-	ctx context.Context, categoryID int64, sourcePath string, tagSource music.Resolved,
-	ids []int64, batch []inspect.Unit, decisions []library.UnitDecision, ladder []string,
-) {
-	committer, ok := j.committer.(UnverifiedCommitter)
-	if !ok {
-		return
-	}
-	for i, decision := range decisions {
-		if decision.Decision != library.UnitQueue || len(batch[i].Media) == 0 {
-			continue
-		}
-		placed, err := committer.CommitUnverifiedUnit(ctx, sourcePath, batch[i], tagSource, categoryID, ladder)
-		if err != nil {
-			j.logger.Warn("import: could not add an unverified album",
-				slog.Int64("unit_id", ids[i]), slog.String("path", batch[i].Directory), slog.Any("error", err))
-			continue
-		}
-		if err := j.sessions.RecordPlacement(ctx, ids[i], library.Placement{
-			WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
-			EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
-			MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
-			TransferMethods: placed.TransferMethodNames(), Extras: placedExtras(placed),
-		}); err != nil {
-			j.logger.Warn("import: could not record an unverified placement", slog.Int64("unit_id", ids[i]), slog.Any("error", err))
-		}
-	}
-}
-
-// placedExtras is the placement's extra files in the form RecordPlacement keeps for revert.
-func placedExtras(placed music.Placed) []library.UnitExtra {
-	extras := make([]library.UnitExtra, len(placed.Extras))
-	for i, relPath := range placed.Extras {
-		extras[i] = library.UnitExtra{RootFolderID: placed.RootFolderID, RelPath: relPath}
-	}
-	return extras
-}
-
-// logPathWarnings surfaces naming.RenderPath's own non-fatal notices (today:
-// only the total-length recommendation) at COMMIT time -- ADR-48's inline
-// commit has no separate preview step to block on the way rename does, so a
-// log line is this path's own "notification only" (architecture §2), not a
-// UI-blocking decision.
-func logPathWarnings(logger *slog.Logger, unitID int64, warnings map[int64][]string) {
-	for mediaObjectID, messages := range warnings {
-		for _, message := range messages {
-			logger.Warn("import commit: naming warning",
-				slog.Int64("unit_id", unitID), slog.Int64("media_object_id", mediaObjectID), slog.String("warning", message))
-		}
-	}
 }
 
 // Import progress phases (todo 4.21's own SSE shape).
@@ -1019,68 +680,22 @@ func Enqueue(ctx context.Context, queue *jobs.Queue, payload Payload) (jobs.Enqu
 	})
 }
 
-// importerFor is the media type's own importer for a category, nil for music.
-func (j *Job) importerFor(categoryID *int64) importbatch.Importer {
-	if categoryID == nil || j.mediaTypeOf == nil {
-		return nil
+// importerFor is the importer of a category's media type, or of the unassigned type for a session with no library.
+func (j *Job) importerFor(categoryID *int64) (importbatch.Importer, string) {
+	mediaType := j.unassigned
+	if categoryID != nil && j.mediaTypeOf != nil {
+		mediaType = j.mediaTypeOf(*categoryID)
 	}
-	return j.importers[j.mediaTypeOf(*categoryID)]
+	return j.importers[mediaType], mediaType
 }
 
-// importWith records a batch's units, then lets the media type identify, decide and place them.
-func (j *Job) importWith(
-	ctx context.Context, importer importbatch.Importer, session library.Session, sourcePath string, preview bool,
-	ladder []string, batch []inspect.Unit,
-) error {
-	newUnits := make([]library.NewUnit, len(batch))
-	for i, unit := range batch {
-		evidenceJSON, err := json.Marshal(unit.Evidence)
-		if err != nil {
-			return fmt.Errorf("importjob: encode evidence for %s: %w", unit.Directory, err)
-		}
-		var bytes int64
-		for _, f := range unit.Media {
-			bytes += f.SizeBytes
-		}
-		newUnits[i] = library.NewUnit{
-			RelPath: unit.Directory, Shape: string(inspect.ShapeOf(unit)),
-			FileCount: int64(len(unit.Media)), Bytes: bytes, EvidenceJSON: string(evidenceJSON),
-		}
-	}
-	ids, err := j.sessions.AddUnits(ctx, session.ID, newUnits)
-	if err != nil {
-		return fmt.Errorf("importjob: add units: %w", err)
-	}
-	result, err := importer.ImportBatch(ctx, importbatch.Request{
-		SessionID: session.ID, CategoryID: *session.CategoryID, AcquisitionID: session.AcquisitionID, SourcePath: sourcePath,
-		Units: batch, UnitIDs: ids, Preview: preview, Ladder: ladder,
-	})
-	if err != nil {
-		return fmt.Errorf("importjob: import batch: %w", err)
-	}
-	if err := j.sessions.SetUnitDecisions(ctx, session.ID, result.Decisions); err != nil {
-		return fmt.Errorf("importjob: record decisions: %w", err)
-	}
-	for i, placement := range result.Placements {
-		if placement == nil {
-			continue
-		}
-		if err := j.sessions.RecordPlacement(ctx, ids[i], *placement); err != nil {
-			j.logger.Warn("import commit: could not record placement", slog.Int64("unit_id", ids[i]), slog.Any("error", err))
-		}
-	}
-	j.publishProgress(ctx, session.ID, importPhaseWalking, batch[len(batch)-1].Directory)
-	return nil
-}
-
-// videoSizeFloor keeps a sample or a stub out of a video import: smaller than any real episode.
-const videoSizeFloor = 30 << 20
-
-// walkOptions are the inspection options of a category's media type; music takes the defaults.
+// walkOptions are the inspection options of a category's media type: its own size floor, and the files asked for.
 func (j *Job) walkOptions(categoryID *int64, only []string) inspect.WalkOptions {
 	var options inspect.WalkOptions
-	if j.importerFor(categoryID) != nil {
-		options.MediaSizeFloorBytes = videoSizeFloor
+	if importer, _ := j.importerFor(categoryID); importer != nil {
+		if floor, ok := importer.(importbatch.SizeFloor); ok {
+			options.MediaSizeFloorBytes = floor.MediaSizeFloorBytes()
+		}
 	}
 	if len(only) > 0 {
 		options.Only = make(map[string]bool, len(only))

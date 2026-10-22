@@ -16,8 +16,10 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/platform/archive"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -190,11 +192,18 @@ func newFixture(t *testing.T, files ...string) *fixture {
 	}
 }
 
+// musicImporters is the job's importers with music alone, which also takes a session with no library.
+func musicImporters(tool mediatool.Tool, committer music.UnitCommitter, acoustID music.AcoustIDLookup) map[string]batch.Importer {
+	return map[string]batch.Importer{"music": music.NewImporter(music.ImporterConfig{
+		Tool: tool, Committer: committer, AcoustID: acoustID, Logger: slog.New(slog.DiscardHandler),
+	})}
+}
+
 func (f *fixture) job(t *testing.T, policy float64) *importjob.Job {
 	t.Helper()
 	return importjob.NewJob(importjob.Config{
 		FS: f.fsys, Sessions: library.NewImportSessions(f.store), Policy: fixedPolicy(policy),
-		Tool: f.tool, Packs: library.NewPacks(f.store), Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
+		Importers: musicImporters(f.tool, nil, nil), Unassigned: "music", Packs: library.NewPacks(f.store), Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
 
@@ -203,7 +212,7 @@ func (f *fixture) jobWithAcoustID(t *testing.T, policy float64, lookup *fakeAcou
 	t.Helper()
 	return importjob.NewJob(importjob.Config{
 		FS: f.fsys, Sessions: library.NewImportSessions(f.store), Policy: fixedPolicy(policy),
-		Tool: f.tool, AcoustID: lookup, Packs: library.NewPacks(f.store),
+		Importers: musicImporters(f.tool, nil, lookup), Unassigned: "music", Packs: library.NewPacks(f.store),
 		Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
@@ -289,7 +298,7 @@ func TestJob_PoisonsAUnitCarryingARefusedFile(t *testing.T) {
 
 	job := importjob.NewJob(importjob.Config{
 		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: poisoningPolicy{refuseName: "virus.exe"},
-		Tool: fx.tool, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+		Importers: musicImporters(fx.tool, nil, nil), Unassigned: "music", Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -322,6 +331,75 @@ func TestJob_PoisonsAUnitCarryingARefusedFile(t *testing.T) {
 	}
 }
 
+// recordingImporter is a media type's own importer that commits every unit it is handed and remembers them.
+type recordingImporter struct{ handed []string }
+
+func (r *recordingImporter) ImportBatch(_ context.Context, request batch.Request) (batch.Result, error) {
+	result := batch.Result{Placements: make([]*library.Placement, len(request.Units))}
+	for index, unit := range request.Units {
+		r.handed = append(r.handed, unit.Directory)
+		result.Decisions = append(result.Decisions, library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitCommit, Confidence: 1})
+	}
+	return result, nil
+}
+
+// The refuse action is the job's, not music's: a library whose type imports in its own way never sees a poisoned
+// unit, and the clean one beside it is still handed over.
+func TestJob_PoisonsARefusedUnitBeforeAnyMediaTypeSeesIt(t *testing.T) {
+	fx := newFixture(t, "Show/Season 1/e01.mkv", "Show/Season 1/virus.exe", "Other/Season 1/e01.mkv")
+	own := &recordingImporter{}
+	catID := int64(7)
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: poisoningPolicy{refuseName: "virus.exe"},
+		Importers: map[string]batch.Importer{"tv": own}, MediaTypeOf: func(int64) string { return "tv" },
+		Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !reflect.DeepEqual(own.handed, []string{"Other/Season 1"}) {
+		t.Errorf("handed to the media type: %v, want only the clean unit", own.handed)
+	}
+	done, _ := fx.sessions().List(t.Context(), library.ImportDone, false)
+	units, err := fx.sessions().ListUnits(t.Context(), done[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decisions := map[string]string{}
+	for _, unit := range units {
+		decisions[unit.RelPath] = unit.Decision
+	}
+	if want := map[string]string{"Show/Season 1": library.UnitSkip, "Other/Season 1": library.UnitCommit}; !reflect.DeepEqual(decisions, want) {
+		t.Errorf("decisions = %v, want %v", decisions, want)
+	}
+}
+
+// flooredImporter is a recordingImporter whose type keeps files under a size out of its imports, as video does.
+type flooredImporter struct{ recordingImporter }
+
+func (flooredImporter) MediaSizeFloorBytes() int64 { return 180 * 1024 }
+
+// The walk leaves out what the library's type says is too small to be media, whatever the file is called.
+func TestJob_WalksWithTheMediaTypesOwnSizeFloor(t *testing.T) {
+	fx := newFixture(t, "Show/Season 1/e01.mkv")
+	writeFile(t, fx.fsys, filepath.Join(root, "Show/Season 1/e02.mkv"), 150*1024)
+	own := &flooredImporter{}
+	catID := int64(7)
+	job := importjob.NewJob(importjob.Config{
+		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: fixedPolicy(0.9),
+		Importers: map[string]batch.Importer{"tv": own}, MediaTypeOf: func(int64) string { return "tv" },
+		Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, CategoryID: &catID}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	done, _ := fx.sessions().List(t.Context(), library.ImportDone, false)
+	units, err := fx.sessions().ListUnits(t.Context(), done[0].ID)
+	if err != nil || len(units) != 1 || units[0].FileCount != 1 {
+		t.Fatalf("units = %+v, %v; want one unit holding the episode alone", units, err)
+	}
+}
+
 // A session that committed a unit says so, so the vap edition's tracklist is fetched at once.
 func TestJob_TellsOnCommittedOnlyWhenAUnitCommitted(t *testing.T) {
 	for _, tagged := range []bool{true, false} {
@@ -333,7 +411,7 @@ func TestJob_TellsOnCommittedOnlyWhenAUnitCommitted(t *testing.T) {
 		told := 0
 		job := importjob.NewJob(importjob.Config{
 			FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: fixedPolicy(0.90),
-			Tool: fx.tool, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+			Importers: musicImporters(fx.tool, nil, nil), Unassigned: "music", Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 			OnCommitted: func(context.Context) { told++ },
 		})
 		if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {
@@ -479,7 +557,7 @@ func TestJob_AResumedPreviewStaysAPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, unit := range units {
-		if unit.Decision != library.UnitQueue || unit.Reason != importjob.ReasonPreview {
+		if unit.Decision != library.UnitQueue || unit.Reason != batch.ReasonPreview {
 			t.Errorf("%s: %s %q, want held for review like the rest of the preview", unit.RelPath, unit.Decision, unit.Reason)
 		}
 	}
@@ -777,7 +855,7 @@ func TestJob_PicksUpACategoryAssignedMidRun(t *testing.T) {
 
 	job := importjob.NewJob(importjob.Config{
 		FS: fx.fsys, Sessions: sessions, Policy: fixedPolicy(0.90),
-		Tool: fx.tool, Committer: committer, Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+		Importers: musicImporters(fx.tool, committer, nil), Unassigned: "music", Packs: library.NewPacks(fx.store), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 	// A download folder's own transfer order travels with the payload to every commit.
 	payload := importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual, TransferLadder: []string{"copy"}}
@@ -989,8 +1067,8 @@ func TestJob_PreviewHoldsEvenAConfidentUnit(t *testing.T) {
 		t.Fatalf("units = %+v, want one QUEUE", units)
 	}
 	// Said plainly, so the screen does not imply IDENTIFY was unsure.
-	if units[0].Reason != importjob.ReasonPreview {
-		t.Errorf("Reason = %q, want %q", units[0].Reason, importjob.ReasonPreview)
+	if units[0].Reason != batch.ReasonPreview {
+		t.Errorf("Reason = %q, want %q", units[0].Reason, batch.ReasonPreview)
 	}
 	// Held, not blinded: the candidate is still there for the commit to use.
 	if units[0].CandidatesJSON == "" {
@@ -1031,7 +1109,7 @@ func TestJob_ImportsTheContentsOfAnArchiveLikeAFolder(t *testing.T) {
 	_ = file.Close()
 
 	job := importjob.NewJob(importjob.Config{
-		FS: fx.fsys, Sessions: fx.sessions(), Policy: fixedPolicy(0.90), Tool: fx.tool, Packs: library.NewPacks(fx.store),
+		FS: fx.fsys, Sessions: fx.sessions(), Policy: fixedPolicy(0.90), Importers: musicImporters(fx.tool, nil, nil), Unassigned: "music", Packs: library.NewPacks(fx.store),
 		Workspace: "/workspace", ArchiveLimits: testArchiveLimits(), Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 	if err := fx.run(t, job, importjob.Payload{SourcePath: root, Origin: library.ImportOriginManual}); err != nil {

@@ -12,60 +12,30 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	importbatch "github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
-	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/fsx"
-	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// ManualCommitter offers the two todo-4.9 UI actions the inline WALK-time
-// commit (commitCluster/placeCommitted) does not cover: force-committing one
-// unit the pipeline queued below threshold ("commit what was held"), and
-// placing whatever a session already decided COMMIT once it is given a
-// category it did not have while walking (a session can start with no
-// category and get one later, questions.md). import_unit persists no
-// member-file list of its own (notes.md §5), so both re-derive it by
-// re-walking the unit's own already-decided boundary (rel_path) -- the same
-// "re-derive rather than duplicate state" rule moverjob's own resume already
-// follows. Deterministic today since WALK/GROUP runs tag-free in production
-// (commitCluster's own Walk call passes an empty WalkOptions{}). A unit
-// sharing its own rel_path with sibling units (a flat directory GROUP split
-// into several by track continuity alone) re-derives through
-// inspect.SplitDirectory -- Walker's own per-cluster split, unsorted -- and
-// matches each sibling back to its own import_unit row by position in
-// ascending id order, the same order AddUnits inserted them in and Walker's
-// own batch arrived in (reconstructUnit).
+// ManualCommitter is what a person does with a session's units the walk did not place: commit one it held (as its
+// best guess, or as a work named), commit every held one, and place what was decided before the session had a
+// library. import_unit keeps no file list, so each re-walks the unit's own folder (reconstructUnit) and hands it to
+// its library's media type, which places it as that type does.
 type ManualCommitter struct {
-	fsys      fsx.FS
-	tool      mediatool.Tool
-	sessions  library.ImportSessions
-	committer Committer
-	// packs is todo 4.11's own pack_item state keeper: a unit resolved
-	// through this package moves its pack membership (if any) from QUEUED to
-	// RESOLVED too, the same way commitCluster's own inline placement does
-	// (job.go). Safe to leave zero-valued in a caller that never places a
-	// unit with a non-nil PackID (every existing test but the pack-specific
-	// ones), since place() checks unit.PackID first.
+	fsys     fsx.FS
+	sessions library.ImportSessions
+	// packs moves a placed unit's pack membership from QUEUED to RESOLVED, as the walk's placement does.
 	packs library.Packs
-	// importerFor is a library's own importer, nil for one the music committer places.
+	// importerFor is the importer of a library's media type, nil for a type without one.
 	importerFor func(categoryID int64) importbatch.Importer
-}
-
-// WithImporters makes held units of a library with its own importer go to that importer instead of music's committer.
-func (m ManualCommitter) WithImporters(importerFor func(categoryID int64) importbatch.Importer) ManualCommitter {
-	m.importerFor = importerFor
-	return m
 }
 
 // ErrHeldCommitNotBuilt is a library whose media type cannot place a held unit by hand.
 var ErrHeldCommitNotBuilt = errors.New("importjob: this library's media type does not commit held units by hand")
 
-// NewManualCommitter builds one. packs may be a zero-valued library.Packs in
-// a caller that never places a unit with a non-nil PackID (place() checks
-// PackID first); every other argument is required.
+// NewManualCommitter builds one; every argument is required.
 func NewManualCommitter(
-	fsys fsx.FS, tool mediatool.Tool, sessions library.ImportSessions, committer Committer, packs library.Packs,
+	fsys fsx.FS, sessions library.ImportSessions, packs library.Packs, importerFor func(categoryID int64) importbatch.Importer,
 ) ManualCommitter {
-	return ManualCommitter{fsys: fsys, tool: tool, sessions: sessions, committer: committer, packs: packs}
+	return ManualCommitter{fsys: fsys, sessions: sessions, packs: packs, importerFor: importerFor}
 }
 
 // ErrSessionHasNoCategory means the session must be given a category
@@ -93,77 +63,55 @@ var ErrNoCandidate = errors.New("importjob: unit has no candidate to commit")
 // would silently commit the wrong thing.
 var ErrUnitChanged = errors.New("importjob: unit's own files no longer match what was inspected")
 
-// CommitHeld force-commits one QUEUE-decision unit using its own top-ranked
-// candidate -- a human override of DECIDE's own threshold, not a second
-// identification: the same candidate IDENTIFY already ranked, never re-run.
-func (m ManualCommitter) CommitHeld(ctx context.Context, unitID int64) (music.Placed, error) {
-	return m.commitHeld(ctx, unitID, nil, topCandidate)
+// CommitHeld force-commits one QUEUE-decision unit as its own best guess: a person overriding DECIDE's threshold,
+// not a second identification.
+func (m ManualCommitter) CommitHeld(ctx context.Context, unitID int64) (library.Placement, error) {
+	return m.commitHeld(ctx, unitID, nil)
 }
 
-// CommitHeldAs force-commits one QUEUE-decision unit as the album a person named ("Identify as...", for a unit
-// IDENTIFY found nothing for, or found the wrong thing): a stated identifier outranks any guess, so it is placed
-// exactly as an identifier read from the files would be.
-func (m ManualCommitter) CommitHeldAs(ctx context.Context, unitID int64, provider, externalID string) (music.Placed, error) {
-	chosen := model.Identification{
-		Strategy:   "manual",
-		ExternalID: &model.ExternalID{Provider: provider, ExternalID: externalID, Confidence: 1},
-		Precedence: model.PrecedenceAsserted,
-		Confidence: 1,
-	}
-	named := &importbatch.Named{Provider: provider, ExternalID: externalID}
-	return m.commitHeld(ctx, unitID, named, func(library.Unit) (model.Identification, error) { return chosen, nil })
+// CommitHeldAs force-commits one QUEUE-decision unit as the work a person named ("Identify as...", for a unit
+// IDENTIFY found nothing for, or found the wrong thing): a stated identifier outranks any guess.
+func (m ManualCommitter) CommitHeldAs(ctx context.Context, unitID int64, provider, externalID string) (library.Placement, error) {
+	return m.commitHeld(ctx, unitID, &importbatch.Named{Provider: provider, ExternalID: externalID})
 }
 
-func (m ManualCommitter) commitHeld(
-	ctx context.Context, unitID int64, named *importbatch.Named, choose func(library.Unit) (model.Identification, error),
-) (music.Placed, error) {
+func (m ManualCommitter) commitHeld(ctx context.Context, unitID int64, named *importbatch.Named) (library.Placement, error) {
 	unit, err := m.sessions.GetUnit(ctx, unitID)
 	if err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: get unit %d: %w", unitID, err)
+		return library.Placement{}, fmt.Errorf("importjob: get unit %d: %w", unitID, err)
 	}
 	if unit.Decision != library.UnitQueue {
-		return music.Placed{}, fmt.Errorf("importjob: unit %d: %w", unitID, ErrUnitNotQueued)
+		return library.Placement{}, fmt.Errorf("importjob: unit %d: %w", unitID, ErrUnitNotQueued)
 	}
 	session, err := m.sessions.Get(ctx, unit.SessionID)
 	if err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: get session %d: %w", unit.SessionID, err)
+		return library.Placement{}, fmt.Errorf("importjob: get session %d: %w", unit.SessionID, err)
 	}
 	if err := checkPlaceable(session); err != nil {
-		return music.Placed{}, err
+		return library.Placement{}, err
 	}
-	if importer := m.ownImporter(session); importer != nil {
-		return m.placeHeld(ctx, session, unit, importer, named)
-	}
-
-	best, err := choose(unit)
-	if err != nil {
-		return music.Placed{}, err
-	}
-	return m.place(ctx, session, unit, best)
-}
-
-// ownImporter is the importer of the session's library when its media type brings one.
-func (m ManualCommitter) ownImporter(session library.Session) importbatch.Importer {
-	if m.importerFor == nil || session.CategoryID == nil {
-		return nil
-	}
-	return m.importerFor(*session.CategoryID)
+	return m.placeHeld(ctx, session, unit, named)
 }
 
 // minimumGuess keeps a guess of no confidence at all distinguishable from a person's naming.
 const minimumGuess = 0.001
 
-// placeHeld hands a held unit to its media type: re-walked as music's is, placed as the work named or resolved.
+// placeHeld hands one unit to its library's media type, re-walked from its own folder, and records what was placed.
 func (m ManualCommitter) placeHeld(
-	ctx context.Context, session library.Session, unit library.Unit, importer importbatch.Importer, named *importbatch.Named,
-) (music.Placed, error) {
+	ctx context.Context, session library.Session, unit library.Unit, named *importbatch.Named,
+) (library.Placement, error) {
+	importer := m.importerFor(*session.CategoryID)
 	committer, ok := importer.(importbatch.HeldCommitter)
 	if !ok {
-		return music.Placed{}, fmt.Errorf("importjob: unit %d: %w", unit.ID, ErrHeldCommitNotBuilt)
+		return library.Placement{}, fmt.Errorf("importjob: unit %d: %w", unit.ID, ErrHeldCommitNotBuilt)
 	}
-	reconstructed, err := m.reconstructUnit(ctx, path.Join(session.SourcePath, unit.RelPath), unit, videoSizeFloor)
+	var floor int64
+	if sized, ok := importer.(importbatch.SizeFloor); ok {
+		floor = sized.MediaSizeFloorBytes()
+	}
+	reconstructed, err := m.reconstructUnit(ctx, path.Join(session.SourcePath, unit.RelPath), unit, floor)
 	if err != nil {
-		return music.Placed{}, err
+		return library.Placement{}, err
 	}
 	// A batch's files are named from the session's source, a re-walk's from the unit's own folder.
 	for index := range reconstructed.Media {
@@ -175,60 +123,44 @@ func (m ManualCommitter) placeHeld(
 	request := importbatch.HeldRequest{
 		SessionID: session.ID, CategoryID: *session.CategoryID, SourcePath: session.SourcePath, Unit: reconstructed, As: named,
 	}
+	if top, err := topCandidate(unit); err == nil {
+		request.Top = &top
+	}
+	if named == nil && unit.WorkID == nil && request.Top == nil {
+		return library.Placement{}, fmt.Errorf("importjob: unit %d: %w", unit.ID, ErrNoCandidate)
+	}
 	if unit.WorkID != nil {
 		request.WorkID = *unit.WorkID
-	} else if named == nil {
+	} else if named == nil && request.Top.ExternalID != nil {
 		// Commit anyway means the best guess for every type: here the top-ranked candidate's own id.
-		if best, err := topCandidate(unit); err == nil && best.ExternalID != nil {
-			request.As = &importbatch.Named{Provider: best.ExternalID.Provider, ExternalID: best.ExternalID.ExternalID}
-			request.Guess = max(best.Confidence, minimumGuess)
-		}
+		request.As = &importbatch.Named{Provider: request.Top.ExternalID.Provider, ExternalID: request.Top.ExternalID.ExternalID}
+		request.Guess = max(request.Top.Confidence, minimumGuess)
 	}
 	placement, err := committer.CommitHeld(ctx, request)
 	if err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: commit unit %d: %w", unit.ID, err)
+		return library.Placement{}, fmt.Errorf("importjob: commit unit %d: %w", unit.ID, err)
 	}
-	if err := m.sessions.SetUnitDecisions(ctx, session.ID, []library.UnitDecision{{
-		UnitID: unit.ID, Decision: library.UnitCommit, Confidence: 1, WorkID: &placement.WorkID,
-		CandidatesJSON: unit.CandidatesJSON, Reason: "manual override",
-	}}); err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
+	if unit.Decision == library.UnitQueue {
+		if err := m.sessions.SetUnitDecisions(ctx, session.ID, []library.UnitDecision{{
+			UnitID: unit.ID, Decision: library.UnitCommit, Confidence: 1, WorkID: &placement.WorkID,
+			CandidatesJSON: unit.CandidatesJSON, Reason: "manual override",
+		}}); err != nil {
+			return library.Placement{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
+		}
 	}
 	if err := m.sessions.RecordPlacement(ctx, unit.ID, placement); err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
+		return library.Placement{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
 	}
-	return music.Placed{WorkID: placement.WorkID, MediaObjectIDs: placement.MediaObjectIDs, LibraryPathIDs: placement.LibraryPathIDs}, nil
+	if unit.PackID != nil {
+		if err := m.packs.ResolveItem(ctx, unit.ID, placement.WorkID, placement.EditionID); err != nil {
+			return library.Placement{}, fmt.Errorf("importjob: resolve pack item for unit %d: %w", unit.ID, err)
+		}
+	}
+	return placement, nil
 }
 
-// identifyUnverified commits a queued unit already placed as an unverified album (D6): its files are
-// in the library, so they are moved onto the chosen album instead of being placed a second time.
-func (m ManualCommitter) identifyUnverified(
-	ctx context.Context, session library.Session, unit library.Unit, best model.Identification, committer UnverifiedCommitter,
-) (music.Placed, error) {
-	placed, err := committer.IdentifyUnverified(ctx, *unit.WorkID, best, *session.CategoryID)
-	if err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: identify unit %d: %w", unit.ID, err)
-	}
-	if err := m.sessions.SetUnitDecisions(ctx, session.ID, []library.UnitDecision{{
-		UnitID: unit.ID, Decision: library.UnitCommit, Confidence: best.Confidence,
-		CandidatesJSON: unit.CandidatesJSON, Reason: "manual override",
-	}}); err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
-	}
-	// The unit's files were recorded when it was placed; only the album it belongs to changes.
-	if err := m.sessions.RecordPlacement(ctx, unit.ID, library.Placement{
-		WorkID: placed.WorkID, WorkCreated: placed.WorkCreated, EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
-	}); err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
-	}
-	return placed, nil
-}
-
-// PlaceUnplaced places every unit this session already decided COMMIT but
-// never placed -- todo 4.9's other UI action: assigning a category to a
-// session after WALK already decided some units. Best-effort per unit, the
-// same tolerance placeCommitted already has inline during WALK: one bad unit
-// does not stop the rest.
+// PlaceUnplaced places every unit this session decided COMMIT but never placed, which is what a session walked before
+// it had a library holds once it is given one. Best-effort: one bad unit does not stop the rest.
 func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (placed int, errs []error) {
 	session, err := m.sessions.Get(ctx, sessionID)
 	if err != nil {
@@ -237,18 +169,16 @@ func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (pl
 	if err := checkPlaceable(session); err != nil {
 		return 0, []error{err}
 	}
-
 	units, err := m.sessions.ListUnplacedCommitUnits(ctx, sessionID)
 	if err != nil {
 		return 0, []error{fmt.Errorf("importjob: list unplaced units for session %d: %w", sessionID, err)}
 	}
 	for _, unit := range units {
-		best, err := topCandidate(unit)
-		if err != nil {
+		if _, err := topCandidate(unit); err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		if _, err := m.place(ctx, session, unit, best); err != nil {
+		if _, err := m.placeHeld(ctx, session, unit, nil); err != nil {
 			errs = append(errs, err)
 			continue
 		}
@@ -257,15 +187,9 @@ func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (pl
 	return placed, errs
 }
 
-// CommitAllHeld force-commits the units a preview run held for review --
-// revision.md 7.9's "commit all / selected", which is CommitHeld's own
-// override repeated, not a second decision path. only, when non-empty, names
-// the subset to commit; every other QUEUE unit is left alone. Best-effort per
-// unit, the same tolerance PlaceUnplaced has: one bad unit does not stop the
-// rest.
-func (m ManualCommitter) CommitAllHeld(
-	ctx context.Context, sessionID int64, only []int64,
-) (committed int, errs []error) {
+// CommitAllHeld force-commits the units a preview run held for review (revision.md 7.9's "commit all / selected"):
+// CommitHeld repeated. only, when non-empty, names the subset; best-effort as PlaceUnplaced is.
+func (m ManualCommitter) CommitAllHeld(ctx context.Context, sessionID int64, only []int64) (committed int, errs []error) {
 	session, err := m.sessions.Get(ctx, sessionID)
 	if err != nil {
 		return 0, []error{fmt.Errorf("importjob: get session %d: %w", sessionID, err)}
@@ -273,32 +197,15 @@ func (m ManualCommitter) CommitAllHeld(
 	if err := checkPlaceable(session); err != nil {
 		return 0, []error{err}
 	}
-
 	units, err := m.sessions.ListUnits(ctx, sessionID)
 	if err != nil {
 		return 0, []error{fmt.Errorf("importjob: list units for session %d: %w", sessionID, err)}
 	}
 	for _, unit := range units {
-		if unit.Decision != library.UnitQueue {
+		if unit.Decision != library.UnitQueue || (len(only) > 0 && !slices.Contains(only, unit.ID)) {
 			continue
 		}
-		if len(only) > 0 && !slices.Contains(only, unit.ID) {
-			continue
-		}
-		if importer := m.ownImporter(session); importer != nil {
-			if _, err := m.placeHeld(ctx, session, unit, importer, nil); err != nil {
-				errs = append(errs, err)
-				continue
-			}
-			committed++
-			continue
-		}
-		best, err := topCandidate(unit)
-		if err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		if _, err := m.place(ctx, session, unit, best); err != nil {
+		if _, err := m.placeHeld(ctx, session, unit, nil); err != nil {
 			errs = append(errs, err)
 			continue
 		}
@@ -410,65 +317,4 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 	// its directory-name naming fallback both read.
 	reconstructed.Directory = unit.RelPath
 	return reconstructed, nil
-}
-
-// place runs the same CommitUnit WALK-time placement already uses, over a
-// unit reconstructUnit re-derived.
-func (m ManualCommitter) place(
-	ctx context.Context, session library.Session, unit library.Unit, best model.Identification,
-) (music.Placed, error) {
-	if unverified, ok := m.committer.(UnverifiedCommitter); ok && unit.WorkID != nil && unit.Decision == library.UnitQueue {
-		return m.identifyUnverified(ctx, session, unit, best, unverified)
-	}
-	root := path.Join(session.SourcePath, unit.RelPath)
-	reconstructed, err := m.reconstructUnit(ctx, root, unit, 0)
-	if err != nil {
-		return music.Placed{}, err
-	}
-
-	absolute := make([]string, len(reconstructed.Media))
-	for i, f := range reconstructed.Media {
-		absolute[i] = path.Join(root, f.RelPath)
-	}
-	probes, err := m.tool.ReadTags(ctx, absolute)
-	if err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: probe unit %d: %w", unit.ID, err)
-	}
-	tags := music.UnitTagSourceFor(root, probes)
-
-	// DECIDE's own contract (identifyUnit): work_id/edition_id stay nil until
-	// RecordPlacement fills them in below -- flipping decision here first,
-	// same order commitCluster's own SetUnitDecisions-then-placeCommitted
-	// already uses, so a placement failure leaves the unit exactly where a
-	// WALK-time placement failure already would: COMMIT-decided, unplaced,
-	// picked up again by a later PlaceUnplaced retry.
-	if unit.Decision == library.UnitQueue {
-		if err := m.sessions.SetUnitDecisions(ctx, session.ID, []library.UnitDecision{{
-			UnitID: unit.ID, Decision: library.UnitCommit, Confidence: best.Confidence,
-			CandidatesJSON: unit.CandidatesJSON, Reason: "manual override",
-		}}); err != nil {
-			return music.Placed{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
-		}
-	}
-
-	// No album placement: a manual commit re-reads the unit from disk, where what album
-	// matching decided during IDENTIFY is no longer in memory (the candidates are, in the row).
-	placed, err := m.committer.CommitMatchedUnit(ctx, root, reconstructed, best, tags, *session.CategoryID, nil, nil)
-	if err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: commit unit %d: %w", unit.ID, err)
-	}
-	if err := m.sessions.RecordPlacement(ctx, unit.ID, library.Placement{
-		WorkID: placed.WorkID, WorkCreated: placed.WorkCreated,
-		EditionID: placed.EditionID, EditionCreated: placed.EditionCreated,
-		MediaObjectIDs: placed.MediaObjectIDs, LibraryPathIDs: placed.LibraryPathIDs,
-		TransferMethods: placed.TransferMethodNames(), Extras: placedExtras(placed),
-	}); err != nil {
-		return music.Placed{}, fmt.Errorf("importjob: record placement for unit %d: %w", unit.ID, err)
-	}
-	if unit.PackID != nil {
-		if err := m.packs.ResolveItem(ctx, unit.ID, placed.WorkID, placed.EditionID); err != nil {
-			return music.Placed{}, fmt.Errorf("importjob: resolve pack item for unit %d: %w", unit.ID, err)
-		}
-	}
-	return placed, nil
 }

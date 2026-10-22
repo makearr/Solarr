@@ -39,9 +39,6 @@ type (
 // AcquisitionSource finds the desired item a finished download was grabbed for.
 type AcquisitionSource = batch.AcquisitionSource
 
-// ReasonPreview is the import job's own reason for a unit a preview run held for a person.
-const ReasonPreview = "preview"
-
 // ImporterConfig is what an Importer needs; Logger, TransferLadder, RenameOnImport and GroupID are optional.
 type ImporterConfig struct {
 	FS           fsx.FS
@@ -103,6 +100,9 @@ func NewImporter(config ImporterConfig) Importer {
 	})}
 }
 
+// MediaSizeFloorBytes implements batch.SizeFloor: a sample or a stub is no episode to import.
+func (Importer) MediaSizeFloorBytes() int64 { return batch.VideoSizeFloorBytes }
+
 var _ batch.Importer = Importer{}
 
 // ImportBatch implements batch.Importer.
@@ -132,7 +132,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			continue
 		}
 		if request.Preview {
-			decision.Reason = ReasonPreview
+			decision.Reason = batch.ReasonPreview
 			decision.WorkID = &workID
 			result.Decisions[index] = decision
 			continue

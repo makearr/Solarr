@@ -89,6 +89,10 @@ UPDATE import_session SET
                       WHERE iu.session_id = sqlc.arg(session_id) AND iu.decision = 'COMMIT')
 WHERE id = sqlc.arg(session_id);
 
+-- Units a pass recorded but could not finish, so a resumed walk inspects them again.
+-- name: DeleteImportUnits :exec
+DELETE FROM import_unit WHERE session_id = sqlc.arg(session_id) AND id IN (sqlc.slice('ids'));
+
 -- name: InsertImportUnit :one
 INSERT INTO import_unit (session_id, rel_path, shape, file_count, bytes, confidence,
                           decision, work_id, edition_id, evidence_json, candidates_json,

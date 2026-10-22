@@ -99,7 +99,7 @@ func TestADR28_ImportJobProcessesUnitsUnderItsTarget(t *testing.T) {
 
 	job := importjob.NewJob(importjob.Config{
 		FS: fx.fsys, Sessions: library.NewImportSessions(fx.store), Policy: fixedPolicy(0.90),
-		Tool: tool, Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
+		Importers: musicImporters(tool, nil, nil), Unassigned: "music", Clock: fx.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 
 	started := time.Now()

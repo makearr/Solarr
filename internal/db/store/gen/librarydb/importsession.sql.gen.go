@@ -8,6 +8,7 @@ package librarydb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const clearImportUnitPlacement = `-- name: ClearImportUnitPlacement :exec
@@ -145,6 +146,32 @@ DELETE FROM import_unit_extra WHERE unit_id = ?
 
 func (q *Queries) DeleteImportUnitExtras(ctx context.Context, unitID int64) error {
 	_, err := q.db.ExecContext(ctx, deleteImportUnitExtras, unitID)
+	return err
+}
+
+const deleteImportUnits = `-- name: DeleteImportUnits :exec
+DELETE FROM import_unit WHERE session_id = ?1 AND id IN (/*SLICE:ids*/?)
+`
+
+type DeleteImportUnitsParams struct {
+	SessionID int64
+	Ids       []int64
+}
+
+// Units a pass recorded but could not finish, so a resumed walk inspects them again.
+func (q *Queries) DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsParams) error {
+	query := deleteImportUnits
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.SessionID)
+	if len(arg.Ids) > 0 {
+		for _, v := range arg.Ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(arg.Ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
 	return err
 }
 

@@ -26,9 +26,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// ReasonPreview is the import job's own reason for a unit a preview run held for a person.
-const ReasonPreview = "preview"
-
 // defaultMovieMinutes is what Radarr assumes a film runs when nothing says.
 const defaultMovieMinutes = 90
 
@@ -78,6 +75,9 @@ func NewImporter(config ImporterConfig) Importer {
 	return Importer{config: config, logger: logger}
 }
 
+// MediaSizeFloorBytes implements batch.SizeFloor: a sample or a stub is no film to import.
+func (Importer) MediaSizeFloorBytes() int64 { return batch.VideoSizeFloorBytes }
+
 var (
 	_ batch.Importer      = Importer{}
 	_ batch.HeldCommitter = Importer{}
@@ -120,7 +120,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		}
 		decision.WorkID = &workID
 		if request.Preview {
-			decision.Reason = ReasonPreview
+			decision.Reason = batch.ReasonPreview
 			result.Decisions[index] = decision
 			continue
 		}

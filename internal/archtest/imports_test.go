@@ -219,7 +219,7 @@ var allowedInternalImports = map[string][]string{
 	// The enrichment job adds musicbrainz (ADR-29) and jobs (its own handler,
 	// mirroring scan.Job).
 	"internal/acquiring/judge": {"internal/db/statistics", "internal/platform/parallel", "internal/acquiring/indexer", "internal/db/library", "internal/db/settings", "internal/identify/model", "internal/identify/score"},
-	"internal/importing/batch": {"internal/db/library", "internal/importing/inspect"},
+	"internal/importing/batch": {"internal/db/library", "internal/identify/model", "internal/importing/inspect"},
 	// The RSS sync of every media type: feeds read once, each type judging its own.
 	"internal/acquiring/rss": {"internal/acquiring/indexer", "internal/acquiring/judge", "internal/jobs", "internal/platform/clock"},
 	// The cutoff check of every media type: paging, state writes and counting once, each type judging its own.
@@ -235,7 +235,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/acoustid", "internal/metadata/musicbrainz",
 		"internal/moving/naming", "internal/moving/placement",
 		"internal/identify/parse", "internal/identify/score", "internal/scanning/scan", "internal/db/settings",
-		"internal/metadata/wikidata", "internal/identify/quality",
+		"internal/metadata/wikidata", "internal/identify/quality", "internal/importing/batch",
 	},
 	"internal/platform/paginate":   {},
 	"internal/platform/listfilter": {},
@@ -263,8 +263,7 @@ var allowedInternalImports = map[string][]string{
 	// own job has for its Consumer, generalised to import's own pipeline.
 	"internal/importing/importjob": {"internal/platform/parallel", "internal/importing/batch",
 		"internal/platform/clock", "internal/platform/fsx", "internal/importing/inspect", "internal/importing/unpack", "internal/platform/archive", "internal/importing/pack",
-		"internal/jobs", "internal/db/library", "internal/platform/mediatool", "internal/identify/model",
-		"internal/media/music", "internal/platform/events",
+		"internal/jobs", "internal/db/library", "internal/identify/model", "internal/platform/events",
 	},
 	// ADR-51's resumable Apply: claims a move_item, calls mover.ApplyOne, then
 	// records/unlinks through internal/db/library. No internal/db/settings import --

@@ -42,8 +42,6 @@ var directWiredMediaFiles = []string{
 	"cmd/solarr/app/job_tvrefresh.go",
 	"cmd/solarr/app/providers.go",
 	"cmd/solarr/app/serve.go",
-	"internal/importing/importjob/job.go",
-	"internal/importing/importjob/manualcommit.go",
 }
 
 func TestMediaModules_AreImportedOnlyByTheRegistration(t *testing.T) {

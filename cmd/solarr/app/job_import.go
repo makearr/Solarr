@@ -22,27 +22,8 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
-// registerImportJob wires ADR-48's import.inspect job into the registry and
-// the executor. There is no enqueue trigger yet -- import.inspect is
-// user-triggered (point it at a path), not a periodic sweep like a scan or a
-// probe, so the natural trigger is the still-unbuilt POST /api/v1/import/
-// inspect endpoint (next.md's own next item), not a startup call. Registered
-// now anyway, the same ready-ahead-of-consumer shape every engine piece this
-// session landed already has -- the executor has to know the type exists
-// before anything can enqueue one.
-//
-// The Committer (todo 4.9's "COMMIT actually imports") reuses the exact
-// adapters registerScanJob already built for the same purpose --
-// adapters.DrainRoots already has the RootFolder/CategoryRoots shape
-// music.PlacementRoots needs, structurally, with no new adapter type.
-//
-// Search wires music.SearchIdentifier into IDENTIFY (todo 4.9's own
-// remaining item) -- the same musicbrainz.Provider registerScanJob already
-// hands its own Consumer, so a scene release with no embedded MBID can
-// still auto-resolve on import, not only on a library scan.
-// identifyCluster's 8-wide fan-out (job.go) was built ahead of exactly this;
-// httpx's global rate limiter (ADR-13) is what keeps several concurrent
-// MusicBrainz lookups from one cluster paced rather than bursting.
+// registerImportJob wires ADR-48's import.inspect job: each media type imports a batch its own way, and a session
+// with no library yet is identified as music, which is what an unsorted download folder mostly is.
 func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Executor) error {
 	if err := registry.Register(importjob.Definition); err != nil {
 		return err
@@ -51,14 +32,9 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		FS:         p.fsys,
 		Sessions:   library.NewImportSessions(p.library),
 		Policy:     adapters.ImportPolicy{Cache: p.cache},
-		Tool:       p.mediaTool(),
-		Search:     p.musicBrainzProvider(),
-		Albums:     p.musicBrainzProvider(),
-		Provenance: p.acquisitionReleaseGroups,
-		AcoustID:   p.acoustIDLookup(),
-		Committer:  p.importCommitter(),
 		Packs:      library.NewPacks(p.library),
 		Importers:  p.batchImporters(),
+		Unassigned: string(music.MediaType),
 		MediaTypeOf: func(categoryID int64) string {
 			if category, found := p.cache.Snapshot().Category(categoryID); found {
 				return category.MediaType
@@ -173,28 +149,32 @@ func (p *process) mediaTool() mediatool.Tool {
 	return mediatool.New(nil, 0)
 }
 
-// manualCommitter builds the Import screen's two remaining UI actions
-// (manualcommit.go): commit-what-was-held and assign-a-category-later. A
-// second Committer instance, not the same value registerImportJob's own job
-// holds -- both are cheap, stateless wrappers over the same long-lived
-// dependencies, and importjob.Job keeps its own unexported.
+// manualCommitter is the Import screen's commit-what-was-held and place-once-assigned, through each type's importer.
 func (p *process) manualCommitter() importjob.ManualCommitter {
 	importers := p.batchImporters()
-	return importjob.NewManualCommitter(
-		p.fsys, p.mediaTool(), library.NewImportSessions(p.library), p.importCommitter(),
-		library.NewPacks(p.library),
-	).WithImporters(func(categoryID int64) batch.Importer {
-		category, found := p.cache.Snapshot().Category(categoryID)
-		if !found {
-			return nil
-		}
-		return importers[category.MediaType]
-	})
+	return importjob.NewManualCommitter(p.fsys, library.NewImportSessions(p.library), library.NewPacks(p.library),
+		func(categoryID int64) batch.Importer {
+			category, found := p.cache.Snapshot().Category(categoryID)
+			if !found {
+				return nil
+			}
+			return importers[category.MediaType]
+		})
 }
 
-// batchImporters are the media types that identify and place an import in their own way, by type.
+// batchImporters are each media type's own identify-and-place of an import, by type.
 func (p *process) batchImporters() map[string]batch.Importer {
-	return map[string]batch.Importer{tv.MediaType: p.tvImporter(), movie.MediaType: p.movieImporter()}
+	return map[string]batch.Importer{
+		string(music.MediaType): p.musicImporter(), tv.MediaType: p.tvImporter(), movie.MediaType: p.movieImporter(),
+	}
+}
+
+// musicImporter is Lidarr's import: tags, MusicBrainz search, album matching and fingerprints, placed by importCommitter.
+func (p *process) musicImporter() music.Importer {
+	return music.NewImporter(music.ImporterConfig{
+		Tool: p.mediaTool(), Search: p.musicBrainzProvider(), Albums: p.musicBrainzProvider(), AcoustID: p.acoustIDLookup(),
+		Committer: p.importCommitter(), Provenance: p.acquisitionReleaseGroups, Logger: p.logger,
+	})
 }
 
 // tvImporter is the TV module's batch importer: the same placement rules as music's commit, naming by the library's TV

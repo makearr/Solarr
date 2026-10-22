@@ -236,6 +236,8 @@ type Querier interface {
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
 	DeleteImportUnitExtras(ctx context.Context, unitID int64) error
+	// Units a pass recorded but could not finish, so a resumed walk inspects them again.
+	DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsParams) error
 	DeleteLibraryPath(ctx context.Context, id int64) error
 	DeleteMediaObject(ctx context.Context, id int64) error
 	DeletePerson(ctx context.Context, id int64) error

@@ -176,7 +176,7 @@ func TestPreviewHoldsTheUnitForAPersonWithoutPlacingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := result.Decisions[0]; d.Decision != library.UnitQueue || d.Reason != tv.ReasonPreview || result.Placements[0] != nil {
+	if d := result.Decisions[0]; d.Decision != library.UnitQueue || d.Reason != batch.ReasonPreview || result.Placements[0] != nil {
 		t.Errorf("decision = %+v", d)
 	}
 }

@@ -201,6 +201,25 @@ func (s ImportSessions) AddUnits(ctx context.Context, sessionID int64, units []N
 	return ids, nil
 }
 
+// DeleteUnits removes units a pass recorded but could not finish, so a resumed walk, which starts after the last unit
+// recorded, inspects them again.
+func (s ImportSessions) DeleteUnits(ctx context.Context, sessionID int64, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		if err := queries.DeleteImportUnits(ctx, librarydb.DeleteImportUnitsParams{SessionID: sessionID, Ids: ids}); err != nil {
+			return err
+		}
+		return queries.RecomputeImportSessionCounts(ctx, sessionID)
+	})
+	if err != nil {
+		return fmt.Errorf("library: delete import units of session %d: %w", sessionID, err)
+	}
+	return nil
+}
+
 // UnitDecision is one unit's IDENTIFY/DECIDE result, ready to record.
 type UnitDecision struct {
 	UnitID                 int64

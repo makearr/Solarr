@@ -26,7 +26,7 @@ type fakeCommitter struct {
 	lastPlacement *music.AlbumPlacement
 	lastLadder    []string
 	workID        int64
-	// placed, keyed by sourceRoot, overrides workID for one call's own answer.
+	// placed, keyed by the unit's directory, overrides workID for one call's own answer.
 	// errFor, keyed the same way, makes one call fail instead.
 	placed map[string]music.Placed
 	errFor map[string]error
@@ -55,7 +55,7 @@ func (f *fakeCommitter) CommitMatchedUnit(
 ) (music.Placed, error) {
 	f.lastPlacement = matched
 	f.lastLadder = ladder
-	key := sourceRoot
+	key := unit.Directory
 	mediaPaths := make([]string, len(unit.Media))
 	for i, m := range unit.Media {
 		mediaPaths[i] = m.RelPath
@@ -71,6 +71,12 @@ func (f *fakeCommitter) CommitMatchedUnit(
 		return placed, nil
 	}
 	return music.Placed{WorkID: f.workID}, nil
+}
+
+// manualCommitter places every held unit through music's importer, with committer as its placement.
+func manualCommitter(fx *fixture, committer music.UnitCommitter) importjob.ManualCommitter {
+	importer := music.NewImporter(music.ImporterConfig{Tool: fx.tool, Committer: committer})
+	return importjob.NewManualCommitter(fx.fsys, fx.sessions(), library.NewPacks(fx.store), func(int64) batch.Importer { return importer })
 }
 
 // seedWork creates one real work row, for a fakeCommitter's own Placed.WorkID
@@ -119,7 +125,7 @@ func TestManualCommitter_CommitHeldPlacesAQueuedUnitUsingItsTopCandidate(t *test
 
 	workID := seedWork(t, fx)
 	committer := &fakeCommitter{workID: workID}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	placed, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if err != nil {
 		t.Fatalf("CommitHeld: %v", err)
@@ -166,7 +172,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitThatIsNotQueued(t *testing.T) {
 		t.Fatalf("unit decision = %q, want COMMIT (test setup)", units[0].Decision)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrUnitNotQueued) {
 		t.Errorf("err = %v, want ErrUnitNotQueued", err)
@@ -189,7 +195,7 @@ func TestManualCommitter_CommitHeldRefusesAUnitWithNoCandidate(t *testing.T) {
 		t.Fatalf("unit = %+v, want QUEUE with no candidates (test setup)", units[0])
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrNoCandidate) {
 		t.Errorf("err = %v, want ErrNoCandidate", err)
@@ -209,7 +215,7 @@ func TestManualCommitter_CommitHeldRefusesWithNoSessionCategory(t *testing.T) {
 	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 	units, _ := sessions.ListUnits(t.Context(), done[0].ID)
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrSessionHasNoCategory) {
 		t.Errorf("err = %v, want ErrSessionHasNoCategory", err)
@@ -240,7 +246,7 @@ func TestManualCommitter_CommitHeldRefusesWhenTheUnitChangedSinceInspection(t *t
 		t.Fatalf("Remove: %v", err)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrUnitChanged) {
 		t.Errorf("err = %v, want ErrUnitChanged", err)
@@ -288,7 +294,7 @@ func TestManualCommitter_CommitHeldPlacesTheCorrectSiblingWhenUnitsShareADirecto
 
 	workID := seedWork(t, fx)
 	committer := &fakeCommitter{workID: workID}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	if _, err := manual.CommitHeld(t.Context(), units[0].ID); err != nil {
 		t.Fatalf("CommitHeld(%d): %v", units[0].ID, err)
 	}
@@ -307,15 +313,14 @@ func TestManualCommitter_CommitHeldPlacesTheCorrectSiblingWhenUnitsShareADirecto
 	// which files got reconstructed, or fileCount, which is 2 for both
 	// siblings here) is what catches the two calls being handed each other's
 	// files.
-	// unit.Media's own RelPath is relative to the unit's own directory (root
-	// above), not the session's source_path -- no "Messy/" prefix.
+	// unit.Media's own RelPath is relative to the session's source_path, as at walk time.
 	if committer.calls[0].externalID != releaseGroupMBID ||
-		!slices.Equal(committer.calls[0].mediaPaths, []string{"01 First.flac", "02 Second.flac"}) {
+		!slices.Equal(committer.calls[0].mediaPaths, []string{"Messy/01 First.flac", "Messy/02 Second.flac"}) {
 		t.Errorf("call for unit %d = %+v, want externalID=%s mediaPaths=[01 First.flac, 02 Second.flac]",
 			units[0].ID, committer.calls[0], releaseGroupMBID)
 	}
 	if committer.calls[1].externalID != otherReleaseGroupMBID ||
-		!slices.Equal(committer.calls[1].mediaPaths, []string{"01 Third.flac", "02 Fourth.flac"}) {
+		!slices.Equal(committer.calls[1].mediaPaths, []string{"Messy/01 Third.flac", "Messy/02 Fourth.flac"}) {
 		t.Errorf("call for unit %d = %+v, want externalID=%s mediaPaths=[01 Third.flac, 02 Fourth.flac]",
 			units[1].ID, committer.calls[1], otherReleaseGroupMBID)
 	}
@@ -343,7 +348,7 @@ func TestManualCommitter_CommitHeldRefusesAReveredSession(t *testing.T) {
 		t.Fatalf("Finish: %v", err)
 	}
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, err := manual.CommitHeld(t.Context(), units[0].ID)
 	if !errors.Is(err, importjob.ErrSessionReverted) {
 		t.Errorf("err = %v, want ErrSessionReverted", err)
@@ -375,7 +380,7 @@ func TestManualCommitter_PlaceUnplacedPlacesEveryUndecidedCommitUnit(t *testing.
 	}
 
 	committer := &fakeCommitter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	placed, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
 	if len(errs) != 0 {
 		t.Fatalf("errs = %v, want none", errs)
@@ -408,14 +413,14 @@ func TestManualCommitter_PlaceUnplacedRefusesWithNoCategory(t *testing.T) {
 	sessions := fx.sessions()
 	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
 	if len(errs) != 1 || !errors.Is(errs[0], importjob.ErrSessionHasNoCategory) {
 		t.Errorf("errs = %v, want one ErrSessionHasNoCategory", errs)
 	}
 }
 
-// One bad unit (fakeCommitter refuses its own sourceRoot) must not stop the
+// One bad unit (fakeCommitter refuses its own directory) must not stop the
 // rest -- the same tolerance placeCommitted already has inline during WALK.
 func TestManualCommitter_PlaceUnplacedIsBestEffortAcrossSeveralUnits(t *testing.T) {
 	fx := newFixture(t, "Artist/Album1/01.flac", "Artist/Album2/01.flac")
@@ -436,9 +441,8 @@ func TestManualCommitter_PlaceUnplacedIsBestEffortAcrossSeveralUnits(t *testing.
 		t.Fatalf("SetCategory: %v", err)
 	}
 
-	failRoot := filepath.Join(root, units[0].RelPath)
-	committer := &fakeCommitter{workID: seedWork(t, fx), errFor: map[string]error{failRoot: errors.New("no room")}}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	committer := &fakeCommitter{workID: seedWork(t, fx), errFor: map[string]error{units[0].RelPath: errors.New("no room")}}
+	manual := manualCommitter(fx, committer)
 	placed, errs := manual.PlaceUnplaced(t.Context(), done[0].ID)
 	if placed != 1 {
 		t.Errorf("placed = %d, want 1 (the other unit)", placed)
@@ -471,7 +475,7 @@ func TestManualCommitter_CommitAllHeldCommitsEveryUnitAPreviewHeld(t *testing.T)
 	}
 
 	committer := &fakeCommitter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	committed, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
 	if len(errs) != 0 {
 		t.Fatalf("errs = %v, want none", errs)
@@ -499,7 +503,7 @@ func TestManualCommitter_CommitAllHeldCommitsOnlyTheNamedSubset(t *testing.T) {
 	}
 
 	committer := &fakeCommitter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	committed, errs := manual.CommitAllHeld(t.Context(), done[0].ID, []int64{units[1].ID})
 	if len(errs) != 0 {
 		t.Fatalf("errs = %v, want none", errs)
@@ -529,7 +533,7 @@ func TestManualCommitter_CommitAllHeldRefusesWithNoCategory(t *testing.T) {
 	sessions := fx.sessions()
 	done, _ := sessions.List(t.Context(), library.ImportDone, false)
 
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, &fakeCommitter{}, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, &fakeCommitter{})
 	_, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
 	if len(errs) != 1 || !errors.Is(errs[0], importjob.ErrSessionHasNoCategory) {
 		t.Errorf("errs = %v, want one ErrSessionHasNoCategory", errs)
@@ -553,7 +557,7 @@ func TestManualCommitter_CommitAllHeldSkipsAUnitThatIsNotQueued(t *testing.T) {
 	}
 
 	committer := &fakeCommitter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	committed, errs := manual.CommitAllHeld(t.Context(), done[0].ID, nil)
 	if len(errs) != 0 {
 		t.Fatalf("errs = %v, want none", errs)
@@ -587,7 +591,7 @@ func TestManualCommitter_CommitHeldAsPlacesTheNamedAlbumNotTheTopCandidate(t *te
 	}
 
 	committer := &fakeCommitter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store))
+	manual := manualCommitter(fx, committer)
 	const chosen = "11111111-2222-3333-4444-555555555555"
 	if _, err := manual.CommitHeldAs(t.Context(), units[0].ID, "musicbrainz:release-group", chosen); err != nil {
 		t.Fatalf("CommitHeldAs: %v", err)
@@ -631,13 +635,13 @@ func TestManualCommitter_AHeldUnitOfALibraryWithItsOwnImporterGoesToThatImporter
 
 	committer := &fakeCommitter{}
 	own := &heldImporter{workID: seedWork(t, fx)}
-	manual := importjob.NewManualCommitter(fx.fsys, fx.tool, sessions, committer, library.NewPacks(fx.store)).
-		WithImporters(func(categoryID int64) batch.Importer {
-			if categoryID != catID {
-				return nil
-			}
-			return own
-		})
+	musicImporter := music.NewImporter(music.ImporterConfig{Tool: fx.tool, Committer: committer})
+	manual := importjob.NewManualCommitter(fx.fsys, sessions, library.NewPacks(fx.store), func(categoryID int64) batch.Importer {
+		if categoryID != catID {
+			return musicImporter
+		}
+		return own
+	})
 	// Commit anyway on a unit matched to no work names its top-ranked candidate.
 	guesses := library.CandidatesJSON([]model.Identification{
 		{Strategy: "parse", ExternalID: &model.ExternalID{Provider: "tvdb", ExternalID: "77"}, Confidence: 0.6},
