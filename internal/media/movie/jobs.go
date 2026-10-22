@@ -9,6 +9,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/picturesweep"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
@@ -112,77 +113,9 @@ var ArtworkDefinition = jobs.Definition{
 	Type: ArtworkJobType, Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1,
 }
 
-const (
-	artworkPerRun  = 1500
-	artworkWorkers = 6
-	maxPhotos      = 6000
-)
-
-// PictureCache is the provider picture cache as the sweep needs it.
-type PictureCache interface {
-	Cached(address string) bool
-	Ensure(ctx context.Context, address string) (string, error)
-}
-
-// ArtworkConfig is what an ArtworkJob needs; Logger is optional.
-type ArtworkConfig struct {
-	Reader library.SeriesReader
-	Cache  PictureCache
-	Logger *slog.Logger
-}
-
-// ArtworkJob fetches the posters, studio logos and first-billed photos a movie library shows before anyone scrolls to
-// them, so a poster fetched when it is first seen does not cost the viewer the CDN's latency.
-type ArtworkJob struct {
-	config ArtworkConfig
-	logger *slog.Logger
-}
-
-// NewArtworkJob builds the handler.
-func NewArtworkJob(config ArtworkConfig) *ArtworkJob {
-	logger := config.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return &ArtworkJob{config: config, logger: logger}
-}
-
-// Run fetches what is missing, posters first.
-func (j *ArtworkJob) Run(ctx context.Context, _ jobs.Job) error {
-	set, err := j.config.Reader.PictureAddressesOf(ctx, MediaType, "studio", maxPhotos)
-	if err != nil {
-		return err
-	}
-	var missing []string
-	for _, group := range [][]string{set.Posters, set.Logos, set.Photos} {
-		for _, address := range group {
-			if !j.config.Cache.Cached(address) {
-				missing = append(missing, address)
-			}
-		}
-	}
-	total := len(missing)
-	if len(missing) > artworkPerRun {
-		missing = missing[:artworkPerRun]
-	}
-	fetched, bad := 0, 0
-	outcomes := parallel.Do(ctx, len(missing), artworkWorkers, func(ctx context.Context, index int) error {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		_, err := j.config.Cache.Ensure(ctx, missing[index])
-		return err
-	})
-	for _, err := range outcomes {
-		switch {
-		case err == nil:
-			fetched++
-		case ctx.Err() == nil:
-			bad++
-		}
-	}
-	j.logger.Info("movie pictures fetched", slog.Int("fetched", fetched), slog.Int("failed", bad), slog.Int("still_missing", total-fetched-bad))
-	return ctx.Err()
+// NewArtworkJob keeps movie libraries' posters, studio logos and billed-first cast photos in the picture cache.
+func NewArtworkJob(reader picturesweep.Reader, cache picturesweep.Cache, logger *slog.Logger) *picturesweep.Job {
+	return picturesweep.New(picturesweep.Config{MediaType: MediaType, OrganisationKind: "studio", Reader: reader, Cache: cache, Logger: logger})
 }
 
 // EnqueueArtwork submits one sweep, deduplicated by ArtworkActionKey.

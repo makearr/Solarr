@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
@@ -145,8 +146,9 @@ func (p *process) tvModule() tv.Module {
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
-			Housekeeping: tv.Housekeeping{
-				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library), Logger: p.logger,
+			Housekeeping: housekeeping.UnmonitorDeleted{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
+				Grain: tv.Module{}.Descriptor().WantedGrain, Logger: p.logger,
 			},
 		},
 		Hunt:     p.tvHunt,
@@ -177,15 +179,7 @@ func (p *process) tvModule() tv.Module {
 		},
 		Feed: tv.Feed{
 			Grab: p.tvGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.tvIndexerConns, Logger: p.logger,
-			Libraries: func() []int64 {
-				var ids []int64
-				for _, category := range p.cache.Snapshot().Categories() {
-					if category.MediaType == tv.MediaType {
-						ids = append(ids, category.ID)
-					}
-				}
-				return ids
-			},
+			Libraries: p.libraryIDsOf(tv.MediaType),
 		},
 		CutoffJob: tv.CutoffJob{
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
@@ -219,15 +213,7 @@ func (p *process) tvModule() tv.Module {
 		},
 		Crossovers: &tv.CrossoverJob{
 			Crossovers: library.NewCrossovers(p.library), Logger: p.logger,
-			Libraries: func() []int64 {
-				var ids []int64
-				for _, category := range p.cache.Snapshot().Categories() {
-					if category.MediaType == tv.MediaType {
-						ids = append(ids, category.ID)
-					}
-				}
-				return ids
-			},
+			Libraries: p.libraryIDsOf(tv.MediaType),
 		},
 		FranchisePass: &tv.FranchisePass{
 			Source: p.wikidataFetcher(), Anime: p.aniListClient(), Franchises: library.NewFranchises(p.library), Crossovers: library.NewCrossovers(p.library),
@@ -374,8 +360,9 @@ func (p *process) movieModule() movie.Module {
 		TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: movie.IsFeature,
-			Housekeeping: movie.Housekeeping{
-				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library), Logger: p.logger,
+			Housekeeping: housekeeping.UnmonitorDeleted{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
+				Grain: movie.Module{}.Descriptor().WantedGrain, Logger: p.logger,
 			},
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
@@ -404,15 +391,7 @@ func (p *process) movieModule() movie.Module {
 		Hunt: p.movieHunt,
 		Feed: movie.Feed{
 			Grab: p.movieGrab(), Reader: library.NewSeriesReader(p.library), Indexers: p.movieIndexerConns, Logger: p.logger,
-			Libraries: func() []int64 {
-				var ids []int64
-				for _, category := range p.cache.Snapshot().Categories() {
-					if category.MediaType == movie.MediaType {
-						ids = append(ids, category.ID)
-					}
-				}
-				return ids
-			},
+			Libraries: p.libraryIDsOf(movie.MediaType),
 		},
 		CutoffJob: movie.CutoffJob{
 			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache,
@@ -454,9 +433,7 @@ func (p *process) movieJobs() []media.JobRegistration {
 		{Definition: movie.UniversePassDefinition, Handler: &movie.UniversePass{
 			Source: p.wikidataFetcher(), Franchises: library.NewFranchises(p.library), Logger: p.logger,
 		}},
-		{Definition: movie.ArtworkDefinition, Handler: movie.NewArtworkJob(movie.ArtworkConfig{
-			Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger,
-		})},
+		{Definition: movie.ArtworkDefinition, Handler: movie.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
 	}
 }
 

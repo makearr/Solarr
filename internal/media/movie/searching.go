@@ -43,12 +43,5 @@ func (s Searching) prepare(ctx context.Context, search media.WantedSearch) ([]ju
 	if search.Part != "" {
 		return nil, media.ErrWholeItemOnly
 	}
-	conns, err := s.Conns(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("movie: search: indexers: %w", err)
-	}
-	if len(conns) == 0 {
-		return nil, media.ErrNoIndexers
-	}
-	return conns, nil
+	return media.SearchConns(ctx, "movie", s.Conns)
 }

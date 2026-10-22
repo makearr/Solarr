@@ -64,12 +64,7 @@ func (a SystemHealth) mediaChecks(snapshot *settings.Snapshot) []apiserver.Healt
 		if !ok {
 			continue
 		}
-		libraries := 0
-		for _, category := range snapshot.Categories() {
-			if category.MediaType == string(descriptor.Key) {
-				libraries++
-			}
-		}
+		libraries := len(snapshot.CategoryIDsOf(string(descriptor.Key)))
 		for _, check := range module.HealthChecks(libraries) {
 			checks = append(checks, apiserver.HealthCheck{ID: check.ID, Severity: check.Severity, Message: check.Message, Link: check.Link})
 		}

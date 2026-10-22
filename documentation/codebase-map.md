@@ -30,7 +30,7 @@ internal/
 ├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar
 ├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  qbittorrent  poll  plan
 │               judge  dispatch  rss
-├── media/      the media-type registry  +  music  tv  movie  knownfor
+├── media/      the media-type registry  +  music  tv  movie  +  shared by types: knownfor  picturesweep  housekeeping
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```
 

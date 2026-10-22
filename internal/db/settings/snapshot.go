@@ -171,6 +171,17 @@ func (s *Snapshot) CategoriesForRootFolder(rootFolderID int64) []int64 {
 	return categoryIDs
 }
 
+// CategoryIDsOf returns the ids of the categories (libraries) of one media type, in the order Categories lists them.
+func (s *Snapshot) CategoryIDsOf(mediaType string) []int64 {
+	var ids []int64
+	for _, category := range s.categories {
+		if category.MediaType == mediaType {
+			ids = append(ids, category.ID)
+		}
+	}
+	return ids
+}
+
 // newSnapshot builds the indexes. It clones the slices it is given, so a caller
 // keeping a reference cannot mutate a published snapshot.
 func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,

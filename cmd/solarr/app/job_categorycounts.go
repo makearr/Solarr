@@ -93,3 +93,8 @@ func (p *process) enqueueCategoryCounts(ctx context.Context) (jobs.EnqueueResult
 	}
 	return result, err
 }
+
+// libraryIDsOf answers, each time it is asked, the libraries of mediaType as the settings hold them then.
+func (p *process) libraryIDsOf(mediaType string) func() []int64 {
+	return func() []int64 { return p.cache.Snapshot().CategoryIDsOf(mediaType) }
+}

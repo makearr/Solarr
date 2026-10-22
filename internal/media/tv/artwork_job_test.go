@@ -40,7 +40,7 @@ func TestArtworkJobFetchesThePostersNotYetCachedAndNothingTwice(t *testing.T) {
 		t.Fatal(err)
 	}
 	pictures := &fakePictures{have: map[string]bool{}}
-	job := tv.NewArtworkJob(tv.ArtworkConfig{Reader: library.NewSeriesReader(opened), Cache: pictures})
+	job := tv.NewArtworkJob(library.NewSeriesReader(opened), pictures, nil)
 
 	for range 2 {
 		if err := job.Run(t.Context(), jobs.Job{}); err != nil {

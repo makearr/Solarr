@@ -2,6 +2,8 @@ package settings_test
 
 import (
 	"errors"
+	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -334,5 +336,27 @@ func TestAcquisitionHeadroom_IsTheBestAcceptingRootAboveItsReserve(t *testing.T)
 	bytes, measured := cache.Snapshot().AcquisitionHeadroom(category.ID)
 	if want := 10_000_000_000 - settings.DefaultMinFreeBytes; !measured || bytes != want {
 		t.Errorf("AcquisitionHeadroom = %d, %v; want %d from /media/a (b takes nothing new, c has less)", bytes, measured, want)
+	}
+}
+
+func TestCategoryIDsOf_AnswersOnlyThatMediaTypesLibraries(t *testing.T) {
+	cache, _ := newCache(t)
+	var music []int64
+	for _, entry := range []struct{ mediaType, name string }{{"music", "Music"}, {"tv", "TV"}, {"music", "Classical"}} {
+		category, err := cache.CreateCategory(t.Context(), entry.mediaType, entry.name, 100)
+		if err != nil {
+			t.Fatalf("CreateCategory: %v", err)
+		}
+		if entry.mediaType == "music" {
+			music = append(music, category.ID)
+		}
+	}
+	got := cache.Snapshot().CategoryIDsOf("music")
+	slices.Sort(got)
+	if !reflect.DeepEqual(got, music) {
+		t.Errorf("CategoryIDsOf(music) = %v, want %v", got, music)
+	}
+	if got := cache.Snapshot().CategoryIDsOf("movie"); got != nil {
+		t.Errorf("CategoryIDsOf(movie) = %v, want none", got)
 	}
 }

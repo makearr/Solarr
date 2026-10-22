@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
+	"cmd/solarr/app": {"internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -337,12 +337,16 @@ var allowedInternalImports = map[string][]string{
 	"internal/moving/sidecar":    {"internal/db/settings", "internal/platform/fsx"},
 	"internal/importing/placer":  {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
 	"internal/media/knownfor":    {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
-	"internal/media/tv":          {"internal/metadata/anilist", "internal/metadata/wikidata", "internal/media/knownfor", "internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/importing/placer", "internal/importing/rules", "internal/acquiring/releasefacts", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/keyedlock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
+	// File Management a sweep applies alike for every type that wants whole works or their parts.
+	"internal/media/housekeeping": {"internal/db/library", "internal/db/settings", "internal/media", "internal/scanning/scan"},
+	// The picture cache sweep video types share: posters, organisation logos, billed-first photos.
+	"internal/media/picturesweep": {"internal/db/library", "internal/jobs", "internal/platform/parallel"},
+	"internal/media/tv":           {"internal/media/picturesweep", "internal/metadata/anilist", "internal/metadata/wikidata", "internal/media/knownfor", "internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/importing/placer", "internal/importing/rules", "internal/acquiring/releasefacts", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/keyedlock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// One lock per key, for work on the same series folder or movie.
 	"internal/platform/keyedlock": {},
 	// The movie module (stage 10), built beside music and TV on the same seams.
 	"internal/media/movie": {
-		"internal/media/knownfor",
+		"internal/media/knownfor", "internal/media/picturesweep",
 		"internal/db/library", "internal/db/settings", "internal/db/store/gen/librarydb", "internal/identify/model",
 		"internal/identify/parsemovie", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
 		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media", "internal/metadata/radarrmeta", "internal/metadata/tmdb", "internal/metadata/wikidata", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/metadata/tvdb",

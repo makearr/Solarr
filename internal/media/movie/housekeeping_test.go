@@ -6,6 +6,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -50,14 +51,15 @@ func TestHousekeepingUnmonitorsOnlyTheMovieWhoseFileIsGone(t *testing.T) {
 	}
 
 	sweep := scan.SweepOutcome{MissingSince: gone}
-	off := movie.Housekeeping{Categories: fileManagement{false}, Desired: desired}
+	grain := movie.Module{}.Descriptor().WantedGrain
+	off := housekeeping.UnmonitorDeleted{Categories: fileManagement{false}, Desired: desired, Grain: grain}
 	if err := off.AfterSweep(t.Context(), settings.RootFolder{ID: 9}, 5, sweep); err != nil {
 		t.Fatal(err)
 	}
 	if kept, _ := desired.Get(t.Context(), items[1]); kept.Monitored != 1 {
 		t.Fatalf("with the setting off the deleted movie stays monitored: %+v", kept)
 	}
-	on := movie.Housekeeping{Categories: fileManagement{true}, Desired: desired}
+	on := housekeeping.UnmonitorDeleted{Categories: fileManagement{true}, Desired: desired, Grain: grain}
 	if err := on.AfterSweep(t.Context(), settings.RootFolder{ID: 9}, 5, sweep); err != nil {
 		t.Fatal(err)
 	}

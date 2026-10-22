@@ -5,7 +5,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/rss"
@@ -152,19 +151,4 @@ func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, ra
 		return ItemSearchResult{}, err
 	}
 	return s.pipeline().Feed(ctx, itemID, conn, raws, measure.evaluate, at)
-}
-
-// JudgeFeedAndSend is the RSS sync's grab: a feed's releases are judged against a wanted season and the best
-// accepted one is sent as an RSS grab. Nothing is searched.
-func (g Grab) JudgeFeedAndSend(ctx context.Context, itemID int64, conn judge.Conn, raws []indexer.RawItem, at time.Time) (GrabResult, error) {
-	if _, inFlight, err := g.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
-		return GrabResult{}, err
-	} else if inFlight {
-		return GrabResult{AlreadyInFlight: true}, nil
-	}
-	found, err := g.Search.JudgeFeed(ctx, itemID, conn, raws, at)
-	if err != nil {
-		return GrabResult{Search: found}, err
-	}
-	return g.sendBest(ctx, itemID, found, dispatch.GrabRSS, at)
 }

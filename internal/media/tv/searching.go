@@ -34,10 +34,7 @@ func (s Searching) GrabWanted(ctx context.Context, search media.WantedSearch) (j
 		return judge.Result{}, dispatch.Best{}, err
 	}
 	result, err := s.Acquire.SearchEpisodeAndSend(ctx, search.ItemID, episode, conns, dispatch.GrabUser, now)
-	return result.Search, dispatch.Best{
-		Sent: result.Sent, AlreadyInFlight: result.AlreadyInFlight, Held: result.Held,
-		Refused: result.Refused, NoRoom: result.NoRoom, Refusals: result.Refusals,
-	}, err
+	return result.Search, result.Best, err
 }
 
 // prepare reads the episode a part narrows the search to, zero for the whole season.
@@ -52,12 +49,6 @@ func (s Searching) prepare(ctx context.Context, search media.WantedSearch) (int,
 			return 0, nil, time.Time{}, fmt.Errorf("tv: search: %q is not an episode", search.Part)
 		}
 	}
-	conns, err := s.Conns(ctx)
-	if err != nil {
-		return 0, nil, time.Time{}, fmt.Errorf("tv: search: indexers: %w", err)
-	}
-	if len(conns) == 0 {
-		return 0, nil, time.Time{}, media.ErrNoIndexers
-	}
-	return episode, conns, s.Clock.Now(), nil
+	conns, err := media.SearchConns(ctx, "tv", s.Conns)
+	return episode, conns, s.Clock.Now(), err
 }

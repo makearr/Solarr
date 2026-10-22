@@ -556,6 +556,18 @@ type WantedSearch struct {
 // ErrNoIndexers reports a search with no enabled indexer to ask.
 var ErrNoIndexers = errors.New("media: no indexer is enabled")
 
+// SearchConns answers the indexers a search a person asked for may ask; ErrNoIndexers when none is enabled.
+func SearchConns(ctx context.Context, name string, conns func(context.Context) ([]judge.Conn, error)) ([]judge.Conn, error) {
+	found, err := conns(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: search: indexers: %w", name, err)
+	}
+	if len(found) == 0 {
+		return nil, ErrNoIndexers
+	}
+	return found, nil
+}
+
 // ErrInvalidTerms reports search terms the type cannot search with.
 var ErrInvalidTerms = errors.New("media: invalid search terms")
 

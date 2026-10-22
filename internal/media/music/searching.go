@@ -44,22 +44,13 @@ func (s Searching) GrabWanted(ctx context.Context, search media.WantedSearch) (j
 		return judge.Result{}, dispatch.Best{}, err
 	}
 	result, err := s.Acquire.SearchAndSend(ctx, search.ItemID, conns, dispatch.GrabUser, now)
-	return result.Search, dispatch.Best{
-		Sent: result.Sent, AlreadyInFlight: result.AlreadyInFlight, Held: result.Held,
-		Refused: result.Refused, NoRoom: result.NoRoom, Refusals: result.Refusals,
-	}, err
+	return result.Search, result.Best, err
 }
 
 func (s Searching) prepare(ctx context.Context, search media.WantedSearch) ([]judge.Conn, time.Time, error) {
 	if search.Part != "" {
 		return nil, time.Time{}, media.ErrWholeItemOnly
 	}
-	conns, err := s.Indexers(ctx)
-	if err != nil {
-		return nil, time.Time{}, fmt.Errorf("music: search: indexers: %w", err)
-	}
-	if len(conns) == 0 {
-		return nil, time.Time{}, media.ErrNoIndexers
-	}
-	return conns, s.Clock.Now(), nil
+	conns, err := media.SearchConns(ctx, "music", s.Indexers)
+	return conns, s.Clock.Now(), err
 }

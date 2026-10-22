@@ -2,7 +2,6 @@ package music
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
@@ -20,17 +19,7 @@ type Grab struct {
 // GrabResult is one automatic search: what was found and, when something was, what was sent.
 type GrabResult struct {
 	Search ItemSearchResult
-	Sent   *library.Acquisition
-	// AlreadyInFlight means a download for the album was on its way, so nothing was searched.
-	AlreadyInFlight bool
-	// Held means the best release waits for room in its client's queue (ADR-57's HELD).
-	Held bool
-	// Refused counts releases the client declined before one was taken, or none was.
-	Refused int
-	// NoRoom counts releases passed over because the library has no root with space for them.
-	NoRoom int
-	// Refusals says why each refused release was refused, in the order they were tried.
-	Refusals []string
+	dispatch.Best
 }
 
 // SearchAndSend searches itemID unless a download for it is already on its way, and sends the
@@ -38,16 +27,9 @@ type GrabResult struct {
 func (g Grab) SearchAndSend(
 	ctx context.Context, itemID int64, indexers []IndexerConn, origin GrabOrigin, at time.Time,
 ) (GrabResult, error) {
-	if _, inFlight, err := g.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
-		return GrabResult{}, fmt.Errorf("music: grab item %d: %w", itemID, err)
-	} else if inFlight {
-		return GrabResult{AlreadyInFlight: true}, nil
-	}
-	found, err := g.Search.SearchItem(ctx, itemID, indexers, at)
-	if err != nil {
-		return GrabResult{Search: found}, err
-	}
-	return g.sendBest(ctx, itemID, found, origin, at)
+	return g.run(ctx, itemID, origin, at, func(ctx context.Context) (ItemSearchResult, error) {
+		return g.Search.SearchItem(ctx, itemID, indexers, at)
+	})
 }
 
 // JudgeFeedAndSend is RSS sync's grab: releases a feed listed are judged against a wanted album,
@@ -55,44 +37,22 @@ func (g Grab) SearchAndSend(
 func (g Grab) JudgeFeedAndSend(
 	ctx context.Context, itemID int64, conn IndexerConn, raws []indexer.RawItem, at time.Time,
 ) (GrabResult, error) {
-	if _, inFlight, err := g.Dispatch.Acquisitions.InFlightForItem(ctx, itemID); err != nil {
-		return GrabResult{}, fmt.Errorf("music: rss grab item %d: %w", itemID, err)
-	} else if inFlight {
-		return GrabResult{AlreadyInFlight: true}, nil
-	}
-	found, err := g.Search.JudgeFeed(ctx, itemID, conn, raws, at)
-	if err != nil {
-		return GrabResult{Search: found}, err
-	}
-	return g.sendBest(ctx, itemID, found, GrabRSS, at)
+	return g.run(ctx, itemID, GrabRSS, at, func(ctx context.Context) (ItemSearchResult, error) {
+		return g.Search.JudgeFeed(ctx, itemID, conn, raws, at)
+	})
 }
 
-// sendBest sends found's best accepted release, or holds it when origin may wait; the search persists best first.
-func (g Grab) sendBest(ctx context.Context, itemID int64, found ItemSearchResult, origin GrabOrigin, at time.Time) (GrabResult, error) {
-	room, err := g.headroom(ctx, itemID, origin)
-	if err != nil {
-		return GrabResult{Search: found}, fmt.Errorf("music: grab item %d: %w", itemID, err)
+// run is dispatch.Automatic with the library's free space as its headroom; the search's result is kept even when it fails.
+func (g Grab) run(ctx context.Context, itemID int64, origin GrabOrigin, at time.Time, search func(context.Context) (ItemSearchResult, error)) (GrabResult, error) {
+	automatic := dispatch.Automatic{Dispatch: g.Dispatch, Name: "music"}
+	if settings := g.Search.Settings; settings != nil {
+		automatic.FreeSpace = func(categoryID int64) (int64, bool) { return settings.Snapshot().AcquisitionHeadroom(categoryID) }
 	}
-	best, err := g.Dispatch.SendBest(ctx, itemID, found.Decisions, room, origin, at)
-	result := GrabResult{
-		Search: found, Sent: best.Sent, AlreadyInFlight: best.AlreadyInFlight, Held: best.Held,
-		Refused: best.Refused, NoRoom: best.NoRoom, Refusals: best.Refusals,
-	}
-	if err != nil {
-		return result, fmt.Errorf("music: grab item %d: %w", itemID, err)
-	}
-	return result, nil
-}
-
-// headroom is how much an automatic grab for itemID may bring in; a person's own grab is never gated.
-func (g Grab) headroom(ctx context.Context, itemID int64, origin GrabOrigin) (dispatch.Headroom, error) {
-	if origin == dispatch.GrabUser || g.Search.Settings == nil {
-		return dispatch.Headroom{}, nil
-	}
-	item, err := g.Search.Desired.Get(ctx, itemID)
-	if err != nil {
-		return dispatch.Headroom{}, err
-	}
-	free, measured := g.Search.Settings.Snapshot().AcquisitionHeadroom(item.CategoryID)
-	return g.Dispatch.HeadroomFor(ctx, item.CategoryID, origin, free, measured)
+	var found ItemSearchResult
+	best, err := automatic.Run(ctx, itemID, origin, at, func(ctx context.Context) ([]library.DecisionDetail, error) {
+		var err error
+		found, err = search(ctx)
+		return found.Decisions, err
+	})
+	return GrabResult{Search: found, Best: best}, err
 }

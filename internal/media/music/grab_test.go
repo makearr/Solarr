@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/download"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/db/library"
@@ -45,7 +46,7 @@ func TestGrab_SendsTheBestReleaseAndNeverSearchesAnAlbumAlreadyDownloading(t *te
 	if err != nil {
 		t.Fatalf("second SearchAndSend: %v", err)
 	}
-	if !reflect.DeepEqual(second, music.GrabResult{AlreadyInFlight: true}) || len(searcher.requests) != calls {
+	if !reflect.DeepEqual(second, music.GrabResult{Best: dispatch.Best{AlreadyInFlight: true}}) || len(searcher.requests) != calls {
 		t.Errorf("second = %+v after %d more indexer calls; want AlreadyInFlight and no search",
 			second, len(searcher.requests)-calls)
 	}

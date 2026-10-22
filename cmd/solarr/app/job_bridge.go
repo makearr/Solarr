@@ -45,5 +45,5 @@ func (p *process) enqueueTVRetry(ctx context.Context) (jobs.EnqueueResult, error
 
 // tvArtworkJob is the sweep that keeps a TV library's posters, logos and photos in the picture cache.
 func (p *process) tvArtworkJob() media.JobRegistration {
-	return media.JobRegistration{Definition: tv.ArtworkDefinition, Handler: tv.NewArtworkJob(tv.ArtworkConfig{Reader: library.NewSeriesReader(p.library), Cache: p.remoteImages(), Logger: p.logger})}
+	return media.JobRegistration{Definition: tv.ArtworkDefinition, Handler: tv.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)}
 }

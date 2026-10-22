@@ -14,16 +14,8 @@ import (
 func (p *process) discographyCoverageJob() media.JobRegistration {
 	return media.JobRegistration{Definition: music.DiscographyCoverageDefinition, Handler: music.NewDiscographyCoverageJob(music.DiscographyCoverageConfig{
 		Statistics: library.NewStatistics(p.library), Coverage: statistics.NewRollup(p.statistics), Provider: p.musicBrainzProvider(),
-		Categories: func() []int64 {
-			var ids []int64
-			for _, category := range p.cache.Snapshot().Categories() {
-				if category.MediaType == string(music.MediaType) {
-					ids = append(ids, category.ID)
-				}
-			}
-			return ids
-		},
-		Clock: clock.NewSystem(), Logger: p.logger,
+		Categories: p.libraryIDsOf(string(music.MediaType)),
+		Clock:      clock.NewSystem(), Logger: p.logger,
 	})}
 }
 

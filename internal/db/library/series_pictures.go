@@ -11,11 +11,6 @@ type PictureSet struct {
 	Posters, Logos, Photos []string
 }
 
-// PictureAddresses is PictureAddressesOf for TV: series and their networks.
-func (r SeriesReader) PictureAddresses(ctx context.Context, maxPhotos int) (PictureSet, error) {
-	return r.PictureAddressesOf(ctx, "tv", "network", maxPhotos)
-}
-
 // PictureAddressesOf lists the poster of each work of a media type (the provider the page itself reads), the logo of each
 // organisation of a kind (networks, studios) and the photos of the people billed first in each work, at most maxPhotos.
 func (r SeriesReader) PictureAddressesOf(ctx context.Context, mediaType, organisationKind string, maxPhotos int) (PictureSet, error) {
