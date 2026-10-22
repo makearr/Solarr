@@ -23,10 +23,7 @@ type Querier interface {
 	// Column lists follow table order, or sqlc stops reusing the generated model.
 	GetCachedMetadata(ctx context.Context, arg GetCachedMetadataParams) (MetadataCache, error)
 	SetCachedMetadata(ctx context.Context, arg SetCachedMetadataParams) error
-	// ADR-60's cache budget (todo 4.19): the logical bytes actually stored, a
-	// real measurement (SUM of what is there), not an estimate -- distinct from
-	// the metadata.db file's own physical size, which SQLite does not shrink on
-	// DELETE without a VACUUM this codebase deliberately does not run here.
+	// ADR-60's budget: bytes stored (a BLOB's length; a text's counts characters), not the file, which DELETE does not shrink.
 	SumMetadataCacheBytes(ctx context.Context) (int64, error)
 }
 

@@ -194,7 +194,7 @@ LIMIT sqlc.arg(page_size);
 -- name: PruneEventsBefore :execrows
 DELETE FROM event_log
 WHERE id IN (
-  SELECT e.id FROM event_log e WHERE e.at < sqlc.arg(before) ORDER BY e.id LIMIT sqlc.arg(batch_size)
+  SELECT e.id FROM event_log e WHERE e.at < sqlc.arg(before) ORDER BY e.at LIMIT sqlc.arg(batch_size)
 );
 
 -- name: GetRetentionState :one

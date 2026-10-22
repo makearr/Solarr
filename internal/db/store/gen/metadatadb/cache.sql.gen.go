@@ -116,13 +116,10 @@ func (q *Queries) SetCachedMetadata(ctx context.Context, arg SetCachedMetadataPa
 }
 
 const sumMetadataCacheBytes = `-- name: SumMetadataCacheBytes :one
-SELECT CAST(COALESCE(SUM(LENGTH(body)), 0) AS INTEGER) FROM metadata_cache
+SELECT CAST(COALESCE(SUM(LENGTH(CAST(body AS BLOB))), 0) AS INTEGER) FROM metadata_cache
 `
 
-// ADR-60's cache budget (todo 4.19): the logical bytes actually stored, a
-// real measurement (SUM of what is there), not an estimate -- distinct from
-// the metadata.db file's own physical size, which SQLite does not shrink on
-// DELETE without a VACUUM this codebase deliberately does not run here.
+// ADR-60's budget: bytes stored (a BLOB's length; a text's counts characters), not the file, which DELETE does not shrink.
 func (q *Queries) SumMetadataCacheBytes(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, sumMetadataCacheBytes)
 	var column_1 int64

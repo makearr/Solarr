@@ -775,7 +775,7 @@ func (q *Queries) ListJobsPage(ctx context.Context, arg ListJobsPageParams) ([]J
 const pruneEventsBefore = `-- name: PruneEventsBefore :execrows
 DELETE FROM event_log
 WHERE id IN (
-  SELECT e.id FROM event_log e WHERE e.at < ?1 ORDER BY e.id LIMIT ?2
+  SELECT e.id FROM event_log e WHERE e.at < ?1 ORDER BY e.at LIMIT ?2
 )
 `
 

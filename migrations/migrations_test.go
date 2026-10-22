@@ -1,34 +1,34 @@
 package migrations_test
 
 import (
+	"regexp"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/migrations"
 )
 
-// A migration's DisablesForeignKeys comes from a marker comment inside its own file (checked into
-// the checksum like everything else), not a separate registry -- this proves the marker is
-// actually wired through load() end to end, not just present as a comment nobody reads.
-func TestLibrary_DisableForeignKeysMarkerIsWiredThrough(t *testing.T) {
-	owner, err := migrations.Library()
-	if err != nil {
-		t.Fatalf("Library: %v", err)
-	}
+var sha256Hex = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-	var marked, unmarked int
-	for _, migration := range owner.Migrations {
-		if migration.DisablesForeignKeys {
-			marked++
-		} else {
-			unmarked++
+// Every database starts from one squashed baseline; a mangled marker would make an existing database
+// refuse to start (ErrMigrationChanged), so the checksum it carries is checked for shape here.
+func TestEveryDatabase_StartsFromABaseline(t *testing.T) {
+	for name, load := range map[string]func() (store.Owner, error){
+		"settings": migrations.Settings, "jobs": migrations.Jobs, "library": migrations.Library,
+		"metadata": migrations.Metadata, "statistics": migrations.Statistics,
+	} {
+		owner, err := load()
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
 		}
-	}
-	if marked == 0 {
-		t.Error("no library migration carries the disable-foreign-keys marker; " +
-			"is the migration that needs it missing, or has its marker been dropped?")
-	}
-	if unmarked == 0 {
-		t.Error("every library migration carries the marker; want most of them not to " +
-			"(it is an opt-in for the rare rebuild, not the default)")
+		first := owner.Migrations[0]
+		if !sha256Hex.MatchString(first.Replaces) {
+			t.Errorf("%s: first migration %d replaces %q, want a sha256 checksum", name, first.Version, first.Replaces)
+		}
+		for _, later := range owner.Migrations[1:] {
+			if later.Replaces != "" {
+				t.Errorf("%s: migration %d is a second baseline", name, later.Version)
+			}
+		}
 	}
 }

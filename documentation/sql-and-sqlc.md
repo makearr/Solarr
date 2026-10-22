@@ -72,7 +72,8 @@ convention. Write `section 5.5`, not `§5.5`, in SQL.
   before the commit, refusing the migration outright rather than leaving a silent dangling
   reference. The marker lives inside the checksummed SQL text, so turning it on or off after the
   migration has applied is exactly the "changed migration" case `store.Migrate` already refuses.
-  Migration 0030 (widening `desired_item`'s own key) is the first migration to need this.
+  Migration 0030 (widening `desired_item`'s own key) was the first to need this; it is in the
+  baseline now, so no current file carries the marker.
 
 ## What sqlc refuses, or gets wrong quietly
 

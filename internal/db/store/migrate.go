@@ -23,6 +23,10 @@ var (
 	// prefix, which is how one plugin ends up owning another's data.
 	ErrPrefixViolation = errors.New("store: table is outside its owner's reserved prefix")
 
+	// ErrPredatesBaseline reports a database partway through the migrations a baseline squashed,
+	// which no longer exist to finish it.
+	ErrPredatesBaseline = errors.New("store: database predates the squashed baseline migration")
+
 	// ErrBackupDirRequired reports migrations attempted with nowhere to back up to (Invariant 7,
 	// ADR-15).
 	ErrBackupDirRequired = errors.New("store: a backup directory is required before migrating")
@@ -42,6 +46,9 @@ type Migration struct {
 	// Set by migrations.load from a marker comment in the .sql file itself, so it is
 	// locked into the migration's own checksum like everything else in the text.
 	DisablesForeignKeys bool
+	// Replaces marks a baseline: the checksum of the last migration it squashed, so a database that
+	// applied that one is already at this schema. Empty for every ordinary migration.
+	Replaces string
 }
 
 // Owner is a component that owns part of the schema: core, or a plugin.
@@ -122,7 +129,17 @@ func validateOwners(owners []Owner) error {
 		}
 
 		seenVersions := make(map[int]bool, len(owner.Migrations))
+		lowest := 0
 		for _, migration := range owner.Migrations {
+			if lowest == 0 || migration.Version < lowest {
+				lowest = migration.Version
+			}
+		}
+		for _, migration := range owner.Migrations {
+			if migration.Replaces != "" && migration.Version != lowest {
+				return fmt.Errorf("store: owner %q has a baseline at version %d above version %d",
+					owner.Name, migration.Version, lowest)
+			}
 			if migration.Version <= 0 {
 				return fmt.Errorf("store: owner %q has migration version %d; versions start at 1",
 					owner.Name, migration.Version)
@@ -176,16 +193,29 @@ func (s *Store) pendingMigrations(ctx context.Context, owners []Owner) ([]pendin
 
 			previous, wasApplied := applied[key]
 			if !wasApplied {
+				if migration.Replaces != "" && appliedBelow(applied, owner.Name, migration.Version) {
+					return nil, fmt.Errorf("%w: %s has migrations below version %d applied but not %d itself",
+						ErrPredatesBaseline, owner.Name, migration.Version, migration.Version)
+				}
 				pending = append(pending, pendingMigration{owner: owner, migration: migration})
 				continue
 			}
-			if previous != checksum {
+			if previous != checksum && previous != migration.Replaces {
 				return nil, fmt.Errorf("%w: %s version %d was applied as %s but is now %s",
 					ErrMigrationChanged, owner.Name, migration.Version, previous[:12], checksum[:12])
 			}
 		}
 	}
 	return pending, nil
+}
+
+func appliedBelow(applied map[migrationKey]string, owner string, version int) bool {
+	for key := range applied {
+		if key.owner == owner && key.version < version {
+			return true
+		}
+	}
+	return false
 }
 
 type migrationKey struct {

@@ -1,5 +1,5 @@
 // Package migrations carries the core schema as embedded SQL files, one per version per
-// database (ADR-16).
+// database (ADR-16): a squashed baseline, then whatever changed after it.
 package migrations
 
 import (
@@ -25,6 +25,10 @@ var files embed.FS
 // migration's checksum like everything else: changing it after the migration has applied is
 // exactly the "changed migration" case store.Migrate already refuses.
 const disableForeignKeysMarker = "-- migrate:disable-foreign-keys"
+
+// baselineMarker opens the line a squashed baseline carries, followed by the checksum of the last
+// migration it replaced (store.Migration.Replaces).
+const baselineMarker = "-- migrate:baseline replaces="
 
 // Settings returns the migration set for settings.db.
 func Settings() (store.Owner, error) { return owner("settings") }
@@ -73,11 +77,21 @@ func load(directory string) ([]store.Migration, error) {
 		migrations = append(migrations, store.Migration{
 			Version: version, Up: string(content),
 			DisablesForeignKeys: strings.Contains(string(content), disableForeignKeysMarker),
+			Replaces:            replacedChecksum(string(content)),
 		})
 	}
 
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })
 	return migrations, nil
+}
+
+func replacedChecksum(content string) string {
+	_, rest, found := strings.Cut(content, baselineMarker)
+	if !found {
+		return ""
+	}
+	checksum, _, _ := strings.Cut(rest, "\n")
+	return strings.TrimSpace(checksum)
 }
 
 func versionOf(name string) (int, error) {

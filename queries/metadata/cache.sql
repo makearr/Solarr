@@ -12,12 +12,9 @@ ON CONFLICT (kind, external_id) DO UPDATE SET
   body = excluded.body,
   fetched_at = excluded.fetched_at;
 
--- ADR-60's cache budget (todo 4.19): the logical bytes actually stored, a
--- real measurement (SUM of what is there), not an estimate -- distinct from
--- the metadata.db file's own physical size, which SQLite does not shrink on
--- DELETE without a VACUUM this codebase deliberately does not run here.
+-- ADR-60's budget: bytes stored (a BLOB's length; a text's counts characters), not the file, which DELETE does not shrink.
 -- name: SumMetadataCacheBytes :one
-SELECT CAST(COALESCE(SUM(LENGTH(body)), 0) AS INTEGER) FROM metadata_cache;
+SELECT CAST(COALESCE(SUM(LENGTH(CAST(body AS BLOB))), 0) AS INTEGER) FROM metadata_cache;
 
 -- name: CountMetadataCache :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM metadata_cache;

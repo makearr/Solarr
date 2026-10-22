@@ -161,6 +161,22 @@ One directory per database under `migrations/`, files named `NNNN_description.sq
 version order with a checksum per migration. An edited migration that has already been applied
 is a hard failure naming both checksums.
 
+Each directory starts with **one squashed baseline**, `NNNN_baseline.sql`: the schema and seed rows
+every migration up to `NNNN` built, so a fresh database runs one file (plus anything newer). Its
+`-- migrate:baseline replaces=<sha256>` line names the checksum of the last migration it absorbed:
+
+| The database has applied | What happens |
+|---|---|
+| nothing | the baseline runs |
+| version `NNNN` (the original, or the baseline itself) | already there; later migrations run |
+| only versions below `NNNN` | refused (`store.ErrPredatesBaseline`): upgrade through a release that still ships them |
+
+To squash again: build a database from the current chain, dump `sqlite_master` (shadow tables of
+FTS5 excluded) and the seed rows into a new baseline at the last version, delete the older files,
+and check that a database built from the baseline is identical (schema text, `table_xinfo`, foreign
+keys, rows). The original files stay in git history. The last squash (2026-10-22) did this in
+Python's `sqlite3`.
+
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).
 

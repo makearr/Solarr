@@ -847,7 +847,7 @@ func (q *Queries) ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueR
 
 const listCreditsForEdition = `-- name: ListCreditsForEdition :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
-FROM credit WHERE edition_id = ? ORDER BY role, ord, person_id
+FROM credit WHERE edition_id = ? AND edition_id != 0 ORDER BY role, ord, person_id
 `
 
 func (q *Queries) ListCreditsForEdition(ctx context.Context, editionID int64) ([]Credit, error) {
@@ -883,7 +883,7 @@ func (q *Queries) ListCreditsForEdition(ctx context.Context, editionID int64) ([
 
 const listCreditsForPart = `-- name: ListCreditsForPart :many
 SELECT person_id, work_id, edition_id, part_id, role, character, ord
-FROM credit WHERE part_id = ? ORDER BY role, ord, person_id
+FROM credit WHERE part_id = ? AND part_id != 0 ORDER BY role, ord, person_id
 `
 
 // Per-track performers and composers, which is what classical and various-artists

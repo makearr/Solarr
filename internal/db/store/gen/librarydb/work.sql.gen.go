@@ -488,7 +488,7 @@ func (q *Queries) DeleteEdition(ctx context.Context, id int64) error {
 }
 
 const deleteEditionCredits = `-- name: DeleteEditionCredits :exec
-DELETE FROM credit WHERE edition_id = ?
+DELETE FROM credit WHERE edition_id = ? AND edition_id != 0
 `
 
 func (q *Queries) DeleteEditionCredits(ctx context.Context, editionID int64) error {
@@ -2028,7 +2028,7 @@ func (q *Queries) ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle
 }
 
 const moveEditionCredits = `-- name: MoveEditionCredits :exec
-UPDATE OR IGNORE credit SET edition_id = ?1 WHERE edition_id = ?2
+UPDATE OR IGNORE credit SET edition_id = ?1 WHERE edition_id = ?2 AND edition_id != 0
 `
 
 type MoveEditionCreditsParams struct {

@@ -817,11 +817,6 @@ type WorkFile struct {
 	FirstSeenAt   int64
 }
 
-type WorkFranchiseCheck struct {
-	WorkID    int64
-	CheckedAt int64
-}
-
 type WorkMergeSuggestion struct {
 	WorkID     int64
 	IntoWorkID int64

@@ -445,10 +445,10 @@ UPDATE pack_item SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(fr
 
 -- A credit both editions hold stays the twin's own; the leftover goes with DeleteEditionCredits.
 -- name: MoveEditionCredits :exec
-UPDATE OR IGNORE credit SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(from_id);
+UPDATE OR IGNORE credit SET edition_id = sqlc.arg(to_id) WHERE edition_id = sqlc.arg(from_id) AND edition_id != 0;
 
 -- name: DeleteEditionCredits :exec
-DELETE FROM credit WHERE edition_id = ?;
+DELETE FROM credit WHERE edition_id = ? AND edition_id != 0;
 
 -- Every path of every file of one work, for returning the files to the identification queue.
 -- name: ListWorkFilePaths :many

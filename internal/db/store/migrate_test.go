@@ -2,7 +2,9 @@ package store_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"os"
@@ -180,6 +182,82 @@ func TestMigrate_AppliesToAPreviousSchemaAsWellAsAnEmptyOne(t *testing.T) {
 
 	if got, want := schemaOf(t, stepwise.store), schemaOf(t, fresh.store); got != want {
 		t.Errorf("stepwise schema differs from a fresh one:\n stepwise: %s\n fresh:    %s", got, want)
+	}
+}
+
+func sha256Of(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
+}
+
+// squashFixture is a two-migration history and the baseline that squashes it.
+func squashFixture() (first, second, baseline, third store.Migration) {
+	first = store.Migration{Version: 1, Up: "CREATE TABLE work (id INTEGER PRIMARY KEY)"}
+	second = store.Migration{Version: 2, Up: "ALTER TABLE work ADD COLUMN title TEXT"}
+	baseline = store.Migration{Version: 2, Up: "CREATE TABLE work (id INTEGER PRIMARY KEY, title TEXT)",
+		Replaces: sha256Of(second.Up)}
+	third = store.Migration{Version: 3, Up: "CREATE TABLE edition (id INTEGER PRIMARY KEY)"}
+	return first, second, baseline, third
+}
+
+func TestMigrate_BaselineBuildsAFreshDatabase(t *testing.T) {
+	_, _, baseline, third := squashFixture()
+	fixture := newMigrationFixture(t)
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(baseline, third)); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	if !tableExists(t, fixture.store, "work") || !tableExists(t, fixture.store, "edition") {
+		t.Error("a fresh database did not get the baseline and the migration after it")
+	}
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(baseline, third)); err != nil {
+		t.Errorf("second Migrate over its own baseline: %v", err)
+	}
+}
+
+func TestMigrate_BaselineIsAlreadyAppliedWhereTheMigrationItReplacesRan(t *testing.T) {
+	first, second, baseline, third := squashFixture()
+	fixture := newMigrationFixture(t)
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(first, second)); err != nil {
+		t.Fatalf("Migrate the original history: %v", err)
+	}
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(baseline, third)); err != nil {
+		t.Fatalf("Migrate onto the baseline: %v", err)
+	}
+	if !tableExists(t, fixture.store, "edition") {
+		t.Error("the migration after the baseline did not run")
+	}
+}
+
+func TestMigrate_BaselineRefusesADatabasePartwayThroughWhatItSquashed(t *testing.T) {
+	first, _, baseline, third := squashFixture()
+	fixture := newMigrationFixture(t)
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(first)); err != nil {
+		t.Fatalf("Migrate version 1: %v", err)
+	}
+	err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(baseline, third))
+	if !errors.Is(err, store.ErrPredatesBaseline) {
+		t.Fatalf("Migrate = %v, want ErrPredatesBaseline", err)
+	}
+}
+
+func TestMigrate_DetectsAnEditedBaseline(t *testing.T) {
+	_, _, baseline, _ := squashFixture()
+	fixture := newMigrationFixture(t)
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(baseline)); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	baseline.Up += ";\nCREATE TABLE extra (id INTEGER PRIMARY KEY)"
+	err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(baseline))
+	if !errors.Is(err, store.ErrMigrationChanged) {
+		t.Fatalf("Migrate with an edited baseline = %v, want ErrMigrationChanged", err)
+	}
+}
+
+func TestMigrate_RejectsABaselineAboveAnotherMigration(t *testing.T) {
+	first, _, baseline, _ := squashFixture()
+	fixture := newMigrationFixture(t)
+	if err := store.Migrate(t.Context(), fixture.store, fixture.backupDir, coreOwner(first, baseline)); err == nil {
+		t.Fatal("Migrate accepted a baseline that is not the owner's first migration")
 	}
 }
 
