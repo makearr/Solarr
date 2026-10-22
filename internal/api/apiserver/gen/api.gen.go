@@ -409,6 +409,27 @@ const (
 	MediaTypeYoutube   MediaType = "youtube"
 )
 
+// Defines values for MediaTypeInfoFileSettingsKey.
+const (
+	MediaTypeInfoFileSettingsKeyChangeFileDate           MediaTypeInfoFileSettingsKey = "change_file_date"
+	MediaTypeInfoFileSettingsKeyCreateEmptyArtistFolders MediaTypeInfoFileSettingsKey = "create_empty_artist_folders"
+	MediaTypeInfoFileSettingsKeyDeleteEmptyFolders       MediaTypeInfoFileSettingsKey = "delete_empty_folders"
+	MediaTypeInfoFileSettingsKeyExtraFileExtensions      MediaTypeInfoFileSettingsKey = "extra_file_extensions"
+	MediaTypeInfoFileSettingsKeyImportExtraFiles         MediaTypeInfoFileSettingsKey = "import_extra_files"
+	MediaTypeInfoFileSettingsKeyMediaServerFiles         MediaTypeInfoFileSettingsKey = "media_server_files"
+	MediaTypeInfoFileSettingsKeyMergeArtistAliases       MediaTypeInfoFileSettingsKey = "merge_artist_aliases"
+	MediaTypeInfoFileSettingsKeyMonitorNewSeasons        MediaTypeInfoFileSettingsKey = "monitor_new_seasons"
+	MediaTypeInfoFileSettingsKeyRescanAfterRefresh       MediaTypeInfoFileSettingsKey = "rescan_after_refresh"
+	MediaTypeInfoFileSettingsKeySharedFileFallback       MediaTypeInfoFileSettingsKey = "shared_file_fallback"
+	MediaTypeInfoFileSettingsKeyUnmonitorDeleted         MediaTypeInfoFileSettingsKey = "unmonitor_deleted"
+)
+
+// Defines values for MediaTypeInfoScanMonitorSetting.
+const (
+	MediaTypeInfoScanMonitorSettingMonitorDiscovered MediaTypeInfoScanMonitorSetting = "monitor_discovered"
+	MediaTypeInfoScanMonitorSettingTvMonitor         MediaTypeInfoScanMonitorSetting = "tv_monitor"
+)
+
 // Defines values for MediaTypeInfoWantedGrain.
 const (
 	MediaTypeInfoWantedGrainPart MediaTypeInfoWantedGrain = "part"
@@ -2827,6 +2848,12 @@ type Me struct {
 // MeTier How much of the settings surface this caller is shown (ADR-26). Self-service via PATCH /me/tier -- raising or lowering it never changes behaviour, only what is displayed.
 type MeTier string
 
+// MediaChoice defines model for MediaChoice.
+type MediaChoice struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
 // MediaRole defines model for MediaRole.
 type MediaRole struct {
 	// Character Carries the name of who was played.
@@ -2867,11 +2894,24 @@ type MediaTypeInfo struct {
 	// CommitsHeldImports A held import unit is committed by hand, anyway or as a work named (Identify as).
 	CommitsHeldImports bool `json:"commits_held_imports"`
 
+	// CoverSources The type's covers follow cover_sources of the metadata settings.
+	CoverSources bool `json:"cover_sources"`
+
 	// DuplicatesByName A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part.
 	DuplicatesByName bool `json:"duplicates_by_name"`
 
 	// Facets The type's own fields of its entities beyond the base ones, as lists and pages show them.
 	Facets []Facet `json:"facets"`
+
+	// FileSettings The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type.
+	FileSettings []struct {
+		Help  string                       `json:"help"`
+		Key   MediaTypeInfoFileSettingsKey `json:"key"`
+		Label string                       `json:"label"`
+
+		// Options A choice's values in the type's words.
+		Options *[]MediaChoice `json:"options,omitempty"`
+	} `json:"file_settings"`
 
 	// FollowOptions The settings a follow of a person or organisation offers in this type's libraries.
 	FollowOptions []FollowOption `json:"follow_options"`
@@ -2896,15 +2936,31 @@ type MediaTypeInfo struct {
 		Key   string `json:"key"`
 		Label string `json:"label"`
 	} `json:"monitor_options"`
-	Organisation MediaTerm   `json:"organisation"`
-	Part         MediaTerm   `json:"part"`
-	Roles        []MediaRole `json:"roles"`
+	Organisation MediaTerm `json:"organisation"`
+	Part         MediaTerm `json:"part"`
+
+	// ReleaseFilters A work can carry release filters (GET /works/{id}/release-filters).
+	ReleaseFilters bool        `json:"release_filters"`
+	Roles          []MediaRole `json:"roles"`
+
+	// ScanMonitor What a scan monitors of a work it finds, and the library setting that holds it.
+	ScanMonitor struct {
+		Label   string                          `json:"label"`
+		Options []MediaChoice                   `json:"options"`
+		Setting MediaTypeInfoScanMonitorSetting `json:"setting"`
+	} `json:"scan_monitor"`
 
 	// SearchTerms The words a person may search with instead of a work's own, the keys of POST /works/{id}/search's body.
 	SearchTerms []struct {
 		Key   string `json:"key"`
 		Label string `json:"label"`
 	} `json:"search_terms"`
+
+	// SearchesLibrary Every wanted work of a library can be searched at once (POST /categories/{id}/search).
+	SearchesLibrary bool `json:"searches_library"`
+
+	// UnidentifiedRetry The schedule that tries a library's unidentified files again (POST /schedules/{key}/run); absent when the type has none.
+	UnidentifiedRetry *string `json:"unidentified_retry,omitempty"`
 
 	// WantedGrain What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
 	WantedGrain MediaTypeInfoWantedGrain `json:"wanted_grain"`
@@ -2913,6 +2969,12 @@ type MediaTypeInfo struct {
 	// WorkImage The shape of a work's picture: an album's square cover, a series' tall poster.
 	WorkImage MediaTypeInfoWorkImage `json:"work_image"`
 }
+
+// MediaTypeInfoFileSettingsKey defines model for MediaTypeInfo.FileSettings.Key.
+type MediaTypeInfoFileSettingsKey string
+
+// MediaTypeInfoScanMonitorSetting defines model for MediaTypeInfo.ScanMonitor.Setting.
+type MediaTypeInfoScanMonitorSetting string
 
 // MediaTypeInfoWantedGrain What Wanted lists: works (Lidarr's albums) or parts (Sonarr's episodes, GET /wanted/parts).
 type MediaTypeInfoWantedGrain string

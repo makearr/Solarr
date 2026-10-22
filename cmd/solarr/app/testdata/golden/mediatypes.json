@@ -12,6 +12,7 @@
     ],
     "commit_guess_floor": 0,
     "commits_held_imports": true,
+    "cover_sources": true,
     "duplicates_by_name": true,
     "facets": [
       {
@@ -71,6 +72,58 @@
         "kind": "list",
         "label": "Genre",
         "sortable": true
+      }
+    ],
+    "file_settings": [
+      {
+        "help": "Create missing artist folders for monitored artists during disk scan.",
+        "key": "create_empty_artist_folders",
+        "label": "Create Empty Artist Folders"
+      },
+      {
+        "help": "Delete empty artist and album folders during disk scan and when track files are deleted.",
+        "key": "delete_empty_folders",
+        "label": "Delete Empty Folders"
+      },
+      {
+        "help": "An album with a track deleted from disk is automatically unmonitored.",
+        "key": "unmonitor_deleted",
+        "label": "Unmonitor Deleted Tracks"
+      },
+      {
+        "help": "After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are.",
+        "key": "merge_artist_aliases",
+        "label": "Merge Artists Stored Under Several Names"
+      },
+      {
+        "help": "Rescan the artist's folders after refreshing its metadata; otherwise changes to files on disk are not noticed after a refresh.",
+        "key": "rescan_after_refresh",
+        "label": "Rescan Artist Folder after Refresh"
+      },
+      {
+        "help": "Change the file date on import and rescan.",
+        "key": "change_file_date",
+        "label": "Change File Date",
+        "options": [
+          {
+            "key": "none",
+            "label": "None"
+          },
+          {
+            "key": "release_date",
+            "label": "Album Release Date"
+          }
+        ]
+      },
+      {
+        "help": "Bring matching files along with the tracks: lyrics, cue sheets, rip logs.",
+        "key": "import_extra_files",
+        "label": "Import Extra Files"
+      },
+      {
+        "help": "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs.",
+        "key": "extra_file_extensions",
+        "label": "Extra File Extensions"
       }
     ],
     "follow_options": [
@@ -176,6 +229,7 @@
       "many": "Tracks",
       "one": "Track"
     },
+    "release_filters": false,
     "roles": [
       {
         "character": false,
@@ -186,6 +240,24 @@
         "part_scoped": false
       }
     ],
+    "scan_monitor": {
+      "label": "Monitor discovered",
+      "options": [
+        {
+          "key": "monitored",
+          "label": "Monitored"
+        },
+        {
+          "key": "unmonitored",
+          "label": "Unmonitored"
+        },
+        {
+          "key": "none",
+          "label": "None"
+        }
+      ],
+      "setting": "monitor_discovered"
+    },
     "search_terms": [
       {
         "key": "artist",
@@ -196,6 +268,7 @@
         "label": "Album"
       }
     ],
+    "searches_library": true,
     "wanted_grain": "work",
     "work": {
       "many": "Albums",
@@ -212,6 +285,7 @@
     ],
     "commit_guess_floor": 0.75,
     "commits_held_imports": true,
+    "cover_sources": false,
     "duplicates_by_name": false,
     "facets": [
       {
@@ -414,6 +488,68 @@
         "sortable": false
       }
     ],
+    "file_settings": [
+      {
+        "help": "Delete a series or season folder left empty when episode files are deleted.",
+        "key": "delete_empty_folders",
+        "label": "Delete Empty Folders"
+      },
+      {
+        "help": "An episode whose file is deleted from disk is unmonitored instead of being fetched again.",
+        "key": "unmonitor_deleted",
+        "label": "Unmonitor Deleted Episodes"
+      },
+      {
+        "help": "Change the file date on import and rescan.",
+        "key": "change_file_date",
+        "label": "Change File Date",
+        "options": [
+          {
+            "key": "none",
+            "label": "None"
+          },
+          {
+            "key": "release_date",
+            "label": "Episode Air Date"
+          }
+        ]
+      },
+      {
+        "help": "Bring files named after an episode along with it, such as its subtitles, under the episode's new name.",
+        "key": "import_extra_files",
+        "label": "Import Extra Files"
+      },
+      {
+        "help": "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt).",
+        "key": "extra_file_extensions",
+        "label": "Extra File Extensions"
+      },
+      {
+        "help": "Write what Jellyfin and Kodi read beside the series: tvshow.nfo, season.nfo and an nfo per episode with the TheTVDB ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root; daily, and at once when switched on.",
+        "key": "media_server_files",
+        "label": "Jellyfin and Kodi files"
+      },
+      {
+        "help": "When a refresh finds a season the library does not have yet, monitor it if the series already has a monitored season. Off leaves new seasons unmonitored until you choose them.",
+        "key": "monitor_new_seasons",
+        "label": "Monitor new seasons"
+      },
+      {
+        "help": "An episode listed under two series (a crossover) is held once and linked into the second series' folder. When the two folders are on different disks no link can be made: keep a second copy, or put a symbolic link there.",
+        "key": "shared_file_fallback",
+        "label": "Shared episodes across disks",
+        "options": [
+          {
+            "key": "copy",
+            "label": "Second copy"
+          },
+          {
+            "key": "symlink",
+            "label": "Symbolic link"
+          }
+        ]
+      }
+    ],
     "follow_options": [
       {
         "choices": [
@@ -537,6 +673,7 @@
       "many": "Episodes",
       "one": "Episode"
     },
+    "release_filters": true,
     "roles": [
       {
         "character": true,
@@ -611,7 +748,27 @@
         "part_scoped": true
       }
     ],
+    "scan_monitor": {
+      "label": "Monitor series found by a scan",
+      "options": [
+        {
+          "key": "existing",
+          "label": "Only the episodes on disk"
+        },
+        {
+          "key": "all",
+          "label": "Every episode (hunts the gaps)"
+        },
+        {
+          "key": "none",
+          "label": "None"
+        }
+      ],
+      "setting": "tv_monitor"
+    },
     "search_terms": [],
+    "searches_library": false,
+    "unidentified_retry": "tv_retry",
     "wanted_grain": "part",
     "work": {
       "many": "Series",
@@ -628,6 +785,7 @@
     ],
     "commit_guess_floor": 0.75,
     "commits_held_imports": true,
+    "cover_sources": false,
     "duplicates_by_name": false,
     "facets": [
       {
@@ -723,6 +881,48 @@
         "sortable": false
       }
     ],
+    "file_settings": [
+      {
+        "help": "Delete a movie folder left empty when its file is deleted.",
+        "key": "delete_empty_folders",
+        "label": "Delete Empty Folders"
+      },
+      {
+        "help": "A movie whose file is deleted from disk is unmonitored instead of being fetched again.",
+        "key": "unmonitor_deleted",
+        "label": "Unmonitor Deleted Movies"
+      },
+      {
+        "help": "Change the file date on import and rescan.",
+        "key": "change_file_date",
+        "label": "Change File Date",
+        "options": [
+          {
+            "key": "none",
+            "label": "None"
+          },
+          {
+            "key": "release_date",
+            "label": "Movie Release Date"
+          }
+        ]
+      },
+      {
+        "help": "Bring files named after the movie along with it, such as its subtitles, under the movie file's new name.",
+        "key": "import_extra_files",
+        "label": "Import Extra Files"
+      },
+      {
+        "help": "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt).",
+        "key": "extra_file_extensions",
+        "label": "Extra File Extensions"
+      },
+      {
+        "help": "Write what Jellyfin and Kodi read beside each movie: an nfo named after the file with the TMDB and IMDb ids, and the movie's poster and fanart. Only where none exists, never on a read-only root; daily, and at once when switched on.",
+        "key": "media_server_files",
+        "label": "Jellyfin and Kodi files"
+      }
+    ],
     "follow_options": [],
     "group": {
       "many": "",
@@ -756,6 +956,7 @@
       "many": "",
       "one": ""
     },
+    "release_filters": true,
     "roles": [
       {
         "character": true,
@@ -806,7 +1007,22 @@
         "part_scoped": false
       }
     ],
+    "scan_monitor": {
+      "label": "Monitor movies found by a scan",
+      "options": [
+        {
+          "key": "existing",
+          "label": "Monitored"
+        },
+        {
+          "key": "none",
+          "label": "Not monitored"
+        }
+      ],
+      "setting": "tv_monitor"
+    },
     "search_terms": [],
+    "searches_library": false,
     "wanted_grain": "work",
     "work": {
       "many": "Movies",

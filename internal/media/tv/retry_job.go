@@ -19,6 +19,9 @@ import (
 // RetryJobType is the registered type of the sweep that asks again about files a scan could not place.
 const RetryJobType = jobs.Type("tv.retry_unidentified")
 
+// RetryScheduleKey is the schedule that runs the sweep, which the unidentified files' Retry button runs too.
+const RetryScheduleKey = "tv_retry"
+
 // RetryActionKey deduplicates the sweep: one at a time (Invariant 16).
 const RetryActionKey = "tv.retry_unidentified"
 

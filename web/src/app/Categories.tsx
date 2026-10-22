@@ -6,31 +6,18 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
+import { useMediaType } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
-import { AddLibraryForm } from "./AddLibraryForm";
+import { AddLibraryForm } from "./NewLibrary";
 import { KindSelect } from "./LibraryKindSelect";
 
 type Category = components["schemas"]["LibraryCategory"];
 type CategorySettings = components["schemas"]["CategorySettings"];
 type MonitorDiscovered = components["schemas"]["CategorySettings"]["monitor_discovered"];
-
-/** What a library of each media type is called when its own name is left
- *  blank -- "the default library name should always be the category, for
- *  example Music" (2026-09-19). Also what the media-type picker shows, so
- *  the two can never drift apart. */
-const MONITOR_DISCOVERED_OPTIONS: readonly MonitorDiscovered[] = ["monitored", "unmonitored", "none"];
-
 type TVMonitor = NonNullable<components["schemas"]["CategorySettings"]["tv_monitor"]>;
-
-/** What a scan monitors of a series it finds; Sonarr adopts a library as "all", which would hunt every gap. */
-const TV_MONITOR_OPTIONS: readonly { value: TVMonitor; label: string }[] = [
-  { value: "existing", label: "Only the episodes on disk" },
-  { value: "all", label: "Every episode (hunts the gaps)" },
-  { value: "none", label: "None" },
-];
 
 /** The policy boundary for naming, profiles and access (ADR-27). Section 21.14's
  *  "no POST /categories at all" gap: standing one up used to need a hand-written
@@ -135,6 +122,7 @@ function Row({
   searchPending: boolean;
   searchMessage: string | undefined;
 }) {
+  const mediaType = useMediaType(category.media_type);
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
       <span className="text-sm font-medium">{category.name}</span>
@@ -143,9 +131,11 @@ function Row({
         {mediaTypeName(category.media_type)}
       </span>
       {category.works != null && (
-        <span className="ml-auto shrink-0 text-xs text-ink-muted">{category.works} works</span>
+        <span className="ml-auto shrink-0 text-xs text-ink-muted">
+          {category.works} {mediaType?.work.many.toLowerCase() ?? "works"}
+        </span>
       )}
-      {category.media_type === "music" && (
+      {mediaType?.searches_library && (
         <>
           {searchMessage && <span className="text-xs text-ink-muted">{searchMessage}</span>}
           <button
@@ -242,7 +232,8 @@ function EditCategoryFields({
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
   const [tvMonitor, setTvMonitor] = useState<TVMonitor>(initial.tv_monitor ?? "existing");
   const [kind, setKind] = useState(initial.kind ?? "");
-  const isTV = initial.media_type === "tv" || initial.media_type === "movie";
+  const scanMonitor = useMediaType(initial.media_type)?.scan_monitor;
+  const monitorsParts = scanMonitor?.setting === "tv_monitor";
   const queryClient = useQueryClient();
 
   const save = useMutation({
@@ -255,7 +246,7 @@ function EditCategoryFields({
           quality_profile_id: qualityProfileId || undefined,
           language_profile_id: languageProfileId || undefined,
           monitor_discovered: monitorDiscovered,
-          tv_monitor: isTV ? tvMonitor : undefined,
+          tv_monitor: monitorsParts ? tvMonitor : undefined,
           kind: kind || undefined,
         },
       }));
@@ -329,28 +320,21 @@ function EditCategoryFields({
           </select>
         </label>
         <KindSelect mediaType={initial.media_type} value={kind} onChange={setKind} />
-        {isTV ? (
+        {scanMonitor && (
           <label className={labelStyle}>
-            {initial.media_type === "movie" ? "Monitor movies found by a scan" : "Monitor series found by a scan"}
-            <select className={inputStyle} value={tvMonitor} onChange={(event) => setTvMonitor(event.target.value as TVMonitor)}>
-              {TV_MONITOR_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : (
-          <label className={labelStyle}>
-            Monitor discovered
+            {scanMonitor.label}
             <select
               className={inputStyle}
-              value={monitorDiscovered}
-              onChange={(event) => setMonitorDiscovered(event.target.value as MonitorDiscovered)}
+              value={monitorsParts ? tvMonitor : monitorDiscovered}
+              onChange={(event) =>
+                monitorsParts
+                  ? setTvMonitor(event.target.value as TVMonitor)
+                  : setMonitorDiscovered(event.target.value as MonitorDiscovered)
+              }
             >
-              {MONITOR_DISCOVERED_OPTIONS.map((option) => (
-                <option key={option} value={option}>
-                  {option}
+              {scanMonitor.options.map((option) => (
+                <option key={option.key} value={option.key}>
+                  {option.label}
                 </option>
               ))}
             </select>

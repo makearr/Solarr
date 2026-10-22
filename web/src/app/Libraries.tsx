@@ -4,7 +4,7 @@ import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useLibraries } from "@/lib/resources";
 import type { components } from "@/api/schema";
 
-import { AddLibraryForm } from "./AddLibraryForm";
+import { AddLibraryForm } from "./NewLibrary";
 import { defaultLevelKey } from "./Sidebar";
 
 type LibraryEntry = components["schemas"]["Library"];

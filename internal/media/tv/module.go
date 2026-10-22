@@ -220,6 +220,23 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 }
 
 // Descriptor implements media.Module.
+// fileSettings are Sonarr's Media Management settings as a TV library has them, and the media server and crossover ones.
+var fileSettings = []media.FileSetting{
+	{Key: media.FileDeleteEmptyFolders, Label: "Delete Empty Folders", Help: "Delete a series or season folder left empty when episode files are deleted."},
+	{Key: media.FileUnmonitorDeleted, Label: "Unmonitor Deleted Episodes", Help: "An episode whose file is deleted from disk is unmonitored instead of being fetched again."},
+	{Key: media.FileChangeFileDate, Label: "Change File Date", Help: "Change the file date on import and rescan.", Options: []media.Choice{{Key: "none", Label: "None"}, {Key: "release_date", Label: "Episode Air Date"}}},
+	{Key: media.FileImportExtraFiles, Label: "Import Extra Files", Help: "Bring files named after an episode along with it, such as its subtitles, under the episode's new name."},
+	{Key: media.FileExtraFileExtensions, Label: "Extra File Extensions", Help: "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt)."},
+	{Key: media.FileMediaServerFiles, Label: "Jellyfin and Kodi files", Help: "Write what Jellyfin and Kodi read beside the series: tvshow.nfo, season.nfo and an nfo per episode with the TheTVDB ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root; daily, and at once when switched on."},
+	{Key: media.FileMonitorNewGroups, Label: "Monitor new seasons", Help: "When a refresh finds a season the library does not have yet, monitor it if the series already has a monitored season. Off leaves new seasons unmonitored until you choose them."},
+	{Key: media.FileSharedFileFallback, Label: "Shared episodes across disks", Help: "An episode listed under two series (a crossover) is held once and linked into the second series' folder. When the two folders are on different disks no link can be made: keep a second copy, or put a symbolic link there.", Options: []media.Choice{{Key: "copy", Label: "Second copy"}, {Key: "symlink", Label: "Symbolic link"}}},
+}
+
+// scanMonitoring is what a scan monitors of a series it finds; Sonarr adopts a library as "all", which would hunt every gap.
+var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorParts, Label: "Monitor series found by a scan", Options: []media.Choice{
+	{Key: "existing", Label: "Only the episodes on disk"}, {Key: "all", Label: "Every episode (hunts the gaps)"}, {Key: "none", Label: "None"},
+}}
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:   media.Key(MediaType),
@@ -253,9 +270,12 @@ func (Module) Descriptor() media.Descriptor {
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
 		// Sonarr brings subtitles along; a hand-named folder guessed below this is named by a person instead.
-		ExtraFiles: media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
-		GuessFloor: GuessFloor,
-		Kinds:      libraryKinds,
+		ExtraFiles:        media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
+		GuessFloor:        GuessFloor,
+		Kinds:             libraryKinds,
+		FileSettings:      fileSettings,
+		ScanMonitor:       scanMonitoring,
+		UnidentifiedRetry: RetryScheduleKey,
 	}
 }
 

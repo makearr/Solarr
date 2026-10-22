@@ -7605,7 +7605,7 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name]
+      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
@@ -7670,6 +7670,43 @@ components:
           format: double
           description: The least confidence "Commit anyway" places a held unit's best guess at; below it the unit is named with Identify as. 0 takes any.
         duplicates_by_name: { type: boolean, description: "A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part." }
+        file_settings:
+          type: array
+          description: The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type.
+          items:
+            type: object
+            required: [key, label, help]
+            properties:
+              key:
+                type: string
+                enum: [create_empty_artist_folders, delete_empty_folders, unmonitor_deleted, merge_artist_aliases, rescan_after_refresh, change_file_date, import_extra_files, extra_file_extensions, media_server_files, monitor_new_seasons, shared_file_fallback]
+              label: { type: string }
+              help: { type: string }
+              options:
+                type: array
+                description: A choice's values in the type's words.
+                items: { $ref: "#/components/schemas/MediaChoice" }
+        scan_monitor:
+          type: object
+          description: What a scan monitors of a work it finds, and the library setting that holds it.
+          required: [setting, label, options]
+          properties:
+            setting: { type: string, enum: [monitor_discovered, tv_monitor] }
+            label: { type: string }
+            options:
+              type: array
+              items: { $ref: "#/components/schemas/MediaChoice" }
+        unidentified_retry: { type: string, description: "The schedule that tries a library's unidentified files again (POST /schedules/{key}/run); absent when the type has none." }
+        searches_library: { type: boolean, description: "Every wanted work of a library can be searched at once (POST /categories/{id}/search)." }
+        cover_sources: { type: boolean, description: "The type's covers follow cover_sources of the metadata settings." }
+        release_filters: { type: boolean, description: "A work can carry release filters (GET /works/{id}/release-filters)." }
+
+    MediaChoice:
+      type: object
+      required: [key, label]
+      properties:
+        key: { type: string }
+        label: { type: string }
 
     MediaType:
       type: string

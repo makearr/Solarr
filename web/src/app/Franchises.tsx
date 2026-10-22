@@ -15,6 +15,7 @@ import { PageHeader } from "@/ui/PageHeader";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { Dialog } from "@/ui/Dialog";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMediaType } from "@/lib/useMediaTypes";
 import { AddToLibrary } from "./work/AddWork";
 import { CoverArt } from "./CoverArt";
 import { usePreference } from "@/lib/usePreference";
@@ -189,6 +190,7 @@ function CollectionDetail({
 }) {
   const queryClient = useQueryClient();
   const library = useLibrary(categoryId);
+  const mediaType = useMediaType(library?.media_type);
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState(summary.name);
@@ -227,7 +229,7 @@ function CollectionDetail({
   });
   const franchise = detail.data ?? summary;
   const custom = franchise.kind === "custom";
-  const words = library?.media_type === "movie" ? "films" : "works";
+  const words = mediaType?.work.many.toLowerCase() ?? "works";
   return (
     <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
       <div className="flex flex-wrap items-center gap-3">

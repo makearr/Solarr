@@ -8,6 +8,7 @@ const series: components["schemas"]["MediaTypeInfo"] = {
   key: "tv", label: "TV", work: { one: "Series", many: "Series" }, part: { one: "", many: "" }, group: { one: "", many: "" },
   lead_people: { one: "", many: "" }, organisation: { one: "", many: "" }, roles: [], follow_options: [], facets: [],
   monitor_options: [], search_terms: [], work_image: "poster", wanted_grain: "part", add_kinds: [], commits_held_imports: false, duplicates_by_name: false,
+  file_settings: [], scan_monitor: { setting: "tv_monitor", label: "", options: [] }, searches_library: false, cover_sources: false, release_filters: false,
 };
 
 describe("t", () => {

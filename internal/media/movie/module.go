@@ -155,6 +155,21 @@ var monitorChoices = []media.Choice{
 }
 
 // Descriptor implements media.Module.
+// fileSettings are Radarr's Media Management settings as a movie library has them, and the media server one.
+var fileSettings = []media.FileSetting{
+	{Key: media.FileDeleteEmptyFolders, Label: "Delete Empty Folders", Help: "Delete a movie folder left empty when its file is deleted."},
+	{Key: media.FileUnmonitorDeleted, Label: "Unmonitor Deleted Movies", Help: "A movie whose file is deleted from disk is unmonitored instead of being fetched again."},
+	{Key: media.FileChangeFileDate, Label: "Change File Date", Help: "Change the file date on import and rescan.", Options: []media.Choice{{Key: "none", Label: "None"}, {Key: "release_date", Label: "Movie Release Date"}}},
+	{Key: media.FileImportExtraFiles, Label: "Import Extra Files", Help: "Bring files named after the movie along with it, such as its subtitles, under the movie file's new name."},
+	{Key: media.FileExtraFileExtensions, Label: "Extra File Extensions", Help: "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt)."},
+	{Key: media.FileMediaServerFiles, Label: "Jellyfin and Kodi files", Help: "Write what Jellyfin and Kodi read beside each movie: an nfo named after the file with the TMDB and IMDb ids, and the movie's poster and fanart. Only where none exists, never on a read-only root; daily, and at once when switched on."},
+}
+
+// scanMonitoring is what a scan does with a movie it finds; the movie resolver tells only "none" from the rest.
+var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorParts, Label: "Monitor movies found by a scan", Options: []media.Choice{
+	{Key: "existing", Label: "Monitored"}, {Key: "none", Label: "Not monitored"},
+}}
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:   media.Key(MediaType),
@@ -181,8 +196,10 @@ func (Module) Descriptor() media.Descriptor {
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
 		// Radarr leaves subtitles where they are unless asked; here they come along, as in TV.
-		ExtraFiles: media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
-		GuessFloor: GuessFloor,
+		ExtraFiles:   media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
+		GuessFloor:   GuessFloor,
+		FileSettings: fileSettings,
+		ScanMonitor:  scanMonitoring,
 	}
 }
 

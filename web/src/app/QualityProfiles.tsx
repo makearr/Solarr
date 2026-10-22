@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { api, ok } from "@/api/client";
 import { parseAudioRules } from "@/lib/qualityRules";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMediaType } from "@/lib/useMediaTypes";
 
 import { summariseTarget } from "./QualityTargets";
 import type { components } from "@/api/schema";
@@ -87,7 +88,10 @@ function LibraryQualityEditor() {
   const [preferred, setPreferred] = useState<"" | "usenet" | "torrent">("");
   const [delayMinutes, setDelayMinutes] = useState(0);
   const [targetId, setTargetId] = useState<number | undefined>();
-  const video = ["tv", "movie"].includes(useLibrary(categoryId)?.media_type ?? "");
+  // What a search looks for: a season where Wanted lists parts, otherwise the work itself.
+  const mediaType = useMediaType(useLibrary(categoryId)?.media_type);
+  const unit = ((mediaType?.wanted_grain === "part" ? mediaType.group.one : mediaType?.work.one) ?? "work").toLowerCase();
+  const aUnit = `${/^[aeiou]/.test(unit) ? "an" : "a"} ${unit}`;
   useEffect(() => {
     if (!quality.data) return;
     setOrder(quality.data.profiles.map((profile) => profile.id));
@@ -216,7 +220,7 @@ function LibraryQualityEditor() {
           <span className="flex flex-col">
             <span className="text-ink">Upgrades allowed</span>
             <span className="text-ink-muted">
-              {video ? "Off, a season, or a film with its file, is complete whatever its quality: nothing is searched for an upgrade." : "Off, an album with every track is complete whatever its quality: nothing is searched for an upgrade."}
+              Off, {aUnit} with all its files is complete whatever its quality: nothing is searched for an upgrade.
             </span>
           </span>
         </label>
@@ -242,7 +246,7 @@ function LibraryQualityEditor() {
         <h2 className="text-sm font-medium">Delay profile</h2>
         <p className="text-xs text-ink-muted">
           Prefer one kind of download and give it a head start: a release of the other kind is held back until it has been
-          posted this long, then taken like any other. Nothing is refused, so {video ? "an episode or film" : "an album"} only one kind has is still found.
+          posted this long, then taken like any other. Nothing is refused, so {aUnit} only one kind has is still found.
         </p>
         <div className="flex flex-wrap items-end gap-3 text-xs text-ink-muted">
           <label className="flex flex-col gap-1">

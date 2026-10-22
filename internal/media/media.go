@@ -103,6 +103,59 @@ type Descriptor struct {
 	// Kinds are what a library of the type can be (TV: series, anime), picked when one is added; none for a type of one
 	// kind. The first is the default.
 	Kinds []LibraryKind
+	// FileSettings are the File Management settings that mean something for the type, in its own words; the rest of
+	// File Management is the same for every type.
+	FileSettings []FileSetting
+	// ScanMonitor is what a scan monitors of a work it finds, as the library's settings offer it.
+	ScanMonitor ScanMonitor
+	// UnidentifiedRetry is the schedule that tries a library's unidentified files again, when the type has one.
+	UnidentifiedRetry string
+	// SearchesLibrary says every wanted work of a library can be searched at once (Lidarr's "Search all").
+	SearchesLibrary bool
+	// CoverSources says the type's covers follow the cover source order of the metadata settings.
+	CoverSources bool
+}
+
+// FileSettingKey names a File Management setting whose meaning depends on the media type.
+type FileSettingKey string
+
+// The File Management settings a type declares; one it leaves out is not offered for its libraries.
+const (
+	FileCreateEmptyLeadFolders FileSettingKey = "create_empty_artist_folders"
+	FileDeleteEmptyFolders     FileSettingKey = "delete_empty_folders"
+	FileUnmonitorDeleted       FileSettingKey = "unmonitor_deleted"
+	FileMergeLeadAliases       FileSettingKey = "merge_artist_aliases"
+	FileRescanAfterRefresh     FileSettingKey = "rescan_after_refresh"
+	FileChangeFileDate         FileSettingKey = "change_file_date"
+	FileImportExtraFiles       FileSettingKey = "import_extra_files"
+	FileExtraFileExtensions    FileSettingKey = "extra_file_extensions"
+	FileMediaServerFiles       FileSettingKey = "media_server_files"
+	FileMonitorNewGroups       FileSettingKey = "monitor_new_seasons"
+	FileSharedFileFallback     FileSettingKey = "shared_file_fallback"
+)
+
+// FileSetting is one File Management setting as a type words it; Options relabel a choice's values in its words.
+type FileSetting struct {
+	Key     FileSettingKey
+	Label   string
+	Help    string
+	Options []Choice
+}
+
+// ScanSetting names the library setting a type's scan reads to monitor what it finds.
+type ScanSetting string
+
+// The two settings a scan's monitoring is read from.
+const (
+	ScanMonitorDiscovered ScanSetting = "monitor_discovered"
+	ScanMonitorParts      ScanSetting = "tv_monitor"
+)
+
+// ScanMonitor is the setting a type's scan reads and its values in the type's words.
+type ScanMonitor struct {
+	Setting ScanSetting
+	Label   string
+	Options []Choice
 }
 
 // LibraryKind is one kind of library of a media type, with the defaults a library of it starts with. The type itself

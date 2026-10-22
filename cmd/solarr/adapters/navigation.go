@@ -209,12 +209,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		for _, facet := range descriptor.Facets {
 			info.Facets = append(info.Facets, facetView(facet))
 		}
-		for _, option := range descriptor.MonitorOptions {
-			info.MonitorOptions = append(info.MonitorOptions, apiserver.MediaChoice{Key: option.Key, Label: option.Label})
-		}
-		for _, kind := range descriptor.AddKinds {
-			info.AddKinds = append(info.AddKinds, apiserver.MediaChoice{Key: kind.Key, Label: kind.Label})
-		}
+		info.MonitorOptions, info.AddKinds = mediaChoices(descriptor.MonitorOptions), mediaChoices(descriptor.AddKinds)
 		info.CommitsHeldImports = descriptor.CommitsHeldImports
 		info.DuplicatesByName = descriptor.DuplicatesByName
 		info.ExtraFiles = settings.ExtraFiles{Import: &descriptor.ExtraFiles.Import, Extensions: descriptor.ExtraFiles.Extensions}
@@ -224,6 +219,17 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 				Key: kind.Key, Label: kind.Label, Help: kind.Help, QualityProfiles: kind.QualityProfiles, Language: kind.Language,
 			})
 		}
+		for _, setting := range descriptor.FileSettings {
+			info.FileSettings = append(info.FileSettings, apiserver.FileSetting{
+				Key: string(setting.Key), Label: setting.Label, Help: setting.Help, Options: mediaChoices(setting.Options),
+			})
+		}
+		info.ScanMonitor = apiserver.ScanMonitor{
+			Setting: string(descriptor.ScanMonitor.Setting), Label: descriptor.ScanMonitor.Label, Options: mediaChoices(descriptor.ScanMonitor.Options),
+		}
+		info.UnidentifiedRetry = descriptor.UnidentifiedRetry
+		info.SearchesLibrary, info.CoverSources = descriptor.SearchesLibrary, descriptor.CoverSources
+		_, info.ReleaseFilters = media.Capability[media.ReleaseFiltering](m.Registry, descriptor.Key)
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {
 			info.WantedGrain = "part"
@@ -232,9 +238,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		if info.WorkImage == "" {
 			info.WorkImage = string(media.ImageCover)
 		}
-		for _, term := range descriptor.SearchTerms {
-			info.SearchTerms = append(info.SearchTerms, apiserver.MediaChoice{Key: term.Key, Label: term.Label})
-		}
+		info.SearchTerms = mediaChoices(descriptor.SearchTerms)
 		for _, role := range descriptor.Roles {
 			info.Roles = append(info.Roles, apiserver.MediaRole{
 				Key: role.Key, Label: role.Label, Lead: role.Lead, Followable: role.Followable,
@@ -286,4 +290,12 @@ func (m MediaSweeps) SweepFor(categoryID int64) (scan.Sweep, bool) {
 	}
 	sweep := module.ScanSweep()
 	return sweep, sweep.Consumer != nil
+}
+
+func mediaChoices(choices []media.Choice) []apiserver.MediaChoice {
+	views := make([]apiserver.MediaChoice, len(choices))
+	for i, choice := range choices {
+		views[i] = apiserver.MediaChoice{Key: choice.Key, Label: choice.Label}
+	}
+	return views
 }

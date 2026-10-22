@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMediaType } from "@/lib/useMediaTypes";
 import type { components } from "@/api/schema";
 
 import { isTierVisible, useTier } from "@/lib/useTier";
@@ -13,6 +14,7 @@ import { Message, Toggle } from "./LibraryNaming";
 import { SaveBar, SettingRow } from "./SettingsCard";
 
 type FileManagement = components["schemas"]["FileManagement"];
+type FileSettingKey = components["schemas"]["MediaTypeInfo"]["file_settings"][number]["key"];
 
 /** Sonarr's Folders, File Management and Permissions sections, for one library (2026-09-19). */
 export function LibraryFileManagement() {
@@ -21,11 +23,11 @@ export function LibraryFileManagement() {
   const queryClient = useQueryClient();
   // Sonarr's basic view: folders and deleted tracks; the recycle bin and the rest are advanced (2026-09-30).
   const advanced = isTierVisible(useTier(), "advanced");
-  const mediaType = useLibrary(categoryId ?? "")?.media_type;
-  const isTV = mediaType === "tv";
-  const isVideo = isTV || mediaType === "movie";
-  // Wording per type: TV talks of episodes, movies of the film, music of tracks.
-  const pick = (tv: string, movie: string, music: string) => (isTV ? tv : mediaType === "movie" ? movie : music);
+  // The settings whose meaning depends on the type are offered only when it declares them, in its words.
+  const declared = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.file_settings ?? [];
+  const setting = (key: FileSettingKey) => declared.find((entry) => entry.key === key);
+  const options = (entry: { options?: { key: string; label: string }[] }) =>
+    (entry.options ?? []).map((option) => [option.key, option.label] as const);
 
   const saved = useQuery({
     queryKey: ["libraryFileManagement", id],
@@ -67,50 +69,14 @@ export function LibraryFileManagement() {
 
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Folders</h2>
-        {!isVideo && (
-          <Toggle
-            label="Create Empty Artist Folders"
-            help="Create missing artist folders for monitored artists during disk scan."
-            checked={draft.create_empty_artist_folders}
-            onChange={(checked) => set({ create_empty_artist_folders: checked })}
-          />
-        )}
-        <Toggle
-          label="Delete Empty Folders"
-          help={
-            pick(
-              "Delete a series or season folder left empty when episode files are deleted.",
-              "Delete a movie folder left empty when its file is deleted.",
-              "Delete empty artist and album folders during disk scan and when track files are deleted.",
-            )
-          }
-          checked={draft.delete_empty_folders}
-          onChange={(checked) => set({ delete_empty_folders: checked })}
-        />
+        <DeclaredToggle entry={setting("create_empty_artist_folders")} checked={draft.create_empty_artist_folders} onChange={(checked) => set({ create_empty_artist_folders: checked })} />
+        <DeclaredToggle entry={setting("delete_empty_folders")} checked={draft.delete_empty_folders} onChange={(checked) => set({ delete_empty_folders: checked })} />
       </section>
 
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">File Management</h2>
-        <Toggle
-          label={pick("Unmonitor Deleted Episodes", "Unmonitor Deleted Movies", "Unmonitor Deleted Tracks")}
-          help={
-            pick(
-              "An episode whose file is deleted from disk is unmonitored instead of being fetched again.",
-              "A movie whose file is deleted from disk is unmonitored instead of being fetched again.",
-              "An album with a track deleted from disk is automatically unmonitored.",
-            )
-          }
-          checked={draft.unmonitor_deleted}
-          onChange={(checked) => set({ unmonitor_deleted: checked })}
-        />
-        {!isVideo && (
-        <Toggle
-          label="Merge Artists Stored Under Several Names"
-          help="After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are."
-          checked={draft.merge_artist_aliases}
-          onChange={(checked) => set({ merge_artist_aliases: checked })}
-        />
-        )}
+        <DeclaredToggle entry={setting("unmonitor_deleted")} checked={draft.unmonitor_deleted} onChange={(checked) => set({ unmonitor_deleted: checked })} />
+        <DeclaredToggle entry={setting("merge_artist_aliases")} checked={draft.merge_artist_aliases} onChange={(checked) => set({ merge_artist_aliases: checked })} />
         {advanced && (
         <>
         <Choice
@@ -124,14 +90,10 @@ export function LibraryFileManagement() {
           ]}
           onChange={(value) => set({ propers_repacks: value as FileManagement["propers_repacks"] })}
         />
-        {!isVideo && (
+        {setting("rescan_after_refresh") && (
         <Choice
-          label="Rescan Artist Folder after Refresh"
-          help={
-            draft.rescan_after_refresh === "always"
-              ? "Rescan the artist's folders after refreshing its metadata."
-              : "Changes to files on disk are not noticed after a refresh unless this is Always."
-          }
+          label={setting("rescan_after_refresh")!.label}
+          help={setting("rescan_after_refresh")!.help}
           value={draft.rescan_after_refresh}
           options={[
             ["always", "Always"],
@@ -141,16 +103,15 @@ export function LibraryFileManagement() {
           onChange={(value) => set({ rescan_after_refresh: value as FileManagement["rescan_after_refresh"] })}
         />
         )}
+        {setting("change_file_date") && (
         <Choice
-          label="Change File Date"
-          help="Change the file date on import and rescan."
+          label={setting("change_file_date")!.label}
+          help={setting("change_file_date")!.help}
           value={draft.change_file_date}
-          options={[
-            ["none", "None"],
-            ["release_date", pick("Episode Air Date", "Movie Release Date", "Album Release Date")],
-          ]}
+          options={options(setting("change_file_date")!)}
           onChange={(value) => set({ change_file_date: value as FileManagement["change_file_date"] })}
         />
+        )}
         </>
         )}
         {advanced && (
@@ -170,29 +131,12 @@ export function LibraryFileManagement() {
         )}
       </section>
 
+      {setting("import_extra_files") && (
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Importing</h2>
-        <Toggle
-          label="Import Extra Files"
-          help={
-            pick(
-              "Bring files named after an episode along with it, such as its subtitles, under the episode's new name.",
-              "Bring files named after the movie along with it, such as its subtitles, under the movie file's new name.",
-              "Bring matching files along with the tracks: lyrics, cue sheets, rip logs.",
-            )
-          }
-          checked={draft.import_extra_files ?? false}
-          onChange={(checked) => set({ import_extra_files: checked })}
-        />
-        {draft.import_extra_files && (
-          <SettingRow
-            label="Extra File Extensions"
-            help={
-              isVideo
-                ? "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt)."
-                : "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs."
-            }
-          >
+        <DeclaredToggle entry={setting("import_extra_files")} checked={draft.import_extra_files ?? false} onChange={(checked) => set({ import_extra_files: checked })} />
+        {draft.import_extra_files && setting("extra_file_extensions") && (
+          <SettingRow label={setting("extra_file_extensions")!.label} help={setting("extra_file_extensions")!.help}>
             <input
               value={(draft.extra_file_extensions ?? []).join(",")}
               onChange={(event) => set({ extra_file_extensions: event.target.value.split(",") })}
@@ -201,36 +145,22 @@ export function LibraryFileManagement() {
           </SettingRow>
         )}
       </section>
+      )}
 
-      {isVideo && (
+      {(setting("media_server_files") || setting("monitor_new_seasons") || setting("shared_file_fallback")) && (
         <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
           <h2 className="text-sm font-medium">Media servers</h2>
-          <Toggle
-            label="Jellyfin and Kodi files"
-            help={
-              isTV
-                ? "Write what Jellyfin and Kodi read beside the series: tvshow.nfo, season.nfo and an nfo per episode with the TheTVDB ids, and the series' poster, fanart, banner and logo. Only where none exists, never on a read-only root; daily, and at once when switched on."
-                : "Write what Jellyfin and Kodi read beside each movie: an nfo named after the file with the TMDB and IMDb ids, and the movie's poster and fanart. Only where none exists, never on a read-only root; daily, and at once when switched on."
-            }
-            checked={draft.media_server_files ?? false}
-            onChange={(checked) => set({ media_server_files: checked })}
-          />
-          <Toggle
-            label="Monitor new seasons"
-            help="When a refresh finds a season the library does not have yet, monitor it if the series already has a monitored season. Off leaves new seasons unmonitored until you choose them."
-            checked={draft.monitor_new_seasons ?? true}
-            onChange={(checked) => set({ monitor_new_seasons: checked })}
-          />
-          <Choice
-            label="Shared episodes across disks"
-            help="An episode listed under two series (a crossover) is held once and linked into the second series' folder. When the two folders are on different disks no link can be made: keep a second copy, or put a symbolic link there."
-            value={draft.shared_file_fallback ?? "copy"}
-            options={[
-              ["copy", "Second copy"],
-              ["symlink", "Symbolic link"],
-            ]}
-            onChange={(value) => set({ shared_file_fallback: value as FileManagement["shared_file_fallback"] })}
-          />
+          <DeclaredToggle entry={setting("media_server_files")} checked={draft.media_server_files ?? false} onChange={(checked) => set({ media_server_files: checked })} />
+          <DeclaredToggle entry={setting("monitor_new_seasons")} checked={draft.monitor_new_seasons ?? true} onChange={(checked) => set({ monitor_new_seasons: checked })} />
+          {setting("shared_file_fallback") && (
+            <Choice
+              label={setting("shared_file_fallback")!.label}
+              help={setting("shared_file_fallback")!.help}
+              value={draft.shared_file_fallback ?? "copy"}
+              options={options(setting("shared_file_fallback")!)}
+              onChange={(value) => set({ shared_file_fallback: value as FileManagement["shared_file_fallback"] })}
+            />
+          )}
         </section>
       )}
 
@@ -268,6 +198,19 @@ export function LibraryFileManagement() {
       <SaveBar dirty={dirty} busy={save.isPending} onSave={() => save.mutate(draft)} onUndo={() => setDraft(saved.data)} error={save.isError ? save.error.message : null} />
     </div>
   );
+}
+
+/** A switch for a setting the media type declares; nothing when it does not. */
+function DeclaredToggle({
+  entry,
+  checked,
+  onChange,
+}: {
+  entry: { label: string; help: string } | undefined;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return entry ? <Toggle label={entry.label} help={entry.help} checked={checked} onChange={onChange} /> : null;
 }
 
 function Choice({

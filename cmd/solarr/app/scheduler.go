@@ -73,10 +73,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.passEnqueue(media.PassPictures, false), EnqueueManual: p.passEnqueue(media.PassPictures, true),
 	})
-	registry.MustRegister(jobs.Task{
-		Key: "tv_retry", Name: "Identify waiting TV files", DefaultCadence: tvRetryScheduleCron,
-		Tier: string(settings.TierNormal), Category: jobs.CategoryLibrary, Enqueue: p.enqueueTVRetry,
-	})
+	registry.MustRegister(p.tvRetryTask())
 	registry.MustRegister(jobs.Task{
 		Key: "tv_crossovers", Name: "Find crossover episodes", DefaultCadence: crossoverPassScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,

@@ -2,13 +2,13 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
-import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useCategories } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { ArrSyncOptions } from "./ArrSyncOptions";
 import { KindSelect } from "./LibraryKindSelect";
+import { useNewLibrary } from "./NewLibrary";
 
 // The wizard connects an app to make a library from it; Prowlarr has none, so it is added under Connections.
 type ArrApp = Exclude<components["schemas"]["ArrApp"], "prowlarr">;
@@ -417,31 +417,19 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   // A root folder belongs to a library (2026-09-19): one created here with
   // no library attached is invisible to every import and scan afterwards.
   const [chosenCategory, setCategoryId] = useState<number | "new" | null>(null);
-  const [mediaType, setMediaType] = useState<MediaType>("music");
-  const [kind, setKind] = useState("");
-  const mediaTypes = useMediaTypes();
-  const [libraryName, setLibraryName] = useState(mediaTypeName("music"));
-  const [libraryNameTouched, setLibraryNameTouched] = useState(false);
+  const library = useNewLibrary();
 
   const categories = useCategories();
 
   const existing = categories.data ?? [];
   // A library the *Arr step just made is the likely home of this folder; a new one only when there is none.
   const categoryId = chosenCategory ?? existing[0]?.id ?? "new";
-  const changeMediaType = (value: MediaType) => {
-    setMediaType(value);
-    if (!libraryNameTouched) setLibraryName(mediaTypeName(value));
-  };
 
   const add = useMutation({
     mutationFn: async () => {
       let attachTo = categoryId;
       if (attachTo === "new") {
-        const { data: category, error: categoryError } = await api.POST("/categories", {
-          body: { name: libraryName.trim() || mediaTypeName(mediaType), media_type: mediaType, kind: kind || undefined },
-        });
-        if (categoryError) throw categoryError;
-        attachTo = category!.id;
+        attachTo = (await library.create()).id;
       }
 
       const { data: root, error } = await api.POST("/rootfolders", {
@@ -509,29 +497,23 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
             <Field label="What it holds">
               <select
                 className={inputStyle}
-                value={mediaType}
-                onChange={(event) => {
-                  changeMediaType(event.target.value as MediaType);
-                  setKind("");
-                }}
+                value={library.mediaType ?? ""}
+                onChange={(event) => library.setMediaType(event.target.value as MediaType)}
               >
-                {mediaTypes.map((type) => (
+                {library.mediaTypes.map((type) => (
                   <option key={type.key} value={type.key}>
                     {type.label}
                   </option>
                 ))}
               </select>
             </Field>
-            <KindSelect mediaType={mediaType} value={kind} onChange={setKind} />
+            {library.mediaType && <KindSelect mediaType={library.mediaType} value={library.kind} onChange={library.setKind} />}
             <Field label="Library name">
               <input
                 className={inputStyle}
-                value={libraryName}
-                placeholder={mediaTypeName(mediaType)}
-                onChange={(event) => {
-                  setLibraryName(event.target.value);
-                  setLibraryNameTouched(true);
-                }}
+                value={library.name}
+                placeholder={library.typeName}
+                onChange={(event) => library.setName(event.target.value)}
               />
             </Field>
           </>

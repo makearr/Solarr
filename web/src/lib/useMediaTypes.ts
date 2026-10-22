@@ -17,3 +17,8 @@ export function useMediaTypes(): readonly MediaTypeInfo[] {
   });
   return mediaTypes.data ?? NONE;
 }
+
+/** One media type's description; undefined while it loads or for a type this build does not bring. */
+export function useMediaType(key: string | undefined): MediaTypeInfo | undefined {
+  return useMediaTypes().find((type) => type.key === key);
+}

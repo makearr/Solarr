@@ -4883,6 +4883,34 @@ export interface components {
             commit_guess_floor?: number;
             /** @description A duplicate is one recording under any work, matched by artist, title and length (music); otherwise two files covering one part. */
             duplicates_by_name: boolean;
+            /** @description The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type. */
+            file_settings: {
+                /** @enum {string} */
+                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback";
+                label: string;
+                help: string;
+                /** @description A choice's values in the type's words. */
+                options?: components["schemas"]["MediaChoice"][];
+            }[];
+            /** @description What a scan monitors of a work it finds, and the library setting that holds it. */
+            scan_monitor: {
+                /** @enum {string} */
+                setting: "monitor_discovered" | "tv_monitor";
+                label: string;
+                options: components["schemas"]["MediaChoice"][];
+            };
+            /** @description The schedule that tries a library's unidentified files again (POST /schedules/{key}/run); absent when the type has none. */
+            unidentified_retry?: string;
+            /** @description Every wanted work of a library can be searched at once (POST /categories/{id}/search). */
+            searches_library: boolean;
+            /** @description The type's covers follow cover_sources of the metadata settings. */
+            cover_sources: boolean;
+            /** @description A work can carry release filters (GET /works/{id}/release-filters). */
+            release_filters: boolean;
+        };
+        MediaChoice: {
+            key: string;
+            label: string;
         };
         /**
          * @description Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.

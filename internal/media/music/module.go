@@ -134,6 +134,23 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 func (m Module) ScanSweep() scan.Sweep { return m.Sweep }
 
 // Descriptor implements media.Module.
+// fileSettings are Lidarr's Media Management settings as a music library has them.
+var fileSettings = []media.FileSetting{
+	{Key: media.FileCreateEmptyLeadFolders, Label: "Create Empty Artist Folders", Help: "Create missing artist folders for monitored artists during disk scan."},
+	{Key: media.FileDeleteEmptyFolders, Label: "Delete Empty Folders", Help: "Delete empty artist and album folders during disk scan and when track files are deleted."},
+	{Key: media.FileUnmonitorDeleted, Label: "Unmonitor Deleted Tracks", Help: "An album with a track deleted from disk is automatically unmonitored."},
+	{Key: media.FileMergeLeadAliases, Label: "Merge Artists Stored Under Several Names", Help: "After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are."},
+	{Key: media.FileRescanAfterRefresh, Label: "Rescan Artist Folder after Refresh", Help: "Rescan the artist's folders after refreshing its metadata; otherwise changes to files on disk are not noticed after a refresh."},
+	{Key: media.FileChangeFileDate, Label: "Change File Date", Help: "Change the file date on import and rescan.", Options: []media.Choice{{Key: "none", Label: "None"}, {Key: "release_date", Label: "Album Release Date"}}},
+	{Key: media.FileImportExtraFiles, Label: "Import Extra Files", Help: "Bring matching files along with the tracks: lyrics, cue sheets, rip logs."},
+	{Key: media.FileExtraFileExtensions, Label: "Extra File Extensions", Help: "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs."},
+}
+
+// scanMonitoring is what a scan does with an album it finds that nothing wanted yet.
+var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorDiscovered, Label: "Monitor discovered", Options: []media.Choice{
+	{Key: "monitored", Label: "Monitored"}, {Key: "unmonitored", Label: "Unmonitored"}, {Key: "none", Label: "None"},
+}}
+
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
 		Key:   MediaType,
@@ -157,7 +174,11 @@ func (Module) Descriptor() media.Descriptor {
 		CommitsHeldImports: true,
 		DuplicatesByName:   true,
 		// Lidarr's: off, and when on lyrics, cue sheets, rip logs and release notes.
-		ExtraFiles: media.ExtraFilesDefault{Extensions: []string{"lrc", "cue", "log", "nfo"}},
+		ExtraFiles:      media.ExtraFilesDefault{Extensions: []string{"lrc", "cue", "log", "nfo"}},
+		FileSettings:    fileSettings,
+		ScanMonitor:     scanMonitoring,
+		SearchesLibrary: true,
+		CoverSources:    true,
 	}
 }
 

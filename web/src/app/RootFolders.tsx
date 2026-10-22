@@ -7,15 +7,13 @@ import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useCategories, useRootFolders } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { EditCategoryForm } from "./Categories";
-import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
-import { inputStyle, labelStyle } from "@/ui/form";
-import { KindSelect } from "./LibraryKindSelect";
+import { inputStyle } from "@/ui/form";
+import { NewLibraryFields, useNewLibrary } from "./NewLibrary";
 import { MoveJobList, RootMoveControls } from "./Moves";
 
 type RootFolder = components["schemas"]["RootFolder"];
 type LibraryCategory = components["schemas"]["LibraryCategory"];
-type MediaType = components["schemas"]["MediaType"];
 
 const NEW_LIBRARY = "__new__";
 
@@ -540,11 +538,7 @@ function AddRootFolder({
   const [label, setLabel] = useState("");
   const [libraryChoice, setLibraryChoice] = useState<string>(NEW_LIBRARY);
   const [libraryChoiceTouched, setLibraryChoiceTouched] = useState(false);
-  const [newLibraryName, setNewLibraryName] = useState(mediaTypeName("music"));
-  const [newLibraryNameTouched, setNewLibraryNameTouched] = useState(false);
-  const [newLibraryMediaType, setNewLibraryMediaType] = useState<MediaType>("music");
-  const [newLibraryKind, setNewLibraryKind] = useState("");
-  const mediaTypes = useMediaTypes();
+  const newLibrary = useNewLibrary();
 
   // categories arrives asynchronously (its own useQuery, one render behind
   // this form's first paint); once it does, default to the first real
@@ -564,15 +558,7 @@ function AddRootFolder({
 
       let categoryId: number;
       if (libraryChoice === NEW_LIBRARY) {
-        const { data: category, error: categoryError } = await api.POST("/categories", {
-          body: {
-            name: newLibraryName.trim() || mediaTypeName(newLibraryMediaType),
-            media_type: newLibraryMediaType,
-            kind: newLibraryKind || undefined,
-          },
-        });
-        if (categoryError) throw categoryError;
-        categoryId = category!.id;
+        categoryId = (await newLibrary.create()).id;
       } else {
         categoryId = Number(libraryChoice);
       }
@@ -586,8 +572,7 @@ function AddRootFolder({
     onSuccess: () => {
       setPath("");
       setLabel("");
-      setNewLibraryName(mediaTypeName(newLibraryMediaType));
-      setNewLibraryNameTouched(false);
+      newLibrary.forgetName();
       onAdded();
     },
   });
@@ -641,43 +626,7 @@ function AddRootFolder({
           <option value={NEW_LIBRARY}>+ New library…</option>
         </select>
       </label>
-      {creatingNewLibrary && (
-        <>
-          <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
-            Library name
-            <input
-              className={inputStyle}
-              value={newLibraryName}
-              placeholder={mediaTypeName(newLibraryMediaType)}
-              autoComplete="off"
-              onChange={(event) => {
-                setNewLibraryName(event.target.value);
-                setNewLibraryNameTouched(true);
-              }}
-            />
-          </label>
-          <label className={labelStyle}>
-            Media type
-            <select
-              className={inputStyle}
-              value={newLibraryMediaType}
-              onChange={(event) => {
-                const value = event.target.value as MediaType;
-                setNewLibraryMediaType(value);
-                setNewLibraryKind("");
-                if (!newLibraryNameTouched) setNewLibraryName(mediaTypeName(value));
-              }}
-            >
-              {mediaTypes.map((type) => (
-                <option key={type.key} value={type.key}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <KindSelect mediaType={newLibraryMediaType} value={newLibraryKind} onChange={setNewLibraryKind} />
-        </>
-      )}
+      {creatingNewLibrary && <NewLibraryFields library={newLibrary} />}
       <Button
         variant="primary"
         type="submit"

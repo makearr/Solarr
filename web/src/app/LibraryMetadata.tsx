@@ -9,6 +9,7 @@ import { Chip } from "@/ui/Chip";
 import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMediaType } from "@/lib/useMediaTypes";
 import { useMetadataSettings } from "@/lib/resources";
 import { OrderedSources, usePatchMetadataSettings } from "./MetadataSettings";
 
@@ -20,6 +21,7 @@ export function LibraryMetadata() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const id = Number(categoryId);
   const library = useLibrary(categoryId);
+  const mediaType = useMediaType(library?.media_type);
   const queryClient = useQueryClient();
   const key = ["libraryMetadataSources", id];
   const saved = useQuery({
@@ -104,7 +106,7 @@ export function LibraryMetadata() {
           )}
           {save.isError && <p className="text-xs text-danger">That could not be saved.</p>}
         </section>
-        {library?.media_type === "music" && <CoverOrder />}
+        {mediaType?.cover_sources && <CoverOrder />}
         <p className="text-xs text-ink-muted">
           A library starts with the providers that suit its kind, Wikidata first: the ids its item records steer the others to the right
           entry. Providers are switched on and off, and their keys given, under Settings, Metadata. Music is looked up once for every

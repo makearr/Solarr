@@ -57,6 +57,15 @@ type MediaTypeInfo struct {
 	GuessFloor float64
 	// Kinds are what a library of the type can be, the first being the default.
 	Kinds []LibraryKind
+	// FileSettings are the type's own File Management settings, in its words.
+	FileSettings []FileSetting
+	// ScanMonitor is what a scan monitors of a work it finds.
+	ScanMonitor ScanMonitor
+	// UnidentifiedRetry is the schedule that retries unidentified files; empty when the type has none.
+	UnidentifiedRetry string
+	SearchesLibrary   bool
+	CoverSources      bool
+	ReleaseFilters    bool
 }
 
 // LibraryKind is one kind of library of a media type and the defaults a library of it starts with.
@@ -107,6 +116,18 @@ func kindViews(kinds []LibraryKind) *[]struct {
 // MediaChoice is one key a media type offers, with its label.
 type MediaChoice struct{ Key, Label string }
 
+// FileSetting is one File Management setting as a media type words it.
+type FileSetting struct {
+	Key, Label, Help string
+	Options          []MediaChoice
+}
+
+// ScanMonitor is the library setting a type's scan monitors by, with its values in the type's words.
+type ScanMonitor struct {
+	Setting, Label string
+	Options        []MediaChoice
+}
+
 // MediaTypeCatalog answers which media types have a module, so a handler never names one.
 type MediaTypeCatalog interface {
 	List() []MediaTypeInfo
@@ -134,6 +155,9 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 				WorkImage: gen.MediaTypeInfoWorkImage(info.WorkImage), WantedGrain: gen.MediaTypeInfoWantedGrain(info.WantedGrain),
 				AddKinds: choiceViews(info.AddKinds), CommitsHeldImports: info.CommitsHeldImports, CommitGuessFloor: &info.GuessFloor,
 				DuplicatesByName: info.DuplicatesByName, Kinds: kindViews(info.Kinds),
+				FileSettings: fileSettingViews(info.FileSettings), ScanMonitor: scanMonitorView(info.ScanMonitor),
+				UnidentifiedRetry: strPtr(info.UnidentifiedRetry), SearchesLibrary: info.SearchesLibrary,
+				CoverSources: info.CoverSources, ReleaseFilters: info.ReleaseFilters,
 			})
 		}
 	}
@@ -150,6 +174,48 @@ func choiceViews(options []MediaChoice) []struct {
 	}, len(options))
 	for i, option := range options {
 		views[i].Key, views[i].Label = option.Key, option.Label
+	}
+	return views
+}
+
+func fileSettingViews(settings []FileSetting) []struct {
+	Help    string                           `json:"help"`
+	Key     gen.MediaTypeInfoFileSettingsKey `json:"key"`
+	Label   string                           `json:"label"`
+	Options *[]gen.MediaChoice               `json:"options,omitempty"`
+} {
+	views := make([]struct {
+		Help    string                           `json:"help"`
+		Key     gen.MediaTypeInfoFileSettingsKey `json:"key"`
+		Label   string                           `json:"label"`
+		Options *[]gen.MediaChoice               `json:"options,omitempty"`
+	}, len(settings))
+	for i, setting := range settings {
+		views[i].Key, views[i].Label, views[i].Help = gen.MediaTypeInfoFileSettingsKey(setting.Key), setting.Label, setting.Help
+		if len(setting.Options) > 0 {
+			options := mediaChoices(setting.Options)
+			views[i].Options = &options
+		}
+	}
+	return views
+}
+
+func scanMonitorView(monitor ScanMonitor) struct {
+	Label   string                              `json:"label"`
+	Options []gen.MediaChoice                   `json:"options"`
+	Setting gen.MediaTypeInfoScanMonitorSetting `json:"setting"`
+} {
+	return struct {
+		Label   string                              `json:"label"`
+		Options []gen.MediaChoice                   `json:"options"`
+		Setting gen.MediaTypeInfoScanMonitorSetting `json:"setting"`
+	}{Label: monitor.Label, Options: mediaChoices(monitor.Options), Setting: gen.MediaTypeInfoScanMonitorSetting(monitor.Setting)}
+}
+
+func mediaChoices(options []MediaChoice) []gen.MediaChoice {
+	views := make([]gen.MediaChoice, len(options))
+	for i, option := range options {
+		views[i] = gen.MediaChoice{Key: option.Key, Label: option.Label}
 	}
 	return views
 }

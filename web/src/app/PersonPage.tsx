@@ -2,11 +2,11 @@ import { useState } from "react";
 
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, Tv } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
+import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import { remoteImage } from "@/lib/remoteImage";
 import { useLibraries } from "@/lib/resources";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
@@ -336,7 +336,7 @@ function LibrarySection({ name, type, credits }: { name: string; type?: MediaTyp
 }
 
 function PosterImage({ url, kind, workId, title }: { url?: string; kind: string; workId?: number; title: string }) {
-  const Icon = kind === "movie" ? Film : Tv;
+  const Icon = mediaTypeIcon(kind);
   return (
     <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
       {url ? (
@@ -425,7 +425,7 @@ function KnownForTile({ title }: { title: KnownFor }) {
     return (
       <a href={`https://www.themoviedb.org/${title.kind}/${title.external_id}`} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
         {caption}
-        <span className="text-xs text-ink-muted">No {title.kind === "movie" ? "movie" : "TV"} library to add it to</span>
+        <span className="text-xs text-ink-muted">No {mediaTypeName(title.kind)} library to add it to</span>
       </a>
     );
   }

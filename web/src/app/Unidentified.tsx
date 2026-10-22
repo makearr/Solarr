@@ -7,6 +7,7 @@ import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
 import { useLibrary } from "@/lib/useLibrary";
+import { useMediaType } from "@/lib/useMediaTypes";
 import type { components } from "@/api/schema";
 
 type UnidentifiedFile = components["schemas"]["UnidentifiedFile"];
@@ -18,11 +19,11 @@ const FILTER_KEYS: readonly string[] = ["category_id"];
 export function Unidentified() {
   const queryClient = useQueryClient();
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
-  // Only TV has a job that asks the providers again.
-  const canRetry = useLibrary(categoryId ?? "")?.media_type === "tv";
+  // A type whose providers can be asked again names the schedule that does it.
+  const retryKey = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.unidentified_retry;
   const retry = useMutation({
     mutationFn: async () => {
-      const { error, response } = await api.POST("/schedules/{key}/run", { params: { path: { key: "tv_retry" } } });
+      const { error, response } = await api.POST("/schedules/{key}/run", { params: { path: { key: retryKey! } } });
       if (error && response.status !== 409) throw error;
     },
     onSuccess: () => {
@@ -112,7 +113,7 @@ export function Unidentified() {
         <span className="text-xs text-ink-muted">
           Files a scan found but could not confidently match to a work
         </span>
-        {canRetry && (
+        {retryKey && (
         <button
           type="button"
           disabled={retry.isPending}

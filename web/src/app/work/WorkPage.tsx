@@ -359,7 +359,7 @@ function WorkHeader({
                 {t("numbering.title")}
               </Button>
             )}
-            {administrator && (work.media_type === "tv" || work.media_type === "movie") && (
+            {administrator && info?.release_filters && (
               <Button icon={<Filter aria-hidden className="size-4" />} onClick={() => setFiltering(true)}>
                 {t("releaseFilters.title")}
               </Button>

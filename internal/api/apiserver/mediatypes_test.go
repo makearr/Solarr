@@ -21,8 +21,13 @@ func (fakeMediaTypes) List() []apiserver.MediaTypeInfo {
 			Work: apiserver.MediaTerm{One: "Album", Many: "Albums"}, Part: apiserver.MediaTerm{One: "Track", Many: "Tracks"},
 			LeadPeople: apiserver.MediaTerm{One: "Artist", Many: "Artists"},
 			Roles:      []apiserver.MediaRole{{Key: "artist", Label: "Artist", Lead: true, Followable: true}},
+			FileSettings: []apiserver.FileSetting{{Key: "change_file_date", Label: "Change File Date", Help: "On import.",
+				Options: []apiserver.MediaChoice{{Key: "release_date", Label: "Album Release Date"}}}},
+			ScanMonitor: apiserver.ScanMonitor{Setting: "monitor_discovered", Label: "Monitor discovered",
+				Options: []apiserver.MediaChoice{{Key: "none", Label: "None"}}},
+			SearchesLibrary: true, CoverSources: true,
 		},
-		{Key: "tv", Label: "TV", Work: apiserver.MediaTerm{One: "Series", Many: "Series"}, Kinds: []apiserver.LibraryKind{
+		{Key: "tv", Label: "TV", Work: apiserver.MediaTerm{One: "Series", Many: "Series"}, UnidentifiedRetry: "tv_retry", ReleaseFilters: true, Kinds: []apiserver.LibraryKind{
 			{Key: "series", Label: "Series", QualityProfiles: []string{"WEB 1080p"}},
 			{Key: "anime", Label: "Anime", Help: "Anime.", QualityProfiles: []string{"Anime 1080p", "WEB 1080p", "No such profile"},
 				Language: &settings.LanguageProfile{Name: "Japanese first", AudioPreferred: []string{"ja", "en"}}},
@@ -54,11 +59,18 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 				"key": "artist", "label": "Artist", "lead": true, "followable": true, "part_scoped": false, "character": false,
 			}},
 			"follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false,
+			"file_settings": []any{map[string]any{"key": "change_file_date", "label": "Change File Date", "help": "On import.",
+				"options": []any{map[string]any{"key": "release_date", "label": "Album Release Date"}}}},
+			"scan_monitor": map[string]any{"setting": "monitor_discovered", "label": "Monitor discovered",
+				"options": []any{map[string]any{"key": "none", "label": "None"}}},
+			"searches_library": true, "cover_sources": true, "release_filters": false,
 		},
 		{
 			"key": "tv", "label": "TV", "work": term("Series", "Series"), "part": term("", ""), "group": term("", ""),
 			"lead_people": term("", ""), "organisation": term("", ""), "roles": []any{}, "follow_options": []any{}, "facets": []any{}, "monitor_options": []any{}, "search_terms": []any{}, "work_image": "", "wanted_grain": "", "add_kinds": []any{}, "commits_held_imports": false, "commit_guess_floor": float64(0), "duplicates_by_name": false,
-			"kinds": []any{map[string]any{"key": "series", "label": "Series"}, map[string]any{"key": "anime", "label": "Anime", "help": "Anime."}},
+			"kinds":         []any{map[string]any{"key": "series", "label": "Series"}, map[string]any{"key": "anime", "label": "Anime", "help": "Anime."}},
+			"file_settings": []any{}, "scan_monitor": map[string]any{"setting": "", "label": "", "options": []any{}},
+			"unidentified_retry": "tv_retry", "searches_library": false, "cover_sources": false, "release_filters": true,
 		},
 	}
 	if !reflect.DeepEqual(got, want) {
