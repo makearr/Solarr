@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -29,6 +29,9 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
   });
 
   const raw = stored.data?.[key];
+  // The value just set, until the stored one moves (the query's own update arrives a tick later), so a checkbox does not
+  // flick back for a frame.
+  const [justSet, setJustSet] = useState<{ value: T; over: string | undefined }>();
   let value = fallback;
   if (raw !== undefined) {
     try {
@@ -41,6 +44,7 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
   // Optimistic: the list reorders on click rather than after a round trip.
   const set = useCallback(
     (next: T) => {
+      setJustSet({ value: next, over: raw });
       void queryClient.cancelQueries({ queryKey: KEY });
       queryClient.setQueryData(KEY, (current: Record<string, string> | undefined) => ({
         ...(current ?? {}),
@@ -48,8 +52,8 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
       }));
       save.mutate(next);
     },
-    [key, queryClient, save],
+    [key, queryClient, save, raw],
   );
 
-  return [value, set];
+  return [justSet && justSet.over === raw ? justSet.value : value, set];
 }
