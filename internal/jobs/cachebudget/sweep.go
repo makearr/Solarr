@@ -38,17 +38,23 @@ type NamespaceReport struct {
 type Report struct {
 	Images, Metadata NamespaceReport
 	MeasuredAt       time.Time
+	// DiskTotalBytes and DiskFreeBytes are the filesystem under the cache, 0 when unreadable.
+	DiskTotalBytes, DiskFreeBytes int64
 }
 
 // Result is what one enforcement pass did, on top of its own final Report.
 type Result struct {
 	Report                         Report
 	ImagesEvicted, MetadataEvicted int64
+	// ShrunkToBytes is the ceiling the disk's free space held the cache to, 0 when MaxBytes held.
+	ShrunkToBytes int64
 }
 
 // Config is everything a Sweep needs. Every field is required.
 type Config struct {
-	FS        fsx.FS
+	FS fsx.FS
+	// Dir is the cache directory, whose filesystem's free space MinFreePercent keeps.
+	Dir       string
 	ImagesDir string
 	Metadata  metacache.Cache
 	Cache     *settings.Cache
@@ -59,6 +65,7 @@ type Config struct {
 // Sweep measures, enforces and clears the cache.
 type Sweep struct {
 	fs        fsx.FS
+	dir       string
 	imagesDir string
 	metadata  metacache.Cache
 	cache     *settings.Cache
@@ -73,7 +80,7 @@ func NewSweep(config Config) *Sweep {
 		logger = slog.Default()
 	}
 	return &Sweep{
-		fs: config.FS, imagesDir: config.ImagesDir, metadata: config.Metadata,
+		fs: config.FS, dir: config.Dir, imagesDir: config.ImagesDir, metadata: config.Metadata,
 		cache: config.Cache, clock: config.Clock, logger: logger,
 	}
 }
@@ -92,11 +99,42 @@ func (s *Sweep) Measure(ctx context.Context) (Report, error) {
 		return Report{}, fmt.Errorf("cachebudget: measure metadata: %w", err)
 	}
 
-	return Report{
+	report := Report{
 		Images:     NamespaceReport{Bytes: imagesBytes},
 		Metadata:   NamespaceReport{Bytes: metadataBytes},
 		MeasuredAt: s.clock.Now(),
-	}, nil
+	}
+	if total, free, err := s.fs.DiskUsage(s.dir); err == nil {
+		report.DiskTotalBytes, report.DiskFreeBytes = total, free
+	}
+	return report, nil
+}
+
+// heldToFreeSpace lowers the budget's ceiling by however far the disk under the cache is below MinFreePercent free;
+// answers the lowered ceiling, or 0 when the budget stands (user, 2026-10-23).
+func (s *Sweep) heldToFreeSpace(ctx context.Context, budget *settings.CacheBudget) (int64, error) {
+	if budget.MinFreePercent <= 0 {
+		return 0, nil
+	}
+	now, err := s.Measure(ctx)
+	if err != nil {
+		return 0, err
+	}
+	if now.DiskTotalBytes <= 0 {
+		return 0, nil
+	}
+	short := now.DiskTotalBytes*budget.MinFreePercent/100 - now.DiskFreeBytes
+	if short <= 0 {
+		return 0, nil
+	}
+	ceiling := max(0, now.Images.Bytes+now.Metadata.Bytes-short)
+	if ceiling >= budget.MaxBytes {
+		return 0, nil
+	}
+	s.logger.WarnContext(ctx, "cache disk short of its free space: shrinking the cache",
+		slog.Int64("short_bytes", short), slog.Int64("ceiling_bytes", ceiling))
+	budget.MaxBytes = ceiling
+	return ceiling, nil
 }
 
 // Enforce applies ADR-60's two eviction triggers in order -- max_age
@@ -115,6 +153,10 @@ func (s *Sweep) Enforce(ctx context.Context, budget settings.CacheBudget) (Resul
 		return Result{}, fmt.Errorf("cachebudget: prune metadata by age: %w", err)
 	}
 
+	shrunkTo, err := s.heldToFreeSpace(ctx, &budget)
+	if err != nil {
+		return Result{}, fmt.Errorf("cachebudget: free space: %w", err)
+	}
 	imagesBudgetBytes := budget.MaxBytes * budget.ImagesSharePercent / 100
 	metadataBudgetBytes := budget.MaxBytes * budget.MetadataSharePercent / 100
 
@@ -133,7 +175,8 @@ func (s *Sweep) Enforce(ctx context.Context, budget settings.CacheBudget) (Resul
 	}
 	if err := s.cache.SetCacheMeasurement(ctx, s.clock, settings.CacheMeasurement{
 		ImagesBytes: report.Images.Bytes, MetadataBytes: report.Metadata.Bytes,
-		MeasuredAt: report.MeasuredAt.Unix(),
+		MeasuredAt: report.MeasuredAt.Unix(), DiskTotalBytes: report.DiskTotalBytes, DiskFreeBytes: report.DiskFreeBytes,
+		ShrunkToBytes: shrunkTo,
 	}); err != nil {
 		return Result{}, fmt.Errorf("cachebudget: record measurement: %w", err)
 	}
@@ -142,6 +185,7 @@ func (s *Sweep) Enforce(ctx context.Context, budget settings.CacheBudget) (Resul
 		Report:          report,
 		ImagesEvicted:   imagesAgeEvicted + imagesBudgetEvicted,
 		MetadataEvicted: metadataAgeEvicted + metadataBudgetEvicted,
+		ShrunkToBytes:   shrunkTo,
 	}, nil
 }
 

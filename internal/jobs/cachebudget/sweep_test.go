@@ -279,3 +279,35 @@ func TestSweep_EnforceTerminatesWhenTheBudgetForcesFullEviction(t *testing.T) {
 		t.Fatal("Enforce did not return -- an unmeetable budget looped forever")
 	}
 }
+
+// A disk short of its free share shrinks the cache by the shortfall, however far below its size limit (2026-10-23).
+func TestSweep_EnforceShrinksTheCacheToKeepTheDiskFree(t *testing.T) {
+	f := newFixture(t)
+	for _, name := range []string{"a.webp", "b.webp", "c.webp", "d.webp"} {
+		f.writeImage(t, name, 100)
+		f.clock.Advance(time.Minute)
+	}
+	f.fs.SetDiskUsage(1000, 50) // 10% free would be 100: 50 short
+	budget := settings.CacheBudget{MaxBytes: 1 << 30, MaxAgeDays: 30, ImagesSharePercent: 100, MinFreePercent: 10}
+
+	result, err := f.sweep.Enforce(t.Context(), budget)
+	if err != nil {
+		t.Fatalf("Enforce: %v", err)
+	}
+	if result.ShrunkToBytes != 350 || result.ImagesEvicted != 1 || result.Report.Images.Bytes != 300 {
+		t.Errorf("shrunk to %d, evicted %d, %d bytes left; want 350, the oldest one, 300",
+			result.ShrunkToBytes, result.ImagesEvicted, result.Report.Images.Bytes)
+	}
+	if result.Report.DiskTotalBytes != 1000 || result.Report.DiskFreeBytes != 50 {
+		t.Errorf("disk = %d free of %d, want the measured 50 of 1000", result.Report.DiskFreeBytes, result.Report.DiskTotalBytes)
+	}
+
+	f.fs.SetDiskUsage(1000, 500)
+	result, err = f.sweep.Enforce(t.Context(), budget)
+	if err != nil {
+		t.Fatalf("Enforce: %v", err)
+	}
+	if result.ShrunkToBytes != 0 || result.ImagesEvicted != 0 {
+		t.Errorf("with room: shrunk to %d, evicted %d; want the size limit to stand", result.ShrunkToBytes, result.ImagesEvicted)
+	}
+}

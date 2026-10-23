@@ -66,7 +66,7 @@ func (p *process) registerCacheJob(registry *jobs.Registry, executor *jobs.Execu
 		return err
 	}
 	p.cacheSweep = cachebudget.NewSweep(cachebudget.Config{
-		FS: p.fsys, ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
+		FS: p.fsys, Dir: p.config.Paths.CacheDir, ImagesDir: filepath.Join(p.config.Paths.CacheDir, "images"),
 		Metadata: metacache.New(p.metadata), Cache: p.cache, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(cacheJobType, cacheJob{

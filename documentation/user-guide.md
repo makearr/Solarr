@@ -262,6 +262,10 @@ Files a library scan could not identify wait under **Library → Music → Unide
   rename** (it names the files even on a root it may not change, and says why) and **Drain…**, which shows what would
   move and asks before moving every file to the library's other roots. Removing a folder, or taking a root out of its
   library, asks first.
+- **Settings → Cache** (expert) bounds the provider answers and resized artwork Solarr keeps: a size limit (10 GiB),
+  an age (90 days), the images/metadata split, and **Keep disk free** (10%): when the disk under the cache runs short of
+  that, the next cache maintenance shrinks the cache by the shortfall, below its size limit. The page shows the disk's
+  size and free space and warns when the size limit is larger than the disk. Clearing it is always safe.
 - **A root Solarr cannot reach** (missing, unreadable, or empty although it held files: an unmounted disk) is declared
   offline by Solarr, checked every five minutes, and declared online again once reached. A root *you* declare offline
   stays offline until you declare it online.

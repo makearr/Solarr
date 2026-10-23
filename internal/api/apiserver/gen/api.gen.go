@@ -1335,6 +1335,12 @@ type BulkResult struct {
 
 // CacheReport The cache's own budgets and last-measured size per namespace (ADR-60).
 type CacheReport struct {
+	// DiskFreeBytes Its free space
+	DiskFreeBytes *int64 `json:"disk_free_bytes,omitempty"`
+
+	// DiskTotalBytes The disk under the cache
+	DiskTotalBytes *int64 `json:"disk_total_bytes,omitempty"`
+
 	// ImagesBytes Absent until the cache maintenance task has run once.
 	ImagesBytes        *int64     `json:"images_bytes,omitempty"`
 	ImagesSharePercent int64      `json:"images_share_percent"`
@@ -1345,6 +1351,12 @@ type CacheReport struct {
 	// MetadataBytes Logical bytes stored, a real measurement -- not metadata.db's own physical file size, which does not shrink on eviction without a VACUUM this codebase deliberately does not run.
 	MetadataBytes        *int64 `json:"metadata_bytes,omitempty"`
 	MetadataSharePercent int64  `json:"metadata_share_percent"`
+
+	// MinFreePercent Percent of the disk under the cache kept free; the cache shrinks below max_bytes to keep it. 0 is off. Default 10.
+	MinFreePercent int64 `json:"min_free_percent"`
+
+	// ShrunkToBytes The size the last sweep held the cache to for the disk's free space; absent when max_bytes held.
+	ShrunkToBytes *int64 `json:"shrunk_to_bytes,omitempty"`
 }
 
 // CalendarDate defines model for CalendarDate.
@@ -4730,6 +4742,9 @@ type UpdateCacheBudgetJSONBody struct {
 	MaxAgeDays           int64 `json:"max_age_days"`
 	MaxBytes             int64 `json:"max_bytes"`
 	MetadataSharePercent int64 `json:"metadata_share_percent"`
+
+	// MinFreePercent Absent leaves it as it is.
+	MinFreePercent *int64 `json:"min_free_percent,omitempty"`
 }
 
 // ListCalendarParams defines parameters for ListCalendar.

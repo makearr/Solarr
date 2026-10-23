@@ -24,6 +24,7 @@ func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
 		Budget: apiserver.CacheBudget{
 			MaxBytes: budget.MaxBytes, MaxAgeDays: budget.MaxAgeDays,
 			ImagesSharePercent: budget.ImagesSharePercent, MetadataSharePercent: budget.MetadataSharePercent,
+			MinFreePercent: &budget.MinFreePercent,
 		},
 	}
 	if measurement, found := a.Cache.Snapshot().CacheMeasurement(); found {
@@ -31,6 +32,12 @@ func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
 		report.MetadataBytes = &measurement.MetadataBytes
 		measuredAt := time.Unix(measurement.MeasuredAt, 0).UTC()
 		report.MeasuredAt = &measuredAt
+		if measurement.DiskTotalBytes > 0 {
+			report.DiskTotalBytes, report.DiskFreeBytes = &measurement.DiskTotalBytes, &measurement.DiskFreeBytes
+		}
+		if measurement.ShrunkToBytes > 0 {
+			report.ShrunkToBytes = &measurement.ShrunkToBytes
+		}
 	}
 	return report, nil
 }
@@ -38,12 +45,18 @@ func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
 func (a CacheManager) SetBudget(ctx context.Context, budget apiserver.CacheBudget) error {
 	if err := a.Registry.LookupAll(
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare,
+		settings.KeyCacheMinFreePercent,
 	); err != nil {
 		return err
+	}
+	minFree := a.Cache.Snapshot().CacheBudget().MinFreePercent
+	if budget.MinFreePercent != nil {
+		minFree = *budget.MinFreePercent
 	}
 	return a.Cache.SetCacheBudget(ctx, a.Clock, settings.CacheBudget{
 		MaxBytes: budget.MaxBytes, MaxAgeDays: budget.MaxAgeDays,
 		ImagesSharePercent: budget.ImagesSharePercent, MetadataSharePercent: budget.MetadataSharePercent,
+		MinFreePercent: minFree,
 	})
 }
 

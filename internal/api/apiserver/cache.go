@@ -19,6 +19,8 @@ type CacheBudget struct {
 	MaxAgeDays           int64
 	ImagesSharePercent   int64
 	MetadataSharePercent int64
+	// MinFreePercent is nil on a write to leave it alone.
+	MinFreePercent *int64
 }
 
 // CacheReport is a budget plus what the last measurement found. The two
@@ -28,6 +30,8 @@ type CacheReport struct {
 	Budget                     CacheBudget
 	ImagesBytes, MetadataBytes *int64
 	MeasuredAt                 *time.Time
+	// DiskTotalBytes, DiskFreeBytes and ShrunkToBytes are nil until measured, ShrunkToBytes also when MaxBytes held.
+	DiskTotalBytes, DiskFreeBytes, ShrunkToBytes *int64
 }
 
 // CacheManager exposes ADR-60's cache budget, its last measurement, and the
@@ -84,6 +88,7 @@ func (s *Server) UpdateCacheBudget(w http.ResponseWriter, r *http.Request) {
 	budget := CacheBudget{
 		MaxBytes: body.MaxBytes, MaxAgeDays: body.MaxAgeDays,
 		ImagesSharePercent: body.ImagesSharePercent, MetadataSharePercent: body.MetadataSharePercent,
+		MinFreePercent: body.MinFreePercent,
 	}
 	if err := s.cacheManager.SetBudget(r.Context(), budget); err != nil {
 		var problems config.Problems
@@ -134,5 +139,7 @@ func cacheReportView(report CacheReport) gen.CacheReport {
 		MaxBytes: report.Budget.MaxBytes, MaxAgeDays: report.Budget.MaxAgeDays,
 		ImagesSharePercent: report.Budget.ImagesSharePercent, MetadataSharePercent: report.Budget.MetadataSharePercent,
 		ImagesBytes: report.ImagesBytes, MetadataBytes: report.MetadataBytes, MeasuredAt: report.MeasuredAt,
+		MinFreePercent: derefOr(report.Budget.MinFreePercent, 0), DiskTotalBytes: report.DiskTotalBytes,
+		DiskFreeBytes: report.DiskFreeBytes, ShrunkToBytes: report.ShrunkToBytes,
 	}
 }

@@ -4456,6 +4456,26 @@ export interface components {
             metadata_share_percent: number;
             /**
              * Format: int64
+             * @description Percent of the disk under the cache kept free; the cache shrinks below max_bytes to keep it. 0 is off. Default 10.
+             */
+            min_free_percent: number;
+            /**
+             * Format: int64
+             * @description The disk under the cache
+             */
+            disk_total_bytes?: number;
+            /**
+             * Format: int64
+             * @description Its free space
+             */
+            disk_free_bytes?: number;
+            /**
+             * Format: int64
+             * @description The size the last sweep held the cache to for the disk's free space; absent when max_bytes held.
+             */
+            shrunk_to_bytes?: number;
+            /**
+             * Format: int64
              * @description Absent until the cache maintenance task has run once.
              */
             images_bytes?: number;
@@ -9069,6 +9089,11 @@ export interface operations {
                     images_share_percent: number;
                     /** Format: int64 */
                     metadata_share_percent: number;
+                    /**
+                     * Format: int64
+                     * @description Absent leaves it as it is.
+                     */
+                    min_free_percent?: number;
                 };
             };
         };

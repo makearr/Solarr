@@ -10,6 +10,10 @@ import { Card, Field, SaveBar } from "./SettingsCard";
 
 type CacheReport = components["schemas"]["CacheReport"];
 
+// A gigabyte as formatBytes counts one, so the 10 GiB default reads as 10.
+const GIB = 1024 ** 3;
+type Budget = components["schemas"]["CacheReport"] & { min_free_percent: number };
+
 /** The Cache settings page: CacheSettings' own section, given its own page
  *  2026-09-11 (split out of one long Settings scroll). Expert tier (the
  *  registry's own cache.* keys, todo 4.14) -- unlike Network/Priority,
@@ -51,12 +55,7 @@ export function CacheSettings() {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["cache"] });
 
   const update = useMutation({
-    mutationFn: async (budget: {
-      max_bytes: number;
-      max_age_days: number;
-      images_share_percent: number;
-      metadata_share_percent: number;
-    }) => {
+    mutationFn: async (budget: Budget) => {
       await ok(api.PATCH("/cache", { body: budget }));
     },
     onSuccess: invalidate,
@@ -94,6 +93,21 @@ export function CacheSettings() {
             ? `Measured ${new Date(report.data.measured_at).toLocaleString()}.`
             : "Not measured yet: the cache maintenance task has not run."}
         </p>
+        {report.data.disk_total_bytes != null && report.data.disk_free_bytes != null && (
+          <p className="text-xs text-ink-muted">
+            The disk under the cache: {formatBytes(report.data.disk_free_bytes)} free of {formatBytes(report.data.disk_total_bytes)}
+            {report.data.max_bytes > report.data.disk_total_bytes && (
+              <span className="text-warn">; the size limit is larger than the whole disk</span>
+            )}
+            .
+          </p>
+        )}
+        {report.data.shrunk_to_bytes != null && (
+          <p className="text-xs text-warn">
+            The last sweep held the cache to {formatBytes(report.data.shrunk_to_bytes)} to keep {report.data.min_free_percent}% of the
+            disk free.
+          </p>
+        )}
       </Card>
 
       <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
@@ -131,29 +145,27 @@ function BudgetForm({
   busy,
 }: {
   report: CacheReport;
-  onSave: (budget: {
-    max_bytes: number;
-    max_age_days: number;
-    images_share_percent: number;
-    metadata_share_percent: number;
-  }) => void;
+  onSave: (budget: Budget) => void;
   busy: boolean;
 }) {
-  const [maxGB, setMaxGB] = useState(Math.round(report.max_bytes / 1_000_000_000));
+  const [maxGB, setMaxGB] = useState(Math.round(report.max_bytes / GIB));
   const [maxAgeDays, setMaxAgeDays] = useState(report.max_age_days);
   const [imagesShare, setImagesShare] = useState(report.images_share_percent);
+  const [minFree, setMinFree] = useState(report.min_free_percent);
 
   const dirty =
-    maxGB !== Math.round(report.max_bytes / 1_000_000_000) ||
+    maxGB !== Math.round(report.max_bytes / GIB) ||
     maxAgeDays !== report.max_age_days ||
-    imagesShare !== report.images_share_percent;
+    imagesShare !== report.images_share_percent ||
+    minFree !== report.min_free_percent;
 
   const submit = () =>
     onSave({
-      max_bytes: maxGB * 1_000_000_000,
+      max_bytes: maxGB * GIB,
       max_age_days: maxAgeDays,
       images_share_percent: imagesShare,
       metadata_share_percent: 100 - imagesShare,
+      min_free_percent: minFree,
     });
   const number = (value: number, set: (next: number) => void, min: number, max?: number) => (
     <input
@@ -175,7 +187,10 @@ function BudgetForm({
         submit();
       }}
     >
-      <Card title="Limits" help="The cache is trimmed when it passes its size, and anything older than the age is dropped.">
+      <Card
+        title="Limits"
+        help="The cache is trimmed when it passes its size, and anything older than the age is dropped. It also shrinks, below its size, when its disk runs short of the free share."
+      >
         <div className="flex flex-wrap items-start gap-4">
           <Field label="Max size (GB)" className="w-36">
             {number(maxGB, setMaxGB, 1)}
@@ -185,6 +200,9 @@ function BudgetForm({
           </Field>
           <Field label="Images share (%)" help={`Metadata gets ${100 - imagesShare}%.`} className="w-36">
             {number(imagesShare, setImagesShare, 0, 100)}
+          </Field>
+          <Field label="Keep disk free (%)" help="0 turns it off." className="w-36">
+            {number(minFree, setMinFree, 0, 90)}
           </Field>
         </div>
       </Card>

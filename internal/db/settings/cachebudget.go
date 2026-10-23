@@ -15,6 +15,8 @@ const (
 	KeyCacheMaxAgeDays    = "cache.max_age_days"
 	KeyCacheImagesShare   = "cache.namespace_share.images"
 	KeyCacheMetadataShare = "cache.namespace_share.metadata"
+	// KeyCacheMinFreePercent is the share of the cache's filesystem kept free; the cache shrinks to keep it (2026-10-23).
+	KeyCacheMinFreePercent = "cache.min_free_percent"
 )
 
 // ADR-60's own shipped defaults.
@@ -23,6 +25,8 @@ const (
 	DefaultCacheMaxAgeDays           = 90
 	DefaultCacheImagesSharePercent   = 80
 	DefaultCacheMetadataSharePercent = 20
+	DefaultCacheMinFreePercent       = 10
+	maxCacheMinFreePercent           = 90
 )
 
 // CacheBudget is ADR-60's own policy: a total byte ceiling, a per-entry age
@@ -33,6 +37,8 @@ type CacheBudget struct {
 	MaxAgeDays           int64
 	ImagesSharePercent   int64
 	MetadataSharePercent int64
+	// MinFreePercent of the filesystem under the cache is kept free, the cache shrinking below MaxBytes to keep it; 0 is off.
+	MinFreePercent int64
 }
 
 // CacheBudget reads the configured budget, or ADR-60's shipped defaults for
@@ -43,6 +49,7 @@ func (s *Snapshot) CacheBudget() CacheBudget {
 		MaxAgeDays:           s.policyInt(KeyCacheMaxAgeDays, DefaultCacheMaxAgeDays),
 		ImagesSharePercent:   s.policyInt(KeyCacheImagesShare, DefaultCacheImagesSharePercent),
 		MetadataSharePercent: s.policyInt(KeyCacheMetadataShare, DefaultCacheMetadataSharePercent),
+		MinFreePercent:       s.policyInt(KeyCacheMinFreePercent, DefaultCacheMinFreePercent),
 	}
 }
 
@@ -68,6 +75,7 @@ func (c *Cache) SetCacheBudget(ctx context.Context, cl clock.Clock, budget Cache
 	for key, value := range map[string]int64{
 		KeyCacheMaxBytes: budget.MaxBytes, KeyCacheMaxAgeDays: budget.MaxAgeDays,
 		KeyCacheImagesShare: budget.ImagesSharePercent, KeyCacheMetadataShare: budget.MetadataSharePercent,
+		KeyCacheMinFreePercent: budget.MinFreePercent,
 	} {
 		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
 			return err
@@ -93,6 +101,12 @@ func validateCacheBudget(budget CacheBudget) config.Problems {
 			Path: "namespace_share", Expectation: "both shares must be non-negative",
 		})
 	}
+	if budget.MinFreePercent < 0 || budget.MinFreePercent > maxCacheMinFreePercent {
+		problems = append(problems, config.Problem{
+			Path: "min_free_percent", Value: strconv.FormatInt(budget.MinFreePercent, 10),
+			Expectation: "0 (off) to " + strconv.Itoa(maxCacheMinFreePercent) + " percent of the disk",
+		})
+	}
 	if budget.ImagesSharePercent+budget.MetadataSharePercent != 100 {
 		problems = append(problems, config.Problem{
 			Path: "namespace_share",
@@ -112,6 +126,9 @@ const (
 	keyCacheImagesBytes   = "cache.measured.images_bytes"
 	keyCacheMetadataBytes = "cache.measured.metadata_bytes"
 	keyCacheMeasuredAt    = "cache.measured.at"
+	keyCacheDiskTotal     = "cache.measured.disk_total_bytes"
+	keyCacheDiskFree      = "cache.measured.disk_free_bytes"
+	keyCacheShrunkTo      = "cache.measured.shrunk_to_bytes"
 )
 
 // CacheMeasurement is what the last measurement sweep found. found is false
@@ -120,6 +137,10 @@ type CacheMeasurement struct {
 	ImagesBytes   int64
 	MetadataBytes int64
 	MeasuredAt    int64
+	// DiskTotalBytes and DiskFreeBytes are the filesystem under the cache; 0 when it could not be read.
+	DiskTotalBytes, DiskFreeBytes int64
+	// ShrunkToBytes is the ceiling the last sweep held the cache to for the disk's free space; 0 when MaxBytes held.
+	ShrunkToBytes int64
 }
 
 // CacheMeasurement reads the last measurement, or found=false if the task
@@ -135,7 +156,8 @@ func (s *Snapshot) CacheMeasurement() (CacheMeasurement, bool) {
 	}
 	return CacheMeasurement{
 		ImagesBytes: s.policyInt(keyCacheImagesBytes, 0), MetadataBytes: s.policyInt(keyCacheMetadataBytes, 0),
-		MeasuredAt: measuredAt,
+		MeasuredAt: measuredAt, DiskTotalBytes: s.policyInt(keyCacheDiskTotal, 0), DiskFreeBytes: s.policyInt(keyCacheDiskFree, 0),
+		ShrunkToBytes: s.policyInt(keyCacheShrunkTo, 0),
 	}, true
 }
 
@@ -145,7 +167,8 @@ func (s *Snapshot) CacheMeasurement() (CacheMeasurement, bool) {
 func (c *Cache) SetCacheMeasurement(ctx context.Context, cl clock.Clock, measurement CacheMeasurement) error {
 	for key, value := range map[string]int64{
 		keyCacheImagesBytes: measurement.ImagesBytes, keyCacheMetadataBytes: measurement.MetadataBytes,
-		keyCacheMeasuredAt: measurement.MeasuredAt,
+		keyCacheMeasuredAt: measurement.MeasuredAt, keyCacheDiskTotal: measurement.DiskTotalBytes,
+		keyCacheDiskFree: measurement.DiskFreeBytes, keyCacheShrunkTo: measurement.ShrunkToBytes,
 	} {
 		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
 			return err

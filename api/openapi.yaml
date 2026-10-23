@@ -1261,6 +1261,7 @@ paths:
                 max_age_days: { type: integer, format: int64 }
                 images_share_percent: { type: integer, format: int64 }
                 metadata_share_percent: { type: integer, format: int64 }
+                min_free_percent: { type: integer, format: int64, description: Absent leaves it as it is. }
       responses:
         "200":
           description: Updated.
@@ -7143,12 +7144,22 @@ components:
     CacheReport:
       type: object
       description: The cache's own budgets and last-measured size per namespace (ADR-60).
-      required: [max_bytes, max_age_days, images_share_percent, metadata_share_percent]
+      required: [max_bytes, max_age_days, images_share_percent, metadata_share_percent, min_free_percent]
       properties:
         max_bytes: { type: integer, format: int64 }
         max_age_days: { type: integer, format: int64 }
         images_share_percent: { type: integer, format: int64 }
         metadata_share_percent: { type: integer, format: int64 }
+        min_free_percent:
+          type: integer
+          format: int64
+          description: Percent of the disk under the cache kept free; the cache shrinks below max_bytes to keep it. 0 is off. Default 10.
+        disk_total_bytes: { type: integer, format: int64, description: The disk under the cache, as last measured; absent until measured. }
+        disk_free_bytes: { type: integer, format: int64, description: Its free space, as last measured. }
+        shrunk_to_bytes:
+          type: integer
+          format: int64
+          description: The size the last sweep held the cache to for the disk's free space; absent when max_bytes held.
         images_bytes:
           type: integer
           format: int64

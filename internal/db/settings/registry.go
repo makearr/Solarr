@@ -262,6 +262,12 @@ func NewDefaultRegistry() *Registry {
 		HelpText: "Percentage of the cache size limit reserved for metadata. Must sum to 100 with the images share.",
 		Default:  fmt.Sprintf("%d", DefaultCacheMetadataSharePercent),
 	})
+	registry.MustRegister(SettingDef{
+		Key: KeyCacheMinFreePercent, Kind: KindInt, Tier: TierExpert,
+		Name:     "Cache: disk kept free",
+		HelpText: "Percentage of the disk under the cache kept free; the cache shrinks below its size limit to keep it. 0 is off.",
+		Default:  fmt.Sprintf("%d", DefaultCacheMinFreePercent),
+	})
 
 	// Recycle bin (section 10.8): the space bound, global; each library keeps its own days.
 	registry.MustRegister(SettingDef{
