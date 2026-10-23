@@ -2150,6 +2150,10 @@ paths:
             Only works whose monitored album has every track but a file below the library's cutoff
             (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
           schema: { type: boolean, default: false }
+        - name: above_rating
+          in: query
+          description: Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
+          schema: { type: boolean, default: false }
         - name: where
           in: query
           description: >-
@@ -3321,6 +3325,7 @@ paths:
                 fresh: { type: boolean, default: false, description: The list's Fresh filter, when "select all matching" was made under it. }
                 where: { type: string, description: The list's custom filter (the JSON the list carried), when "select all matching" was made under it. }
                 tags: { type: string, description: The list's tag chips, as listWorks takes them. }
+                above_rating: { type: boolean, default: false, description: The list's Above rating filter. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
                 cutoff_unmet: { type: boolean, default: false, description: The list's Cutoff Unmet filter. }
                 monitored: { type: boolean }
@@ -3364,6 +3369,7 @@ paths:
                 fresh: { type: boolean, default: false }
                 where: { type: string }
                 tags: { type: string }
+                above_rating: { type: boolean, default: false }
                 wanted: { type: boolean, default: false }
                 cutoff_unmet: { type: boolean, default: false }
                 preview: { type: boolean, default: false }
@@ -7757,11 +7763,12 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, taxonomy, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
+      required: [key, label, taxonomy, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
         taxonomy: { $ref: "#/components/schemas/Taxonomy" }
+        ratings: { type: boolean, description: Its works carry certifications a library's maximum rating limits. }
         work: { $ref: "#/components/schemas/MediaTerm" }
         part: { $ref: "#/components/schemas/MediaTerm" }
         group: { $ref: "#/components/schemas/MediaTerm" }
@@ -9711,6 +9718,14 @@ components:
         genres:
           type: array
           items: { type: string }
+        rating:
+          type: object
+          description: The work's certification; absent when it has none.
+          required: [text, age, above_limit]
+          properties:
+            text: { type: string, example: PG-13 }
+            age: { type: integer, format: int64, description: The youngest age it admits; -1 when not understood. }
+            above_limit: { type: boolean, description: A library holding the work does not admit it, so it is never searched there. }
         part_count:
           type: integer
           format: int64
@@ -10623,7 +10638,7 @@ components:
         administrator only -- richer than LibraryCategory, which stays lean
         for the many navigation callers (root folder pickers, *Arr import,
         the sidebar) that never need any of this.
-      required: [id, media_type, name, priority_rank, monitor_discovered]
+      required: [id, media_type, name, priority_rank, monitor_discovered, rating_limit]
       properties:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
@@ -10647,6 +10662,17 @@ components:
             What a scan monitors of a series it finds in a TV library: only the
             episodes on disk (existing), every episode (all), or none.
         kind: { type: string, description: "The library's kind within its media type (MediaTypeInfo.kinds); absent for none." }
+        rating_limit: { $ref: "#/components/schemas/RatingLimit" }
+
+    RatingLimit:
+      type: object
+      description: >-
+        A library's maximum rating, as the youngest viewer age a work may admit (13 is PG-13); max_age null is no
+        limit. A work over it, or unrated unless allow_unrated, is held: never searched, shown under Above rating.
+      required: [allow_unrated]
+      properties:
+        max_age: { type: integer, format: int64, nullable: true, minimum: 0, maximum: 21 }
+        allow_unrated: { type: boolean }
 
     CategoryWrite:
       type: object
@@ -10673,6 +10699,9 @@ components:
         kind:
           type: string
           description: One of the media type's kinds; absent leaves it. Changing it applies no defaults, it only says what the library is.
+        rating_limit:
+          allOf: [{ $ref: "#/components/schemas/RatingLimit" }]
+          description: Only for a media type with ratings (MediaTypeInfo.ratings); absent leaves it.
 
     Library:
       type: object
@@ -10684,6 +10713,9 @@ components:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         name: { type: string }
+        rating_limit:
+          allOf: [{ $ref: "#/components/schemas/RatingLimit" }]
+          description: The library's maximum rating; absent when it has none.
         permission:
           allOf: [{ $ref: "#/components/schemas/Permission" }]
           description: >-

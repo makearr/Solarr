@@ -63,6 +63,9 @@ type Module struct {
 	Rename *RenameConfig
 }
 
+// RatingAge implements media.Rating.
+func (Module) RatingAge(rating string) (int64, bool) { return screen.RatingAge(rating) }
+
 // NameFiles implements media.Renaming.
 func (m Module) NameFiles(ctx context.Context, category settings.Category, workID int64, files []renamejob.File) ([]renamejob.Named, error) {
 	if m.Rename == nil {

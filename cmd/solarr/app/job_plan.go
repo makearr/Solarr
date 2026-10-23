@@ -86,6 +86,7 @@ func (p *process) planFacts(context.Context) (plan.Facts, error) {
 	return plan.Facts{
 		Policy:  plan.Policy{Weights: weights, NewReleaseDays: int(stored.NewReleaseDays), RSSFreshHours: int(*stored.RSSFreshHours)},
 		Upgrade: p.upgradeRules(snapshot),
+		Admits:  p.ratingAdmits,
 		CategoryRank: func(categoryID int64) int64 {
 			if rank, found := ranks[categoryID]; found {
 				return rank

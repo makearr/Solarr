@@ -195,6 +195,17 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	if err == nil && body.TvMonitor != nil {
 		updated, err = s.auth.Settings.SetCategoryTVMonitor(r.Context(), id, string(*body.TvMonitor))
 	}
+	if err == nil && body.RatingLimit != nil {
+		if info, _ := s.mediaTypeInfo(updated.MediaType); !info.Ratings {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "No ratings",
+				fmt.Sprintf("a %s library has no ratings to limit", updated.MediaType))
+			return
+		}
+		updated, err = s.auth.Settings.SetCategoryRatingLimit(r.Context(), id, body.RatingLimit.MaxAge, body.RatingLimit.AllowUnrated)
+		if err == nil && s.replanning != nil {
+			err = s.replanning.MarkLibraryDirty(r.Context(), id)
+		}
+	}
 	if err == nil && body.Kind != nil {
 		info, _ := s.mediaTypeInfo(updated.MediaType)
 		if _, known := info.kindOf(*body.Kind); !known || *body.Kind == "" && len(info.Kinds) > 0 {
@@ -232,6 +243,7 @@ func categorySettingsView(c settings.Category) gen.CategorySettings {
 		MonitorDiscovered: gen.CategorySettingsMonitorDiscovered(c.MonitorDiscovered),
 		TvMonitor:         tvMonitorView(c.TVMonitor),
 		Kind:              strPtr(c.Kind),
+		RatingLimit:       gen.RatingLimit{MaxAge: c.MaxAge, AllowUnrated: c.AllowUnrated},
 	}
 }
 
@@ -417,4 +429,9 @@ func (s *Server) categoryCounts(ctx context.Context, categoryID int64) (works, f
 		return 0, 0
 	}
 	return int(values["works"]), int(values["files"])
+}
+
+// Replanning has every item of a library planned again. Satisfied by library.Desired.
+type Replanning interface {
+	MarkLibraryDirty(ctx context.Context, categoryID int64) error
 }

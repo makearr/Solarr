@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"math"
 	"slices"
 	"time"
 
@@ -24,6 +25,22 @@ type Works struct {
 	Facets func(mediaType string) []library.WorkFacet
 	// MediaTypeOf answers a library's media type.
 	MediaTypeOf func(categoryID int64) (string, bool)
+	// RatingLimit answers a library's maximum rating, false when it has none; nil filters nothing by rating.
+	RatingLimit func(categoryID int64) (library.RatingLimit, bool)
+}
+
+// aboveRating is the list's Above rating filter for the one library it shows; a library without a limit holds
+// nothing above it.
+func aboveRating(on bool, categoryIDs []int64, limitOf func(int64) (library.RatingLimit, bool)) *library.RatingLimit {
+	if !on {
+		return nil
+	}
+	if len(categoryIDs) == 1 && limitOf != nil {
+		if limit, found := limitOf(categoryIDs[0]); found {
+			return &limit
+		}
+	}
+	return &library.RatingLimit{MaxAge: math.MaxInt32, AllowUnrated: true}
 }
 
 // facetsFor are the facets a filter may name: the one library's type's, else every type's.
@@ -75,6 +92,7 @@ func (a Works) ListWorks(
 			CutoffUnmetOnly: filter.CutoffUnmet,
 			TagIDs:          filter.TagIDs,
 			ExcludedTagIDs:  filter.ExcludedTagIDs,
+			AboveRating:     aboveRating(filter.AboveRating, filter.CategoryIDs, a.RatingLimit),
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,

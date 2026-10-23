@@ -117,6 +117,8 @@ type WorkFilter struct {
 	CutoffUnmetOnly bool
 	// TagIDs are tags a work must carry, each or one below it; ExcludedTagIDs tags it must carry neither of.
 	TagIDs, ExcludedTagIDs []int64
+	// AboveRating keeps only the works a library's maximum rating does not admit; nil does not filter.
+	AboveRating *RatingLimit
 	// Where are the conditions of a custom filter, all of which must hold.
 	Where []listfilter.Condition
 	// Facets are the media type's facets a condition of Where may name.
@@ -210,6 +212,9 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	}
 	for _, id := range filter.ExcludedTagIDs {
 		predicates.Add("NOT EXISTS "+workTagTree, id)
+	}
+	if limit := filter.AboveRating; limit != nil {
+		predicates.Add(aboveRatingSQL, boolToInt(limit.AllowUnrated), limit.MaxAge)
 	}
 	predicates.AddIf(filter.FreshSince != "",
 		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+

@@ -31,6 +31,10 @@ func TestDecideNeverSearchesWhatIsNotWanted(t *testing.T) {
 		"unmonitored":  func(item *Item) { item.Monitored = false },
 		"complete":     func(item *Item) { item.State = "COMPLETE" },
 		"track itself": func(item *Item) { item.Searchable = false },
+		"above rating": func(item *Item) { item.AboveRating = true },
+		"an upgrade above rating": func(item *Item) {
+			item.State, item.AboveRating = "UPGRADABLE", true
+		},
 	}
 	for name, change := range cases {
 		t.Run(name, func(t *testing.T) {

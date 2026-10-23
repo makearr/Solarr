@@ -360,6 +360,7 @@ type Querier interface {
 	GetAttributes(ctx context.Context, id int64) (MediaAttribute, error)
 	GetBlockedContent(ctx context.Context, id int64) (BlockedContent, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
+	GetCertificationAge(ctx context.Context, arg GetCertificationAgeParams) (sql.NullInt64, error)
 	GetCollection(ctx context.Context, id int64) (Collection, error)
 	// A collection a provider names, found by its id there: a movie's franchise.
 	GetCollectionByExternalID(ctx context.Context, arg GetCollectionByExternalIDParams) (Collection, error)
@@ -378,6 +379,8 @@ type Querier interface {
 	GetHuntPriority(ctx context.Context, desiredItemID int64) (int64, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
 	GetImportUnit(ctx context.Context, id int64) (ImportUnit, error)
+	// The library an item is in and the youngest age its work's certification admits, -1 when none is understood.
+	GetItemRating(ctx context.Context, id int64) (GetItemRatingRow, error)
 	// An item's release date of the given kind, empty when unknown: held releases rank new before backfill.
 	GetItemReleaseDate(ctx context.Context, arg GetItemReleaseDateParams) (string, error)
 	// The newest import a download's poll started, to follow it to IMPORTED.
@@ -412,6 +415,8 @@ type Querier interface {
 	GetWork(ctx context.Context, id int64) (Work, error)
 	// Resolving a provider id to a work is the first step of the Identifier chain (ADR-24).
 	GetWorkByExternalID(ctx context.Context, arg GetWorkByExternalIDParams) (Work, error)
+	// A work's certification, the one understood first; one work may carry a TV and a film rating.
+	GetWorkCertification(ctx context.Context, workID int64) (GetWorkCertificationRow, error)
 	GetWorkExternalIDByProvider(ctx context.Context, arg GetWorkExternalIDByProviderParams) (WorkExternalID, error)
 	GetWorkMergeSuggestion(ctx context.Context, workID int64) (GetWorkMergeSuggestionRow, error)
 	// An import names an album it already knows by the canonical title and artist, never the tags.
@@ -522,6 +527,8 @@ type Querier interface {
 	ListCalendarEpisodes(ctx context.Context, arg ListCalendarEpisodesParams) ([]ListCalendarEpisodesRow, error)
 	// What statistics.db's copy reads, oldest first after an id (revision 2, D7).
 	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
+	// Certifications written before their age was read, a page at a time.
+	ListCertificationsWithoutAge(ctx context.Context, limit int64) ([]ListCertificationsWithoutAgeRow, error)
 	// Who plays whom in each work of a media type, once per work: a character two series share makes them one family.
 	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
 	// Genres stored before they were tags, a page of works at a time.
@@ -870,6 +877,8 @@ type Querier interface {
 	// The works holding a file one sweep found gone, so their counts can follow.
 	ListWorksWithPathsMissingSince(ctx context.Context, arg ListWorksWithPathsMissingSinceParams) ([]int64, error)
 	MarkAnimeChecked(ctx context.Context, arg MarkAnimeCheckedParams) error
+	// A library's rating limit changed: its items are planned again, a batch at a time.
+	MarkCategoryItemsDirtyBatch(ctx context.Context, arg MarkCategoryItemsDirtyBatchParams) (int64, error)
 	MarkDesiredItemDirty(ctx context.Context, id int64) error
 	MarkDesiredItemPlanned(ctx context.Context, arg MarkDesiredItemPlannedParams) error
 	// Clears dirty only when nothing the plan read has changed since; zero rows means plan it again.
@@ -888,6 +897,7 @@ type Querier interface {
 	// so tightening it here does not touch a working caller.
 	MarkRecycleBinRestored(ctx context.Context, arg MarkRecycleBinRestoredParams) (int64, error)
 	MarkRequestFulfilled(ctx context.Context, id int64) (int64, error)
+	MarkWorkItemsDirty(ctx context.Context, workID int64) error
 	MaxDesiredItemID(ctx context.Context) (int64, error)
 	MergeAliasesInto(ctx context.Context, arg MergeAliasesIntoParams) error
 	MergeArtworkInto(ctx context.Context, arg MergeArtworkIntoParams) error
@@ -1036,6 +1046,7 @@ type Querier interface {
 	SetAcquisitionStall(ctx context.Context, arg SetAcquisitionStallParams) error
 	SetAcquisitionState(ctx context.Context, arg SetAcquisitionStateParams) error
 	SetArrImportState(ctx context.Context, arg SetArrImportStateParams) error
+	SetCertificationAge(ctx context.Context, arg SetCertificationAgeParams) error
 	// The claimed half (todo 4.2): derived once per release folder at scan time,
 	// from the release name rather than the file's own bytes, so it needs no
 	// scalar columns or mismatch comparison of its own (RecordMeasured's own

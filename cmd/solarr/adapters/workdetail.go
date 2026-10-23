@@ -20,6 +20,8 @@ type WorkDetail struct {
 	SearchStatus func(ctx context.Context, itemID int64) (apiserver.WantedRow, error)
 	// PartPosition places a part of a media type's work; nil numbers it by its ref.
 	PartPosition func(mediaType, ref string) (section, number string)
+	// Admits answers whether a library's maximum rating lets in a work admitting age; nil admits all.
+	Admits func(categoryID, age int64) bool
 }
 
 func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.WorkDetailRow, error) {
@@ -35,17 +37,21 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 
 	row := apiserver.WorkDetailRow{
 		ID: detail.Work.ID, MediaType: detail.Work.MediaType, Title: detail.Work.CanonicalTitle,
-		SortTitle:     detail.Work.SortTitle,
-		OnDisk:        detail.OnDisk(),
-		AddedAt:       time.Unix(detail.Work.AddedAt, 0),
-		UpdatedAt:     time.Unix(detail.Work.UpdatedAt, 0),
-		ExternalIDs:   externalIDs,
-		Editions:      editionRows(detail.Editions),
-		PartCount:     int64(len(detail.Parts)),
-		Credits:       creditRows(detail.Credits),
-		Genres:        detail.Genres,
+		SortTitle:   detail.Work.SortTitle,
+		OnDisk:      detail.OnDisk(),
+		AddedAt:     time.Unix(detail.Work.AddedAt, 0),
+		UpdatedAt:   time.Unix(detail.Work.UpdatedAt, 0),
+		ExternalIDs: externalIDs,
+		Editions:    editionRows(detail.Editions),
+		PartCount:   int64(len(detail.Parts)),
+		Credits:     creditRows(detail.Credits),
+		Genres:      detail.Genres,
+		Rating:      detail.Rating, RatingAge: detail.RatingAge,
 		RootFolderIDs: detail.RootFolderIDs,
 		CategoryIDs:   detail.CategoryIDs,
+	}
+	for _, categoryID := range detail.CategoryIDs {
+		row.AboveLimit = row.AboveLimit || a.Admits != nil && !a.Admits(categoryID, detail.RatingAge)
 	}
 	for _, organisation := range detail.Organisations {
 		row.Organisations = append(row.Organisations, apiserver.WorkOrganisationRow{ID: organisation.ID, Name: organisation.Name, Role: organisation.Role})

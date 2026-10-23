@@ -98,6 +98,10 @@ type Category struct {
 	Kind string
 	// SearchShare is the library's share of each automatic search run, weighed against the others'; 0 is none.
 	SearchShare int64
+	// MaxAge is the oldest youngest-viewer age a work may admit (13 for PG-13), nil for no limit; AllowUnrated lets in
+	// a work with no rating understood.
+	MaxAge       *int64
+	AllowUnrated bool
 	// MonitorReleaseTypes is which release types a monitored artist in this
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).
@@ -315,4 +319,16 @@ type APIKey struct {
 	LastUsedAt time.Time
 	// Revealable is true when a sealed copy is kept, so the key can be shown again.
 	Revealable bool
+}
+
+// AdmitsAge says whether a work admitting age (-1 when unrated) may be in the library under its maximum rating.
+func (c Category) AdmitsAge(age int64) bool {
+	switch {
+	case c.MaxAge == nil:
+		return true
+	case age < 0:
+		return c.AllowUnrated
+	default:
+		return age <= *c.MaxAge
+	}
 }

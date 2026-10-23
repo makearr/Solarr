@@ -453,6 +453,25 @@ func (q *Queries) GetHuntPriority(ctx context.Context, desiredItemID int64) (int
 	return priority, err
 }
 
+const getItemRating = `-- name: GetItemRating :one
+SELECT di.category_id,
+       CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = di.work_id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
+FROM desired_item di WHERE di.id = ?
+`
+
+type GetItemRatingRow struct {
+	CategoryID int64
+	RatingAge  int64
+}
+
+// The library an item is in and the youngest age its work's certification admits, -1 when none is understood.
+func (q *Queries) GetItemRating(ctx context.Context, id int64) (GetItemRatingRow, error) {
+	row := q.db.QueryRowContext(ctx, getItemRating, id)
+	var i GetItemRatingRow
+	err := row.Scan(&i.CategoryID, &i.RatingAge)
+	return i, err
+}
+
 const getItemReleaseDate = `-- name: GetItemReleaseDate :one
 SELECT CAST(COALESCE((SELECT MIN(wd.date) FROM work_date wd
   WHERE wd.work_id = di.work_id AND wd.kind = ?1), '') AS TEXT) AS release_date
@@ -1279,7 +1298,8 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
        CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
              AND aq.updated_at >= ?2) AS INTEGER) AS recent_imports,
-       CAST(COALESCE((SELECT rs.seen_at FROM rss_sighting rs WHERE rs.desired_item_id = di.id), 0) AS INTEGER) AS rss_seen_at
+       CAST(COALESCE((SELECT rs.seen_at FROM rss_sighting rs WHERE rs.desired_item_id = di.id), 0) AS INTEGER) AS rss_seen_at,
+       CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = di.work_id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(?3 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?4
@@ -1311,6 +1331,7 @@ type ListPlanInputsRow struct {
 	ArrivedAt        int64
 	RecentImports    int64
 	RssSeenAt        int64
+	RatingAge        int64
 }
 
 // The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
@@ -1346,6 +1367,7 @@ func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) 
 			&i.ArrivedAt,
 			&i.RecentImports,
 			&i.RssSeenAt,
+			&i.RatingAge,
 		); err != nil {
 			return nil, err
 		}
@@ -1547,6 +1569,25 @@ func (q *Queries) ListWholeFilesForWork(ctx context.Context, workID int64) ([]Li
 	return items, nil
 }
 
+const markCategoryItemsDirtyBatch = `-- name: MarkCategoryItemsDirtyBatch :execrows
+UPDATE desired_item SET dirty = 1
+WHERE id IN (SELECT d.id FROM desired_item d WHERE d.category_id = ?1 AND d.dirty = 0 LIMIT ?2)
+`
+
+type MarkCategoryItemsDirtyBatchParams struct {
+	CategoryID int64
+	BatchSize  int64
+}
+
+// A library's rating limit changed: its items are planned again, a batch at a time.
+func (q *Queries) MarkCategoryItemsDirtyBatch(ctx context.Context, arg MarkCategoryItemsDirtyBatchParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, markCategoryItemsDirtyBatch, arg.CategoryID, arg.BatchSize)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const markDesiredItemDirty = `-- name: MarkDesiredItemDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE id = ?
 `
@@ -1630,6 +1671,15 @@ type MarkHuntedParams struct {
 
 func (q *Queries) MarkHunted(ctx context.Context, arg MarkHuntedParams) error {
 	_, err := q.db.ExecContext(ctx, markHunted, arg.LastSearchedAt, arg.EligibleAfter, arg.DesiredItemID)
+	return err
+}
+
+const markWorkItemsDirty = `-- name: MarkWorkItemsDirty :exec
+UPDATE desired_item SET dirty = 1 WHERE work_id = ?
+`
+
+func (q *Queries) MarkWorkItemsDirty(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, markWorkItemsDirty, workID)
 	return err
 }
 

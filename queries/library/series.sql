@@ -52,9 +52,25 @@ VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (work_id, provider) DO UPDATE SET score = excluded.score, votes = excluded.votes, fetched_at = excluded.fetched_at;
 
 -- name: SetWorkCertification :exec
-INSERT INTO work_certification (work_id, system, rating)
-VALUES (?, ?, ?)
-ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating;
+INSERT INTO work_certification (work_id, system, rating, age)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating, age = excluded.age;
+
+-- Certifications written before their age was read, a page at a time.
+-- name: ListCertificationsWithoutAge :many
+SELECT c.work_id, c.system, c.rating, w.media_type FROM work_certification c JOIN work w ON w.id = c.work_id
+WHERE c.age IS NULL ORDER BY c.work_id, c.system LIMIT ?;
+
+-- A work's certification, the one understood first; one work may carry a TV and a film rating.
+-- name: GetWorkCertification :one
+SELECT rating, CAST(COALESCE(age, -1) AS INTEGER) AS age FROM work_certification WHERE work_id = ?
+ORDER BY COALESCE(age, -1) DESC, system LIMIT 1;
+
+-- name: GetCertificationAge :one
+SELECT age FROM work_certification WHERE work_id = ? AND system = ?;
+
+-- name: SetCertificationAge :exec
+UPDATE work_certification SET age = ? WHERE work_id = ? AND system = ?;
 
 -- name: GetSeriesInCategory :one
 SELECT w.id, w.canonical_title, w.sort_title, w.year, w.added_at, w.description, w.original_language, w.runtime_ms

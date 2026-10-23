@@ -40,7 +40,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "above_rating"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -103,6 +103,7 @@ function selectionBody(request: SelectionRequest) {
     fresh: request.filters.fresh === "1" ? true : undefined,
     where: whereWithTitle(request.filters.where, request.filters.q),
     tags: request.filters.tags || undefined,
+    above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
   };
 }
 
@@ -167,6 +168,7 @@ export function WorkIndex() {
             dir: query.direction === "desc" ? "desc" : undefined,
             from: query.filters.from || undefined,
             tags: query.filters.tags || undefined,
+            above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
           },
         },
         signal,
@@ -194,6 +196,16 @@ export function WorkIndex() {
           Fresh
         </Button>
         <ToolbarSearch value={routeView.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Title contains…" label={`Filter ${words.works} by title`} />
+        {library?.rating_limit?.max_age != null && (
+          <Button
+            variant={String(routeView.query.filters.above_rating) === "1" ? "primary" : "secondary"}
+            aria-pressed={String(routeView.query.filters.above_rating) === "1"}
+            title="Above this library's maximum rating: kept, never searched here"
+            onClick={() => setFilter("above_rating", String(routeView.query.filters.above_rating) === "1" ? "" : "1")}
+          >
+            Above rating
+          </Button>
+        )}
         <TagChips taxonomy={info?.taxonomy.key ?? ""} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
         <CustomFilterMenu
           fields={filterFieldsOf(info)}
@@ -247,7 +259,7 @@ export function WorkIndex() {
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.above_rating ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>

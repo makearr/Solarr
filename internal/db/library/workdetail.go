@@ -102,12 +102,15 @@ type DesiredItemStatus struct {
 // check; CategoryIDs is the other half -- a subscription-discovered work has
 // no root folder yet but does have a desired_item.category_id.
 type WorkDetail struct {
-	Work          librarydb.Work
-	ExternalIDs   []librarydb.WorkExternalID
-	Editions      []EditionDetail
-	Parts         []PartDetail
-	Credits       []Credit
-	Genres        []string
+	Work        librarydb.Work
+	ExternalIDs []librarydb.WorkExternalID
+	Editions    []EditionDetail
+	Parts       []PartDetail
+	Credits     []Credit
+	Genres      []string
+	// Rating is the work's certification ("PG-13"), "" when it has none; RatingAge its youngest age, -1 unrated.
+	Rating        string
+	RatingAge     int64
 	RootFolderIDs []int64
 	CategoryIDs   []int64
 	// HasFiles is whether one of its files is still on disk.
@@ -294,7 +297,16 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 		named = append(named, WorkOrganisation{ID: row.OrganisationID, Name: row.Name, Role: row.Role})
 	}
 
+	rating, err := queries.GetWorkCertification(ctx, id)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return WorkDetail{}, fmt.Errorf("library: work detail: certification: %w", err)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		rating.Age = -1
+	}
+
 	return WorkDetail{
+		Rating: rating.Rating, RatingAge: rating.Age,
 		Files: wholeFiles, Organisations: named,
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,

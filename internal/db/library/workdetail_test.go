@@ -95,6 +95,7 @@ func TestWorkDetail_RoundTripsEveryLevel(t *testing.T) {
 		},
 		Credits:       []library.Credit{},
 		Genres:        []string{},
+		RatingAge:     -1,
 		RootFolderIDs: []int64{7},
 		CategoryIDs:   []int64{},
 	}

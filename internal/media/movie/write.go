@@ -83,6 +83,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 		OrganisationKind:    "studio",
 		Certification:       movie.Certification,
 		CertificationSystem: "movie",
+		CertificationAge:    screen.AgeOrUnrated(movie.Certification),
 		Keywords:            movie.Keywords,
 		Fields:              fieldWrites(movie, source, options.Now),
 	}

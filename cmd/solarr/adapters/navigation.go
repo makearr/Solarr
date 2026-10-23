@@ -241,6 +241,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 		info.UnidentifiedRetry = descriptor.UnidentifiedRetry
 		info.SearchesLibrary, info.CoverSources = descriptor.SearchesLibrary, descriptor.CoverSources
 		_, info.ReleaseFilters = media.Capability[media.ReleaseFiltering](m.Registry, descriptor.Key)
+		_, info.Ratings = media.Capability[media.Rating](m.Registry, descriptor.Key)
 		info.WantedGrain = "work"
 		if descriptor.WantedGrain == media.WantedParts {
 			info.WantedGrain = "part"

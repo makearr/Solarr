@@ -783,6 +783,7 @@ type WorkCertification struct {
 	WorkID int64
 	System string
 	Rating string
+	Age    sql.NullInt64
 }
 
 type WorkClassification struct {

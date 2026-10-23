@@ -1487,6 +1487,9 @@ type CategorySettings struct {
 	PriorityRank     int64  `json:"priority_rank"`
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
 
+	// RatingLimit A library's maximum rating, as the youngest viewer age a work may admit (13 is PG-13); max_age null is no limit. A work over it, or unrated unless allow_unrated, is held: never searched, shown under Above rating.
+	RatingLimit RatingLimit `json:"rating_limit"`
+
 	// TvMonitor What a scan monitors of a series it finds in a TV library: only the episodes on disk (existing), every episode (all), or none.
 	TvMonitor *CategorySettingsTvMonitor `json:"tv_monitor,omitempty"`
 }
@@ -1554,6 +1557,9 @@ type CategoryWrite struct {
 
 	// QualityProfileId Absent or null clears it -- no default profile.
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
+
+	// RatingLimit Only for a media type with ratings (MediaTypeInfo.ratings); absent leaves it.
+	RatingLimit *RatingLimit `json:"rating_limit,omitempty"`
 
 	// TvMonitor TV libraries only; absent leaves it as it is.
 	TvMonitor *CategoryWriteTvMonitor `json:"tv_monitor,omitempty"`
@@ -2607,6 +2613,9 @@ type Library struct {
 	// Permission What the caller may do here, so a screen offers only the actions the server would accept: searching and monitoring need request.
 	Permission Permission `json:"permission"`
 
+	// RatingLimit The library's maximum rating; absent when it has none.
+	RatingLimit *RatingLimit `json:"rating_limit,omitempty"`
+
 	// Wanted Albums (works) in this library with a monitored item not yet complete: the Wanted page's total. From the counter table, never a live COUNT; absent until first counted.
 	Wanted *int `json:"wanted,omitempty"`
 }
@@ -2970,6 +2979,9 @@ type MediaTypeInfo struct {
 	} `json:"monitor_options"`
 	Organisation MediaTerm `json:"organisation"`
 	Part         MediaTerm `json:"part"`
+
+	// Ratings Its works carry certifications a library's maximum rating limits.
+	Ratings bool `json:"ratings"`
 
 	// ReleaseFilters A work can carry release filters (GET /works/{id}/release-filters).
 	ReleaseFilters bool        `json:"release_filters"`
@@ -3749,6 +3761,12 @@ type QueueItemClientState string
 
 // QueueItemState defines model for QueueItem.State.
 type QueueItemState string
+
+// RatingLimit A library's maximum rating, as the youngest viewer age a work may admit (13 is PG-13); max_age null is no limit. A work over it, or unrated unless allow_unrated, is held: never searched, shown under Above rating.
+type RatingLimit struct {
+	AllowUnrated bool   `json:"allow_unrated"`
+	MaxAge       *int64 `json:"max_age"`
+}
 
 // ReadyStatus defines model for ReadyStatus.
 type ReadyStatus struct {
@@ -4583,11 +4601,21 @@ type WorkDetail struct {
 	PartCount int64 `json:"part_count"`
 
 	// Pictures The work's pictures at their providers, by kind (poster, fanart, logo); a person's own choice first.
-	Pictures  *map[string]string `json:"pictures,omitempty"`
-	RuntimeMs *int64             `json:"runtime_ms,omitempty"`
-	SortTitle string             `json:"sort_title"`
-	Title     string             `json:"title"`
-	UpdatedAt time.Time          `json:"updated_at"`
+	Pictures *map[string]string `json:"pictures,omitempty"`
+
+	// Rating The work's certification; absent when it has none.
+	Rating *struct {
+		// AboveLimit A library holding the work does not admit it
+		AboveLimit bool `json:"above_limit"`
+
+		// Age The youngest age it admits; -1 when not understood.
+		Age  int64  `json:"age"`
+		Text string `json:"text"`
+	} `json:"rating,omitempty"`
+	RuntimeMs *int64    `json:"runtime_ms,omitempty"`
+	SortTitle string    `json:"sort_title"`
+	Title     string    `json:"title"`
+	UpdatedAt time.Time `json:"updated_at"`
 
 	// Wanted Null when nothing has ever wanted this album -- no scan, no subscription, no request.
 	Wanted *Wanted `json:"wanted"`
@@ -5435,6 +5463,9 @@ type ListWorksParams struct {
 	// CutoffUnmet Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL.
 	CutoffUnmet *bool `form:"cutoff_unmet,omitempty" json:"cutoff_unmet,omitempty"`
 
+	// AboveRating Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
+	AboveRating *bool `form:"above_rating,omitempty" json:"above_rating,omitempty"`
+
 	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
 	Where *string `form:"where,omitempty" json:"where,omitempty"`
 
@@ -5447,6 +5478,7 @@ type ListWorksParamsDir string
 
 // BulkEditWorksJSONBody defines parameters for BulkEditWorks.
 type BulkEditWorksJSONBody struct {
+	AboveRating *bool     `json:"above_rating,omitempty"`
 	AddTags     *[]string `json:"add_tags,omitempty"`
 	CategoryId  *int64    `json:"category_id,omitempty"`
 	CutoffUnmet *bool     `json:"cutoff_unmet,omitempty"`
@@ -5475,7 +5507,9 @@ type BulkEditWorksJSONBody struct {
 
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
 type BulkSetWorkMonitoredJSONBody struct {
-	CategoryId *int64 `json:"category_id,omitempty"`
+	// AboveRating The list's Above rating filter.
+	AboveRating *bool  `json:"above_rating,omitempty"`
+	CategoryId  *int64 `json:"category_id,omitempty"`
 
 	// CutoffUnmet The list's Cutoff Unmet filter.
 	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
@@ -16176,6 +16210,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "cutoff_unmet", r.URL.Query(), &params.CutoffUnmet)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "cutoff_unmet", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "above_rating" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "above_rating", r.URL.Query(), &params.AboveRating)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "above_rating", Err: err})
 		return
 	}
 

@@ -81,6 +81,8 @@ type WorksFilter struct {
 	CutoffUnmet bool
 	// TagIDs are tags a work must carry (or one below each), ExcludedTagIDs tags it must not: the list's chips.
 	TagIDs, ExcludedTagIDs []int64
+	// AboveRating keeps the works the library's maximum rating does not admit.
+	AboveRating bool
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
 }
@@ -197,7 +199,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
-			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without,
+			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without, AboveRating: derefOr(params.AboveRating, false),
 		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {

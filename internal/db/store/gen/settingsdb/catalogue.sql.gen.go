@@ -77,7 +77,7 @@ INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
           monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated
 `
 
 type CreateCategoryParams struct {
@@ -106,6 +106,8 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.TvMonitor,
 		&i.Kind,
 		&i.SearchShare,
+		&i.MaxAge,
+		&i.AllowUnrated,
 	)
 	return i, err
 }
@@ -192,7 +194,7 @@ func (q *Queries) DetachRootFolderFromCategory(ctx context.Context, arg DetachRo
 const getCategory = `-- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated
 FROM category WHERE id = ?
 `
 
@@ -216,6 +218,8 @@ func (q *Queries) GetCategory(ctx context.Context, id int64) (Category, error) {
 		&i.TvMonitor,
 		&i.Kind,
 		&i.SearchShare,
+		&i.MaxAge,
+		&i.AllowUnrated,
 	)
 	return i, err
 }
@@ -273,7 +277,7 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 const listCategories = `-- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated
 FROM category ORDER BY priority_rank, name
 `
 
@@ -303,6 +307,8 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 			&i.TvMonitor,
 			&i.Kind,
 			&i.SearchShare,
+			&i.MaxAge,
+			&i.AllowUnrated,
 		); err != nil {
 			return nil, err
 		}
@@ -440,6 +446,21 @@ type SetCategoryMonitorReleaseTypesParams struct {
 
 func (q *Queries) SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error {
 	_, err := q.db.ExecContext(ctx, setCategoryMonitorReleaseTypes, arg.MonitorReleaseTypes, arg.ID)
+	return err
+}
+
+const setCategoryRatingLimit = `-- name: SetCategoryRatingLimit :exec
+UPDATE category SET max_age = ?, allow_unrated = ? WHERE id = ?
+`
+
+type SetCategoryRatingLimitParams struct {
+	MaxAge       sql.NullInt64
+	AllowUnrated int64
+	ID           int64
+}
+
+func (q *Queries) SetCategoryRatingLimit(ctx context.Context, arg SetCategoryRatingLimitParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryRatingLimit, arg.MaxAge, arg.AllowUnrated, arg.ID)
 	return err
 }
 

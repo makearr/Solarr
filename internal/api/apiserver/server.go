@@ -179,6 +179,8 @@ type Config struct {
 	// RenameStarter applies section 11.8's naming template to a root.
 	// Optional: without it, RenameRootFolder answers 503.
 	RenameStarter RenameStarter
+	// Replanning has the planner look at a library again after a change of what it may hold; nil waits for its sweep.
+	Replanning Replanning
 	// NamingSchemes answers each media type's naming declaration. Optional: without it, the
 	// naming endpoints answer 503.
 	NamingSchemes NamingSchemes
@@ -313,6 +315,7 @@ type Server struct {
 	franchises              Franchises
 	moveJobs                MoveJobLister
 	renameStarter           RenameStarter
+	replanning              Replanning
 	namingSchemes           NamingSchemes
 	navigation              NavigationProvider
 	mediaTypes              MediaTypeCatalog
@@ -426,6 +429,7 @@ func New(config Config) (*Server, error) {
 		franchises:              config.Franchises,
 		moveJobs:                config.MoveJobs,
 		renameStarter:           config.RenameStarter,
+		replanning:              config.Replanning,
 		namingSchemes:           config.NamingSchemes,
 		navigation:              config.Navigation,
 		mediaTypes:              config.MediaTypes,
@@ -990,6 +994,10 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := query.Get("tags"); raw != "" {
 		params.Tags = &raw
+	}
+	if raw := query.Get("above_rating"); raw != "" {
+		above := raw == "true"
+		params.AboveRating = &above
 	}
 
 	s.ListWorks(w, r, params)

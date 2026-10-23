@@ -132,22 +132,27 @@ type WantedRow struct {
 // rendered -- GetWork uses them to run ListWorks' ADR-27 visibility check
 // (both halves) against one item.
 type WorkDetailRow struct {
-	ID            int64
-	MediaType     string
-	Title         string
-	SortTitle     string
-	Year          *int64
-	RuntimeMs     *int64
-	Language      *string
-	Description   *string
-	OnDisk        bool
-	AddedAt       time.Time
-	UpdatedAt     time.Time
-	ExternalIDs   []ExternalIDRow
-	Editions      []EditionRow
-	PartCount     int64
-	Credits       []CreditRow
-	Genres        []string
+	ID          int64
+	MediaType   string
+	Title       string
+	SortTitle   string
+	Year        *int64
+	RuntimeMs   *int64
+	Language    *string
+	Description *string
+	OnDisk      bool
+	AddedAt     time.Time
+	UpdatedAt   time.Time
+	ExternalIDs []ExternalIDRow
+	Editions    []EditionRow
+	PartCount   int64
+	Credits     []CreditRow
+	Genres      []string
+	// Rating is the work's certification ("" for none), RatingAge its youngest age (-1 unrated), AboveLimit whether a
+	// library holding it does not admit it.
+	Rating        string
+	RatingAge     int64
+	AboveLimit    bool
 	RootFolderIDs []int64
 	CategoryIDs   []int64
 	// Wanted is nil when nothing has ever wanted this album.
@@ -180,6 +185,8 @@ type BulkSelection struct {
 	Where string
 	// TagIDs and ExcludedTagIDs are the list's tag chips.
 	TagIDs, ExcludedTagIDs []int64
+	// AboveRating is the list's Above rating filter.
+	AboveRating bool
 }
 
 // WorksMonitor toggles monitored state at the album and part level (section
@@ -514,7 +521,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
-		Where: derefOr(body.Where, ""),
+		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
@@ -617,6 +624,13 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		PartCount:   row.PartCount,
 		Credits:     buildCreditViews(row.Credits),
 		Genres:      row.Genres,
+	}
+	if row.Rating != "" || row.AboveLimit {
+		view.Rating = &struct {
+			AboveLimit bool   `json:"above_limit"`
+			Age        int64  `json:"age"`
+			Text       string `json:"text"`
+		}{AboveLimit: row.AboveLimit, Age: row.RatingAge, Text: row.Rating}
 	}
 	if row.Wanted != nil {
 		wanted := buildWantedView(*row.Wanted)

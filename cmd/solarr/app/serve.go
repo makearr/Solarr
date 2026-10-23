@@ -189,6 +189,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 	running.seedTaxonomies(ctx)
+	running.readCertificationAges(ctx)
 	return running.startServer(ctx)
 }
 
@@ -656,11 +657,12 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		Works: adapters.Works{
 			Works: library.NewWorks(p.library), Clock: clock.NewSystem(), Fresh: p.freshWindow,
 			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, MediaTypeOf: adapters.Categories{Cache: p.cache}.MediaTypeOf,
+			RatingLimit: p.ratingLimit,
 		},
 		WorkDetail: adapters.WorkDetail{
 			Works: library.NewWorks(p.library), SearchStatus: p.searchStatus,
 			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, GroupLabel: adapters.MediaTypes{Registry: p.media}.GroupLabel,
-			PartPosition: adapters.MediaTypes{Registry: p.media}.PartPosition,
+			PartPosition: adapters.MediaTypes{Registry: p.media}.PartPosition, Admits: p.ratingAdmits,
 		},
 		WorksMonitor: p.worksMonitor(),
 		WorkEditor: adapters.WorkEdit{
@@ -668,9 +670,12 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Settings: p.cache, Identity: library.NewIdentity(p.library), Facets: adapters.MediaTypes{Registry: p.media}.Facets,
 			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf, Taxonomy: adapters.MediaTypes{Registry: p.media}.TaxonomyKey,
 		},
-		SystemHealth: adapters.SystemHealth{Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media},
-		Blocklist:    adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
-		History:      adapters.History{History: statistics.NewHistory(p.statistics)},
+		SystemHealth: adapters.SystemHealth{
+			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
+			AboveRating: library.NewWorks(p.library).CountAboveRating,
+		},
+		Blocklist: adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
+		History:   adapters.History{History: statistics.NewHistory(p.statistics)},
 		Queue: adapters.Queue{
 			Poll: p.pollJob(), Ready: library.NewReadyQueue(p.library),
 			Describe: p.describeAcquisition, Clock: clock.NewSystem(),
@@ -817,6 +822,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},
 		LibraryArtists: adapters.Artists{People: library.NewPeople(p.library)},
 		RenameStarter:  adapters.Rename{Registry: p.media, Settings: p.cache, Engine: p.renameEngine()},
+		Replanning:     library.NewDesired(p.library),
 		NamingSchemes:  adapters.NamingSchemes{Registry: p.media},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
@@ -900,7 +906,8 @@ func (p *process) reportRootFolders() {
 // look for one.
 func (p *process) worksMonitor() adapters.WorksMonitor {
 	return adapters.WorksMonitor{
-		Identity: library.NewIdentity(p.library), Works: library.NewWorks(p.library),
+		RatingLimit: p.ratingLimit,
+		Identity:    library.NewIdentity(p.library), Works: library.NewWorks(p.library),
 		Desired: library.NewDesired(p.library), Categories: adapters.Categories{Cache: p.cache},
 		Libraries: adapters.Categories{Cache: p.cache}, Remover: p.fileRemover(),
 		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Fresh: p.freshWindow, Logger: p.logger,

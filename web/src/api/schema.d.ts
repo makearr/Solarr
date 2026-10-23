@@ -4945,6 +4945,8 @@ export interface components {
             /** @description Also the default name of a library of this type. */
             label: string;
             taxonomy: components["schemas"]["Taxonomy"];
+            /** @description Its works carry certifications a library's maximum rating limits. */
+            ratings: boolean;
             work: components["schemas"]["MediaTerm"];
             part: components["schemas"]["MediaTerm"];
             group: components["schemas"]["MediaTerm"];
@@ -6591,6 +6593,18 @@ export interface components {
             editions: components["schemas"]["Edition"][];
             credits: components["schemas"]["Credit"][];
             genres: string[];
+            /** @description The work's certification; absent when it has none. */
+            rating?: {
+                /** @example PG-13 */
+                text: string;
+                /**
+                 * Format: int64
+                 * @description The youngest age it admits; -1 when not understood.
+                 */
+                age: number;
+                /** @description A library holding the work does not admit it */
+                above_limit: boolean;
+            };
             /**
              * Format: int64
              * @description How many parts the work has; the parts themselves are paged from GET /works/{id}/parts.
@@ -7248,6 +7262,13 @@ export interface components {
             tv_monitor?: "existing" | "all" | "none";
             /** @description The library's kind within its media type (MediaTypeInfo.kinds); absent for none. */
             kind?: string;
+            rating_limit: components["schemas"]["RatingLimit"];
+        };
+        /** @description A library's maximum rating, as the youngest viewer age a work may admit (13 is PG-13); max_age null is no limit. A work over it, or unrated unless allow_unrated, is held: never searched, shown under Above rating. */
+        RatingLimit: {
+            /** Format: int64 */
+            max_age?: number | null;
+            allow_unrated: boolean;
         };
         CategoryWrite: {
             name: string;
@@ -7275,6 +7296,8 @@ export interface components {
             tv_monitor?: "existing" | "all" | "none";
             /** @description One of the media type's kinds; absent leaves it. Changing it applies no defaults, it only says what the library is. */
             kind?: string;
+            /** @description Only for a media type with ratings (MediaTypeInfo.ratings); absent leaves it. */
+            rating_limit?: components["schemas"]["RatingLimit"];
         };
         /** @description A category as a navigation root (ADR-54): its declared entity levels replace the old flat works/files pair -- see LibraryLevel. */
         Library: {
@@ -7283,6 +7306,8 @@ export interface components {
             /** @example music */
             media_type: string;
             name: string;
+            /** @description The library's maximum rating; absent when it has none. */
+            rating_limit?: components["schemas"]["RatingLimit"];
             /** @description What the caller may do here, so a screen offers only the actions the server would accept: searching and monitoring need request. */
             permission: components["schemas"]["Permission"];
             levels: components["schemas"]["LibraryLevel"][];
@@ -10121,6 +10146,8 @@ export interface operations {
                 wanted?: boolean;
                 /** @description Only works whose monitored album has every track but a file below the library's cutoff (UPGRADABLE; Lidarr's Wanted -> Cutoff Unmet). Wanted, by contrast, is MISSING or PARTIAL. */
                 cutoff_unmet?: boolean;
+                /** @description Only the works the library's maximum rating does not admit (held, never searched); needs category_id. */
+                above_rating?: boolean;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
                 where?: string;
                 /** @description The list's tag chips, comma-separated tag ids: a work must carry each (or a tag below it); a negative id is a tag it must not carry. */
@@ -11383,6 +11410,11 @@ export interface operations {
                     /** @description The list's tag chips */
                     tags?: string;
                     /**
+                     * @description The list's Above rating filter.
+                     * @default false
+                     */
+                    above_rating?: boolean;
+                    /**
                      * @description The list's Wanted filter.
                      * @default false
                      */
@@ -11431,6 +11463,8 @@ export interface operations {
                     fresh?: boolean;
                     where?: string;
                     tags?: string;
+                    /** @default false */
+                    above_rating?: boolean;
                     /** @default false */
                     wanted?: boolean;
                     /** @default false */

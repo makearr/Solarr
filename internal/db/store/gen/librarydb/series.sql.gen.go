@@ -160,6 +160,22 @@ func (q *Queries) FindOrganisationByName(ctx context.Context, arg FindOrganisati
 	return i, err
 }
 
+const getCertificationAge = `-- name: GetCertificationAge :one
+SELECT age FROM work_certification WHERE work_id = ? AND system = ?
+`
+
+type GetCertificationAgeParams struct {
+	WorkID int64
+	System string
+}
+
+func (q *Queries) GetCertificationAge(ctx context.Context, arg GetCertificationAgeParams) (sql.NullInt64, error) {
+	row := q.db.QueryRowContext(ctx, getCertificationAge, arg.WorkID, arg.System)
+	var age sql.NullInt64
+	err := row.Scan(&age)
+	return age, err
+}
+
 const getOrganisationByExternalID = `-- name: GetOrganisationByExternalID :one
 SELECT o.id, o.name, o.sort_name, o.kind, o.parent_id, o.country, o.fields_json, o.monitored
 FROM organisation o
@@ -228,6 +244,24 @@ func (q *Queries) GetSeriesInCategory(ctx context.Context, arg GetSeriesInCatego
 	return i, err
 }
 
+const getWorkCertification = `-- name: GetWorkCertification :one
+SELECT rating, CAST(COALESCE(age, -1) AS INTEGER) AS age FROM work_certification WHERE work_id = ?
+ORDER BY COALESCE(age, -1) DESC, system LIMIT 1
+`
+
+type GetWorkCertificationRow struct {
+	Rating string
+	Age    int64
+}
+
+// A work's certification, the one understood first; one work may carry a TV and a film rating.
+func (q *Queries) GetWorkCertification(ctx context.Context, workID int64) (GetWorkCertificationRow, error) {
+	row := q.db.QueryRowContext(ctx, getWorkCertification, workID)
+	var i GetWorkCertificationRow
+	err := row.Scan(&i.Rating, &i.Age)
+	return i, err
+}
+
 const linkOrganisationExternalID = `-- name: LinkOrganisationExternalID :exec
 INSERT OR IGNORE INTO organisation_external_id (provider, external_id, organisation_id) VALUES (?, ?, ?)
 `
@@ -269,6 +303,47 @@ func (q *Queries) ListAltNumbersForWork(ctx context.Context, arg ListAltNumbersF
 	for rows.Next() {
 		var i ListAltNumbersForWorkRow
 		if err := rows.Scan(&i.PartID, &i.AltRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listCertificationsWithoutAge = `-- name: ListCertificationsWithoutAge :many
+SELECT c.work_id, c.system, c.rating, w.media_type FROM work_certification c JOIN work w ON w.id = c.work_id
+WHERE c.age IS NULL ORDER BY c.work_id, c.system LIMIT ?
+`
+
+type ListCertificationsWithoutAgeRow struct {
+	WorkID    int64
+	System    string
+	Rating    string
+	MediaType string
+}
+
+// Certifications written before their age was read, a page at a time.
+func (q *Queries) ListCertificationsWithoutAge(ctx context.Context, limit int64) ([]ListCertificationsWithoutAgeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listCertificationsWithoutAge, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListCertificationsWithoutAgeRow{}
+	for rows.Next() {
+		var i ListCertificationsWithoutAgeRow
+		if err := rows.Scan(
+			&i.WorkID,
+			&i.System,
+			&i.Rating,
+			&i.MediaType,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -737,6 +812,21 @@ func (q *Queries) SeriesPartCounts(ctx context.Context, arg SeriesPartCountsPara
 	return items, nil
 }
 
+const setCertificationAge = `-- name: SetCertificationAge :exec
+UPDATE work_certification SET age = ? WHERE work_id = ? AND system = ?
+`
+
+type SetCertificationAgeParams struct {
+	Age    sql.NullInt64
+	WorkID int64
+	System string
+}
+
+func (q *Queries) SetCertificationAge(ctx context.Context, arg SetCertificationAgeParams) error {
+	_, err := q.db.ExecContext(ctx, setCertificationAge, arg.Age, arg.WorkID, arg.System)
+	return err
+}
+
 const setItemFileRefs = `-- name: SetItemFileRefs :exec
 UPDATE desired_item_file SET media_ref = ?1
 WHERE desired_item_file.media_ref = ?2
@@ -831,19 +921,25 @@ func (q *Queries) SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPart
 }
 
 const setWorkCertification = `-- name: SetWorkCertification :exec
-INSERT INTO work_certification (work_id, system, rating)
-VALUES (?, ?, ?)
-ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating
+INSERT INTO work_certification (work_id, system, rating, age)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (work_id, system) DO UPDATE SET rating = excluded.rating, age = excluded.age
 `
 
 type SetWorkCertificationParams struct {
 	WorkID int64
 	System string
 	Rating string
+	Age    sql.NullInt64
 }
 
 func (q *Queries) SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error {
-	_, err := q.db.ExecContext(ctx, setWorkCertification, arg.WorkID, arg.System, arg.Rating)
+	_, err := q.db.ExecContext(ctx, setWorkCertification,
+		arg.WorkID,
+		arg.System,
+		arg.Rating,
+		arg.Age,
+	)
 	return err
 }
 

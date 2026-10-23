@@ -29,7 +29,7 @@ func TestPlanInputsReadTheDirtySetWithReleaseDateAndSearchRecord(t *testing.T) {
 	}
 	want := []library.PlanInput{{
 		ID: item.ID, CategoryID: 1, Monitored: true, SatisfactionKind: "SET", State: "MISSING",
-		ReleaseDate: "1988-05-02", LastSearchedAt: 4_000, SearchCount: 1,
+		ReleaseDate: "1988-05-02", LastSearchedAt: 4_000, SearchCount: 1, RatingAge: -1,
 	}}
 	if len(got) != 1 || got[0] != want[0] {
 		t.Fatalf("PlanInputs = %+v, want %+v", got, want)

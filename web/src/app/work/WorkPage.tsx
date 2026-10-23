@@ -291,6 +291,16 @@ function WorkHeader({
                     : t("work.partsPresent", { ...words, present: counts.present })}
                 </Chip>
               )}
+              {work.rating && (
+                <Chip tone={work.rating.above_limit ? "warn" : "neutral"} title={work.rating.age < 0 ? "A rating Solarr cannot read counts as unrated." : `Admits ${work.rating.age} and older.`}>
+                  Rated {work.rating.text || "unrated"}
+                </Chip>
+              )}
+              {work.rating?.above_limit && (
+                <Chip tone="warn" title="Its library's maximum rating does not admit it: it stays, but is never searched there. Move it to another library or raise the limit.">
+                  Above this library's rating
+                </Chip>
+              )}
               <DownloadingBadge workId={work.id} />
             </div>
             {work.description && <p className="max-w-3xl text-sm text-ink-muted">{work.description}</p>}

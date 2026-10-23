@@ -29,6 +29,9 @@ func (a Automatic) Run(
 	} else if inFlight {
 		return Best{AlreadyInFlight: true}, nil
 	}
+	if held, err := a.aboveRating(ctx, itemID, origin); err != nil || held {
+		return Best{AboveRating: held}, err
+	}
 	decisions, err := search(ctx)
 	if err != nil {
 		return Best{}, err
@@ -38,6 +41,9 @@ func (a Automatic) Run(
 
 // Send sends the best accepted of decisions, which are best first, within what the library has room for.
 func (a Automatic) Send(ctx context.Context, itemID int64, decisions []library.DecisionDetail, origin GrabOrigin, at time.Time) (Best, error) {
+	if held, err := a.aboveRating(ctx, itemID, origin); err != nil || held {
+		return Best{AboveRating: held}, err
+	}
 	room, err := a.headroom(ctx, itemID, origin)
 	if err != nil {
 		return Best{}, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
@@ -47,6 +53,19 @@ func (a Automatic) Send(ctx context.Context, itemID int64, decisions []library.D
 		return best, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
 	}
 	return best, nil
+}
+
+// aboveRating says an automatic grab is for a work its library's maximum rating does not admit; a person's own grab
+// is never held.
+func (a Automatic) aboveRating(ctx context.Context, itemID int64, origin GrabOrigin) (bool, error) {
+	if origin == GrabUser || a.Dispatch.Admits == nil {
+		return false, nil
+	}
+	categoryID, age, err := a.Dispatch.Desired.ItemRating(ctx, itemID)
+	if err != nil {
+		return false, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
+	}
+	return !a.Dispatch.Admits(categoryID, age), nil
 }
 
 // headroom is how much an automatic grab for itemID may bring in; a person's own grab is never gated.

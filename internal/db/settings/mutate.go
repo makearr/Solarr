@@ -236,6 +236,34 @@ func (c *Cache) SetCategoryKind(ctx context.Context, id int64, kind string) (Cat
 	return updated, nil
 }
 
+// SetCategoryRatingLimit sets a library's maximum rating as an age (nil for none) and whether unrated works may be in it.
+func (c *Cache) SetCategoryRatingLimit(ctx context.Context, id int64, maxAge *int64, allowUnrated bool) (Category, error) {
+	if _, found := c.Snapshot().Category(id); !found {
+		return Category{}, fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	if maxAge != nil && (*maxAge < 0 || *maxAge > maxRatingAge) {
+		return Category{}, config.Problems{{Path: "rating_limit.max_age", Value: strconv.FormatInt(*maxAge, 10),
+			Expectation: "an age from 0 to " + strconv.Itoa(maxRatingAge) + ", or none"}}
+	}
+	allowed := int64(0)
+	if allowUnrated {
+		allowed = 1
+	}
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryRatingLimit(ctx, settingsdb.SetCategoryRatingLimitParams{
+			MaxAge: nullInt64(maxAge), AllowUnrated: allowed, ID: id,
+		})
+	})
+	if err != nil {
+		return Category{}, err
+	}
+	updated, _ := c.Snapshot().Category(id)
+	return updated, nil
+}
+
+// maxRatingAge is the oldest age a rating names (R21).
+const maxRatingAge = 21
+
 // SetCategoryTVMonitor sets what a scan monitors of a series it finds in a TV library, answering the category as written.
 func (c *Cache) SetCategoryTVMonitor(ctx context.Context, id int64, policy string) (Category, error) {
 	if _, found := c.Snapshot().Category(id); !found {

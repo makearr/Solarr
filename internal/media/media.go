@@ -490,6 +490,12 @@ type Renaming interface {
 	renamejob.Namer
 }
 
+// Rating is the capability of a media type whose works carry certifications a library's maximum rating limits.
+type Rating interface {
+	// RatingAge answers the youngest age a certification admits; false when the type cannot read it.
+	RatingAge(rating string) (int64, bool)
+}
+
 // Feeding is the capability of a media type whose wanted items are also filled from the indexers' feeds.
 type Feeding interface {
 	rss.Feed

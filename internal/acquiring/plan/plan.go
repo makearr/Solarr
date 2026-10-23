@@ -36,6 +36,8 @@ type Item struct {
 	Upgrade   UpgradeRules
 	// QueuedSince is when the item entered the hunt queue; zero when it is not in it.
 	QueuedSince int64
+	// AboveRating says its work exceeds its library's maximum rating: held, never searched (plan 10-libraries L2).
+	AboveRating bool
 }
 
 // Policy is the instance's priority settings (ADR-36, ADR-55).
@@ -85,6 +87,9 @@ func Decide(item Item, policy Policy, now time.Time) Entry {
 	if known {
 		unix := released.Unix()
 		entry.ReleaseDate = &unix
+	}
+	if item.AboveRating {
+		return entry
 	}
 	if item.Monitored && item.Searchable && item.State == "UPGRADABLE" {
 		return decideUpgrade(item, entry, policy, now)

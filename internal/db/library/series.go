@@ -92,6 +92,8 @@ type SeriesWrite struct {
 	Certification string
 	// CertificationSystem names the scheme Certification is in: "tv" (the default) or "movie".
 	CertificationSystem string
+	// CertificationAge is the youngest age Certification admits, -1 when the type cannot read it.
+	CertificationAge int64
 	// MoreNetworks are linked beside Network, which stays the primary one; one that names it adds its id and logo.
 	MoreNetworks []SeriesNetworkWrite
 	Keywords     []string
@@ -337,7 +339,20 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 		}
 	}
 	if write.Certification != "" {
-		if err := queries.SetWorkCertification(ctx, librarydb.SetWorkCertificationParams{WorkID: workID, System: orDefault(write.CertificationSystem, "tv"), Rating: write.Certification}); err != nil {
+		system := orDefault(write.CertificationSystem, "tv")
+		before, err := queries.GetCertificationAge(ctx, librarydb.GetCertificationAgeParams{WorkID: workID, System: system})
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("library: read certification: %w", err)
+		}
+		if before.Int64 != write.CertificationAge || !before.Valid {
+			if err := queries.MarkWorkItemsDirty(ctx, workID); err != nil {
+				return fmt.Errorf("library: plan again after a new rating: %w", err)
+			}
+		}
+		if err := queries.SetWorkCertification(ctx, librarydb.SetWorkCertificationParams{
+			WorkID: workID, System: system, Rating: write.Certification,
+			Age: sql.NullInt64{Int64: write.CertificationAge, Valid: true},
+		}); err != nil {
 			return fmt.Errorf("library: set certification: %w", err)
 		}
 	}

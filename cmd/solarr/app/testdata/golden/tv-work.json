@@ -96,6 +96,11 @@
   "pictures": {
     "poster": "https://artworks.thetvdb.com/marble-1.jpg"
   },
+  "rating": {
+    "above_limit": false,
+    "age": 14,
+    "text": "TV-14"
+  },
   "runtime_ms": 2700000,
   "sort_title": "marble stations",
   "title": "The Marble Stations",

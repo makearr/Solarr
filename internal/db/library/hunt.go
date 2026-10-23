@@ -36,6 +36,8 @@ type PlanInput struct {
 	ArrivedAt, RecentImports int64
 	// RSSSeenAt is when an RSS feed first showed a release decided for this item; zero when none did.
 	RSSSeenAt int64
+	// RatingAge is the youngest age the work's certification admits, -1 when it has none understood.
+	RatingAge int64
 }
 
 // PlanInputs pages through the dirty set, or with dirtyOnly false through every item, by id.
@@ -53,6 +55,7 @@ func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize,
 			State: row.State, Generation: row.Generation, ReleaseDate: row.ReleaseDate,
 			LastSearchedAt: row.LastSearchedAt, SearchCount: row.SearchCount, QueuedSince: row.QueuedSince,
 			AfterFailure: row.AfterFailure == 1, ArrivedAt: row.ArrivedAt, RecentImports: row.RecentImports, RSSSeenAt: row.RssSeenAt,
+			RatingAge: row.RatingAge,
 		}
 	}
 	return inputs, nil

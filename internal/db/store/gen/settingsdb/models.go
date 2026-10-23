@@ -68,6 +68,8 @@ type Category struct {
 	TvMonitor              string
 	Kind                   string
 	SearchShare            int64
+	MaxAge                 sql.NullInt64
+	AllowUnrated           int64
 }
 
 type CategoryFileManagement struct {

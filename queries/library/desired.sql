@@ -301,6 +301,20 @@ ORDER BY outcome;
 UPDATE desired_item SET dirty = 1
 WHERE id IN (SELECT d.id FROM desired_item d WHERE d.dirty = 0 LIMIT sqlc.arg(batch_size));
 
+-- A library's rating limit changed: its items are planned again, a batch at a time.
+-- name: MarkCategoryItemsDirtyBatch :execrows
+UPDATE desired_item SET dirty = 1
+WHERE id IN (SELECT d.id FROM desired_item d WHERE d.category_id = sqlc.arg(category_id) AND d.dirty = 0 LIMIT sqlc.arg(batch_size));
+
+-- The library an item is in and the youngest age its work's certification admits, -1 when none is understood.
+-- name: GetItemRating :one
+SELECT di.category_id,
+       CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = di.work_id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
+FROM desired_item di WHERE di.id = ?;
+
+-- name: MarkWorkItemsDirty :exec
+UPDATE desired_item SET dirty = 1 WHERE work_id = ?;
+
 -- library.db references settings.db by id with no foreign key (ADR-25), so only the
 -- application can find a reference a restore has orphaned. The count is what makes
 -- the report worth reading.
@@ -409,7 +423,8 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
        CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
              AND aq.updated_at >= sqlc.arg(imports_since)) AS INTEGER) AS recent_imports,
-       CAST(COALESCE((SELECT rs.seen_at FROM rss_sighting rs WHERE rs.desired_item_id = di.id), 0) AS INTEGER) AS rss_seen_at
+       CAST(COALESCE((SELECT rs.seen_at FROM rss_sighting rs WHERE rs.desired_item_id = di.id), 0) AS INTEGER) AS rss_seen_at,
+       CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = di.work_id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
 WHERE (CAST(sqlc.arg(dirty_only) AS INTEGER) = 0 OR di.dirty = 1) AND di.id > sqlc.arg(after_id)

@@ -48,6 +48,9 @@ func (s *Server) ListLibraries(w http.ResponseWriter, r *http.Request) {
 			Levels:     s.libraryLevels(category, values),
 			LastLevel:  s.lastLibraryLevel(r.Context(), access.UserID(), category.ID),
 		}
+		if category.MaxAge != nil {
+			views[index].RatingLimit = &gen.RatingLimit{MaxAge: category.MaxAge, AllowUnrated: category.AllowUnrated}
+		}
 		if wanted, ok := values["works_wanted"]; ok {
 			count := int(wanted)
 			views[index].Wanted = &count

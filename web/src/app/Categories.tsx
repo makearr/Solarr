@@ -19,6 +19,20 @@ type CategorySettings = components["schemas"]["CategorySettings"];
 type MonitorDiscovered = components["schemas"]["CategorySettings"]["monitor_discovered"];
 type TVMonitor = NonNullable<components["schemas"]["CategorySettings"]["tv_monitor"]>;
 
+// The limits a library may set, as the youngest viewer age a work admits and the ratings that are that age.
+const RATING_CHOICES: readonly [number | null, string][] = [
+  [null, "No limit"],
+  [0, "All ages (G, TV-Y, TV-G, FSK 0)"],
+  [7, "7 (PG, TV-Y7)"],
+  [10, "10 (TV-PG)"],
+  [12, "12 (12A, FSK 12)"],
+  [13, "13 (PG-13)"],
+  [14, "14 (TV-14)"],
+  [16, "16 (FSK 16)"],
+  [17, "17 (R, TV-MA)"],
+  [18, "18 (NC-17, FSK 18)"],
+];
+
 /** The policy boundary for naming, profiles and access (ADR-27). Section 21.14's
  *  "no POST /categories at all" gap: standing one up used to need a hand-written
  *  settings/import YAML document. Editing (todo 4.6's own remaining gap, landed
@@ -232,7 +246,10 @@ function EditCategoryFields({
   const [monitorDiscovered, setMonitorDiscovered] = useState<MonitorDiscovered>(initial.monitor_discovered);
   const [tvMonitor, setTvMonitor] = useState<TVMonitor>(initial.tv_monitor ?? "existing");
   const [kind, setKind] = useState(initial.kind ?? "");
-  const scanMonitor = useMediaType(initial.media_type)?.scan_monitor;
+  const [maxAge, setMaxAge] = useState<number | null>(initial.rating_limit.max_age ?? null);
+  const [allowUnrated, setAllowUnrated] = useState(initial.rating_limit.allow_unrated);
+  const info = useMediaType(initial.media_type);
+  const scanMonitor = info?.scan_monitor;
   const monitorsParts = scanMonitor?.setting === "tv_monitor";
   const queryClient = useQueryClient();
 
@@ -248,6 +265,7 @@ function EditCategoryFields({
           monitor_discovered: monitorDiscovered,
           tv_monitor: monitorsParts ? tvMonitor : undefined,
           kind: kind || undefined,
+          rating_limit: info?.ratings ? { max_age: maxAge, allow_unrated: allowUnrated } : undefined,
         },
       }));
     },
@@ -340,7 +358,35 @@ function EditCategoryFields({
             </select>
           </label>
         )}
+        {info?.ratings && (
+          <label className={labelStyle}>
+            Maximum rating
+            <select
+              className={inputStyle}
+              value={maxAge ?? ""}
+              onChange={(event) => setMaxAge(event.target.value === "" ? null : Number(event.target.value))}
+            >
+              {RATING_CHOICES.map(([age, label]) => (
+                <option key={label} value={age ?? ""}>
+                  {label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {info?.ratings && maxAge !== null && (
+          <label className="flex items-center gap-2 self-end pb-2 text-sm">
+            <input type="checkbox" checked={allowUnrated} onChange={(event) => setAllowUnrated(event.target.checked)} />
+            Also allow unrated
+          </label>
+        )}
       </div>
+      {info?.ratings && maxAge !== null && (
+        <p className="text-xs text-ink-muted">
+          Anything rated higher{allowUnrated ? "" : ", or not rated at all,"} stays where it is but is never searched in this library; a
+          notice says how many, and Above rating in the library lists them.
+        </p>
+      )}
       {save.isError && (
         <p className="text-xs text-danger">
           {(save.error as { detail?: string }).detail ?? "That library could not be saved."}

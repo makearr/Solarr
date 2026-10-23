@@ -8,6 +8,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
 )
 
@@ -24,6 +25,8 @@ type SystemHealth struct {
 	Vanished apiserver.VanishedFiles
 	// Registry lets each media type add its own checks; nil adds none.
 	Registry *media.Registry
+	// AboveRating counts a library's works its maximum rating does not admit; nil skips that check.
+	AboveRating func(ctx context.Context, categoryID int64, limit library.RatingLimit) (int64, error)
 }
 
 // Checks reports what is missing. Every probe is best-effort: a failure to
@@ -50,7 +53,48 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	snapshot := a.Cache.Snapshot()
 	checks = append(checks, a.vanishedHeld(ctx, snapshot)...)
 	checks = append(checks, a.mediaChecks(snapshot)...)
+	checks = append(checks, a.heldByRating(ctx, snapshot)...)
 	return append(checks, pausedForRoom(snapshot)...)
+}
+
+// workLevel is the key of the level a media type lists its works on ("series", "movies").
+func (a SystemHealth) workLevel(mediaType string) string {
+	if a.Registry != nil {
+		for _, descriptor := range a.Registry.Descriptors() {
+			if string(descriptor.Key) != mediaType {
+				continue
+			}
+			for _, level := range descriptor.Levels {
+				if level.Entity == model.LevelEntityWork {
+					return level.Key
+				}
+			}
+		}
+	}
+	return "works"
+}
+
+// heldByRating names each library holding works its maximum rating does not admit: they are never searched there.
+func (a SystemHealth) heldByRating(ctx context.Context, snapshot *settings.Snapshot) []apiserver.HealthCheck {
+	if a.AboveRating == nil {
+		return nil
+	}
+	var checks []apiserver.HealthCheck
+	for _, category := range snapshot.Categories() {
+		if category.MaxAge == nil {
+			continue
+		}
+		count, err := a.AboveRating(ctx, category.ID, library.RatingLimit{MaxAge: *category.MaxAge, AllowUnrated: category.AllowUnrated})
+		if err != nil || count == 0 {
+			continue
+		}
+		checks = append(checks, apiserver.HealthCheck{
+			ID: fmt.Sprintf("above_rating_%d", category.ID), Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("%d in %s are above its maximum rating and are never searched; move them to another library or raise the limit.", count, category.Name),
+			Link:    fmt.Sprintf("/library/%d/%s?above_rating=1", category.ID, a.workLevel(category.MediaType)),
+		})
+	}
+	return checks
 }
 
 // mediaChecks asks each media type that can say what its libraries lack.

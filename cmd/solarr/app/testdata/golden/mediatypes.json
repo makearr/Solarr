@@ -229,6 +229,7 @@
       "many": "Tracks",
       "one": "Track"
     },
+    "ratings": false,
     "release_filters": false,
     "roles": [
       {
@@ -677,6 +678,7 @@
       "many": "Episodes",
       "one": "Episode"
     },
+    "ratings": true,
     "release_filters": true,
     "roles": [
       {
@@ -964,6 +966,7 @@
       "many": "",
       "one": ""
     },
+    "ratings": true,
     "release_filters": true,
     "roles": [
       {

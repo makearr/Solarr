@@ -87,6 +87,10 @@ every genre as a tree, one per kind of media (Music; Film and TV), and your free
 each; an administrator renames, moves a tag under another, merges two (the merged name keeps leading there when a
 provider uses it again), adds or deletes them.
 
+**Maximum rating** (Settings → Libraries → Edit, TV and movie libraries): a Kids library set to "13 (PG-13)" keeps
+anything rated higher, or unrated unless you allow it, where it is but never searches for it there; its list's
+**Above rating** button shows those, their pages say so, and a notice counts them.
+
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most
 missing first, with one click to follow the artist and add the rest. It fills in after the weekly

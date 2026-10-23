@@ -33,6 +33,8 @@ type Facts struct {
 	CategoryRank func(categoryID int64) int64
 	// Upgrade answers a library's upgrade hysteresis.
 	Upgrade func(categoryID int64) UpgradeRules
+	// Admits answers whether a library's maximum rating lets in a work admitting age (-1 unrated); nil admits all.
+	Admits func(categoryID, age int64) bool
 }
 
 // upgradeRules is Upgrade, or no hysteresis for a Facts that states none.
@@ -124,6 +126,7 @@ func (j *Job) apply(ctx context.Context, inputs []library.PlanInput, facts Facts
 			CategoryRank: facts.CategoryRank(input.CategoryID), LastSearchedAt: input.LastSearchedAt,
 			SearchCount: input.SearchCount, QueuedSince: input.QueuedSince, AfterFailure: input.AfterFailure,
 			ArrivedAt: input.ArrivedAt, RecentImports: input.RecentImports, RSSSeenAt: input.RSSSeenAt, Upgrade: facts.upgradeRules(input.CategoryID),
+			AboveRating: facts.Admits != nil && !facts.Admits(input.CategoryID, input.RatingAge),
 		}, facts.Policy, now)
 		planned[index] = library.PlannedHunt{
 			Input: input, Class: entry.Class, Priority: entry.Priority, ReleaseDate: entry.ReleaseDate,

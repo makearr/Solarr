@@ -22,9 +22,11 @@ import (
 // category the caller has no natural way to supply -- a work-detail page has
 // a work, not a root folder, to derive one from.
 type WorksMonitor struct {
-	Works    library.Works
-	Identity library.Identity
-	Desired  library.Desired
+	// RatingLimit answers a library's maximum rating, for a selection made under Above rating; nil filters nothing.
+	RatingLimit func(categoryID int64) (library.RatingLimit, bool)
+	Works       library.Works
+	Identity    library.Identity
+	Desired     library.Desired
 	// Remover recycles the files of an album being deleted with them.
 	Remover    FileRemover
 	Categories music.CategoryFinder
@@ -289,6 +291,7 @@ func (a WorksMonitor) matchingWorkIDs(ctx context.Context, selection apiserver.B
 	filter := library.WorkFilter{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, WantedOnly: selection.Wanted, CutoffUnmetOnly: selection.CutoffUnmet,
 		Where: where, TagIDs: selection.TagIDs, ExcludedTagIDs: selection.ExcludedTagIDs,
+		AboveRating: aboveRating(selection.AboveRating, categoryIDs, a.RatingLimit),
 	}
 	if selection.Fresh {
 		filter.FreshSince, filter.FreshRSSSince = a.Fresh.Cutoffs(a.Clock)

@@ -98,6 +98,9 @@ type Dispatch struct {
 	Ready *library.ReadyQueue
 	// Blocklist is optional: a held release blocklisted meanwhile is dropped, not sent.
 	Blocklist *library.BlocklistStore
+	// Admits is optional: whether a library's maximum rating lets in a work admitting age (-1 unrated); an automatic
+	// grab of a work it does not admit is not sent.
+	Admits func(categoryID, age int64) bool
 }
 
 // Send dispatches one decision, previously recorded against itemID by

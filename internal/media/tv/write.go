@@ -161,6 +161,7 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		Network:          series.Network,
 		NetworkCountry:   series.OriginalCountry,
 		Certification:    series.ContentRating,
+		CertificationAge: screen.AgeOrUnrated(series.ContentRating),
 		Fields:           fieldWrites(series, source),
 	}
 	if series.Rating > 0 {

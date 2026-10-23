@@ -241,3 +241,36 @@ func TestGrab_WhatIsAlreadyDownloadingCountsAgainstTheReserve(t *testing.T) {
 			held.Sent, held.NoRoom, err)
 	}
 }
+
+// A work its library's maximum rating does not admit is never searched for an automatic grab, but a person may still
+// grab it (plan 10-libraries L2).
+func TestGrab_HoldsAWorkAboveItsLibrarysRating(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	held := env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: &fakeSabnzbdSender{clientRef: "nzo-1"}}})
+	var asked []int64
+	held.Admits = func(_, age int64) bool {
+		asked = append(asked, age)
+		return false
+	}
+	grab := music.Grab{Search: env.search(), Dispatch: held}
+	indexers := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
+
+	result, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil {
+		t.Fatalf("SearchAndSend: %v", err)
+	}
+	if !reflect.DeepEqual(result, music.GrabResult{Best: dispatch.Best{AboveRating: true}}) || len(searcher.requests) != 0 {
+		t.Fatalf("automatic = %+v after %d searches; want held, nothing searched", result, len(searcher.requests))
+	}
+	if !reflect.DeepEqual(asked, []int64{-1}) {
+		t.Errorf("asked about ages %v, want the unrated album's -1", asked)
+	}
+	own, err := grab.SearchAndSend(t.Context(), item.ID, indexers, dispatch.GrabUser, env.clock.Now())
+	if err != nil || own.Sent == nil {
+		t.Fatalf("a person's own grab = %+v, %v; want it sent", own, err)
+	}
+}

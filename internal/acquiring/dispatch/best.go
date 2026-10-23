@@ -23,6 +23,8 @@ type Best struct {
 	NoRoom int
 	// Refusals says why each refused release was refused, in the order they were tried.
 	Refusals []string
+	// AboveRating means the work exceeds its library's maximum rating, so an automatic grab sent nothing.
+	AboveRating bool
 }
 
 // Headroom is how much an automatic grab may bring into a library (ADR-12: free space is a hard precondition).

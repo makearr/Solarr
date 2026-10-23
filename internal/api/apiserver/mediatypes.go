@@ -29,12 +29,14 @@ type MediaTypeInfo struct {
 	Label string
 	// TaxonomyKey and TaxonomyLabel name the genre tree the type's tags are mapped onto.
 	TaxonomyKey, TaxonomyLabel string
-	Work                       MediaTerm
-	Part                       MediaTerm
-	Group                      MediaTerm
-	LeadPeople                 MediaTerm
-	Organisation               MediaTerm
-	Roles                      []MediaRole
+	// Ratings says its works carry certifications a library's maximum rating limits.
+	Ratings      bool
+	Work         MediaTerm
+	Part         MediaTerm
+	Group        MediaTerm
+	LeadPeople   MediaTerm
+	Organisation MediaTerm
+	Roles        []MediaRole
 	// FollowOptions are what a follow offers in this type's libraries, as the generated shape carries them.
 	FollowOptions []gen.FollowOption
 	// Facets are the type's own fields, as the generated shape carries them.
@@ -150,8 +152,8 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 			}
 			out = append(out, gen.MediaTypeInfo{
 				Key: gen.MediaType(info.Key), Label: info.Label, Roles: roles,
-				Taxonomy: gen.Taxonomy{Key: info.TaxonomyKey, Label: info.TaxonomyLabel},
-				Work:     termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
+				Taxonomy: gen.Taxonomy{Key: info.TaxonomyKey, Label: info.TaxonomyLabel}, Ratings: info.Ratings,
+				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),
 				MonitorOptions: choiceViews(info.MonitorOptions), SearchTerms: choiceViews(info.SearchTerms),
