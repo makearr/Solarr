@@ -1023,6 +1023,33 @@ func (c *Cache) SetRootFolderOnline(ctx context.Context, id int64, online bool) 
 	})
 }
 
+// RecordRootFolderReach records whether a probe reached a root: an online root it cannot reach goes offline as
+// Solarr's own declaration, and only such a root comes back online once reached (user, 2026-10-23). A root a person
+// declared offline is left alone (Invariant 87). entries is what a reached root holds; only whether it held any is
+// kept, so a new folder in it is not a settings change (each of which takes a backup).
+func (c *Cache) RecordRootFolderReach(ctx context.Context, id int64, reached bool, reason string, entries int64) error {
+	root, found := c.Snapshot().RootFolder(id)
+	if !found {
+		return fmt.Errorf("%w: root folder %d", ErrNotFound, id)
+	}
+	if !root.Online && !root.OfflineAuto {
+		return nil
+	}
+	online, auto, why, seen := false, true, reason, root.SeenEntries
+	if reached {
+		online, auto, why, seen = true, false, "", min(entries, 1)
+	}
+	if online == root.Online && auto == root.OfflineAuto && why == root.OfflineReason && seen == root.SeenEntries {
+		return nil
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetRootFolderReachability(ctx, settingsdb.SetRootFolderReachabilityParams{
+			Online: boolToInt(online), OfflineAuto: boolToInt(auto),
+			OfflineReason: sql.NullString{String: why, Valid: why != ""}, SeenEntries: seen, ID: id,
+		})
+	})
+}
+
 // AttachRootFolder puts a root folder into a category, or updates its ordering.
 func (c *Cache) AttachRootFolder(ctx context.Context, attachment CategoryRoot) error {
 	snapshot := c.Snapshot()

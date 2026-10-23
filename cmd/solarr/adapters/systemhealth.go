@@ -118,7 +118,7 @@ func (a SystemHealth) vanishedHeld(ctx context.Context, snapshot *settings.Snaps
 			Message: fmt.Sprintf("The last full scan of %s found %d %s gone. Nothing is marked missing or downloaded "+
 				"again until you look: if the disk is back, run a full scan; if you deleted them, accept it under Root folders.",
 				root.Path, count, plural(int(count), "file", "files")),
-			Link: "/storage/roots",
+			Link: "/storage/folders",
 		})
 	}
 	return checks

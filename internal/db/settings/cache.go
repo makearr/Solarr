@@ -406,6 +406,7 @@ func convertRootFolder(row settingsdb.RootFolder) RootFolder {
 		MinFreeBytes: row.MinFreeBytes, CapacityCheckedAt: nullInt64Ptr(row.CapacityCheckedAt),
 		FSID: row.FsID.String, CapabilitiesJSON: row.CapabilitiesJson.String,
 		DrainState: row.DrainState, DrainJobID: nullInt64Ptr(row.DrainJobID),
+		OfflineAuto: row.OfflineAuto != 0, OfflineReason: row.OfflineReason.String, SeenEntries: row.SeenEntries,
 	}
 }
 

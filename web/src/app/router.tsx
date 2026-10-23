@@ -18,7 +18,6 @@ import { Notifications } from "./Notifications";
 import { Statistics } from "./Statistics";
 import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
-import { DownloadFolders } from "./DownloadFolders";
 import { Downloaders } from "./Downloaders";
 import { Indexers } from "./Indexers";
 import { Import } from "./Import";
@@ -29,6 +28,7 @@ import { CacheSettingsPage } from "./CacheSettings";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
 import { LibraryHealth } from "./LibraryHealth";
+import { Folders } from "./Folders";
 import { CollectionPage, FranchiseIndex } from "./Franchises";
 import { CrossoverIndex, CrossoverPage } from "./Crossovers";
 import { LibraryLevelList } from "./LibraryLevelList";
@@ -42,7 +42,6 @@ import { PersonPage } from "./PersonPage";
 import { QualityProfilesPage } from "./QualityProfileEditor";
 import { QualityProfiles } from "./QualityProfiles";
 import { RecycleBin } from "./RecycleBin";
-import { RootFolders } from "./RootFolders";
 import {
   BlocklistsSettings, LibrariesSettings, MetadataSettingsPage, NetworkSettings, TagsSettings, WebUISettings,
 } from "./Settings";
@@ -273,16 +272,30 @@ const routes = [
   // Storage (todo 4.18): Root folders, Move & drain, Download folders and
   // Import are grouped under one section. /import and /moves redirect
   // rather than 404ing, the same courtesy the old flat /library got.
-  createRoute({ getParentRoute: () => rootRoute, path: "/storage/roots", component: RootFolders }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/folders", component: Folders }),
+  // Root and download folders became one Folders tab 2026-10-23.
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/storage/roots",
+    beforeLoad: () => {
+      throw redirect({ to: "/storage/folders" });
+    },
+  }),
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: "/storage/downloads",
+    beforeLoad: () => {
+      throw redirect({ to: "/storage/folders" });
+    },
+  }),
   createRoute({ getParentRoute: () => rootRoute, path: "/crossovers/$id", component: CrossoverPage }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/storage/moves",
     beforeLoad: () => {
-      throw redirect({ to: "/storage/roots" });
+      throw redirect({ to: "/storage/folders" });
     },
   }),
-  createRoute({ getParentRoute: () => rootRoute, path: "/storage/downloads", component: DownloadFolders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/recycle-bin", component: RecycleBin }),
   // Packs moved to each library 2026-09-11; redirected rather than 404ing,
@@ -309,7 +322,7 @@ const routes = [
     getParentRoute: () => rootRoute,
     path: "/moves",
     beforeLoad: () => {
-      throw redirect({ to: "/storage/roots" });
+      throw redirect({ to: "/storage/folders" });
     },
   }),
   // Connections (stage 5, ADR-54/todo 5.2): indexers and download clients so

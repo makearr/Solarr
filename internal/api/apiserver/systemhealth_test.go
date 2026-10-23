@@ -101,7 +101,7 @@ func TestGetSystemHealth_ReportsErrorsBeforeWarnings(t *testing.T) {
 // nowhere. These are the paths web/src/app/router.tsx declares.
 func TestGetSystemHealth_LinksPointAtRealRoutes(t *testing.T) {
 	known := map[string]bool{
-		"/libraries": true, "/storage/roots": true,
+		"/libraries": true, "/storage/folders": true,
 		"/connections/indexers": true, "/connections/downloaders": true,
 	}
 	fixture := newWorksFixture(t)

@@ -19,7 +19,20 @@ func (p *process) registerCapacityJob(registry *jobs.Registry, executor *jobs.Ex
 		FS: p.fsys, Cache: p.cache, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(capacity.JobType, job)
+	if err := registry.Register(capacity.ReachDefinition); err != nil {
+		return err
+	}
+	executor.Handle(capacity.ReachJobType, capacity.NewReachJob(capacity.Config{FS: p.fsys, Cache: p.cache, Logger: p.logger}))
 	return nil
+}
+
+// enqueueReach submits one root folder reachability check.
+func (p *process) enqueueReach(ctx context.Context) (jobs.EnqueueResult, error) {
+	result, err := capacity.EnqueueReach(ctx, p.queue)
+	if err != nil {
+		p.logger.Warn("enqueue root folder reachability check", slog.Any("error", err))
+	}
+	return result, err
 }
 
 // enqueueCapacity submits one capacity sweep. Registered as a task with

@@ -257,7 +257,7 @@ func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	view := buildAPIKeyView(created)
 	writeJSON(w, s.logger, http.StatusCreated, gen.CreatedAPIKey{
-		Id: view.Id, Name: view.Name, CreatedAt: view.CreatedAt, LastUsedAt: view.LastUsedAt,
+		Id: view.Id, Name: view.Name, CreatedAt: view.CreatedAt, LastUsedAt: view.LastUsedAt, Revealable: view.Revealable,
 		Key: string(plaintext),
 	})
 }

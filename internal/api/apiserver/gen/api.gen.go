@@ -3870,6 +3870,12 @@ type RootFolder struct {
 	// MinFreeBytes The user's own reserve; placement refuses to dip below it.
 	MinFreeBytes *int64 `json:"min_free_bytes,omitempty"`
 
+	// OfflineAuto Offline because Solarr could not reach it, checked every five minutes and declared online again once reached; absent for a root a person declared offline, which only a person brings back.
+	OfflineAuto *bool `json:"offline_auto,omitempty"`
+
+	// OfflineReason Why the root could not be reached, when it was not.
+	OfflineReason *string `json:"offline_reason,omitempty"`
+
 	// Online An unmounted root counts as unavailable, never as free space (Invariant 20a).
 	Online bool   `json:"online"`
 	Path   string `json:"path"`

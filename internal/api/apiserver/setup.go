@@ -209,6 +209,12 @@ func (s *Server) rootFolderView(folder settings.RootFolder) gen.RootFolder {
 		fsID := folder.FSID
 		view.FilesystemId = &fsID
 	}
+	if folder.OfflineAuto {
+		view.OfflineAuto = &folder.OfflineAuto
+	}
+	if folder.OfflineReason != "" {
+		view.OfflineReason = &folder.OfflineReason
+	}
 
 	snapshot := s.auth.Settings.Snapshot()
 	var categories []gen.RootFolderCategory

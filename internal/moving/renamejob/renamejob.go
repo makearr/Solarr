@@ -85,14 +85,23 @@ func Start(
 			DestRootFolderID: rootFolderID, DestRelPath: target.ProposedRelPath,
 		}
 	}
-	plan, err := mover.Plan(mover.Request{
+	candidate := rootCandidate(rootFolderID, root)
+	request := mover.Request{
 		Reason: mover.ReasonRename, Files: files,
-		Roots:             map[int64]placement.RootCandidate{rootFolderID: rootCandidate(rootFolderID, root)},
+		Roots:             map[int64]placement.RootCandidate{rootFolderID: candidate},
 		SourceReadOnly:    map[int64]bool{rootFolderID: root.ReadOnly},
 		SourceAllowRename: map[int64]bool{rootFolderID: root.AllowRename},
-	})
+	}
+	plan, err := mover.Plan(request)
 	if err != nil {
 		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: plan rename for root %d: %w", rootFolderID, err)
+	}
+	if preview && len(plan.Refused) > 0 {
+		// A preview names the files even on a root it may not change (user, 2026-10-23); the refusals stay beside them.
+		plan.Moves, err = previewNames(request, candidate)
+		if err != nil {
+			return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: preview names for root %d: %w", rootFolderID, err)
+		}
 	}
 	if preview || len(plan.Moves) == 0 {
 		return plan, 0, warnings, nil
@@ -133,6 +142,15 @@ func Start(
 		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: enqueue move job %d: %w", jobID, err)
 	}
 	return plan, jobID, warnings, nil
+}
+
+// previewNames plans the request as if the root were online, writable and allowed to rename, for names alone.
+func previewNames(request mover.Request, candidate placement.RootCandidate) ([]mover.PlannedMove, error) {
+	candidate.Online, candidate.Writable, candidate.ReadOnly = true, true, false
+	request.Roots = map[int64]placement.RootCandidate{candidate.RootFolderID: candidate}
+	request.SourceReadOnly = nil
+	names, err := mover.Plan(request)
+	return names.Moves, err
 }
 
 func rootCandidate(rootFolderID int64, root settings.RootFolder) placement.RootCandidate {

@@ -6,6 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories, useDownloadFolders, useImportSettings } from "@/lib/resources";
 import { Button } from "@/ui/Button";
+import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { TransferLadderEditor, type TransferMethod } from "./Import";
@@ -13,9 +14,9 @@ import { TransferLadderEditor, type TransferMethod } from "./Import";
 type DownloadFolder = components["schemas"]["DownloadFolder"];
 type LibraryCategory = components["schemas"]["LibraryCategory"];
 
-/** The folders upstream download clients write to (todo 4.18). Watched: every entry that has
- *  settled for ten minutes is imported once, into the folder's library, by its import method. */
-export function DownloadFolders() {
+/** The folders upstream download clients write to (todo 4.18). Watched: every entry that has settled for ten minutes
+ *  is imported once, into the folder's library, by its import method. Part of Storage -> Folders (2026-10-23). */
+export function DownloadFolderSection() {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState<number | null>(null);
 
@@ -33,10 +34,10 @@ export function DownloadFolders() {
   });
 
   return (
-    <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold">Download folders</h1>
-        <p className="text-sm leading-relaxed text-ink-muted">
+    <section className="flex flex-col gap-3">
+      <header className="flex flex-col gap-0.5">
+        <h2 className="text-sm font-semibold">Download folders</h2>
+        <p className="text-xs leading-relaxed text-ink-muted">
           Folders your download clients write to. A watched folder is checked every five minutes:
           anything in it that has not changed for ten minutes is imported once into the library the folder
           names, and shows up under Import like any other import. A folder must name a library to be watched. Solarr only reads here, unless an import method lets it Move.
@@ -71,7 +72,7 @@ export function DownloadFolders() {
       {remove.isError && <p className="text-xs text-danger">That folder could not be removed.</p>}
 
       <AddDownloadFolder categories={categories.data ?? []} onAdded={invalidate} />
-    </div>
+    </section>
   );
 }
 
@@ -91,6 +92,7 @@ function DownloadFolderCard({
   busy: boolean;
 }) {
   const queryClient = useQueryClient();
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const importSettings = useImportSettings();
   const update = useMutation({
     mutationFn: async (change: Partial<Pick<DownloadFolder, "category_id" | "watch" | "transfer_ladder">>) => {
@@ -116,7 +118,7 @@ function DownloadFolderCard({
   });
 
   return (
-    <li className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-3">
+    <li className="flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface px-3 py-2">
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -128,20 +130,20 @@ function DownloadFolderCard({
           {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         </button>
         <Download aria-hidden className="size-4 shrink-0 text-ink-muted" />
-        <span className="font-medium">{folder.label || folder.path}</span>
-        <span className="truncate font-mono text-xs text-ink-muted">{folder.path}</span>
+        <span className="text-sm font-medium">{folder.label || folder.path}</span>
+        {folder.label && <span className="truncate font-mono text-xs text-ink-muted">{folder.path}</span>}
         {!folder.readable && (
           <span
             className="rounded-full border border-warn px-1.5 py-px text-[0.6875rem] text-warn"
             title={folder.readable_reason}
           >
-            not readable
+            unreachable
           </span>
         )}
         <button
           type="button"
           aria-label={`Stop watching ${folder.path}`}
-          onClick={onRemove}
+          onClick={() => setConfirmingRemove(true)}
           disabled={busy}
           className="ml-auto shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
                      hover:text-danger disabled:opacity-50 focus-visible:outline-2
@@ -213,6 +215,20 @@ function DownloadFolderCard({
         />
       )}
       {update.isError && !ownLadder && <p className="text-xs text-danger">That could not be changed.</p>}
+
+      {confirmingRemove && (
+        <ConfirmDialog
+          title={`Stop watching ${folder.label || folder.path}?`}
+          consequence="Solarr forgets this download folder and imports nothing more from it. Nothing on disk is touched."
+          confirmLabel="Remove"
+          danger
+          onConfirm={() => {
+            setConfirmingRemove(false);
+            onRemove();
+          }}
+          onCancel={() => setConfirmingRemove(false)}
+        />
+      )}
 
       {expanded && (
         <div className="border-t border-border-subtle pt-2">

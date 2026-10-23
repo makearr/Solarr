@@ -278,6 +278,12 @@ type RootFolder struct {
 	// DrainState is NONE.
 	DrainState string
 	DrainJobID *int64
+	// OfflineAuto is true when Solarr declared the root offline because it could not reach it; only such a
+	// declaration is lifted again by a probe, never a person's (Invariant 87).
+	OfflineAuto   bool
+	OfflineReason string
+	// SeenEntries is 1 when the root held any entry when last reached, else 0.
+	SeenEntries int64
 }
 
 // Root folder drain states (root_folder.drain_state).

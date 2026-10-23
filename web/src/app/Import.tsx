@@ -622,7 +622,7 @@ function InspectForm() {
       </div>
       {addRoot.isSuccess && (
         <p className="w-full text-xs text-ink-muted">
-          Added as a root folder of the library; it is being scanned where it is. See Storage → Root folders.
+          Added as a root folder of the library; it is being scanned where it is. See Storage → Folders.
         </p>
       )}
       {addRoot.isError && (

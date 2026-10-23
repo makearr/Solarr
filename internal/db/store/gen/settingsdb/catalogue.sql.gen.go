@@ -114,7 +114,7 @@ INSERT INTO root_folder (path, label, online, min_free_bytes)
 VALUES (?, ?, ?, ?)
 RETURNING id, path, label, online, writable, writable_reason, read_only, allow_rename,
           total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
 `
 
 type CreateRootFolderParams struct {
@@ -149,6 +149,9 @@ func (q *Queries) CreateRootFolder(ctx context.Context, arg CreateRootFolderPara
 		&i.CapabilitiesJson,
 		&i.DrainState,
 		&i.DrainJobID,
+		&i.OfflineAuto,
+		&i.OfflineReason,
+		&i.SeenEntries,
 	)
 	return i, err
 }
@@ -234,7 +237,7 @@ func (q *Queries) GetPlacementAffinity(ctx context.Context, arg GetPlacementAffi
 const getRootFolder = `-- name: GetRootFolder :one
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
        total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
 FROM root_folder WHERE id = ?
 `
 
@@ -258,6 +261,9 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 		&i.CapabilitiesJson,
 		&i.DrainState,
 		&i.DrainJobID,
+		&i.OfflineAuto,
+		&i.OfflineReason,
+		&i.SeenEntries,
 	)
 	return i, err
 }
@@ -345,7 +351,7 @@ func (q *Queries) ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFo
 const listRootFolders = `-- name: ListRootFolders :many
 SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
        total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id
+       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
 FROM root_folder ORDER BY path
 `
 
@@ -375,6 +381,9 @@ func (q *Queries) ListRootFolders(ctx context.Context) ([]RootFolder, error) {
 			&i.CapabilitiesJson,
 			&i.DrainState,
 			&i.DrainJobID,
+			&i.OfflineAuto,
+			&i.OfflineReason,
+			&i.SeenEntries,
 		); err != nil {
 			return nil, err
 		}
@@ -521,7 +530,7 @@ func (q *Queries) SetRootFolderDrainState(ctx context.Context, arg SetRootFolder
 }
 
 const setRootFolderOnline = `-- name: SetRootFolderOnline :exec
-UPDATE root_folder SET online = ? WHERE id = ?
+UPDATE root_folder SET online = ?, offline_auto = 0, offline_reason = NULL, seen_entries = 0 WHERE id = ?
 `
 
 type SetRootFolderOnlineParams struct {
@@ -529,6 +538,7 @@ type SetRootFolderOnlineParams struct {
 	ID     int64
 }
 
+// A person's declaration: never Solarr's own, and the emptiness it accepts is the new normal.
 func (q *Queries) SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error {
 	_, err := q.db.ExecContext(ctx, setRootFolderOnline, arg.Online, arg.ID)
 	return err
@@ -553,6 +563,29 @@ func (q *Queries) SetRootFolderPolicy(ctx context.Context, arg SetRootFolderPoli
 		arg.ReadOnly,
 		arg.AllowRename,
 		arg.MinFreeBytes,
+		arg.ID,
+	)
+	return err
+}
+
+const setRootFolderReachability = `-- name: SetRootFolderReachability :exec
+UPDATE root_folder SET online = ?, offline_auto = ?, offline_reason = ?, seen_entries = ? WHERE id = ?
+`
+
+type SetRootFolderReachabilityParams struct {
+	Online        int64
+	OfflineAuto   int64
+	OfflineReason sql.NullString
+	SeenEntries   int64
+	ID            int64
+}
+
+func (q *Queries) SetRootFolderReachability(ctx context.Context, arg SetRootFolderReachabilityParams) error {
+	_, err := q.db.ExecContext(ctx, setRootFolderReachability,
+		arg.Online,
+		arg.OfflineAuto,
+		arg.OfflineReason,
+		arg.SeenEntries,
 		arg.ID,
 	)
 	return err

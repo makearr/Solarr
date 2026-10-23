@@ -4289,6 +4289,10 @@ export interface components {
             label?: string;
             /** @description An unmounted root counts as unavailable, never as free space (Invariant 20a). */
             online: boolean;
+            /** @description Offline because Solarr could not reach it, checked every five minutes and declared online again once reached; absent for a root a person declared offline, which only a person brings back. */
+            offline_auto?: boolean;
+            /** @description Why the root could not be reached, when it was not. */
+            offline_reason?: string;
             /** @description The filesystem under this root is mounted read only, found by trying to write; the root is then read only whatever its policy says. */
             read_only_detected?: boolean;
             /**

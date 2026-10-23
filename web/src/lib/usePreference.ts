@@ -24,7 +24,8 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
         body: { value: JSON.stringify(value) },
       }));
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: KEY }),
+    // Success keeps the optimistic value: a refetch after one save could land after the next and undo it (2026-10-23).
+    onError: () => void queryClient.invalidateQueries({ queryKey: KEY }),
   });
 
   const raw = stored.data?.[key];
@@ -40,6 +41,7 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
   // Optimistic: the list reorders on click rather than after a round trip.
   const set = useCallback(
     (next: T) => {
+      void queryClient.cancelQueries({ queryKey: KEY });
       queryClient.setQueryData(KEY, (current: Record<string, string> | undefined) => ({
         ...(current ?? {}),
         [key]: JSON.stringify(next),

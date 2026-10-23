@@ -168,11 +168,13 @@ type Querier interface {
 	// ADR-51's own drain state machine; drain_job_id is library.db's own id
 	// (no FK, cross-db), null once a drain finishes or is cancelled.
 	SetRootFolderDrainState(ctx context.Context, arg SetRootFolderDrainStateParams) error
+	// A person's declaration: never Solarr's own, and the emptiness it accepts is the new normal.
 	SetRootFolderOnline(ctx context.Context, arg SetRootFolderOnlineParams) error
 	// read_only and allow_rename are the user's own policy (section 11.7,
 	// Invariant 69); min_free_bytes is their reserve. Kept separate from
 	// SetRootFolderCapacity below, which only the capacity job ever calls.
 	SetRootFolderPolicy(ctx context.Context, arg SetRootFolderPolicyParams) error
+	SetRootFolderReachability(ctx context.Context, arg SetRootFolderReachabilityParams) error
 	SetUserLimits(ctx context.Context, arg SetUserLimitsParams) error
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error

@@ -83,7 +83,7 @@ func (s *Server) settingsHealthChecks() []HealthCheck {
 			checks = append(checks, HealthCheck{
 				ID: "category_without_root", Severity: HealthError,
 				Message: fmt.Sprintf("The library %q has no root folder, so nothing can be scanned or imported into it.", category.Name),
-				Link:    "/storage/roots",
+				Link:    "/storage/folders",
 			})
 		}
 	}
@@ -93,14 +93,14 @@ func (s *Server) settingsHealthChecks() []HealthCheck {
 			checks = append(checks, HealthCheck{
 				ID: "root_offline", Severity: HealthWarning,
 				Message: fmt.Sprintf("The root folder %s is declared offline. Nothing on it counts as missing.", root.Path),
-				Link:    "/storage/roots",
+				Link:    "/storage/folders",
 			})
 		case !root.Writable && !root.ReadOnly:
 			// Read-only is a deliberate policy; unwritable without it is not.
 			checks = append(checks, HealthCheck{
 				ID: "root_not_writable", Severity: HealthWarning,
 				Message: fmt.Sprintf("The root folder %s cannot be written to, and is not marked read-only. Check its ownership, or whether it is a read-only mount.", root.Path),
-				Link:    "/storage/roots",
+				Link:    "/storage/folders",
 			})
 		}
 	}

@@ -29,7 +29,7 @@ Rules worth knowing:
   again counts again at once. **A mass vanish is held**: a full scan that would mark more than 50 of a root's files *and*
   more than one in twenty of them marks none, says so under the bell, and waits. Run a full scan once the disk is back (an incremental one skips folders
   whose date did not change, as a remounted one's does not), or
-  **Accept as gone** on Storage -> Root folders (`POST /rootfolders/{id}/vanished/accept`), which marks what that scan
+  **Accept as gone** on Storage -> Folders (`POST /rootfolders/{id}/vanished/accept`), which marks what that scan
   missed and runs *Unmonitor deleted*. An offline root is never scanned, so nothing on it goes missing
   (`scan.MassVanish`, `adapters.VanishedFiles`).
 

@@ -14,6 +14,10 @@ import { inputStyle } from "@/ui/form";
 import { useDebouncedValue } from "../useDebouncedValue";
 import { CandidateCard, LOOKUP_PAGE, MAXIMUM_LOOKUP, MINIMUM_QUERY_LENGTH } from "./AddWork";
 
+// Every library at once starts short, so each kind shows above the fold, and grows by a page.
+const FIRST_ACROSS_LIBRARIES = 5;
+const MORE_ACROSS_LIBRARIES = 10;
+
 type LibraryEntry = components["schemas"]["Library"];
 
 /** One block of results: a media type's kind, looked up through the first of its libraries in scope. */
@@ -31,9 +35,11 @@ export function AddAnywhere() {
   const libraries = useLibraries().data ?? [];
   const mediaTypes = useMediaTypes();
   const [query, setQuery] = useState(opened.q ?? "");
-  const [limit, setLimit] = useState(LOOKUP_PAGE);
   const debounced = useDebouncedValue(query.trim(), 300);
   const scope = libraries.filter((library) => !opened.library || String(library.id) === opened.library);
+  const first = opened.library ? LOOKUP_PAGE : FIRST_ACROSS_LIBRARIES;
+  const step = opened.library ? LOOKUP_PAGE : MORE_ACROSS_LIBRARIES;
+  const [limit, setLimit] = useState(first);
 
   const targets: Target[] = [];
   for (const info of mediaTypes) {
@@ -58,7 +64,7 @@ export function AddAnywhere() {
             value={query}
             onChange={(event) => {
               setQuery(event.target.value);
-              setLimit(LOOKUP_PAGE);
+              setLimit(first);
               remember({ q: event.target.value.trim(), library: opened.library });
             }}
             placeholder="Search for something to add…"
@@ -70,7 +76,7 @@ export function AddAnywhere() {
           aria-label="Search in"
           value={opened.library ?? ""}
           onChange={(event) => {
-            setLimit(LOOKUP_PAGE);
+            setLimit(event.target.value ? LOOKUP_PAGE : FIRST_ACROSS_LIBRARIES);
             remember({ q: query.trim(), library: event.target.value });
           }}
           className={inputStyle}
@@ -86,7 +92,7 @@ export function AddAnywhere() {
       {query.trim().length > 0 && debounced.length < MINIMUM_QUERY_LENGTH && <p className="text-sm text-ink-muted">Keep typing: at least two characters.</p>}
       {searchable && targets.length === 0 && <EmptyState title="No library to add to yet." />}
       {searchable && (
-        <TargetResults key={`${opened.library ?? ""}:${debounced}`} targets={targets} query={debounced} limit={limit} onMore={() => setLimit(limit + LOOKUP_PAGE)} />
+        <TargetResults key={`${opened.library ?? ""}:${debounced}`} targets={targets} query={debounced} limit={limit} onMore={() => setLimit(Math.min(limit + step, MAXIMUM_LOOKUP))} />
       )}
     </div>
   );

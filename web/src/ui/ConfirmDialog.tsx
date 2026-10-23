@@ -11,6 +11,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   danger = false,
   busy = false,
+  disabled = false,
   onConfirm,
   onCancel,
   children,
@@ -21,6 +22,8 @@ export function ConfirmDialog({
   cancelLabel?: string;
   danger?: boolean;
   busy?: boolean;
+  /** Confirming is not possible yet, or not at all. */
+  disabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
   /** Choices that change what confirming does, such as "also delete the files". */
@@ -36,7 +39,7 @@ export function ConfirmDialog({
           <Button variant="ghost" onClick={onCancel}>
             {cancelLabel}
           </Button>
-          <Button variant={danger ? "danger" : "primary"} busy={busy} onClick={onConfirm}>
+          <Button variant={danger ? "danger" : "primary"} busy={busy} disabled={disabled} onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </>

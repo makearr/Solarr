@@ -6,7 +6,7 @@ describe("isAdministratorPath", () => {
   it.each([
     ["/settings/network", true],
     ["/settings/user", false],
-    ["/storage/roots", true],
+    ["/storage/folders", true],
     ["/connections/indexers", true],
     ["/library/1/config/naming", true],
     ["/library/1/import", true],

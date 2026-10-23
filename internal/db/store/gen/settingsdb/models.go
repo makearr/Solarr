@@ -281,6 +281,9 @@ type RootFolder struct {
 	CapabilitiesJson  sql.NullString
 	DrainState        string
 	DrainJobID        sql.NullInt64
+	OfflineAuto       int64
+	OfflineReason     sql.NullString
+	SeenEntries       int64
 }
 
 type UserCategoryAccess struct {

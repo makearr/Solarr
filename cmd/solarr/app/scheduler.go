@@ -29,6 +29,7 @@ const (
 	serverFilesScheduleCron        = "30 4 * * *"    // daily at 04:30
 	probeScheduleCron              = "0 2 * * *"     // daily at 02:00
 	capacityScheduleCron           = "50 */6 * * *"  // every 6 hours
+	reachScheduleCron              = "*/5 * * * *"   // every 5 minutes; a stat and a listing per root
 	cacheMaintenanceScheduleCron   = "0 3 * * *"     // daily at 03:00
 	downloadWatchScheduleCron      = "*/5 * * * *"   // every 5 minutes
 	downloadPollScheduleCron       = "* * * * *"     // every minute, as Lidarr checks its clients
@@ -140,6 +141,11 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "capacity", Name: "Root folder capacity", DefaultCadence: capacityScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryStatistics, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueCapacity,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "reach", Name: "Root folder reachability", DefaultCadence: reachScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMaintenance, Startup: jobs.StartupOn,
+		Enqueue: p.enqueueReach,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "cache_maintenance", Name: "Cache maintenance", DefaultCadence: cacheMaintenanceScheduleCron,

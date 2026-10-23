@@ -73,6 +73,10 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("capacity.context", string(JobType), err)
 		}
+		if !root.Online && root.OfflineAuto {
+			// Unreachable: an unmounted mount point would report its parent filesystem's space.
+			continue
+		}
 		if err := j.refreshOne(ctx, root); err != nil {
 			failed++
 			j.logger.WarnContext(ctx, "capacity probe failed",

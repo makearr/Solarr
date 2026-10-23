@@ -61,8 +61,8 @@ export function RenamePlanner({
       {plan && started && (
         <p className="text-sm">
           Renaming {moves.length} {moves.length === 1 ? "file" : "files"}. Progress is under{" "}
-          <Link to="/storage/roots" className="text-accent hover:underline">
-            Storage → Root folders
+          <Link to="/storage/folders" className="text-accent hover:underline">
+            Storage → Folders
           </Link>
           .
         </p>

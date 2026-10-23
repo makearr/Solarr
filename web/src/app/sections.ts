@@ -36,8 +36,7 @@ export const STORAGE: Section = {
   key: "storage",
   label: "Storage",
   tabs: [
-    { label: "Root folders", path: "/storage/roots", tier: "advanced", administrator: true },
-    { label: "Download folders", path: "/storage/downloads", tier: "advanced", administrator: true },
+    { label: "Folders", path: "/storage/folders", tier: "advanced", administrator: true },
     { label: "Import", path: "/storage/import", tier: "advanced", administrator: true },
     { label: "Recycle bin", path: "/storage/recycle-bin", tier: "advanced", administrator: true },
     // Every library's waiting files at once; one library's are under its own Files.

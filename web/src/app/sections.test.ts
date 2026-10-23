@@ -31,7 +31,7 @@ test("the page decides its section, and a library's unidentified files belong to
 
 test("a tab is active on its own page and the pages under it", () => {
   const roots = STORAGE.tabs[0]!;
-  expect([isAt(roots, { path: "/storage/roots" }), isAt(roots, { path: "/storage/roots/3" }), isAt(roots, { path: "/storage/rootsx" })]).toEqual([
+  expect([isAt(roots, { path: "/storage/folders" }), isAt(roots, { path: "/storage/folders/3" }), isAt(roots, { path: "/storage/foldersx" })]).toEqual([
     true, true, false,
   ]);
 });
@@ -43,5 +43,5 @@ test("a section's entry leads to the first tab the viewer may see", () => {
 });
 
 test("a page's tier is its tab's, and normal when no section lists it", () => {
-  expect([pageTier("/settings/cache"), pageTier("/storage/roots"), pageTier("/calendar")]).toEqual(["expert", "advanced", "normal"]);
+  expect([pageTier("/settings/cache"), pageTier("/storage/folders"), pageTier("/calendar")]).toEqual(["expert", "advanced", "normal"]);
 });

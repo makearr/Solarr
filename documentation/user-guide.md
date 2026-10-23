@@ -35,7 +35,7 @@ which albums, how its paths read here). Attaching a root folder scans it: albums
 MusicBrainz tags are recognised at once, others by their tracklists and names. Covers and artist
 pictures arrive over the following minutes.
 
-A root folder keeps a **reserve** of free space (8 GB by default, Storage → Root folders,
+A root folder keeps a **reserve** of free space (8 GB by default, Storage → Folders,
 advanced): automatic downloads stop before they would eat into it.
 
 ## 3. Connect an indexer and a download client (advanced)
@@ -255,9 +255,14 @@ Files a library scan could not identify wait under **Library → Music → Unide
 
 ## 8. Libraries and storage
 
-- **Storage → Root folders** groups the roots under their library; a root folder belongs to at most one.
-  Each card carries the policy (read only, allow rename, reserve), capacity, and **Preview rename / drain**
-  to move files off a disk.
+- **Storage → Folders** holds the root folders, grouped under their library (a root folder belongs to at most one), and
+  the download folders. Each root's card carries the policy (read only, allow rename, reserve), capacity, **Preview
+  rename** (it names the files even on a root it may not change, and says why) and **Drain…**, which shows what would
+  move and asks before moving every file to the library's other roots. Removing a folder, or taking a root out of its
+  library, asks first.
+- **A root Solarr cannot reach** (missing, unreadable, or empty although it held files: an unmounted disk) is declared
+  offline by Solarr, checked every five minutes, and declared online again once reached. A root *you* declare offline
+  stays offline until you declare it online.
 - **An album held twice** (the same release found under two albums, for example after MusicBrainz merged two release
   groups) shows a warning on its page naming the other one. **Merge into it…** shows what moves; **Merge** moves its files,
   wanted state, downloads and history onto the other album, keeps its name and old ids as the other's aliases, and removes it.
