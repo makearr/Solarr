@@ -214,6 +214,67 @@ export function CrossoverBadges({ partId, events, links, categoryId }: { partId:
   );
 }
 
+/** The other series' episodes of the events whose first episode in this series is partId, on one side of it. */
+export function guestMembers(partId: number, workId: number, placement: "before" | "after", events: readonly Crossover[]) {
+  return events.flatMap((event) => {
+    const first = event.members.findIndex((member) => member.work_id === workId);
+    if (event.members[first]?.part_id !== partId) return [];
+    return event.members
+      .map((member, at) => ({ member, at, event }))
+      .filter(({ member, at }) => member.work_id !== workId && (placement === "before" ? at < first : at > first));
+  });
+}
+
+/** Around a series' first episode of an event, the event's episodes of other series in watch order, as rows of the same
+ *  season: those before it above, the rest below. A crossover is watched across series, so each season shows all of it
+ *  (user, 2026-10-23). */
+export function CrossoverGuestRows({
+  partId,
+  workId,
+  placement,
+  events,
+  categoryId,
+}: {
+  partId: number;
+  workId: number;
+  placement: "before" | "after";
+  events: readonly Crossover[];
+  categoryId?: string;
+}) {
+  const rows = guestMembers(partId, workId, placement, events);
+  if (rows.length === 0) return null;
+  return (
+    <>
+      {rows.map(({ member, at, event }) => (
+        <tr key={`${event.id}:${member.part_id}`} className="border-b border-border-subtle bg-canvas/60 align-top last:border-0">
+          <td className="w-9 px-3 py-1.5">
+            <Link2 aria-hidden className="size-3.5 text-ink-muted" />
+          </td>
+          <td className="w-12 py-1.5" />
+          <td className="py-1.5">
+            <span className="text-ink-muted">{member.title || refLabel(member.media_ref)}</span>
+            <span className="mt-0.5 flex flex-wrap items-center gap-1">
+              <Link {...seriesLink(member, categoryId)}>
+                <Chip>{t("crossover.guest", { series: member.work_title, ref: refLabel(member.media_ref), at: at + 1, of: event.members.length })}</Chip>
+              </Link>
+              <Link to="/crossovers/$id" params={{ id: String(event.id) }}>
+                <Chip>{event.name}</Chip>
+              </Link>
+            </span>
+          </td>
+          <td className="hidden sm:table-cell" />
+          <td className="hidden whitespace-nowrap py-1.5 pr-3 text-xs text-ink-muted md:table-cell">{member.date ?? ""}</td>
+          <td className="whitespace-nowrap py-1.5 pr-3 text-right text-xs">
+            <span className={member.has_file ? "text-ok" : member.monitored ? "text-danger" : "text-ink-muted"}>
+              {member.has_file ? t("crossover.onDisk") : member.monitored ? t("crossover.missing") : t("crossover.unmonitored")}
+            </span>
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 /** An episode joins an event, new or existing, or is recorded as the same broadcast as an episode of another series. */
 export function CrossoverDialog({ part, categoryId, onClose }: { part: { id: number; title?: string; media_ref: string }; categoryId: string; onClose: () => void }) {
   const queryClient = useQueryClient();

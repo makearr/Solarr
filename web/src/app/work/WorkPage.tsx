@@ -25,7 +25,7 @@ import { ChooseImage } from "../ChooseImage";
 import { InteractiveSearch, type SearchScope } from "../InteractiveSearch";
 import { RenamePlanner } from "../RenamePlanner";
 import { statusLabel, useQueue } from "../Queue";
-import { CrossoverBadges, CrossoverDialog, useWorkCrossovers } from "../Crossovers";
+import { CrossoverBadges, CrossoverDialog, CrossoverGuestRows, useWorkCrossovers } from "../Crossovers";
 import { useLibrary } from "@/lib/useLibrary";
 import { EditWork } from "./EditWork";
 import { NumberingDialog, useNumberingChoices } from "./NumberingDialog";
@@ -494,6 +494,11 @@ function OverviewTab({ work, info, words, categoryId }: { work: Work; info: Medi
   const crossovers = useWorkCrossovers(work.id, hasCrossovers);
   const [crossoverPart, setCrossoverPart] = useState<{ id: number; title?: string; media_ref: string }>();
   const actions: PartActions = {
+    rowsAround: crossovers.data
+      ? (part, placement) => (
+          <CrossoverGuestRows partId={part.id} workId={work.id} placement={placement} events={crossovers.data.events} categoryId={categoryId} />
+        )
+      : undefined,
     badgesOf: crossovers.data
       ? (part) => <CrossoverBadges partId={part.id} events={crossovers.data.events} links={crossovers.data.same_content} categoryId={categoryId} />
       : undefined,

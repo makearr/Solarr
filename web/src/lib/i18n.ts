@@ -134,6 +134,7 @@ const catalogue = {
   "crossover.delete": "Delete the event",
   "crossover.badge": "{name}, {at} of {of}",
   "crossover.also": "also {series} {ref}",
+  "crossover.guest": "{series} {ref}, part {at} of {of}",
   "crossover.action": "Crossover…",
   "crossover.joinEvent": "Part of an event",
   "crossover.newEvent": "A new event…",

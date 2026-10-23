@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, ChevronDown, ChevronRight, Link2, Search, Trash2, User } from "lucide-react";
@@ -58,6 +58,8 @@ export interface PartActions {
   onRemove?: (part: Part, deleteFiles: boolean) => void;
   /** What a part takes part in beyond its work (a crossover event, the same broadcast in another series). */
   badgesOf?: (part: Part) => React.ReactNode;
+  /** Rows around a part's own, in its group: another series' episodes of the same crossover event, in watch order. */
+  rowsAround?: (part: Part, placement: "before" | "after") => React.ReactNode;
   onCrossover?: (part: Part) => void;
 }
 
@@ -165,7 +167,11 @@ export function PartTable({
           {parts
             .filter((part) => (part.section ?? "") === section)
             .map((part) => (
-              <PartRow key={part.id} part={part} group={group} categoryId={categoryId} info={info} actions={actions} />
+              <Fragment key={part.id}>
+                {actions.rowsAround?.(part, "before")}
+                <PartRow part={part} group={group} categoryId={categoryId} info={info} actions={actions} />
+                {actions.rowsAround?.(part, "after")}
+              </Fragment>
             ))}
         </tbody>
       ))}
