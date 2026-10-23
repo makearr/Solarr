@@ -39,12 +39,13 @@ type PeopleFilter struct {
 	// Category narrows to one library; 0 is every visible one.
 	Category int64
 	// Roles narrow to people credited in any of them; empty is any role.
-	Roles      []string
-	Monitored  *bool
-	NamePrefix string
-	Where      []listfilter.Condition
-	Sort       string
-	Desc       bool
+	Roles     []string
+	Monitored *bool
+	// NameContains narrows to people whose name contains it, any case.
+	NameContains string
+	Where        []listfilter.Condition
+	Sort         string
+	Desc         bool
 }
 
 // PeopleCursor is a position in the list: the sort value (the name, or a number) and the id that breaks ties.
@@ -227,13 +228,9 @@ func composePeople(filter PeopleFilter, after PeopleCursor, pageSize int) (strin
 	if filter.Monitored != nil {
 		predicates.Add("p.monitored = ?", boolInt(*filter.Monitored))
 	}
-	if filter.NamePrefix != "" {
-		upper, bounded := prefixUpperBound(filter.NamePrefix)
-		if bounded {
-			predicates.Add("(p.sort_name COLLATE NOCASE >= ? AND p.sort_name COLLATE NOCASE < ?)", filter.NamePrefix, upper)
-		} else {
-			predicates.Add("p.sort_name COLLATE NOCASE >= ?", filter.NamePrefix)
-		}
+	if filter.NameContains != "" {
+		like := containsPattern(filter.NameContains)
+		predicates.Add("(LOWER(p.name) LIKE ? ESCAPE '\\' OR LOWER(p.sort_name) LIKE ? ESCAPE '\\')", like, like)
 	}
 	for _, condition := range filter.Where {
 		part := query.condition(condition)

@@ -49,7 +49,7 @@ const (
 func (f TrackFilter) partPredicates() store.Predicates {
 	var predicates store.Predicates
 	if search := strings.TrimSpace(f.Search); search != "" {
-		like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(search)) + "%"
+		like := containsPattern(search)
 		predicates.Add("(LOWER(COALESCE(wp.title, '')) LIKE ? ESCAPE '\\' OR LOWER(work.canonical_title) LIKE ? ESCAPE '\\'"+
 			" OR LOWER("+trackArtistName+") LIKE ? ESCAPE '\\')", like, like, like)
 	}

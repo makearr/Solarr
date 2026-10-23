@@ -63,6 +63,7 @@ export const SETTINGS: Section = {
     { label: "Tags", path: "/settings/tags", tier: "normal", administrator: true },
     { label: "Blocklists", path: "/settings/blocklists", tier: "expert", administrator: true },
     { label: "User", path: "/settings/user", tier: "normal" },
+    { label: "Web UI", path: "/settings/webui", tier: "normal" },
     { label: "Metadata", path: "/settings/metadata", tier: "normal", administrator: true },
     { label: "Quality profiles", path: "/quality-profiles", tier: "advanced", administrator: true },
     { label: "Network", path: "/settings/network", tier: "advanced", administrator: true },

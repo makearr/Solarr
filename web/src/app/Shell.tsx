@@ -1,5 +1,6 @@
 import { useLocation } from "@tanstack/react-router";
 
+import { useShowFooter } from "@/lib/interfacePreferences";
 import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator";
 
 import { NotificationBell } from "./Notifications";
@@ -14,6 +15,7 @@ import { UserMenu } from "./UserMenu";
  *  half-configured install is never shown a dashboard of zeroes it cannot act
  *  on. */
 export function Shell({ children }: { children: React.ReactNode }) {
+  const [showFooter] = useShowFooter();
   return (
     <div className="flex h-full flex-col">
       <div className="flex min-h-0 flex-1">
@@ -34,7 +36,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
-      <StatusBar />
+      {showFooter && <StatusBar />}
     </div>
   );
 }

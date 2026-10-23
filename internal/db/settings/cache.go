@@ -24,6 +24,9 @@ var ErrInvalidNaming = errors.New("settings: invalid naming")
 // ErrNotFound reports an id that is not in settings.db.
 var ErrNotFound = errors.New("settings: not found")
 
+// ErrNotRevealable reports an API key stored as a hash alone, made before keys were sealed.
+var ErrNotRevealable = errors.New("settings: api key was stored as a hash only and cannot be shown")
+
 // Cache is the in-memory authority for reads.
 type Cache struct {
 	store   *store.Store

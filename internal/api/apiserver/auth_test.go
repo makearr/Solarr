@@ -210,7 +210,7 @@ func TestAuth_APIKeyAuthenticates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
-	if _, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash); err != nil {
+	if _, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash, ""); err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
 
@@ -511,7 +511,7 @@ func TestListMyAPIKeys_NeverIncludesTheKeyOrHash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
-	if _, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash); err != nil {
+	if _, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash, ""); err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
 
@@ -544,7 +544,7 @@ func TestDeleteMyAPIKey_RemovesIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
-	created, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash)
+	created, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "scripts", hash, "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -574,7 +574,7 @@ func TestDeleteMyAPIKey_RefusesAnotherUsersKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateAPIKey: %v", err)
 	}
-	adminsKey, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "admin-only", hash)
+	adminsKey, err := fixture.cache.CreateAPIKey(t.Context(), fixture.clock, fixture.admin.ID, "admin-only", hash, "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}

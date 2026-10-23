@@ -222,8 +222,7 @@ func (s *Server) ListMyAPIKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, buildAPIKeyViews(keys))
 }
 
-// CreateMyAPIKey mints a key for the caller and returns its plaintext --
-// the only time it is ever shown (ADR-14).
+// CreateMyAPIKey mints a key for the caller and returns its plaintext; RevealMyAPIKey shows it again.
 func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
@@ -250,7 +249,7 @@ func (s *Server) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
-	created, err := s.auth.Settings.CreateAPIKey(r.Context(), s.wall, access.UserID(), name, hash)
+	created, err := s.auth.Settings.CreateAPIKey(r.Context(), s.wall, access.UserID(), name, hash, plaintext)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -290,6 +289,32 @@ func (s *Server) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// routeRevealMyAPIKey parses the id path parameter, mirroring routeDeleteMyAPIKey.
+func (s *Server) routeRevealMyAPIKey(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "an api key id must be a number")
+		return
+	}
+	s.RevealMyAPIKey(w, r, id)
+}
+
+// RevealMyAPIKey shows one of the caller's own keys again (user, 2026-10-23); someone else's is 404.
+func (s *Server) RevealMyAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	key, err := s.auth.Settings.RevealAPIKey(r.Context(), access.UserID(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]string{"key": key.Reveal()})
+}
+
 func buildAPIKeyViews(keys []settings.APIKey) []gen.APIKey {
 	views := make([]gen.APIKey, len(keys))
 	for index, key := range keys {
@@ -299,7 +324,7 @@ func buildAPIKeyViews(keys []settings.APIKey) []gen.APIKey {
 }
 
 func buildAPIKeyView(key settings.APIKey) gen.APIKey {
-	view := gen.APIKey{Id: key.ID, Name: key.Name, CreatedAt: key.CreatedAt}
+	view := gen.APIKey{Id: key.ID, Name: key.Name, CreatedAt: key.CreatedAt, Revealable: key.Revealable}
 	if !key.LastUsedAt.IsZero() {
 		lastUsed := key.LastUsedAt
 		view.LastUsedAt = &lastUsed

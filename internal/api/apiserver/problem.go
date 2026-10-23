@@ -89,6 +89,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, settings.ErrInUse):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Still in use", err.Error())
 
+	case errors.Is(err, settings.ErrNotRevealable):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Cannot be shown", err.Error())
+
 	case errors.Is(err, ErrNothingToDrain):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Nothing to drain", err.Error())
 

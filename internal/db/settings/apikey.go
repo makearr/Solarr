@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // Authenticated is who a credential belongs to, and which key was used, so the
@@ -36,18 +37,25 @@ func (c *Cache) UserByAPIKeyHash(ctx context.Context, keyHash string) (Authentic
 	}, nil
 }
 
-// CreateAPIKey stores a key's hash against a user. The plaintext never reaches
-// this package.
+// CreateAPIKey stores a key's hash against a user, and the key itself sealed so it can be
+// shown again; a zero key, or no cipher, stores the hash alone.
 func (c *Cache) CreateAPIKey(ctx context.Context, cl clock.Clock, userID int64,
-	name, keyHash string) (APIKey, error) {
+	name, keyHash string, key secrets.Secret) (APIKey, error) {
 	if _, found := c.Snapshot().User(userID); !found {
 		return APIKey{}, fmt.Errorf("%w: user %d", ErrNotFound, userID)
+	}
+	var sealed []byte
+	if !key.IsZero() && c.cipher != nil {
+		var err error
+		if sealed, err = c.cipher.Seal(key); err != nil {
+			return APIKey{}, fmt.Errorf("settings: seal api key %q: %w", name, err)
+		}
 	}
 
 	var created settingsdb.ApiKey
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		row, err := c.queries.WithTx(tx).CreateAPIKey(ctx, settingsdb.CreateAPIKeyParams{
-			UserID: userID, Name: name, KeyHash: keyHash, CreatedAt: cl.Now().Unix(),
+			UserID: userID, Name: name, KeyHash: keyHash, CreatedAt: cl.Now().Unix(), KeySealed: sealed,
 		})
 		created = row
 		return err
@@ -57,7 +65,7 @@ func (c *Cache) CreateAPIKey(ctx context.Context, cl clock.Clock, userID int64,
 	}
 	return APIKey{
 		ID: created.ID, UserID: created.UserID, Name: created.Name,
-		CreatedAt: time.Unix(created.CreatedAt, 0).UTC(),
+		CreatedAt: time.Unix(created.CreatedAt, 0).UTC(), Revealable: len(created.KeySealed) > 0,
 	}, nil
 }
 
@@ -87,9 +95,36 @@ func (c *Cache) ListAPIKeys(ctx context.Context, userID int64) ([]APIKey, error)
 			ID: row.ID, UserID: row.UserID, Name: row.Name,
 			CreatedAt:  time.Unix(row.CreatedAt, 0).UTC(),
 			LastUsedAt: unixOrZero(row.LastUsedAt),
+			Revealable: len(row.KeySealed) > 0,
 		})
 	}
 	return keys, nil
+}
+
+// RevealAPIKey answers one of userID's keys in plaintext: ErrNotFound for someone else's,
+// ErrNotRevealable for a key stored as a hash alone.
+func (c *Cache) RevealAPIKey(ctx context.Context, userID, keyID int64) (secrets.Secret, error) {
+	rows, err := c.queries.ListAPIKeysForUser(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("settings: list api keys for %d: %w", userID, err)
+	}
+	for _, row := range rows {
+		if row.ID != keyID {
+			continue
+		}
+		if len(row.KeySealed) == 0 {
+			return "", fmt.Errorf("%w: api key %d", ErrNotRevealable, keyID)
+		}
+		if c.cipher == nil {
+			return "", ErrSecretsUnavailable
+		}
+		key, err := c.cipher.Open(row.KeySealed)
+		if err != nil {
+			return "", fmt.Errorf("settings: open api key %d: %w", keyID, err)
+		}
+		return key, nil
+	}
+	return "", fmt.Errorf("%w: api key %d", ErrNotFound, keyID)
 }
 
 // DeleteAPIKey revokes a key, refused (ErrNotFound, indistinguishable from

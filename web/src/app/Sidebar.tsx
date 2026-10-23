@@ -16,6 +16,7 @@ import {
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useLibraries } from "@/lib/resources";
+import { useShowCalendar } from "@/lib/interfacePreferences";
 import { useOpenSections } from "@/lib/useOpenSections";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useTier, type Tier } from "@/lib/useTier";
@@ -73,6 +74,7 @@ export function Sidebar() {
   };
   const search = useSearch({ strict: false }) as { category_id?: string };
   const collapsed = useSidebarCollapsed();
+  const [showCalendar] = useShowCalendar();
 
   const libraries = useLibraries();
 
@@ -129,6 +131,14 @@ export function Sidebar() {
             {!collapsed && "Dashboard"}
           </Link>
         </li>
+        {showCalendar && (
+          <li>
+            <Link to="/calendar" title={collapsed ? "Calendar" : undefined} className={sectionLinkClass(path.startsWith("/calendar"), collapsed)}>
+              <CalendarDays aria-hidden className="size-4 shrink-0" />
+              {!collapsed && "Calendar"}
+            </Link>
+          </li>
+        )}
       </ul>
 
       <CollapsibleSection
@@ -145,12 +155,6 @@ export function Sidebar() {
       </CollapsibleSection>
 
       <ul className="flex flex-col gap-0.5 px-2 pt-3">
-        <li>
-          <Link to="/calendar" title={collapsed ? "Calendar" : undefined} className={sectionLinkClass(path.startsWith("/calendar"), collapsed)}>
-            <CalendarDays aria-hidden className="size-4 shrink-0" />
-            {!collapsed && "Calendar"}
-          </Link>
-        </li>
         <li>
           <Link
             to="/people"

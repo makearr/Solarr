@@ -158,18 +158,35 @@ func TestListPeople_MonitoredFilterNarrows(t *testing.T) {
 	_ = unmonitoredID
 }
 
-func TestListPeople_NamePrefixNarrows(t *testing.T) {
+// The name filter matches anywhere in the name, in any case (user, 2026-10-23), and a LIKE wildcard typed is literal.
+func TestListPeople_NameContainsNarrows(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 	resolvePersonNamed(t, people, "artist-1", "Katupoken")
 	resolvePersonNamed(t, people, "artist-2", "Vutu Doci")
+	resolvePersonNamed(t, people, "artist-3", "Do_ci 100%")
 
-	got, err := people.List(t.Context(), library.PeopleFilter{NamePrefix: "Kat"}, library.PeopleCursor{}, 50)
-	if err != nil {
-		t.Fatalf("ListPeople: %v", err)
-	}
-	if len(got) != 1 || got[0].SortName != "Katupoken" {
-		t.Errorf("ListPeople(prefix Kat) = %+v, want only Katupoken", got)
+	for _, test := range []struct {
+		search string
+		want   []string
+	}{
+		{"Kat", []string{"Katupoken"}},
+		{"upok", []string{"Katupoken"}},
+		{"DOCI", []string{"Vutu Doci"}},
+		{"o_c", []string{"Do_ci 100%"}},
+		{"0%", []string{"Do_ci 100%"}},
+	} {
+		got, err := people.List(t.Context(), library.PeopleFilter{NameContains: test.search}, library.PeopleCursor{}, 50)
+		if err != nil {
+			t.Fatalf("ListPeople(%q): %v", test.search, err)
+		}
+		var names []string
+		for _, entry := range got {
+			names = append(names, entry.SortName)
+		}
+		if !slices.Equal(names, test.want) {
+			t.Errorf("ListPeople(contains %q) = %v, want %v", test.search, names, test.want)
+		}
 	}
 }
 

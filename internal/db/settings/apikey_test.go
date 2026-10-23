@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
 // CreateAPIKey, ListAPIKeys and DeleteAPIKey existed and were exercised only
@@ -19,7 +20,7 @@ func TestCreateAPIKey_RoundTripsAndMarksTheUserOwner(t *testing.T) {
 		t.Fatalf("CreateUser: %v", err)
 	}
 
-	created, err := cache.CreateAPIKey(t.Context(), fake, user.ID, "scripts", "keyhash")
+	created, err := cache.CreateAPIKey(t.Context(), fake, user.ID, "scripts", "keyhash", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -38,7 +39,7 @@ func TestCreateAPIKey_RoundTripsAndMarksTheUserOwner(t *testing.T) {
 
 func TestCreateAPIKey_RefusesAMissingUser(t *testing.T) {
 	cache, fake := newCache(t)
-	if _, err := cache.CreateAPIKey(t.Context(), fake, 404, "scripts", "keyhash"); !errors.Is(err, settings.ErrNotFound) {
+	if _, err := cache.CreateAPIKey(t.Context(), fake, 404, "scripts", "keyhash", ""); !errors.Is(err, settings.ErrNotFound) {
 		t.Fatalf("CreateAPIKey for a missing user = %v, want ErrNotFound", err)
 	}
 }
@@ -53,10 +54,10 @@ func TestListAPIKeys_OnlyTheOwnersOwn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser(other): %v", err)
 	}
-	if _, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a"); err != nil {
+	if _, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a", ""); err != nil {
 		t.Fatalf("CreateAPIKey(owner): %v", err)
 	}
-	if _, err := cache.CreateAPIKey(t.Context(), fake, other.ID, "other-key", "hash-b"); err != nil {
+	if _, err := cache.CreateAPIKey(t.Context(), fake, other.ID, "other-key", "hash-b", ""); err != nil {
 		t.Fatalf("CreateAPIKey(other): %v", err)
 	}
 
@@ -82,7 +83,7 @@ func TestDeleteAPIKey_RefusesAnotherUsersKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser(other): %v", err)
 	}
-	key, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a")
+	key, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -106,7 +107,7 @@ func TestDeleteAPIKey_RemovesTheOwnersOwnKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	key, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a")
+	key, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -130,7 +131,7 @@ func TestTouchAPIKey_RecordsLastUsed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	key, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a")
+	key, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "owner-key", "hash-a", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}
@@ -155,5 +156,47 @@ func TestUserByAPIKeyHash_RefusesAnUnknownHash(t *testing.T) {
 	cache, _ := newCache(t)
 	if _, err := cache.UserByAPIKeyHash(t.Context(), "no-such-hash"); !errors.Is(err, sql.ErrNoRows) && !errors.Is(err, settings.ErrNotFound) {
 		t.Fatalf("UserByAPIKeyHash for an unknown hash = %v, want ErrNotFound", err)
+	}
+}
+
+func TestRevealAPIKey_ShowsTheOwnersSealedKeyOnly(t *testing.T) {
+	cache, fake := newCache(t)
+	cipher, err := secrets.New(testCipherKey())
+	if err != nil {
+		t.Fatalf("secrets.New: %v", err)
+	}
+	cache.EnableSecrets(cipher)
+	owner, err := cache.CreateUser(t.Context(), fake, "owner", "hash", settings.RoleAdmin)
+	if err != nil {
+		t.Fatalf("CreateUser(owner): %v", err)
+	}
+	other, err := cache.CreateUser(t.Context(), fake, "other", "hash", settings.RoleOperator)
+	if err != nil {
+		t.Fatalf("CreateUser(other): %v", err)
+	}
+	sealed, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "sealed", "hash-a", "mnx_plaintext")
+	if err != nil {
+		t.Fatalf("CreateAPIKey(sealed): %v", err)
+	}
+	hashOnly, err := cache.CreateAPIKey(t.Context(), fake, owner.ID, "hash-only", "hash-b", "")
+	if err != nil {
+		t.Fatalf("CreateAPIKey(hash-only): %v", err)
+	}
+
+	if got, err := cache.RevealAPIKey(t.Context(), owner.ID, sealed.ID); err != nil || got.Reveal() != "mnx_plaintext" {
+		t.Errorf("RevealAPIKey(owner, sealed) = %q, %v; want mnx_plaintext", got.Reveal(), err)
+	}
+	if _, err := cache.RevealAPIKey(t.Context(), other.ID, sealed.ID); !errors.Is(err, settings.ErrNotFound) {
+		t.Errorf("RevealAPIKey(other, sealed) = %v, want ErrNotFound", err)
+	}
+	if _, err := cache.RevealAPIKey(t.Context(), owner.ID, hashOnly.ID); !errors.Is(err, settings.ErrNotRevealable) {
+		t.Errorf("RevealAPIKey(owner, hash-only) = %v, want ErrNotRevealable", err)
+	}
+	keys, err := cache.ListAPIKeys(t.Context(), owner.ID)
+	if err != nil {
+		t.Fatalf("ListAPIKeys: %v", err)
+	}
+	if len(keys) != 2 || !keys[0].Revealable || keys[1].Revealable {
+		t.Errorf("ListAPIKeys revealable = %+v, want sealed true, hash-only false", keys)
 	}
 }

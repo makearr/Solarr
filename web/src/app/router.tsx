@@ -43,7 +43,9 @@ import { QualityProfilesPage } from "./QualityProfileEditor";
 import { QualityProfiles } from "./QualityProfiles";
 import { RecycleBin } from "./RecycleBin";
 import { RootFolders } from "./RootFolders";
-import { BlocklistsSettings, LibrariesSettings, MetadataSettingsPage, NetworkSettings, TagsSettings } from "./Settings";
+import {
+  BlocklistsSettings, LibrariesSettings, MetadataSettingsPage, NetworkSettings, TagsSettings, WebUISettings,
+} from "./Settings";
 import { Backups } from "./Backups";
 import { Calendar } from "./Calendar";
 import { Logs } from "./Logs";
@@ -357,6 +359,7 @@ const routes = [
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/blocklists", component: BlocklistsSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/tags", component: TagsSettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/network", component: NetworkSettings }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/settings/webui", component: WebUISettings }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/metadata", component: MetadataSettingsPage }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/backups", component: Backups }),
   createRoute({ getParentRoute: () => rootRoute, path: "/settings/logs", component: Logs }),

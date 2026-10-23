@@ -27,7 +27,8 @@ type PeopleQuery struct {
 	Category  int64
 	Roles     []string
 	Monitored *bool
-	Prefix    string
+	// NameContains narrows to names containing it, any case.
+	NameContains string
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
 	Sort  string
@@ -186,7 +187,7 @@ func (s *Server) ListPeople(w http.ResponseWriter, r *http.Request, params gen.L
 		return
 	}
 	query := PeopleQuery{
-		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, Prefix: derefOr(params.Q, ""),
+		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, NameContains: derefOr(params.Q, ""),
 		Where: derefOr(params.Where, ""), Sort: string(derefOr(params.Sort, gen.ListPeopleParamsSortName)),
 		Desc: derefOr(params.Dir, gen.ListPeopleParamsDirAsc) == gen.ListPeopleParamsDirDesc,
 	}

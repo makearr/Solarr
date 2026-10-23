@@ -15,7 +15,7 @@ export function useIsAdministrator(): boolean {
 /** Pages that configure the instance or a library: only an administrator can change anything on
  *  them, so nobody else is shown them (found 2026-09-24). A user's own settings stay open. */
 export function isAdministratorPath(path: string): boolean {
-  if (path.startsWith("/settings/")) return path !== "/settings/user";
+  if (path.startsWith("/settings/")) return path !== "/settings/user" && path !== "/settings/webui";
   return (
     path.startsWith("/storage") ||
     path.startsWith("/connections") ||

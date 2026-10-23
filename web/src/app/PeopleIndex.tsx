@@ -188,7 +188,7 @@ export function PeopleIndex() {
           <option value="true">Followed</option>
           <option value="false">Not followed</option>
         </ToolbarSelect>
-        <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name starts with…" label="Filter people by name" />
+        <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label="Filter people by name" />
         <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
         <ToolbarSort
           sort={sort}

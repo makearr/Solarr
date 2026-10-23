@@ -55,8 +55,8 @@ func TestTVPeopleListTheLibrarysCreditedPeopleByRoleAndName(t *testing.T) {
 	if got := names(list(library.PeopleFilter{Roles: []string{"actor"}}, library.PeopleCursor{}, 50)); !slices.Equal(got, []string{"A Person"}) {
 		t.Errorf("actors = %v", got)
 	}
-	if got := names(list(library.PeopleFilter{NamePrefix: "g"}, library.PeopleCursor{}, 50)); !slices.Equal(got, []string{"G Star"}) {
-		t.Errorf("prefix g = %v", got)
+	if got := names(list(library.PeopleFilter{NameContains: "star"}, library.PeopleCursor{}, 50)); !slices.Equal(got, []string{"G Star"}) {
+		t.Errorf("contains star = %v", got)
 	}
 	if got := names(list(library.PeopleFilter{}, library.PeopleCursor{Name: all[0].SortName, ID: all[0].ID, Set: true}, 1)); !slices.Equal(got, []string{"B Person"}) {
 		t.Errorf("after the first = %v", got)

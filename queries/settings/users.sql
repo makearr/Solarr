@@ -70,17 +70,17 @@ ON CONFLICT (user_id, key) DO UPDATE SET value_json = excluded.value_json;
 DELETE FROM user_preference WHERE user_id = ? AND key = ?;
 
 -- name: GetAPIKeyByHash :one
-SELECT id, user_id, name, key_hash, created_at, last_used_at
+SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
 FROM api_key WHERE key_hash = ?;
 
 -- name: ListAPIKeysForUser :many
-SELECT id, user_id, name, key_hash, created_at, last_used_at
+SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
 FROM api_key WHERE user_id = ? ORDER BY created_at;
 
 -- name: CreateAPIKey :one
-INSERT INTO api_key (user_id, name, key_hash, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, user_id, name, key_hash, created_at, last_used_at;
+INSERT INTO api_key (user_id, name, key_hash, created_at, key_sealed)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, user_id, name, key_hash, created_at, last_used_at, key_sealed;
 
 -- name: TouchAPIKey :exec
 UPDATE api_key SET last_used_at = ? WHERE id = ?;

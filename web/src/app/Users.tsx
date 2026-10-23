@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
@@ -137,28 +137,18 @@ function APIKeysSection() {
   return (
     <Card
       title="API keys"
-      help="For an upstream app that authenticates as you (an *Arr-style X-Api-Key or Bearer header) rather than a person signing in. A key is shown once, when it is made: store it there."
+      help="For an upstream app that authenticates as you (an *Arr-style X-Api-Key or Bearer header) rather than a person signing in. Show a key again with the eye beside it."
     >
       {justCreated && (
         <div className="flex flex-col gap-1.5 rounded-md border border-accent bg-accent/10 p-2.5">
           <span className="text-xs text-ink-muted">
-            "{justCreated.name}" -- copy this now, it will not be shown again:
+            "{justCreated.name}" -- paste this into the app that uses it:
           </span>
           <div className="flex items-center gap-1.5">
             <code className="min-w-0 flex-1 truncate rounded bg-canvas px-2 py-1 font-mono text-xs">
               {justCreated.key}
             </code>
-            <button
-              type="button"
-              aria-label="Copy key"
-              onClick={() => {
-                navigator.clipboard?.writeText(justCreated.key).catch(() => {});
-              }}
-              className="shrink-0 rounded-md border border-border-subtle p-1.5 text-ink-muted
-                         hover:text-ink"
-            >
-              <Copy aria-hidden className="size-3.5" />
-            </button>
+            <CopyKeyButton value={justCreated.key} />
             <button
               type="button"
               onClick={() => setJustCreated(null)}
@@ -228,33 +218,79 @@ function APIKeyRow({
   busy: boolean;
   onRevoke: () => void;
 }) {
+  const [shown, setShown] = useState(false);
+  const reveal = useQuery({
+    queryKey: ["me", "apikeys", apiKey.id, "key"],
+    queryFn: () => ok(api.GET("/me/apikeys/{id}/key", { params: { path: { id: apiKey.id } } })),
+    enabled: shown,
+    staleTime: Infinity,
+  });
   return (
-    <li className="flex items-center gap-2 py-2 text-sm">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate font-medium">{apiKey.name}</span>
-        <span className="text-xs text-ink-muted">
-          Created {new Date(apiKey.created_at).toLocaleDateString()}
-          {apiKey.last_used_at
-            ? ` · last used ${new Date(apiKey.last_used_at).toLocaleDateString()}`
-            : " · never used"}
-        </span>
+    <li className="flex flex-col gap-1.5 py-2 text-sm">
+      <div className="flex items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="truncate font-medium">{apiKey.name}</span>
+          <span className="text-xs text-ink-muted">
+            Created {new Date(apiKey.created_at).toLocaleDateString()}
+            {apiKey.last_used_at
+              ? ` · last used ${new Date(apiKey.last_used_at).toLocaleString()}`
+              : " · never used"}
+          </span>
+        </div>
+        <button
+          type="button"
+          aria-label={`${shown ? "Hide" : "Show"} ${apiKey.name}`}
+          title={apiKey.revealable ? undefined : "Made before keys could be shown again: revoke it and make a new one"}
+          aria-pressed={shown}
+          onClick={() => setShown(!shown)}
+          disabled={!apiKey.revealable}
+          className="shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
+                     hover:text-ink disabled:opacity-50 focus-visible:outline-2
+                     focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          {shown ? <EyeOff aria-hidden className="size-3.5" /> : <Eye aria-hidden className="size-3.5" />}
+        </button>
+        <button
+          type="button"
+          aria-label={`Revoke ${apiKey.name}`}
+          onClick={() => {
+            if (window.confirm(`Revoke "${apiKey.name}"? Anything using it will stop working immediately.`)) {
+              onRevoke();
+            }
+          }}
+          disabled={busy}
+          className="shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
+                     hover:text-danger disabled:opacity-50 focus-visible:outline-2
+                     focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <Trash2 aria-hidden className="size-3.5" />
+        </button>
       </div>
-      <button
-        type="button"
-        aria-label={`Revoke ${apiKey.name}`}
-        onClick={() => {
-          if (window.confirm(`Revoke "${apiKey.name}"? Anything using it will stop working immediately.`)) {
-            onRevoke();
-          }
-        }}
-        disabled={busy}
-        className="shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
-                   hover:text-danger disabled:opacity-50 focus-visible:outline-2
-                   focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        <Trash2 aria-hidden className="size-3.5" />
-      </button>
+      {shown && (
+        <div className="flex items-center gap-1.5">
+          <code className="min-w-0 flex-1 truncate rounded bg-canvas px-2 py-1 font-mono text-xs">
+            {reveal.data?.key ?? (reveal.isError ? "That could not be shown." : "…")}
+          </code>
+          {reveal.data && <CopyKeyButton value={reveal.data.key} />}
+        </div>
+      )}
     </li>
+  );
+}
+
+function CopyKeyButton({ value }: { value: string }) {
+  return (
+    <button
+      type="button"
+      aria-label="Copy key"
+      onClick={() => {
+        navigator.clipboard?.writeText(value).catch(() => {});
+      }}
+      className="shrink-0 rounded-md border border-border-subtle p-1.5 text-ink-muted
+                 hover:text-ink"
+    >
+      <Copy aria-hidden className="size-3.5" />
+    </button>
   );
 }
 

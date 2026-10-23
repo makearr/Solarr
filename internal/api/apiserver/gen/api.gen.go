@@ -922,7 +922,7 @@ const (
 	GetWorkArtworkParamsSizeThumb GetWorkArtworkParamsSize = "thumb"
 )
 
-// APIKey A non-interactive credential (X-Api-Key or Bearer), never the key itself or its hash -- see CreatedAPIKey for the one response that does carry the plaintext.
+// APIKey A non-interactive credential (X-Api-Key or Bearer), never the key itself or its hash -- GET /me/apikeys/{id}/key shows it again.
 type APIKey struct {
 	CreatedAt time.Time `json:"created_at"`
 	Id        int64     `json:"id"`
@@ -930,6 +930,9 @@ type APIKey struct {
 	// LastUsedAt Null until the key is presented for the first time.
 	LastUsedAt *time.Time `json:"last_used_at"`
 	Name       string     `json:"name"`
+
+	// Revealable The key is kept sealed and can be shown again; false for a key made before 2026-10-23.
+	Revealable bool `json:"revealable"`
 }
 
 // Acquisition One dispatch to a download client (ADR-57, section 12) -- denormalised from the candidate it came from, since a candidate can expire while this row must outlive it.
@@ -1570,6 +1573,9 @@ type CreatedAPIKey struct {
 	// LastUsedAt Null until the key is presented for the first time.
 	LastUsedAt *time.Time `json:"last_used_at"`
 	Name       string     `json:"name"`
+
+	// Revealable The key is kept sealed and can be shown again; false for a key made before 2026-10-23.
+	Revealable bool `json:"revealable"`
 }
 
 // Credit One work-level credit (ADR-32) -- the person's own name, so a client never needs a second round-trip just to display it.
@@ -5062,7 +5068,7 @@ type ListOrganisationsParams struct {
 	Role      *string `form:"role,omitempty" json:"role,omitempty"`
 	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
 
-	// Q Matches the start of the name.
+	// Q Matches anywhere in the name, any case.
 	Q    *string                      `form:"q,omitempty" json:"q,omitempty"`
 	Sort *ListOrganisationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir  *ListOrganisationsParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
@@ -5121,7 +5127,7 @@ type ListPeopleParams struct {
 	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
 
-	// Q Matches the start of the sort name.
+	// Q Matches anywhere in the name, any case.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
 }
 
@@ -6228,7 +6234,7 @@ type ServerInterface interface {
 	// Who the caller is and what they may see.
 	// (GET /me)
 	GetMe(w http.ResponseWriter, r *http.Request)
-	// The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash -- ADR-14: a secret is shown once, at creation, and never again.
+	// The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash; GET /me/apikeys/{id}/key shows one again (user, 2026-10-23, revising ADR-14's shown-once rule).
 	// (GET /me/apikeys)
 	ListMyAPIKeys(w http.ResponseWriter, r *http.Request)
 	// Mint a new key for the caller, self-service.
@@ -6237,6 +6243,9 @@ type ServerInterface interface {
 	// Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
 	// (DELETE /me/apikeys/{id})
 	DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64)
+	// One of the caller's own keys, in plaintext. 404 for someone else's key; 409 for a key made before keys were kept sealed, which can only be revoked and made anew.
+	// (GET /me/apikeys/{id}/key)
+	RevealMyAPIKey(w http.ResponseWriter, r *http.Request, id int64)
 	// Revoke the caller's calendar feed; the link stops working at once.
 	// (DELETE /me/calendar-feed)
 	DeleteMyCalendarFeed(w http.ResponseWriter, r *http.Request)
@@ -7425,7 +7434,7 @@ func (_ Unimplemented) GetMe(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash -- ADR-14: a secret is shown once, at creation, and never again.
+// The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash; GET /me/apikeys/{id}/key shows one again (user, 2026-10-23, revising ADR-14's shown-once rule).
 // (GET /me/apikeys)
 func (_ Unimplemented) ListMyAPIKeys(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -7440,6 +7449,12 @@ func (_ Unimplemented) CreateMyAPIKey(w http.ResponseWriter, r *http.Request) {
 // Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists.
 // (DELETE /me/apikeys/{id})
 func (_ Unimplemented) DeleteMyAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// One of the caller's own keys, in plaintext. 404 for someone else's key; 409 for a key made before keys were kept sealed, which can only be revoked and made anew.
+// (GET /me/apikeys/{id}/key)
+func (_ Unimplemented) RevealMyAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12602,6 +12617,39 @@ func (siw *ServerInterfaceWrapper) DeleteMyAPIKey(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// RevealMyAPIKey operation middleware
+func (siw *ServerInterfaceWrapper) RevealMyAPIKey(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RevealMyAPIKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteMyCalendarFeed operation middleware
 func (siw *ServerInterfaceWrapper) DeleteMyCalendarFeed(w http.ResponseWriter, r *http.Request) {
 
@@ -17735,6 +17783,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/me/apikeys/{id}", wrapper.DeleteMyAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/me/apikeys/{id}/key", wrapper.RevealMyAPIKey)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/me/calendar-feed", wrapper.DeleteMyCalendarFeed)

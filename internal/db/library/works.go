@@ -375,6 +375,11 @@ func addPrefix(predicates *store.Predicates, prefix string) {
 	predicates.Add("(sort_title >= ? AND sort_title < ?)", prefix, upper)
 }
 
+// containsPattern is a LIKE pattern, escaped with '\\', matching any lower-cased text containing search.
+func containsPattern(search string) string {
+	return "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(strings.ToLower(search)) + "%"
+}
+
 // prefixUpperBound is the first string ordering after every string with this prefix.
 // A prefix of nothing but 0xff bytes has no such bound, and then the lower one stands
 // alone rather than a wrong upper one being invented.

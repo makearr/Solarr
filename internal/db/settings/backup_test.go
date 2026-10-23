@@ -124,7 +124,7 @@ func TestBackupOnChange_APIKeyTouchNeverBacksUp(t *testing.T) {
 	// matters here.
 	before := rotationBackups(t, opened, backups)
 
-	key, err := cache.CreateAPIKey(t.Context(), fake, user.ID, "test", "hash")
+	key, err := cache.CreateAPIKey(t.Context(), fake, user.ID, "test", "hash", "")
 	if err != nil {
 		t.Fatalf("CreateAPIKey: %v", err)
 	}

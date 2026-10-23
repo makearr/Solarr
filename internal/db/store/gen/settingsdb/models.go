@@ -15,6 +15,7 @@ type ApiKey struct {
 	KeyHash    string
 	CreatedAt  int64
 	LastUsedAt sql.NullInt64
+	KeySealed  []byte
 }
 
 type AppUser struct {

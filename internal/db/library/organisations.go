@@ -26,11 +26,12 @@ func NewOrganisations(opened *store.Store) Organisations { return Organisations{
 // OrganisationFilter is PeopleFilter for organisations.
 type OrganisationFilter struct {
 	// Visible are the libraries the viewer may read; nil is every organisation, for a caller with no viewer.
-	Visible    []int64
-	Category   int64
-	Roles      []string
-	Monitored  *bool
-	NamePrefix string
+	Visible   []int64
+	Category  int64
+	Roles     []string
+	Monitored *bool
+	// NameContains narrows to organisations whose name contains it, any case.
+	NameContains string
 	// Sort is name, works or latest.
 	Sort string
 	Desc bool
@@ -105,13 +106,9 @@ func composeOrganisations(filter OrganisationFilter, after PeopleCursor, pageSiz
 	if filter.Monitored != nil {
 		predicates.Add("o.monitored = ?", boolInt(*filter.Monitored))
 	}
-	if filter.NamePrefix != "" {
-		upper, bounded := prefixUpperBound(filter.NamePrefix)
-		if bounded {
-			predicates.Add("(o.sort_name COLLATE NOCASE >= ? AND o.sort_name COLLATE NOCASE < ?)", filter.NamePrefix, upper)
-		} else {
-			predicates.Add("o.sort_name COLLATE NOCASE >= ?", filter.NamePrefix)
-		}
+	if filter.NameContains != "" {
+		like := containsPattern(filter.NameContains)
+		predicates.Add("(LOWER(o.name) LIKE ? ESCAPE '\\' OR LOWER(o.sort_name) LIKE ? ESCAPE '\\')", like, like)
 	}
 	direction, compare := "", ">"
 	if filter.Desc {

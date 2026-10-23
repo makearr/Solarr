@@ -496,6 +496,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/me/apikeys", server.ListMyAPIKeys)
 			secured.Post("/me/apikeys", server.CreateMyAPIKey)
 			secured.Delete("/me/apikeys/{id}", server.routeDeleteMyAPIKey)
+			secured.Get("/me/apikeys/{id}/key", server.routeRevealMyAPIKey)
 			secured.Get("/me/calendar-feed", server.GetMyCalendarFeed)
 			secured.Post("/me/calendar-feed", server.CreateMyCalendarFeed)
 			secured.Delete("/me/calendar-feed", server.DeleteMyCalendarFeed)

@@ -305,4 +305,6 @@ type APIKey struct {
 	Name       string
 	CreatedAt  time.Time
 	LastUsedAt time.Time
+	// Revealable is true when a sealed copy is kept, so the key can be shown again.
+	Revealable bool
 }

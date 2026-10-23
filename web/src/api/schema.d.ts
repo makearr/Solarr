@@ -1346,12 +1346,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash -- ADR-14: a secret is shown once, at creation, and never again. */
+        /** The caller's own non-interactive credentials for programmatic access (X-Api-Key or Bearer), for an upstream app that is not a person signing in. Never the key itself, or its hash; GET /me/apikeys/{id}/key shows one again (user, 2026-10-23, revising ADR-14's shown-once rule). */
         get: operations["listMyAPIKeys"];
         put?: never;
         /**
          * Mint a new key for the caller, self-service.
-         * @description The response's own `key` field is the only time the plaintext is ever returned -- store it now. Every other read of this key (this list included) only ever shows its name and timestamps.
+         * @description The response carries the plaintext; GET /me/apikeys/{id}/key shows it again.
          */
         post: operations["createMyAPIKey"];
         delete?: never;
@@ -1374,6 +1374,25 @@ export interface paths {
         post?: never;
         /** Revoke one of the caller's own keys. Refused (404, indistinguishable from missing, Invariant 37) for a key belonging to someone else -- never even reveals that a different user's key by that id exists. */
         delete: operations["deleteMyAPIKey"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/apikeys/{id}/key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** One of the caller's own keys, in plaintext. 404 for someone else's key; 409 for a key made before keys were kept sealed, which can only be revoked and made anew. */
+        get: operations["revealMyAPIKey"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4786,7 +4805,7 @@ export interface components {
             tier: "normal" | "advanced" | "expert";
             categories: components["schemas"]["Category"][];
         };
-        /** @description A non-interactive credential (X-Api-Key or Bearer), never the key itself or its hash -- see CreatedAPIKey for the one response that does carry the plaintext. */
+        /** @description A non-interactive credential (X-Api-Key or Bearer), never the key itself or its hash -- GET /me/apikeys/{id}/key shows it again. */
         APIKey: {
             /** Format: int64 */
             id: number;
@@ -4794,13 +4813,15 @@ export interface components {
             name: string;
             /** Format: date-time */
             created_at: string;
+            /** @description The key is kept sealed and can be shown again; false for a key made before 2026-10-23. */
+            revealable: boolean;
             /**
              * Format: date-time
              * @description Null until the key is presented for the first time.
              */
             last_used_at?: string | null;
         };
-        /** @description Answered only once, by POST /me/apikeys -- `key` is the plaintext, shown here and never again. */
+        /** @description Answered by POST /me/apikeys -- `key` is the plaintext. */
         CreatedAPIKey: components["schemas"]["APIKey"] & {
             /** @example mnx_... */
             key: string;
@@ -9848,7 +9869,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created. Store the key now; it is never shown again. */
+            /** @description Created, with the key. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -9882,6 +9903,34 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    revealMyAPIKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @example mnx_... */
+                        key: string;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     listJobs: {
@@ -13700,7 +13749,7 @@ export interface operations {
                 /** @description Comma-separated roles (network, label, studio, publisher); any when absent. */
                 role?: string;
                 monitored?: boolean;
-                /** @description Matches the start of the name. */
+                /** @description Matches anywhere in the name, any case. */
                 q?: string;
                 sort?: "name" | "works" | "latest";
                 dir?: "asc" | "desc";
@@ -13771,7 +13820,7 @@ export interface operations {
                 cursor?: string;
                 limit?: number;
                 monitored?: boolean;
-                /** @description Matches the start of the sort name. */
+                /** @description Matches anywhere in the name, any case. */
                 q?: string;
             };
             header?: never;

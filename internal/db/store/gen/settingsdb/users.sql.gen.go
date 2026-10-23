@@ -22,9 +22,9 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 }
 
 const createAPIKey = `-- name: CreateAPIKey :one
-INSERT INTO api_key (user_id, name, key_hash, created_at)
-VALUES (?, ?, ?, ?)
-RETURNING id, user_id, name, key_hash, created_at, last_used_at
+INSERT INTO api_key (user_id, name, key_hash, created_at, key_sealed)
+VALUES (?, ?, ?, ?, ?)
+RETURNING id, user_id, name, key_hash, created_at, last_used_at, key_sealed
 `
 
 type CreateAPIKeyParams struct {
@@ -32,6 +32,7 @@ type CreateAPIKeyParams struct {
 	Name      string
 	KeyHash   string
 	CreatedAt int64
+	KeySealed []byte
 }
 
 func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error) {
@@ -40,6 +41,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		arg.Name,
 		arg.KeyHash,
 		arg.CreatedAt,
+		arg.KeySealed,
 	)
 	var i ApiKey
 	err := row.Scan(
@@ -49,6 +51,7 @@ func (q *Queries) CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (Api
 		&i.KeyHash,
 		&i.CreatedAt,
 		&i.LastUsedAt,
+		&i.KeySealed,
 	)
 	return i, err
 }
@@ -131,7 +134,7 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 }
 
 const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, user_id, name, key_hash, created_at, last_used_at
+SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
 FROM api_key WHERE key_hash = ?
 `
 
@@ -145,6 +148,7 @@ func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, 
 		&i.KeyHash,
 		&i.CreatedAt,
 		&i.LastUsedAt,
+		&i.KeySealed,
 	)
 	return i, err
 }
@@ -253,7 +257,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (AppUs
 }
 
 const listAPIKeysForUser = `-- name: ListAPIKeysForUser :many
-SELECT id, user_id, name, key_hash, created_at, last_used_at
+SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
 FROM api_key WHERE user_id = ? ORDER BY created_at
 `
 
@@ -273,6 +277,7 @@ func (q *Queries) ListAPIKeysForUser(ctx context.Context, userID int64) ([]ApiKe
 			&i.KeyHash,
 			&i.CreatedAt,
 			&i.LastUsedAt,
+			&i.KeySealed,
 		); err != nil {
 			return nil, err
 		}

@@ -105,7 +105,7 @@ export function OrganisationIndex() {
           <option value="true">Followed</option>
           <option value="false">Not followed</option>
         </ToolbarSelect>
-        <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name starts with…" label={`Filter ${many.toLowerCase()} by name`} />
+        <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label={`Filter ${many.toLowerCase()} by name`} />
         <ToolbarSort
           sort={sort}
           descending={descending}

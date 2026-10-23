@@ -85,7 +85,7 @@ func (s *Server) ListOrganisations(w http.ResponseWriter, r *http.Request, param
 		return
 	}
 	query := PeopleQuery{
-		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, Prefix: derefOr(params.Q, ""),
+		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, NameContains: derefOr(params.Q, ""),
 		Sort: string(derefOr(params.Sort, gen.ListOrganisationsParamsSortName)),
 		Desc: derefOr(params.Dir, gen.ListOrganisationsParamsDirAsc) == gen.ListOrganisationsParamsDirDesc,
 	}

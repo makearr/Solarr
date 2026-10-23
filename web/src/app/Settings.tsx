@@ -5,7 +5,10 @@ import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
+import { useShowCalendar, useShowFooter } from "@/lib/interfacePreferences";
 import { isTierVisible, useTier, type Tier } from "@/lib/useTier";
+
+import { Card } from "./SettingsCard";
 
 /** Settings -> General, split apart on the 2026-09-19 review: Libraries, Blocklists, Network,
  *  Metadata. Quality profiles, indexers and download clients live where they are configured. */
@@ -80,6 +83,26 @@ export function MetadataSettingsPage() {
   return (
     <SettingsPage title="Metadata" requiredTier="normal">
       <MetadataSettings />
+    </SettingsPage>
+  );
+}
+
+/** The caller's own interface: what the frame around every page shows. */
+export function WebUISettings() {
+  const [showCalendar, setShowCalendar] = useShowCalendar();
+  const [showFooter, setShowFooter] = useShowFooter();
+  return (
+    <SettingsPage title="Web UI">
+      <Card title="Layout" help="Your own view only; every other account keeps its own.">
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={showCalendar} onChange={(event) => setShowCalendar(event.target.checked)} />
+          Show Calendar in the sidebar
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={showFooter} onChange={(event) => setShowFooter(event.target.checked)} />
+          Show the status bar along the bottom
+        </label>
+      </Card>
     </SettingsPage>
   );
 }

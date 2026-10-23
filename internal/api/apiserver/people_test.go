@@ -160,7 +160,7 @@ func TestListPeople_MonitoredAndQueryParamsReachTheFilter(t *testing.T) {
 		t.Fatalf("status %d (%s)", recorder.Code, recorder.Body)
 	}
 	query := fixture.people.lastQuery
-	if query.Monitored == nil || !*query.Monitored || query.Prefix != "Rad" || !slices.Equal(query.Roles, []string{"actor", "director"}) ||
+	if query.Monitored == nil || !*query.Monitored || query.NameContains != "Rad" || !slices.Equal(query.Roles, []string{"actor", "director"}) ||
 		query.Sort != "works" || !query.Desc {
 		t.Errorf("query = %+v, want monitored, prefix Rad, the two roles, by works descending", query)
 	}
