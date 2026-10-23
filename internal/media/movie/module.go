@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -45,6 +46,16 @@ type Module struct {
 	Service Service
 	// Passes are the type's periodic metadata passes.
 	media.Passes
+	// Rename names a movie's files for a rename; nil leaves movies without one.
+	Rename *RenameConfig
+}
+
+// NameFiles implements media.Renaming.
+func (m Module) NameFiles(ctx context.Context, category settings.Category, workID int64, files []renamejob.File) ([]renamejob.Named, error) {
+	if m.Rename == nil {
+		return nil, fmt.Errorf("movie: rename is not wired")
+	}
+	return m.Rename.NameFiles(ctx, category, workID, files)
 }
 
 // ScanSweep implements media.Scanning.

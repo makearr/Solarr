@@ -494,6 +494,13 @@ type MoveItem struct {
 	Error         sql.NullString
 }
 
+type MoveItemCompanion struct {
+	MoveJobID     int64
+	MediaObjectID int64
+	SourceRelPath string
+	DestRelPath   string
+}
+
 type MoveJob struct {
 	ID           int64
 	Reason       string

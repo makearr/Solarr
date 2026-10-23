@@ -200,12 +200,20 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 		return fmt.Errorf("media object %d has no library_path left to move", item.MediaObjectID)
 	}
 	primary := paths[0]
+	// A rescan after a folder was renamed by hand leaves the old row, missing, before the file's present one.
+	for _, candidate := range paths {
+		if candidate.IsPrimary == 1 && !candidate.MissingSince.Valid {
+			primary = candidate
+			break
+		}
+	}
 
 	if primary.RootFolderID == item.DestRootID && primary.RelPath == item.DestRelPath {
 		// Already at the destination: a prior attempt completed RECORD (and
 		// likely UNLINK) before crashing on the bookkeeping below. The old
 		// location is not recoverable from move_item, which does not
-		// persist it -- nothing left to do but finish the item.
+		// persist it -- what is left is the companions a crash may have cut short.
+		j.moveCompanions(ctx, item, primary.RootFolderID, permissions)
 		return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
 	}
 
@@ -254,9 +262,60 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 		// ErrNotExist is the expected outcome then, not a failure.
 		return fmt.Errorf("unlink source %q: %w", sourceAbs, err)
 	}
+	j.moveCompanions(ctx, item, primary.RootFolderID, permissions)
 	j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
 
 	return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
+}
+
+// moveCompanions moves the item's subtitles, nfo and pictures after it from sourceRootID; one already moved or gone is
+// done, one whose new name is taken stays (documentation/naming.md).
+func (j *Job) moveCompanions(ctx context.Context, item library.Item, sourceRootID int64, permissions *mover.Permissions) {
+	companions, err := j.moveJobs.Companions(ctx, item.MoveJobID, item.MediaObjectID)
+	if err != nil {
+		j.logger.Warn("companions not read", slog.Int64("media_object_id", item.MediaObjectID), slog.Any("error", err))
+		return
+	}
+	sourceRoot, sourceKnown := j.roots.RootFolder(sourceRootID)
+	destRoot, destKnown := j.roots.RootFolder(item.DestRootID)
+	if len(companions) == 0 || !sourceKnown || !destKnown {
+		return
+	}
+	rootPath := func(rootFolderID int64) (string, bool) {
+		root, ok := j.roots.RootFolder(rootFolderID)
+		return root.Path, ok
+	}
+	for _, companion := range companions {
+		sourceAbs, destAbs := path.Join(sourceRoot.Path, companion.SourceRelPath), path.Join(destRoot.Path, companion.DestRelPath)
+		info, err := j.fsys.Stat(sourceAbs)
+		if err != nil || sourceAbs == destAbs {
+			continue
+		}
+		if _, err := j.fsys.Stat(destAbs); err == nil {
+			j.logger.Warn("companion left where it is: its new name is taken", slog.String("path", sourceAbs), slog.String("taken", destAbs))
+			continue
+		}
+		move := mover.PlannedMove{
+			MediaObjectID: item.MediaObjectID, SourceRootFolderID: sourceRootID, SourceRelPath: companion.SourceRelPath,
+			DestRootFolderID: item.DestRootID, DestRelPath: companion.DestRelPath, SizeBytes: info.Size,
+			SameFilesystem: sourceRoot.FSID != "" && sourceRoot.FSID == destRoot.FSID,
+		}
+		if err := mover.ApplyOne(j.fsys, move, rootPath); err != nil {
+			j.logger.Warn("companion not moved", slog.String("path", sourceAbs), slog.Any("error", err))
+			continue
+		}
+		if !move.SameFilesystem {
+			if err := j.fsys.Remove(sourceAbs); err != nil && !errors.Is(err, fs.ErrNotExist) {
+				j.logger.Warn("companion copied but its old name not removed", slog.String("path", sourceAbs), slog.Any("error", err))
+			}
+		}
+		if permissions != nil {
+			if err := mover.ApplyPermissions(j.fsys, destRoot.Path, destAbs, *permissions); err != nil {
+				j.logger.Warn("permissions not set", slog.String("path", destAbs), slog.Any("error", err))
+			}
+		}
+		j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
+	}
 }
 
 // permissionsFor is the job's library's Set Permissions, or nil when it has none or it is off.

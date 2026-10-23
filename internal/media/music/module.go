@@ -9,8 +9,8 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
-	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -112,12 +112,12 @@ func (m Module) HuntSearch(ctx context.Context, itemID int64) (plan.Outcome, err
 	return m.Hunt(ctx, itemID)
 }
 
-// StartRename implements media.Renaming.
-func (m Module) StartRename(ctx context.Context, rootFolderID int64, scope media.RenameScope, preview bool) (mover.MovePlan, int64, map[int64][]string, error) {
+// NameFiles implements media.Renaming.
+func (m Module) NameFiles(ctx context.Context, category settings.Category, workID int64, files []renamejob.File) ([]renamejob.Named, error) {
 	if m.Rename == nil {
-		return mover.MovePlan{}, 0, nil, errors.New("music: rename is not wired")
+		return nil, errors.New("music: rename is not wired")
 	}
-	return RenameStart(ctx, *m.Rename, rootFolderID, scope, preview)
+	return m.Rename.NameFiles(ctx, category, workID, files)
 }
 
 // RegisterJobs implements media.Jobs.

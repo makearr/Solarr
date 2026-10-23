@@ -11,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -57,6 +58,16 @@ type Module struct {
 	FranchisePass *FranchisePass
 	// Crossovers finds the episodes that are one broadcast under two series; nil leaves the job unregistered.
 	Crossovers *CrossoverJob
+	// Rename names a series' files for a rename; nil leaves TV without one.
+	Rename *RenameConfig
+}
+
+// NameFiles implements media.Renaming.
+func (m Module) NameFiles(ctx context.Context, category settings.Category, workID int64, files []renamejob.File) ([]renamejob.Named, error) {
+	if m.Rename == nil {
+		return nil, fmt.Errorf("tv: rename is not wired")
+	}
+	return m.Rename.NameFiles(ctx, category, workID, files)
 }
 
 // MissingFranchiseMembers implements media.Franchising.

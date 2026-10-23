@@ -161,11 +161,20 @@ function PlanPreview({
   }
   const refused = new Set(plan.refused.map((entry) => entry.media_object_id));
   const runnable = plan.moves.filter((move) => !refused.has(move.media_object_id));
-  const firstRefusal = plan.refused[0];
+  const listed = new Set(plan.moves.map((move) => move.media_object_id));
+  const leftOut = plan.refused.filter((entry) => !listed.has(entry.media_object_id));
+  const firstRefusal = plan.refused.find((entry) => listed.has(entry.media_object_id));
   if (plan.moves.length === 0) {
     return (
       <div className="flex items-center gap-2 rounded-md border border-border-subtle bg-canvas p-2 text-xs text-ink-muted">
-        {firstRefusal ? <span className="text-danger">Refused -- {firstRefusal.reason}</span> : "Every file already has its name."}
+        {leftOut[0] ? (
+          <span>
+            Every other file already has its name; {leftOut.length} {leftOut.length === 1 ? "stays" : "stay"} as {leftOut.length === 1 ? "it is" : "they are"}:{" "}
+            {leftOut[0].reason}
+          </span>
+        ) : (
+          "Every file already has its name."
+        )}
         <Button variant="ghost" className="ml-auto" onClick={onClose}>
           Close
         </Button>
@@ -186,6 +195,12 @@ function PlanPreview({
   }
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-2 text-xs">
+      {leftOut.length > 0 && (
+        <p className="text-ink-muted">
+          {leftOut.length} more {leftOut.length === 1 ? "file stays" : "files stay"} where {leftOut.length === 1 ? "it is" : "they are"}:{" "}
+          {leftOut[0]!.reason}
+        </p>
+      )}
       {firstRefusal && (
         <p className="text-warn">
           {runnable.length === 0 ? "Shown, but nothing can be renamed" : `${plan.moves.length - runnable.length} of these cannot be renamed`}: {firstRefusal.reason}
@@ -207,6 +222,7 @@ function PlanPreview({
                       ⚠ {warning}
                     </span>
                   ))}
+                  <Companions move={move} />
                 </li>
               ))}
             </ul>
@@ -228,6 +244,20 @@ function PlanPreview({
         )}
       </div>
     </div>
+  );
+}
+
+/** The files that move with a media file (subtitles, nfo, pictures), current then new name. */
+export function Companions({ move }: { move: DrainPlan["moves"][number] }) {
+  if (!move.companions?.length) return null;
+  return (
+    <span className="flex flex-col pl-3 text-[0.6875rem] text-ink-muted">
+      {move.companions.map((companion) => (
+        <span key={companion.source_rel_path} className="truncate" title={`${companion.source_rel_path} → ${companion.dest_rel_path}`}>
+          + {companion.dest_rel_path.split("/").pop()}
+        </span>
+      ))}
+    </span>
   );
 }
 

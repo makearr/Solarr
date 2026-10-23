@@ -7,6 +7,7 @@ import (
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/moverjob"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -41,4 +42,14 @@ func (p *process) libraryPermissions(categoryID int64) (mover.Permissions, bool,
 	management := category.FileManagement
 	permissions, err := mover.PermissionsOf(management.FolderMode(), management.FileMode(), management.ChownGroup, lookupGroupID)
 	return permissions, err == nil, err
+}
+
+// renameEngine is the one rename every library uses; its media type only names the files.
+func (p *process) renameEngine() renamejob.Engine {
+	return renamejob.Engine{
+		Config: renamejob.Config{
+			Roots: adapters.DrainRoots{Cache: p.cache}, MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
+		},
+		Files: library.NewPhysical(p.library), FS: p.fsys,
+	}
 }

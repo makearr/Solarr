@@ -227,6 +227,37 @@ func (q *Queries) DeleteMediaObject(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteStaleDestinationPath = `-- name: DeleteStaleDestinationPath :exec
+DELETE FROM library_path
+WHERE library_path.root_folder_id = ?1 AND library_path.rel_path = ?2
+  AND library_path.missing_since IS NOT NULL
+  AND library_path.media_object_id = (SELECT o.media_object_id FROM library_path o
+                         WHERE o.root_folder_id = ?3 AND o.rel_path = ?4)
+`
+
+type DeleteStaleDestinationPathParams struct {
+	NewRootFolderID int64
+	NewRelPath      string
+	OldRootFolderID int64
+	OldRelPath      string
+}
+
+// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
+// where it lives. Matched by the old (root_folder_id, rel_path) rather than
+// by id, since that pair is what Apply already has in hand from its own
+// PlannedMove; :execrows lets the caller confirm exactly one row moved
+// rather than trusting a silent no-op.
+// The file's own row marked missing where it moves back to (a folder renamed by hand, then rescanned) is stale.
+func (q *Queries) DeleteStaleDestinationPath(ctx context.Context, arg DeleteStaleDestinationPathParams) error {
+	_, err := q.db.ExecContext(ctx, deleteStaleDestinationPath,
+		arg.NewRootFolderID,
+		arg.NewRelPath,
+		arg.OldRootFolderID,
+		arg.OldRelPath,
+	)
+	return err
+}
+
 const findMediaObjectsByQuickHash = `-- name: FindMediaObjectsByQuickHash :many
 SELECT id, size_bytes, quick_hash, content_hash, oshash, phash, audio_fp,
        audio_fp_prefix, fingerprinted_at, claimed_attributes_id,
@@ -718,6 +749,81 @@ func (q *Queries) ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHas
 	return items, nil
 }
 
+const listRenameFilesOnRoot = `-- name: ListRenameFilesOnRoot :many
+SELECT lp.media_object_id, lp.rel_path, o.size_bytes, d.work_id, CAST(COALESCE(d.edition_id, 0) AS INTEGER) AS edition_id,
+       f.media_ref
+FROM library_path lp
+JOIN media_object o ON o.id = lp.media_object_id
+JOIN desired_item_file f ON f.media_object_id = lp.media_object_id AND f.role = 'primary'
+JOIN desired_item d ON d.id = f.desired_item_id AND d.category_id = ?1
+WHERE lp.media_object_id IN (
+    SELECT p.media_object_id FROM library_path p
+    WHERE p.root_folder_id = ?2 AND p.is_primary = 1 AND p.missing_since IS NULL
+      AND p.media_object_id > ?3
+      AND (CAST(?4 AS INTEGER) = 0 OR EXISTS (
+        SELECT 1 FROM desired_item_file wf JOIN desired_item wd ON wd.id = wf.desired_item_id
+        WHERE wf.media_object_id = p.media_object_id AND wd.work_id = ?4))
+    ORDER BY p.media_object_id
+    LIMIT ?5)
+  AND lp.root_folder_id = ?2 AND lp.is_primary = 1 AND lp.missing_since IS NULL
+ORDER BY lp.media_object_id, d.work_id, f.media_ref
+`
+
+type ListRenameFilesOnRootParams struct {
+	CategoryID   int64
+	RootFolderID int64
+	AfterID      int64
+	WorkID       int64
+	PageSize     int64
+}
+
+type ListRenameFilesOnRootRow struct {
+	MediaObjectID int64
+	RelPath       string
+	SizeBytes     int64
+	WorkID        int64
+	EditionID     int64
+	MediaRef      string
+}
+
+// A rename's files: each primary file on a root still there, with every part of one library it covers, a page of
+// files at a time (all of one file's rows on one page); work_id narrows to one work, 0 is every work.
+func (q *Queries) ListRenameFilesOnRoot(ctx context.Context, arg ListRenameFilesOnRootParams) ([]ListRenameFilesOnRootRow, error) {
+	rows, err := q.db.QueryContext(ctx, listRenameFilesOnRoot,
+		arg.CategoryID,
+		arg.RootFolderID,
+		arg.AfterID,
+		arg.WorkID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListRenameFilesOnRootRow{}
+	for rows.Next() {
+		var i ListRenameFilesOnRootRow
+		if err := rows.Scan(
+			&i.MediaObjectID,
+			&i.RelPath,
+			&i.SizeBytes,
+			&i.WorkID,
+			&i.EditionID,
+			&i.MediaRef,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listStaleProbes = `-- name: ListStaleProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
@@ -1150,11 +1256,6 @@ type RelocateLibraryPathParams struct {
 	OldRelPath      string
 }
 
-// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
-// where it lives. Matched by the old (root_folder_id, rel_path) rather than
-// by id, since that pair is what Apply already has in hand from its own
-// PlannedMove; :execrows lets the caller confirm exactly one row moved
-// rather than trusting a silent no-op.
 func (q *Queries) RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPathParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, relocateLibraryPath,
 		arg.NewRootFolderID,

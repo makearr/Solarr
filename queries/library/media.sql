@@ -220,6 +220,14 @@ UPDATE library_path SET last_seen_at = ?, missing_since = NULL WHERE id = ?;
 -- by id, since that pair is what Apply already has in hand from its own
 -- PlannedMove; :execrows lets the caller confirm exactly one row moved
 -- rather than trusting a silent no-op.
+-- The file's own row marked missing where it moves back to (a folder renamed by hand, then rescanned) is stale.
+-- name: DeleteStaleDestinationPath :exec
+DELETE FROM library_path
+WHERE library_path.root_folder_id = sqlc.arg(new_root_folder_id) AND library_path.rel_path = sqlc.arg(new_rel_path)
+  AND library_path.missing_since IS NOT NULL
+  AND library_path.media_object_id = (SELECT o.media_object_id FROM library_path o
+                         WHERE o.root_folder_id = sqlc.arg(old_root_folder_id) AND o.rel_path = sqlc.arg(old_rel_path));
+
 -- name: RelocateLibraryPath :execrows
 UPDATE library_path SET root_folder_id = sqlc.arg(new_root_folder_id), rel_path = sqlc.arg(new_rel_path)
 WHERE root_folder_id = sqlc.arg(old_root_folder_id) AND rel_path = sqlc.arg(old_rel_path);
@@ -275,3 +283,24 @@ UPDATE media_object SET kind = ? WHERE id = ?;
 -- name: ListWorkIDsOfObject :many
 SELECT DISTINCT di.work_id FROM desired_item_file f JOIN desired_item di ON di.id = f.desired_item_id
 WHERE f.media_object_id = ? ORDER BY di.work_id;
+
+-- A rename's files: each primary file on a root still there, with every part of one library it covers, a page of
+-- files at a time (all of one file's rows on one page); work_id narrows to one work, 0 is every work.
+-- name: ListRenameFilesOnRoot :many
+SELECT lp.media_object_id, lp.rel_path, o.size_bytes, d.work_id, CAST(COALESCE(d.edition_id, 0) AS INTEGER) AS edition_id,
+       f.media_ref
+FROM library_path lp
+JOIN media_object o ON o.id = lp.media_object_id
+JOIN desired_item_file f ON f.media_object_id = lp.media_object_id AND f.role = 'primary'
+JOIN desired_item d ON d.id = f.desired_item_id AND d.category_id = sqlc.arg(category_id)
+WHERE lp.media_object_id IN (
+    SELECT p.media_object_id FROM library_path p
+    WHERE p.root_folder_id = sqlc.arg(root_folder_id) AND p.is_primary = 1 AND p.missing_since IS NULL
+      AND p.media_object_id > sqlc.arg(after_id)
+      AND (CAST(sqlc.arg(work_id) AS INTEGER) = 0 OR EXISTS (
+        SELECT 1 FROM desired_item_file wf JOIN desired_item wd ON wd.id = wf.desired_item_id
+        WHERE wf.media_object_id = p.media_object_id AND wd.work_id = sqlc.arg(work_id)))
+    ORDER BY p.media_object_id
+    LIMIT sqlc.arg(page_size))
+  AND lp.root_folder_id = sqlc.arg(root_folder_id) AND lp.is_primary = 1 AND lp.missing_since IS NULL
+ORDER BY lp.media_object_id, d.work_id, f.media_ref;

@@ -142,18 +142,14 @@ func (g goldenServer) send(t *testing.T, method, target, body string) (int, stri
 	return recorder.Code, recorder.Body.String()
 }
 
-// A library is renamed by its own media type's formats; one whose type cannot rename is refused, never renamed by
-// another type's.
+// Every library renames through the one engine, each by its own media type's names (2026-10-23).
 func TestRenameLibrary_AsksTheLibrarysMediaType(t *testing.T) {
 	server := newGoldenServer(t)
 	ids := server.seedLibraries(t)
 
-	status, body := server.post(t, fmt.Sprintf("/categories/%d/rename", ids.music), `{"preview":true}`)
-	if status != http.StatusOK {
-		t.Errorf("rename preview of the music library = %d, body = %s, want 200", status, body)
-	}
-	status, body = server.post(t, fmt.Sprintf("/categories/%d/rename", ids.tv), `{"preview":true}`)
-	if status != http.StatusConflict || !strings.Contains(body, "renaming a tv library is not built yet") {
-		t.Errorf("rename preview of the TV library = %d, body = %s, want 409 naming the reason", status, body)
+	for name, id := range map[string]int64{"music": ids.music, "tv": ids.tv} {
+		if status, body := server.post(t, fmt.Sprintf("/categories/%d/rename", id), `{"preview":true}`); status != http.StatusOK {
+			t.Errorf("rename preview of the %s library = %d, body = %s, want 200", name, status, body)
+		}
 	}
 }

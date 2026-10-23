@@ -26,6 +26,8 @@ type Target struct {
 	ProposedRelPath string
 	// Warnings are naming.RenderPath's non-fatal notices about the proposed path.
 	Warnings []naming.Warning
+	// Companions move with the file: what is beside it and, when its whole folder moves, the folder's own files.
+	Companions []mover.Companion
 }
 
 // Changed reports whether the proposed path differs from the current one.
@@ -82,7 +84,7 @@ func Start(
 			MediaObjectID: target.MediaObjectID, SourceRootFolderID: rootFolderID,
 			SourceRelPath: target.CurrentRelPath, SizeBytes: target.SizeBytes,
 			AffinityKey:      fmt.Sprintf("work:%d", target.WorkID),
-			DestRootFolderID: rootFolderID, DestRelPath: target.ProposedRelPath,
+			DestRootFolderID: rootFolderID, DestRelPath: target.ProposedRelPath, Companions: target.Companions,
 		}
 	}
 	candidate := rootCandidate(rootFolderID, root)
@@ -113,6 +115,9 @@ func Start(
 		items[i] = library.NewMoveItem{
 			MediaObjectID: move.MediaObjectID, AffinityKey: move.AffinityKey,
 			DestRootID: move.DestRootFolderID, DestRelPath: move.DestRelPath, Bytes: move.SizeBytes,
+		}
+		for _, companion := range move.Companions {
+			items[i].Companions = append(items[i].Companions, library.MoveCompanion(companion))
 		}
 		bytesTotal += move.SizeBytes
 	}

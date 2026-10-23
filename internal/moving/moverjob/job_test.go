@@ -2,6 +2,7 @@ package moverjob_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -533,5 +534,88 @@ func TestJob_AppliesTheLibrarysPermissionsToARename(t *testing.T) {
 		if changed := info.Mode.Perm() == 0o660; changed != (categoryID != nil) {
 			t.Errorf("library %v: file mode %04o", categoryID, info.Mode.Perm())
 		}
+	}
+}
+
+// A file's companions move with it in the same item; one whose new name is taken stays, nothing is overwritten, and
+// the old folder goes once it is empty (2026-10-23).
+func TestJob_MovesAFilesCompanionsWithIt(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/Old/ep.mkv", "episode")
+	fx.writeFile(t, "/root1/Old/ep.en.srt", "subtitle")
+	fx.writeFile(t, "/root1/Old/ep.nfo", "nfo")
+	fx.writeFile(t, "/root1/New/ep - Pilot.nfo", "already there")
+	objectID := fx.registerObject(t, 1, "Old/ep.mkv", "episode")
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonRename), FilesTotal: 1, BytesTotal: 7, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 1, DestRelPath: "New/ep - Pilot.mkv", Bytes: 7,
+		Companions: []library.MoveCompanion{
+			{SourceRelPath: "Old/ep.en.srt", DestRelPath: "New/ep - Pilot.en.srt"},
+			{SourceRelPath: "Old/ep.nfo", DestRelPath: "New/ep - Pilot.nfo"},
+		},
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+
+	if err := fx.run(t, fx.job(fakeRoots{1: {Path: "/root1", FSID: "fs-a"}}), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := fx.readFile(t, "/root1/New/ep - Pilot.en.srt"); got != "subtitle" || fx.exists("/root1/Old/ep.en.srt") {
+		t.Errorf("subtitle at its new name = %q, old one still there %v; want it moved", got, fx.exists("/root1/Old/ep.en.srt"))
+	}
+	if got := fx.readFile(t, "/root1/New/ep - Pilot.nfo"); got != "already there" || !fx.exists("/root1/Old/ep.nfo") {
+		t.Errorf("taken nfo name holds %q, old nfo kept %v; want the file there untouched and the companion left", got, fx.exists("/root1/Old/ep.nfo"))
+	}
+}
+
+// A folder renamed by hand and rescanned leaves the file's old row, missing, where a rename now puts it back: the file
+// still moves from where it is, and the stale row gives way (2026-10-23, seen live).
+func TestJob_RenamesBackOverTheFilesOwnMissingRow(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/renamed/ep.mkv", "episode")
+	objectID := fx.registerObject(t, 1, "Show/ep.mkv", "episode")
+	if err := fx.store.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `UPDATE library_path SET missing_since = 1 WHERE media_object_id = ?`, objectID); err != nil {
+			return err
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO library_path (media_object_id, root_folder_id, rel_path, link_kind, is_primary, created_at)
+			VALUES (?, 1, 'renamed/ep.mkv', 'primary', 1, 2)`, objectID)
+		return err
+	}); err != nil {
+		t.Fatalf("seed the rescan: %v", err)
+	}
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonRename), FilesTotal: 1, BytesTotal: 7, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 1, DestRelPath: "Show/ep.mkv", Bytes: 7,
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+	if err := fx.run(t, fx.job(fakeRoots{1: {Path: "/root1", FSID: "fs-a"}}), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got := fx.readFile(t, "/root1/Show/ep.mkv"); got != "episode" || fx.exists("/root1/renamed/ep.mkv") {
+		t.Errorf("file at its new name = %q, old one still there %v; want it moved", got, fx.exists("/root1/renamed/ep.mkv"))
+	}
+	paths, err := library.NewPhysical(fx.store).PathsForObject(t.Context(), objectID)
+	if err != nil {
+		t.Fatalf("PathsForObject: %v", err)
+	}
+	if len(paths) != 1 || paths[0].RelPath != "Show/ep.mkv" || paths[0].MissingSince.Valid {
+		t.Errorf("paths = %+v, want the one present row at Show/ep.mkv", paths)
 	}
 }

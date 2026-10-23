@@ -6,6 +6,8 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 
+import { Companions } from "./Moves";
+
 type LibraryRenamePlan = components["schemas"]["LibraryRenamePlan"];
 
 /** A preview of every file of a library, or of one of its works, whose name would change, then the rename. */
@@ -38,6 +40,8 @@ export function RenamePlanner({
 
   const moves = plan?.roots.flatMap((root) => root.plan.moves) ?? [];
   const refused = plan?.roots.flatMap((root) => root.plan.refused) ?? [];
+  const refusedIDs = new Set(refused.map((entry) => entry.media_object_id));
+  const runnable = moves.filter((move) => !refusedIDs.has(move.media_object_id));
   const started = plan?.roots.some((root) => root.plan.accepted) ?? false;
 
   return (
@@ -80,6 +84,7 @@ export function RenamePlanner({
               <li key={move.media_object_id} className="flex flex-col border-b border-border-subtle px-2 py-1 last:border-0">
                 <span className="break-all font-mono text-ink-muted line-through">{move.source_rel_path}</span>
                 <span className="break-all font-mono">{move.dest_rel_path}</span>
+                <Companions move={move} />
               </li>
             ))}
           </ul>
@@ -87,10 +92,10 @@ export function RenamePlanner({
             <Button
               variant="primary"
               type="button"
-              disabled={run.isPending}
+              disabled={run.isPending || runnable.length === 0}
               onClick={() => run.mutate(false)}
             >
-              {run.isPending && !run.variables ? "Starting…" : `Rename ${moves.length} ${moves.length === 1 ? "file" : "files"}`}
+              {run.isPending && !run.variables ? "Starting…" : `Rename ${runnable.length} ${runnable.length === 1 ? "file" : "files"}`}
             </Button>
           </div>
         </>

@@ -242,5 +242,5 @@ The season counts are recomputed in the same transaction; the log line "episodes
 ## Where a media type plugs in
 
 A module brings job types through `RegisterJobs` (`media.JobRegistration`), says what its libraries lack through `media.Healthy`
-(the TV module asks for a TMDB key), and renames through `media.Renaming`, whose planner and move job are shared
-(`internal/moving/renamejob`). TV has no `Renaming` yet; see `private/opus.md` for why (the files beside an episode).
+(the TV module asks for a TMDB key), and renames through `media.Renaming`: the type only names one work's files
+(`NameFiles`); `renamejob.Engine` lists them, finds their companions and plans the move job for every type alike.

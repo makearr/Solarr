@@ -60,3 +60,10 @@ WHERE id = sqlc.arg(move_job_id);
 -- name: ListMoveItems :many
 SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error
 FROM move_item WHERE move_job_id = ? ORDER BY media_object_id;
+
+-- name: InsertMoveItemCompanion :exec
+INSERT INTO move_item_companion (move_job_id, media_object_id, source_rel_path, dest_rel_path) VALUES (?, ?, ?, ?);
+
+-- name: ListMoveItemCompanions :many
+SELECT move_job_id, media_object_id, source_rel_path, dest_rel_path
+FROM move_item_companion WHERE move_job_id = ? AND media_object_id = ? ORDER BY source_rel_path;

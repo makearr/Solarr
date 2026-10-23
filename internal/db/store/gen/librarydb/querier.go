@@ -252,6 +252,13 @@ type Querier interface {
 	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
 	// A root that is removed from configuration leaves no progress behind.
 	DeleteScanState(ctx context.Context, rootFolderID int64) error
+	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
+	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
+	// by id, since that pair is what Apply already has in hand from its own
+	// PlannedMove; :execrows lets the caller confirm exactly one row moved
+	// rather than trusting a silent no-op.
+	// The file's own row marked missing where it moves back to (a folder renamed by hand, then rescanned) is stale.
+	DeleteStaleDestinationPath(ctx context.Context, arg DeleteStaleDestinationPathParams) error
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
@@ -422,6 +429,7 @@ type Querier interface {
 	// shape ImportSessions.AddUnits already uses) -- modernc's sqlite driver
 	// does not support :copyfrom (pgx/mysql only).
 	InsertMoveItem(ctx context.Context, arg InsertMoveItemParams) error
+	InsertMoveItemCompanion(ctx context.Context, arg InsertMoveItemCompanionParams) error
 	InsertPackItem(ctx context.Context, arg InsertPackItemParams) error
 	// Physical files. Column lists follow table order, or sqlc stops reusing models.
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
@@ -627,6 +635,7 @@ type Querier interface {
 	ListMonitoredPartsLosingFiles(ctx context.Context, arg ListMonitoredPartsLosingFilesParams) ([]ListMonitoredPartsLosingFilesRow, error)
 	// The wanted items searched most that are still missing, most first; the statistics job keeps the top of each library.
 	ListMostSearchedMissing(ctx context.Context) ([]ListMostSearchedMissingRow, error)
+	ListMoveItemCompanions(ctx context.Context, arg ListMoveItemCompanionsParams) ([]MoveItemCompanion, error)
 	ListMoveItems(ctx context.Context, moveJobID int64) ([]MoveItem, error)
 	// Small, operator-facing list -- move counts never approach library scale,
 	// the same reasoning ListImportSessions' own comment already gives.
@@ -702,6 +711,9 @@ type Querier interface {
 	// Pairs of works a provider says are related (an anime's sequel, its spin-off).
 	ListRelatedWorkPairs(ctx context.Context, mediaType string) ([]ListRelatedWorkPairsRow, error)
 	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
+	// A rename's files: each primary file on a root still there, with every part of one library it covers, a page of
+	// files at a time (all of one file's rows on one page); work_id narrows to one work, 0 is every work.
+	ListRenameFilesOnRoot(ctx context.Context, arg ListRenameFilesOnRootParams) ([]ListRenameFilesOnRootRow, error)
 	// Newest first: a user's own request history.
 	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
@@ -953,11 +965,6 @@ type Querier interface {
 	// Recycled bytes count against the free-space gate, so they are summed per
 	// root rather than assumed to be free (ADR-12).
 	RecycledBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
-	// ADR-51's own RECORD step: media_object never changes (Invariant 70), only
-	// where it lives. Matched by the old (root_folder_id, rel_path) rather than
-	// by id, since that pair is what Apply already has in hand from its own
-	// PlannedMove; :execrows lets the caller confirm exactly one row moved
-	// rather than trusting a silent no-op.
 	RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPathParams) (int64, error)
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveCollectionMember(ctx context.Context, arg RemoveCollectionMemberParams) error

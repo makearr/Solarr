@@ -140,6 +140,65 @@ func (q *Queries) InsertMoveItem(ctx context.Context, arg InsertMoveItemParams) 
 	return err
 }
 
+const insertMoveItemCompanion = `-- name: InsertMoveItemCompanion :exec
+INSERT INTO move_item_companion (move_job_id, media_object_id, source_rel_path, dest_rel_path) VALUES (?, ?, ?, ?)
+`
+
+type InsertMoveItemCompanionParams struct {
+	MoveJobID     int64
+	MediaObjectID int64
+	SourceRelPath string
+	DestRelPath   string
+}
+
+func (q *Queries) InsertMoveItemCompanion(ctx context.Context, arg InsertMoveItemCompanionParams) error {
+	_, err := q.db.ExecContext(ctx, insertMoveItemCompanion,
+		arg.MoveJobID,
+		arg.MediaObjectID,
+		arg.SourceRelPath,
+		arg.DestRelPath,
+	)
+	return err
+}
+
+const listMoveItemCompanions = `-- name: ListMoveItemCompanions :many
+SELECT move_job_id, media_object_id, source_rel_path, dest_rel_path
+FROM move_item_companion WHERE move_job_id = ? AND media_object_id = ? ORDER BY source_rel_path
+`
+
+type ListMoveItemCompanionsParams struct {
+	MoveJobID     int64
+	MediaObjectID int64
+}
+
+func (q *Queries) ListMoveItemCompanions(ctx context.Context, arg ListMoveItemCompanionsParams) ([]MoveItemCompanion, error) {
+	rows, err := q.db.QueryContext(ctx, listMoveItemCompanions, arg.MoveJobID, arg.MediaObjectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MoveItemCompanion{}
+	for rows.Next() {
+		var i MoveItemCompanion
+		if err := rows.Scan(
+			&i.MoveJobID,
+			&i.MediaObjectID,
+			&i.SourceRelPath,
+			&i.DestRelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMoveItems = `-- name: ListMoveItems :many
 SELECT move_job_id, media_object_id, affinity_key, dest_root_id, dest_rel_path, bytes, state, error
 FROM move_item WHERE move_job_id = ? ORDER BY media_object_id

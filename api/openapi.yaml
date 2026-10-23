@@ -7537,6 +7537,17 @@ components:
             own total-path-length recommendation. Always present but only
             ever populated for a rename plan; a drain never renames a file,
             so this is always empty there.
+        companions:
+          type: array
+          items: { $ref: "#/components/schemas/MoveCompanion" }
+          description: The files that move with it, which are no media of their own (subtitles, nfo, pictures); absent when none.
+
+    MoveCompanion:
+      type: object
+      required: [source_rel_path, dest_rel_path]
+      properties:
+        source_rel_path: { type: string }
+        dest_rel_path: { type: string }
 
     DrainRefusal:
       type: object

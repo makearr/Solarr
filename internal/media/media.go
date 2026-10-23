@@ -15,8 +15,8 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/jobs"
-	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/moving/naming"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 )
 
@@ -467,17 +467,10 @@ func (d Descriptor) LeadRole() (string, bool) {
 	return "", false
 }
 
-// Renaming is the capability of a media type that can rename a library's files to its naming formats.
+// Renaming is the capability of a media type whose library's files can be renamed to its naming formats: the type
+// names one work's files, renamejob.Engine does everything else the same for every type.
 type Renaming interface {
-	// StartRename plans, and unless preview starts, the rename of one root's files within scope. It answers the plan,
-	// the job started (0 for a preview) and warnings per media object.
-	StartRename(ctx context.Context, rootFolderID int64, scope RenameScope, preview bool) (mover.MovePlan, int64, map[int64][]string, error)
-}
-
-// RenameScope narrows a rename: to one library's works, and to one work; zero means no narrowing.
-type RenameScope struct {
-	CategoryID int64
-	WorkID     int64
+	renamejob.Namer
 }
 
 // Feeding is the capability of a media type whose wanted items are also filled from the indexers' feeds.

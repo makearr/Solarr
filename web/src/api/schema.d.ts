@@ -4790,6 +4790,12 @@ export interface components {
             affinity_key: string;
             /** @description Non-fatal notices about dest_rel_path -- today, only naming's own total-path-length recommendation. Always present but only ever populated for a rename plan; a drain never renames a file, so this is always empty there. */
             warnings?: string[];
+            /** @description The files that move with it, which are no media of their own (subtitles, nfo, pictures); absent when none. */
+            companions?: components["schemas"]["MoveCompanion"][];
+        };
+        MoveCompanion: {
+            source_rel_path: string;
+            dest_rel_path: string;
         };
         DrainRefusal: {
             /** Format: int64 */

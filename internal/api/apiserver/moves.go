@@ -89,6 +89,13 @@ type DrainMoveRow struct {
 	// for a rename plan; a drain never renames a file, so this stays empty
 	// there.
 	Warnings []string
+	// Companions are the files that move with it, current then new path.
+	Companions []MoveCompanionRow
+}
+
+// MoveCompanionRow is one file that moves with a media file.
+type MoveCompanionRow struct {
+	SourceRelPath, DestRelPath string
 }
 
 // DrainRefusalRow is one file (or every file, for a whole-batch refusal) a
@@ -340,6 +347,13 @@ func drainPlanView(result DrainPlanResult) gen.DrainPlan {
 		// serialise as null.
 		if len(m.Warnings) > 0 {
 			view.Moves[i].Warnings = &m.Warnings
+		}
+		if len(m.Companions) > 0 {
+			companions := make([]gen.MoveCompanion, len(m.Companions))
+			for k, companion := range m.Companions {
+				companions[k] = gen.MoveCompanion{SourceRelPath: companion.SourceRelPath, DestRelPath: companion.DestRelPath}
+			}
+			view.Moves[i].Companions = &companions
 		}
 	}
 	for i, refusal := range result.Refused {

@@ -362,6 +362,12 @@ var ErrPathNotFound = errors.New("library: no library_path at the given location
 // already carries -- no lookup needed before the update.
 func (p Physical) Relocate(ctx context.Context, oldRootFolderID int64, oldRelPath string, newRootFolderID int64, newRelPath string) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		if err := librarydb.New(tx).DeleteStaleDestinationPath(ctx, librarydb.DeleteStaleDestinationPathParams{
+			NewRootFolderID: newRootFolderID, NewRelPath: newRelPath,
+			OldRootFolderID: oldRootFolderID, OldRelPath: oldRelPath,
+		}); err != nil {
+			return err
+		}
 		affected, err := librarydb.New(tx).RelocateLibraryPath(ctx, librarydb.RelocateLibraryPathParams{
 			NewRootFolderID: newRootFolderID, NewRelPath: newRelPath,
 			OldRootFolderID: oldRootFolderID, OldRelPath: oldRelPath,

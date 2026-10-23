@@ -67,12 +67,7 @@ func (p *process) musicModule() music.Module {
 		// category yet -- ensureDefaultQualityProfile seeded it at startup.
 		DefaultProfileID: p.defaultQualityProfileID,
 	})
-	rename := music.RenameConfig{
-		Categories: adapters.Categories{Cache: p.cache},
-		Roots:      adapters.DrainRoots{Cache: p.cache}, Files: physical,
-		Identities: library.NewDesired(p.library), Works: library.NewWorks(p.library),
-		MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem(),
-	}
+	rename := music.RenameConfig{Works: library.NewWorks(p.library)}
 	feed := music.Feed{
 		Grab: p.musicGrab(), Indexers: p.indexerConns, WantedByArtist: library.NewHunt(p.library).WantedAlbumsByArtist, Logger: p.logger,
 	}
@@ -152,6 +147,7 @@ func (p *process) tvModule() tv.Module {
 			},
 		},
 		Hunt:     p.tvHunt,
+		Rename:   &tv.RenameConfig{Series: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Adder:    p.seriesCatalog(),
 		Pictures: p.seriesCatalog(),
 		Renumber: p.seriesCatalog(),
@@ -367,6 +363,7 @@ func (p *process) movieModule() movie.Module {
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
 		Adder: catalog, Franchise: catalog,
+		Rename:    &movie.RenameConfig{Movies: library.NewSeriesReader(p.library)},
 		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared},
 		Files: movie.Files{
 			Resolver: movie.Resolver{

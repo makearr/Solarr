@@ -56,4 +56,11 @@ never overwritten; a skipped extra is logged and never fails the album. Extras a
 
 `POST /categories/{id}/rename` runs one rename per root the library uses, through the move
 engine (ADR-51), touching only that library's works. Preview first; read-only roots refuse unless
-they allow renaming.
+they allow renaming. Music, TV and movies share one engine (`renamejob.Engine`); the media type only names a
+work's files. A file two works hold (a crossover episode) stays where it is.
+
+Files that are no media move with their file in the same item (`move_item_companion`): one named like it plus an
+ending (`.en.srt`, `.nfo`, `-thumb.jpg`, `.lrc`) takes the new name with that ending; when every media file of a
+folder moves to one new folder (an album, a season, a movie, and the artist or series folder above), the folder's
+other files (`cover.jpg`, `tvshow.nfo`) go with it. An audio or video file is never a companion, and a companion
+whose new name is taken stays where it is.

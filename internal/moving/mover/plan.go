@@ -56,6 +56,15 @@ type FileToMove struct {
 	// DestRelPath is already computed by the caller (internal/moving/naming for a
 	// rename, unchanged for category/rebalance/drain).
 	DestRelPath string
+	// Companions move with the file in the same item: files beside it that are no media objects.
+	Companions []Companion
+}
+
+// Companion is a file that moves with a media file but is none itself (a subtitle, an nfo, a picture), on the root
+// its file moves to.
+type Companion struct {
+	SourceRelPath string
+	DestRelPath   string
 }
 
 // Request is what Plan needs.
@@ -95,6 +104,7 @@ type PlannedMove struct {
 	// once, here, from both roots' FSID, rather than re-derived per file
 	// during Apply.
 	SameFilesystem bool
+	Companions     []Companion
 }
 
 // RefusedFile is one file Plan could not place, and why -- ADR-10's own
@@ -203,7 +213,7 @@ func Plan(req Request) (MovePlan, error) {
 			result.Moves = append(result.Moves, PlannedMove{
 				MediaObjectID: f.MediaObjectID, SourceRootFolderID: f.SourceRootFolderID,
 				SourceRelPath: f.SourceRelPath, DestRootFolderID: f.DestRootFolderID,
-				DestRelPath: f.DestRelPath, SizeBytes: f.SizeBytes, AffinityKey: g.affinityKey,
+				DestRelPath: f.DestRelPath, SizeBytes: f.SizeBytes, AffinityKey: g.affinityKey, Companions: f.Companions,
 				SameFilesystem: source.FSID != "" && source.FSID == destCandidate.FSID,
 			})
 			// Bytes leaving a root free up space there -- tracked per file

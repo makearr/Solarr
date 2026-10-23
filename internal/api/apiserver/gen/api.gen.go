@@ -1745,11 +1745,14 @@ type DownloaderOptions struct {
 // DrainMove defines model for DrainMove.
 type DrainMove struct {
 	// AffinityKey The top-level directory this file was grouped and moved with.
-	AffinityKey      string `json:"affinity_key"`
-	DestRelPath      string `json:"dest_rel_path"`
-	DestRootFolderId int64  `json:"dest_root_folder_id"`
-	MediaObjectId    int64  `json:"media_object_id"`
-	SizeBytes        int64  `json:"size_bytes"`
+	AffinityKey string `json:"affinity_key"`
+
+	// Companions The files that move with it, which are no media of their own (subtitles, nfo, pictures); absent when none.
+	Companions       *[]MoveCompanion `json:"companions,omitempty"`
+	DestRelPath      string           `json:"dest_rel_path"`
+	DestRootFolderId int64            `json:"dest_root_folder_id"`
+	MediaObjectId    int64            `json:"media_object_id"`
+	SizeBytes        int64            `json:"size_bytes"`
 
 	// SourceRelPath The file's current path -- present so a caller can render the full "current vs proposed" diff section 11.8 asks for, not just the proposed side.
 	SourceRelPath *string `json:"source_rel_path,omitempty"`
@@ -3109,6 +3112,12 @@ type MetadataSettingsTvSources string
 
 // MetadataSource A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.
 type MetadataSource string
+
+// MoveCompanion defines model for MoveCompanion.
+type MoveCompanion struct {
+	DestRelPath   string `json:"dest_rel_path"`
+	SourceRelPath string `json:"source_rel_path"`
+}
 
 // MoveJob defines model for MoveJob.
 type MoveJob struct {

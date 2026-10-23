@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -88,6 +89,13 @@ type NewMoveItem struct {
 	DestRootID    int64
 	DestRelPath   string
 	Bytes         int64
+	// Companions move with the file: its subtitles, nfo, pictures, which are no media objects of their own.
+	Companions []MoveCompanion
+}
+
+// MoveCompanion is one file that moves with an item, within the item's root.
+type MoveCompanion struct {
+	SourceRelPath, DestRelPath string
 }
 
 // Create starts one job in MoveJobPlanned, with no items yet.
@@ -118,23 +126,51 @@ func (m MoveJobs) AddItems(ctx context.Context, jobID int64, items []NewMoveItem
 	if len(items) == 0 {
 		return nil
 	}
-	err := m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		for _, item := range items {
-			if err := queries.InsertMoveItem(ctx, librarydb.InsertMoveItemParams{
-				MoveJobID: jobID, MediaObjectID: item.MediaObjectID, AffinityKey: item.AffinityKey,
-				DestRootID: item.DestRootID, DestRelPath: item.DestRelPath, Bytes: item.Bytes,
-				State: MoveItemPending,
-			}); err != nil {
-				return fmt.Errorf("insert item for media object %d: %w", item.MediaObjectID, err)
+	for chunk := range slices.Chunk(items, moveItemChunk) {
+		err := m.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			queries := librarydb.New(tx)
+			for _, item := range chunk {
+				if err := queries.InsertMoveItem(ctx, librarydb.InsertMoveItemParams{
+					MoveJobID: jobID, MediaObjectID: item.MediaObjectID, AffinityKey: item.AffinityKey,
+					DestRootID: item.DestRootID, DestRelPath: item.DestRelPath, Bytes: item.Bytes,
+					State: MoveItemPending,
+				}); err != nil {
+					return fmt.Errorf("insert item for media object %d: %w", item.MediaObjectID, err)
+				}
+				for _, companion := range item.Companions {
+					if err := queries.InsertMoveItemCompanion(ctx, librarydb.InsertMoveItemCompanionParams{
+						MoveJobID: jobID, MediaObjectID: item.MediaObjectID,
+						SourceRelPath: companion.SourceRelPath, DestRelPath: companion.DestRelPath,
+					}); err != nil {
+						return fmt.Errorf("insert companion %q of media object %d: %w", companion.SourceRelPath, item.MediaObjectID, err)
+					}
+				}
 			}
+			return nil
+		})
+		if err != nil {
+			return fmt.Errorf("library: add items to move job %d: %w", jobID, err)
 		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("library: add items to move job %d: %w", jobID, err)
 	}
 	return nil
+}
+
+// moveItemChunk is how many items one write adds, so a whole root's rename stays within the bulk-write budget.
+const moveItemChunk = 200
+
+// Companions answers the files that move with one item.
+func (m MoveJobs) Companions(ctx context.Context, jobID, mediaObjectID int64) ([]MoveCompanion, error) {
+	rows, err := librarydb.New(m.store.Read()).ListMoveItemCompanions(ctx, librarydb.ListMoveItemCompanionsParams{
+		MoveJobID: jobID, MediaObjectID: mediaObjectID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: companions of item %d in move job %d: %w", mediaObjectID, jobID, err)
+	}
+	companions := make([]MoveCompanion, len(rows))
+	for index, row := range rows {
+		companions[index] = MoveCompanion{SourceRelPath: row.SourceRelPath, DestRelPath: row.DestRelPath}
+	}
+	return companions, nil
 }
 
 // SetRunning transitions a job from PLANNED to RUNNING -- once, at the start

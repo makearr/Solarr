@@ -815,7 +815,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		MediaTypes:     adapters.MediaTypes{Registry: p.media},
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},
 		LibraryArtists: adapters.Artists{People: library.NewPeople(p.library)},
-		RenameStarter:  adapters.Rename{Registry: p.media, Settings: p.cache},
+		RenameStarter:  adapters.Rename{Registry: p.media, Settings: p.cache, Engine: p.renameEngine()},
 		NamingSchemes:  adapters.NamingSchemes{Registry: p.media},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
