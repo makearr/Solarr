@@ -2,7 +2,9 @@ package plan_test
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -55,6 +57,12 @@ func newEnv(t *testing.T) *env {
 // album adds a wanted album; monitored false makes it one nobody asked to search.
 func (e *env) album(t *testing.T, title string, monitored bool) int64 {
 	t.Helper()
+	return e.albumIn(t, title, monitored, 1)
+}
+
+// albumIn is album in one library.
+func (e *env) albumIn(t *testing.T, title string, monitored bool, categoryID int64) int64 {
+	t.Helper()
 	workIDs, err := library.NewIdentity(e.store).ResolveWorks(t.Context(), e.clock.Now(), []library.WorkLink{{
 		Provider: "musicbrainz:release-group", ExternalID: "rg-" + title, Confidence: 1,
 		Work: library.WorkIdentity{MediaType: "music", CanonicalTitle: title},
@@ -63,7 +71,7 @@ func (e *env) album(t *testing.T, title string, monitored bool) int64 {
 		t.Fatal(err)
 	}
 	item, err := library.NewDesired(e.store).EnsureAlbumItem(t.Context(), library.AlbumRequest{
-		WorkID: workIDs[0], CategoryID: 1, ProfileID: 1, Monitored: monitored,
+		WorkID: workIDs[0], CategoryID: categoryID, ProfileID: 1, Monitored: monitored,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -258,5 +266,78 @@ func TestHuntKeepsAFifthOfTheBudgetForUpgradesAndSpillsTheRest(t *testing.T) {
 	run(t, spill.huntJob())
 	if len(spill.searched) != 3 {
 		t.Fatalf("with nothing missing, searched %v, want all 3 upgrades", spill.searched)
+	}
+}
+
+// Each run spends its part of the hourly budget, so searches spread over the hour (user, 2026-10-23).
+func TestHuntSpreadsTheHourlyBudgetOverItsRuns(t *testing.T) {
+	e := newEnv(t)
+	e.perHour = 8
+	for _, title := range []string{"A", "B", "C", "D", "E", "F"} {
+		e.album(t, title, true)
+	}
+	e.planPass(t)
+	hunt := plan.NewHuntJob(plan.HuntConfig{
+		Hunt: library.NewHunt(e.store), Clock: e.clock, Logger: slog.New(slog.DiscardHandler),
+		PerHour:  func(context.Context) (int, error) { return e.perHour, nil },
+		Interval: func() time.Duration { return 15 * time.Minute },
+		Search: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+			e.searched = append(e.searched, itemID)
+			return plan.OutcomeSearched, library.NewDesired(e.store).RecordSearched(ctx, itemID, e.clock.Now().Unix())
+		},
+	})
+
+	run(t, hunt)
+	if len(e.searched) != 2 {
+		t.Fatalf("first run of four an hour searched %d, want 2 of 8", len(e.searched))
+	}
+	e.clock.Advance(15 * time.Minute)
+	run(t, hunt)
+	if len(e.searched) != 4 {
+		t.Fatalf("second run searched %d in all, want 4", len(e.searched))
+	}
+}
+
+// The searches are dealt to the libraries by their shares; a library with share 0 is never searched, and what one
+// cannot use goes to the others (user, 2026-10-23).
+func TestHuntDealsSearchesToLibrariesByShare(t *testing.T) {
+	e := newEnv(t)
+	e.perHour = 8
+	inLibrary := map[int64]int64{}
+	for index := range 8 {
+		inLibrary[e.albumIn(t, fmt.Sprintf("Music %d", index), true, 1)] = 1
+		inLibrary[e.albumIn(t, fmt.Sprintf("Series %d", index), true, 2)] = 2
+		inLibrary[e.albumIn(t, fmt.Sprintf("Movies %d", index), true, 3)] = 3
+	}
+	e.planPass(t)
+	shares := []plan.LibraryShare{{CategoryID: 1, Share: 3}, {CategoryID: 2, Share: 1}, {CategoryID: 3, Share: 0}}
+	hunt := plan.NewHuntJob(plan.HuntConfig{
+		Hunt: library.NewHunt(e.store), Clock: e.clock, Logger: slog.New(slog.DiscardHandler),
+		PerHour:   func(context.Context) (int, error) { return e.perHour, nil },
+		Libraries: func(context.Context) ([]plan.LibraryShare, error) { return shares, nil },
+		Search: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+			e.searched = append(e.searched, itemID)
+			return plan.OutcomeSearched, library.NewDesired(e.store).RecordSearched(ctx, itemID, e.clock.Now().Unix())
+		},
+	})
+
+	run(t, hunt)
+	count := func() map[int64]int {
+		counts := map[int64]int{}
+		for _, id := range e.searched {
+			counts[inLibrary[id]]++
+		}
+		return counts
+	}
+	if got, want := count(), map[int64]int{1: 6, 2: 2}; !maps.Equal(got, want) {
+		t.Fatalf("searches by library = %v, want %v", got, want)
+	}
+
+	// Two of the first library's albums are left; the third library still gets nothing.
+	e.clock.Advance(61 * time.Minute)
+	e.perHour = 6
+	run(t, hunt)
+	if got, want := count(), map[int64]int{1: 8, 2: 6}; !maps.Equal(got, want) {
+		t.Fatalf("searches by library after the second hour = %v, want %v", got, want)
 	}
 }

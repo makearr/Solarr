@@ -9941,8 +9941,9 @@ components:
           type: integer
           format: int64
           description: >-
-            Missing albums searched automatically each hour, most urgent first; 0 turns automatic
-            searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
+            Missing items searched automatically each hour, most urgent first, spread over the hunt task's runs
+            (every 15 minutes by default, Settings -> Scheduler); 0 turns automatic searching off. Default 30.
+            Always answered; omitted on a PATCH leaves it alone.
         hunt_mode:
           type: string
           enum: [oldest_searched, newest_searched, oldest_release, newest_release, random_oldest_searched]
@@ -9950,6 +9951,20 @@ components:
             The order the automatic search takes wanted albums in within a share of the budget (new
             releases 40%, gaps 40%, upgrades 20%, what one leaves unused going to the others). Default
             oldest_searched. Always answered; omitted on a PATCH leaves it alone.
+        search_shares:
+          type: array
+          items: { $ref: "#/components/schemas/LibrarySearchShare" }
+          description: >-
+            Each library's share of every automatic search run, weighed against the others' (user, 2026-10-23).
+            Always answered, every library; on a PATCH only the libraries listed change.
+
+    LibrarySearchShare:
+      type: object
+      required: [library_id, share]
+      properties:
+        library_id: { type: integer, format: int64 }
+        name: { type: string, description: Answered; ignored on a PATCH. }
+        share: { type: integer, format: int64, minimum: 0, maximum: 100, description: 0 is never searched automatically. Default 1. }
 
     MetadataSource:
       type: string

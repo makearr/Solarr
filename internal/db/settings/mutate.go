@@ -186,6 +186,23 @@ func (c *Cache) SetCategoryMonitorDiscovered(ctx context.Context, id int64, poli
 	})
 }
 
+// SetCategorySearchShare sets a library's share of the automatic searches, 0 (none) to 100.
+func (c *Cache) SetCategorySearchShare(ctx context.Context, id, share int64) error {
+	if _, found := c.Snapshot().Category(id); !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	if share < 0 || share > maxSearchShare {
+		return config.Problems{{Path: "search_share", Value: strconv.FormatInt(share, 10),
+			Expectation: "0 (none) to " + strconv.Itoa(maxSearchShare)}}
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategorySearchShare(ctx, settingsdb.SetCategorySearchShareParams{SearchShare: share, ID: id})
+	})
+}
+
+// maxSearchShare bounds a library's search share; a weight, so only the ratios matter.
+const maxSearchShare = 100
+
 // SetCategoryKind records a library's kind; which kinds a media type has is its own declaration, checked by the caller.
 func (c *Cache) SetCategoryKind(ctx context.Context, id int64, kind string) (Category, error) {
 	before, found := c.Snapshot().Category(id)

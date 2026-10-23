@@ -67,6 +67,7 @@ type Category struct {
 	ProtocolDelayMinutes   int64
 	TvMonitor              string
 	Kind                   string
+	SearchShare            int64
 }
 
 type CategoryFileManagement struct {

@@ -295,6 +295,7 @@ func convertCategories(rows []settingsdb.Category, naming map[int64]*NamingProfi
 			MonitorDiscovered:   row.MonitorDiscovered,
 			TVMonitor:           row.TvMonitor,
 			Kind:                row.Kind,
+			SearchShare:         row.SearchShare,
 			MonitorReleaseTypes: decodeReleaseTypes(row.MonitorReleaseTypes),
 			Naming:              profile,
 			QualityCutoffID:     nullInt64Ptr(row.QualityCutoffProfileID),

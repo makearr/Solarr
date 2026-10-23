@@ -187,6 +187,30 @@ func (r *TaskRunner) resolveSchedule() cron.Schedule {
 	return schedules
 }
 
+// CadenceInterval is the gap between the next two firings of the earliest of cadences after now, falling back to
+// fallback when none parses; zero when neither can fire.
+func CadenceInterval(cadences []string, fallback string, now time.Time) time.Duration {
+	var schedules earliest
+	for _, cadence := range cadences {
+		if parsed, err := cronParser.Parse(cadence); err == nil {
+			schedules = append(schedules, parsed)
+		}
+	}
+	if len(schedules) == 0 {
+		parsed, err := cronParser.Parse(fallback)
+		if err != nil {
+			return 0
+		}
+		schedules = earliest{parsed}
+	}
+	first := schedules.Next(now)
+	second := schedules.Next(first)
+	if first.IsZero() || second.IsZero() {
+		return 0
+	}
+	return second.Sub(first)
+}
+
 // earliest fires at the soonest of several schedules.
 type earliest []cron.Schedule
 

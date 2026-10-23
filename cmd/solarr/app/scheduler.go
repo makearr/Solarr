@@ -42,12 +42,13 @@ const (
 	planScheduleCron               = "*/5 * * * *"   // every 5 minutes; reads the database only
 	cutoffScheduleCron             = "40 2 * * *"    // daily at 02:40, after the probe measured the night's files
 	rssScheduleCron                = "*/15 * * * *"  // every 15 minutes, as Lidarr's RSS Sync
-	huntScheduleCron               = "*/15 * * * *"  // every 15 minutes, within the hourly budget
-	crossoverPassScheduleCron      = "10 5 * * *"    // daily at 05:10, after the night's refreshes
-	universePassScheduleCron       = "40 4 * * *"    // daily; one bulk read of Wikidata for the whole film library
-	franchisePassScheduleCron      = "20 */4 * * *"  // every four hours; 60 series a run, Wikidata asks for polite use
-	bridgeScheduleCron             = "50 3 * * *"    // daily at 03:50; 300 people a run, after the night's refreshes
-	tvRetryScheduleCron            = "30 4 * * *"    // daily at 04:30: providers learn new series and fix old data overnight
+	huntTaskKey                    = "hunt"
+	huntScheduleCron               = "*/15 * * * *" // every 15 minutes, each run a quarter of the hourly budget
+	crossoverPassScheduleCron      = "10 5 * * *"   // daily at 05:10, after the night's refreshes
+	universePassScheduleCron       = "40 4 * * *"   // daily; one bulk read of Wikidata for the whole film library
+	franchisePassScheduleCron      = "20 */4 * * *" // every four hours; 60 series a run, Wikidata asks for polite use
+	bridgeScheduleCron             = "50 3 * * *"   // daily at 03:50; 300 people a run, after the night's refreshes
+	tvRetryScheduleCron            = "30 4 * * *"   // daily at 04:30: providers learn new series and fix old data overnight
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -178,7 +179,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.enqueueRSS,
 	})
 	registry.MustRegister(jobs.Task{
-		Key: "hunt", Name: "Search for what is missing", DefaultCadence: huntScheduleCron,
+		Key: huntTaskKey, Name: "Search for what is missing", DefaultCadence: huntScheduleCron,
 		Tier: string(settings.TierNormal), Category: jobs.CategoryDownloads, Startup: jobs.StartupOff,
 		Enqueue: p.enqueueHunt,
 	})

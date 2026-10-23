@@ -9,10 +9,12 @@ Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pr
   monitored MISSING or PARTIAL albums may be searched, how urgently (the priority ladder below), and
   from when. An album with a known street date waits until 12 hours after it; one just searched
   waits 6 hours, then 12, 24, doubling to a week. Tracks are never searched on their own.
-- **Search for what is missing** (every 15 minutes) searches the most urgent eligible albums, least
-  recently searched first, and sends the best release as an automatic grab. It spends at most
-  **Automatic searches per hour** (Settings -> Priority, default 12, 0 = off); an album with a
-  download already on its way costs nothing and is looked at again in an hour. Every search counts
+- **Search for what is missing** (every 15 minutes by default, **Search every** on the Automatic searching card)
+  searches the most urgent eligible items, least recently searched first, and sends the best release as an
+  automatic grab. Each run spends its part of **Automatic searches per hour** (Settings -> Priority, default 30,
+  0 = off: a quarter of it every 15 minutes), dealt to the libraries by their **search share** (default 1 each, 0
+  none) by a weighted round robin that carries over between runs; what one library cannot use goes to the others.
+  An item with a download already on its way costs nothing and is looked at again in an hour. Every search counts
   toward the backoff, whoever started it.
 
 **A person's search** is one set of routes for every media type: `POST /works/{id}/search` (interactive:

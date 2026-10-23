@@ -131,6 +131,8 @@ type HuntSelection struct {
 	Mode                       HuntMode
 	Now, Limit                 int64
 	ReleaseFrom, ReleaseBefore int64
+	// CategoryID narrows to one library; 0 is every library.
+	CategoryID int64
 }
 
 // randomPool is how many times the limit random_oldest_searched draws from the oldest before choosing at random.
@@ -150,25 +152,25 @@ func (h Hunt) NextToHunt(ctx context.Context, selection HuntSelection) ([]int64,
 	case HuntNewestSearched:
 		var rows []librarydb.HuntQueue
 		rows, err = queries.NextHuntByNewestSearched(ctx, librarydb.NextHuntByNewestSearchedParams{
-			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, CategoryID: selection.CategoryID, PageSize: limit,
 		})
 		ids = huntIDs(rows)
 	case HuntOldestRelease:
 		var rows []librarydb.HuntQueue
 		rows, err = queries.NextHuntByOldestRelease(ctx, librarydb.NextHuntByOldestReleaseParams{
-			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, CategoryID: selection.CategoryID, PageSize: limit,
 		})
 		ids = huntIDs(rows)
 	case HuntNewestRelease:
 		var rows []librarydb.HuntQueue
 		rows, err = queries.NextHuntByNewestRelease(ctx, librarydb.NextHuntByNewestReleaseParams{
-			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, CategoryID: selection.CategoryID, PageSize: limit,
 		})
 		ids = huntIDs(rows)
 	default:
 		var rows []librarydb.HuntQueue
 		rows, err = queries.NextHuntByOldestSearched(ctx, librarydb.NextHuntByOldestSearchedParams{
-			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, PageSize: limit,
+			Class: selection.Class, Now: selection.Now, ReleaseFrom: selection.ReleaseFrom, ReleaseBefore: selection.ReleaseBefore, CategoryID: selection.CategoryID, PageSize: limit,
 		})
 		ids = huntIDs(rows)
 	}

@@ -9,7 +9,24 @@ import { inputStyle, labelStyle } from "@/ui/form";
 import { Card, Field, SaveBar } from "./SettingsCard";
 
 type PrioritySettings = components["schemas"]["PrioritySettings"];
+type SearchShare = components["schemas"]["LibrarySearchShare"];
 type HuntMode = NonNullable<PrioritySettings["hunt_mode"]>;
+
+// The automatic search's run interval choices; each divides the hour, so the runs are evenly spaced.
+const HUNT_MINUTES = [5, 10, 15, 20, 30, 60] as const;
+const HUNT_TASK = "hunt";
+
+/** The minutes between the hunt's runs when its cadence is a plain "every N minutes", else undefined. */
+function huntMinutes(cadences: readonly string[] | undefined): number | undefined {
+  if (cadences?.length !== 1) return undefined;
+  if (cadences[0] === "0 * * * *") return 60;
+  const every = /^\*\/(\d+) \* \* \* \*$/.exec(cadences[0] ?? "");
+  return every ? Number(every[1]) : undefined;
+}
+
+function huntCadence(minutes: number): string {
+  return minutes === 60 ? "0 * * * *" : `*/${minutes} * * * *`;
+}
 
 const HUNT_MODES: readonly (readonly [HuntMode, string])[] = [
   ["oldest_searched", "Oldest searched first"],
@@ -28,19 +45,37 @@ export function Priority() {
     queryFn: () => ok(api.GET("/priority")),
   });
 
+  const schedules = useQuery({
+    queryKey: ["schedules"],
+    queryFn: () => ok(api.GET("/schedules")),
+  });
+  const huntCadences = schedules.data?.find((schedule) => schedule.key === HUNT_TASK)?.cadences;
+
   const update = useMutation({
-    mutationFn: async (body: PrioritySettings) => {
+    mutationFn: async ({ body, minutes }: { body: PrioritySettings; minutes?: number }) => {
       await ok(api.PATCH("/priority", { body }));
+      if (minutes !== undefined && minutes !== huntMinutes(huntCadences)) {
+        await ok(api.PATCH("/schedules/{key}", { params: { path: { key: HUNT_TASK } }, body: { cadences: [huntCadence(minutes)] } }));
+      }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["priority"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["priority"] });
+      void queryClient.invalidateQueries({ queryKey: ["schedules"] });
+    },
   });
 
   if (!isTierVisible(tier, "advanced")) return null;
-  if (priority.error !== null || !priority.data) return null;
+  if (priority.error !== null || !priority.data || !schedules.data) return null;
 
   return (
     <section className="flex flex-col gap-3">
-      <PriorityForm priority={priority.data} onSave={(body) => update.mutate(body)} busy={update.isPending} />
+      <PriorityForm
+        key={huntCadences?.join("|")}
+        priority={priority.data}
+        minutes={huntMinutes(huntCadences)}
+        onSave={(body, minutes) => update.mutate({ body, minutes })}
+        busy={update.isPending}
+      />
       {update.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
   );
@@ -48,19 +83,24 @@ export function Priority() {
 
 function PriorityForm({
   priority,
+  minutes: storedMinutes,
   onSave,
   busy,
 }: {
   priority: PrioritySettings;
-  onSave: (body: PrioritySettings) => void;
+  /** Undefined when the hunt's cadence is a custom one, set under Scheduler. */
+  minutes: number | undefined;
+  onSave: (body: PrioritySettings, minutes: number | undefined) => void;
   busy: boolean;
 }) {
+  const [minutes, setMinutes] = useState(storedMinutes);
+  const [shares, setShares] = useState<SearchShare[]>(priority.search_shares ?? []);
   const [userRequestWeight, setUserRequestWeight] = useState(priority.user_request_weight);
   const [newReleaseWeight, setNewReleaseWeight] = useState(priority.new_release_weight);
   const [gapWeight, setGapWeight] = useState(priority.gap_weight);
   const [upgradeWeight, setUpgradeWeight] = useState(priority.upgrade_weight);
   const [newReleaseDays, setNewReleaseDays] = useState(priority.new_release_days);
-  const [searchesPerHour, setSearchesPerHour] = useState(priority.searches_per_hour ?? 12);
+  const [searchesPerHour, setSearchesPerHour] = useState(priority.searches_per_hour ?? 30);
   const [rssFreshHours, setRssFreshHours] = useState(priority.rss_fresh_hours ?? 48);
   const [huntMode, setHuntMode] = useState<HuntMode>(priority.hunt_mode ?? "oldest_searched");
 
@@ -72,19 +112,26 @@ function PriorityForm({
     newReleaseDays !== priority.new_release_days ||
     searchesPerHour !== priority.searches_per_hour ||
     rssFreshHours !== (priority.rss_fresh_hours ?? 48) ||
-    huntMode !== (priority.hunt_mode ?? "oldest_searched");
+    huntMode !== (priority.hunt_mode ?? "oldest_searched") ||
+    minutes !== storedMinutes ||
+    shares.some((share, index) => share.share !== priority.search_shares?.[index]?.share);
+  const totalShare = shares.reduce((sum, share) => sum + share.share, 0);
 
   const submit = () =>
-    onSave({
+    onSave(
+      {
       user_request_weight: userRequestWeight,
       new_release_weight: newReleaseWeight,
       gap_weight: gapWeight,
       upgrade_weight: upgradeWeight,
       new_release_days: newReleaseDays,
       searches_per_hour: searchesPerHour,
-      rss_fresh_hours: rssFreshHours,
-      hunt_mode: huntMode,
-    });
+        rss_fresh_hours: rssFreshHours,
+        hunt_mode: huntMode,
+        search_shares: shares.map((share) => ({ library_id: share.library_id, share: share.share })),
+      },
+      minutes,
+    );
 
   return (
     <form
@@ -96,9 +143,24 @@ function PriorityForm({
     >
       <Card
         title="Automatic searching"
-        help="Missing albums are searched on their own every hour, most urgent first. Keep the number low if an indexer limits API calls per day."
+        help="Missing items are searched on their own, most urgent first, the hour's searches spread over its runs. Keep the number low if an indexer limits API calls per day."
       >
         <div className="flex flex-wrap items-start gap-4">
+          <Field label="Search every" help="How often a run starts." className="w-36">
+            <select
+              value={minutes ?? ""}
+              disabled={busy}
+              onChange={(event) => setMinutes(event.target.value ? Number(event.target.value) : undefined)}
+              className={inputStyle}
+            >
+              {minutes === undefined && <option value="">Custom (Scheduler)</option>}
+              {HUNT_MINUTES.map((choice) => (
+                <option key={choice} value={choice}>
+                  {choice === 60 ? "hour" : `${choice} minutes`}
+                </option>
+              ))}
+            </select>
+          </Field>
           <Field label="Searches per hour" help="0 turns automatic searching off." className="w-44">
             <input
               type="number"
@@ -112,7 +174,7 @@ function PriorityForm({
           </Field>
           <Field
             label="Order"
-            help="Each hour's searches are split 40% new releases, 40% gaps and 20% upgrades; what one leaves unused goes to the others. This is the order within each share."
+            help="Each run's searches are split 40% new releases, 40% gaps and 20% upgrades; what one leaves unused goes to the others. This is the order within each share."
             className="min-w-64 flex-1"
           >
             <select
@@ -129,6 +191,36 @@ function PriorityForm({
             </select>
           </Field>
         </div>
+        {shares.length > 1 && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-ink-muted">
+              Each library&apos;s share of the searches, against the others&apos;: 2 gets twice as many as 1, 0 none. What
+              one library cannot use goes to the others.
+            </span>
+            <div className="flex flex-wrap gap-3">
+              {shares.map((share, index) => (
+                <label key={share.library_id} className={labelStyle}>
+                  {share.name ?? `Library ${share.library_id}`}
+                  <span className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      value={share.share}
+                      aria-label={`${share.name ?? `Library ${share.library_id}`} share`}
+                      disabled={busy}
+                      onChange={(event) =>
+                        setShares(shares.map((entry, at) => (at === index ? { ...entry, share: Number(event.target.value) } : entry)))
+                      }
+                      className={`${inputStyle} w-20`}
+                    />
+                    <span className="w-10 tabular-nums">{totalShare > 0 ? `${Math.round((share.share / totalShare) * 100)}%` : "–"}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
       </Card>
 
       <Card
@@ -157,7 +249,7 @@ function PriorityForm({
         </Field>
         <Field
           label="RSS freshness window (hours)"
-          help="Hours after an RSS feed first shows a release for a wanted album that it still counts as newly arrived."
+          help="Hours after an RSS feed first shows a release for a wanted item that it still counts as newly arrived."
           className="max-w-sm"
         >
           <input

@@ -96,6 +96,8 @@ type Category struct {
 	TVMonitor string
 	// Kind is the library's kind within its media type, one the type declares (TV: "anime"); "" is none.
 	Kind string
+	// SearchShare is the library's share of each automatic search run, weighed against the others'; 0 is none.
+	SearchShare int64
 	// MonitorReleaseTypes is which release types a monitored artist in this
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).

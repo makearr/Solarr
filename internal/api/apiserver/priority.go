@@ -52,6 +52,20 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 		GapWeight: body.GapWeight, UpgradeWeight: body.UpgradeWeight, NewReleaseDays: body.NewReleaseDays,
 		SearchesPerHour: body.SearchesPerHour, RSSFreshHours: body.RssFreshHours, HuntMode: string(derefOr(body.HuntMode, "")),
 	}
+	if body.SearchShares != nil {
+		for _, share := range *body.SearchShares {
+			if err := s.auth.Settings.SetCategorySearchShare(r.Context(), share.LibraryId, share.Share); err != nil {
+				var problems config.Problems
+				if errors.As(err, &problems) {
+					writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+						"A library's search share has problems", problems.Report("the search shares", "Later libraries were not changed."))
+					return
+				}
+				writeError(w, s.logger, err)
+				return
+			}
+		}
+	}
 	if err := s.auth.Settings.SetPrioritySettings(r.Context(), clock.NewSystem(), wanted); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
@@ -66,11 +80,18 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) prioritySettingsView() gen.PrioritySettings {
-	stored := s.auth.Settings.Snapshot().PrioritySettings()
+	snapshot := s.auth.Settings.Snapshot()
+	stored := snapshot.PrioritySettings()
 	huntMode := gen.PrioritySettingsHuntMode(stored.HuntMode)
+	shares := []gen.LibrarySearchShare{}
+	for _, category := range snapshot.Categories() {
+		name := category.Name
+		shares = append(shares, gen.LibrarySearchShare{LibraryId: category.ID, Name: &name, Share: category.SearchShare})
+	}
 	return gen.PrioritySettings{
 		UserRequestWeight: stored.UserRequestWeight, NewReleaseWeight: stored.NewReleaseWeight,
 		GapWeight: stored.GapWeight, UpgradeWeight: stored.UpgradeWeight, NewReleaseDays: stored.NewReleaseDays,
 		SearchesPerHour: stored.SearchesPerHour, RssFreshHours: stored.RSSFreshHours, HuntMode: &huntMode,
+		SearchShares: &shares,
 	}
 }

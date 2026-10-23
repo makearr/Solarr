@@ -900,6 +900,7 @@ type Querier interface {
 	NextHuntByOldestRelease(ctx context.Context, arg NextHuntByOldestReleaseParams) ([]HuntQueue, error)
 	// The hunt's five modes (section 9.3), each within a class and, for the new-release and gap shares, a release-date range:
 	// release_from and release_before are Unix seconds, zero for no bound; an unknown release date counts as a gap.
+	// category_id narrows to one library, zero for every library.
 	// oldest_searched, the default.
 	NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error)
 	// Oldest (insertion order, via rowid on a WITHOUT ROWID table's own implicit

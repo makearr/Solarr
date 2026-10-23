@@ -25,6 +25,7 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 		return err
 	}
 	hunt := library.NewHunt(p.library)
+	wall := clock.NewSystem()
 	executor.Handle(plan.JobType, plan.NewJob(plan.JobConfig{
 		Hunt: hunt, Facts: p.planFacts, Clock: clock.NewSystem(), Logger: p.logger,
 		Searchable: func(item library.PlanInput) bool { return plan.SearchedOnItsOwn(item.SatisfactionKind) },
@@ -35,6 +36,17 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 			return library.HuntMode(p.cache.Snapshot().PrioritySettings().HuntMode), nil
 		},
 		NewReleaseDays: func() int { return int(p.cache.Snapshot().PrioritySettings().NewReleaseDays) }, Clock: clock.NewSystem(), Logger: p.logger,
+		Interval: func() time.Duration {
+			return jobs.CadenceInterval(p.cache.Snapshot().ScheduleCadences(huntTaskKey, huntScheduleCron), huntScheduleCron, wall.Now())
+		},
+		Libraries: func(context.Context) ([]plan.LibraryShare, error) {
+			categories := p.cache.Snapshot().Categories()
+			shares := make([]plan.LibraryShare, len(categories))
+			for index, category := range categories {
+				shares[index] = plan.LibraryShare{CategoryID: category.ID, Share: category.SearchShare}
+			}
+			return shares, nil
+		},
 	}))
 	if err := registry.Register(rss.Definition); err != nil {
 		return err

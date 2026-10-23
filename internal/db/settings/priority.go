@@ -31,7 +31,7 @@ var HuntModes = []string{"oldest_searched", "newest_searched", "oldest_release",
 
 // DefaultSearchesPerHour spares an indexer's daily API limit; maxSearchesPerHour bounds a typo.
 const (
-	DefaultSearchesPerHour = 12
+	DefaultSearchesPerHour = 30
 	maxSearchesPerHour     = 1000
 	// DefaultRSSFreshHours is ADR-55's availability window; maxRSSFreshHours bounds a typo (a year).
 	DefaultRSSFreshHours = 48

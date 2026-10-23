@@ -519,3 +519,21 @@ func TestTaskRunner_HeavyStartupWaitsAndIsSkippedAfterARecentRun(t *testing.T) {
 		})
 	}
 }
+
+// The hunt spreads its hourly budget by its own cadence; an unparseable override falls back to the default.
+func TestCadenceIntervalIsTheGapBetweenFirings(t *testing.T) {
+	now := time.Date(2026, 10, 23, 12, 7, 0, 0, time.UTC)
+	for _, test := range []struct {
+		cadences []string
+		want     time.Duration
+	}{
+		{[]string{"*/20 * * * *"}, 20 * time.Minute},
+		{[]string{"0 * * * *"}, time.Hour},
+		{[]string{"not a cadence"}, 15 * time.Minute},
+		{nil, 15 * time.Minute},
+	} {
+		if got := jobs.CadenceInterval(test.cadences, "*/15 * * * *", now); got != test.want {
+			t.Errorf("CadenceInterval(%v) = %v, want %v", test.cadences, got, test.want)
+		}
+	}
+}

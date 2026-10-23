@@ -1651,8 +1651,10 @@ FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
   AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
+  AND (CAST(?5 AS INTEGER) = 0
+       OR EXISTS (SELECT 1 FROM desired_item d WHERE d.id = hunt_queue.desired_item_id AND d.category_id = ?5))
 ORDER BY priority DESC, release_date DESC
-LIMIT ?5
+LIMIT ?6
 `
 
 type NextHuntByNewestReleaseParams struct {
@@ -1660,6 +1662,7 @@ type NextHuntByNewestReleaseParams struct {
 	Now           int64
 	ReleaseFrom   int64
 	ReleaseBefore int64
+	CategoryID    int64
 	PageSize      int64
 }
 
@@ -1670,6 +1673,7 @@ func (q *Queries) NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNew
 		arg.Now,
 		arg.ReleaseFrom,
 		arg.ReleaseBefore,
+		arg.CategoryID,
 		arg.PageSize,
 	)
 	if err != nil {
@@ -1710,8 +1714,10 @@ FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
   AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
+  AND (CAST(?5 AS INTEGER) = 0
+       OR EXISTS (SELECT 1 FROM desired_item d WHERE d.id = hunt_queue.desired_item_id AND d.category_id = ?5))
 ORDER BY priority DESC, last_searched_at DESC
-LIMIT ?5
+LIMIT ?6
 `
 
 type NextHuntByNewestSearchedParams struct {
@@ -1719,6 +1725,7 @@ type NextHuntByNewestSearchedParams struct {
 	Now           int64
 	ReleaseFrom   int64
 	ReleaseBefore int64
+	CategoryID    int64
 	PageSize      int64
 }
 
@@ -1729,6 +1736,7 @@ func (q *Queries) NextHuntByNewestSearched(ctx context.Context, arg NextHuntByNe
 		arg.Now,
 		arg.ReleaseFrom,
 		arg.ReleaseBefore,
+		arg.CategoryID,
 		arg.PageSize,
 	)
 	if err != nil {
@@ -1769,8 +1777,10 @@ FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
   AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
+  AND (CAST(?5 AS INTEGER) = 0
+       OR EXISTS (SELECT 1 FROM desired_item d WHERE d.id = hunt_queue.desired_item_id AND d.category_id = ?5))
 ORDER BY priority DESC, release_date ASC
-LIMIT ?5
+LIMIT ?6
 `
 
 type NextHuntByOldestReleaseParams struct {
@@ -1778,6 +1788,7 @@ type NextHuntByOldestReleaseParams struct {
 	Now           int64
 	ReleaseFrom   int64
 	ReleaseBefore int64
+	CategoryID    int64
 	PageSize      int64
 }
 
@@ -1788,6 +1799,7 @@ func (q *Queries) NextHuntByOldestRelease(ctx context.Context, arg NextHuntByOld
 		arg.Now,
 		arg.ReleaseFrom,
 		arg.ReleaseBefore,
+		arg.CategoryID,
 		arg.PageSize,
 	)
 	if err != nil {
@@ -1829,8 +1841,10 @@ FROM hunt_queue
 WHERE class = ?1 AND eligible_after <= ?2
   AND (CAST(?3 AS INTEGER) = 0 OR release_date >= ?3)
   AND (CAST(?4 AS INTEGER) = 0 OR release_date IS NULL OR release_date < ?4)
+  AND (CAST(?5 AS INTEGER) = 0
+       OR EXISTS (SELECT 1 FROM desired_item d WHERE d.id = hunt_queue.desired_item_id AND d.category_id = ?5))
 ORDER BY priority DESC, last_searched_at ASC
-LIMIT ?5
+LIMIT ?6
 `
 
 type NextHuntByOldestSearchedParams struct {
@@ -1838,11 +1852,13 @@ type NextHuntByOldestSearchedParams struct {
 	Now           int64
 	ReleaseFrom   int64
 	ReleaseBefore int64
+	CategoryID    int64
 	PageSize      int64
 }
 
 // The hunt's five modes (section 9.3), each within a class and, for the new-release and gap shares, a release-date range:
 // release_from and release_before are Unix seconds, zero for no bound; an unknown release date counts as a gap.
+// category_id narrows to one library, zero for every library.
 // oldest_searched, the default.
 func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOldestSearchedParams) ([]HuntQueue, error) {
 	rows, err := q.db.QueryContext(ctx, nextHuntByOldestSearched,
@@ -1850,6 +1866,7 @@ func (q *Queries) NextHuntByOldestSearched(ctx context.Context, arg NextHuntByOl
 		arg.Now,
 		arg.ReleaseFrom,
 		arg.ReleaseBefore,
+		arg.CategoryID,
 		arg.PageSize,
 	)
 	if err != nil {

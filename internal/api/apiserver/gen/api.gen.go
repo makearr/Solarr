@@ -2788,6 +2788,17 @@ type LibraryRenamePlan struct {
 	Roots []RootRenamePlan `json:"roots"`
 }
 
+// LibrarySearchShare defines model for LibrarySearchShare.
+type LibrarySearchShare struct {
+	LibraryId int64 `json:"library_id"`
+
+	// Name Answered; ignored on a PATCH.
+	Name *string `json:"name,omitempty"`
+
+	// Share 0 is never searched automatically. Default 1.
+	Share int64 `json:"share"`
+}
+
 // LinkPreview defines model for LinkPreview.
 type LinkPreview struct {
 	Links []struct {
@@ -3525,7 +3536,10 @@ type PrioritySettings struct {
 	// RssFreshHours Hours after an RSS feed first shows a release for a wanted album that it still counts as new. Default 48. Always answered; omitted on a PATCH leaves it alone.
 	RssFreshHours *int64 `json:"rss_fresh_hours,omitempty"`
 
-	// SearchesPerHour Missing albums searched automatically each hour, most urgent first; 0 turns automatic searching off. Default 12. Always answered; omitted on a PATCH leaves it alone.
+	// SearchShares Each library's share of every automatic search run, weighed against the others' (user, 2026-10-23). Always answered, every library; on a PATCH only the libraries listed change.
+	SearchShares *[]LibrarySearchShare `json:"search_shares,omitempty"`
+
+	// SearchesPerHour Missing items searched automatically each hour, most urgent first, spread over the hunt task's runs (every 15 minutes by default, Settings -> Scheduler); 0 turns automatic searching off. Default 30. Always answered; omitted on a PATCH leaves it alone.
 	SearchesPerHour *int64 `json:"searches_per_hour,omitempty"`
 
 	// UpgradeWeight Bigger is more urgent. Default 10.

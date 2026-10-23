@@ -1,9 +1,11 @@
 package plan
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -47,10 +49,20 @@ type HuntConfig struct {
 	Mode func(ctx context.Context) (library.HuntMode, error)
 	// NewReleaseDays is the freshness window that tells a new release from a gap; nil is 7.
 	NewReleaseDays func() int
+	// Interval is how often the hunt runs; each run spends its part of the hourly budget. Nil spends it all at once.
+	Interval func() time.Duration
+	// Libraries are the libraries searched and their shares; nil searches every library as one.
+	Libraries func(ctx context.Context) ([]LibraryShare, error)
 	// Search searches one item and sends what it finds, re-checking first that it is still wanted.
 	Search func(ctx context.Context, itemID int64) (Outcome, error)
 	Clock  clock.Clock
 	Logger *slog.Logger
+}
+
+// LibraryShare is a library's weight in each run's searches; only the ratios between libraries matter.
+type LibraryShare struct {
+	CategoryID int64
+	Share      int64
 }
 
 // HuntJob searches the most urgent eligible items, within the hourly budget.
@@ -59,6 +71,8 @@ type HuntJob struct {
 	mu     sync.Mutex
 	// searched is when each search of the last window ran; a restart forgets it, costing one window at most.
 	searched []time.Time
+	// credit is each library's standing in splitByShare's round robin.
+	credit map[int64]int64
 }
 
 // NewHuntJob builds the hunt.
@@ -79,9 +93,17 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	}
 	now := j.config.Clock.Now()
 	j.forgetBefore(now.Add(-budgetWindow))
-	left := perHour - len(j.searched)
+	left := min(perHour-len(j.searched), j.perRun(perHour))
 	if left <= 0 {
 		return nil
+	}
+	libraries := []LibraryShare{{Share: 1}}
+	if j.config.Libraries != nil {
+		if libraries, err = j.config.Libraries(ctx); err != nil {
+			return fmt.Errorf("plan: hunt libraries: %w", err)
+		}
+		libraries = slices.DeleteFunc(libraries, func(library LibraryShare) bool { return library.Share <= 0 })
+		slices.SortStableFunc(libraries, func(a, b LibraryShare) int { return cmp.Compare(b.Share, a.Share) })
 	}
 	mode := library.HuntOldestSearched
 	if j.config.Mode != nil {
@@ -105,24 +127,92 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	budgets := []int{(left*newReleasePercent + 99) / 100, 0, 0}
 	budgets[1] = min((left*gapPercent+99)/100, left-budgets[0])
 	budgets[2] = left - budgets[0] - budgets[1]
-	for index, one := range shares {
-		done, seen, err := j.huntShare(ctx, job, one, mode, min(budgets[index], left-searched), now, looked)
-		if err != nil {
-			return err
+	// Each share is split over the libraries by their weights (user, 2026-10-23); a library that runs out of a share's
+	// items is left out of that share's later deals.
+	exhausted := make([]map[int64]bool, len(shares))
+	spend := func(index int, budget int) error {
+		if exhausted[index] == nil {
+			exhausted[index] = map[int64]bool{}
 		}
-		searched, looked = searched+done, looked+seen
+		open := slices.DeleteFunc(slices.Clone(libraries), func(library LibraryShare) bool { return exhausted[index][library.CategoryID] })
+		parts := j.splitByShare(budget, open)
+		for position, library := range open {
+			part := min(parts[position], left-searched)
+			if part <= 0 {
+				continue
+			}
+			done, seen, err := j.huntShare(ctx, job, shares[index], library.CategoryID, mode, part, now, looked)
+			if err != nil {
+				return err
+			}
+			if done < part {
+				exhausted[index][library.CategoryID] = true
+			}
+			searched, looked = searched+done, looked+seen
+		}
+		return nil
 	}
-	for _, one := range shares {
-		done, seen, err := j.huntShare(ctx, job, one, mode, left-searched, now, looked)
-		if err != nil {
+	for index := range shares {
+		if err := spend(index, min(budgets[index], left-searched)); err != nil {
 			return err
 		}
-		searched, looked = searched+done, looked+seen
+	}
+	// What a share or a library leaves unused goes to the others, split the same way, until nothing more is found.
+	for round := 0; searched < left && round <= len(shares)*len(libraries); round++ {
+		before := searched
+		for index := range shares {
+			if err := spend(index, left-searched); err != nil {
+				return err
+			}
+		}
+		if searched == before {
+			break
+		}
 	}
 	if looked > 0 {
 		j.config.Logger.Info("plan: hunt done", "looked", looked, "searched", searched, "budget_left", left-searched)
 	}
 	return nil
+}
+
+// perRun is one run's part of the hourly budget, rounded up so a small budget still searches.
+func (j *HuntJob) perRun(perHour int) int {
+	if j.config.Interval == nil {
+		return perHour
+	}
+	interval := j.config.Interval()
+	if interval <= 0 || interval >= budgetWindow {
+		return perHour
+	}
+	return int((int64(perHour)*int64(interval) + int64(budgetWindow) - 1) / int64(budgetWindow))
+}
+
+// splitByShare deals budget out one search at a time by smooth weighted round robin over the libraries' shares; the
+// credits carry over between runs, so even a budget of one per run comes out in proportion over time.
+func (j *HuntJob) splitByShare(budget int, libraries []LibraryShare) []int {
+	parts := make([]int, len(libraries))
+	var total int64
+	for _, library := range libraries {
+		total += library.Share
+	}
+	if total == 0 {
+		return parts
+	}
+	if j.credit == nil {
+		j.credit = map[int64]int64{}
+	}
+	for range max(budget, 0) {
+		best := 0
+		for index, library := range libraries {
+			j.credit[library.CategoryID] += library.Share
+			if j.credit[library.CategoryID] > j.credit[libraries[best].CategoryID] {
+				best = index
+			}
+		}
+		j.credit[libraries[best].CategoryID] -= total
+		parts[best]++
+	}
+	return parts
 }
 
 // Section 9.4's split of each window's budget: new releases, gaps and upgrades.
@@ -138,15 +228,16 @@ type share struct {
 	releaseFrom, releaseBefore int64
 }
 
-// huntShare searches up to budget eligible items of one share; answers how many searches ran and how many items were looked at.
+// huntShare searches up to budget eligible items of one share in one library (0: all); answers how many searches ran
+// and how many items were looked at.
 func (j *HuntJob) huntShare(
-	ctx context.Context, job jobs.Job, one share, mode library.HuntMode, budget int, now time.Time, lookedBefore int,
+	ctx context.Context, job jobs.Job, one share, categoryID int64, mode library.HuntMode, budget int, now time.Time, lookedBefore int,
 ) (searched, looked int, err error) {
 	// Every item looked at is postponed past now, so each page is new; the cap guards a failing postpone.
 	for searched < budget && looked < 10*budget+100 {
 		ids, err := j.config.Hunt.NextToHunt(ctx, library.HuntSelection{
 			Class: one.class, Mode: mode, Now: now.Unix(), Limit: int64(budget - searched),
-			ReleaseFrom: one.releaseFrom, ReleaseBefore: one.releaseBefore,
+			ReleaseFrom: one.releaseFrom, ReleaseBefore: one.releaseBefore, CategoryID: categoryID,
 		})
 		if err != nil {
 			return searched, looked, err
