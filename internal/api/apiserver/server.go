@@ -160,6 +160,8 @@ type Config struct {
 	DrainStarter DrainStarter
 	// WorkMover moves one work to another root folder. Optional: without it MoveWork answers 503.
 	WorkMover WorkMover
+	// LibraryMover moves or copies works to another library; nil answers 503.
+	LibraryMover LibraryMover
 	// Franchises are the groups a provider puts works in. Optional: without it every library lists none.
 	Franchises Franchises
 	// Crossovers are events across works and one broadcast listed twice. Optional: without it, 503.
@@ -307,6 +309,7 @@ type Server struct {
 	fingerprintRetrier      FingerprintRetrier
 	drainStarter            DrainStarter
 	workMover               WorkMover
+	libraryMover            LibraryMover
 	vanishedFiles           VanishedFiles
 	workMerger              WorkMerger
 	workNumbering           WorkNumbering
@@ -421,6 +424,7 @@ func New(config Config) (*Server, error) {
 		fingerprintRetrier:      config.FingerprintRetrier,
 		drainStarter:            config.DrainStarter,
 		workMover:               config.WorkMover,
+		libraryMover:            config.LibraryMover,
 		vanishedFiles:           config.VanishedFiles,
 		workMerger:              config.WorkMerger,
 		workNumbering:           config.WorkNumbering,
@@ -525,6 +529,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/works/{id}", server.routeGetWork)
 			secured.Post("/works/bulk/monitor", server.BulkSetWorkMonitored)
 			secured.Post("/works/bulk/edit", server.BulkEditWorks)
+			secured.Post("/works/bulk/library", server.BulkMoveWorksToLibrary)
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Get("/works/{id}/edit", server.routeGetWorkEdit)
 			secured.Put("/works/{id}/edit", server.routeSaveWorkEdit)
@@ -744,6 +749,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/cache/clear", server.ClearCache)
 			secured.Post("/rootfolders/{id}/drain", server.routeDrainRootFolder)
 			secured.Post("/works/{id}/move", server.routeMoveWork)
+			secured.Post("/works/{id}/library", server.routeMoveWorkToLibrary)
 			secured.Delete("/rootfolders/{id}/drain", server.routeStopDrainingRootFolder)
 			secured.Get("/moves", server.routeListMoveJobs)
 			secured.Post("/rootfolders/{id}/rename", server.routeRenameRootFolder)

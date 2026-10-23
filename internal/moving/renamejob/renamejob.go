@@ -109,11 +109,24 @@ func Start(
 		return plan, 0, warnings, nil
 	}
 
+	var onlyCategoryID *int64
+	if categoryScope != 0 {
+		onlyCategoryID = &categoryScope
+	}
+	jobID, err := commit(ctx, cfg, plan, onlyCategoryID, false)
+	if err != nil {
+		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: root %d: %w", rootFolderID, err)
+	}
+	return plan, jobID, warnings, nil
+}
+
+// commit persists an accepted plan as a move job of its reason and enqueues it; keepSource copies instead of moving.
+func commit(ctx context.Context, cfg Config, plan mover.MovePlan, categoryID *int64, keepSource bool) (int64, error) {
 	items := make([]library.NewMoveItem, len(plan.Moves))
 	var bytesTotal int64
 	for i, move := range plan.Moves {
 		items[i] = library.NewMoveItem{
-			MediaObjectID: move.MediaObjectID, AffinityKey: move.AffinityKey,
+			MediaObjectID: move.MediaObjectID, AffinityKey: move.AffinityKey, KeepSource: keepSource,
 			DestRootID: move.DestRootFolderID, DestRelPath: move.DestRelPath, Bytes: move.SizeBytes,
 		}
 		for _, companion := range move.Companions {
@@ -123,30 +136,26 @@ func Start(
 	}
 	planJSON, err := json.Marshal(plan)
 	if err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: encode rename plan: %w", err)
+		return 0, fmt.Errorf("encode the plan: %w", err)
 	}
 	now := cfg.Clock
 	if now == nil {
 		now = clock.NewSystem()
 	}
-	var onlyCategoryID *int64
-	if categoryScope != 0 {
-		onlyCategoryID = &categoryScope
-	}
 	jobID, err := cfg.MoveJobs.Create(ctx, library.NewMoveJob{
-		Reason: string(mover.ReasonRename), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,
-		PlanJSON: string(planJSON), CreatedAt: now.Now().Unix(), CategoryID: onlyCategoryID,
+		Reason: string(plan.Reason), FilesTotal: int64(len(items)), BytesTotal: bytesTotal,
+		PlanJSON: string(planJSON), CreatedAt: now.Now().Unix(), CategoryID: categoryID,
 	})
 	if err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: create move job for root %d: %w", rootFolderID, err)
+		return 0, fmt.Errorf("create the move job: %w", err)
 	}
 	if err := cfg.MoveJobs.AddItems(ctx, jobID, items); err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: add items to move job %d: %w", jobID, err)
+		return 0, fmt.Errorf("add items to move job %d: %w", jobID, err)
 	}
 	if _, err := moverjob.Enqueue(ctx, cfg.Queue, jobID); err != nil {
-		return mover.MovePlan{}, 0, nil, fmt.Errorf("renamejob: enqueue move job %d: %w", jobID, err)
+		return 0, fmt.Errorf("enqueue move job %d: %w", jobID, err)
 	}
-	return plan, jobID, warnings, nil
+	return jobID, nil
 }
 
 // previewNames plans the request as if the root were online, writable and allowed to rename, for names alone.

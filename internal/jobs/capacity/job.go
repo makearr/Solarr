@@ -52,6 +52,8 @@ type Config struct {
 	Cache  *settings.Cache
 	Clock  clock.Clock
 	Logger *slog.Logger
+	// HoldsFiles says the library still has files on a root; nil takes any root once seen full and now empty offline.
+	HoldsFiles func(ctx context.Context, rootFolderID int64) (bool, error)
 }
 
 // NewJob builds the handler.

@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -115,14 +117,14 @@ func (f *fixture) registerObject(t *testing.T, rootFolderID int64, relPath, cont
 
 func (f *fixture) job(roots moverjob.RootFolders) *moverjob.Job {
 	return moverjob.NewJob(moverjob.Config{
-		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store),
+		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store), Links: library.NewObjectLinks(f.store),
 		Roots: roots, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
 
 func (f *fixture) jobWithDrainCompletion(roots moverjob.RootFolders, completion moverjob.DrainCompletion) *moverjob.Job {
 	return moverjob.NewJob(moverjob.Config{
-		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store),
+		FS: f.fsys, MoveJobs: library.NewMoveJobs(f.store), Physical: library.NewPhysical(f.store), Links: library.NewObjectLinks(f.store),
 		Roots: roots, DrainCompletion: completion, Clock: f.clock, Logger: slog.New(slog.DiscardHandler),
 	})
 }
@@ -617,5 +619,48 @@ func TestJob_RenamesBackOverTheFilesOwnMissingRow(t *testing.T) {
 	}
 	if len(paths) != 1 || paths[0].RelPath != "Show/ep.mkv" || paths[0].MissingSince.Valid {
 		t.Errorf("paths = %+v, want the one present row at Show/ep.mkv", paths)
+	}
+}
+
+// A copy to another library places the file and its companions on the other root and records the copy as a further
+// path of the same file; the source stays (plan 10-libraries L3).
+func TestJob_CopiesAFileToAnotherLibrarysRoot(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/Show/ep.mkv", "episode")
+	fx.writeFile(t, "/root1/Show/ep.en.srt", "subtitle")
+	objectID := fx.registerObject(t, 1, "Show/ep.mkv", "episode")
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonCategory), FilesTotal: 1, BytesTotal: 7, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 2, DestRelPath: "Show/ep.mkv", Bytes: 7, KeepSource: true,
+		Companions: []library.MoveCompanion{{SourceRelPath: "Show/ep.en.srt", DestRelPath: "Show/ep.en.srt"}},
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+	if err := fx.run(t, fx.job(fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	for _, file := range []string{"/root1/Show/ep.mkv", "/root2/Show/ep.mkv", "/root1/Show/ep.en.srt", "/root2/Show/ep.en.srt"} {
+		if !fx.exists(file) {
+			t.Errorf("%s is missing; a copy keeps the source and places the copy", file)
+		}
+	}
+	paths, err := library.NewPhysical(fx.store).PathsForObject(t.Context(), objectID)
+	if err != nil {
+		t.Fatalf("PathsForObject: %v", err)
+	}
+	var where []string
+	for _, p := range paths {
+		where = append(where, fmt.Sprintf("%d:%s primary=%d", p.RootFolderID, p.RelPath, p.IsPrimary))
+	}
+	if want := []string{"1:Show/ep.mkv primary=1", "2:Show/ep.mkv primary=0"}; !reflect.DeepEqual(where, want) {
+		t.Errorf("paths = %v, want %v", where, want)
 	}
 }

@@ -1269,6 +1269,18 @@ func (q *Queries) RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPa
 	return result.RowsAffected()
 }
 
+const rootHoldsFiles = `-- name: RootHoldsFiles :one
+SELECT CAST(EXISTS (SELECT 1 FROM library_path WHERE root_folder_id = ? AND missing_since IS NULL) AS INTEGER) AS holds
+`
+
+// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
+func (q *Queries) RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, rootHoldsFiles, rootFolderID)
+	var holds int64
+	err := row.Scan(&holds)
+	return holds, err
+}
+
 const setClaimedAttributes = `-- name: SetClaimedAttributes :exec
 UPDATE media_object SET claimed_attributes_id = ? WHERE id = ?
 `

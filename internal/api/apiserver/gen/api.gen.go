@@ -1328,6 +1328,19 @@ type BuildInfo struct {
 	Version  string  `json:"version"`
 }
 
+// BulkLibraryMove defines model for BulkLibraryMove.
+type BulkLibraryMove struct {
+	Bytes   int64                `json:"bytes"`
+	Files   int64                `json:"files"`
+	Refused []LibraryMoveRefusal `json:"refused"`
+
+	// Started Works whose move or copy was started; 0 for a preview.
+	Started int64 `json:"started"`
+
+	// Works Works that can go.
+	Works int64 `json:"works"`
+}
+
 // BulkResult How many rows a bulk action (section 21.7) matched, and, unless it was a preview, changed.
 type BulkResult struct {
 	Count int64 `json:"count"`
@@ -2743,6 +2756,33 @@ type LibraryMetadataSources struct {
 
 	// Sources The providers asked
 	Sources []string `json:"sources"`
+}
+
+// LibraryMovePlan defines model for LibraryMovePlan.
+type LibraryMovePlan struct {
+	// Plan What one drainRootFolder call computed -- a preview, a refusal, or an accepted and enqueued plan (ADR-51).
+	Plan DrainPlan `json:"plan"`
+
+	// Refusal Why the work cannot go to that library at all; nothing was planned.
+	Refusal *string `json:"refusal,omitempty"`
+}
+
+// LibraryMoveRefusal defines model for LibraryMoveRefusal.
+type LibraryMoveRefusal struct {
+	Reason string `json:"reason"`
+	Title  string `json:"title"`
+	WorkId int64  `json:"work_id"`
+}
+
+// LibraryMoveRequest defines model for LibraryMoveRequest.
+type LibraryMoveRequest struct {
+	// CategoryId The library it goes to.
+	CategoryId int64 `json:"category_id"`
+	Copy       *bool `json:"copy,omitempty"`
+
+	// FromCategoryId The library it leaves
+	FromCategoryId *int64 `json:"from_category_id,omitempty"`
+	Preview        *bool  `json:"preview,omitempty"`
 }
 
 // LibraryNaming defines model for LibraryNaming.
@@ -5505,6 +5545,26 @@ type BulkEditWorksJSONBody struct {
 	Where    *string `json:"where,omitempty"`
 }
 
+// BulkMoveWorksToLibraryJSONBody defines parameters for BulkMoveWorksToLibrary.
+type BulkMoveWorksToLibraryJSONBody struct {
+	AboveRating *bool `json:"above_rating,omitempty"`
+
+	// CategoryId The library they go to.
+	CategoryId  int64    `json:"category_id"`
+	Copy        *bool    `json:"copy,omitempty"`
+	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
+	ExcludedIds *[]int64 `json:"excluded_ids,omitempty"`
+	Fresh       *bool    `json:"fresh,omitempty"`
+	Ids         *[]int64 `json:"ids,omitempty"`
+
+	// LibraryId The library the selection was made in.
+	LibraryId *int64  `json:"library_id,omitempty"`
+	Preview   *bool   `json:"preview,omitempty"`
+	Tags      *string `json:"tags,omitempty"`
+	Wanted    *bool   `json:"wanted,omitempty"`
+	Where     *string `json:"where,omitempty"`
+}
+
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
 type BulkSetWorkMonitoredJSONBody struct {
 	// AboveRating The list's Above rating filter.
@@ -5967,6 +6027,9 @@ type AddWorkJSONRequestBody = AddWorkRequest
 // BulkEditWorksJSONRequestBody defines body for BulkEditWorks for application/json ContentType.
 type BulkEditWorksJSONRequestBody BulkEditWorksJSONBody
 
+// BulkMoveWorksToLibraryJSONRequestBody defines body for BulkMoveWorksToLibrary for application/json ContentType.
+type BulkMoveWorksToLibraryJSONRequestBody BulkMoveWorksToLibraryJSONBody
+
 // BulkSetWorkMonitoredJSONRequestBody defines body for BulkSetWorkMonitored for application/json ContentType.
 type BulkSetWorkMonitoredJSONRequestBody BulkSetWorkMonitoredJSONBody
 
@@ -5975,6 +6038,9 @@ type ChooseWorkArtworkJSONRequestBody = ImagePick
 
 // SaveWorkEditJSONRequestBody defines body for SaveWorkEdit for application/json ContentType.
 type SaveWorkEditJSONRequestBody = WorkEdit
+
+// MoveWorkToLibraryJSONRequestBody defines body for MoveWorkToLibrary for application/json ContentType.
+type MoveWorkToLibraryJSONRequestBody = LibraryMoveRequest
 
 // MergeWorkJSONRequestBody defines body for MergeWork for application/json ContentType.
 type MergeWorkJSONRequestBody MergeWorkJSONBody
@@ -6731,6 +6797,9 @@ type ServerInterface interface {
 	// Change monitoring, a monitor option, quality profile, tags and editable fields of every work matching a selection (Radarr's and Sonarr's Edit selected).
 	// (POST /works/bulk/edit)
 	BulkEditWorks(w http.ResponseWriter, r *http.Request)
+	// Move or copy every work of a selection to another library. Administrator only.
+	// (POST /works/bulk/library)
+	BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request)
 	// Monitor or unmonitor every work matching a selection (section 21.7).
 	// (POST /works/bulk/monitor)
 	BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request)
@@ -6779,6 +6848,9 @@ type ServerInterface interface {
 	// Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 	// (POST /works/{id}/grab)
 	GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams)
+	// Move or copy one work to another library of its media type. Administrator only.
+	// (POST /works/{id}/library)
+	MoveWorkToLibrary(w http.ResponseWriter, r *http.Request, id int64)
 	// Fold this work into another of its type. Administrator only.
 	// (POST /works/{id}/merge)
 	MergeWork(w http.ResponseWriter, r *http.Request, id int64)
@@ -8279,6 +8351,12 @@ func (_ Unimplemented) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Move or copy every work of a selection to another library. Administrator only.
+// (POST /works/bulk/library)
+func (_ Unimplemented) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Monitor or unmonitor every work matching a selection (section 21.7).
 // (POST /works/bulk/monitor)
 func (_ Unimplemented) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
@@ -8372,6 +8450,12 @@ func (_ Unimplemented) ListWorkFranchises(w http.ResponseWriter, r *http.Request
 // Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 // (POST /works/{id}/grab)
 func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Move or copy one work to another library of its media type. Administrator only.
+// (POST /works/{id}/library)
+func (_ Unimplemented) MoveWorkToLibrary(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -16292,6 +16376,28 @@ func (siw *ServerInterfaceWrapper) BulkEditWorks(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// BulkMoveWorksToLibrary operation middleware
+func (siw *ServerInterfaceWrapper) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.BulkMoveWorksToLibrary(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // BulkSetWorkMonitored operation middleware
 func (siw *ServerInterfaceWrapper) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 
@@ -17011,6 +17117,39 @@ func (siw *ServerInterfaceWrapper) GrabWork(w http.ResponseWriter, r *http.Reque
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.GrabWork(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MoveWorkToLibrary operation middleware
+func (siw *ServerInterfaceWrapper) MoveWorkToLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MoveWorkToLibrary(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18386,6 +18525,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/works/bulk/edit", wrapper.BulkEditWorks)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/bulk/library", wrapper.BulkMoveWorksToLibrary)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/bulk/monitor", wrapper.BulkSetWorkMonitored)
 	})
 	r.Group(func(r chi.Router) {
@@ -18432,6 +18574,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/grab", wrapper.GrabWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/works/{id}/library", wrapper.MoveWorkToLibrary)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/merge", wrapper.MergeWork)

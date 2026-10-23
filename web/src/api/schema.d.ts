@@ -1203,6 +1203,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move or copy one work to another library of its media type. Administrator only.
+         * @description Its files on the source library's roots go to a root of the target, named by the target's naming, through the one move engine (reason CATEGORY), subtitles and other files beside them along. A move takes the work's items with it; a copy places the files again (reflink, else hardlink, else a copy; never a symlink) and gives the target the same items, unmonitored. Refused when the target cannot hold the work's media type or its maximum rating does not admit it (refusal). preview, or a plan refusing any file, starts nothing.
+         */
+        post: operations["moveWorkToLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/works/bulk/library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move or copy every work of a selection to another library. Administrator only.
+         * @description The selection is the one /works/bulk/monitor takes, filters included; each work as /works/{id}/library.
+         */
+        post: operations["bulkMoveWorksToLibrary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/rootfolders/{id}/rename": {
         parameters: {
             query?: never;
@@ -4799,6 +4841,50 @@ export interface components {
         MoveCompanion: {
             source_rel_path: string;
             dest_rel_path: string;
+        };
+        LibraryMoveRequest: {
+            /**
+             * Format: int64
+             * @description The library it goes to.
+             */
+            category_id: number;
+            /**
+             * Format: int64
+             * @description The library it leaves
+             */
+            from_category_id?: number;
+            /** @default false */
+            copy: boolean;
+            /** @default false */
+            preview: boolean;
+        };
+        LibraryMovePlan: {
+            plan: components["schemas"]["DrainPlan"];
+            /** @description Why the work cannot go to that library at all; nothing was planned. */
+            refusal?: string;
+        };
+        BulkLibraryMove: {
+            /**
+             * Format: int64
+             * @description Works that can go.
+             */
+            works: number;
+            /** Format: int64 */
+            files: number;
+            /** Format: int64 */
+            bytes: number;
+            /**
+             * Format: int64
+             * @description Works whose move or copy was started; 0 for a preview.
+             */
+            started: number;
+            refused: components["schemas"]["LibraryMoveRefusal"][];
+        };
+        LibraryMoveRefusal: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            reason: string;
         };
         DrainRefusal: {
             /** Format: int64 */
@@ -9785,6 +9871,90 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description The work has no file off that root. */
             409: components["responses"]["Problem"];
+        };
+    };
+    moveWorkToLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description The plan, or why the work cannot go there. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryMovePlan"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    bulkMoveWorksToLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    ids?: number[];
+                    /**
+                     * Format: int64
+                     * @description The library the selection was made in.
+                     */
+                    library_id?: number;
+                    excluded_ids?: number[];
+                    /** @default false */
+                    fresh?: boolean;
+                    where?: string;
+                    tags?: string;
+                    /** @default false */
+                    above_rating?: boolean;
+                    /** @default false */
+                    wanted?: boolean;
+                    /** @default false */
+                    cutoff_unmet?: boolean;
+                    /**
+                     * Format: int64
+                     * @description The library they go to.
+                     */
+                    category_id: number;
+                    /** @default false */
+                    copy?: boolean;
+                    /** @default false */
+                    preview?: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description What it comes to, or what was started. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkLibraryMove"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     renameRootFolder: {

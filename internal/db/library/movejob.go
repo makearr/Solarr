@@ -80,6 +80,8 @@ type Item struct {
 	Bytes         int64
 	State         string
 	Error         string
+	// KeepSource copies the file to its destination as a further path instead of moving it.
+	KeepSource bool
 }
 
 // NewMoveItem is what AddItems needs for one file a plan approved.
@@ -91,6 +93,8 @@ type NewMoveItem struct {
 	Bytes         int64
 	// Companions move with the file: its subtitles, nfo, pictures, which are no media objects of their own.
 	Companions []MoveCompanion
+	// KeepSource copies instead of moving: the file stays and the copy is a further path of it.
+	KeepSource bool
 }
 
 // MoveCompanion is one file that moves with an item, within the item's root.
@@ -133,7 +137,7 @@ func (m MoveJobs) AddItems(ctx context.Context, jobID int64, items []NewMoveItem
 				if err := queries.InsertMoveItem(ctx, librarydb.InsertMoveItemParams{
 					MoveJobID: jobID, MediaObjectID: item.MediaObjectID, AffinityKey: item.AffinityKey,
 					DestRootID: item.DestRootID, DestRelPath: item.DestRelPath, Bytes: item.Bytes,
-					State: MoveItemPending,
+					State: MoveItemPending, KeepSource: boolToInt(item.KeepSource),
 				}); err != nil {
 					return fmt.Errorf("insert item for media object %d: %w", item.MediaObjectID, err)
 				}
@@ -285,6 +289,6 @@ func itemFromRow(row librarydb.MoveItem) Item {
 	return Item{
 		MoveJobID: row.MoveJobID, MediaObjectID: row.MediaObjectID, AffinityKey: row.AffinityKey,
 		DestRootID: row.DestRootID, DestRelPath: row.DestRelPath, Bytes: row.Bytes,
-		State: row.State, Error: row.Error.String,
+		State: row.State, Error: row.Error.String, KeepSource: row.KeepSource == 1,
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/capacity"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -22,7 +23,9 @@ func (p *process) registerCapacityJob(registry *jobs.Registry, executor *jobs.Ex
 	if err := registry.Register(capacity.ReachDefinition); err != nil {
 		return err
 	}
-	executor.Handle(capacity.ReachJobType, capacity.NewReachJob(capacity.Config{FS: p.fsys, Cache: p.cache, Logger: p.logger}))
+	executor.Handle(capacity.ReachJobType, capacity.NewReachJob(capacity.Config{
+		FS: p.fsys, Cache: p.cache, Logger: p.logger, HoldsFiles: library.NewPhysical(p.library).HoldsFiles,
+	}))
 	return nil
 }
 

@@ -304,3 +304,7 @@ WHERE lp.media_object_id IN (
     LIMIT sqlc.arg(page_size))
   AND lp.root_folder_id = sqlc.arg(root_folder_id) AND lp.is_primary = 1 AND lp.missing_since IS NULL
 ORDER BY lp.media_object_id, d.work_id, f.media_ref;
+
+-- Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
+-- name: RootHoldsFiles :one
+SELECT CAST(EXISTS (SELECT 1 FROM library_path WHERE root_folder_id = ? AND missing_since IS NULL) AS INTEGER) AS holds;

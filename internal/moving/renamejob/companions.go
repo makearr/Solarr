@@ -97,7 +97,7 @@ func movedFolders(proposals []proposal, level int, listing folderListing, known 
 		}
 	}
 	for old, moved := range to {
-		if mixed[old] || old == moved {
+		if mixed[old] || old == moved && !crossRoot(proposals) {
 			delete(to, old)
 			continue
 		}
@@ -189,4 +189,9 @@ func (l folderListing) files(dir string) []fsx.DirEntry {
 		}
 	}
 	return files
+}
+
+// crossRoot says the proposals go to another root, where even a folder of the same name is a move.
+func crossRoot(proposals []proposal) bool {
+	return len(proposals) > 0 && proposals[0].crossRoot
 }

@@ -561,3 +561,39 @@ WHERE d.satisfaction_kind = 'SET' AND d.id > sqlc.arg(after_id)
   AND NOT EXISTS (SELECT 1 FROM work_part p WHERE p.work_id = d.work_id AND (p.available_at IS NOT NULL OR COALESCE(p.date, '') <> ''))
 ORDER BY d.id
 LIMIT sqlc.arg(page_size);
+
+-- A work's items move to another library and take its profile; an item the target already has (a copy made before)
+-- is dropped from the source instead (plan 10-libraries L3).
+-- name: DropWorkItemsTheTargetHas :exec
+DELETE FROM desired_item
+WHERE desired_item.work_id = sqlc.arg(work_id) AND desired_item.category_id = sqlc.arg(from_category_id)
+  AND EXISTS (SELECT 1 FROM desired_item t WHERE t.work_id = desired_item.work_id AND t.category_id = sqlc.arg(to_category_id)
+              AND t.media_ref = desired_item.media_ref AND t.satisfaction_kind = desired_item.satisfaction_kind);
+
+-- name: MoveWorkItemsToCategory :execrows
+UPDATE desired_item SET category_id = sqlc.arg(to_category_id), profile_id = sqlc.arg(profile_id), dirty = 1
+WHERE work_id = sqlc.arg(work_id) AND category_id = sqlc.arg(from_category_id);
+
+-- A copy in another library starts unmonitored: it holds what exists, acquisition stays with the original.
+-- name: CopyWorkItemsToCategory :execrows
+INSERT INTO desired_item (work_id, edition_id, media_ref, media_sort_key, category_id,
+                          profile_id, monitored, satisfaction_kind, required_count,
+                          present_count, state, available_from, available_confidence,
+                          available_basis, dirty, generation, last_planned_at, added_by)
+SELECT s.work_id, s.edition_id, s.media_ref, s.media_sort_key, sqlc.arg(to_category_id),
+       sqlc.arg(profile_id), 0, s.satisfaction_kind, s.required_count,
+       s.present_count, s.state, s.available_from, s.available_confidence,
+       s.available_basis, 1, 0, NULL, s.added_by
+FROM desired_item s
+WHERE s.work_id = sqlc.arg(work_id) AND s.category_id = sqlc.arg(from_category_id)
+  AND NOT EXISTS (SELECT 1 FROM desired_item t WHERE t.work_id = s.work_id AND t.category_id = sqlc.arg(to_category_id)
+                  AND t.media_ref = s.media_ref AND t.satisfaction_kind = s.satisfaction_kind);
+
+-- name: CopyWorkItemFilesToCategory :exec
+INSERT OR IGNORE INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+SELECT t.id, f.media_object_id, f.role, f.media_ref, f.added_at
+FROM desired_item s
+JOIN desired_item_file f ON f.desired_item_id = s.id
+JOIN desired_item t ON t.work_id = s.work_id AND t.category_id = sqlc.arg(to_category_id)
+                   AND t.media_ref = s.media_ref AND t.satisfaction_kind = s.satisfaction_kind
+WHERE s.work_id = sqlc.arg(work_id) AND s.category_id = sqlc.arg(from_category_id);

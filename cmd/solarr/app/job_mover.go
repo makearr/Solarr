@@ -22,7 +22,7 @@ func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Execu
 		return err
 	}
 	job := moverjob.NewJob(moverjob.Config{
-		FS: p.fsys, MoveJobs: library.NewMoveJobs(p.library), Physical: library.NewPhysical(p.library),
+		FS: p.fsys, MoveJobs: library.NewMoveJobs(p.library), Physical: library.NewPhysical(p.library), Links: library.NewObjectLinks(p.library),
 		Roots: adapters.MoverRoots{Roots: adapters.Roots{Cache: p.cache}},
 		DrainCompletion: drainjob.Completer{
 			Roots: adapters.DrainRoots{Cache: p.cache}, Files: library.NewPhysical(p.library),

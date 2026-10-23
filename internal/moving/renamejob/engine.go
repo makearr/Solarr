@@ -111,10 +111,11 @@ func (e Engine) Start(
 	return plan, jobID, warnings, nil
 }
 
-// proposal is one named file: where it is and where its naming puts it.
+// proposal is one named file: where it is and where its naming puts it; crossRoot when it goes to another root.
 type proposal struct {
-	file  File
-	named Named
+	file      File
+	named     Named
+	crossRoot bool
 }
 
-func (p proposal) changed() bool { return p.named.RelPath != p.file.RelPath }
+func (p proposal) changed() bool { return p.crossRoot || p.named.RelPath != p.file.RelPath }

@@ -1759,6 +1759,78 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The work has no file off that root.
 
+  /works/{id}/library:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: moveWorkToLibrary
+      tags: [library]
+      summary: Move or copy one work to another library of its media type. Administrator only.
+      description: >-
+        Its files on the source library's roots go to a root of the target, named by the target's naming, through the
+        one move engine (reason CATEGORY), subtitles and other files beside them along. A move takes the work's items
+        with it; a copy places the files again (reflink, else hardlink, else a copy; never a symlink) and gives the
+        target the same items, unmonitored. Refused when the target cannot hold the work's media type or its
+        maximum rating does not admit it (refusal). preview, or a plan refusing any file, starts nothing.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryMoveRequest" }
+      responses:
+        "200":
+          description: The plan, or why the work cannot go there.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryMovePlan" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /works/bulk/library:
+    post:
+      operationId: bulkMoveWorksToLibrary
+      tags: [library]
+      summary: Move or copy every work of a selection to another library. Administrator only.
+      description: The selection is the one /works/bulk/monitor takes, filters included; each work as /works/{id}/library.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [category_id]
+              properties:
+                ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                library_id: { type: integer, format: int64, description: The library the selection was made in. }
+                excluded_ids:
+                  type: array
+                  items: { type: integer, format: int64 }
+                fresh: { type: boolean, default: false }
+                where: { type: string }
+                tags: { type: string }
+                above_rating: { type: boolean, default: false }
+                wanted: { type: boolean, default: false }
+                cutoff_unmet: { type: boolean, default: false }
+                category_id: { type: integer, format: int64, description: The library they go to. }
+                copy: { type: boolean, default: false }
+                preview: { type: boolean, default: false }
+      responses:
+        "200":
+          description: What it comes to, or what was started.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkLibraryMove" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /rootfolders/{id}/rename:
     parameters:
       - name: id
@@ -7601,6 +7673,42 @@ components:
       properties:
         source_rel_path: { type: string }
         dest_rel_path: { type: string }
+
+    LibraryMoveRequest:
+      type: object
+      required: [category_id]
+      properties:
+        category_id: { type: integer, format: int64, description: The library it goes to. }
+        from_category_id: { type: integer, format: int64, description: The library it leaves, for a work in several; its first other one when absent. }
+        copy: { type: boolean, default: false }
+        preview: { type: boolean, default: false }
+
+    LibraryMovePlan:
+      type: object
+      required: [plan]
+      properties:
+        plan: { $ref: "#/components/schemas/DrainPlan" }
+        refusal: { type: string, description: Why the work cannot go to that library at all; nothing was planned. }
+
+    BulkLibraryMove:
+      type: object
+      required: [works, files, bytes, started, refused]
+      properties:
+        works: { type: integer, format: int64, description: Works that can go. }
+        files: { type: integer, format: int64 }
+        bytes: { type: integer, format: int64 }
+        started: { type: integer, format: int64, description: Works whose move or copy was started; 0 for a preview. }
+        refused:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryMoveRefusal" }
+
+    LibraryMoveRefusal:
+      type: object
+      required: [work_id, title, reason]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        reason: { type: string }
 
     DrainRefusal:
       type: object

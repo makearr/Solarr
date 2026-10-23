@@ -89,6 +89,7 @@ type Job struct {
 	fsys            fsx.FS
 	moveJobs        library.MoveJobs
 	physical        library.Physical
+	links           library.ObjectLinks
 	roots           RootFolders
 	drainCompletion DrainCompletion
 	permissions     Permissions
@@ -99,9 +100,11 @@ type Job struct {
 // Config is what a Job needs. Every field is required except Logger and
 // DrainCompletion.
 type Config struct {
-	FS              fsx.FS
-	MoveJobs        library.MoveJobs
-	Physical        library.Physical
+	FS       fsx.FS
+	MoveJobs library.MoveJobs
+	Physical library.Physical
+	// Links records the further path a copy to another library places.
+	Links           library.ObjectLinks
 	Roots           RootFolders
 	DrainCompletion DrainCompletion
 	// Permissions is optional; a rename run for one library applies it to what it moves.
@@ -117,7 +120,7 @@ func NewJob(config Config) *Job {
 		logger = slog.Default()
 	}
 	return &Job{
-		fsys: config.FS, moveJobs: config.MoveJobs, physical: config.Physical,
+		fsys: config.FS, moveJobs: config.MoveJobs, physical: config.Physical, links: config.Links,
 		roots: config.Roots, drainCompletion: config.DrainCompletion, permissions: config.Permissions,
 		clock: config.Clock, logger: logger,
 	}
@@ -220,6 +223,9 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 	sourceRoot, ok := j.roots.RootFolder(primary.RootFolderID)
 	if !ok {
 		return fmt.Errorf("source root %d has no known path", primary.RootFolderID)
+	}
+	if item.KeepSource {
+		return j.copyItem(ctx, item, primary.RootFolderID, primary.RelPath, sourceRoot, permissions)
 	}
 	destRoot, ok := j.roots.RootFolder(item.DestRootID)
 	if !ok {
@@ -359,4 +365,71 @@ func Enqueue(ctx context.Context, queue *jobs.Queue, moveJobID int64) (jobs.Enqu
 		Priority:  jobs.PriorityLow,
 		Payload:   data,
 	})
+}
+
+// copyLadder is how a copy to another library shares the file's bytes: independence first, never a symlink (ADR-11).
+var copyLadder = []mover.PlaceMethod{mover.PlaceReflink, mover.PlaceHardlink, mover.PlaceCopy}
+
+// copyItem places the file at its destination and records it as a further path of the same media object, leaving the
+// source where it is; its companions are placed beside it the same way.
+func (j *Job) copyItem(
+	ctx context.Context, item library.Item, sourceRootID int64, sourceRel string, sourceRoot RootFolder, permissions *mover.Permissions,
+) error {
+	destRoot, ok := j.roots.RootFolder(item.DestRootID)
+	if !ok {
+		return fmt.Errorf("destination root %d has no known path", item.DestRootID)
+	}
+	sourceAbs, destAbs := path.Join(sourceRoot.Path, sourceRel), path.Join(destRoot.Path, item.DestRelPath)
+	if _, err := j.fsys.Stat(destAbs); err != nil {
+		method, err := mover.PlaceOne(j.fsys, sourceAbs, destAbs, item.Bytes, copyLadder)
+		if err != nil {
+			return fmt.Errorf("copy %q: %w", sourceAbs, err)
+		}
+		if permissions != nil {
+			if err := mover.ApplyPermissions(j.fsys, destRoot.Path, destAbs, *permissions); err != nil {
+				j.logger.Warn("permissions not set", slog.String("path", destAbs), slog.Any("error", err))
+			}
+		}
+		if err := j.links.AddLinkedPath(ctx, item.MediaObjectID, item.DestRootID, item.DestRelPath, linkKindOf(method)); err != nil {
+			return errors.Join(fmt.Errorf("record the copy: %w", err), j.fsys.Remove(destAbs))
+		}
+	} else if err := j.links.AddLinkedPath(ctx, item.MediaObjectID, item.DestRootID, item.DestRelPath, library.LinkPrimary); err != nil {
+		return fmt.Errorf("%q is taken: %w", destAbs, err)
+	}
+	j.copyCompanions(ctx, item, sourceRootID, sourceRoot, destRoot)
+	return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
+}
+
+// copyCompanions places the item's subtitles, nfo and pictures beside its copy; one whose name is taken is left out.
+func (j *Job) copyCompanions(ctx context.Context, item library.Item, sourceRootID int64, sourceRoot, destRoot RootFolder) {
+	companions, err := j.moveJobs.Companions(ctx, item.MoveJobID, item.MediaObjectID)
+	if err != nil {
+		j.logger.Warn("companions not read", slog.Int64("media_object_id", item.MediaObjectID), slog.Any("error", err))
+		return
+	}
+	for _, companion := range companions {
+		sourceAbs, destAbs := path.Join(sourceRoot.Path, companion.SourceRelPath), path.Join(destRoot.Path, companion.DestRelPath)
+		info, err := j.fsys.Stat(sourceAbs)
+		if err != nil {
+			continue
+		}
+		if _, err := j.fsys.Stat(destAbs); err == nil {
+			continue
+		}
+		if _, err := mover.PlaceOne(j.fsys, sourceAbs, destAbs, info.Size, copyLadder); err != nil {
+			j.logger.Warn("companion not copied", slog.String("path", sourceAbs), slog.Int64("source_root", sourceRootID), slog.Any("error", err))
+		}
+	}
+}
+
+// linkKindOf is how a placed copy is recorded: a link of its kind, or a primary copy of its own.
+func linkKindOf(method mover.PlaceMethod) string {
+	switch method {
+	case mover.PlaceReflink:
+		return library.LinkReflink
+	case mover.PlaceHardlink:
+		return library.LinkHardlink
+	default:
+		return library.LinkPrimary
+	}
 }

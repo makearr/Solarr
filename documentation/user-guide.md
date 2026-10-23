@@ -91,6 +91,11 @@ provider uses it again), adds or deletes them.
 anything rated higher, or unrated unless you allow it, where it is but never searches for it there; its list's
 **Above rating** button shows those, their pages say so, and a notice counts them.
 
+**Move to library** (a work's page, or a selection in the list; administrator) moves or copies works to another library
+of the same kind, a series to Anime say: preview shows every file's new place under that library's naming, with the
+subtitles and pictures that come along; a copy is unmonitored in the other library and shares the file's bytes where
+the disk allows.
+
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most
 missing first, with one click to follow the artist and add the rest. It fills in after the weekly

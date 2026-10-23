@@ -351,6 +351,15 @@ func (p Physical) PathsForObject(ctx context.Context, mediaObjectID int64) ([]li
 	return rows, nil
 }
 
+// HoldsFiles says the library still has a file on the root that is not missing.
+func (p Physical) HoldsFiles(ctx context.Context, rootFolderID int64) (bool, error) {
+	holds, err := librarydb.New(p.store.Read()).RootHoldsFiles(ctx, rootFolderID)
+	if err != nil {
+		return false, fmt.Errorf("library: files on root %d: %w", rootFolderID, err)
+	}
+	return holds == 1, nil
+}
+
 // ErrPathNotFound means the (rootFolderID, relPath) pair Relocate was asked
 // to move no longer names a library_path row -- a concurrent change since
 // Plan ran (a rescan, another move, a manual edit), not a bug in the caller.

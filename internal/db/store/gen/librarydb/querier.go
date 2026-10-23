@@ -83,6 +83,9 @@ type Querier interface {
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
+	CopyWorkItemFilesToCategory(ctx context.Context, arg CopyWorkItemFilesToCategoryParams) error
+	// A copy in another library starts unmonitored: it holds what exists, acquisition stays with the original.
+	CopyWorkItemsToCategory(ctx context.Context, arg CopyWorkItemsToCategoryParams) (int64, error)
 	// The "artists" count for one category (ADR-54's person-entity navigation levels,
 	// e.g. music's Artists): distinct persons credited with role 'artist' on a work
 	// visible to the category. Hard-codes the 'artist' role, the same way
@@ -305,6 +308,9 @@ type Querier interface {
 	// distinguishes "no such session, or still running" from "now hidden".
 	DismissImportSession(ctx context.Context, arg DismissImportSessionParams) (int64, error)
 	DropUnplacedItemFiles(ctx context.Context, arg DropUnplacedItemFilesParams) error
+	// A work's items move to another library and take its profile; an item the target already has (a copy made before)
+	// is dropped from the source instead (plan 10-libraries L3).
+	DropWorkItemsTheTargetHas(ctx context.Context, arg DropWorkItemsTheTargetHasParams) error
 	// Primed so something dispatches the instant a slot frees (section 10.5).
 	EnqueueReady(ctx context.Context, arg EnqueueReadyParams) error
 	FillOrganisationDetails(ctx context.Context, arg FillOrganisationDetailsParams) error
@@ -933,6 +939,7 @@ type Querier interface {
 	MoveEditionToWork(ctx context.Context, arg MoveEditionToWorkParams) error
 	MoveTagAliases(ctx context.Context, arg MoveTagAliasesParams) error
 	MoveTagAssignments(ctx context.Context, arg MoveTagAssignmentsParams) error
+	MoveWorkItemsToCategory(ctx context.Context, arg MoveWorkItemsToCategoryParams) (int64, error)
 	// newest_release.
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// newest_searched.
@@ -1017,6 +1024,8 @@ type Querier interface {
 	ResolvePackItem(ctx context.Context, arg ResolvePackItemParams) error
 	// Aged decision detail (section 5.7, Part VI Q5).
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
+	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.
+	RootHoldsFiles(ctx context.Context, rootFolderID int64) (int64, error)
 	// Ranked cross-media search over titles and aliases (migration 0010, section 21.1).
 	// One row per matching work, even if several of its titles match: the best (lowest) bm25
 	// rank wins, so a common alias never crowds out the rest of the results. media_type is

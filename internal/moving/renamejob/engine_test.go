@@ -210,3 +210,46 @@ func compare(a, b string) int {
 	}
 	return 0
 }
+
+// A work going to another library moves to the target's root under the target's names, everything beside it and its
+// folders' own files along, even where the name stays the same; a copy keeps its sources (plan 10-libraries L3).
+func TestEngine_MovesAWorkToAnotherLibrarysRoot(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	onDisk(t, fsys, "Show/Season 1/Show - S01E01.mkv", "Show/Season 1/Show - S01E01.en.srt", "Show/Season 1/Show - S01E02.mkv", "Show/tvshow.nfo")
+	files := &listedFiles{files: []library.RenameFile{listed(1, 5, "Show/Season 1/Show - S01E01.mkv"), listed(2, 5, "Show/Season 1/Show - S01E02.mkv")}}
+	namer := &namesByID{names: map[int64]string{1: "Show/Season 1/Show - S01E01 - Pilot.mkv"}}
+	recorded := &recordedJobs{}
+	free := int64(1 << 40)
+	moving := engine(t, fsys, files, recorded)
+	moving.Roots = roots{
+		1: {ID: 1, Path: rootPath, Online: true, Writable: true, FSID: "fs"},
+		2: {ID: 2, Path: "/media/anime", Online: true, Writable: true, FSID: "fs", FreeBytes: &free},
+	}
+
+	plan, jobID, _, err := moving.StartLibraryMove(t.Context(), namer, renamejob.LibraryMove{
+		WorkID: 5, Source: settings.Category{ID: 3}, Target: settings.Category{ID: 4}, SourceRoots: []int64{1}, DestRoot: 2, Copy: true,
+	}, false)
+	if err != nil {
+		t.Fatalf("StartLibraryMove: %v", err)
+	}
+	if jobID != 7 || len(plan.Refused) != 0 || plan.Reason != mover.ReasonCategory {
+		t.Fatalf("job %d, refused %+v, reason %s; want job 7 of reason CATEGORY", jobID, plan.Refused, plan.Reason)
+	}
+	got := map[string]library.NewMoveItem{}
+	for _, item := range recorded.items {
+		slices.SortFunc(item.Companions, func(a, b library.MoveCompanion) int { return compare(a.SourceRelPath, b.SourceRelPath) })
+		got[item.DestRelPath] = item
+	}
+	want := map[string]library.NewMoveItem{
+		"Show/Season 1/Show - S01E01 - Pilot.mkv": {MediaObjectID: 1, AffinityKey: "work:5", DestRootID: 2, DestRelPath: "Show/Season 1/Show - S01E01 - Pilot.mkv",
+			Bytes: 10, KeepSource: true, Companions: []library.MoveCompanion{
+				{SourceRelPath: "Show/Season 1/Show - S01E01.en.srt", DestRelPath: "Show/Season 1/Show - S01E01 - Pilot.en.srt"},
+				{SourceRelPath: "Show/tvshow.nfo", DestRelPath: "Show/tvshow.nfo"},
+			}},
+		"Show/Season 1/Show - S01E02.mkv": {MediaObjectID: 2, AffinityKey: "work:5", DestRootID: 2, DestRelPath: "Show/Season 1/Show - S01E02.mkv",
+			Bytes: 10, KeepSource: true},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("items = %+v\nwant %+v", got, want)
+	}
+}

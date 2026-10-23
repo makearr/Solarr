@@ -35,6 +35,7 @@ import {
 import { formatBytes } from "../Queue";
 import { TagChips } from "../TagChips";
 import { BulkEditWork } from "./EditWork";
+import { LibraryMoveDialog } from "./LibraryMoveDialog";
 import { formatMinutes } from "./workFormat";
 
 type Work = components["schemas"]["Work"];
@@ -247,6 +248,7 @@ export function WorkIndex() {
           request={list.selectionRequest}
           count={list.selectionCount}
           info={info}
+          libraryId={Number(categoryId)}
           explicitIds={list.items.filter((work) => list.isSelected(work.id)).map((work) => work.id)}
           onDone={() => list.clearSelection()}
         />
@@ -342,12 +344,14 @@ function BulkBar({
   request,
   count,
   info,
+  libraryId,
   explicitIds,
   onDone,
 }: {
   request: SelectionRequest;
   count: number | null;
   info: MediaTypeInfo | undefined;
+  libraryId: number;
   explicitIds: number[];
   onDone: () => void;
 }) {
@@ -357,6 +361,7 @@ function BulkBar({
     { kind: "monitor"; monitored: boolean; count: number } | { kind: "option"; option: string; count: number } | { kind: "remove" }
   >();
   const [editing, setEditing] = useState(false);
+  const [movingLibrary, setMovingLibrary] = useState(false);
   const [option, setOption] = useState(info?.monitor_options[0]?.key ?? "");
   const [removal, setRemoval] = useState({ deleteFiles: false, exclude: true });
   const [progress, setProgress] = useState<string>();
@@ -429,6 +434,9 @@ function BulkBar({
           </Button>
         </span>
       )}
+      {administrator && info && (
+        <Button onClick={() => setMovingLibrary(true)}>Move to library</Button>
+      )}
       {explicitIds.length > 0 && administrator && (
         <Button variant="danger" onClick={() => setConfirm({ kind: "remove" })}>
           {t("action.remove")}
@@ -438,6 +446,18 @@ function BulkBar({
         Clear
       </Button>
       {progress && <span className="text-ink-muted">{progress}</span>}
+      {movingLibrary && info && (
+        <LibraryMoveDialog
+          subject={{ selection: selectionBody(request), count: count ?? explicitIds.length }}
+          mediaType={info.key}
+          fromLibraryId={libraryId}
+          onClose={() => setMovingLibrary(false)}
+          onDone={() => {
+            setMovingLibrary(false);
+            changed();
+          }}
+        />
+      )}
       {editing && (
         <BulkEditWork
           selection={selectionBody(request)}

@@ -23,9 +23,10 @@ var ReachDefinition = jobs.Definition{
 // ReachJob takes a root it cannot reach offline and brings back one it took offline once it is reachable again
 // (user, 2026-10-23); a root a person declared offline is left alone (settings.Cache.RecordRootFolderReach).
 type ReachJob struct {
-	fsys   fsx.FS
-	cache  *settings.Cache
-	logger *slog.Logger
+	fsys       fsx.FS
+	cache      *settings.Cache
+	holdsFiles func(ctx context.Context, rootFolderID int64) (bool, error)
+	logger     *slog.Logger
 }
 
 // NewReachJob builds the handler from the capacity sweep's own configuration; Clock is not needed.
@@ -34,7 +35,7 @@ func NewReachJob(config Config) *ReachJob {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &ReachJob{fsys: config.FS, cache: config.Cache, logger: logger}
+	return &ReachJob{fsys: config.FS, cache: config.Cache, holdsFiles: config.HoldsFiles, logger: logger}
 }
 
 // Run checks every root once.
@@ -44,6 +45,12 @@ func (j *ReachJob) Run(ctx context.Context, _ jobs.Job) error {
 			return jobs.Retryablef("reach.context", string(ReachJobType), err)
 		}
 		reached, reason, entries := Reach(j.fsys, root)
+		// A root Solarr emptied itself (a move to another library, a drain) is empty, not unmounted.
+		if !reached && entries == 0 && reason == emptyReason && j.holdsFiles != nil {
+			if holds, err := j.holdsFiles(ctx, root.ID); err == nil && !holds {
+				reached, reason = true, ""
+			}
+		}
 		if err := j.cache.RecordRootFolderReach(ctx, root.ID, reached, reason, entries); err != nil {
 			j.logger.WarnContext(ctx, "could not record whether a root folder is reachable",
 				slog.Int64("root_folder_id", root.ID), slog.Any("error", err))
@@ -76,10 +83,13 @@ func Reach(fsys fsx.FS, root settings.RootFolder) (reached bool, reason string, 
 		return false, err.Error(), 0
 	}
 	if len(listed) == 0 && root.SeenEntries > 0 {
-		return false, "is empty although it held files: is the disk mounted?", 0
+		return false, emptyReason, 0
 	}
 	return true, "", int64(len(listed))
 }
+
+// emptyReason is why a root that held files and is empty now is taken offline.
+const emptyReason = "is empty although it held files: is the disk mounted?"
 
 // EnqueueReach submits one reachability check, deduplicated by ReachActionKey.
 func EnqueueReach(ctx context.Context, queue *jobs.Queue) (jobs.EnqueueResult, error) {

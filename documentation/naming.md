@@ -64,3 +64,14 @@ ending (`.en.srt`, `.nfo`, `-thumb.jpg`, `.lrc`) takes the new name with that en
 folder moves to one new folder (an album, a season, a movie, and the artist or series folder above), the folder's
 other files (`cover.jpg`, `tvshow.nfo`) go with it. An audio or video file is never a companion, and a companion
 whose new name is taken stays where it is.
+
+## Moving a work to another library
+
+Work page or a selection -> **Move to library** (administrator): a work goes to another library of its media type,
+its files from the source library's roots to one root of the target (on the same filesystem when one is, else the
+one with the most room), named by the **target's** naming, companions along, through the one move engine (reason
+`CATEGORY`, `renamejob.Engine.StartLibraryMove`). A move takes the work's items with it, under the target's profile; a
+**copy** places the files again (reflink, else hardlink, else a copy; never a symlink, `move_item.keep_source`),
+records each as a further path of the same file and gives the target the same items, unmonitored. Refused, with the
+reason, when the target holds another media type, its maximum rating does not admit the work, it holds the work
+already, or it has no root taking new files; a file another work also holds stays and refuses the plan.

@@ -1,6 +1,7 @@
 package capacity_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -99,5 +100,48 @@ func TestReach_NamesWhyARootCannotBeReached(t *testing.T) {
 	}
 	if reached, _, entries := capacity.Reach(fsys, settings.RootFolder{Path: "/media/empty"}); !reached || entries != 0 {
 		t.Errorf("a new empty root = reached %v, entries %d; want reached, nothing in it", reached, entries)
+	}
+}
+
+// A root Solarr emptied itself, by moving its works to another library or draining it, holds no files of the library
+// any more: empty, it stays online (found live 2026-10-23); while the library has files there it is a missing disk.
+func TestReachJob_KeepsARootTheLibraryEmptiedOnline(t *testing.T) {
+	cache := newCache(t)
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	if err := fsys.MkdirAll("/media/tv/Show", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	root, err := cache.CreateRootFolder(t.Context(), "/media/tv", "")
+	if err != nil {
+		t.Fatalf("CreateRootFolder: %v", err)
+	}
+	holds := true
+	job := capacity.NewReachJob(capacity.Config{FS: fsys, Cache: cache, HoldsFiles: func(context.Context, int64) (bool, error) { return holds, nil }})
+	run := func() {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	run()
+	if err := fsys.Remove("/media/tv/Show"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	holds = false
+	run()
+	if got := reachOf(t, cache, root.ID); got != (reachState{online: true}) {
+		t.Fatalf("emptied by the library = %+v, want online", got)
+	}
+	if err := fsys.MkdirAll("/media/tv/Show", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	run()
+	if err := fsys.Remove("/media/tv/Show"); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	holds = true
+	run()
+	if got := reachOf(t, cache, root.ID); got.online {
+		t.Fatalf("emptied while the library has files there = %+v, want offline", got)
 	}
 }

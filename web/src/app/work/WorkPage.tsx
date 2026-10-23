@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FilePen, Filter, Layers, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound } from "lucide-react";
+import { FilePen, Filter, Layers, ListChecks, ListOrdered, Pencil, RefreshCw, Search, Trash2, UserRound, FolderInput } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -24,6 +24,7 @@ import { Tabs, type Tab } from "@/ui/Tabs";
 import { ChooseImage } from "../ChooseImage";
 import { InteractiveSearch, type SearchScope } from "../InteractiveSearch";
 import { RenamePlanner } from "../RenamePlanner";
+import { LibraryMoveDialog } from "./LibraryMoveDialog";
 import { statusLabel, useQueue } from "../Queue";
 import { CrossoverBadges, CrossoverDialog, CrossoverGuestRows, useWorkCrossovers } from "../Crossovers";
 import { useLibrary } from "@/lib/useLibrary";
@@ -181,6 +182,7 @@ function WorkHeader({
   const [editing, setEditing] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [renaming, setRenaming] = useState(false);
+  const [movingLibrary, setMovingLibrary] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const library = useLibrary(categoryId ?? "");
   const [numbering, setNumbering] = useState(false);
@@ -364,6 +366,11 @@ function WorkHeader({
                 {t("action.renamePreview")}
               </Button>
             )}
+            {administrator && categoryId !== undefined && (
+              <Button icon={<FolderInput aria-hidden className="size-4" />} onClick={() => setMovingLibrary(true)}>
+                Move to library
+              </Button>
+            )}
             {administrator && numberings.data && (
               <Button icon={<ListOrdered aria-hidden className="size-4" />} onClick={() => setNumbering(true)}>
                 {t("numbering.title")}
@@ -392,6 +399,15 @@ function WorkHeader({
         <Dialog title={t("action.renamePreview")} description={work.title} width="wide" onClose={() => setRenaming(false)}>
           <RenamePlanner categoryId={Number(categoryId)} workId={work.id} previewAtOnce />
         </Dialog>
+      )}
+      {movingLibrary && categoryId !== undefined && (
+        <LibraryMoveDialog
+          subject={{ workId: work.id, title: work.title }}
+          mediaType={work.media_type}
+          fromLibraryId={Number(categoryId)}
+          onClose={() => setMovingLibrary(false)}
+          onDone={() => setMovingLibrary(false)}
+        />
       )}
       {collecting && categoryId !== undefined && <AddToCollection categoryId={categoryId} workId={work.id} title={work.title} onClose={() => setCollecting(false)} />}
       {removing && (

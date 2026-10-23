@@ -492,6 +492,7 @@ type MoveItem struct {
 	Bytes         int64
 	State         string
 	Error         sql.NullString
+	KeepSource    int64
 }
 
 type MoveItemCompanion struct {

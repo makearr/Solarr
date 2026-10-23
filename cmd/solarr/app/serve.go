@@ -822,8 +822,13 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},
 		LibraryArtists: adapters.Artists{People: library.NewPeople(p.library)},
 		RenameStarter:  adapters.Rename{Registry: p.media, Settings: p.cache, Engine: p.renameEngine()},
-		Replanning:     library.NewDesired(p.library),
-		NamingSchemes:  adapters.NamingSchemes{Registry: p.media},
+		LibraryMover: adapters.LibraryMove{
+			Registry: p.media, Settings: p.cache, Engine: p.renameEngine(), Works: library.NewWorks(p.library),
+			Desired: library.NewDesired(p.library), Selection: p.worksMonitor(), DefaultProfileID: p.defaultQualityProfileID,
+			OnMoved: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		},
+		Replanning:    library.NewDesired(p.library),
+		NamingSchemes: adapters.NamingSchemes{Registry: p.media},
 		// time.Local.String() reports "Local"; the name the operator set is the useful one.
 		Timezone: p.timezone,
 		Egress:   adapters.Egress{Prober: prober},

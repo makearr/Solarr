@@ -61,6 +61,63 @@ func (q *Queries) AttachFile(ctx context.Context, arg AttachFileParams) error {
 	return err
 }
 
+const copyWorkItemFilesToCategory = `-- name: CopyWorkItemFilesToCategory :exec
+INSERT OR IGNORE INTO desired_item_file (desired_item_id, media_object_id, role, media_ref, added_at)
+SELECT t.id, f.media_object_id, f.role, f.media_ref, f.added_at
+FROM desired_item s
+JOIN desired_item_file f ON f.desired_item_id = s.id
+JOIN desired_item t ON t.work_id = s.work_id AND t.category_id = ?1
+                   AND t.media_ref = s.media_ref AND t.satisfaction_kind = s.satisfaction_kind
+WHERE s.work_id = ?2 AND s.category_id = ?3
+`
+
+type CopyWorkItemFilesToCategoryParams struct {
+	ToCategoryID   int64
+	WorkID         int64
+	FromCategoryID int64
+}
+
+func (q *Queries) CopyWorkItemFilesToCategory(ctx context.Context, arg CopyWorkItemFilesToCategoryParams) error {
+	_, err := q.db.ExecContext(ctx, copyWorkItemFilesToCategory, arg.ToCategoryID, arg.WorkID, arg.FromCategoryID)
+	return err
+}
+
+const copyWorkItemsToCategory = `-- name: CopyWorkItemsToCategory :execrows
+INSERT INTO desired_item (work_id, edition_id, media_ref, media_sort_key, category_id,
+                          profile_id, monitored, satisfaction_kind, required_count,
+                          present_count, state, available_from, available_confidence,
+                          available_basis, dirty, generation, last_planned_at, added_by)
+SELECT s.work_id, s.edition_id, s.media_ref, s.media_sort_key, ?1,
+       ?2, 0, s.satisfaction_kind, s.required_count,
+       s.present_count, s.state, s.available_from, s.available_confidence,
+       s.available_basis, 1, 0, NULL, s.added_by
+FROM desired_item s
+WHERE s.work_id = ?3 AND s.category_id = ?4
+  AND NOT EXISTS (SELECT 1 FROM desired_item t WHERE t.work_id = s.work_id AND t.category_id = ?1
+                  AND t.media_ref = s.media_ref AND t.satisfaction_kind = s.satisfaction_kind)
+`
+
+type CopyWorkItemsToCategoryParams struct {
+	ToCategoryID   int64
+	ProfileID      int64
+	WorkID         int64
+	FromCategoryID int64
+}
+
+// A copy in another library starts unmonitored: it holds what exists, acquisition stays with the original.
+func (q *Queries) CopyWorkItemsToCategory(ctx context.Context, arg CopyWorkItemsToCategoryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, copyWorkItemsToCategory,
+		arg.ToCategoryID,
+		arg.ProfileID,
+		arg.WorkID,
+		arg.FromCategoryID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const countDesiredItemsByCategory = `-- name: CountDesiredItemsByCategory :many
 SELECT category_id, CAST(count(*) AS INTEGER) AS total
 FROM desired_item GROUP BY category_id ORDER BY category_id
@@ -357,6 +414,26 @@ WHERE pack_item.work_id = ?1
 
 func (q *Queries) DetachPackItemsFromWork(ctx context.Context, workID sql.NullInt64) error {
 	_, err := q.db.ExecContext(ctx, detachPackItemsFromWork, workID)
+	return err
+}
+
+const dropWorkItemsTheTargetHas = `-- name: DropWorkItemsTheTargetHas :exec
+DELETE FROM desired_item
+WHERE desired_item.work_id = ?1 AND desired_item.category_id = ?2
+  AND EXISTS (SELECT 1 FROM desired_item t WHERE t.work_id = desired_item.work_id AND t.category_id = ?3
+              AND t.media_ref = desired_item.media_ref AND t.satisfaction_kind = desired_item.satisfaction_kind)
+`
+
+type DropWorkItemsTheTargetHasParams struct {
+	WorkID         int64
+	FromCategoryID int64
+	ToCategoryID   int64
+}
+
+// A work's items move to another library and take its profile; an item the target already has (a copy made before)
+// is dropped from the source instead (plan 10-libraries L3).
+func (q *Queries) DropWorkItemsTheTargetHas(ctx context.Context, arg DropWorkItemsTheTargetHasParams) error {
+	_, err := q.db.ExecContext(ctx, dropWorkItemsTheTargetHas, arg.WorkID, arg.FromCategoryID, arg.ToCategoryID)
 	return err
 }
 
@@ -1692,6 +1769,31 @@ func (q *Queries) MaxDesiredItemID(ctx context.Context) (int64, error) {
 	var max_id int64
 	err := row.Scan(&max_id)
 	return max_id, err
+}
+
+const moveWorkItemsToCategory = `-- name: MoveWorkItemsToCategory :execrows
+UPDATE desired_item SET category_id = ?1, profile_id = ?2, dirty = 1
+WHERE work_id = ?3 AND category_id = ?4
+`
+
+type MoveWorkItemsToCategoryParams struct {
+	ToCategoryID   int64
+	ProfileID      int64
+	WorkID         int64
+	FromCategoryID int64
+}
+
+func (q *Queries) MoveWorkItemsToCategory(ctx context.Context, arg MoveWorkItemsToCategoryParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, moveWorkItemsToCategory,
+		arg.ToCategoryID,
+		arg.ProfileID,
+		arg.WorkID,
+		arg.FromCategoryID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const nextHuntByNewestRelease = `-- name: NextHuntByNewestRelease :many
