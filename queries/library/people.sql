@@ -185,12 +185,12 @@ FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id
 WHERE wo.work_id = ? ORDER BY wo.role, o.name COLLATE NOCASE, o.id;
 
 -- name: CreateTag :one
-INSERT INTO tag (name, slug, parent_id, description, source)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, name, slug, parent_id, description, source;
+INSERT INTO tag (name, slug, parent_id, description, source, taxonomy)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, name, slug, parent_id, description, source, taxonomy;
 
 -- name: GetTagBySlug :one
-SELECT id, name, slug, parent_id, description, source FROM tag WHERE slug = ?;
+SELECT id, name, slug, parent_id, description, source, taxonomy FROM tag WHERE slug = ?;
 
 -- The closure is materialised, so inserting a tag inserts its ancestry too.
 -- name: AddTagClosure :exec

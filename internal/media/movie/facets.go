@@ -3,6 +3,7 @@ package movie
 import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/screen"
 )
 
 // facets are a movie's own fields beyond the base ones.
@@ -28,7 +29,7 @@ var facets = []media.Facet{
 	},
 	{
 		Key: "genre", Label: "Genre", Entity: model.LevelEntityWork, Kind: media.FacetList,
-		Source: media.FacetSource{Kind: media.SourceClassification, Name: "genre"}, Sortable: true, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceTaxonomy, Name: screen.Taxonomy.Key}, Sortable: true, Filterable: true,
 	},
 	{
 		Key: "runtime", Label: "Runtime", Entity: model.LevelEntityWork, Kind: media.FacetDuration,

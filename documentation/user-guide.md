@@ -72,15 +72,20 @@ Monitoring an album later from its own page also searches it at once while that 
 
 **Edit** (the pencil on an album's poster or row, as in Radarr) sets monitored, the album's **own quality
 profile** (used instead of the library's profiles when it is searched or upgraded; the library's cutoff
-still decides whether it counts as upgradable) and your **tags** (new ones are created as you type). In a library
+still decides whether it counts as upgradable) and your **tags**: typing suggests the library's genres (Jazz,
+Science Fiction) and your own labels, and a name no tag has becomes a new label. In a library
 with several root folders it also sets the **root folder**: choosing another one shows how many files move and
 moves them on Save (all or none, through the same copy-verify-delete as every move); later downloads follow.
-Tags a metadata provider assigned are never touched. With albums selected (Table view, or Select all
+Tags a metadata provider assigned are never touched. The **Tags** button beside the title filter narrows any library
+to works carrying a tag, a genre including everything below it (Rock finds Metal); a click on a chip turns it into
+"not", and several chips must all hold. With albums selected (Table view, or Select all
 matching), **Edit** in the toolbar applies only what you change to all of them, after showing the count.
 **Fresh** means released within a week, or shown by an RSS feed within 48 hours whatever the release date
 (a manual search never counts), and those albums are also searched first.
-Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Library → Duplicates** (advanced) lists tracks held more than once, found by artist, title and length (a flac and a 96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality. You choose the copy to keep (a radio per copy) and, for each other copy, whether its paths become links to the kept file (hardlink or reflink; the other album keeps its track, the old file waits seven days in the recycle bin; only between files of the same extension) or the copy goes to the recycle bin; a confirmation lists every path before anything changes. Above it, **Identical files** covers the other case, the very same bytes stored at two paths: a preview of which second paths can become a reflink (else a hardlink) of the first, per pair on one filesystem, and a **Link identical files** button (manage access) that compares every byte again before swapping a path atomically. Roots that are offline, not writable or read-only are never touched. **Settings → Tags** lists
-the tags you made, with how many albums carry each, and renames or deletes them (administrator).
+Select all matching now respects the Fresh filter, for Monitor and Unmonitor too. **Library → Duplicates** (advanced) lists tracks held more than once, found by artist, title and length (a flac and a 96 kbit mp3 of one song, on any albums), and recommends the copy closer to the library's target quality. You choose the copy to keep (a radio per copy) and, for each other copy, whether its paths become links to the kept file (hardlink or reflink; the other album keeps its track, the old file waits seven days in the recycle bin; only between files of the same extension) or the copy goes to the recycle bin; a confirmation lists every path before anything changes. Above it, **Identical files** covers the other case, the very same bytes stored at two paths: a preview of which second paths can become a reflink (else a hardlink) of the first, per pair on one filesystem, and a **Link identical files** button (manage access) that compares every byte again before swapping a path atomically. Roots that are offline, not writable or read-only are never touched. **Settings → Tags** shows
+every genre as a tree, one per kind of media (Music; Film and TV), and your free labels, with how many items carry
+each; an administrator renames, moves a tag under another, merges two (the merged name keeps leading there when a
+provider uses it again), adds or deletes them.
 
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most

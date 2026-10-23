@@ -2013,27 +2013,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Every tag, by name, for the Edit dialog's tag picker. */
+        /** The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels). */
         get: operations["listTags"];
         put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/tags/own": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** The tags created from the Edit dialog, with how many albums carry each. */
-        get: operations["listOwnTags"];
-        put?: never;
-        post?: never;
+        /** Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only. */
+        post: operations["createTag"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2050,11 +2034,30 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rename one of the user's own tags. Administrator only. */
-        put: operations["renameTag"];
+        /** Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only. */
+        put: operations["editTag"];
         post?: never;
-        /** Delete one of the user's own tags and take it off every album. Administrator only. */
+        /** Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only. */
         delete: operations["deleteTag"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/tags/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias. Administrator only. */
+        post: operations["mergeTag"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -4916,10 +4919,32 @@ export interface components {
             /** @description Carries the name of who was played. */
             character: boolean;
         };
+        TagNode: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Absent at the top of its taxonomy.
+             */
+            parent_id?: number;
+            /** @description The taxonomy's key; empty for a free label. */
+            taxonomy: string;
+            /** @description user, taxonomy (the shipped tree) or the provider that named it */
+            source: string;
+            /** Format: int64 */
+            works: number;
+            aliases: string[];
+        };
+        Taxonomy: {
+            key: string;
+            label: string;
+        };
         MediaTypeInfo: {
             key: components["schemas"]["MediaType"];
             /** @description Also the default name of a library of this type. */
             label: string;
+            taxonomy: components["schemas"]["Taxonomy"];
             work: components["schemas"]["MediaTerm"];
             part: components["schemas"]["MediaTerm"];
             group: components["schemas"]["MediaTerm"];
@@ -10098,6 +10123,8 @@ export interface operations {
                 cutoff_unmet?: boolean;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
                 where?: string;
+                /** @description The list's tag chips, comma-separated tag ids: a work must carry each (or a tag below it); a negative id is a tag it must not carry. */
+                tags?: string;
             };
             header?: never;
             path?: never;
@@ -11162,7 +11189,9 @@ export interface operations {
     };
     listTags: {
         parameters: {
-            query?: never;
+            query?: {
+                taxonomy?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -11175,40 +11204,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": string[];
+                    "application/json": components["schemas"]["TagNode"][];
                 };
             };
             401: components["responses"]["Problem"];
         };
     };
-    listOwnTags: {
+    createTag: {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    taxonomy: string;
+                    /** Format: int64 */
+                    parent_id?: number | null;
+                };
+            };
+        };
         responses: {
-            /** @description The tags, by name. */
+            /** @description The tag. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        /** Format: int64 */
-                        id: number;
-                        name: string;
-                        /** Format: int64 */
-                        works: number;
-                    }[];
+                    "application/json": components["schemas"]["TagNode"];
                 };
             };
+            400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
-    renameTag: {
+    editTag: {
         parameters: {
             query?: never;
             header?: never;
@@ -11221,11 +11255,13 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
+                    /** Format: int64 */
+                    parent_id: number | null;
                 };
             };
         };
         responses: {
-            /** @description Renamed. */
+            /** @description Changed. */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -11258,6 +11294,36 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    mergeTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    into_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Merged. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     setTrackWanted: {
@@ -11314,6 +11380,8 @@ export interface operations {
                     fresh?: boolean;
                     /** @description The list's custom filter (the JSON the list carried) */
                     where?: string;
+                    /** @description The list's tag chips */
+                    tags?: string;
                     /**
                      * @description The list's Wanted filter.
                      * @default false
@@ -11362,6 +11430,7 @@ export interface operations {
                     /** @default false */
                     fresh?: boolean;
                     where?: string;
+                    tags?: string;
                     /** @default false */
                     wanted?: boolean;
                     /** @default false */

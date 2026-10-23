@@ -53,7 +53,10 @@
       "2020"
     ]
   },
-  "genres": [],
+  "genres": [
+    "Drama",
+    "Mystery"
+  ],
   "groups": [
     {
       "desired_item_id": 2,

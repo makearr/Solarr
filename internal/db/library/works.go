@@ -115,6 +115,8 @@ type WorkFilter struct {
 	// CutoffUnmetOnly restricts to works whose monitored album falls short of its cutoff (M1d, Lidarr's
 	// Wanted -> Cutoff Unmet).
 	CutoffUnmetOnly bool
+	// TagIDs are tags a work must carry, each or one below it; ExcludedTagIDs tags it must carry neither of.
+	TagIDs, ExcludedTagIDs []int64
 	// Where are the conditions of a custom filter, all of which must hold.
 	Where []listfilter.Condition
 	// Facets are the media type's facets a condition of Where may name.
@@ -203,6 +205,12 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	addPrefix(&predicates, filter.TitlePrefix)
 	addVisibility(&predicates, filter.RootFolderIDs, filter.CategoryIDs)
 	addWorkConditions(&predicates, addFacetConditions(&predicates, filter.Where, filter.Facets))
+	for _, id := range filter.TagIDs {
+		predicates.Add("EXISTS "+workTagTree, id)
+	}
+	for _, id := range filter.ExcludedTagIDs {
+		predicates.Add("NOT EXISTS "+workTagTree, id)
+	}
 	predicates.AddIf(filter.FreshSince != "",
 		"(EXISTS (SELECT 1 FROM work_date wd WHERE wd.work_id = work.id AND wd.kind = ? AND wd.date >= ?)"+
 			" OR EXISTS (SELECT 1 FROM candidate_decision fcd JOIN candidate fc ON fc.id = fcd.candidate_id"+
@@ -328,19 +336,23 @@ func sortTextColumn(sort WorkSort, facet WorkFacet) string {
 	case WorkSortFacet:
 		return facetSortColumn(facet)
 	case WorkSortGenre:
-		return tagNameColumn("=")
-	case WorkSortTag:
 		return tagNameColumn("<>")
+	case WorkSortTag:
+		return tagNameColumn("=")
 	default:
 		return "COALESCE((SELECT di.state FROM desired_item di WHERE di.work_id = work.id AND di.monitored = 1" +
 			" ORDER BY di.satisfaction_kind = 'SET' DESC, di.id LIMIT 1), '') COLLATE NOCASE"
 	}
 }
 
-// tagNameColumn reads the genres (source musicbrainz, operator =) or the user's own tags (<>).
+// workTagTree is "the work carries this tag or one below it", one join over the materialised closure (ADR-33).
+const workTagTree = "(SELECT 1 FROM tag_assignment ta JOIN tag_closure tc ON tc.descendant_id = ta.tag_id" +
+	" WHERE ta.subject_type = 'work' AND ta.subject_id = work.id AND tc.ancestor_id = ?)"
+
+// tagNameColumn reads the genres (a taxonomy's tags, operator <>) or the free labels (=).
 func tagNameColumn(operator string) string {
 	return "COALESCE((SELECT MIN(st.name) FROM tag_assignment sa JOIN tag st ON st.id = sa.tag_id" +
-		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND sa.source " + operator + " 'musicbrainz'), '') COLLATE NOCASE"
+		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND st.taxonomy " + operator + " ''), '') COLLATE NOCASE"
 }
 
 // setTotalsColumns sum a work's monitored SET items, what a list shows for a work of many groups.

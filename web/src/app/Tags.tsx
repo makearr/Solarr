@@ -1,94 +1,221 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { api, ok } from "@/api/client";
+import { api } from "@/api/client";
+import type { components } from "@/api/schema";
+import { useTagTree } from "@/lib/resources";
 import { useIsAdministrator } from "@/lib/useAdministrator";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { Card } from "./SettingsCard";
+import { orderedTags } from "./TagChips";
 
-/** The tags made from an album's Edit dialog: how many albums carry each, renamed or deleted here. A provider's
- *  genres are not listed; they are the provider's to change. */
+type TagNode = components["schemas"]["TagNode"];
+
+const button = "rounded-md border border-border-subtle px-2 py-0.5 text-xs text-ink-muted enabled:hover:text-ink disabled:opacity-50";
+const field = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm";
+
+/** Where a tag came from, in a person's words. */
+function sourceLabel(source: string): string {
+  if (source === "user") return "yours";
+  if (source === "taxonomy") return "shipped";
+  return `from ${source}`;
+}
+
+/** Every tag as a tree per genre taxonomy, plus the free labels: renamed, moved under another, merged, added or
+ *  deleted here. A provider's genre renamed or merged keeps its old name as an alias, so a refresh follows. */
 export function Tags() {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
-  const [editing, setEditing] = useState<{ id: number; name: string } | null>(null);
+  const navigate = useNavigate();
+  const search = useSearch({ strict: false }) as { taxonomy?: string };
+  const tree = useTagTree();
+  const taxonomies = [...new Map(useMediaTypes().filter((info) => info.taxonomy.key !== "").map((info) => [info.taxonomy.key, info.taxonomy.label]))];
+  const taxonomy = search.taxonomy ?? taxonomies[0]?.[0] ?? "";
+  const choose = (key: string) => void navigate({ to: ".", search: (previous: Record<string, unknown>) => ({ ...previous, taxonomy: key }) });
+  const [editing, setEditing] = useState<{ id: number; name: string; parentId: number; mergeInto: number } | null>(null);
+  const [adding, setAdding] = useState<{ name: string; parentId: number } | null>(null);
 
-  const tags = useQuery({
-    queryKey: ["tags", "own"],
-    queryFn: () => ok(api.GET("/tags/own")),
-  });
+  const all = tree.data ?? [];
+  const rows = orderedTags(all, taxonomy).filter(({ tag }) => tag.taxonomy === taxonomy);
+  const inTaxonomy = all.filter((tag) => tag.taxonomy === taxonomy);
+  // A tag may not go under itself or anything below it.
+  const below = (id: number): Set<number> => {
+    const out = new Set([id]);
+    for (let grew = true; grew; ) {
+      grew = false;
+      for (const tag of inTaxonomy) {
+        if (tag.parent_id && out.has(tag.parent_id) && !out.has(tag.id)) {
+          out.add(tag.id);
+          grew = true;
+        }
+      }
+    }
+    return out;
+  };
+
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["tags"] });
     void queryClient.invalidateQueries({ queryKey: ["works"] });
   };
-  const rename = useMutation({
-    mutationFn: async (target: { id: number; name: string }) => {
-      const { error, response } = await api.PUT("/tags/{id}", { params: { path: { id: target.id } }, body: { name: target.name } });
-      if (error) throw new Error(response.status === 409 ? "taken" : "failed");
+  const failure = (status: number) => new Error(status === 409 ? "conflict" : "failed");
+  const save = useMutation({
+    mutationFn: async (target: NonNullable<typeof editing>) => {
+      const original = all.find((tag) => tag.id === target.id);
+      if (target.mergeInto) {
+        const { error, response } = await api.POST("/tags/{id}/merge", { params: { path: { id: target.id } }, body: { into_id: target.mergeInto } });
+        if (error) throw failure(response.status);
+        return;
+      }
+      if (original && original.name === target.name.trim() && (original.parent_id ?? 0) === target.parentId) return;
+      const { error, response } = await api.PUT("/tags/{id}", {
+        params: { path: { id: target.id } },
+        body: { name: target.name, parent_id: target.parentId || null },
+      });
+      if (error) throw failure(response.status);
     },
     onSuccess: () => {
       setEditing(null);
       refresh();
     },
   });
+  const create = useMutation({
+    mutationFn: async (target: NonNullable<typeof adding>) => {
+      const { error, response } = await api.POST("/tags", { body: { name: target.name, taxonomy, parent_id: target.parentId || null } });
+      if (error) throw failure(response.status);
+    },
+    onSuccess: () => {
+      setAdding(null);
+      refresh();
+    },
+  });
   const remove = useMutation({
     mutationFn: async (id: number) => {
-      await ok(api.DELETE("/tags/{id}", { params: { path: { id } } }));
+      const { error, response } = await api.DELETE("/tags/{id}", { params: { path: { id } } });
+      if (error) throw failure(response.status);
     },
     onSuccess: refresh,
   });
 
-  const button = "rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted enabled:hover:text-ink disabled:opacity-50";
+  const parentChoices = (exclude: Set<number>) =>
+    orderedTags(inTaxonomy, taxonomy)
+      .filter(({ tag }) => tag.taxonomy === taxonomy && !exclude.has(tag.id))
+      .map(({ tag, depth }) => (
+        <option key={tag.id} value={tag.id}>
+          {"  ".repeat(depth)}
+          {tag.name}
+        </option>
+      ));
+
+  const editRow = (tag: TagNode) =>
+    editing && (
+      <form
+        className="flex flex-1 flex-wrap items-center gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          save.mutate(editing);
+        }}
+      >
+        <input autoFocus value={editing.name} onChange={(event) => setEditing({ ...editing, name: event.target.value })} aria-label={`New name for ${tag.name}`} className={`w-56 ${field}`} />
+        <label className="flex items-center gap-1 text-xs text-ink-muted">
+          under
+          <select value={editing.parentId} onChange={(event) => setEditing({ ...editing, parentId: Number(event.target.value) })} className={field}>
+            <option value={0}>(top)</option>
+            {parentChoices(below(tag.id))}
+          </select>
+        </label>
+        <label className="flex items-center gap-1 text-xs text-ink-muted">
+          or merge into
+          <select value={editing.mergeInto} onChange={(event) => setEditing({ ...editing, mergeInto: Number(event.target.value) })} className={field}>
+            <option value={0}>(no merge)</option>
+            {parentChoices(below(tag.id))}
+          </select>
+        </label>
+        <button type="submit" disabled={save.isPending || editing.name.trim() === ""} className={button}>
+          {editing.mergeInto ? "Merge" : "Save"}
+        </button>
+        <button type="button" onClick={() => setEditing(null)} className={button}>
+          Cancel
+        </button>
+      </form>
+    );
+
   return (
     <Card
-      title="Every tag"
-      help="Tags given in an Edit dialog. Deleting one takes it off everything it is on; nothing else is touched."
-    >      {tags.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
-      {tags.error !== null && !tags.isLoading && <p className="text-sm text-danger">The tags could not be read.</p>}
-      {tags.data && tags.data.length === 0 && (
-        <p className="text-sm text-ink-muted">No tags yet. Add one from an album's Edit dialog.</p>
+      title="Tags"
+      help="Genres are tags in a tree per kind of media: choosing Rock in a library's Tags filter finds Metal too. Providers' genres land in it by name or alias; yours are never removed by a refresh. Free labels are tags of your own outside any tree."
+    >
+      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Taxonomy">
+        {[...taxonomies, ["", "Free labels"] as [string, string]].map(([key, label]) => (
+          <button
+            key={key || "free"}
+            type="button"
+            role="tab"
+            aria-selected={key === taxonomy}
+            onClick={() => choose(key)}
+            className={`rounded-md border px-3 py-1 text-sm ${key === taxonomy ? "border-accent text-ink" : "border-border-subtle text-ink-muted"}`}
+          >
+            {label}
+          </button>
+        ))}
+        {administrator && (
+          <button type="button" className={`ml-auto ${button}`} onClick={() => { create.reset(); setAdding({ name: "", parentId: 0 }); }}>
+            Add tag
+          </button>
+        )}
+      </div>
+      {adding && (
+        <form
+          className="flex max-w-2xl flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            create.mutate(adding);
+          }}
+        >
+          <input autoFocus value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} aria-label="New tag name" placeholder="Name" className={`min-w-0 flex-1 ${field}`} />
+          {taxonomy !== "" && (
+            <select value={adding.parentId} onChange={(event) => setAdding({ ...adding, parentId: Number(event.target.value) })} aria-label="Under" className={field}>
+              <option value={0}>(top)</option>
+              {parentChoices(new Set())}
+            </select>
+          )}
+          <button type="submit" disabled={create.isPending || adding.name.trim() === ""} className={button}>
+            Add
+          </button>
+          <button type="button" onClick={() => setAdding(null)} className={button}>
+            Cancel
+          </button>
+        </form>
       )}
-      <ul className="flex max-w-2xl flex-col gap-1">
-        {(tags.data ?? []).map((tag) => (
-          <li key={tag.id} className="flex items-center gap-3 rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm">
+      {tree.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
+      {tree.error !== null && !tree.isLoading && <p className="text-sm text-danger">The tags could not be read.</p>}
+      {tree.data && rows.length === 0 && (
+        <p className="text-sm text-ink-muted">{taxonomy === "" ? "No labels yet. Add one here or from an Edit dialog." : "No genres yet; a refresh brings the providers'."}</p>
+      )}
+      <ul className="flex max-w-3xl flex-col rounded-md border border-border-subtle">
+        {rows.map(({ tag, depth }) => (
+          <li key={tag.id} style={{ paddingLeft: `${0.5 + depth * 1.25}rem` }} className="flex items-center gap-3 border-b border-border-subtle px-2 py-0.5 text-sm last:border-0 hover:bg-surface">
             {editing?.id === tag.id ? (
-              <form
-                className="flex flex-1 items-center gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  rename.mutate(editing);
-                }}
-              >
-                <input
-                  autoFocus
-                  value={editing.name}
-                  onChange={(event) => setEditing({ id: tag.id, name: event.target.value })}
-                  aria-label={`New name for ${tag.name}`}
-                  className="min-w-0 flex-1 rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm"
-                />
-                <button type="submit" disabled={rename.isPending || editing.name.trim() === ""} className={button}>
-                  Save
-                </button>
-                <button type="button" onClick={() => setEditing(null)} className={button}>
-                  Cancel
-                </button>
-              </form>
+              editRow(tag)
             ) : (
               <>
-                <span className="min-w-0 flex-1 truncate font-medium">{tag.name}</span>
-                <span className="shrink-0 text-xs tabular-nums text-ink-muted">
-                  {tag.works} {tag.works === 1 ? "album" : "albums"}
+                <span className={`min-w-0 flex-1 truncate ${depth === 0 ? "font-medium" : ""}`} title={tag.aliases.length > 0 ? `Also known as: ${tag.aliases.join(", ")}` : undefined}>
+                  {tag.name}
                 </span>
+                <span className="shrink-0 text-xs text-ink-muted">{sourceLabel(tag.source)}</span>
+                <span className="w-16 shrink-0 text-right text-xs tabular-nums text-ink-muted">{tag.works} {tag.works === 1 ? "item" : "items"}</span>
                 {administrator && (
                   <>
-                    <button type="button" onClick={() => { rename.reset(); setEditing({ id: tag.id, name: tag.name }); }} className={button}>
-                      Rename
+                    <button type="button" onClick={() => { save.reset(); setEditing({ id: tag.id, name: tag.name, parentId: tag.parent_id ?? 0, mergeInto: 0 }); }} className={button}>
+                      Edit
                     </button>
                     <button
                       type="button"
                       disabled={remove.isPending}
                       onClick={() => {
-                        if (confirm(`Delete the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "album" : "albums"}.`)) {
+                        const back = tag.source === "user" || tag.source === "taxonomy" ? "" : " A provider's genre comes back with the next refresh; merge it instead to keep it away.";
+                        if (confirm(`Delete the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"}; tags below it move up.${back}`)) {
                           remove.mutate(tag.id);
                         }
                       }}
@@ -103,9 +230,9 @@ export function Tags() {
           </li>
         ))}
       </ul>
-      {rename.isError && (
+      {(save.isError || create.isError) && (
         <p className="text-xs text-danger">
-          {rename.error.message === "taken" ? "Another tag already has that name." : "That could not be renamed."}
+          {(save.error ?? create.error)?.message === "conflict" ? "Another tag already has that name, or it cannot go there." : "That could not be saved."}
         </p>
       )}
       {remove.isError && <p className="text-xs text-danger">That could not be deleted.</p>}

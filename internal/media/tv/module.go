@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/screen"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -250,8 +251,9 @@ var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorParts, Label: "
 
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
-		Key:   media.Key(MediaType),
-		Label: "TV",
+		Key:      media.Key(MediaType),
+		Label:    "TV",
+		Taxonomy: screen.Taxonomy,
 		Vocabulary: media.Vocabulary{
 			Work:         media.Term{One: "Series", Many: "Series"},
 			Part:         media.Term{One: "Episode", Many: "Episodes"},

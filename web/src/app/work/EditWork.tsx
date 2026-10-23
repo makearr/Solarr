@@ -12,12 +12,14 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 
+import { TagPicker } from "../TagChips";
+
 type Work = components["schemas"]["WorkDetail"];
 
 interface Draft {
   monitored: boolean;
   profileId: number | null;
-  tags: string;
+  tags: string[];
   fields: Record<string, string>;
   option: string;
   specials: boolean;
@@ -49,7 +51,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
     (edit.data && {
       monitored: edit.data.monitored,
       profileId: edit.data.profile_id,
-      tags: edit.data.tags.join(", "),
+      tags: edit.data.tags,
       fields: Object.fromEntries(editable.map((facet) => [facet.key, edit.data.fields?.[facet.key] ?? ""])),
       option: "",
       specials: false,
@@ -73,10 +75,9 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
         setMoving({ files: data.files_total, rootPath: target?.path ?? "" });
         return "confirm";
       }
-      const tags = form.tags.split(",").map((tag) => tag.trim()).filter(Boolean);
       await ok(api.PUT("/works/{id}/edit", {
         params: { path: { id: work.id } },
-        body: { monitored: form.monitored, profile_id: form.profileId, tags, fields: form.fields },
+        body: { monitored: form.monitored, profile_id: form.profileId, tags: form.tags, fields: form.fields },
       }));
       if (form.option) {
         const { error: optionError } = await api.POST("/works/{id}/monitor", {
@@ -208,10 +209,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
               {rootChanged && <span className="text-xs text-ink-muted">Its files move there when you save.</span>}
             </label>
           )}
-          <label className="flex flex-col gap-1">
-            <span className="text-xs text-ink-muted">Tags, separated by commas</span>
-            <input value={form.tags} onChange={(event) => change({ tags: event.target.value })} className={field} />
-          </label>
+          <TagPicker label="Tags" taxonomy={info?.taxonomy.key ?? ""} names={form.tags} onChange={(tags) => change({ tags })} />
           {save.isError && <p className="text-xs text-danger">{(save.error as { detail?: string }).detail ?? "That could not be saved."}</p>}
         </div>
       )}
@@ -279,13 +277,12 @@ export function BulkEditWork({
   const [option, setOption] = useState("");
   const [specials, setSpecials] = useState(false);
   const [profile, setProfile] = useState<"keep" | "default" | number>("keep");
-  const [addTags, setAddTags] = useState("");
-  const [removeTags, setRemoveTags] = useState("");
+  const [addTags, setAddTags] = useState<string[]>([]);
+  const [removeTags, setRemoveTags] = useState<string[]>([]);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [count, setCount] = useState<number | null>(null);
   const editable = (info?.facets ?? []).filter((facet) => facet.editable);
   const profiles = useQualityProfiles();
-  const names = (raw: string) => raw.split(",").map((name) => name.trim()).filter((name) => name !== "");
   const send = useMutation({
     mutationFn: async (preview: boolean) => {
       const { data, error } = await api.POST("/works/bulk/edit", {
@@ -294,8 +291,8 @@ export function BulkEditWork({
           preview,
           monitored: monitored === "keep" ? undefined : monitored === "yes",
           profile: profile === "keep" ? undefined : { id: profile === "default" ? null : profile },
-          add_tags: names(addTags),
-          remove_tags: names(removeTags),
+          add_tags: addTags,
+          remove_tags: removeTags,
           fields: Object.keys(fields).length > 0 ? fields : undefined,
           monitor_option: option || undefined,
           specials,
@@ -311,7 +308,7 @@ export function BulkEditWork({
   });
   const changed = () => setCount(null);
   const nothing =
-    monitored === "keep" && option === "" && profile === "keep" && names(addTags).length === 0 && names(removeTags).length === 0 &&
+    monitored === "keep" && option === "" && profile === "keep" && addTags.length === 0 && removeTags.length === 0 &&
     Object.keys(fields).length === 0;
   return (
     <Dialog
@@ -413,14 +410,8 @@ export function BulkEditWork({
             </select>
           </label>
         ))}
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink-muted">Add tags</span>
-          <input value={addTags} onChange={(event) => { setAddTags(event.target.value); changed(); }} placeholder="comma separated" className={field} />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-xs text-ink-muted">Remove tags</span>
-          <input value={removeTags} onChange={(event) => { setRemoveTags(event.target.value); changed(); }} placeholder="comma separated" className={field} />
-        </label>
+        <TagPicker label="Add tags" taxonomy={info?.taxonomy.key ?? ""} names={addTags} onChange={(tags) => { setAddTags(tags); changed(); }} />
+        <TagPicker label="Remove tags" taxonomy={info?.taxonomy.key ?? ""} names={removeTags} onChange={(tags) => { setRemoveTags(tags); changed(); }} />
         {send.isError && <p className="text-sm text-danger">That could not be applied.</p>}
       </div>
     </Dialog>

@@ -186,7 +186,7 @@ func TestAssignGenres_CreatesTagsAndAssignsThem(t *testing.T) {
 	people := library.NewPeople(opened)
 	workID := newWorkForCredits(t, identity, queries, "rg-credit-2")
 
-	err := people.AssignGenres(t.Context(), workID, []library.GenreLink{
+	err := people.AssignGenres(t.Context(), workID, "music", []library.GenreLink{
 		{Name: "Alternative Rock"}, {Name: "Art Rock"},
 	})
 	if err != nil {
@@ -218,7 +218,7 @@ func TestAssignGenres_NeverRemovesAUserTag(t *testing.T) {
 	people := library.NewPeople(opened)
 	workID := newWorkForCredits(t, identity, queries, "rg-credit-3")
 
-	if err := people.AssignGenres(t.Context(), workID, []library.GenreLink{{Name: "Art Rock"}}); err != nil {
+	if err := people.AssignGenres(t.Context(), workID, "music", []library.GenreLink{{Name: "Art Rock"}}); err != nil {
 		t.Fatalf("first AssignGenres: %v", err)
 	}
 	userTag, err := queries.CreateTag(t.Context(), librarydb.CreateTagParams{
@@ -234,7 +234,7 @@ func TestAssignGenres_NeverRemovesAUserTag(t *testing.T) {
 	}
 
 	// A refresh that now finds a different genre set.
-	if err := people.AssignGenres(t.Context(), workID, []library.GenreLink{{Name: "Electronic"}}); err != nil {
+	if err := people.AssignGenres(t.Context(), workID, "music", []library.GenreLink{{Name: "Electronic"}}); err != nil {
 		t.Fatalf("second AssignGenres: %v", err)
 	}
 

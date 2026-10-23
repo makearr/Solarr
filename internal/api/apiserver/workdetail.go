@@ -178,6 +178,8 @@ type BulkSelection struct {
 	Fresh, Wanted, CutoffUnmet                   bool
 	// Where is the list's custom filter as the JSON it carried; malformed answers ErrInvalidChoice.
 	Where string
+	// TagIDs and ExcludedTagIDs are the list's tag chips.
+	TagIDs, ExcludedTagIDs []int64
 }
 
 // WorksMonitor toggles monitored state at the album and part level (section
@@ -513,6 +515,10 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
 		Where: derefOr(body.Where, ""),
+	}
+	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
+		return
 	}
 	count, err := s.worksMonitor.BulkSetMonitored(r.Context(), selection, body.Monitored, derefOr(body.Preview, false))
 	if err != nil {

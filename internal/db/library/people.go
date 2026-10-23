@@ -20,7 +20,7 @@ import (
 type PersonIdentity struct {
 	Name           string
 	Disambiguation string
-	// Kind is the provider's own vocabulary ("Person", "Group", ...), stored
+	// Kind is the provider's own taxonomy ("Person", "Group", ...), stored
 	// as-is, same reasoning as ReleaseGroup.Subtype.
 	Kind    string
 	Gender  string
@@ -232,40 +232,22 @@ func (p People) addCredit(ctx context.Context, workID, personID int64, role stri
 	return nil
 }
 
-// AssignGenres replaces a work's musicbrainz-sourced genre tags with the given
-// set: existing musicbrainz assignments are cleared first, so a release that
-// lost a genre on MusicBrainz loses it here too, while any tag a user added
-// by hand (a different source) is never touched (ADR-33).
-func (p People) AssignGenres(ctx context.Context, workID int64, genres []GenreLink) error {
-	return p.AssignGenresFrom(ctx, workID, providerSourceMusicBrainz, genres)
+// AssignGenres replaces a work's provider genres of the taxonomy with MusicBrainz's; a person's own stay (ADR-33).
+func (p People) AssignGenres(ctx context.Context, workID int64, taxonomy string, genres []GenreLink) error {
+	return p.AssignGenresFrom(ctx, workID, taxonomy, providerSourceMusicBrainz, genres)
 }
 
 // GenreSourceWikidata is the source of the genres Wikidata names, which replace MusicBrainz's where it has any.
 const GenreSourceWikidata = "wikidata"
 
-// AssignGenresFrom replaces a work's provider genres, MusicBrainz's and Wikidata's alike, with one provider's.
-func (p People) AssignGenresFrom(ctx context.Context, workID int64, source string, genres []GenreLink) error {
+// AssignGenresFrom replaces a work's provider genres of the taxonomy with one provider's, mapped onto its tree.
+func (p People) AssignGenresFrom(ctx context.Context, workID int64, taxonomy, source string, genres []GenreLink) error {
+	names := make([]string, len(genres))
+	for i, genre := range genres {
+		names[i] = genre.Name
+	}
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		for _, provider := range []string{providerSourceMusicBrainz, GenreSourceWikidata} {
-			if err := queries.ClearProviderTagAssignments(ctx, librarydb.ClearProviderTagAssignmentsParams{
-				SubjectType: "work", SubjectID: workID, Source: provider,
-			}); err != nil {
-				return fmt.Errorf("clear existing: %w", err)
-			}
-		}
-		for _, genre := range genres {
-			tagID, err := findOrCreateTag(ctx, queries, genre.Name, source)
-			if err != nil {
-				return fmt.Errorf("tag %q: %w", genre.Name, err)
-			}
-			if err := queries.AssignTag(ctx, librarydb.AssignTagParams{
-				TagID: tagID, SubjectType: "work", SubjectID: workID, Source: source,
-			}); err != nil {
-				return fmt.Errorf("assign tag %q: %w", genre.Name, err)
-			}
-		}
-		return nil
+		return assignGenres(ctx, librarydb.New(tx), workID, taxonomy, source, names)
 	})
 	if err != nil {
 		return fmt.Errorf("library: assign genres to work %d: %w", workID, err)
@@ -273,37 +255,8 @@ func (p People) AssignGenresFrom(ctx context.Context, workID int64, source strin
 	return nil
 }
 
-// providerSourceMusicBrainz is the tag_assignment.source value every genre
-// this package writes uses -- a refresh only ever clears its own source's
-// rows (ADR-33), so this string is the boundary of what a refresh may touch.
+// providerSourceMusicBrainz is the tag_assignment.source of MusicBrainz's genres.
 const providerSourceMusicBrainz = "musicbrainz"
-
-func findOrCreateTag(ctx context.Context, queries *librarydb.Queries, name, source string) (int64, error) {
-	slug := slugify(name)
-	existing, err := queries.GetTagBySlug(ctx, slug)
-	if err == nil {
-		return existing.ID, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return 0, fmt.Errorf("look up: %w", err)
-	}
-
-	tag, err := queries.CreateTag(ctx, librarydb.CreateTagParams{
-		Name: name, Slug: slug, Source: source,
-	})
-	if err != nil {
-		return 0, fmt.Errorf("create: %w", err)
-	}
-	// Flat, no parent: every tag is still its own ancestor at depth zero, or
-	// ListSubjectsForTagTree would never match it (tag_closure's own doc
-	// comment in the migration).
-	if err := queries.AddTagSelfClosure(ctx, librarydb.AddTagSelfClosureParams{
-		AncestorID: tag.ID, DescendantID: tag.ID,
-	}); err != nil {
-		return 0, fmt.Errorf("self closure: %w", err)
-	}
-	return tag.ID, nil
-}
 
 // slugify turns a genre name into tag.slug's globally-unique key: lowercase,
 // non-alphanumeric runs collapsed to a single hyphen.
@@ -435,7 +388,7 @@ type SubscriptionRequest struct {
 	Roles                []string
 	MonitorBackCatalogue bool
 	// FiltersJSON is opaque here (subscription.FiltersJSON's own doc comment):
-	// which vocabulary it filters on is a media type's own concern (ADR-23).
+	// which taxonomy it filters on is a media type's own concern (ADR-23).
 	// Empty means "use that media type's own default" -- never written as an
 	// empty JSON object, so a caller that never sets this changes nothing.
 	FiltersJSON string

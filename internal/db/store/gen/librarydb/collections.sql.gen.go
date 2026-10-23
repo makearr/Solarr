@@ -1203,8 +1203,9 @@ func (q *Queries) ListFranchisesOfType(ctx context.Context, mediaType string) ([
 }
 
 const listGenresOfType = `-- name: ListGenresOfType :many
-SELECT wc.work_id, wc.value AS genre FROM work_classification wc JOIN work w ON w.id = wc.work_id
-WHERE w.media_type = ? AND wc.kind = 'genre'
+SELECT a.subject_id AS work_id, t.name AS genre
+FROM tag_assignment a JOIN tag t ON t.id = a.tag_id JOIN work w ON w.id = a.subject_id
+WHERE a.subject_type = 'work' AND w.media_type = ? AND t.taxonomy <> ''
 `
 
 type ListGenresOfTypeRow struct {

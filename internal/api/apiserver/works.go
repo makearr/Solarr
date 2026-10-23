@@ -79,6 +79,8 @@ type WorksFilter struct {
 	Wanted bool
 	// CutoffUnmet restricts to albums whose files fall short of the library's cutoff (M1d).
 	CutoffUnmet bool
+	// TagIDs are tags a work must carry (or one below each), ExcludedTagIDs tags it must not: the list's chips.
+	TagIDs, ExcludedTagIDs []int64
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
 }
@@ -186,11 +188,16 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		direction = SortDescending
 	}
 
+	carry, without, err := parseTagChips(derefOr(params.Tags, ""))
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
+		return
+	}
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
-			Where: derefOr(params.Where, ""),
+			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without,
 		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {

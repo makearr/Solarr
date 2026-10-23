@@ -524,10 +524,18 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/monitor", server.routeSetWorkMonitored)
 			secured.Get("/works/{id}/edit", server.routeGetWorkEdit)
 			secured.Put("/works/{id}/edit", server.routeSaveWorkEdit)
-			secured.Get("/tags", server.ListTags)
-			secured.Get("/tags/own", server.ListOwnTags)
-			secured.Put("/tags/{id}", server.routeRenameTag)
-			secured.Delete("/tags/{id}", server.routeDeleteTag)
+			secured.Get("/tags", func(w http.ResponseWriter, r *http.Request) {
+				var params gen.ListTagsParams
+				if r.URL.Query().Has("taxonomy") {
+					taxonomy := r.URL.Query().Get("taxonomy")
+					params.Taxonomy = &taxonomy
+				}
+				server.ListTags(w, r, params)
+			})
+			secured.Post("/tags", server.CreateTag)
+			secured.Put("/tags/{id}", server.withTagID(server.EditTag))
+			secured.Delete("/tags/{id}", server.withTagID(server.DeleteTag))
+			secured.Post("/tags/{id}/merge", server.withTagID(server.MergeTag))
 			secured.Post("/works/{id}/remove", server.routeRemoveWork)
 			secured.Get("/works/{id}/merge-suggestion", func(w http.ResponseWriter, r *http.Request) {
 				server.routeWorkID(w, r, server.GetWorkMergeSuggestion)
@@ -979,6 +987,9 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := query.Get("where"); raw != "" {
 		params.Where = &raw
+	}
+	if raw := query.Get("tags"); raw != "" {
+		params.Tags = &raw
 	}
 
 	s.ListWorks(w, r, params)

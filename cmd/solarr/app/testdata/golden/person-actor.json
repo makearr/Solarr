@@ -20,7 +20,10 @@
       }
     }
   ],
-  "genres": [],
+  "genres": [
+    "Drama",
+    "Mystery"
+  ],
   "id": 3,
   "ids": {
     "tmdb": "301"

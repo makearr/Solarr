@@ -269,6 +269,10 @@
       }
     ],
     "searches_library": true,
+    "taxonomy": {
+      "key": "music",
+      "label": "Music"
+    },
     "wanted_grain": "work",
     "work": {
       "many": "Albums",
@@ -768,6 +772,10 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "taxonomy": {
+      "key": "screen",
+      "label": "Film and TV"
+    },
     "unidentified_retry": "tv_retry",
     "wanted_grain": "part",
     "work": {
@@ -1023,6 +1031,10 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "taxonomy": {
+      "key": "screen",
+      "label": "Film and TV"
+    },
     "wanted_grain": "work",
     "work": {
       "many": "Movies",

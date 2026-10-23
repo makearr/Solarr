@@ -26,3 +26,6 @@ export const useMetadataSettings = () =>
   useQuery({ queryKey: ["metadata-settings"], queryFn: () => ok(api.GET("/metadata/settings")) });
 
 export const useUserDefaults = () => useQuery({ queryKey: ["user-defaults"], queryFn: () => ok(api.GET("/settings/users")) });
+
+/** The whole tag tree, every taxonomy's and the free labels; screens narrow it themselves. */
+export const useTagTree = () => useQuery({ queryKey: ["tags"], queryFn: () => ok(api.GET("/tags")) });

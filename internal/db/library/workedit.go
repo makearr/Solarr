@@ -51,19 +51,6 @@ type TagName struct {
 	Name string
 }
 
-// ListTags answers every tag, by name.
-func (p People) ListTags(ctx context.Context) ([]TagName, error) {
-	rows, err := librarydb.New(p.store.Read()).ListTagNames(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("library: list tags: %w", err)
-	}
-	tags := make([]TagName, len(rows))
-	for i, row := range rows {
-		tags[i] = TagName{ID: row.ID, Name: row.Name}
-	}
-	return tags, nil
-}
-
 // UserTags answers the tags a person assigned to a work.
 func (p People) UserTags(ctx context.Context, workID int64) ([]TagName, error) {
 	rows, err := librarydb.New(p.store.Read()).ListTagNamesForSubjectBySource(ctx,
@@ -78,9 +65,9 @@ func (p People) UserTags(ctx context.Context, workID int64) ([]TagName, error) {
 	return tags, nil
 }
 
-// SetUserTags makes names the work's user-assigned tags, creating the ones that do not exist yet;
-// provider-assigned tags are untouched.
-func (p People) SetUserTags(ctx context.Context, workID int64, names []string) error {
+// SetUserTags makes names the work's own tags: a name its taxonomy knows is that tag, any other a free label, created
+// when new; provider-assigned tags are untouched.
+func (p People) SetUserTags(ctx context.Context, workID int64, taxonomy string, names []string) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if err := queries.ClearProviderTagAssignments(ctx, librarydb.ClearProviderTagAssignmentsParams{
@@ -89,14 +76,16 @@ func (p People) SetUserTags(ctx context.Context, workID int64, names []string) e
 			return fmt.Errorf("clear existing: %w", err)
 		}
 		for _, name := range names {
-			tagID, err := findOrCreateTag(ctx, queries, name, userTagSource)
+			ids, err := userTag(ctx, queries, taxonomy, name)
 			if err != nil {
 				return fmt.Errorf("tag %q: %w", name, err)
 			}
-			if err := queries.AssignTag(ctx, librarydb.AssignTagParams{
-				TagID: tagID, SubjectType: "work", SubjectID: workID, Source: userTagSource,
-			}); err != nil {
-				return fmt.Errorf("assign tag %q: %w", name, err)
+			for _, id := range ids {
+				if err := queries.AssignTag(ctx, librarydb.AssignTagParams{
+					TagID: id, SubjectType: "work", SubjectID: workID, Source: userTagSource,
+				}); err != nil {
+					return fmt.Errorf("assign tag %q: %w", name, err)
+				}
 			}
 		}
 		return nil
@@ -107,70 +96,26 @@ func (p People) SetUserTags(ctx context.Context, workID int64, names []string) e
 	return nil
 }
 
+// userTag is the tag a person's name means: the taxonomy's by name or alias, else the free label, created when new.
+func userTag(ctx context.Context, queries *librarydb.Queries, taxonomy, name string) ([]int64, error) {
+	if taxonomy != "" {
+		if tag, err := queries.GetTagBySlug(ctx, taxonomySlug(taxonomy, name)); err == nil {
+			return []int64{tag.ID}, nil
+		}
+		ids, err := queries.ListTagsByAlias(ctx, librarydb.ListTagsByAliasParams{Alias: slugify(name), Taxonomy: taxonomy})
+		if err != nil || len(ids) > 0 {
+			return ids, err
+		}
+	}
+	if tag, err := queries.GetTagBySlug(ctx, taxonomySlug("", name)); err == nil {
+		return []int64{tag.ID}, nil
+	}
+	if slugify(name) == "" {
+		return nil, ErrTagName
+	}
+	id, err := createTag(ctx, queries, name, "", userTagSource, 0)
+	return []int64{id}, err
+}
+
 // ErrTagExists reports a rename onto a name another tag already has.
 var ErrTagExists = errors.New("library: a tag with that name exists")
-
-// UserTag is one of the user's own tags with the number of albums carrying it.
-type UserTag struct {
-	ID    int64
-	Name  string
-	Works int64
-}
-
-// ListUserTags answers the tags created from the Edit dialog, by name.
-func (p People) ListUserTags(ctx context.Context) ([]UserTag, error) {
-	rows, err := librarydb.New(p.store.Read()).ListUserTagsWithUse(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("library: list user tags: %w", err)
-	}
-	tags := make([]UserTag, len(rows))
-	for i, row := range rows {
-		tags[i] = UserTag{ID: row.ID, Name: row.Name, Works: row.Works}
-	}
-	return tags, nil
-}
-
-// RenameUserTag renames one of the user's tags; a missing or provider-owned id wraps sql.ErrNoRows and a name
-// another tag has is ErrTagExists.
-func (p People) RenameUserTag(ctx context.Context, id int64, name string) error {
-	slug := slugify(name)
-	if slug == "" {
-		return fmt.Errorf("library: rename tag %d: the name has no letters or digits", id)
-	}
-	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		queries := librarydb.New(tx)
-		if existing, err := queries.GetTagBySlug(ctx, slug); err == nil && existing.ID != id {
-			return ErrTagExists
-		}
-		changed, err := queries.RenameUserTag(ctx, librarydb.RenameUserTagParams{Name: name, Slug: slug, ID: id})
-		if err != nil {
-			return err
-		}
-		if changed == 0 {
-			return sql.ErrNoRows
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("library: rename tag %d: %w", id, err)
-	}
-	return nil
-}
-
-// DeleteUserTag removes one of the user's tags and every assignment of it; a missing or provider-owned id wraps sql.ErrNoRows.
-func (p People) DeleteUserTag(ctx context.Context, id int64) error {
-	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		changed, err := librarydb.New(tx).DeleteUserTag(ctx, id)
-		if err != nil {
-			return err
-		}
-		if changed == 0 {
-			return sql.ErrNoRows
-		}
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("library: delete tag %d: %w", id, err)
-	}
-	return nil
-}

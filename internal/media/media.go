@@ -114,6 +114,23 @@ type Descriptor struct {
 	SearchesLibrary bool
 	// CoverSources says the type's covers follow the cover source order of the metadata settings.
 	CoverSources bool
+	// Taxonomy is the genre tree the type's tags are mapped onto; types sharing one (TV, movies) share its tags.
+	Taxonomy Taxonomy
+}
+
+// Taxonomy is a shipped genre tree; Version rises when the tree changes, so it is applied again.
+type Taxonomy struct {
+	Key     string
+	Label   string
+	Version int64
+	Tags    []TaxonomyTag
+}
+
+// TaxonomyTag is one genre of a taxonomy, with the names providers give it.
+type TaxonomyTag struct {
+	Name     string
+	Aliases  []string
+	Children []TaxonomyTag
 }
 
 // FileSettingKey names a File Management setting whose meaning depends on the media type.

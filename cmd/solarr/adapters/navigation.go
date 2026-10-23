@@ -51,6 +51,16 @@ func (m MediaTypes) Facets(mediaType string) []media.Facet {
 	return nil
 }
 
+// TaxonomyKey answers the key of the genre taxonomy a media type's tags are mapped onto; "" when it has none.
+func (m MediaTypes) TaxonomyKey(mediaType string) string {
+	for _, descriptor := range m.Registry.Descriptors() {
+		if string(descriptor.Key) == mediaType {
+			return descriptor.Taxonomy.Key
+		}
+	}
+	return ""
+}
+
 // WorkFacets answers a media type's work facets as the works list reads them; "" is every type's, once per key.
 func (m MediaTypes) WorkFacets(mediaType string) []library.WorkFacet {
 	var out []library.WorkFacet
@@ -190,6 +200,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 	for _, descriptor := range descriptors {
 		info := apiserver.MediaTypeInfo{
 			Key: string(descriptor.Key), Label: descriptor.Label,
+			TaxonomyKey: descriptor.Taxonomy.Key, TaxonomyLabel: descriptor.Taxonomy.Label,
 			Work:         apiserver.MediaTerm(descriptor.Vocabulary.Work),
 			Part:         apiserver.MediaTerm(descriptor.Vocabulary.Part),
 			Group:        apiserver.MediaTerm(descriptor.Vocabulary.Group),

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/media/screen"
 )
 
 // MediaType is the work media type of a series.
@@ -156,6 +157,7 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		AliasSource:      "series-merge",
 		Genres:           series.Genres,
 		GenreSource:      source,
+		GenreTaxonomy:    screen.Taxonomy.Key,
 		Network:          series.Network,
 		NetworkCountry:   series.OriginalCountry,
 		Certification:    series.ContentRating,

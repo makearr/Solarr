@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/media/screen"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
@@ -77,6 +78,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 		AliasSource:         "movie-merge",
 		Genres:              movie.Genres,
 		GenreSource:         source,
+		GenreTaxonomy:       screen.Taxonomy.Key,
 		Network:             movie.Studio,
 		OrganisationKind:    "studio",
 		Certification:       movie.Certification,

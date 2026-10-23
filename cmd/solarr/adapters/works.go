@@ -73,6 +73,8 @@ func (a Works) ListWorks(
 			FreshRSSSince:   freshRSSSince,
 			WantedOnly:      filter.Wanted,
 			CutoffUnmetOnly: filter.CutoffUnmet,
+			TagIDs:          filter.TagIDs,
+			ExcludedTagIDs:  filter.ExcludedTagIDs,
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,

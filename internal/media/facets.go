@@ -32,8 +32,8 @@ const (
 	SourceOrganisation SourceKind = "organisation"
 	// SourceClassification is the work's work_classification values of one kind.
 	SourceClassification SourceKind = "classification"
-	// SourceTags is the work's tags from one source.
-	SourceTags SourceKind = "tags"
+	// SourceTaxonomy is the work's tags of one taxonomy, whoever assigned them.
+	SourceTaxonomy SourceKind = "taxonomy"
 )
 
 // FacetSource names where a facet is read: a column, a field, a role, a classification kind or a tag source.
@@ -72,7 +72,7 @@ func checkFacet(facet Facet) error {
 		if facet.Entity != model.LevelEntityWork || !slices.Contains(workColumns, facet.Source.Name) {
 			return fmt.Errorf("facet %s reads column %s, which a %s does not have", facet.Key, facet.Source.Name, facet.Entity)
 		}
-	case SourceField, SourceOrganisation, SourceClassification, SourceTags:
+	case SourceField, SourceOrganisation, SourceClassification, SourceTaxonomy:
 		if facet.Source.Name == "" {
 			return fmt.Errorf("facet %s names no %s", facet.Key, facet.Source.Kind)
 		}

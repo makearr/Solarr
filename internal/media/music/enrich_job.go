@@ -830,7 +830,7 @@ func (j *EnrichJob) enrichCreditsAndGenres(
 	for index, genre := range rg.Genres {
 		genres[index] = library.GenreLink{Name: genre.Name}
 	}
-	if err := j.people.AssignGenres(ctx, workID, genres); err != nil {
+	if err := j.people.AssignGenres(ctx, workID, Taxonomy.Key, genres); err != nil {
 		j.logger.WarnContext(ctx, "assign genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
 	}
 }
@@ -850,7 +850,7 @@ func (j *EnrichJob) enrichDescription(ctx context.Context, workID int64, album a
 		for index, name := range album.genres {
 			genres[index] = library.GenreLink{Name: name}
 		}
-		if err := j.people.AssignGenresFrom(ctx, workID, library.GenreSourceWikidata, genres); err != nil {
+		if err := j.people.AssignGenresFrom(ctx, workID, Taxonomy.Key, library.GenreSourceWikidata, genres); err != nil {
 			j.logger.WarnContext(ctx, "assign wikidata genres failed", slog.Int64("work_id", workID), slog.Any("error", err))
 		}
 	}

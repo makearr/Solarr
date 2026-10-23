@@ -120,7 +120,7 @@ func TestWorkDetail_IncludesCreditsAndGenres(t *testing.T) {
 	if err := people.AddLeadCredit(t.Context(), work.ID, personID, "artist"); err != nil {
 		t.Fatalf("AddCredit: %v", err)
 	}
-	if err := people.AssignGenres(t.Context(), work.ID, []library.GenreLink{{Name: "alternative rock"}}); err != nil {
+	if err := people.AssignGenres(t.Context(), work.ID, "music", []library.GenreLink{{Name: "alternative rock"}}); err != nil {
 		t.Fatalf("AssignGenres: %v", err)
 	}
 
@@ -132,7 +132,7 @@ func TestWorkDetail_IncludesCreditsAndGenres(t *testing.T) {
 		got.Credits[0].PersonName != "Katupoken" || got.Credits[0].Role != "artist" {
 		t.Errorf("Credits = %+v, want Katupoken's artist credit with the person's name", got.Credits)
 	}
-	if len(got.Genres) != 1 || got.Genres[0] != "alternative rock" {
+	if len(got.Genres) != 1 || got.Genres[0] != "Alternative Rock" {
 		t.Errorf("Genres = %+v, want the one assigned genre", got.Genres)
 	}
 }

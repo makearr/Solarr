@@ -193,10 +193,10 @@ func TestPersonDetail_GenresAreTheUnionOfDiscographyTags(t *testing.T) {
 	})
 
 	people := library.NewPeople(opened)
-	if err := people.AssignGenres(t.Context(), first.ID, []library.GenreLink{{Name: "Alternative Rock"}}); err != nil {
+	if err := people.AssignGenres(t.Context(), first.ID, "music", []library.GenreLink{{Name: "Alternative Rock"}}); err != nil {
 		t.Fatalf("AssignGenres (first): %v", err)
 	}
-	if err := people.AssignGenres(t.Context(), second.ID, []library.GenreLink{
+	if err := people.AssignGenres(t.Context(), second.ID, "music", []library.GenreLink{
 		{Name: "Alternative Rock"}, {Name: "Art Rock"},
 	}); err != nil {
 		t.Fatalf("AssignGenres (second): %v", err)

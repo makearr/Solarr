@@ -73,12 +73,14 @@ type SeriesWrite struct {
 	RuntimeMs        *int64
 	Description      string
 	// IDs lists every provider id; the first one already in the library decides which work this is.
-	IDs            []ExternalIDWrite
-	Aliases        []string
-	AliasSource    string
-	Fields         []SeriesFieldWrite
-	Genres         []string
-	GenreSource    string
+	IDs         []ExternalIDWrite
+	Aliases     []string
+	AliasSource string
+	Fields      []SeriesFieldWrite
+	Genres      []string
+	GenreSource string
+	// GenreTaxonomy is the tag tree the genres are mapped onto, the media type's.
+	GenreTaxonomy  string
 	Network        string
 	NetworkCountry string
 	// OrganisationKind is what Network and MoreNetworks are: a TV "network" (the default), a movie "studio".
@@ -315,14 +317,9 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 			return fmt.Errorf("library: set date: %w", err)
 		}
 	}
-	if len(write.Genres) > 0 {
-		if err := queries.ClearWorkClassification(ctx, librarydb.ClearWorkClassificationParams{WorkID: workID, Kind: "genre"}); err != nil {
-			return fmt.Errorf("library: clear genres: %w", err)
-		}
-		for _, genre := range write.Genres {
-			if err := queries.SetWorkClassification(ctx, librarydb.SetWorkClassificationParams{WorkID: workID, Kind: "genre", Value: genre, Source: write.GenreSource}); err != nil {
-				return fmt.Errorf("library: set genre: %w", err)
-			}
+	if len(write.Genres) > 0 && write.GenreTaxonomy != "" {
+		if err := assignGenres(ctx, queries, workID, write.GenreTaxonomy, write.GenreSource, write.Genres); err != nil {
+			return fmt.Errorf("library: genres: %w", err)
 		}
 	}
 	if write.Rating != nil {

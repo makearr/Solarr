@@ -712,6 +712,7 @@ type Tag struct {
 	ParentID    sql.NullInt64
 	Description sql.NullString
 	Source      string
+	Taxonomy    string
 }
 
 type TagAlias struct {
@@ -730,6 +731,11 @@ type TagClosure struct {
 	AncestorID   int64
 	DescendantID int64
 	Depth        int64
+}
+
+type TagTaxonomy struct {
+	Key           string
+	SeededVersion int64
 }
 
 type TagWriteback struct {

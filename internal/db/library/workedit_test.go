@@ -1,13 +1,10 @@
 package library_test
 
 import (
-	"database/sql"
-	"errors"
 	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
 func TestProfileOverride_SetReadClear(t *testing.T) {
@@ -33,19 +30,23 @@ func TestProfileOverride_SetReadClear(t *testing.T) {
 	}
 }
 
+// A person's tags replace only their own; a name the taxonomy knows is that genre, any other a free label.
 func TestSetUserTags_ReplacesOnlyTheUsersOwn(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 	work := createWork(t, opened, "music", "Alpha")
-	if err := people.AssignGenres(t.Context(), work.ID, []library.GenreLink{{Name: "Rock"}}); err != nil {
+	if err := people.AssignGenres(t.Context(), work.ID, "music", []library.GenreLink{{Name: "Rock"}}); err != nil {
 		t.Fatalf("AssignGenres: %v", err)
 	}
 
-	if err := people.SetUserTags(t.Context(), work.ID, []string{"Road trip", "rock"}); err != nil {
+	if err := people.SetUserTags(t.Context(), work.ID, "music", []string{"Road trip", "rock"}); err != nil {
 		t.Fatalf("SetUserTags: %v", err)
 	}
-	if err := people.SetUserTags(t.Context(), work.ID, []string{"Road trip", "Sleep"}); err != nil {
+	if err := people.SetUserTags(t.Context(), work.ID, "music", []string{"Road trip", "Sleep", "ROCK"}); err != nil {
 		t.Fatalf("SetUserTags again: %v", err)
+	}
+	if err := people.AssignGenres(t.Context(), work.ID, "music", []library.GenreLink{{Name: "Jazz"}}); err != nil {
+		t.Fatalf("a refresh: %v", err)
 	}
 
 	user, err := people.UserTags(t.Context(), work.ID)
@@ -56,64 +57,18 @@ func TestSetUserTags_ReplacesOnlyTheUsersOwn(t *testing.T) {
 	for _, tag := range user {
 		names = append(names, tag.Name)
 	}
-	if want := []string{"Road trip", "Sleep"}; !reflect.DeepEqual(names, want) {
+	if want := []string{"Road trip", "Rock", "Sleep"}; !reflect.DeepEqual(names, want) {
 		t.Fatalf("user tags = %v, want %v", names, want)
 	}
-	all, err := people.ListTags(t.Context())
+	tree, err := people.TagTree(t.Context(), "*")
 	if err != nil {
-		t.Fatalf("ListTags: %v", err)
+		t.Fatalf("TagTree: %v", err)
 	}
 	var every []string
-	for _, tag := range all {
-		every = append(every, tag.Name)
+	for _, tag := range tree {
+		every = append(every, tag.Taxonomy+":"+tag.Name)
 	}
-	if want := []string{"Road trip", "Rock", "Sleep"}; !reflect.DeepEqual(every, want) {
-		t.Fatalf("every tag = %v, want %v", every, want)
-	}
-}
-
-func TestUserTags_RenameDeleteAndTheProvidersAreLeftAlone(t *testing.T) {
-	opened, _ := newLibrary(t)
-	people := library.NewPeople(opened)
-	work := createWork(t, opened, "music", "Alpha")
-	if err := people.AssignGenres(t.Context(), work.ID, []library.GenreLink{{Name: "Rock"}}); err != nil {
-		t.Fatalf("AssignGenres: %v", err)
-	}
-	if err := people.SetUserTags(t.Context(), work.ID, []string{"Road trip", "Sleep"}); err != nil {
-		t.Fatalf("SetUserTags: %v", err)
-	}
-	own, err := people.ListUserTags(t.Context())
-	if err != nil || len(own) != 2 || own[0].Name != "Road trip" || own[0].Works != 1 {
-		t.Fatalf("own tags = %+v err %v, want Road trip and Sleep, one album each, no genre", own, err)
-	}
-
-	if err := people.RenameUserTag(t.Context(), own[1].ID, "road   trip"); !errors.Is(err, library.ErrTagExists) {
-		t.Fatalf("rename onto a taken name: %v, want ErrTagExists", err)
-	}
-	if err := people.RenameUserTag(t.Context(), own[1].ID, "Nap"); err != nil {
-		t.Fatalf("RenameUserTag: %v", err)
-	}
-	all, _ := people.ListTags(t.Context())
-	var names []string
-	for _, tag := range all {
-		names = append(names, tag.Name)
-	}
-	if want := []string{"Nap", "Road trip", "Rock"}; !reflect.DeepEqual(names, want) {
-		t.Fatalf("tags after rename = %v, want %v", names, want)
-	}
-	genres, _ := librarydb.New(opened.Read()).ListTagNamesForSubjectBySource(t.Context(),
-		librarydb.ListTagNamesForSubjectBySourceParams{SubjectType: "work", SubjectID: work.ID, Source: "musicbrainz"})
-	if err := people.RenameUserTag(t.Context(), genres[0].TagID, "Metal"); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("renaming a provider's genre: %v, want ErrNoRows", err)
-	}
-
-	if err := people.DeleteUserTag(t.Context(), own[0].ID); err != nil {
-		t.Fatalf("DeleteUserTag: %v", err)
-	}
-	if remaining, _ := people.UserTags(t.Context(), work.ID); len(remaining) != 1 || remaining[0].Name != "Nap" {
-		t.Fatalf("after deleting Road trip the album carries %+v, want Nap only", remaining)
-	}
-	if err := people.DeleteUserTag(t.Context(), genres[0].TagID); !errors.Is(err, sql.ErrNoRows) {
-		t.Fatalf("deleting a provider's genre: %v, want ErrNoRows", err)
+	if want := []string{":Road trip", ":Sleep", "music:Jazz", "music:Rock"}; !reflect.DeepEqual(every, want) {
+		t.Fatalf("every tag = %v, want %v (one Rock, the genre)", every, want)
 	}
 }

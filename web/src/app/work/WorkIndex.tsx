@@ -33,13 +33,14 @@ import {
   POSTER_WIDTHS, PosterOptionsMenu, RowActions, posterRowHeight, workEntry, type IndexView, type PosterOptions,
 } from "../IndexViews";
 import { formatBytes } from "../Queue";
+import { TagChips } from "../TagChips";
 import { BulkEditWork } from "./EditWork";
 import { formatMinutes } from "./workFormat";
 
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -101,6 +102,7 @@ function selectionBody(request: SelectionRequest) {
     excluded_ids: request.excluded,
     fresh: request.filters.fresh === "1" ? true : undefined,
     where: whereWithTitle(request.filters.where, request.filters.q),
+    tags: request.filters.tags || undefined,
   };
 }
 
@@ -164,6 +166,7 @@ export function WorkIndex() {
             sort: query.sort ?? defaultSort,
             dir: query.direction === "desc" ? "desc" : undefined,
             from: query.filters.from || undefined,
+            tags: query.filters.tags || undefined,
           },
         },
         signal,
@@ -191,6 +194,7 @@ export function WorkIndex() {
           Fresh
         </Button>
         <ToolbarSearch value={routeView.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Title contains…" label={`Filter ${words.works} by title`} />
+        <TagChips taxonomy={info?.taxonomy.key ?? ""} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
         <CustomFilterMenu
           fields={filterFieldsOf(info)}
           storageKey={`${categoryId}.${level}`}
@@ -243,7 +247,7 @@ export function WorkIndex() {
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>

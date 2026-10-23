@@ -26,6 +26,8 @@ type WorkEdit struct {
 	Facets func(mediaType string) []media.Facet
 	// Refreshing answers a media type's refresh, for a field the type derives other data from; nil refreshes nothing.
 	Refreshing func(mediaType string) (media.Refreshing, bool)
+	// Taxonomy answers a media type's genre taxonomy key, which a typed tag name is looked up in first.
+	Taxonomy func(mediaType string) string
 }
 
 // editable answers the editable facets of a work's media type.
@@ -143,7 +145,7 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			return err
 		}
 	}
-	if err := a.People.SetUserTags(ctx, workID, names); err != nil {
+	if err := a.People.SetUserTags(ctx, workID, a.Taxonomy(mediaType), names); err != nil {
 		return err
 	}
 	refresh := false
@@ -192,19 +194,6 @@ func (a WorkEdit) fieldWrites(mediaType string, edited map[string]string) (map[s
 		writes[facet.Source.Name] = value
 	}
 	return writes, nil
-}
-
-// ListTags answers every tag name.
-func (a WorkEdit) ListTags(ctx context.Context) ([]string, error) {
-	tags, err := a.People.ListTags(ctx)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, len(tags))
-	for i, tag := range tags {
-		names[i] = tag.Name
-	}
-	return names, nil
 }
 
 // BulkEdit applies change to every matching work through the same per-album edit the dialog uses, so one album failing
@@ -270,29 +259,52 @@ func applyBulkChange(edit apiserver.WorkEditRow, change apiserver.BulkEditChange
 	return edit
 }
 
-// ListOwnTags answers the user's tags with their use.
-func (a WorkEdit) ListOwnTags(ctx context.Context) ([]apiserver.OwnTagRow, error) {
-	tags, err := a.People.ListUserTags(ctx)
+// TagTree answers the tags of a taxonomy, "*" for all.
+func (a WorkEdit) TagTree(ctx context.Context, taxonomy string) ([]apiserver.TagRow, error) {
+	nodes, err := a.People.TagTree(ctx, taxonomy)
 	if err != nil {
 		return nil, err
 	}
-	rows := make([]apiserver.OwnTagRow, len(tags))
-	for i, tag := range tags {
-		rows[i] = apiserver.OwnTagRow{ID: tag.ID, Name: tag.Name, Works: tag.Works}
+	rows := make([]apiserver.TagRow, len(nodes))
+	for i, node := range nodes {
+		rows[i] = apiserver.TagRow(node)
 	}
 	return rows, nil
 }
 
-// RenameTag renames one of the user's tags.
-func (a WorkEdit) RenameTag(ctx context.Context, id int64, name string) error {
-	err := a.People.RenameUserTag(ctx, id, name)
-	if errors.Is(err, library.ErrTagExists) {
-		return apiserver.ErrTagNameTaken
+// CreateTag adds a person's tag.
+func (a WorkEdit) CreateTag(ctx context.Context, name, taxonomy string, parentID int64) (apiserver.TagRow, error) {
+	id, err := a.People.CreateTag(ctx, name, taxonomy, parentID)
+	if err != nil {
+		return apiserver.TagRow{}, tagError(err)
 	}
-	return err
+	return apiserver.TagRow{ID: id, Name: name, ParentID: parentID, Taxonomy: taxonomy, Source: "user"}, nil
 }
 
-// DeleteTag removes one of the user's tags.
+// EditTag renames and places a tag.
+func (a WorkEdit) EditTag(ctx context.Context, id int64, name string, parentID int64) error {
+	return tagError(a.People.EditTag(ctx, id, name, parentID))
+}
+
+// MergeTag folds one tag into another.
+func (a WorkEdit) MergeTag(ctx context.Context, fromID, intoID int64) error {
+	return tagError(a.People.MergeTag(ctx, fromID, intoID))
+}
+
+// DeleteTag removes a tag.
 func (a WorkEdit) DeleteTag(ctx context.Context, id int64) error {
-	return a.People.DeleteUserTag(ctx, id)
+	return a.People.DeleteTag(ctx, id)
+}
+
+// tagError maps the library's refusals to the ones writeWorkEditError knows.
+func tagError(err error) error {
+	switch {
+	case errors.Is(err, library.ErrTagExists):
+		return fmt.Errorf("%w: %w", apiserver.ErrTagNameTaken, err)
+	case errors.Is(err, library.ErrTagMove):
+		return fmt.Errorf("%w: %w", apiserver.ErrTagMove, err)
+	case errors.Is(err, library.ErrTagName):
+		return fmt.Errorf("%w: %w", apiserver.ErrInvalidWorkEdit, err)
+	}
+	return err
 }

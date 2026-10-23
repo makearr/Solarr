@@ -40,9 +40,9 @@ func existsText(condition listfilter.Condition, from, column string) (string, []
 
 const (
 	workGenreFrom = "FROM tag_assignment sa JOIN tag st ON st.id = sa.tag_id" +
-		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND sa.source = 'musicbrainz'"
+		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND st.taxonomy <> ''"
 	workTagFrom = "FROM tag_assignment sa JOIN tag st ON st.id = sa.tag_id" +
-		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND sa.source <> 'musicbrainz'"
+		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND st.taxonomy = ''"
 	workSizeBytes = "CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
 		" WHERE wf.work_id = work.id), 0) AS INTEGER)"
 )

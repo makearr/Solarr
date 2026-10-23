@@ -21,6 +21,7 @@ type Querier interface {
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
 	AddRelationship(ctx context.Context, arg AddRelationshipParams) error
+	AddTagAlias(ctx context.Context, arg AddTagAliasParams) error
 	// The closure is materialised, so inserting a tag inserts its ancestry too.
 	AddTagClosure(ctx context.Context, arg AddTagClosureParams) error
 	// Every tag is its own ancestor at depth zero, so a root tag still matches.
@@ -60,6 +61,7 @@ type Querier interface {
 	// had a source, not a refresh (a manual override must always win, ADR-8).
 	BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
+	ClearClassificationGenres(ctx context.Context, workID int64) error
 	ClearDesiredProfileOverride(ctx context.Context, desiredItemID int64) error
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
 	// going back to NULL is what makes it safe to then delete the work/edition
@@ -76,6 +78,8 @@ type Querier interface {
 	ClearVanished(ctx context.Context, rootFolderID int64) error
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error
+	// A refresh replaces every provider's genres of a work at once: every source but a person's own.
+	ClearWorkProviderTagsOfTaxonomy(ctx context.Context, arg ClearWorkProviderTagsOfTaxonomyParams) error
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
@@ -217,6 +221,8 @@ type Querier interface {
 	CreateWork(ctx context.Context, arg CreateWorkParams) (Work, error)
 	CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) (WorkPart, error)
 	CreateWorkReleaseFilter(ctx context.Context, arg CreateWorkReleaseFilterParams) error
+	// Moving a subtree: first cut every path from outside the subtree into it, then join it under the new parent.
+	CutTagSubtree(ctx context.Context, tagID int64) error
 	// Guarded on the current state so approving (or declining) twice -- a race between
 	// two admins, or a retried request -- reports that nothing changed rather than
 	// silently overwriting who decided it and when.
@@ -262,13 +268,12 @@ type Querier interface {
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
 	DeleteStatRollupMetricForCategory(ctx context.Context, arg DeleteStatRollupMetricForCategoryParams) error
 	DeleteSubscription(ctx context.Context, id int64) error
+	DeleteTag(ctx context.Context, id int64) (int64, error)
 	// A file that resolves on a later sweep leaves the queue entirely -- there is no
 	// "resolved" state to keep around.
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
 	// A held release (ready_queue) keeps its candidate however old.
 	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
-	// The assignments, closure rows and aliases go with it (ON DELETE CASCADE).
-	DeleteUserTag(ctx context.Context, id int64) (int64, error)
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
@@ -396,7 +401,10 @@ type Querier interface {
 	GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error)
 	// One follow per subject, user and library; "IS" matches NULL as the constraint's own NULLs do not.
 	GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error)
+	// The tag tree: taxonomies, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
+	GetTag(ctx context.Context, id int64) (Tag, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
+	GetTaxonomySeed(ctx context.Context, key string) (int64, error)
 	// One entry, for the manual resolve action -- confirming a candidate needs the
 	// file's own root_folder_id (to link work_root_folder), which the ranked
 	// candidates list alone does not carry.
@@ -435,6 +443,8 @@ type Querier interface {
 	InternAttributes(ctx context.Context, arg InternAttributesParams) (MediaAttribute, error)
 	// The pipeline filters against this between dedupe and evaluate (section 10.11).
 	IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (int64, error)
+	IsTagInSubtree(ctx context.Context, arg IsTagInSubtreeParams) (int64, error)
+	JoinTagSubtree(ctx context.Context, arg JoinTagSubtreeParams) error
 	// A merged release's old id still names its edition, or files tagged with it open a second one.
 	KeepEditionAlias(ctx context.Context, arg KeepEditionAliasParams) error
 	LinkCollectionExternalID(ctx context.Context, arg LinkCollectionExternalIDParams) error
@@ -514,6 +524,8 @@ type Querier interface {
 	ListCandidatesAfter(ctx context.Context, arg ListCandidatesAfterParams) ([]Candidate, error)
 	// Who plays whom in each work of a media type, once per work: a character two series share makes them one family.
 	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
+	// Genres stored before they were tags, a page of works at a time.
+	ListClassificationGenres(ctx context.Context, pageSize int64) ([]ListClassificationGenresRow, error)
 	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
 	// The works of a library in the collections, monitored as the library's own item says, files counted.
 	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)
@@ -579,6 +591,8 @@ type Querier interface {
 	// Who belongs to which franchise, of a media type: the provider's and the automatic ones.
 	ListFranchiseMembershipsOfType(ctx context.Context, mediaType string) ([]ListFranchiseMembershipsOfTypeRow, error)
 	ListFranchisesOfType(ctx context.Context, mediaType string) ([]ListFranchisesOfTypeRow, error)
+	// A work's genres: its tags of any taxonomy, whoever assigned them.
+	ListGenreTagsOfWork(ctx context.Context, subjectID int64) ([]string, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
@@ -741,14 +755,19 @@ type Querier interface {
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
 	ListSubscriptionsForSubject(ctx context.Context, arg ListSubscriptionsForSubjectParams) ([]Subscription, error)
-	ListTagNames(ctx context.Context) ([]ListTagNamesRow, error)
+	ListTagAliases(ctx context.Context) ([]TagAlias, error)
+	ListTagChildren(ctx context.Context, parentID sql.NullInt64) ([]int64, error)
 	ListTagNamesForSubjectBySource(ctx context.Context, arg ListTagNamesForSubjectBySourceParams) ([]ListTagNamesForSubjectBySourceRow, error)
+	ListTagTree(ctx context.Context, taxonomy interface{}) ([]ListTagTreeRow, error)
 	// Identified files under the given roots with everything their tags could take and the digest
 	// of what was last written. Providers are arguments: the query knows no media type.
 	ListTagWritebackCandidates(ctx context.Context, arg ListTagWritebackCandidatesParams) ([]ListTagWritebackCandidatesRow, error)
+	// The tags of one taxonomy an alias names; one alias may name several ("Action & Adventure").
+	ListTagsByAlias(ctx context.Context, arg ListTagsByAliasParams) ([]int64, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
 	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)
+	ListTagsOfTaxonomy(ctx context.Context, taxonomy string) ([]Tag, error)
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
@@ -782,8 +801,6 @@ type Querier interface {
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
-	// A tag is the user's own when it was created from the Edit dialog; a provider's genre is not offered for renaming.
-	ListUserTagsWithUse(ctx context.Context) ([]ListUserTagsWithUseRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
@@ -904,6 +921,8 @@ type Querier interface {
 	MoveEditionImportUnits(ctx context.Context, arg MoveEditionImportUnitsParams) error
 	MoveEditionPackItems(ctx context.Context, arg MoveEditionPackItemsParams) error
 	MoveEditionToWork(ctx context.Context, arg MoveEditionToWorkParams) error
+	MoveTagAliases(ctx context.Context, arg MoveTagAliasesParams) error
+	MoveTagAssignments(ctx context.Context, arg MoveTagAssignmentsParams) error
 	// newest_release.
 	NextHuntByNewestRelease(ctx context.Context, arg NextHuntByNewestReleaseParams) ([]HuntQueue, error)
 	// newest_searched.
@@ -972,7 +991,6 @@ type Querier interface {
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
 	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
 	RenameCustomCollection(ctx context.Context, arg RenameCustomCollectionParams) (int64, error)
-	RenameUserTag(ctx context.Context, arg RenameUserTagParams) (int64, error)
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
 	// already holds the new one (M1f, 2026-09-25).
@@ -1083,6 +1101,9 @@ type Querier interface {
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
 	SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
+	SetTagName(ctx context.Context, arg SetTagNameParams) error
+	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
+	SetTaxonomySeed(ctx context.Context, arg SetTaxonomySeedParams) error
 	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error

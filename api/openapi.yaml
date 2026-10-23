@@ -2156,6 +2156,12 @@ paths:
             A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag
             (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
           schema: { type: string }
+        - name: tags
+          in: query
+          description: >-
+            The list's tag chips, comma-separated tag ids: a work must carry each (or a tag below it); a negative id
+            is a tag it must not carry.
+          schema: { type: string }
       responses:
         "200":
           description: One page.
@@ -3134,7 +3140,11 @@ paths:
     get:
       operationId: listTags
       tags: [library]
-      summary: Every tag, by name, for the Edit dialog's tag picker.
+      summary: The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels).
+      parameters:
+        - name: taxonomy
+          in: query
+          schema: { type: string }
       responses:
         "200":
           description: The tags.
@@ -3142,29 +3152,32 @@ paths:
             application/json:
               schema:
                 type: array
-                items: { type: string }
+                items: { $ref: "#/components/schemas/TagNode" }
         "401": { $ref: "#/components/responses/Problem" }
-
-  /tags/own:
-    get:
-      operationId: listOwnTags
+    post:
+      operationId: createTag
       tags: [library]
-      summary: The tags created from the Edit dialog, with how many albums carry each.
+      summary: Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, taxonomy]
+              properties:
+                name: { type: string }
+                taxonomy: { type: string }
+                parent_id: { type: integer, format: int64, nullable: true }
       responses:
         "200":
-          description: The tags, by name.
+          description: The tag.
           content:
             application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  required: [id, name, works]
-                  properties:
-                    id: { type: integer, format: int64 }
-                    name: { type: string }
-                    works: { type: integer, format: int64 }
+              schema: { $ref: "#/components/schemas/TagNode" }
+        "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /tags/{id}:
     parameters:
@@ -3173,20 +3186,23 @@ paths:
         required: true
         schema: { type: integer, format: int64 }
     put:
-      operationId: renameTag
+      operationId: editTag
       tags: [library]
-      summary: Rename one of the user's own tags. Administrator only.
+      summary: >-
+        Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps
+        its old name as an alias, so the next refresh finds it again. Administrator only.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [name]
+              required: [name, parent_id]
               properties:
                 name: { type: string }
+                parent_id: { type: integer, format: int64, nullable: true }
       responses:
-        "204": { description: Renamed. }
+        "204": { description: Changed. }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
@@ -3194,11 +3210,40 @@ paths:
     delete:
       operationId: deleteTag
       tags: [library]
-      summary: Delete one of the user's own tags and take it off every album. Administrator only.
+      summary: >-
+        Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next
+        refresh: merge it instead. Administrator only.
       responses:
         "204": { description: Deleted. }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /tags/{id}/merge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: mergeTag
+      tags: [library]
+      summary: >-
+        Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias.
+        Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [into_id]
+              properties:
+                into_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Merged. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /works/{id}/parts/{partId}/wanted:
     parameters:
@@ -3275,6 +3320,7 @@ paths:
                   items: { type: integer, format: int64 }
                 fresh: { type: boolean, default: false, description: The list's Fresh filter, when "select all matching" was made under it. }
                 where: { type: string, description: The list's custom filter (the JSON the list carried), when "select all matching" was made under it. }
+                tags: { type: string, description: The list's tag chips, as listWorks takes them. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
                 cutoff_unmet: { type: boolean, default: false, description: The list's Cutoff Unmet filter. }
                 monitored: { type: boolean }
@@ -3317,6 +3363,7 @@ paths:
                   items: { type: integer, format: int64 }
                 fresh: { type: boolean, default: false }
                 where: { type: string }
+                tags: { type: string }
                 wanted: { type: boolean, default: false }
                 cutoff_unmet: { type: boolean, default: false }
                 preview: { type: boolean, default: false }
@@ -7687,12 +7734,34 @@ components:
         part_scoped: { type: boolean, description: Credited per part rather than per work. }
         character: { type: boolean, description: Carries the name of who was played. }
 
+    TagNode:
+      type: object
+      required: [id, name, taxonomy, source, works, aliases]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+        parent_id: { type: integer, format: int64, description: Absent at the top of its taxonomy. }
+        taxonomy: { type: string, description: The taxonomy's key; empty for a free label. }
+        source: { type: string, description: "user, taxonomy (the shipped tree) or the provider that named it" }
+        works: { type: integer, format: int64 }
+        aliases:
+          type: array
+          items: { type: string }
+
+    Taxonomy:
+      type: object
+      required: [key, label]
+      properties:
+        key: { type: string }
+        label: { type: string }
+
     MediaTypeInfo:
       type: object
-      required: [key, label, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
+      required: [key, label, taxonomy, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
+        taxonomy: { $ref: "#/components/schemas/Taxonomy" }
         work: { $ref: "#/components/schemas/MediaTerm" }
         part: { $ref: "#/components/schemas/MediaTerm" }
         group: { $ref: "#/components/schemas/MediaTerm" }

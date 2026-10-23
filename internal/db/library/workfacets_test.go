@@ -13,7 +13,7 @@ var tvFacets = []library.WorkFacet{
 	{Key: "year", Source: library.FacetColumn, Name: "year", Kind: listfilter.Number},
 	{Key: "status", Source: library.FacetField, Name: "status", Kind: listfilter.Enum, Choices: []string{"continuing", "ended", "upcoming"}},
 	{Key: "network", Source: library.FacetOrganisation, Name: "network", Kind: listfilter.Text},
-	{Key: "genre", Source: library.FacetClassification, Name: "genre", Kind: listfilter.Text},
+	{Key: "genre", Source: library.FacetTaxonomy, Name: "screen", Kind: listfilter.Text},
 	{Key: "runtime", Source: library.FacetColumn, Name: "runtime_ms", Kind: listfilter.Number},
 }
 

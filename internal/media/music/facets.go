@@ -23,6 +23,6 @@ var facets = []media.Facet{
 	},
 	{
 		Key: "genre", Label: "Genre", Entity: model.LevelEntityWork, Kind: media.FacetList,
-		Source: media.FacetSource{Kind: media.SourceTags, Name: "musicbrainz"}, Sortable: true, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceTaxonomy, Name: Taxonomy.Key}, Sortable: true, Filterable: true,
 	},
 }

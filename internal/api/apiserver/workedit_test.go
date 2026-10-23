@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -20,7 +21,8 @@ type fakeWorkEditor struct {
 	bulkSelection apiserver.BulkSelection
 	bulkChange    apiserver.BulkEditChange
 	bulkPreview   bool
-	renamed       string
+	edited        string
+	merged        string
 	deleted       int64
 }
 
@@ -40,22 +42,31 @@ func (f *fakeWorkEditor) BulkEdit(
 	return 7, f.err
 }
 
-func (f *fakeWorkEditor) ListOwnTags(context.Context) ([]apiserver.OwnTagRow, error) {
-	return []apiserver.OwnTagRow{{ID: 3, Name: "Sleep", Works: 12}}, nil
+func (f *fakeWorkEditor) TagTree(_ context.Context, taxonomy string) ([]apiserver.TagRow, error) {
+	return []apiserver.TagRow{
+		{ID: 1, Name: "Rock", Taxonomy: "music", Source: "taxonomy", Works: 4, Aliases: []string{"rock-music"}},
+		{ID: 2, Name: "Metal", ParentID: 1, Taxonomy: "music", Source: "musicbrainz", Works: 2},
+		{ID: 3, Name: taxonomy, Source: "user"},
+	}, nil
 }
 
-func (f *fakeWorkEditor) RenameTag(_ context.Context, id int64, name string) error {
-	f.renamed = fmt.Sprintf("%d=%s", id, name)
+func (f *fakeWorkEditor) CreateTag(_ context.Context, name, taxonomy string, parentID int64) (apiserver.TagRow, error) {
+	return apiserver.TagRow{ID: 9, Name: name, ParentID: parentID, Taxonomy: taxonomy, Source: "user"}, f.err
+}
+
+func (f *fakeWorkEditor) EditTag(_ context.Context, id int64, name string, parentID int64) error {
+	f.edited = fmt.Sprintf("%d=%s under %d", id, name, parentID)
+	return f.err
+}
+
+func (f *fakeWorkEditor) MergeTag(_ context.Context, fromID, intoID int64) error {
+	f.merged = fmt.Sprintf("%d into %d", fromID, intoID)
 	return f.err
 }
 
 func (f *fakeWorkEditor) DeleteTag(_ context.Context, id int64) error {
 	f.deleted = id
 	return f.err
-}
-
-func (f *fakeWorkEditor) ListTags(context.Context) ([]string, error) {
-	return []string{"Rock", "Sleep"}, nil
 }
 
 func TestWorkEdit_ReadsAndSavesTheWholeDialog(t *testing.T) {
@@ -91,11 +102,18 @@ func TestWorkEdit_AnUnknownProfileIs400AndAMissingWorkIs404(t *testing.T) {
 	}
 }
 
-func TestListTags_AnswersNames(t *testing.T) {
+// The tree comes with parents, aliases and counts; taxonomy narrows it, "*" when absent.
+func TestListTags_AnswersTheTree(t *testing.T) {
 	fixture, cookies := visibleWorksFixture(t)
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags"))
-	if recorder.Code != http.StatusOK || recorder.Body.String() != "[\"Rock\",\"Sleep\"]\n" {
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags?taxonomy="))
+	want := `[{"aliases":["rock-music"],"id":1,"name":"Rock","source":"taxonomy","taxonomy":"music","works":4},` +
+		`{"aliases":[],"id":2,"name":"Metal","parent_id":1,"source":"musicbrainz","taxonomy":"music","works":2},` +
+		`{"aliases":[],"id":3,"name":"","source":"user","taxonomy":"","works":0}]` + "\n"
+	if recorder.Code != http.StatusOK || recorder.Body.String() != want {
 		t.Fatalf("status %d, body %q", recorder.Code, recorder.Body)
+	}
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags")); !strings.Contains(recorder.Body.String(), `"name":"*"`) {
+		t.Fatalf("without taxonomy: body %q, want every taxonomy asked for", recorder.Body)
 	}
 }
 
@@ -130,42 +148,66 @@ func TestBulkEditWorks_NeedsRequestPermissionOnTheLibrary(t *testing.T) {
 	}
 }
 
-func TestOwnTags_ListRenameDeleteAreAdministratorWorkAndMapConflicts(t *testing.T) {
+func TestTags_ChangingThemIsAdministratorWork(t *testing.T) {
 	fixture, cookies := visibleWorksFixture(t) // a read-only listener
-	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Nap"}`)); recorder.Code != http.StatusForbidden {
-		t.Fatalf("rename by a listener: status %d, want 403", recorder.Code)
+	for _, request := range []*http.Request{
+		authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Nap","parent_id":null}`),
+		authedDelete(t, cookies, "/api/v1/tags/3"),
+		authedPost(t, cookies, "/api/v1/tags/3/merge", `{"into_id":1}`),
+		authedPost(t, cookies, "/api/v1/tags", `{"name":"Nap","taxonomy":""}`),
+	} {
+		if recorder := fixture.do(request); recorder.Code != http.StatusForbidden {
+			t.Fatalf("%s %s by a listener: status %d, want 403", request.Method, request.URL.Path, recorder.Code)
+		}
 	}
-	if recorder := fixture.do(authedDelete(t, cookies, "/api/v1/tags/3")); recorder.Code != http.StatusForbidden {
-		t.Fatalf("delete by a listener: status %d, want 403", recorder.Code)
-	}
-	if fixture.workEditor.renamed != "" || fixture.workEditor.deleted != 0 {
+	if fixture.workEditor.edited != "" || fixture.workEditor.merged != "" || fixture.workEditor.deleted != 0 {
 		t.Fatal("a listener reached the tag store")
-	}
-	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags/own")); recorder.Code != http.StatusOK ||
-		recorder.Body.String() != "[{\"id\":3,\"name\":\"Sleep\",\"works\":12}]\n" {
-		t.Fatalf("list: status %d, body %q", recorder.Code, recorder.Body)
 	}
 }
 
-func TestOwnTags_AnAdministratorRenamesAndDeletesAndATakenNameIs409(t *testing.T) {
+func TestTags_AnAdministratorEditsMergesDeletesAndConflictsAre409(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
-	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"  Nap "}`)); recorder.Code != http.StatusNoContent {
-		t.Fatalf("rename: status %d, body %s", recorder.Code, recorder.Body)
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"  Nap ","parent_id":1}`)); recorder.Code != http.StatusNoContent {
+		t.Fatalf("edit: status %d, body %s", recorder.Code, recorder.Body)
 	}
-	if fixture.workEditor.renamed != "3=Nap" {
-		t.Errorf("renamed %q, want the trimmed name", fixture.workEditor.renamed)
+	if fixture.workEditor.edited != "3=Nap under 1" {
+		t.Errorf("edited %q, want the trimmed name under 1", fixture.workEditor.edited)
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/tags/3/merge", `{"into_id":1}`)); recorder.Code != http.StatusNoContent || fixture.workEditor.merged != "3 into 1" {
+		t.Fatalf("merge: status %d, merged %q", recorder.Code, fixture.workEditor.merged)
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/tags", `{"name":"Jazz","taxonomy":"music"}`)); recorder.Code != http.StatusOK ||
+		recorder.Body.String() != `{"aliases":[],"id":9,"name":"Jazz","source":"user","taxonomy":"music","works":0}`+"\n" {
+		t.Fatalf("create: status %d, body %q", recorder.Code, recorder.Body)
 	}
 	if recorder := fixture.do(authedDelete(t, cookies, "/api/v1/tags/3")); recorder.Code != http.StatusNoContent || fixture.workEditor.deleted != 3 {
 		t.Fatalf("delete: status %d, deleted %d", recorder.Code, fixture.workEditor.deleted)
 	}
-	fixture.workEditor.err = apiserver.ErrTagNameTaken
-	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Rock"}`)); recorder.Code != http.StatusConflict {
-		t.Fatalf("taken name: status %d, want 409", recorder.Code)
-	}
-	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"  "}`)); recorder.Code != http.StatusBadRequest {
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"  ","parent_id":null}`)); recorder.Code != http.StatusBadRequest {
 		t.Fatalf("blank name: status %d, want 400", recorder.Code)
+	}
+	for _, refusal := range []error{apiserver.ErrTagNameTaken, apiserver.ErrTagMove} {
+		fixture.workEditor.err = refusal
+		if recorder := fixture.do(authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Rock","parent_id":null}`)); recorder.Code != http.StatusConflict {
+			t.Fatalf("%v: status %d, want 409", refusal, recorder.Code)
+		}
+	}
+}
+
+// The list's tag chips reach the selection, a negative id as one to leave out; anything else is 400.
+func TestBulkEditWorks_CarriesTheTagChips(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/edit", `{"category_id":1,"tags":"4, -7","preview":true}`))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d, body %s", recorder.Code, recorder.Body)
+	}
+	if selection := fixture.workEditor.bulkSelection; !reflect.DeepEqual(selection.TagIDs, []int64{4}) || !reflect.DeepEqual(selection.ExcludedTagIDs, []int64{7}) {
+		t.Errorf("selection tags %v, without %v; want [4] and [7]", selection.TagIDs, selection.ExcludedTagIDs)
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/edit", `{"category_id":1,"tags":"rock"}`)); recorder.Code != http.StatusBadRequest {
+		t.Fatalf("a tag name for an id: status %d, want 400", recorder.Code)
 	}
 }

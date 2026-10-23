@@ -664,7 +664,7 @@ func TestEnrichJob_WikidataGenresLeadMusicBrainzs(t *testing.T) {
 		names = append(names, tag.TagName)
 	}
 	slices.Sort(names)
-	if !slices.Equal(names, []string{"art rock", "progressive rock"}) {
+	if !slices.Equal(names, []string{"Art Rock", "Progressive Rock"}) {
 		t.Errorf("genres = %v; want Wikidata's in place of MusicBrainz's", names)
 	}
 }
@@ -1373,7 +1373,7 @@ func TestEnrichJob_RefreshArtistFetchesAgainAndRescans(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(detail.Genres, "art rock") {
+	if !slices.Contains(detail.Genres, "Art Rock") {
 		t.Errorf("genres = %v, want the refreshed one", detail.Genres)
 	}
 	if n := len(realigner.manual); n == 0 || !realigner.manual[n-1] || !slices.Equal(realigner.batches[n-1], []int64{work.ID}) {

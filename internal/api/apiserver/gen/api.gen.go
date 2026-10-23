@@ -2989,7 +2989,8 @@ type MediaTypeInfo struct {
 	} `json:"search_terms"`
 
 	// SearchesLibrary Every wanted work of a library can be searched at once (POST /categories/{id}/search).
-	SearchesLibrary bool `json:"searches_library"`
+	SearchesLibrary bool     `json:"searches_library"`
+	Taxonomy        Taxonomy `json:"taxonomy"`
 
 	// UnidentifiedRetry The schedule that tries a library's unidentified files again (POST /schedules/{key}/run); absent when the type has none.
 	UnidentifiedRetry *string `json:"unidentified_retry,omitempty"`
@@ -4226,6 +4227,23 @@ type TVProviderTest struct {
 // TVProviderTestId defines model for TVProviderTest.Id.
 type TVProviderTestId string
 
+// TagNode defines model for TagNode.
+type TagNode struct {
+	Aliases []string `json:"aliases"`
+	Id      int64    `json:"id"`
+	Name    string   `json:"name"`
+
+	// ParentId Absent at the top of its taxonomy.
+	ParentId *int64 `json:"parent_id,omitempty"`
+
+	// Source user, taxonomy (the shipped tree) or the provider that named it
+	Source string `json:"source"`
+
+	// Taxonomy The taxonomy's key; empty for a free label.
+	Taxonomy string `json:"taxonomy"`
+	Works    int64  `json:"works"`
+}
+
 // Tagging What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder.
 type Tagging struct {
 	// EmbedCover Embed the fetched cover into files that carry no picture.
@@ -4242,6 +4260,12 @@ type Tagging struct {
 
 	// WriteMetadata Write album, album artist, track title, track and disc number, date and genre.
 	WriteMetadata bool `json:"write_metadata"`
+}
+
+// Taxonomy defines model for Taxonomy.
+type Taxonomy struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
 }
 
 // TestDownloaderRequest defines model for TestDownloaderRequest.
@@ -5324,9 +5348,27 @@ type ListLogsParams struct {
 // ListLogsParamsLevel defines parameters for ListLogs.
 type ListLogsParamsLevel string
 
-// RenameTagJSONBody defines parameters for RenameTag.
-type RenameTagJSONBody struct {
-	Name string `json:"name"`
+// ListTagsParams defines parameters for ListTags.
+type ListTagsParams struct {
+	Taxonomy *string `form:"taxonomy,omitempty" json:"taxonomy,omitempty"`
+}
+
+// CreateTagJSONBody defines parameters for CreateTag.
+type CreateTagJSONBody struct {
+	Name     string `json:"name"`
+	ParentId *int64 `json:"parent_id"`
+	Taxonomy string `json:"taxonomy"`
+}
+
+// EditTagJSONBody defines parameters for EditTag.
+type EditTagJSONBody struct {
+	Name     string `json:"name"`
+	ParentId *int64 `json:"parent_id"`
+}
+
+// MergeTagJSONBody defines parameters for MergeTag.
+type MergeTagJSONBody struct {
+	IntoId int64 `json:"into_id"`
 }
 
 // CreateUserJSONBody defines parameters for CreateUser.
@@ -5395,6 +5437,9 @@ type ListWorksParams struct {
 
 	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
 	Where *string `form:"where,omitempty" json:"where,omitempty"`
+
+	// Tags The list's tag chips, comma-separated tag ids: a work must carry each (or a tag below it); a negative id is a tag it must not carry.
+	Tags *string `form:"tags,omitempty" json:"tags,omitempty"`
 }
 
 // ListWorksParamsDir defines parameters for ListWorks.
@@ -5423,6 +5468,7 @@ type BulkEditWorksJSONBody struct {
 
 	// Specials With monitor_option
 	Specials *bool   `json:"specials,omitempty"`
+	Tags     *string `json:"tags,omitempty"`
 	Wanted   *bool   `json:"wanted,omitempty"`
 	Where    *string `json:"where,omitempty"`
 }
@@ -5442,6 +5488,9 @@ type BulkSetWorkMonitoredJSONBody struct {
 	Ids       *[]int64 `json:"ids,omitempty"`
 	Monitored bool     `json:"monitored"`
 	Preview   *bool    `json:"preview,omitempty"`
+
+	// Tags The list's tag chips
+	Tags *string `json:"tags,omitempty"`
 
 	// Wanted The list's Wanted filter.
 	Wanted *bool `json:"wanted,omitempty"`
@@ -5860,8 +5909,14 @@ type SetUserDefaultsJSONRequestBody = UserDefaults
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
 
-// RenameTagJSONRequestBody defines body for RenameTag for application/json ContentType.
-type RenameTagJSONRequestBody RenameTagJSONBody
+// CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
+type CreateTagJSONRequestBody CreateTagJSONBody
+
+// EditTagJSONRequestBody defines body for EditTag for application/json ContentType.
+type EditTagJSONRequestBody EditTagJSONBody
+
+// MergeTagJSONRequestBody defines body for MergeTag for application/json ContentType.
+type MergeTagJSONRequestBody MergeTagJSONBody
 
 // CreateUserJSONRequestBody defines body for CreateUser for application/json ContentType.
 type CreateUserJSONRequestBody CreateUserJSONBody
@@ -6600,18 +6655,21 @@ type ServerInterface interface {
 	// The most recent log records, newest first.
 	// (GET /system/logs)
 	ListLogs(w http.ResponseWriter, r *http.Request, params ListLogsParams)
-	// Every tag, by name, for the Edit dialog's tag picker.
+	// The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels).
 	// (GET /tags)
-	ListTags(w http.ResponseWriter, r *http.Request)
-	// The tags created from the Edit dialog, with how many albums carry each.
-	// (GET /tags/own)
-	ListOwnTags(w http.ResponseWriter, r *http.Request)
-	// Delete one of the user's own tags and take it off every album. Administrator only.
+	ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams)
+	// Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only.
+	// (POST /tags)
+	CreateTag(w http.ResponseWriter, r *http.Request)
+	// Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only.
 	// (DELETE /tags/{id})
 	DeleteTag(w http.ResponseWriter, r *http.Request, id int64)
-	// Rename one of the user's own tags. Administrator only.
+	// Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
 	// (PUT /tags/{id})
-	RenameTag(w http.ResponseWriter, r *http.Request, id int64)
+	EditTag(w http.ResponseWriter, r *http.Request, id int64)
+	// Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias. Administrator only.
+	// (POST /tags/{id}/merge)
+	MergeTag(w http.ResponseWriter, r *http.Request, id int64)
 	// Every account, with its role and category grants.
 	// (GET /users)
 	ListUsers(w http.ResponseWriter, r *http.Request)
@@ -8103,27 +8161,33 @@ func (_ Unimplemented) ListLogs(w http.ResponseWriter, r *http.Request, params L
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Every tag, by name, for the Edit dialog's tag picker.
+// The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels).
 // (GET /tags)
-func (_ Unimplemented) ListTags(w http.ResponseWriter, r *http.Request) {
+func (_ Unimplemented) ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The tags created from the Edit dialog, with how many albums carry each.
-// (GET /tags/own)
-func (_ Unimplemented) ListOwnTags(w http.ResponseWriter, r *http.Request) {
+// Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only.
+// (POST /tags)
+func (_ Unimplemented) CreateTag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Delete one of the user's own tags and take it off every album. Administrator only.
+// Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only.
 // (DELETE /tags/{id})
 func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Rename one of the user's own tags. Administrator only.
+// Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
 // (PUT /tags/{id})
-func (_ Unimplemented) RenameTag(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) EditTag(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias. Administrator only.
+// (POST /tags/{id}/merge)
+func (_ Unimplemented) MergeTag(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15665,6 +15729,8 @@ func (siw *ServerInterfaceWrapper) ListLogs(w http.ResponseWriter, r *http.Reque
 // ListTags operation middleware
 func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Request) {
 
+	var err error
+
 	ctx := r.Context()
 
 	ctx = context.WithValue(ctx, SessionScopes, []string{})
@@ -15673,8 +15739,19 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListTagsParams
+
+	// ------------- Optional query parameter "taxonomy" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "taxonomy", r.URL.Query(), &params.Taxonomy)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taxonomy", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListTags(w, r)
+		siw.Handler.ListTags(w, r, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15684,8 +15761,8 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
-// ListOwnTags operation middleware
-func (siw *ServerInterfaceWrapper) ListOwnTags(w http.ResponseWriter, r *http.Request) {
+// CreateTag operation middleware
+func (siw *ServerInterfaceWrapper) CreateTag(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
@@ -15696,7 +15773,7 @@ func (siw *ServerInterfaceWrapper) ListOwnTags(w http.ResponseWriter, r *http.Re
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.ListOwnTags(w, r)
+		siw.Handler.CreateTag(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -15739,8 +15816,8 @@ func (siw *ServerInterfaceWrapper) DeleteTag(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
-// RenameTag operation middleware
-func (siw *ServerInterfaceWrapper) RenameTag(w http.ResponseWriter, r *http.Request) {
+// EditTag operation middleware
+func (siw *ServerInterfaceWrapper) EditTag(w http.ResponseWriter, r *http.Request) {
 
 	var err error
 
@@ -15762,7 +15839,40 @@ func (siw *ServerInterfaceWrapper) RenameTag(w http.ResponseWriter, r *http.Requ
 	r = r.WithContext(ctx)
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.RenameTag(w, r, id)
+		siw.Handler.EditTag(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MergeTag operation middleware
+func (siw *ServerInterfaceWrapper) MergeTag(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeTag(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16074,6 +16184,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "where", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "tags" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "tags", r.URL.Query(), &params.Tags)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "tags", Err: err})
 		return
 	}
 
@@ -18187,13 +18305,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/tags", wrapper.ListTags)
 	})
 	r.Group(func(r chi.Router) {
-		r.Get(options.BaseURL+"/tags/own", wrapper.ListOwnTags)
+		r.Post(options.BaseURL+"/tags", wrapper.CreateTag)
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/tags/{id}", wrapper.DeleteTag)
 	})
 	r.Group(func(r chi.Router) {
-		r.Put(options.BaseURL+"/tags/{id}", wrapper.RenameTag)
+		r.Put(options.BaseURL+"/tags/{id}", wrapper.EditTag)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/tags/{id}/merge", wrapper.MergeTag)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/users", wrapper.ListUsers)

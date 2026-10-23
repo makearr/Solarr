@@ -411,9 +411,9 @@ func (q *Queries) CreateSubscription(ctx context.Context, arg CreateSubscription
 }
 
 const createTag = `-- name: CreateTag :one
-INSERT INTO tag (name, slug, parent_id, description, source)
-VALUES (?, ?, ?, ?, ?)
-RETURNING id, name, slug, parent_id, description, source
+INSERT INTO tag (name, slug, parent_id, description, source, taxonomy)
+VALUES (?, ?, ?, ?, ?, ?)
+RETURNING id, name, slug, parent_id, description, source, taxonomy
 `
 
 type CreateTagParams struct {
@@ -422,6 +422,7 @@ type CreateTagParams struct {
 	ParentID    sql.NullInt64
 	Description sql.NullString
 	Source      string
+	Taxonomy    string
 }
 
 func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, error) {
@@ -431,6 +432,7 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		arg.ParentID,
 		arg.Description,
 		arg.Source,
+		arg.Taxonomy,
 	)
 	var i Tag
 	err := row.Scan(
@@ -440,6 +442,7 @@ func (q *Queries) CreateTag(ctx context.Context, arg CreateTagParams) (Tag, erro
 		&i.ParentID,
 		&i.Description,
 		&i.Source,
+		&i.Taxonomy,
 	)
 	return i, err
 }
@@ -691,7 +694,7 @@ func (q *Queries) GetSubscriptionForSubject(ctx context.Context, arg GetSubscrip
 }
 
 const getTagBySlug = `-- name: GetTagBySlug :one
-SELECT id, name, slug, parent_id, description, source FROM tag WHERE slug = ?
+SELECT id, name, slug, parent_id, description, source, taxonomy FROM tag WHERE slug = ?
 `
 
 func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
@@ -704,6 +707,7 @@ func (q *Queries) GetTagBySlug(ctx context.Context, slug string) (Tag, error) {
 		&i.ParentID,
 		&i.Description,
 		&i.Source,
+		&i.Taxonomy,
 	)
 	return i, err
 }

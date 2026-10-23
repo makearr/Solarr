@@ -251,15 +251,11 @@ func (r SeriesReader) fill(ctx context.Context, queries *librarydb.Queries, summ
 			return fmt.Errorf("library: series fields: %w", err)
 		}
 		summary.Fields = mergeFields(fields)
-		classifications, err := queries.ListWorkClassifications(ctx, summary.WorkID)
+		genres, err := queries.ListGenreTagsOfWork(ctx, summary.WorkID)
 		if err != nil {
 			return fmt.Errorf("library: series genres: %w", err)
 		}
-		for _, classification := range classifications {
-			if classification.Kind == "genre" {
-				summary.Genres = append(summary.Genres, classification.Value)
-			}
-		}
+		summary.Genres = genres
 	}
 	return nil
 }
