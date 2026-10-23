@@ -72,6 +72,20 @@ func TestFindsRankAcceptedFirstThenQualityThenDistance(t *testing.T) {
 	}
 }
 
+// Two equal releases go to the preferred indexer, the lower priority number (user, 2026-10-23); a better release
+// from a less preferred indexer still wins.
+func TestSortBestFirstBreaksTiesByIndexerPriority(t *testing.T) {
+	accepted := model.Decision{Outcome: model.OutcomeAccept}
+	preferred := judge.Find{Conn: judge.Conn{ID: 1, Priority: 10}, Raw: indexer.RawItem{Title: "preferred"}, Decision: accepted, Distance: 0.2}
+	other := judge.Find{Conn: judge.Conn{ID: 2, Priority: 25}, Raw: indexer.RawItem{Title: "other"}, Decision: accepted, Distance: 0.2}
+	closer := judge.Find{Conn: judge.Conn{ID: 3, Priority: 50}, Raw: indexer.RawItem{Title: "closer"}, Decision: accepted}
+	finds := []judge.Find{other, preferred, closer}
+	judge.SortBestFirst(finds)
+	if finds[0].Raw.Title != "closer" || finds[1].Raw.Title != "preferred" || finds[2].Raw.Title != "other" {
+		t.Errorf("order = %s, %s, %s; want closer, preferred, other", finds[0].Raw.Title, finds[1].Raw.Title, finds[2].Raw.Title)
+	}
+}
+
 func TestDuplicatesAcrossIndexersKeepTheFirst(t *testing.T) {
 	a := judge.Find{Conn: judge.Conn{ID: 1}, Raw: indexer.RawItem{Title: "Show.S01E01.1080p", SizeBytes: 1000}}
 	b := judge.Find{Conn: judge.Conn{ID: 2}, Raw: indexer.RawItem{Title: "show s01e01 1080p", SizeBytes: 1005}}

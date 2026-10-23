@@ -37,7 +37,8 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 		}
 		client := factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress())
 		conn := music.IndexerConn{
-			ID: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, Client: client, Categories: indexer.MusicCategories(),
+			ID: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, Priority: indexer.Priority, Client: client,
+			Categories: indexer.MusicCategories(),
 		}
 		if p.indexerCaps != nil {
 			conn.Params = map[string][]string{"music": p.indexerCaps.musicParams(ctx, indexer.ID, indexer.BaseURL, client)}
@@ -64,7 +65,7 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 			return nil, err
 		}
 		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
-		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Client: client, Categories: found.TVCategories()}
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.TVCategories()}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.tvParams(ctx, found.ID, found.BaseURL, client); params != nil {
 				conn.Params = map[string][]string{"tvsearch": params}
@@ -93,7 +94,7 @@ func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 			return nil, err
 		}
 		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
-		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Client: client, Categories: found.MovieCategories()}
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.MovieCategories()}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.movieParams(ctx, found.ID, found.BaseURL, client); params != nil {
 				conn.Params = map[string][]string{"movie": params}

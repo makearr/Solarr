@@ -32,7 +32,7 @@ type Find struct {
 }
 
 // SortBestFirst ranks releases as a grab chooses them: accepted first, then the quality tiers (ADR-40), then the
-// additive score, then the closer match.
+// additive score, then the closer match, then the preferred indexer (Sonarr's indexer priority, user 2026-10-23).
 func SortBestFirst(finds []Find) {
 	slices.SortStableFunc(finds, func(a, b Find) int {
 		if aOK, bOK := a.Decision.Outcome == model.OutcomeAccept, b.Decision.Outcome == model.OutcomeAccept; aOK != bOK {
@@ -47,7 +47,10 @@ func SortBestFirst(finds []Find) {
 		if byScore := cmp.Compare(b.Decision.Score(), a.Decision.Score()); byScore != 0 {
 			return byScore
 		}
-		return cmp.Compare(a.Distance, b.Distance)
+		if byDistance := cmp.Compare(a.Distance, b.Distance); byDistance != 0 {
+			return byDistance
+		}
+		return cmp.Compare(a.Conn.Priority, b.Conn.Priority)
 	})
 }
 

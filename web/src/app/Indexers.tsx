@@ -26,8 +26,8 @@ export function Indexers() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["indexers"] });
 
-  const setEnabled = useMutation({
-    mutationFn: async (args: { indexer: Indexer; enabled: boolean }) => {
+  const update = useMutation({
+    mutationFn: async (args: { indexer: Indexer; enabled: boolean; priority: number }) => {
       // PATCH replaces every field this form can change -- egress_proxy_url
       // has to be resent from the current row or toggling "enabled" would
       // silently wipe it (the same staleness shape todo 4.6's category edit
@@ -36,7 +36,7 @@ export function Indexers() {
         params: { path: { id: args.indexer.id } },
         body: {
           name: args.indexer.name, impl: args.indexer.impl, base_url: args.indexer.base_url,
-          priority: args.indexer.priority, enabled: args.enabled,
+          priority: args.priority, enabled: args.enabled,
           egress_proxy_url: args.indexer.egress_proxy_url,
           music_categories: args.indexer.music_categories,
         },
@@ -88,8 +88,9 @@ export function Indexers() {
       {explainPriority && (
         <p className="rounded-lg border border-border-subtle bg-surface p-3 text-xs leading-relaxed text-ink-muted">
           Priority runs from 1 to 50, and lower is preferred, as in Lidarr. Every enabled indexer is
-          searched; when two of them list the same release, the one with the lower number is the one
-          it is downloaded from. Indexers with equal priority are treated alike. New indexers start at 25.
+          searched. When two releases are otherwise equal -- the same quality, score and match -- the one
+          from the indexer with the lower number is grabbed, and when two indexers list the same release
+          it is downloaded from that one. Indexers with equal priority are treated alike. New indexers start at 25.
         </p>
       )}
 
@@ -117,8 +118,8 @@ export function Indexers() {
                     <input
                       type="checkbox"
                       checked={indexer.enabled}
-                      disabled={setEnabled.isPending}
-                      onChange={(event) => setEnabled.mutate({ indexer, enabled: event.target.checked })}
+                      disabled={update.isPending}
+                      onChange={(event) => update.mutate({ indexer, enabled: event.target.checked, priority: indexer.priority })}
                     />
                     enabled
                   </label>
@@ -141,8 +142,13 @@ export function Indexers() {
                   </button>
                 </span>
               </div>
-              <span className="text-xs text-ink-muted">
-                priority {indexer.priority}
+              <span className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
+                <PriorityInput
+                  key={indexer.priority}
+                  value={indexer.priority}
+                  busy={update.isPending}
+                  onSave={(priority) => update.mutate({ indexer, enabled: indexer.enabled, priority })}
+                />
                 {indexer.caps_fetched_at ? ` · capabilities last read ${new Date(indexer.caps_fetched_at).toLocaleString()}` : " · capabilities never read"}
                 {expert && indexer.egress_proxy_url ? ` · FlareSolverr proxy ${indexer.egress_proxy_url}` : ""}
               </span>
@@ -164,7 +170,7 @@ export function Indexers() {
         )
       )}
 
-      {(setEnabled.isError || remove.isError) && (
+      {(update.isError || remove.isError) && (
         <p className="text-xs text-danger">That change was refused.</p>
       )}
 
@@ -462,5 +468,34 @@ function MusicCategories({ indexer, onSaved }: { indexer: Indexer; onSaved: () =
       )}
       {save.isError && <span className="text-danger">Refused.</span>}
     </form>
+  );
+}
+
+/** An indexer's priority, saved when it is left or Enter is pressed; 1 to 50, lower preferred. */
+function PriorityInput({ value, busy, onSave }: { value: number; busy: boolean; onSave: (priority: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+  const commit = () => {
+    const parsed = Math.round(Number(draft));
+    if (Number.isFinite(parsed) && parsed >= 1 && parsed <= 50 && parsed !== value) onSave(parsed);
+    else setDraft(String(value));
+  };
+  return (
+    <label className="flex items-center gap-1">
+      priority
+      <input
+        type="number"
+        min={1}
+        max={50}
+        value={draft}
+        disabled={busy}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+        className="w-12 rounded-md border border-border-subtle bg-canvas px-1 py-0.5 text-xs text-ink
+                   focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      />
+    </label>
   );
 }

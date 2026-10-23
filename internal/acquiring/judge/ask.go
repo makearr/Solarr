@@ -19,10 +19,12 @@ type Searcher interface {
 
 // Conn is one configured, enabled indexer ready to search.
 type Conn struct {
-	ID     int64
-	Name   string
-	Impl   string // "newznab" | "torznab"
-	Client Searcher
+	ID   int64
+	Name string
+	Impl string // "newznab" | "torznab"
+	// Priority is the indexer's, 1 to 50, lower preferred: it breaks ties between otherwise equal releases.
+	Priority int64
+	Client   Searcher
 	// Categories scope every search to the media type's categories; nil asks without one.
 	Categories []int
 	// Params are the search parameters the indexer's caps list for each function ("tvsearch" -> tvdbid, season, ...);
