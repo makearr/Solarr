@@ -142,9 +142,15 @@ func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, er
 	if budget.pausedUntil.After(now) {
 		return budget.pausedUntil.Sub(now), nil
 	}
-	if !budget.lastRequest.IsZero() && budget.limits.MinInterval > 0 {
-		if elapsed := now.Sub(budget.lastRequest); elapsed < budget.limits.MinInterval {
-			return budget.limits.MinInterval - elapsed, nil
+	interval := budget.limits.MinInterval
+	if l.config.LivePace != nil {
+		if pace, own := l.config.LivePace(provider); own {
+			interval = pace
+		}
+	}
+	if !budget.lastRequest.IsZero() && interval > 0 {
+		if elapsed := now.Sub(budget.lastRequest); elapsed < interval {
+			return interval - elapsed, nil
 		}
 	}
 

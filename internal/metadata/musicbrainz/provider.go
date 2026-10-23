@@ -82,9 +82,8 @@ type Provider struct {
 // construction would stay stale until a restart.
 //
 // A source the order does not mention is dropped; a name the order mentions
-// that no source provides is ignored. Direct MusicBrainz is always appended
-// when the order left it out, because something has to answer (ADR-29: the
-// proxies are preferred, never required).
+// that no source provides is ignored. Whether direct MusicBrainz is the
+// fallback is the order's to say: it can be switched off (2026-10-23).
 func (p Provider) orderedSources() []Source {
 	if p.liveOrder == nil {
 		return p.sources
@@ -103,9 +102,6 @@ func (p Provider) orderedSources() []Source {
 			ordered = append(ordered, source)
 			delete(byName, name)
 		}
-	}
-	if fallback, found := byName[DirectName]; found {
-		ordered = append(ordered, fallback)
 	}
 	return ordered
 }

@@ -3004,11 +3004,14 @@ type MetadataProviderInfo struct {
 	// AlsoFor The libraries it serves outside their order.
 	AlsoFor []string `json:"also_for"`
 
-	// CanDisable False for MusicBrainz
+	// CanDisable False for the last music source switched on
 	CanDisable bool `json:"can_disable"`
 
 	// Carries What the provider supplies.
 	Carries []string `json:"carries"`
+
+	// DefaultPerMinute The shipped pace; per_minute differs when a person set their own.
+	DefaultPerMinute int64 `json:"default_per_minute"`
 
 	// Enabled Switched on for every library.
 	Enabled bool   `json:"enabled"`
@@ -3018,11 +3021,20 @@ type MetadataProviderInfo struct {
 	KeyStored bool   `json:"key_stored"`
 	Label     string `json:"label"`
 
+	// MaxPerMinute The most a person may set
+	MaxPerMinute int64 `json:"max_per_minute"`
+
 	// MediaTypes The libraries whose order it takes a place in.
 	MediaTypes []string `json:"media_types"`
 
 	// NeedsKey The provider waits for a key of the owner's own that is not stored yet.
 	NeedsKey bool `json:"needs_key"`
+
+	// PerMinute The pace requests go out at
+	PerMinute int64 `json:"per_minute"`
+
+	// Published What the provider says it can take.
+	Published string `json:"published"`
 }
 
 // MetadataSettings The metadata providers' own settings.
@@ -5053,6 +5065,11 @@ type SetMetadataProviderKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
 }
 
+// SetMetadataProviderPaceJSONBody defines parameters for SetMetadataProviderPace.
+type SetMetadataProviderPaceJSONBody struct {
+	PerMinute int64 `json:"per_minute"`
+}
+
 // SetTheAudioDBAPIKeyJSONBody defines parameters for SetTheAudioDBAPIKey.
 type SetTheAudioDBAPIKeyJSONBody struct {
 	ApiKey *string `json:"api_key,omitempty"`
@@ -5732,6 +5749,9 @@ type SetMetadataProviderEnabledJSONRequestBody SetMetadataProviderEnabledJSONBod
 // SetMetadataProviderKeyJSONRequestBody defines body for SetMetadataProviderKey for application/json ContentType.
 type SetMetadataProviderKeyJSONRequestBody SetMetadataProviderKeyJSONBody
 
+// SetMetadataProviderPaceJSONRequestBody defines body for SetMetadataProviderPace for application/json ContentType.
+type SetMetadataProviderPaceJSONRequestBody SetMetadataProviderPaceJSONBody
+
 // UpdateMetadataSettingsJSONRequestBody defines body for UpdateMetadataSettings for application/json ContentType.
 type UpdateMetadataSettingsJSONRequestBody = MetadataSettings
 
@@ -6301,6 +6321,9 @@ type ServerInterface interface {
 	// Store or clear the owner's key for a provider that takes one. Administrator only.
 	// (PUT /metadata/providers/{key}/apikey)
 	SetMetadataProviderKey(w http.ResponseWriter, r *http.Request, key string)
+	// Set how many requests a minute go to a provider, up to max_per_minute; 0 returns it to the shipped pace. Applies at the next request. Administrator only.
+	// (PUT /metadata/providers/{key}/pace)
+	SetMetadataProviderPace(w http.ResponseWriter, r *http.Request, key string)
 	// The metadata providers' own settings.
 	// (GET /metadata/settings)
 	GetMetadataSettings(w http.ResponseWriter, r *http.Request)
@@ -7543,6 +7566,12 @@ func (_ Unimplemented) SetMetadataProviderEnabled(w http.ResponseWriter, r *http
 // Store or clear the owner's key for a provider that takes one. Administrator only.
 // (PUT /metadata/providers/{key}/apikey)
 func (_ Unimplemented) SetMetadataProviderKey(w http.ResponseWriter, r *http.Request, key string) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set how many requests a minute go to a provider, up to max_per_minute; 0 returns it to the shipped pace. Applies at the next request. Administrator only.
+// (PUT /metadata/providers/{key}/pace)
+func (_ Unimplemented) SetMetadataProviderPace(w http.ResponseWriter, r *http.Request, key string) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12947,6 +12976,39 @@ func (siw *ServerInterfaceWrapper) SetMetadataProviderKey(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// SetMetadataProviderPace operation middleware
+func (siw *ServerInterfaceWrapper) SetMetadataProviderPace(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "key" -------------
+	var key string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "key", chi.URLParam(r, "key"), &key, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "key", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetMetadataProviderPace(w, r, key)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetMetadataSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -17841,6 +17903,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/metadata/providers/{key}/apikey", wrapper.SetMetadataProviderKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/metadata/providers/{key}/pace", wrapper.SetMetadataProviderPace)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/metadata/settings", wrapper.GetMetadataSettings)

@@ -992,6 +992,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/metadata/providers/{key}/pace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set how many requests a minute go to a provider, up to max_per_minute; 0 returns it to the shipped pace. Applies at the next request. Administrator only. */
+        put: operations["setMetadataProviderPace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metadata/settings": {
         parameters: {
             query?: never;
@@ -4590,8 +4609,25 @@ export interface components {
             enabled: boolean;
             /** @description The owner's own key for it is stored. */
             key_stored: boolean;
-            /** @description False for MusicBrainz */
+            /** @description False for the last music source switched on */
             can_disable: boolean;
+            /**
+             * Format: int64
+             * @description The pace requests go out at
+             */
+            per_minute: number;
+            /**
+             * Format: int64
+             * @description The shipped pace; per_minute differs when a person set their own.
+             */
+            default_per_minute: number;
+            /**
+             * Format: int64
+             * @description The most a person may set
+             */
+            max_per_minute: number;
+            /** @description What the provider says it can take. */
+            published: string;
             /** @description The libraries whose order it takes a place in. */
             media_types: string[];
             /** @description The libraries it serves outside their order. */
@@ -9287,6 +9323,36 @@ export interface operations {
         };
         responses: {
             /** @description Switched. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    setMetadataProviderPace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    per_minute: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Set. */
             204: {
                 headers: {
                     [name: string]: unknown;

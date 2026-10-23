@@ -58,17 +58,6 @@ func TestSetMetadataSettings_RejectsAnUnsendableAgent(t *testing.T) {
 
 // Direct MusicBrainz is the one source always reachable; the others are
 // proxies of it, so it can be reordered but never removed.
-func TestSetMetadataSettings_RefusesToRemoveDirectMusicBrainz(t *testing.T) {
-	cache, cl := newCache(t)
-	err := cache.SetMetadataSettings(t.Context(), cl, settings.MetadataSettings{
-		BrainzMashUserAgent: settings.DefaultBrainzMashUserAgent,
-		SourceOrder:         []string{settings.SourceBrainzMash},
-	})
-	if err == nil {
-		t.Fatal("removing direct MusicBrainz was accepted, want a validation error")
-	}
-}
-
 func TestSetMetadataSettings_RefusesAnUnknownOrDuplicateSource(t *testing.T) {
 	cache, cl := newCache(t)
 	for name, order := range map[string][]string{

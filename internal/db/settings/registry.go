@@ -362,6 +362,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  `[]`,
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyMetadataProviderPaces, Kind: KindStringList, Tier: TierAdvanced,
+		Name:     "Metadata provider paces",
+		HelpText: "Requests a minute a person set for a provider, \"provider:pace\" each; the rest keep their shipped pace.",
+		Default:  `[]`,
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyMetadataWikidata, Kind: KindBool, Tier: TierAdvanced,
 		Name:     "Wikidata",
 		HelpText: "Artist photos and biographies from Wikidata and Wikipedia.",

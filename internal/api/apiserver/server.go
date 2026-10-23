@@ -718,6 +718,9 @@ func New(config Config) (*Server, error) {
 			secured.Put("/metadata/providers/{key}", func(w http.ResponseWriter, r *http.Request) {
 				server.SetMetadataProviderEnabled(w, r, chi.URLParam(r, "key"))
 			})
+			secured.Put("/metadata/providers/{key}/pace", func(w http.ResponseWriter, r *http.Request) {
+				server.SetMetadataProviderPace(w, r, chi.URLParam(r, "key"))
+			})
 			secured.Get("/metadata/settings", server.GetMetadataSettings)
 			secured.Patch("/metadata/settings", server.UpdateMetadataSettings)
 			secured.Post("/metadata/acoustid/apikey", server.SetAcoustIDAPIKey)

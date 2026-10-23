@@ -3,8 +3,7 @@ package app
 import (
 	"time"
 
-	"github.com/makearr/Solarr/internal/metadata/acoustid"
-	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -33,36 +32,57 @@ const (
 	providerDownloaderPrefix = "downloader:"
 )
 
-// providerLimits is every provider's pace, declared once (ADR-13). A provider not listed is not paced.
-var providerLimits = map[string]httpx.Limits{
-	// MusicBrainz allows one request per second and means it (ADR-29).
-	musicbrainz.DirectName: {MinInterval: time.Second},
-	// DroppedNeedle's documented 10 req/s for the pool; BrainzMash publishes no quota.
-	musicbrainz.BrainzMashName: {MinInterval: 100 * time.Millisecond},
-	// Lidarr's own service, shared infrastructure this project does not operate.
-	musicbrainz.ProxyName: {MinInterval: 250 * time.Millisecond},
-	// acoustid.org's published 3 requests per second.
-	acoustid.Name: {MinInterval: 334 * time.Millisecond},
-	// Wikidata's action API asks for serial requests; Wikipedia's REST API allows 200/s.
-	providerWikidata:   {MinInterval: time.Second},
-	providerWikipedia:  {MinInterval: 100 * time.Millisecond},
-	providerTheAudioDB: {MinInterval: 500 * time.Millisecond},
+// providerLimits is every provider's pace, declared once (ADR-13): the metadata providers' in settings.MetadataProviders,
+// where a person may set their own, the rest here. A provider not listed is not paced.
+var providerLimits = withMetadataPaces(map[string]httpx.Limits{
+	// Wikipedia's REST API allows 200/s.
+	providerWikipedia: {MinInterval: 100 * time.Millisecond},
 	// Someone's own *Arr server, often busy with its own imports.
-	providerArr:     {MinInterval: 500 * time.Millisecond},
-	providerSkyhook: {MinInterval: 100 * time.Millisecond},
-	// TVmaze publishes 20 calls per 10 seconds.
-	providerTVmaze:  {MinInterval: 500 * time.Millisecond},
-	providerTMDB:    {MinInterval: 25 * time.Millisecond},
-	providerTVDB:    {MinInterval: 50 * time.Millisecond},
-	providerAniList: {MinInterval: 2 * time.Second},
-	// Radarr's own metadata service: shared infrastructure this project does not operate.
-	providerRadarrMeta: {MinInterval: 250 * time.Millisecond},
-	// MDBList's 1,000 reads per five minutes; OMDb's free key 1,000 a day, so it is never hurried; fanart.tv publishes none.
-	providerMDBList: {MinInterval: 300 * time.Millisecond},
-	providerOMDb:    {MinInterval: time.Second},
-	providerFanart:  {MinInterval: 250 * time.Millisecond},
+	providerArr: {MinInterval: 500 * time.Millisecond},
 	// A wall of posters must not starve the metadata calls.
 	providerImages: {MinInterval: 100 * time.Millisecond},
+})
+
+// metadataBuckets names the limiter bucket of a metadata provider whose client is named otherwise.
+var metadataBuckets = map[string]string{settings.MovieSourceRadarr: providerRadarrMeta}
+
+// bucketOf is the limiter bucket a metadata provider's requests go through.
+func bucketOf(key string) string {
+	if bucket, renamed := metadataBuckets[key]; renamed {
+		return bucket
+	}
+	return key
+}
+
+// withMetadataPaces adds every metadata provider's shipped pace to limits.
+func withMetadataPaces(limits map[string]httpx.Limits) map[string]httpx.Limits {
+	for _, provider := range settings.MetadataProviders {
+		if provider.PerMinute > 0 {
+			limits[bucketOf(provider.Key)] = httpx.Limits{MinInterval: paceInterval(provider.PerMinute)}
+		}
+	}
+	return limits
+}
+
+// paceInterval is the gap between requests of a pace in requests a minute.
+func paceInterval(perMinute int64) time.Duration { return time.Minute / time.Duration(perMinute) }
+
+// livePace answers the pace a person set for the metadata provider behind a bucket (user, 2026-10-23).
+func (p *process) livePace(bucket string) (time.Duration, bool) {
+	key := bucket
+	for provider, renamed := range metadataBuckets {
+		if renamed == bucket {
+			key = provider
+		}
+	}
+	if _, known := settings.MetadataProviderByKey(key); !known {
+		return 0, false
+	}
+	perMinute, own := p.cache.Snapshot().ProviderPace(key)
+	if !own || perMinute <= 0 {
+		return 0, false
+	}
+	return paceInterval(perMinute), true
 }
 
 // providerFamilyLimits pace each connection of a kind on its own bucket: a search fans out to every indexer at
@@ -83,7 +103,7 @@ func (p *process) outbound() outbound {
 	p.outboundOnce.Do(func() {
 		wall := clock.NewSystem()
 		p.outboundShared = outbound{
-			limiter: httpx.NewLimiter(wall, httpx.Config{Providers: providerLimits, Prefixes: providerFamilyLimits}, nil),
+			limiter: httpx.NewLimiter(wall, httpx.Config{Providers: providerLimits, Prefixes: providerFamilyLimits, LivePace: p.livePace}, nil),
 			breaker: httpx.NewBreaker(wall, httpx.BreakerConfig{}),
 		}
 	})

@@ -41,7 +41,7 @@ func TestALibraryStartsWithTheProvidersOfItsTypeAndMayReorderThem(t *testing.T) 
 	}
 }
 
-func TestAProviderSwitchedOffIsAskedByNoLibraryAndMusicBrainzStaysOn(t *testing.T) {
+func TestAProviderSwitchedOffIsAskedByNoLibrary(t *testing.T) {
 	cache, fake := newCache(t)
 	movies, err := cache.CreateCategory(t.Context(), "movie", "Movies", 0)
 	if err != nil {
@@ -66,10 +66,62 @@ func TestAProviderSwitchedOffIsAskedByNoLibraryAndMusicBrainzStaysOn(t *testing.
 	if !cache.Snapshot().ProviderEnabled("radarr") {
 		t.Error("switched on again")
 	}
-	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", false); err == nil {
-		t.Error("MusicBrainz always answers, so it cannot be switched off")
-	}
 	if err := cache.SetProviderEnabled(t.Context(), fake, "nonsense", false); err == nil {
 		t.Error("an unknown provider is refused")
+	}
+}
+
+// Direct MusicBrainz can be switched off (user, 2026-10-23), and then is no fallback; the last music source on stays on.
+func TestMusicBrainzCanBeSwitchedOffButNotTheLastMusicSource(t *testing.T) {
+	cache, fake := newCache(t)
+	if got := cache.Snapshot().MusicSourceOrder(); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
+		t.Fatalf("starting order = %v", got)
+	}
+	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", false); err != nil {
+		t.Fatalf("switching MusicBrainz off: %v", err)
+	}
+	if got := cache.Snapshot().MusicSourceOrder(); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy"}) {
+		t.Errorf("order with MusicBrainz off = %v, want it gone, fallback too", got)
+	}
+	if err := cache.SetProviderEnabled(t.Context(), fake, "brainzmash", false); err != nil {
+		t.Fatalf("switching BrainzMash off: %v", err)
+	}
+	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz-proxy", false); err == nil {
+		t.Error("the last music source was switched off")
+	}
+	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", true); err != nil {
+		t.Fatalf("switching MusicBrainz on: %v", err)
+	}
+	if got := cache.Snapshot().MusicSourceOrder(); !slices.Equal(got, []string{"musicbrainz-proxy", "musicbrainz"}) {
+		t.Errorf("order with MusicBrainz back = %v", got)
+	}
+}
+
+// A pace a person sets replaces the shipped one, up to what the provider allows; 0 returns to the shipped pace.
+func TestProviderPaceIsAPersonsUpToTheProvidersLimit(t *testing.T) {
+	cache, fake := newCache(t)
+	if pace, own := cache.Snapshot().ProviderPace("tmdb"); pace != 2400 || own {
+		t.Fatalf("tmdb = %d (own %v), want the shipped 2400", pace, own)
+	}
+	if err := cache.SetProviderPace(t.Context(), fake, "tmdb", 600); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetProviderPace(t.Context(), fake, "musicbrainz", 30); err != nil {
+		t.Fatal(err)
+	}
+	if pace, own := cache.Snapshot().ProviderPace("tmdb"); pace != 600 || !own {
+		t.Errorf("tmdb = %d (own %v), want 600 of the person's", pace, own)
+	}
+	if err := cache.SetProviderPace(t.Context(), fake, "musicbrainz", 61); err == nil {
+		t.Error("MusicBrainz faster than its one a second was accepted")
+	}
+	if err := cache.SetProviderPace(t.Context(), fake, "tmdb", 0); err != nil {
+		t.Fatal(err)
+	}
+	if pace, own := cache.Snapshot().ProviderPace("tmdb"); pace != 2400 || own {
+		t.Errorf("tmdb after 0 = %d (own %v), want the shipped pace", pace, own)
+	}
+	if pace, _ := cache.Snapshot().ProviderPace("musicbrainz"); pace != 30 {
+		t.Errorf("musicbrainz = %d, want its own 30 kept", pace)
 	}
 }

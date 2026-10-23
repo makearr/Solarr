@@ -812,17 +812,14 @@ func TestProvider_LiveOrderOmitsUnlistedSources(t *testing.T) {
 
 // Direct MusicBrainz answers even when an order forgot it: something has to
 // answer, and the others are proxies of it (ADR-29).
-func TestProvider_DirectMusicBrainzIsAlwaysReachable(t *testing.T) {
+// Direct MusicBrainz is asked only where the order names it: switched off, it is left out (user, 2026-10-23).
+func TestProvider_AnOrderWithoutDirectMusicBrainzNeverAsksIt(t *testing.T) {
 	direct := &fakeSource{name: musicbrainz.DirectName, rg: musicbrainz.ReleaseGroup{MBID: "from-direct"}}
 	order := []string{"something-else"}
 	provider := newOrderedProvider(t, &order, direct)
 
-	group, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "", "a")
-	if err != nil {
-		t.Fatalf("Album: %v", err)
-	}
-	if group.MBID != "from-direct" {
-		t.Errorf("MBID = %q, want direct MusicBrainz to answer anyway", group.MBID)
+	if _, _, err := provider.Album(t.Context(), musicbrainz.PriorityEnrich, "", "a"); err == nil || direct.calls != 0 {
+		t.Errorf("Album = %v after %d direct calls; want no source to answer and direct never asked", err, direct.calls)
 	}
 }
 

@@ -43,12 +43,44 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 }
 
 func providerInfo(snapshot *settings.Snapshot, provider settings.MetadataProvider) gen.MetadataProviderInfo {
+	pace, _ := snapshot.ProviderPace(provider.Key)
+	ceiling := provider.MaxPerMinute
+	if ceiling == 0 {
+		ceiling = settings.MaxProviderPerMinute
+	}
 	return gen.MetadataProviderInfo{
 		Key: provider.Key, Label: provider.Label, Carries: provider.Carries, NeedsKey: provider.NeedsKey && !keyStored(snapshot, provider.Key),
-		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: provider.Key != settings.SourceMusicBrainz,
+		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: snapshot.ProviderCanBeSwitchedOff(provider.Key),
 		KeyStored:  snapshot.ProviderKeyStored(provider.Key),
 		MediaTypes: orEmpty(provider.MediaTypes), AlsoFor: orEmpty(provider.AlsoFor),
+		PerMinute: pace, DefaultPerMinute: provider.PerMinute, MaxPerMinute: ceiling, Published: provider.Published,
 	}
+}
+
+// SetMetadataProviderPace sets a provider's pace for every library; the limiter reads it at the next request.
+func (s *Server) SetMetadataProviderPace(w http.ResponseWriter, r *http.Request, key string) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.SetMetadataProviderPaceJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected per_minute")
+		return
+	}
+	if err := s.auth.Registry.LookupAll(settings.KeyMetadataProviderPaces); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if err := s.auth.Settings.SetProviderPace(r.Context(), s.wall, key, body.PerMinute); err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the provider", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // keyStored says the owner's key for a provider that needs one is in place.
@@ -110,7 +142,7 @@ func (s *Server) SetMetadataProviderEnabled(w http.ResponseWriter, r *http.Reque
 	if err := s.auth.Settings.SetProviderEnabled(r.Context(), s.wall, key, body.Enabled); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Error())
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", problems.Report("the provider", "Nothing was changed."))
 			return
 		}
 		writeError(w, s.logger, err)

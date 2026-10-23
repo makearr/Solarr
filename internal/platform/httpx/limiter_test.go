@@ -61,6 +61,41 @@ func TestLimiter_MinIntervalSpacesConsecutiveRequests(t *testing.T) {
 	}
 }
 
+// A pace a person sets replaces the declared interval at the next request, without a restart (2026-10-23).
+func TestLimiter_LivePaceReplacesTheDeclaredInterval(t *testing.T) {
+	pace := 3 * time.Second
+	limiter, fake := newLimiter(httpx.Config{
+		Defaults: httpx.Limits{RequestsPerMinute: 600, MinInterval: time.Second},
+		LivePace: func(provider string) (time.Duration, bool) { return pace, provider == "tmdb" },
+	})
+	release, err := limiter.Acquire(t.Context(), "tmdb")
+	if err != nil {
+		t.Fatalf("first Acquire: %v", err)
+	}
+	release()
+
+	acquired := make(chan error, 1)
+	go func() {
+		release, err := limiter.Acquire(t.Context(), "tmdb")
+		if release != nil {
+			release()
+		}
+		acquired <- err
+	}()
+	fake.BlockUntilWaiters(1)
+	fake.Advance(time.Second)
+	fake.BlockUntilWaiters(1) // the declared second is not enough: it waits out the person's three
+	select {
+	case err := <-acquired:
+		t.Fatalf("second Acquire returned after 1s with %v; the live pace was not used", err)
+	default:
+	}
+	fake.Advance(2 * time.Second)
+	if err := <-acquired; err != nil {
+		t.Fatalf("second Acquire: %v", err)
+	}
+}
+
 // The claim ADR-13 exists to make: three subsystems calling one provider draw from one budget,
 // not three.
 func TestLimiter_SearchRSSAndMetadataShareOneProviderBucket(t *testing.T) {

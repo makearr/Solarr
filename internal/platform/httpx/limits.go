@@ -31,6 +31,9 @@ type Config struct {
 	Providers           map[string]Limits
 	// Prefixes are the limits of a family of providers named "<prefix><id>", one bucket each: "indexer:7".
 	Prefixes map[string]Limits
+	// LivePace answers a provider's MinInterval as a person set it, read at every request so a change applies at once;
+	// false keeps the declared one.
+	LivePace func(provider string) (time.Duration, bool)
 }
 
 // limitsFor is a provider's own limits, else its family's (longest prefix), else none; defaults fill the gaps.

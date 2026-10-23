@@ -1451,6 +1451,30 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /metadata/providers/{key}/pace:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setMetadataProviderPace
+      tags: [settings]
+      summary: >-
+        Set how many requests a minute go to a provider, up to max_per_minute; 0 returns it to the shipped pace.
+        Applies at the next request. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [per_minute]
+              properties:
+                per_minute: { type: integer, format: int64, minimum: 0 }
+      responses:
+        "204": { description: Set. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /metadata/settings:
     get:
       operationId: getMetadataSettings
@@ -7271,7 +7295,7 @@ components:
 
     MetadataProviderInfo:
       type: object
-      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for, key_stored]
+      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for, key_stored, per_minute, default_per_minute, max_per_minute, published]
       properties:
         key: { type: string }
         label: { type: string }
@@ -7279,7 +7303,11 @@ components:
         needs_key: { type: boolean, description: The provider waits for a key of the owner's own that is not stored yet. }
         enabled: { type: boolean, description: Switched on for every library. }
         key_stored: { type: boolean, description: The owner's own key for it is stored. }
-        can_disable: { type: boolean, description: False for MusicBrainz, which always answers. }
+        can_disable: { type: boolean, description: False for the last music source switched on, which every music lookup needs. }
+        per_minute: { type: integer, format: int64, description: The pace requests go out at, a minute; 0 is not paced. }
+        default_per_minute: { type: integer, format: int64, description: The shipped pace; per_minute differs when a person set their own. }
+        max_per_minute: { type: integer, format: int64, description: The most a person may set, the provider's published limit where it has one. }
+        published: { type: string, description: What the provider says it can take. }
         media_types: { type: array, items: { type: string }, description: The libraries whose order it takes a place in. }
         also_for: { type: array, items: { type: string }, description: The libraries it serves outside their order. }
 

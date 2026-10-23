@@ -5,7 +5,15 @@ library asks its providers in its own order (the library's Settings, Metadata): 
 supplies it, each later one only fills what the earlier ones left empty, and a provider left out is not asked. A
 library starts with the providers that suit its type and kind, Wikidata first (anime then asks AniList). Settings,
 Metadata is one overview: every provider, the libraries it serves, its key, and a switch that takes it out of every
-library's order. Music is looked up once for every music library, in the first music library's order.
+library's order. Music is looked up once for every music library, in the first music library's order, with direct
+MusicBrainz after it while MusicBrainz is switched on; any of BrainzMash, Lidarr's service and MusicBrainz may be switched
+off, but not the last of them.
+
+**Pace.** Each provider shows what it publishes it can take and the pace Solarr asks it at (`settings.MetadataProviders`,
+the one declaration: `PerMinute`, `MaxPerMinute`, `Published`). A person may set their own, a second or a minute, up to the
+provider's published limit where it has one (MusicBrainz 1 a second, AcoustID 3, TVmaze 20 per 10 s, AniList 90 a
+minute, MDBList 200); it is stored as `metadata.provider_paces` and read by the shared limiter at every request
+(`httpx.Config.LivePace`), so it applies without a restart.
 
 **Wikidata steers the others.** Before the other providers are asked, the ids Wikidata's item records for the work
 (TheTVDB, TMDB, IMDb, TVmaze, AniList for a series; TMDB, IMDb for a film) fill in what is missing; first in the order,

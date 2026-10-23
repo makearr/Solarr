@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -52,26 +53,99 @@ type MetadataProvider struct {
 	Carries []string
 	// NeedsKey says the provider wants a key of the owner's own before it answers.
 	NeedsKey bool
+	// PerMinute is the shipped pace, requests a minute; 0 is not paced. A person may set their own (ProviderPace).
+	PerMinute int64
+	// MaxPerMinute is the most the provider allows, where it publishes a limit; 0 is MaxProviderPerMinute.
+	MaxPerMinute int64
+	// Published is what the provider says it can take, in the words a person reads.
+	Published string
 }
+
+// MaxProviderPerMinute bounds a pace no provider limits: 100 a second.
+const MaxProviderPerMinute = 6000
+
+// KeyMetadataProviderPaces holds the paces a person set, "provider:requests-per-minute" each.
+const KeyMetadataProviderPaces = "metadata.provider_paces"
 
 // MetadataProviders are the providers a library's order is made of.
 var MetadataProviders = []MetadataProvider{
-	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"}},
-	{Key: SourceBrainzMash, Label: "BrainzMash", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"}},
-	{Key: SourceLidarrProxy, Label: "Lidarr's metadata service", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "genres", "images", "links"}},
-	{Key: SourceMusicBrainz, Label: "MusicBrainz", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"}},
-	{Key: TVSourceSkyhook, Label: "Sonarr's SkyHook", MediaTypes: []string{"tv"}, Carries: []string{"series", "seasons", "episodes", "air dates", "images", "ids"}},
-	{Key: TVSourceTMDB, Label: "TMDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"overview", "cast and crew", "guest stars", "images", "certification", "networks and studios", "collections", "ids"}, NeedsKey: true},
-	{Key: TVSourceTVDB, Label: "TheTVDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"series", "episodes", "other orderings", "images", "cast", "ids"}},
-	{Key: TVSourceTVmaze, Label: "TVmaze", MediaTypes: []string{"tv"}, Carries: []string{"air times and time zones", "networks", "cast", "images"}},
-	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"}},
-	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"}},
-	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true},
-	{Key: MovieSourceOMDb, Label: "OMDb", MediaTypes: []string{"movie"}, Carries: []string{"IMDb, Rotten Tomatoes and Metacritic ratings", "English plots"}, NeedsKey: true},
-	{Key: MovieSourceFanart, Label: "fanart.tv", MediaTypes: []string{"movie"}, Carries: []string{"clear logos", "clear art", "disc art", "banners", "backgrounds"}, NeedsKey: true},
-	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"}},
-	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"}},
-	{Key: SourceAcoustID, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true},
+	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
+		PerMinute: 60, Published: "one request at a time; no rate published"},
+	{Key: SourceBrainzMash, Label: "BrainzMash", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"},
+		PerMinute: 600, Published: "none published (its DroppedNeedle pool documents 10 a second)"},
+	{Key: SourceLidarrProxy, Label: "Lidarr's metadata service", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "genres", "images", "links"},
+		PerMinute: 240, Published: "none published; shared by every Lidarr"},
+	{Key: SourceMusicBrainz, Label: "MusicBrainz", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"},
+		PerMinute: 60, MaxPerMinute: 60, Published: "1 a second; faster gets the address blocked"},
+	{Key: TVSourceSkyhook, Label: "Sonarr's SkyHook", MediaTypes: []string{"tv"}, Carries: []string{"series", "seasons", "episodes", "air dates", "images", "ids"},
+		PerMinute: 600, Published: "none published; shared by every Sonarr"},
+	{Key: TVSourceTMDB, Label: "TMDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"overview", "cast and crew", "guest stars", "images", "certification", "networks and studios", "collections", "ids"}, NeedsKey: true,
+		PerMinute: 2400, Published: "no fixed limit; it throttles at around 40 a second"},
+	{Key: TVSourceTVDB, Label: "TheTVDB", MediaTypes: []string{"tv", "movie"}, Carries: []string{"series", "episodes", "other orderings", "images", "cast", "ids"},
+		PerMinute: 1200, Published: "none published"},
+	{Key: TVSourceTVmaze, Label: "TVmaze", MediaTypes: []string{"tv"}, Carries: []string{"air times and time zones", "networks", "cast", "images"},
+		PerMinute: 120, MaxPerMinute: 120, Published: "20 every 10 seconds"},
+	{Key: TVSourceAniList, Label: "AniList", MediaTypes: []string{"tv"}, Carries: []string{"anime titles in every language", "cours", "relations", "genres", "images"},
+		PerMinute: 30, MaxPerMinute: 90, Published: "90 a minute, 30 while it runs degraded"},
+	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"},
+		PerMinute: 240, Published: "none published; shared by every Radarr"},
+	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true,
+		PerMinute: 200, MaxPerMinute: 200, Published: "1,000 every five minutes"},
+	{Key: MovieSourceOMDb, Label: "OMDb", MediaTypes: []string{"movie"}, Carries: []string{"IMDb, Rotten Tomatoes and Metacritic ratings", "English plots"}, NeedsKey: true,
+		PerMinute: 60, Published: "1,000 a day on a free key"},
+	{Key: MovieSourceFanart, Label: "fanart.tv", MediaTypes: []string{"movie"}, Carries: []string{"clear logos", "clear art", "disc art", "banners", "backgrounds"}, NeedsKey: true,
+		PerMinute: 240, Published: "none published"},
+	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"},
+		PerMinute: 120, Published: "none published for the free key"},
+	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},
+		Published: "none published; served by the Internet Archive"},
+	{Key: SourceAcoustID, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true,
+		PerMinute: 180, MaxPerMinute: 180, Published: "3 a second"},
+}
+
+// musicSources are the music providers of which at least one must stay on: every music lookup asks one of them.
+var musicSources = []string{SourceBrainzMash, SourceLidarrProxy, SourceMusicBrainz}
+
+// ProviderPace is a provider's pace in requests a minute, a person's own where set, else the shipped one; 0 is not paced.
+func (s *Snapshot) ProviderPace(key string) (perMinute int64, own bool) {
+	for _, entry := range s.policyStringList(KeyMetadataProviderPaces) {
+		name, value, found := strings.Cut(entry, ":")
+		if !found || name != key {
+			continue
+		}
+		if parsed, err := strconv.ParseInt(value, 10, 64); err == nil && parsed > 0 {
+			return parsed, true
+		}
+	}
+	provider, _ := MetadataProviderByKey(key)
+	return provider.PerMinute, false
+}
+
+// SetProviderPace sets a provider's pace in requests a minute, up to what it allows; 0 returns it to the shipped pace.
+func (c *Cache) SetProviderPace(ctx context.Context, cl clock.Clock, key string, perMinute int64) error {
+	provider, known := MetadataProviderByKey(key)
+	if !known {
+		return config.Problems{{Path: "provider", Value: key, Expectation: "a metadata provider"}}
+	}
+	ceiling := provider.MaxPerMinute
+	if ceiling == 0 {
+		ceiling = MaxProviderPerMinute
+	}
+	if perMinute < 0 || perMinute > ceiling {
+		return config.Problems{{Path: "per_minute", Value: strconv.FormatInt(perMinute, 10),
+			Expectation: fmt.Sprintf("0 (the shipped pace) to %d, the most %s allows", ceiling, provider.Label)}}
+	}
+	entries := slices.DeleteFunc(slices.Clone(c.Snapshot().policyStringList(KeyMetadataProviderPaces)), func(entry string) bool {
+		return strings.HasPrefix(entry, key+":")
+	})
+	if perMinute > 0 {
+		entries = append(entries, key+":"+strconv.FormatInt(perMinute, 10))
+	}
+	encoded, err := json.Marshal(entries)
+	if err != nil {
+		return err
+	}
+	return c.setPolicy(ctx, cl, KeyMetadataProviderPaces, string(encoded))
 }
 
 // MetadataProviderByKey finds a provider by its key.
@@ -94,10 +168,15 @@ func (s *Snapshot) ProviderEnabled(key string) bool {
 	return !slices.Contains(s.policyStringList(KeyMetadataDisabledProviders), key)
 }
 
-// SetProviderEnabled switches a provider on or off for every library; MusicBrainz, which always answers, stays on.
+// SetProviderEnabled switches a provider on or off for every library; the last music source on stays on, since every music
+// lookup needs one (direct MusicBrainz too may go, user 2026-10-23).
 func (c *Cache) SetProviderEnabled(ctx context.Context, cl clock.Clock, key string, enabled bool) error {
-	if _, known := MetadataProviderByKey(key); !known || key == SourceMusicBrainz {
-		return config.Problems{{Path: "provider", Value: key, Expectation: "a metadata provider that can be switched off"}}
+	if _, known := MetadataProviderByKey(key); !known {
+		return config.Problems{{Path: "provider", Value: key, Expectation: "a metadata provider"}}
+	}
+	if !enabled && slices.Contains(musicSources, key) && !c.Snapshot().anotherMusicSourceOn(key) {
+		return config.Problems{{Path: "provider", Value: key,
+			Expectation: "one of BrainzMash, Lidarr's metadata service and MusicBrainz switched on: music is looked up in one of them"}}
 	}
 	if setting, own := switchedBy[key]; own {
 		return c.setPolicy(ctx, cl, setting, strconv.FormatBool(enabled))
@@ -111,6 +190,16 @@ func (c *Cache) SetProviderEnabled(ctx context.Context, cl clock.Clock, key stri
 		return err
 	}
 	return c.setPolicy(ctx, cl, KeyMetadataDisabledProviders, string(encoded))
+}
+
+// ProviderCanBeSwitchedOff says switching key off leaves a music source on; every provider but the last of those can go.
+func (s *Snapshot) ProviderCanBeSwitchedOff(key string) bool {
+	return !slices.Contains(musicSources, key) || !s.ProviderEnabled(key) || s.anotherMusicSourceOn(key)
+}
+
+// anotherMusicSourceOn says a music source other than key is switched on.
+func (s *Snapshot) anotherMusicSourceOn(key string) bool {
+	return slices.ContainsFunc(musicSources, func(source string) bool { return source != key && s.ProviderEnabled(source) })
 }
 
 // MetadataProvidersFor lists the providers that apply to a media type.
@@ -154,12 +243,16 @@ func (s *Snapshot) MetadataSourcesFor(category Category) []string {
 // MusicSourceOrder is the order music lookups are asked in, the first music library's: lookups are made once for every
 // library, so one order rules them.
 func (s *Snapshot) MusicSourceOrder() []string {
-	for _, category := range s.Categories() {
-		if category.MediaType == "music" {
-			return s.MetadataSourcesFor(category)
-		}
+	library := Category{MediaType: "music"}
+	if index := slices.IndexFunc(s.Categories(), func(category Category) bool { return category.MediaType == "music" }); index >= 0 {
+		library = s.Categories()[index]
 	}
-	return s.MetadataSourcesFor(Category{MediaType: "music"})
+	order := s.MetadataSourcesFor(library)
+	// Direct MusicBrainz, while switched on, answers after the library's own order (ADR-29).
+	if s.ProviderEnabled(SourceMusicBrainz) && !slices.Contains(order, SourceMusicBrainz) {
+		order = append(order, SourceMusicBrainz)
+	}
+	return order
 }
 
 func validSourceFor(mediaType, source string) bool {

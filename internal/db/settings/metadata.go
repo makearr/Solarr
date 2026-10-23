@@ -123,8 +123,8 @@ func validTVSource(name string) bool {
 type MetadataSettings struct {
 	BrainzMashUserAgent string
 	// SourceOrder is the order sources are tried. A source left out is not
-	// consulted at all -- except direct MusicBrainz, which the provider always
-	// falls back to, since something has to answer (ADR-29). Empty on a write
+	// consulted at all -- except direct MusicBrainz while it is switched on,
+	// the fallback after the others (ADR-29). Empty on a write
 	// means "leave the stored order alone", so a caller changing only the
 	// agent need not restate it -- the same convention SubscriptionFilters
 	// already uses for an unset field.
@@ -251,13 +251,6 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 
 func validateMetadataSettings(ms MetadataSettings) config.Problems {
 	var problems config.Problems
-	if len(ms.SourceOrder) > 0 && !slices.Contains(ms.SourceOrder, SourceMusicBrainz) {
-		// Direct MusicBrainz can be reordered but not removed: it is the one
-		// source that is always reachable, and the others are proxies of it.
-		problems = append(problems, config.Problem{
-			Path: KeyMetadataSourceOrder, Expectation: "direct MusicBrainz cannot be removed, only reordered",
-		})
-	}
 	seen := make(map[string]bool, len(ms.SourceOrder))
 	for _, name := range ms.SourceOrder {
 		if !ValidMetadataSource(name) {

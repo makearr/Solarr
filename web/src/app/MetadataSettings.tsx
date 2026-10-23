@@ -6,6 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { useMetadataSettings } from "@/lib/resources";
+import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { Card, Toggle } from "./SettingsCard";
 
@@ -24,7 +25,9 @@ const NOTES: Record<string, string> = {
     "A third-party service, not run by this project and not by MusicBrainz. Artist and album searches from your library are " +
     "sent to it, and its operator can see them. It is fast and answers more than direct MusicBrainz.",
   "musicbrainz-proxy": "The Servarr project's own MusicBrainz proxy. Searches reach it rather than MusicBrainz directly.",
-  musicbrainz: "The upstream database the others proxy: one request a second, but it always answers, so it stays on.",
+  musicbrainz:
+    "The upstream database the others proxy: one request a second. While on, it answers after the library's own order; switched off, " +
+    "only BrainzMash or Lidarr's service is asked, and one of the three stays on.",
   skyhook: "Sonarr's own service: series, seasons, episodes and their numbering, as Sonarr has them. No key.",
   tmdb: "Cast, crew, guest stars, artwork, certifications, studios and collections, for series and films. Free, needs your own key.",
   tvdb: "Episodes in TheTVDB's other orderings (DVD, absolute) and its artwork. Works with Solarr's own key.",
@@ -186,15 +189,24 @@ function ProviderRow({
         <span className="min-w-0 flex-1 truncate text-xs text-ink-muted" title={provider.carries.join(", ")}>
           {provider.carries.join(", ")}
         </span>
+        {provider.per_minute > 0 && (
+          <span className="text-xs tabular-nums text-ink-muted" title={`Published: ${provider.published}`}>
+            {formatPace(provider.per_minute)}
+            {provider.per_minute !== provider.default_per_minute && " (yours)"}
+          </span>
+        )}
         {provider.can_disable ? (
           <Toggle label={provider.enabled ? "On" : "Off"} checked={provider.enabled} disabled={busy} onChange={onSwitch} />
         ) : (
-          <span className="text-xs text-ink-muted">always on</span>
+          <span className="text-xs text-ink-muted" title="Every music lookup asks one of BrainzMash, Lidarr's service and MusicBrainz">
+            last music source on
+          </span>
         )}
       </div>
       {open && (
         <div className="flex flex-col gap-3 pl-1">
           {NOTES[provider.key] && <p className="max-w-2xl text-xs text-ink-muted">{NOTES[provider.key]}</p>}
+          <PaceForm key={provider.per_minute} provider={provider} />
           {KEY_SIGNUP[provider.key] ? (
             <GenericKeyForm provider={provider} />
           ) : (
@@ -203,6 +215,71 @@ function ProviderRow({
         </div>
       )}
     </li>
+  );
+}
+
+/** Requests a minute as a person reads them: a second's worth when that is whole, else a minute's. */
+function formatPace(perMinute: number): string {
+  return perMinute % 60 === 0 ? `${perMinute / 60}/s` : `${perMinute}/min`;
+}
+
+/** How fast Solarr asks a provider: what it publishes, the shipped pace, and the person's own, a second or a minute. */
+function PaceForm({ provider }: { provider: Provider }) {
+  const queryClient = useQueryClient();
+  const [unit, setUnit] = useState<"second" | "minute">(provider.per_minute % 60 === 0 ? "second" : "minute");
+  const [draft, setDraft] = useState(String(unit === "second" ? provider.per_minute / 60 : provider.per_minute));
+  const save = useMutation({
+    mutationFn: async (perMinute: number) => {
+      await ok(api.PUT("/metadata/providers/{key}/pace", { params: { path: { key: provider.key } }, body: { per_minute: perMinute } }));
+    },
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["metadata-providers"] }),
+  });
+  const perMinute = Math.round(Number(draft) * (unit === "second" ? 60 : 1));
+  const valid = Number.isFinite(perMinute) && perMinute >= 1 && perMinute <= provider.max_per_minute;
+  return (
+    <div className="flex flex-col gap-1.5 text-xs">
+      <span className="text-ink-muted">
+        It can take: {provider.published}. Solarr ships{" "}
+        {provider.default_per_minute > 0 ? formatPace(provider.default_per_minute) : "no limit"}
+        {provider.max_per_minute < 6000 && `, and allows at most ${formatPace(provider.max_per_minute)}`}.
+      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-1.5 text-ink-muted">
+          Requests
+          <input
+            type="number"
+            min={0}
+            step="any"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            className={`${inputStyle} w-24`}
+          />
+        </label>
+        <select
+          aria-label="Per"
+          value={unit}
+          onChange={(event) => {
+            const next = event.target.value as "second" | "minute";
+            setDraft(String(next === "second" ? perMinute / 60 : perMinute));
+            setUnit(next);
+          }}
+          className={inputStyle}
+        >
+          <option value="second">a second</option>
+          <option value="minute">a minute</option>
+        </select>
+        <Button busy={save.isPending} disabled={!valid || perMinute === provider.per_minute} onClick={() => save.mutate(perMinute)}>
+          Save
+        </Button>
+        {provider.per_minute !== provider.default_per_minute && (
+          <Button variant="ghost" disabled={save.isPending} onClick={() => save.mutate(0)}>
+            Back to {provider.default_per_minute > 0 ? formatPace(provider.default_per_minute) : "no limit"}
+          </Button>
+        )}
+      </div>
+      {!valid && draft !== "" && <p className="text-warn">Between 1 a minute and {formatPace(provider.max_per_minute)}.</p>}
+      {save.isError && <p className="text-danger">{(save.error as { detail?: string }).detail ?? "That pace was refused."}</p>}
+    </div>
   );
 }
 
