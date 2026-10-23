@@ -10818,6 +10818,7 @@ export interface operations {
                 q: string;
                 /** @description One of the type's add_kinds; the first when absent. */
                 kind?: string;
+                /** @description The Add page's More asks again with a larger one. */
                 limit?: number;
             };
             header?: never;

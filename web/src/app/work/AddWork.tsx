@@ -20,9 +20,13 @@ import { useDebouncedValue } from "../useDebouncedValue";
 import { IncompleteDiscographies } from "./IncompleteDiscographies";
 
 type Candidate = components["schemas"]["AddCandidate"];
+type LibraryEntry = components["schemas"]["Library"];
 
 // Mirrors library.ErrQueryTooShort's floor (section 21.5).
-const MINIMUM_QUERY_LENGTH = 2;
+export const MINIMUM_QUERY_LENGTH = 2;
+// What a lookup asks for at first and what each More adds, up to the API's ceiling.
+export const LOOKUP_PAGE = 20;
+export const MAXIMUM_LOOKUP = 100;
 
 /** Adding to a library (ADR-56's per-library half), Sonarr's and Lidarr's Add New: look the type's sources up for one
  *  of the things it adds, and add one with its monitoring, profile and a search. */
@@ -36,14 +40,16 @@ export function AddWork() {
   const [chosenKind, setKind] = useState(opened.kind);
   const kind = kinds.find((entry) => entry.key === chosenKind)?.key ?? kinds[0]?.key;
   const [open, setOpen] = useState<string>();
+  const [limit, setLimit] = useState(LOOKUP_PAGE);
   const debounced = useDebouncedValue(query.trim(), 300);
   const searchable = debounced.length >= MINIMUM_QUERY_LENGTH && kind !== undefined;
 
   const results = useQuery({
-    queryKey: ["work-lookup", categoryId, kind, debounced],
+    queryKey: ["work-lookup", Number(categoryId), kind, debounced, limit],
     enabled: searchable,
+    placeholderData: (previous) => previous,
     queryFn: () => ok(api.GET("/works/lookup", {
-      params: { query: { category_id: Number(categoryId), q: debounced, kind, limit: 20 } },
+      params: { query: { category_id: Number(categoryId), q: debounced, kind, limit } },
     })),
   });
 
@@ -56,7 +62,7 @@ export function AddWork() {
         {kinds.length > 1 && (
           <div className="ml-auto flex gap-1" role="group" aria-label="What to look for">
             {kinds.map((entry) => (
-              <Button key={entry.key} variant={entry.key === kind ? "primary" : "secondary"} aria-pressed={entry.key === kind} onClick={() => setKind(entry.key)}>
+              <Button key={entry.key} variant={entry.key === kind ? "primary" : "secondary"} aria-pressed={entry.key === kind} onClick={() => { setKind(entry.key); setLimit(LOOKUP_PAGE); }}>
                 {entry.label}
               </Button>
             ))}
@@ -69,7 +75,10 @@ export function AddWork() {
           autoFocus
           type="search"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setLimit(LOOKUP_PAGE);
+          }}
           placeholder={`Search for ${kindLabel || "something to add"}…`}
           aria-label={`Search for ${kindLabel}`}
           className="w-full rounded-md border border-border-subtle bg-surface py-2 pl-9 pr-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -77,7 +86,7 @@ export function AddWork() {
       </label>
       {query.trim().length === 0 && info.roles.some((role) => role.lead) && <IncompleteDiscographies categoryId={Number(categoryId)} />}
       {query.trim().length > 0 && debounced.length < MINIMUM_QUERY_LENGTH && <p className="text-sm text-ink-muted">Keep typing: at least two characters.</p>}
-      {searchable && results.isFetching && <p className="text-sm text-ink-muted">Searching…</p>}
+      {searchable && results.isFetching && !results.data && <p className="text-sm text-ink-muted">Searching…</p>}
       {searchable && results.isError && (
         <p className="text-sm text-danger">{(results.error as { detail?: string }).detail ?? "The metadata sources could not be reached. Try again in a moment."}</p>
       )}
@@ -97,19 +106,29 @@ export function AddWork() {
           );
         })}
       </ul>
+      {searchable && limit < MAXIMUM_LOOKUP && (results.data?.length ?? 0) >= limit && (
+        <div className="flex justify-center">
+          <Button busy={results.isFetching} busyLabel="Searching…" onClick={() => setLimit(limit + LOOKUP_PAGE)}>
+            More
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
 
-function CandidateCard({
+/** One found candidate and its Add panel; `libraries` offers a choice where several hold its type. */
+export function CandidateCard({
   candidate,
   categoryId,
+  libraries,
   info,
   open,
   onToggle,
 }: {
   candidate: Candidate;
   categoryId: string;
+  libraries?: readonly LibraryEntry[];
   info: MediaTypeInfo;
   open: boolean;
   onToggle: () => void;
@@ -150,7 +169,9 @@ function CandidateCard({
           </div>
         </div>
       </div>
-      {open && held === undefined && <AddPanel candidate={candidate} categoryId={categoryId} info={info} person={person} onAdded={setAdded} />}
+      {open && held === undefined && (
+        <AddPanel candidate={candidate} categoryId={categoryId} libraries={libraries} info={info} person={person} onAdded={setAdded} />
+      )}
     </li>
   );
 }
@@ -158,18 +179,21 @@ function CandidateCard({
 /** The add dialog's choices: monitoring (a monitor option where the type has them), the quality profile, the search. */
 function AddPanel({
   candidate,
-  categoryId,
+  categoryId: firstCategoryId,
+  libraries,
   info,
   person,
   onAdded,
 }: {
   candidate: Candidate;
   categoryId: string;
+  libraries?: readonly LibraryEntry[];
   info: MediaTypeInfo;
   person: boolean;
   onAdded: (result: components["schemas"]["AddWorkResult"]) => void;
 }) {
   const queryClient = useQueryClient();
+  const [categoryId, setCategoryId] = useState(firstCategoryId);
   const words = vocabularyOf(info);
   const options = info.monitor_options;
   const [monitored, setMonitored] = useState(true);
@@ -205,6 +229,18 @@ function AddPanel({
   const field = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-sm";
   return (
     <div className="mt-3 flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-sm">
+      {libraries && libraries.length > 1 && (
+        <label className="flex flex-wrap items-center gap-2">
+          <span className="w-24 text-xs text-ink-muted">Library</span>
+          <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={field}>
+            {libraries.map((library) => (
+              <option key={library.id} value={String(library.id)}>
+                {library.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
       {options.length > 0 ? (
         <label className="flex flex-wrap items-center gap-2">
           <span className="w-24 text-xs text-ink-muted">Monitor</span>

@@ -56,8 +56,7 @@ export function Dashboard() {
           <div className="flex flex-wrap gap-2">
             {firstLibrary && (
               <Link
-                to="/library/$categoryId/discover"
-                params={{ categoryId: String(firstLibrary.id) }}
+                to="/add"
                 className="flex items-center gap-1.5 rounded-md bg-accent px-4 py-2 text-sm text-accent-ink
                            focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
               >

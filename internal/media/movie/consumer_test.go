@@ -38,7 +38,7 @@ func (b byTitle) Movie(_ context.Context, id int64) (tmdb.Movie, error) {
 	}
 	return tmdb.Movie{}, tmdb.ErrNotFound
 }
-func (b byTitle) SearchMovies(_ context.Context, _ string, _ int) ([]tmdb.MovieHit, error) {
+func (b byTitle) SearchMovies(_ context.Context, _ string, _, _ int) ([]tmdb.MovieHit, error) {
 	var hits []tmdb.MovieHit
 	for _, movie := range b.movies {
 		hits = append(hits, tmdb.MovieHit{ID: movie.ID, Title: movie.Title, ReleaseDate: movie.ReleaseDate})

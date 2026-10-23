@@ -5409,8 +5409,10 @@ type LookupWorksParams struct {
 	Q string `form:"q" json:"q"`
 
 	// Kind One of the type's add_kinds; the first when absent.
-	Kind  *string `form:"kind,omitempty" json:"kind,omitempty"`
-	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+	Kind *string `form:"kind,omitempty" json:"kind,omitempty"`
+
+	// Limit The Add page's More asks again with a larger one.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetWorkArtworkParams defines parameters for GetWorkArtwork.

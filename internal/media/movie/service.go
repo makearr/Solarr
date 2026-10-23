@@ -29,7 +29,7 @@ var ErrNoSource = errors.New("movie: no metadata source answered")
 type TMDBSource interface {
 	Configured() bool
 	Movie(ctx context.Context, id int64) (tmdb.Movie, error)
-	SearchMovies(ctx context.Context, term string, year int) ([]tmdb.MovieHit, error)
+	SearchMovies(ctx context.Context, term string, year, page int) ([]tmdb.MovieHit, error)
 	FindMovieByIMDb(ctx context.Context, imdbID string) (tmdb.MovieHit, error)
 	Collection(ctx context.Context, id int64) (tmdb.CollectionDetail, error)
 }
@@ -306,7 +306,7 @@ func (s Service) Search(ctx context.Context, term string, year, limit int) ([]Ca
 	}
 	var failure error
 	if s.TMDB != nil && s.TMDB.Configured() {
-		hits, err := s.TMDB.SearchMovies(ctx, term, year)
+		hits, err := s.searchTMDB(ctx, term, year, limit)
 		if err == nil {
 			candidates := make([]Candidate, 0, len(hits))
 			for _, hit := range hits {
@@ -344,6 +344,25 @@ func posterOf(images []radarrmeta.Image) string {
 		}
 	}
 	return ""
+}
+
+// searchTMDB reads as many of TMDB's 20-hit pages as the limit needs, stopping at a short page.
+func (s Service) searchTMDB(ctx context.Context, term string, year, limit int) ([]tmdb.MovieHit, error) {
+	var hits []tmdb.MovieHit
+	for page := 1; page == 1 || len(hits) < limit; page++ {
+		found, err := s.TMDB.SearchMovies(ctx, term, year, page)
+		if err != nil {
+			if page > 1 {
+				return hits, nil
+			}
+			return nil, err
+		}
+		hits = append(hits, found...)
+		if len(found) < tmdb.SearchPageSize {
+			break
+		}
+	}
+	return hits, nil
 }
 
 func capped(candidates []Candidate, limit int) []Candidate {

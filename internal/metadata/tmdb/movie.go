@@ -177,12 +177,15 @@ type MovieHit struct {
 	OriginalLanguage string `json:"original_language"`
 }
 
-// SearchMovies finds films by name, narrowed to a release year when one is given.
-func (c Client) SearchMovies(ctx context.Context, term string, year int) ([]MovieHit, error) {
+// SearchPageSize is how many hits TMDB answers per search page.
+const SearchPageSize = 20
+
+// SearchMovies finds films by name, narrowed to a release year when one is given; page counts from 1.
+func (c Client) SearchMovies(ctx context.Context, term string, year, page int) ([]MovieHit, error) {
 	var answer struct {
 		Results []MovieHit `json:"results"`
 	}
-	query := url.Values{"query": {term}}
+	query := url.Values{"query": {term}, "page": {strconv.Itoa(max(page, 1))}}
 	if year > 0 {
 		query.Set("year", strconv.Itoa(year))
 	}

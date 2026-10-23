@@ -54,6 +54,7 @@ import { Shell } from "./Shell";
 import { defaultLevelKey } from "./Sidebar";
 import { Unidentified } from "./Unidentified";
 import { UserSettings } from "./Users";
+import { AddAnywhere } from "./work/AddAnywhere";
 import { AddWork } from "./work/AddWork";
 import { WantedPage } from "./work/WantedPage";
 import { UnidentifiedReview } from "./UnidentifiedReview";
@@ -170,6 +171,7 @@ const routes = [
   // Registered ahead of the $level catch-all below, or these would each
   // resolve as an (invalid) level key instead of their own screen.
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/collections/$franchiseId", component: CollectionPage }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/add", component: AddAnywhere }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/discover", component: AddWork }),
   createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/add", component: AddWork }),
   // Overview removed 2026-09-13 (the user's own word: it showed nothing the

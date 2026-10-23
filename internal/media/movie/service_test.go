@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -55,7 +56,7 @@ func (f fakeTMDB) Configured() bool { return f.configured }
 func (f fakeTMDB) Movie(context.Context, int64) (tmdb.Movie, error) {
 	return f.movie, f.err
 }
-func (f fakeTMDB) SearchMovies(context.Context, string, int) ([]tmdb.MovieHit, error) {
+func (f fakeTMDB) SearchMovies(context.Context, string, int, int) ([]tmdb.MovieHit, error) {
 	return []tmdb.MovieHit{{ID: f.movie.ID, Title: f.movie.Title, ReleaseDate: f.movie.ReleaseDate}}, f.err
 }
 func (f fakeTMDB) FindMovieByIMDb(context.Context, string) (tmdb.MovieHit, error) {
@@ -229,5 +230,46 @@ func TestALibrarysOrderDecidesWhoSuppliesAndWhoOnlyFills(t *testing.T) {
 	onlyRadarr, _ := service.FetchFor(t.Context(), 3, movie.IDs{TMDB: 603})
 	if onlyRadarr.Title != "Example (other)" || len(onlyRadarr.Sources) != 1 {
 		t.Errorf("only radarr: %+v", onlyRadarr)
+	}
+}
+
+// pagedTMDB answers `total` hits in TMDB's pages of 20, recording which pages were asked for.
+type pagedTMDB struct {
+	fakeTMDB
+	total int
+	pages *[]int
+}
+
+func (f pagedTMDB) SearchMovies(_ context.Context, _ string, _, page int) ([]tmdb.MovieHit, error) {
+	*f.pages = append(*f.pages, page)
+	var hits []tmdb.MovieHit
+	for index := (page - 1) * tmdb.SearchPageSize; index < min(page*tmdb.SearchPageSize, f.total); index++ {
+		hits = append(hits, tmdb.MovieHit{ID: int64(index + 1)})
+	}
+	return hits, nil
+}
+
+// The Add page's More asks for a larger limit: TMDB's pages are read until it is met or a page runs short.
+func TestSearchReadsAsManyTMDBPagesAsTheLimitNeeds(t *testing.T) {
+	for _, test := range []struct {
+		total, limit int
+		wantPages    []int
+		wantHits     int
+	}{
+		{total: 45, limit: 20, wantPages: []int{1}, wantHits: 20},
+		{total: 45, limit: 40, wantPages: []int{1, 2}, wantHits: 40},
+		{total: 45, limit: 100, wantPages: []int{1, 2, 3}, wantHits: 45},
+		{total: 5, limit: 60, wantPages: []int{1}, wantHits: 5},
+	} {
+		var pages []int
+		service := movie.Service{TMDB: pagedTMDB{fakeTMDB: fakeTMDB{configured: true}, total: test.total, pages: &pages}}
+		found, err := service.Search(t.Context(), "example", 0, test.limit)
+		if err != nil {
+			t.Fatalf("Search(limit %d): %v", test.limit, err)
+		}
+		if len(found) != test.wantHits || !slices.Equal(pages, test.wantPages) {
+			t.Errorf("Search(total %d, limit %d) = %d hits from pages %v, want %d from %v",
+				test.total, test.limit, len(found), pages, test.wantHits, test.wantPages)
+		}
 	}
 }

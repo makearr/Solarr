@@ -87,7 +87,7 @@ func (s *Server) LookupWorks(w http.ResponseWriter, r *http.Request, params gen.
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "adding is not available")
 		return
 	}
-	limit := min(derefOr(params.Limit, 20), 50)
+	limit := min(derefOr(params.Limit, 20), 100)
 	found, err := s.workAdder.Lookup(r.Context(), params.CategoryId, derefOr(params.Kind, ""), params.Q, max(limit, 1))
 	if err != nil {
 		writeError(w, s.logger, err)

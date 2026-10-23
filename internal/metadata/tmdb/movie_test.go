@@ -46,11 +46,11 @@ func TestMovieReadsCreditsReleaseDatesAndCollection(t *testing.T) {
 
 func TestSearchMoviesNarrowsByYearAndFindMapsAnIMDbID(t *testing.T) {
 	transport := &canned{body: `{"results":[{"id":603,"title":"The Example Film","release_date":"1999-03-30","poster_path":"/p.jpg"}]}`}
-	hits, err := newClient(t, transport, "plainkey").SearchMovies(t.Context(), "the example film", 1999)
+	hits, err := newClient(t, transport, "plainkey").SearchMovies(t.Context(), "the example film", 1999, 2)
 	if err != nil || len(hits) != 1 || hits[0].ID != 603 {
 		t.Fatalf("hits = %+v, %v", hits, err)
 	}
-	if query := transport.requested[0].URL.Query(); query.Get("year") != "1999" || query.Get("query") != "the example film" {
+	if query := transport.requested[0].URL.Query(); query.Get("year") != "1999" || query.Get("query") != "the example film" || query.Get("page") != "2" {
 		t.Errorf("query = %v", query)
 	}
 	found := &canned{body: `{"movie_results":[{"id":603,"title":"The Example Film"}]}`}
