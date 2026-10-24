@@ -14,6 +14,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // ImportSessionLister reads ADR-48 import sessions and their units. Defined
@@ -692,7 +693,7 @@ func (s *Server) ListImportUnits(w http.ResponseWriter, r *http.Request, id int6
 	}
 	limit := 50
 	if params.Limit != nil {
-		limit = *params.Limit
+		limit = paginate.ClampLimit(*params.Limit)
 	}
 
 	rows, err := s.importSessions.ListImportUnits(r.Context(), id, filterDecision, afterID, limit)

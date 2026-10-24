@@ -156,10 +156,13 @@ func extractEntry(fsys fsx.FS, destDir, name string, isDir bool, src io.Reader, 
 	if err != nil {
 		return fmt.Errorf("archive: create %q: %w", name, err)
 	}
-	defer func() { _ = writer.Close() }()
-
-	if _, err := io.Copy(&limitedWriter{dest: writer, budget: b}, src); err != nil {
-		return fmt.Errorf("archive: extract %q: %w", name, err)
+	_, copyErr := io.Copy(&limitedWriter{dest: writer, budget: b}, src)
+	closeErr := writer.Close()
+	if copyErr != nil {
+		return fmt.Errorf("archive: extract %q: %w", name, copyErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("archive: close extracted %q: %w", name, closeErr)
 	}
 	return nil
 }

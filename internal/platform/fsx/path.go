@@ -104,6 +104,10 @@ func SafeJoin(fsys FS, root string, components ...string) (string, error) {
 
 // Within reports whether path is root itself or lies beneath it.
 func Within(root, path string) bool {
+	if !filepath.IsAbs(root) || !filepath.IsAbs(path) {
+		return false
+	}
+	root, path = filepath.Clean(root), filepath.Clean(path)
 	if path == root {
 		return true
 	}

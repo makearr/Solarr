@@ -123,7 +123,8 @@ func Align(parts []Part, candidates []TrackFile) Alignment {
 			continue
 		}
 		for candidateIndex, candidate := range remaining {
-			if candidate.Track == 0 || candidate.Disc != disc || candidate.Track != track {
+			// A file with no disc tag is on the first disc, as a single-disc album's files mostly are.
+			if candidate.Track == 0 || max(candidate.Disc, 1) != disc || candidate.Track != track {
 				continue
 			}
 			// A bonus track can land exactly on a later track's expected

@@ -187,8 +187,12 @@ type ConnectionTestResult struct {
 // user may run it -- read-only, no credential exposure, the same access
 // ArrInstance's own sync intentionally does not require either.
 func (s *Server) TestIndexer(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	// A test makes an outbound connection, as TestDownloaderConfig does.
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.indexerTester == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "indexer tests are not available")
 		return
 	}
 	result, err := s.indexerTester.TestIndexer(r.Context(), id)

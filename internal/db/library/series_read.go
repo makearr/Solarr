@@ -444,10 +444,10 @@ func (r SeriesReader) PartPaths(ctx context.Context, workID int64, provider stri
 	return paths, nil
 }
 
-// WorksOnRoot answers up to pageSize works after afterID with a file on the root.
-func (r SeriesReader) WorksOnRoot(ctx context.Context, rootFolderID, afterID, pageSize int64) ([]int64, error) {
+// WorksOnRoot answers up to pageSize works of mediaType after afterID with a file on the root; a root may hold several types.
+func (r SeriesReader) WorksOnRoot(ctx context.Context, mediaType string, rootFolderID, afterID, pageSize int64) ([]int64, error) {
 	works, err := librarydb.New(r.store.Read()).ListWorksOnRoot(ctx, librarydb.ListWorksOnRootParams{
-		RootFolderID: rootFolderID, AfterID: afterID, PageSize: pageSize,
+		MediaType: mediaType, RootFolderID: rootFolderID, AfterID: afterID, PageSize: pageSize,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: works on root %d: %w", rootFolderID, err)

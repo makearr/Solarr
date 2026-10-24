@@ -100,6 +100,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 		return 0, err
 	}
 	sent := 0
+	var failures []error
 	for _, entry := range entries {
 		sendable, err := d.stillSendable(ctx, entry, at)
 		if err != nil {
@@ -122,9 +123,11 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 		}
 		_, err = d.SendRelease(ctx, entry.DesiredItemID, heldRelease(entry), at)
 		// Declined by the client: dropped, and the album searched afresh on its next turn.
+		// Kept for its next turn, and no reason to hold back the releases behind it (an expired link fails every time).
 		if err != nil && !errors.Is(err, library.ErrAcquisitionAlreadyInFlight) && !errors.Is(err, download.ErrRefused) &&
 			!errors.Is(err, ErrContentBlocklisted) {
-			return sent, fmt.Errorf("music: send held release %d: %w", entry.CandidateID, err)
+			failures = append(failures, fmt.Errorf("music: send held release %d: %w", entry.CandidateID, err))
+			continue
 		}
 		if err := d.Ready.Remove(ctx, entry.CandidateID); err != nil {
 			return sent, err
@@ -133,7 +136,7 @@ func (d Dispatch) SendHeld(ctx context.Context, at time.Time) (int, error) {
 			sent++
 		}
 	}
-	return sent, nil
+	return sent, errors.Join(failures...)
 }
 
 // stillSendable checks a held release may still go (section 10.5): still monitored, nothing on its way, not

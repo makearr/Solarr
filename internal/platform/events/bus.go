@@ -20,6 +20,8 @@ const (
 // Bus fans events out to subscribers.
 type Bus struct {
 	clock clock.Clock
+	// publishMu keeps id order, replay order and delivery order the same under concurrent publishers.
+	publishMu sync.Mutex
 
 	mu          sync.RWMutex
 	subscribers map[uint64]*Subscription
@@ -48,6 +50,9 @@ func NewBus(c clock.Clock) *Bus {
 
 // Publish delivers an event to every interested subscriber.
 func (b *Bus) Publish(event Event) {
+	b.publishMu.Lock()
+	defer b.publishMu.Unlock()
+
 	event.ID = b.nextID.Add(1)
 	if event.At.IsZero() {
 		event.At = b.clock.Now()
@@ -92,10 +97,17 @@ func (b *Bus) Since(id uint64, topics map[Topic]bool) (found []Event, complete b
 	defer b.replayMu.RUnlock()
 
 	complete = true
+	var oldestID uint64
 	for offset := range b.replay {
 		// Walk oldest to newest, starting at the write cursor.
 		event := b.replay[(b.replayAt+offset)%len(b.replay)]
-		if event.ID == 0 || event.ID <= id {
+		if event.ID == 0 {
+			continue
+		}
+		if oldestID == 0 || event.ID < oldestID {
+			oldestID = event.ID
+		}
+		if event.ID <= id {
 			continue
 		}
 		// An empty set means every topic, matching Subscription.wants.
@@ -105,9 +117,12 @@ func (b *Bus) Since(id uint64, topics map[Topic]bool) (found []Event, complete b
 		found = append(found, event)
 	}
 
-	// The oldest event still held is newer than what the client last saw, so
-	// whatever fell out of the ring in between is gone.
-	if len(found) > 0 && found[0].ID > id+1 {
+	// Judged on the whole ring, not the topic-filtered events: what fell out between the client's id and the oldest held is gone.
+	if oldestID > 0 && id < oldestID-1 {
+		complete = false
+	}
+	// An id this process never issued comes from before a restart: nothing can be replayed against it.
+	if id > b.nextID.Load() {
 		complete = false
 	}
 	return found, complete

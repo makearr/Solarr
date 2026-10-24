@@ -176,12 +176,7 @@ func (s *Server) fromTrustedNetwork(remoteAddr string) bool {
 	if !ok {
 		return false
 	}
-	for _, network := range s.auth.ProxyNetworks {
-		if network.Contains(peer) {
-			return true
-		}
-	}
-	return false
+	return s.trustedProxy(peer)
 }
 
 // peerAddress parses the socket's own remote address, unmapped to its plain
@@ -213,11 +208,29 @@ func (s *Server) resolvedClientAddress(r *http.Request) netip.Addr {
 	if forwarded == "" {
 		return peer
 	}
-	first := strings.TrimSpace(strings.Split(forwarded, ",")[0])
-	if claimed, err := netip.ParseAddr(first); err == nil {
-		return claimed.Unmap()
+	// Proxies append, so only the entries right of the last untrusted hop are vouched for; anything left of it is the client's own claim.
+	hops := strings.Split(forwarded, ",")
+	client := peer
+	for index := len(hops) - 1; index >= 0; index-- {
+		claimed, err := netip.ParseAddr(strings.TrimSpace(hops[index]))
+		if err != nil {
+			return client
+		}
+		client = claimed.Unmap()
+		if !s.trustedProxy(client) {
+			return client
+		}
 	}
-	return peer
+	return client
+}
+
+func (s *Server) trustedProxy(address netip.Addr) bool {
+	for _, network := range s.auth.ProxyNetworks {
+		if network.Contains(address) {
+			return true
+		}
+	}
+	return false
 }
 
 func bearerToken(header string) string {

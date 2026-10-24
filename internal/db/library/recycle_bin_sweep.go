@@ -118,7 +118,22 @@ func (q RecycleBin) sweepRootBudget(
 	if !ok || totalBytes <= 0 {
 		return nil // no known capacity for this root -- nothing to compare against
 	}
-	budget := int64(float64(totalBytes) * maxPercent / 100)
+	var budget int64
+	switch {
+	case maxPercent >= 100:
+		budget = totalBytes
+	case maxPercent <= 0:
+		budget = 0
+	default:
+		fraction := float64(totalBytes) * (maxPercent / 100)
+		// For very large int64 totals, float64 rounds the total up to 2^63.
+		// Avoid converting that out-of-range value back to int64.
+		if fraction >= float64(totalBytes) {
+			budget = totalBytes
+		} else {
+			budget = int64(fraction)
+		}
+	}
 
 	for {
 		held, err := librarydb.New(q.store.Read()).RecycledBytesForRoot(ctx, sql.NullInt64{Int64: rootFolderID, Valid: true})

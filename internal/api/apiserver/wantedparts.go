@@ -94,6 +94,9 @@ func (s *Server) ListWantedParts(w http.ResponseWriter, r *http.Request, params 
 		skipped := int64(0)
 		for _, row := range held {
 			view := wantedPartView(row)
+			if view.File == nil {
+				continue
+			}
 			judgement, ok := quality.Judge(access.Snapshot(), category, partFileFacts(*view.File))
 			if !ok || judgement.MeetsCutoff {
 				continue

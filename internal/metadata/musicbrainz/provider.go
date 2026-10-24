@@ -530,9 +530,12 @@ func (p Provider) remember(ctx context.Context, source string, rg ReleaseGroup, 
 	}
 }
 
-// cachedJSON reads one cache entry as T; a miss, a stale entry or an undecodable body is a miss.
+// cachedJSON reads one cache entry as T; a refresh, a miss, a stale entry or an undecodable body is a miss.
 func cachedJSON[T any](ctx context.Context, p Provider, kind, key string) (T, bool) {
 	var value T
+	if wantsFresh(ctx) {
+		return value, false
+	}
 	entry, err := p.cache.Get(ctx, kind, key)
 	if err != nil || p.stale(entry) || json.Unmarshal([]byte(entry.Body), &value) != nil {
 		return value, false

@@ -174,7 +174,12 @@ func renderICS(rows []CalendarRow, now time.Time) string {
 			status = row.PrimaryType + ", " + strings.ToLower(status[:1]) + status[1:]
 		}
 		line("BEGIN:VEVENT")
-		line(fmt.Sprintf("UID:solarr-work-%d", row.WorkID))
+		// An episode is its own event: a series' episodes share the work id, and a calendar merges equal UIDs.
+		if row.PartID != 0 {
+			line(fmt.Sprintf("UID:solarr-work-%d-part-%d", row.WorkID, row.PartID))
+		} else {
+			line(fmt.Sprintf("UID:solarr-work-%d", row.WorkID))
+		}
 		line("DTSTAMP:" + stamp)
 		line("DTSTART;VALUE=DATE:" + day.Format("20060102"))
 		line("DTEND;VALUE=DATE:" + day.AddDate(0, 0, 1).Format("20060102"))

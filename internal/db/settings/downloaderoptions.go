@@ -143,9 +143,10 @@ func (o DownloaderOptions) LocalPathFor(reported string) string {
 	if o.RemotePath == "" || o.LocalPath == "" {
 		return reported
 	}
-	remote := strings.TrimRight(o.RemotePath, "/")
-	if reported != remote && !strings.HasPrefix(reported, remote+"/") {
+	remote := path.Clean(o.RemotePath)
+	cleanReported := path.Clean(reported)
+	if cleanReported != remote && !strings.HasPrefix(cleanReported, strings.TrimSuffix(remote, "/")+"/") {
 		return reported
 	}
-	return path.Join(o.LocalPath, strings.TrimPrefix(reported, remote))
+	return path.Join(o.LocalPath, strings.TrimPrefix(cleanReported, remote))
 }

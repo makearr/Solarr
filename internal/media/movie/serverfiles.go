@@ -164,7 +164,7 @@ func (j ServerFilesJob) Run(ctx context.Context, job jobs.Job) error {
 			}
 			var afterID int64
 			for {
-				works, err := j.Writer.Reader.WorksOnRoot(ctx, root.ID, afterID, serverFilesPage)
+				works, err := j.Writer.Reader.WorksOnRoot(ctx, string(MediaType), root.ID, afterID, serverFilesPage)
 				if err != nil {
 					return err
 				}

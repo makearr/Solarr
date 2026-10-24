@@ -23,8 +23,12 @@ func (a Organisations) ListOrganisations(ctx context.Context, query apiserver.Pe
 	cursor := library.PeopleCursor{ID: after.ID, Set: after.Sort != "" || after.ID != 0}
 	if query.Sort == library.PeopleByName || query.Sort == "" {
 		cursor.Name = after.Sort
-	} else {
-		cursor.Value, _ = strconv.ParseInt(after.Sort, 10, 64)
+	} else if cursor.Set {
+		value, err := strconv.ParseInt(after.Sort, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid organisation cursor: %w", apiserver.ErrInvalidChoice, err)
+		}
+		cursor.Value = value
 	}
 	rows, err := a.Organisations.List(ctx, library.OrganisationFilter{
 		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored,

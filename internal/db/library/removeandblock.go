@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"time"
 )
@@ -181,6 +182,10 @@ func (r RemoveAndBlock) doRecycle(ctx context.Context, req RemoveAndBlockRequest
 				// own doc comment) -- there is nothing to restore for this copy,
 				// but the other copies and the rest of this action still proceed.
 				result.CrossDeviceDeletes++
+				continue
+			}
+			// A copy a scan already found gone has nothing to recycle; stopping here would leave the block half done.
+			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 			return fmt.Errorf("library: remove and block: recycle bin %q: %w", p.RelPath, err)

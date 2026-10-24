@@ -78,10 +78,13 @@ func healthEndpoint(loaded config.Config, port int) string {
 	}).String()
 }
 
-// resolvedHealthcheckPort re-derives ADR-58's order from scratch, or a port
-// change from the Network screen would make this probe the wrong one.
+// resolvedHealthcheckPort re-derives ADR-58's order from scratch, the same as the server's resolvedServerPort
+// (env, then config.yml, then settings.db), or this probe would knock on a port nothing listens on.
 func resolvedHealthcheckPort(loaded config.Config) int {
 	if _, envSet := os.LookupEnv(config.EnvName("server.port")); envSet {
+		return loaded.Server.Port
+	}
+	if loaded.Server.Port != 0 {
 		return loaded.Server.Port
 	}
 

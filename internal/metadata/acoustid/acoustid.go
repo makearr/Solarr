@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -136,9 +136,13 @@ func (c Client) Lookup(ctx context.Context, fingerprint string, duration time.Du
 				}
 			}
 			if recording.ID != "" {
+				duration := recording.Duration * float64(time.Second)
+				if math.IsNaN(duration) || math.IsInf(duration, 0) || duration < 0 || duration >= float64(1<<63-1) {
+					duration = 0
+				}
 				match.Recordings = append(match.Recordings, Recording{
 					MBID: recording.ID, Title: recording.Title, Artist: creditOf(recording.Artists),
-					Duration:          time.Duration(recording.Duration * float64(time.Second)),
+					Duration:          time.Duration(duration),
 					ReleaseGroupMBIDs: groups,
 				})
 			}
@@ -199,7 +203,7 @@ func (c Client) getJSON(ctx context.Context, url string, into any) error {
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)
 	}

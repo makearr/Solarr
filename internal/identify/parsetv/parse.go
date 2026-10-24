@@ -2,6 +2,7 @@ package parsetv
 
 import (
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,12 @@ import (
 )
 
 const matchTimeout = 2 * time.Second
+
+// A release name's numbering is untrusted: bounded, one file name cannot expand into an enormous episode list.
+const (
+	maxEpisodeNumber = 100_000
+	maxEpisodeRange  = 1_000
+)
 
 func compile(pattern string, options regexp2.RegexOptions) *regexp2.Regexp {
 	re := regexp2.MustCompile(pattern, options)
@@ -386,12 +393,15 @@ func applyNumbering(info *Info, m, first *regexp2.Match, lastIndex *int) bool {
 	if len(episodeCaps) > 0 {
 		low, err1 := parseNumber(episodeCaps[0].String())
 		high, err2 := parseNumber(episodeCaps[len(episodeCaps)-1].String())
-		if err1 != nil || err2 != nil || low > high {
+		if err1 != nil || err2 != nil || low < 0 || high > maxEpisodeNumber || low > high || high-low > maxEpisodeRange {
 			return false
 		}
 		info.EpisodeNumbers = info.EpisodeNumbers[:0:0]
-		for n := low; n <= high; n++ {
+		for n := low; ; n++ {
 			info.EpisodeNumbers = append(info.EpisodeNumbers, n)
+			if n == high {
+				break
+			}
 		}
 		*lastIndex = max(*lastIndex, endIndex(episodeCaps[len(episodeCaps)-1]))
 		if special {
@@ -405,7 +415,8 @@ func applyNumbering(info *Info, m, first *regexp2.Match, lastIndex *int) bool {
 	if len(absoluteCaps) > 0 {
 		low, err1 := parseDecimal(absoluteCaps[0].String())
 		high, err2 := parseDecimal(absoluteCaps[len(absoluteCaps)-1].String())
-		if err1 != nil || err2 != nil || low > high {
+		if err1 != nil || err2 != nil || math.IsNaN(low) || math.IsInf(low, 0) ||
+			math.IsNaN(high) || math.IsInf(high, 0) || low < 0 || high > maxEpisodeNumber || low > high {
 			return false
 		}
 		if low != float64(int(low)) || high != float64(int(high)) {
@@ -416,9 +427,15 @@ func applyNumbering(info *Info, m, first *regexp2.Match, lastIndex *int) bool {
 			info.Special = true
 			*lastIndex = max(*lastIndex, endIndex(absoluteCaps[0]))
 		} else {
+			if high-low > maxEpisodeRange {
+				return false
+			}
 			info.AbsoluteNumbers = info.AbsoluteNumbers[:0:0]
-			for n := int(low); n <= int(high); n++ {
+			for n, last := int(low), int(high); ; n++ {
 				info.AbsoluteNumbers = append(info.AbsoluteNumbers, n)
+				if n == last {
+					break
+				}
 			}
 			if special {
 				info.Special = true

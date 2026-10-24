@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // LogRecordRow is one captured log line.
@@ -56,8 +55,8 @@ func (s *Server) routeListLogs(w http.ResponseWriter, r *http.Request) {
 
 // ListLogs answers the most recent log records, newest first.
 func (s *Server) ListLogs(w http.ResponseWriter, r *http.Request, params gen.ListLogsParams) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	// The log names accounts, addresses and paths from every library.
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.logReader == nil {

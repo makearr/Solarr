@@ -17,6 +17,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // ErrNotAllowed means the address is not one of the providers' image hosts.
@@ -43,7 +44,12 @@ type Cache struct {
 	Hosts []string
 
 	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	locks map[string]*imageLock
+}
+
+type imageLock struct {
+	mu   sync.Mutex
+	refs int
 }
 
 // DefaultHosts are the CDNs the TV providers' pictures live on.
@@ -78,9 +84,8 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 	if c.cached(key) {
 		return key, nil
 	}
-	lock := c.lockFor(key)
-	lock.Lock()
-	defer lock.Unlock()
+	release := c.lockFor(key)
+	defer release()
 	if c.cached(key) {
 		return key, nil
 	}
@@ -130,16 +135,29 @@ func (c *Cache) cached(key string) bool {
 	return err == nil
 }
 
-func (c *Cache) lockFor(key string) *sync.Mutex {
+func (c *Cache) lockFor(key string) func() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.locks == nil {
-		c.locks = map[string]*sync.Mutex{}
+		c.locks = map[string]*imageLock{}
 	}
-	if c.locks[key] == nil {
-		c.locks[key] = &sync.Mutex{}
+	lock := c.locks[key]
+	if lock == nil {
+		lock = &imageLock{}
+		c.locks[key] = lock
 	}
-	return c.locks[key]
+	lock.refs++
+	c.mu.Unlock()
+
+	lock.mu.Lock()
+	return func() {
+		lock.mu.Unlock()
+		c.mu.Lock()
+		lock.refs--
+		if lock.refs == 0 && c.locks[key] == lock {
+			delete(c.locks, key)
+		}
+		c.mu.Unlock()
+	}
 }
 
 // tmdbOriginal is the path TMDB serves a picture in its full size under; its 500-pixel rendition is all a wall needs.
@@ -164,7 +182,7 @@ func (c *Cache) fetch(ctx context.Context, address string) ([]byte, error) {
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("%w: status %d", ErrUnavailable, response.StatusCode)
 	}
-	source, err := io.ReadAll(io.LimitReader(response.Body, maxBytes))
+	source, err := httpx.ReadLimited(response.Body, maxBytes)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrUnavailable, err)
 	}

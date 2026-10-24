@@ -44,9 +44,23 @@ func (c *Cache) SeedAuthRequired(ctx context.Context, cl clock.Clock, required b
 }
 
 func (c *Cache) setPolicy(ctx context.Context, cl clock.Clock, key, value string) error {
+	return c.setPolicies(ctx, cl, map[string]string{key: value})
+}
+
+// setPolicies writes several policy keys in one transaction, so a rule never applies half-changed.
+func (c *Cache) setPolicies(ctx context.Context, cl clock.Clock, values map[string]string) error {
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
-			Key: key, ValueJson: value, UpdatedAt: cl.Now().Unix(),
-		})
+		return setInstanceSettings(ctx, queries, cl, values)
 	})
+}
+
+func setInstanceSettings(ctx context.Context, queries *settingsdb.Queries, cl clock.Clock, values map[string]string) error {
+	for key, value := range values {
+		if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+			Key: key, ValueJson: value, UpdatedAt: cl.Now().Unix(),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

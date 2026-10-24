@@ -31,17 +31,26 @@ func (s *Store) Backup(ctx context.Context, directory string, kind BackupKind) (
 	if !filepath.IsAbs(directory) {
 		return "", fmt.Errorf("store %s: backup directory %q must be absolute", s.config.Name, directory)
 	}
-
-	path, err := s.unusedBackupPath(directory, kind)
-	if err != nil {
-		return "", err
+	if kind != BackupRotation && kind != BackupPreMigration {
+		return "", fmt.Errorf("store %s: unsupported backup kind %q", s.config.Name, kind)
 	}
 
-	err = s.writeExclusive(ctx, PrioBulk, true, func(ctx context.Context, db *sql.DB) error {
+	var path string
+	err := s.writeExclusive(ctx, PrioBulk, true, func(ctx context.Context, db *sql.DB) error {
+		// Choose the name on the single writer, after any earlier backup has
+		// completed; selecting before enqueue lets simultaneous callers race.
+		var err error
+		path, err = s.unusedBackupPath(directory, kind)
+		if err != nil {
+			return err
+		}
 		// VACUUM INTO refuses to overwrite, which is the behaviour we want; the
 		// name is chosen above rather than relying on that refusal.
-		_, execErr := db.ExecContext(ctx, "VACUUM INTO ?", path)
-		return execErr
+		if _, err := db.ExecContext(ctx, "VACUUM INTO ?", path); err != nil {
+			return err
+		}
+		// SQLite creates the copy with the umask's mode; it carries what the live file's 0600 protects.
+		return s.fs.Chmod(path, 0o600)
 	})
 	if err != nil {
 		return "", fmt.Errorf("store %s: backup to %q: %w", s.config.Name, path, err)
@@ -62,7 +71,7 @@ func (s *Store) unusedBackupPath(directory string, kind BackupKind) (string, err
 		if attempt > 0 {
 			candidate = fmt.Sprintf("%s-%d", base, attempt)
 		}
-		_, err := s.fs.Stat(candidate)
+		_, err := s.fs.Lstat(candidate)
 		if errors.Is(err, fs.ErrNotExist) {
 			return candidate, nil
 		}

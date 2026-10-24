@@ -333,6 +333,32 @@ func TestSweep_SplitsALargeDirectoryIntoBoundedBatches(t *testing.T) {
 	}
 }
 
+// A directory split into batches is behind the cursor only once its last batch committed: stopped after the first,
+// a resume reads the directory again rather than skip the files the later batches held.
+func TestSweep_ResumesInsideALargeDirectoryStoppedBetweenItsBatches(t *testing.T) {
+	var files []string
+	for index := range 25 {
+		files = append(files, fmt.Sprintf("box set/%02d.flac", index))
+	}
+	lib := newTree(t, files...)
+
+	interrupted := errors.New("the process is shutting down")
+	collected := &collector{failAfter: 1, failure: interrupted}
+	result, err := scan.NewSweeper(lib.fsys, lib.clock).Sweep(t.Context(), root, scan.State{},
+		scan.Options{Full: true, BatchSize: 10}, collected.emit)
+	if !errors.Is(err, interrupted) {
+		t.Fatalf("Sweep = %v, want the caller's error", err)
+	}
+	if result.State.Cursor == "box set" {
+		t.Fatal("the cursor passed a directory whose later batches never committed")
+	}
+
+	_, resumed := sweep(t, lib, result.State, scan.Options{Full: true, BatchSize: 10})
+	if !slices.Contains(resumed.sorted(), "box set/24.flac") {
+		t.Errorf("resumed with %d files, none from the batches that never committed", len(resumed.found))
+	}
+}
+
 // A scan across 500k files is a job with progress, not a function call: a restart
 // continues from the last committed batch (section 10.4, ADR-3).
 func TestSweep_ResumesAfterTheCallerStoppedIt(t *testing.T) {

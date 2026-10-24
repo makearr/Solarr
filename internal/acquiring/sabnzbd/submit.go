@@ -5,12 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"mime/multipart"
 	"net/http"
 	"net/url"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // AddFileRequest is one NZB uploaded to SABnzbd (ADR-57's acquire.send).
@@ -66,7 +66,7 @@ func (c Client) AddFile(ctx context.Context, request AddFileRequest) (clientRef 
 	defer func() { _ = response.Body.Close() }()
 
 	var parsed addResponse
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	raw, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return "", fmt.Errorf("sabnzbd: add file: read response: %w", err)
 	}

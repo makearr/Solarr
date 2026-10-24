@@ -9,7 +9,6 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
@@ -48,12 +47,7 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, s.logger, err)
 		return
 	}
-	if sent.AutoCommitConfidence != nil {
-		if err := s.auth.Settings.SetImportAutoCommitConfidence(r.Context(), clock.NewSystem(), *sent.AutoCommitConfidence); err != nil {
-			s.writeImportSettingsError(w, err)
-			return
-		}
-	}
+	var ladderValue *[]string
 	// Absent means "say nothing about the ladder", so an older client that
 	// only knows the commit line cannot silently reset the order.
 	if body.TransferLadder != nil {
@@ -61,18 +55,13 @@ func (s *Server) UpdateImportSettings(w http.ResponseWriter, r *http.Request) {
 		for _, method := range *body.TransferLadder {
 			ladder = append(ladder, string(method))
 		}
-		if err := s.auth.Settings.SetImportTransferLadder(r.Context(), clock.NewSystem(), ladder); err != nil {
-			s.writeImportSettingsError(w, err)
-			return
-		}
+		ladderValue = &ladder
 	}
 	// Absent means "say nothing about renaming", the same shape the ladder
 	// above keeps.
-	if body.RenameOnImport != nil {
-		if err := s.auth.Settings.SetImportRenameOnImport(r.Context(), clock.NewSystem(), *body.RenameOnImport); err != nil {
-			s.writeImportSettingsError(w, err)
-			return
-		}
+	if err := s.auth.Settings.UpdateImportSettings(r.Context(), s.auth.Clock, sent.AutoCommitConfidence, ladderValue, body.RenameOnImport); err != nil {
+		s.writeImportSettingsError(w, err)
+		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.importSettingsView())
 }

@@ -186,6 +186,7 @@ ORDER BY wp.sort_key, lp.id;
 -- name: ListWorksOnRoot :many
 SELECT DISTINCT wf.work_id FROM work_file wf
 JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL
+JOIN work w ON w.id = wf.work_id AND w.media_type = sqlc.arg(media_type)
 WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND wf.work_id > sqlc.arg(after_id)
 ORDER BY wf.work_id
 LIMIT sqlc.arg(page_size);

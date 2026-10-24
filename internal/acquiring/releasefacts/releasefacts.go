@@ -4,6 +4,7 @@
 package releasefacts
 
 import (
+	"math"
 	"strconv"
 	"strings"
 
@@ -54,8 +55,16 @@ func EstimateBitrate(facts *score.Facts, sizeBytes int64, items int, runtimeMs i
 		return
 	}
 	overall := float64(sizeBytes) * 8 / (float64(items) * float64(runtimeMs) / 1000)
+	if math.IsNaN(overall) || math.IsInf(overall, 0) || overall < 0 || overall >= float64(1<<63-1) {
+		return
+	}
 	facts.File.OverallBitrate = int64(overall)
-	facts.File.VideoBitrate = int64(overall * videoShare)
+	video := overall * videoShare
+	if math.IsNaN(video) || math.IsInf(video, 0) || video < 0 || video >= float64(1<<63-1) {
+		facts.File.OverallBitrate = 0
+		return
+	}
+	facts.File.VideoBitrate = int64(video)
 }
 
 // QualityTitle is Sonarr's and Radarr's "WEBDL-1080p": the source and the resolution a name claims.

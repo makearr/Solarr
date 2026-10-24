@@ -77,10 +77,11 @@ func (j *EnrichJob) backfillLabels(ctx context.Context, budget int) {
 		}
 		for _, work := range works {
 			after = work.WorkID
-			asked++
+			// An album with no edition is asked nothing, so it costs no budget: counted, it would hold back every later one.
 			if work.EditionLabel == "" {
 				continue
 			}
+			asked++
 			_, release, err := j.provider.Album(ctx, musicbrainz.PriorityBackfill, work.ExternalID, work.EditionLabel)
 			if err != nil {
 				continue

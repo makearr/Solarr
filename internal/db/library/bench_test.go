@@ -486,6 +486,9 @@ var planCases = []struct {
 	{"artist, category visibility and cursor",
 		library.WorkFilter{Sort: library.WorkSortArtist, CategoryIDs: []int64{1}},
 		library.WorkCursor{SortArtist: "artist 50", SortTitle: "silver signals 50", ID: 100}, "work_lead_person_sort"},
+	// The year order on COALESCE(year, 0), so a work with no year pages too: migration 0095's expression index.
+	{"year", library.WorkFilter{Sort: library.WorkSortYear}, library.WorkCursor{}, "work_year_known_sort"},
+	{"year with a cursor", library.WorkFilter{Sort: library.WorkSortYear}, library.WorkCursor{SortYear: 1990, ID: 5000}, "work_year_known_sort"},
 }
 
 // sortsOuterResult reports a temp b-tree at the plan's top level; a correlated subquery's own,

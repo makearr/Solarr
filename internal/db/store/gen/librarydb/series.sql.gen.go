@@ -646,12 +646,14 @@ func (q *Queries) ListWorksOfFolder(ctx context.Context, arg ListWorksOfFolderPa
 const listWorksOnRoot = `-- name: ListWorksOnRoot :many
 SELECT DISTINCT wf.work_id FROM work_file wf
 JOIN library_path lp ON lp.media_object_id = wf.media_object_id AND lp.missing_since IS NULL
-WHERE lp.root_folder_id = ?1 AND wf.work_id > ?2
+JOIN work w ON w.id = wf.work_id AND w.media_type = ?1
+WHERE lp.root_folder_id = ?2 AND wf.work_id > ?3
 ORDER BY wf.work_id
-LIMIT ?3
+LIMIT ?4
 `
 
 type ListWorksOnRootParams struct {
+	MediaType    string
 	RootFolderID int64
 	AfterID      int64
 	PageSize     int64
@@ -659,7 +661,12 @@ type ListWorksOnRootParams struct {
 
 // The works with a file on a root, a page at a time.
 func (q *Queries) ListWorksOnRoot(ctx context.Context, arg ListWorksOnRootParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksOnRoot, arg.RootFolderID, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listWorksOnRoot,
+		arg.MediaType,
+		arg.RootFolderID,
+		arg.AfterID,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}

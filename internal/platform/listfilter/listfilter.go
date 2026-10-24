@@ -5,6 +5,7 @@ package listfilter
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -70,7 +71,7 @@ func Parse(raw string, fields map[string]Field) ([]Condition, error) {
 		}
 		switch field.Kind {
 		case Number:
-			if _, err := strconv.ParseFloat(condition.Value, 64); err != nil {
+			if number, err := strconv.ParseFloat(condition.Value, 64); err != nil || math.IsNaN(number) || math.IsInf(number, 0) {
 				problems = append(problems, fmt.Sprintf("condition %d: %q is not a number", index+1, condition.Value))
 			}
 		case Bool:
@@ -96,7 +97,7 @@ func (c Condition) SQL(kind Kind, expression string) (string, []any) {
 	switch kind {
 	case Text:
 		lower := "LOWER(" + expression + ")"
-		value := strings.ToLower(c.Value)
+		value := asciiLower(c.Value)
 		switch c.Op {
 		case "contains":
 			return lower + " LIKE ? ESCAPE '\\'", []any{"%" + escapeLike(value) + "%"}
@@ -128,4 +129,14 @@ func (c Condition) SQL(kind Kind, expression string) (string, []any) {
 
 func escapeLike(text string) string {
 	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(text)
+}
+
+// asciiLower lowers the way SQLite's LOWER does, A-Z only: lowering "É" here alone would make "Édith" match nothing.
+func asciiLower(text string) string {
+	return strings.Map(func(r rune) rune {
+		if 'A' <= r && r <= 'Z' {
+			return r + 'a' - 'A'
+		}
+		return r
+	}, text)
 }

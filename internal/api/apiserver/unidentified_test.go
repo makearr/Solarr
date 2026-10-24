@@ -411,19 +411,47 @@ func TestMarkUnidentifiedNotMedia_OnlyForAVisibleFile(t *testing.T) {
 // The library and, for a type with groups, the group and parts reach the resolver as the request named them.
 func TestResolveUnidentified_ForwardsTheLibraryAndThePlacement(t *testing.T) {
 	fixture := newWorksFixture(t)
-	_, root := fixture.createCategoryWithRoot(t, "Series", "/media/series")
+	category, root := fixture.createCategoryWithRoot(t, "Series", "/media/series")
 	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "admin")
 
 	recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
-		`{"category_id":7,"provider":"tvdb","external_id":"9001","group":2,"parts":[3,4]}`))
+		fmt.Sprintf(`{"category_id":%d,"provider":"tvdb","external_id":"9001","group":2,"parts":[3,4]}`, category.ID)))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
 	}
 	got := fixture.unidentifiedResolver
 	want := apiserver.FilePlacement{Provider: "tvdb", ExternalID: "9001", Group: 2, Parts: []int{3, 4}}
-	if got.lastCategoryID == nil || *got.lastCategoryID != 7 || !reflect.DeepEqual(got.lastPlacement, want) {
-		t.Errorf("resolver got library %v and %+v, want 7 and %+v", got.lastCategoryID, got.lastPlacement, want)
+	if got.lastCategoryID == nil || *got.lastCategoryID != category.ID || !reflect.DeepEqual(got.lastPlacement, want) {
+		t.Errorf("resolver got library %v and %+v, want %d and %+v", got.lastCategoryID, got.lastPlacement, category.ID, want)
+	}
+}
+
+// Placing a file adds a work: reading the library is not enough, and a library the caller cannot see is not one to name.
+func TestResolveUnidentified_NeedsManageOnTheLibrary(t *testing.T) {
+	fixture := newWorksFixture(t)
+	music, root := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	hidden, _ := fixture.createCategoryWithRoot(t, "Private Stash", "/media/private")
+	fixture.unidentifiedResolver.entry = apiserver.UnidentifiedRow{RootFolderID: root.ID}
+	listener := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), listener.ID, music.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "listener")
+
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		`{"provider":"musicbrainz","external_id":"x"}`)); recorder.Code != http.StatusForbidden {
+		t.Errorf("resolve as a reader: status %d, want 403", recorder.Code)
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/resolve",
+		fmt.Sprintf(`{"category_id":%d,"provider":"musicbrainz","external_id":"x"}`, hidden.ID))); recorder.Code != http.StatusNotFound {
+		t.Errorf("resolve into a hidden library: status %d, want 404", recorder.Code)
+	}
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/library/unidentified/1/not-media", "")); recorder.Code != http.StatusForbidden {
+		t.Errorf("not media as a reader: status %d, want 403", recorder.Code)
+	}
+	if fixture.unidentifiedResolver.lastCategoryID != nil || len(fixture.unidentifiedResolver.notMedia) != 0 {
+		t.Errorf("the resolver was reached: library %v, not media %v", fixture.unidentifiedResolver.lastCategoryID, fixture.unidentifiedResolver.notMedia)
 	}
 }

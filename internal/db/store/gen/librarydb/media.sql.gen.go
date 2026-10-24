@@ -614,12 +614,12 @@ func (q *Queries) ListPathsForObject(ctx context.Context, mediaObjectID int64) (
 }
 
 const listPathsForRootWithSize = `-- name: ListPathsForRootWithSize :many
-SELECT lp.media_object_id, lp.rel_path, o.size_bytes
+SELECT lp.id, lp.media_object_id, lp.rel_path, o.size_bytes
 FROM library_path lp
 JOIN media_object o ON o.id = lp.media_object_id
 WHERE lp.root_folder_id = ?1 AND lp.is_primary = 1
-  AND lp.media_object_id > ?2
-ORDER BY lp.media_object_id
+  AND lp.id > ?2
+ORDER BY lp.id
 LIMIT ?3
 `
 
@@ -630,6 +630,7 @@ type ListPathsForRootWithSizeParams struct {
 }
 
 type ListPathsForRootWithSizeRow struct {
+	ID            int64
 	MediaObjectID int64
 	RelPath       string
 	SizeBytes     int64
@@ -651,7 +652,12 @@ func (q *Queries) ListPathsForRootWithSize(ctx context.Context, arg ListPathsFor
 	items := []ListPathsForRootWithSizeRow{}
 	for rows.Next() {
 		var i ListPathsForRootWithSizeRow
-		if err := rows.Scan(&i.MediaObjectID, &i.RelPath, &i.SizeBytes); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.MediaObjectID,
+			&i.RelPath,
+			&i.SizeBytes,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -828,7 +834,7 @@ const listStaleProbes = `-- name: ListStaleProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
 ORDER BY o.id
 LIMIT ?3
@@ -880,7 +886,7 @@ const listStaleVideoProbes = `-- name: ListStaleVideoProbes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE mp.probe_version < ?1 AND o.measured_attributes_id IS NOT NULL AND o.id > ?2
   AND o.kind = 'video'
 ORDER BY o.id
@@ -1041,7 +1047,7 @@ func (q *Queries) ListUnfingerprinted(ctx context.Context, arg ListUnfingerprint
 const listUnmeasured = `-- name: ListUnmeasured :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.measured_attributes_id IS NULL AND o.id > ?1
 ORDER BY o.id
 LIMIT ?2

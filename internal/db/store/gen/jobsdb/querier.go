@@ -60,7 +60,7 @@ type Querier interface {
 	RenewLease(ctx context.Context, arg RenewLeaseParams) (int64, error)
 	RetryJob(ctx context.Context, arg RetryJobParams) (int64, error)
 	SetRetentionState(ctx context.Context, arg SetRetentionStateParams) error
-	StartJob(ctx context.Context, arg StartJobParams) error
+	StartJob(ctx context.Context, arg StartJobParams) (int64, error)
 	// Called every tick, whether or not a fire actually happens (enabled=false
 	// still has a next-fire time to show), so it must never disturb last_run_at/
 	// last_duration_ms/last_outcome/last_error -- only UpsertScheduleState (after

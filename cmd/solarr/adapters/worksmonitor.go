@@ -140,16 +140,20 @@ func (a WorksMonitor) monitorGroup(ctx context.Context, detail library.WorkDetai
 	return nil
 }
 
+// workCategory is the work's own library, or the first of its media type for a work in none yet.
+func (a WorksMonitor) workCategory(detail library.WorkDetail) (settings.Category, bool) {
+	if len(detail.CategoryIDs) > 0 {
+		if category, ok := a.Categories.Category(detail.CategoryIDs[0]); ok {
+			return category, true
+		}
+	}
+	return a.Categories.CategoryForMediaType(detail.Work.MediaType)
+}
+
 // ensureWorkItem always ensures the work's single SET item exists in its library, monitored or not: an explicit "not
 // interested" is recorded the same way a category's monitor_discovered policy would be (Invariant 71).
 func (a WorksMonitor) ensureWorkItem(ctx context.Context, detail library.WorkDetail, monitored bool) (apiserver.WantedRow, error) {
-	category, ok := settings.Category{}, false
-	if len(detail.CategoryIDs) > 0 {
-		category, ok = a.Categories.Category(detail.CategoryIDs[0])
-	}
-	if !ok {
-		category, ok = a.Categories.CategoryForMediaType(detail.Work.MediaType)
-	}
+	category, ok := a.workCategory(detail)
 	if !ok {
 		return apiserver.WantedRow{}, fmt.Errorf("no category configured for %s", detail.Work.MediaType)
 	}
@@ -190,7 +194,7 @@ func (a WorksMonitor) SetTrackWanted(
 		return apiserver.WantedRow{}, err
 	}
 
-	category, ok := a.Categories.CategoryForMediaType(detail.Work.MediaType)
+	category, ok := a.workCategory(detail)
 	if !ok {
 		return apiserver.WantedRow{}, fmt.Errorf("no category configured for %s", detail.Work.MediaType)
 	}

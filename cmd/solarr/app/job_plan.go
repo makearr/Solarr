@@ -175,16 +175,23 @@ func (p *process) searchStatus(ctx context.Context, itemID int64) (apiserver.Wan
 	if err != nil {
 		return apiserver.WantedRow{}, err
 	}
-	indexers, err := p.indexerConns(ctx)
+	// Counted from settings: building the connections asks every indexer for its capabilities, on every page view.
+	configured, err := p.cache.Indexers(ctx)
 	if err != nil {
 		return apiserver.WantedRow{}, err
+	}
+	enabled := 0
+	for _, indexer := range configured {
+		if indexer.Enabled {
+			enabled++
+		}
 	}
 	snapshot := p.cache.Snapshot()
 	room, measured := snapshot.AcquisitionHeadroom(item.CategoryID)
 	now := clock.NewSystem().Now()
 	why := plan.Explain(plan.Circumstances{
 		Monitored: item.Monitored == 1, State: item.State, Searchable: plan.SearchedOnItsOwn(item.SatisfactionKind),
-		InFlight: inFlight, Held: held, Indexers: len(indexers), PerHour: int(*snapshot.PrioritySettings().SearchesPerHour),
+		InFlight: inFlight, Held: held, Indexers: enabled, PerHour: int(*snapshot.PrioritySettings().SearchesPerHour),
 		NoRoom: measured && room <= 0, Planned: planned && entry.EligibleAfter != plan.Never, ReleaseDate: entry.ReleaseDate,
 	}, now)
 	status := apiserver.WantedRow{LastSearchedAt: entry.LastSearchedAt, AutomaticSearch: string(why)}

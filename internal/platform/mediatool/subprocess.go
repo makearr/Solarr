@@ -147,7 +147,11 @@ func (s *Subprocess) writeBatch(ctx context.Context, edits []TagEdit) ([]TagResu
 	}
 	runCtx, cancel := context.WithTimeout(ctx, time.Duration(len(edits))*perFileTimeout)
 	defer cancel()
-	s.slots <- struct{}{}
+	select {
+	case s.slots <- struct{}{}:
+	case <-runCtx.Done():
+		return nil, runCtx.Err()
+	}
 	output, err := s.runner.Run(runCtx, tagBinary, string(encoded))
 	<-s.slots
 	if err != nil {
@@ -228,7 +232,7 @@ func (s *Subprocess) fingerprintOne(ctx context.Context, path string) Fingerprin
 	if decodeErr == nil && decoded.Fingerprint != "" {
 		return Fingerprint{
 			Path:        path,
-			Duration:    time.Duration(decoded.Duration * float64(time.Second)),
+			Duration:    durationFromSeconds(decoded.Duration),
 			Chromaprint: decoded.Fingerprint,
 			Partial:     runErr != nil,
 		}

@@ -132,7 +132,11 @@ func (p Placer) CheckBlocked(ctx context.Context, sourceRoot string, files []Fil
 // placement strategy's choice. Files first, so a work moved to another root receives its next file there too.
 func (p Placer) ChooseRoot(ctx context.Context, categoryID, workID int64, affinityKey string, bytes int64) (settings.RootFolder, error) {
 	var existing *int64
-	if roots, err := p.config.Identity.WorkFileRoots(ctx, workID); err == nil && len(roots) > 0 {
+	roots, err := p.config.Identity.WorkFileRoots(ctx, workID)
+	if err != nil {
+		return settings.RootFolder{}, fmt.Errorf("find existing work roots: %w", err)
+	}
+	if len(roots) > 0 {
 		rootID := roots[0].RootFolderID
 		existing = &rootID
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 
+	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
@@ -72,16 +73,19 @@ func (c *Cache) SetCacheBudget(ctx context.Context, cl clock.Clock, budget Cache
 	if problems := validateCacheBudget(budget); len(problems) > 0 {
 		return problems
 	}
-	for key, value := range map[string]int64{
+	return c.setPolicies(ctx, cl, formatInts(map[string]int64{
 		KeyCacheMaxBytes: budget.MaxBytes, KeyCacheMaxAgeDays: budget.MaxAgeDays,
 		KeyCacheImagesShare: budget.ImagesSharePercent, KeyCacheMetadataShare: budget.MetadataSharePercent,
 		KeyCacheMinFreePercent: budget.MinFreePercent,
-	} {
-		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
-			return err
-		}
+	}))
+}
+
+func formatInts(values map[string]int64) map[string]string {
+	formatted := make(map[string]string, len(values))
+	for key, value := range values {
+		formatted[key] = strconv.FormatInt(value, 10)
 	}
-	return nil
+	return formatted
 }
 
 func validateCacheBudget(budget CacheBudget) config.Problems {
@@ -165,14 +169,12 @@ func (s *Snapshot) CacheMeasurement() (CacheMeasurement, bool) {
 // (ADR-44 governs user input, not a probed fact) -- the same reasoning
 // SetRootFolderCapacity's own doc comment gives.
 func (c *Cache) SetCacheMeasurement(ctx context.Context, cl clock.Clock, measurement CacheMeasurement) error {
-	for key, value := range map[string]int64{
+	values := formatInts(map[string]int64{
 		keyCacheImagesBytes: measurement.ImagesBytes, keyCacheMetadataBytes: measurement.MetadataBytes,
 		keyCacheMeasuredAt: measurement.MeasuredAt, keyCacheDiskTotal: measurement.DiskTotalBytes,
 		keyCacheDiskFree: measurement.DiskFreeBytes, keyCacheShrunkTo: measurement.ShrunkToBytes,
-	} {
-		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
-			return err
-		}
-	}
-	return nil
+	})
+	return c.writeFact(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return setInstanceSettings(ctx, queries, cl, values)
+	})
 }

@@ -3,6 +3,7 @@ package musicbrainz
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -84,7 +85,8 @@ type proxyTrack struct {
 // group id to confirm from the unidentified queue, never a specific pressing.
 func (p proxy) Album(ctx context.Context, releaseGroupMBID, releaseMBID string) (ReleaseGroup, Release, error) {
 	var parsed proxyAlbum
-	url := fmt.Sprintf("%s/album/%s", p.baseURL, releaseGroupMBID)
+	escaped := url.PathEscape(releaseGroupMBID) // an id from a file tag is not trusted to be a bare MBID
+	url := fmt.Sprintf("%s/album/%s", p.baseURL, escaped)
 	if err := getJSON(ctx, p.client, url, &parsed); err != nil {
 		return ReleaseGroup{}, Release{}, fmt.Errorf("musicbrainz-proxy: album %s: %w", releaseGroupMBID, err)
 	}
@@ -150,7 +152,8 @@ func proxyWikidataQID(links []proxyLink) string {
 // which carries every release with its tracks.
 func (p proxy) Releases(ctx context.Context, releaseGroupMBID string) ([]Release, error) {
 	var parsed proxyAlbum
-	url := fmt.Sprintf("%s/album/%s", p.baseURL, releaseGroupMBID)
+	escaped := url.PathEscape(releaseGroupMBID) // an id from a file tag is not trusted to be a bare MBID
+	url := fmt.Sprintf("%s/album/%s", p.baseURL, escaped)
 	if err := getJSON(ctx, p.client, url, &parsed); err != nil {
 		return nil, fmt.Errorf("musicbrainz-proxy: album %s: %w", releaseGroupMBID, err)
 	}

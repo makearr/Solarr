@@ -6,6 +6,7 @@ package mediatool
 import (
 	"context"
 	"errors"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -156,8 +157,16 @@ func parseInt(value string) int64 {
 // parseSeconds reads ffprobe's fractional-second duration.
 func parseSeconds(value string) time.Duration {
 	seconds, err := strconv.ParseFloat(value, 64)
-	if err != nil || seconds < 0 {
+	if err != nil {
 		return 0
 	}
-	return time.Duration(seconds * float64(time.Second))
+	return durationFromSeconds(seconds)
+}
+
+func durationFromSeconds(seconds float64) time.Duration {
+	nanoseconds := seconds * float64(time.Second)
+	if math.IsNaN(nanoseconds) || math.IsInf(nanoseconds, 0) || nanoseconds < 0 || nanoseconds >= float64(1<<63-1) {
+		return 0
+	}
+	return time.Duration(nanoseconds)
 }

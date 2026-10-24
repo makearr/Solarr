@@ -149,10 +149,17 @@ func readEdition(info *Info, work string) string {
 		return editionRe.ReplaceAllString(work, " ")
 	}
 	cut := qualityStartIndex(work)
+	// With a year, the title is known: an edition word inside it ("Uncut Gems", "Final Cut") is the title's, not an edition.
+	titleEnd := 0
+	if title, year := splitTitle(work); year != 0 {
+		titleEnd = strings.Index(work, title) + len(title)
+	}
 	for _, edition := range editions {
-		if loc := edition.re.FindStringIndex(work); loc != nil && (cut < 0 || loc[0] <= cut+1 || cut == 0) {
-			info.Edition = edition.name
-			return work
+		for _, loc := range edition.re.FindAllStringIndex(work, -1) {
+			if loc[0] >= titleEnd && (cut < 0 || loc[0] <= cut+1 || cut == 0) {
+				info.Edition = edition.name
+				return work
+			}
 		}
 	}
 	return work

@@ -1,6 +1,8 @@
 package apiserver
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -62,14 +64,18 @@ func (r FilesystemRoots) Writable(path string) error {
 }
 
 func (r FilesystemRoots) probeWritable(directory string) error {
-	probe := filepath.Join(directory, ".mnx-write-probe")
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return fmt.Errorf("create write probe name: %w", err)
+	}
+	probe := filepath.Join(directory, ".mnx-write-probe-"+hex.EncodeToString(suffix))
 
 	file, err := r.FS.Create(probe)
 	if err != nil {
 		return err
 	}
 	if err := file.Close(); err != nil {
-		return err
+		return errors.Join(err, r.FS.Remove(probe))
 	}
 	// Or every root the user adds gets a stray file.
 	return r.FS.Remove(probe)

@@ -8,7 +8,6 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
@@ -52,6 +51,11 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 		GapWeight: body.GapWeight, UpgradeWeight: body.UpgradeWeight, NewReleaseDays: body.NewReleaseDays,
 		SearchesPerHour: body.SearchesPerHour, RSSFreshHours: body.RssFreshHours, HuntMode: string(derefOr(body.HuntMode, "")),
 	}
+	// Checked before the shares are written, so a refused change applies nothing.
+	if err := settings.ValidatePrioritySettings(wanted); err != nil {
+		s.writePriorityProblems(w, err)
+		return
+	}
 	if body.SearchShares != nil {
 		for _, share := range *body.SearchShares {
 			err := s.auth.Settings.SetCategorySearchShare(r.Context(), share.LibraryId, share.Share)
@@ -70,17 +74,21 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-	if err := s.auth.Settings.SetPrioritySettings(r.Context(), clock.NewSystem(), wanted); err != nil {
-		var problems config.Problems
-		if errors.As(err, &problems) {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"The priority settings have problems", problems.Report("the priority settings", "Nothing was changed."))
-			return
-		}
-		writeError(w, s.logger, err)
+	if err := s.auth.Settings.SetPrioritySettings(r.Context(), s.auth.Clock, wanted); err != nil {
+		s.writePriorityProblems(w, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.prioritySettingsView())
+}
+
+func (s *Server) writePriorityProblems(w http.ResponseWriter, err error) {
+	var problems config.Problems
+	if errors.As(err, &problems) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"The priority settings have problems", problems.Report("the priority settings", "Nothing was changed."))
+		return
+	}
+	writeError(w, s.logger, err)
 }
 
 func (s *Server) prioritySettingsView() gen.PrioritySettings {

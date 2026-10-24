@@ -6,6 +6,7 @@ package logbuffer
 import (
 	"context"
 	"log/slog"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,9 @@ type buffer struct {
 type Ring struct {
 	next slog.Handler
 	buf  *buffer
+	// attrs and group are what With and WithGroup added, which the record itself never carries.
+	attrs []string
+	group string
 }
 
 // NewRing wraps next, keeping at most capacity records.
@@ -64,8 +68,9 @@ func (r *Ring) Enabled(ctx context.Context, level slog.Level) bool {
 // being readable when the real sink is not.
 func (r *Ring) Handle(ctx context.Context, record slog.Record) error {
 	captured := Record{Time: record.Time, Level: record.Level.String(), Message: record.Message}
+	captured.Attrs = append(captured.Attrs, r.attrs...)
 	record.Attrs(func(attr slog.Attr) bool {
-		captured.Attrs = append(captured.Attrs, attr.Key+"="+attr.Value.String())
+		captured.Attrs = append(captured.Attrs, r.group+attr.Key+"="+attr.Value.String())
 		return true
 	})
 
@@ -85,12 +90,19 @@ func (r *Ring) Handle(ctx context.Context, record slog.Record) error {
 // WithAttrs and WithGroup wrap the next handler and share this ring, so a
 // logger derived with .With() still lands in the same buffer.
 func (r *Ring) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return &Ring{next: r.next.WithAttrs(attrs), buf: r.buf}
+	formatted := slices.Clone(r.attrs)
+	for _, attr := range attrs {
+		formatted = append(formatted, r.group+attr.Key+"="+attr.Value.String())
+	}
+	return &Ring{next: r.next.WithAttrs(attrs), buf: r.buf, attrs: formatted, group: r.group}
 }
 
-// WithGroup mirrors WithAttrs.
+// WithGroup mirrors WithAttrs; the group prefixes later keys as the text handler does ("group.key").
 func (r *Ring) WithGroup(name string) slog.Handler {
-	return &Ring{next: r.next.WithGroup(name), buf: r.buf}
+	if name == "" {
+		return r
+	}
+	return &Ring{next: r.next.WithGroup(name), buf: r.buf, attrs: r.attrs, group: r.group + name + "."}
 }
 
 // Filter narrows what Records answers.

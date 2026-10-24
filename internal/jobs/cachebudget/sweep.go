@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"math"
 	"path/filepath"
 	"sort"
 	"time"
@@ -32,6 +33,17 @@ import (
 // NamespaceReport is one namespace's measured size.
 type NamespaceReport struct {
 	Bytes int64
+}
+
+// percentOf avoids overflowing the intermediate multiplication for large byte budgets.
+func percentOf(bytes, percent int64) int64 {
+	if bytes <= 0 || percent <= 0 {
+		return 0
+	}
+	if percent >= 100 {
+		return bytes
+	}
+	return (bytes/100)*percent + (bytes%100)*percent/100
 }
 
 // Report is what one measurement pass found, both namespaces together.
@@ -123,11 +135,17 @@ func (s *Sweep) heldToFreeSpace(ctx context.Context, budget *settings.CacheBudge
 	if now.DiskTotalBytes <= 0 {
 		return 0, nil
 	}
-	short := now.DiskTotalBytes*budget.MinFreePercent/100 - now.DiskFreeBytes
+	short := percentOf(now.DiskTotalBytes, budget.MinFreePercent) - now.DiskFreeBytes
 	if short <= 0 {
 		return 0, nil
 	}
-	ceiling := max(0, now.Images.Bytes+now.Metadata.Bytes-short)
+	used := now.Images.Bytes
+	if now.Metadata.Bytes > 0 && used > int64(^uint64(0)>>1)-now.Metadata.Bytes {
+		used = math.MaxInt64
+	} else {
+		used += now.Metadata.Bytes
+	}
+	ceiling := max(0, used-short)
 	if ceiling >= budget.MaxBytes {
 		return 0, nil
 	}
@@ -157,8 +175,8 @@ func (s *Sweep) Enforce(ctx context.Context, budget settings.CacheBudget) (Resul
 	if err != nil {
 		return Result{}, fmt.Errorf("cachebudget: free space: %w", err)
 	}
-	imagesBudgetBytes := budget.MaxBytes * budget.ImagesSharePercent / 100
-	metadataBudgetBytes := budget.MaxBytes * budget.MetadataSharePercent / 100
+	imagesBudgetBytes := percentOf(budget.MaxBytes, budget.ImagesSharePercent)
+	metadataBudgetBytes := percentOf(budget.MaxBytes, budget.MetadataSharePercent)
 
 	imagesBudgetEvicted, err := s.evictOldestImagesUntilUnder(imagesBudgetBytes)
 	if err != nil {

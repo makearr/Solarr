@@ -418,6 +418,10 @@ func (j *Job) checkFingerprint(ctx context.Context, acquisition library.Acquisit
 	if entry.Name == "" {
 		return false, nil // the client does not know the name yet
 	}
+	// A torrent's reference is its info hash, which cannot name another download; its name changes once a magnet's metadata arrives.
+	if acquisition.Protocol == "torrent" {
+		return false, nil
+	}
 	fingerprint := "client:" + entry.Name
 	now := j.config.Clock.Now().Unix()
 	if !strings.HasPrefix(acquisition.ClientFingerprint, "client:") {
@@ -473,7 +477,8 @@ func (j *Job) jobFolder(ctx context.Context, localPath string) string {
 		return localPath
 	}
 	for _, folder := range folders {
-		if strings.HasPrefix(parent, path.Clean(folder)+"/") {
+		root := path.Clean(folder)
+		if parent != root && fsx.Within(root, parent) {
 			return parent
 		}
 	}
@@ -494,7 +499,7 @@ func (j *Job) checkPath(ctx context.Context, localPath string) string {
 	inside := false
 	for _, folder := range folders {
 		root := path.Clean(folder)
-		if clean == root || strings.HasPrefix(clean, root+"/") {
+		if fsx.Within(root, clean) {
 			inside = true
 			break
 		}

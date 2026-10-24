@@ -148,6 +148,16 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			return fmt.Errorf("moverjob: set move job %d running: %w", moveJob.ID, err)
 		}
 	}
+	var plan mover.MovePlan
+	if moveJob.PlanJSON != "" {
+		if err := json.Unmarshal([]byte(moveJob.PlanJSON), &plan); err != nil {
+			return fmt.Errorf("moverjob: decode plan for job %d: %w", moveJob.ID, err)
+		}
+	}
+	planned := make(map[int64]mover.PlannedMove, len(plan.Moves))
+	for _, move := range plan.Moves {
+		planned[move.MediaObjectID] = move
+	}
 
 	permissions := j.permissionsFor(moveJob)
 	for {
@@ -159,7 +169,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			return fmt.Errorf("moverjob: next pending item for job %d: %w", moveJob.ID, err)
 		}
 
-		if err := j.applyItem(ctx, item, permissions); err != nil {
+		if err := j.applyItem(ctx, item, permissions, planned[item.MediaObjectID]); err != nil {
 			j.logger.Warn("move item failed",
 				slog.Int64("move_job_id", moveJob.ID), slog.Int64("media_object_id", item.MediaObjectID),
 				slog.String("error", err.Error()))
@@ -194,7 +204,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 // one, then TIDY now-empty source directories -- ADR-51's own
 // copy-verify-repoint-unlink order (Invariant 77), repoint and unlink both
 // the caller's job since ApplyOne imports no store.
-func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mover.Permissions) error {
+func (j *Job) applyItem(
+	ctx context.Context, item library.Item, permissions *mover.Permissions, planned mover.PlannedMove,
+) error {
 	paths, err := j.physical.PathsForObject(ctx, item.MediaObjectID)
 	if err != nil {
 		return fmt.Errorf("paths for media object %d: %w", item.MediaObjectID, err)
@@ -212,10 +224,10 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 	}
 
 	if primary.RootFolderID == item.DestRootID && primary.RelPath == item.DestRelPath {
-		// Already at the destination: a prior attempt completed RECORD (and
-		// likely UNLINK) before crashing on the bookkeeping below. The old
-		// location is not recoverable from move_item, which does not
-		// persist it -- what is left is the companions a crash may have cut short.
+		// The saved plan supplies the old path if a crash followed RECORD but preceded UNLINK.
+		if !item.KeepSource && planned.MediaObjectID == item.MediaObjectID {
+			j.removeMovedSource(planned)
+		}
 		j.moveCompanions(ctx, item, primary.RootFolderID, permissions)
 		return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
 	}
@@ -246,7 +258,11 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 		return fmt.Errorf("apply: %w", err)
 	}
 	if permissions != nil {
-		destAbs := path.Join(destRoot.Path, item.DestRelPath)
+		destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, item.DestRelPath)
+		if err != nil {
+			j.logger.Warn("permissions not set because destination path is invalid", slog.Any("error", err))
+			return err
+		}
 		if err := mover.ApplyPermissions(j.fsys, destRoot.Path, destAbs, *permissions); err != nil {
 			j.logger.Warn("permissions not set", slog.String("path", destAbs), slog.Any("error", err))
 		}
@@ -261,7 +277,10 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 		return fmt.Errorf("record relocation: %w", err)
 	}
 
-	sourceAbs := path.Join(sourceRoot.Path, primary.RelPath)
+	sourceAbs, err := mover.RootRelativePath(j.fsys, sourceRoot.Path, primary.RelPath)
+	if err != nil {
+		return fmt.Errorf("source path before unlink: %w", err)
+	}
 	if err := j.fsys.Remove(sourceAbs); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		// SameFilesystem's own rename(2) already moved the file, so a
 		// same-filesystem move reaches here with nothing left to unlink --
@@ -272,6 +291,50 @@ func (j *Job) applyItem(ctx context.Context, item library.Item, permissions *mov
 	j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
 
 	return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
+}
+
+func (j *Job) removeMovedSource(move mover.PlannedMove) {
+	sourceRoot, sourceOK := j.roots.RootFolder(move.SourceRootFolderID)
+	destRoot, destOK := j.roots.RootFolder(move.DestRootFolderID)
+	if !sourceOK || !destOK {
+		return
+	}
+	sourceAbs, err := mover.RootRelativePath(j.fsys, sourceRoot.Path, move.SourceRelPath)
+	if err != nil {
+		j.logger.Warn("old move source left in place because its path is invalid", slog.Any("error", err))
+		return
+	}
+	destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, move.DestRelPath)
+	if err != nil {
+		j.logger.Warn("old move source left in place because its destination path is invalid", slog.Any("error", err))
+		return
+	}
+	if sourceAbs == destAbs {
+		return
+	}
+	info, err := j.fsys.Lstat(sourceAbs)
+	if errors.Is(err, fs.ErrNotExist) {
+		j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
+		return
+	}
+	if err != nil {
+		j.logger.Warn("old move source left in place", slog.String("path", sourceAbs), slog.Any("error", err))
+		return
+	}
+	if !info.Mode.IsRegular() {
+		j.logger.Warn("old move source left in place because it is not a regular file", slog.String("path", sourceAbs))
+		return
+	}
+	if err := mover.Verify(j.fsys, destAbs, sourceAbs, move.SizeBytes); err != nil {
+		j.logger.Warn("old move source left in place because its content differs",
+			slog.String("path", sourceAbs), slog.Any("error", err))
+		return
+	}
+	if err := j.fsys.Remove(sourceAbs); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		j.logger.Warn("old move source could not be removed", slog.String("path", sourceAbs), slog.Any("error", err))
+		return
+	}
+	j.tidy(path.Dir(sourceAbs), sourceRoot.Path)
 }
 
 // moveCompanions moves the item's subtitles, nfo and pictures after it from sourceRootID; one already moved or gone is
@@ -292,13 +355,25 @@ func (j *Job) moveCompanions(ctx context.Context, item library.Item, sourceRootI
 		return root.Path, ok
 	}
 	for _, companion := range companions {
-		sourceAbs, destAbs := path.Join(sourceRoot.Path, companion.SourceRelPath), path.Join(destRoot.Path, companion.DestRelPath)
+		sourceAbs, err := mover.RootRelativePath(j.fsys, sourceRoot.Path, companion.SourceRelPath)
+		if err != nil {
+			j.logger.Warn("companion not moved because its source path is invalid", slog.Any("error", err))
+			continue
+		}
+		destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, companion.DestRelPath)
+		if err != nil {
+			j.logger.Warn("companion not moved because its destination path is invalid", slog.Any("error", err))
+			continue
+		}
 		info, err := j.fsys.Stat(sourceAbs)
 		if err != nil || sourceAbs == destAbs {
 			continue
 		}
 		if _, err := j.fsys.Stat(destAbs); err == nil {
 			j.logger.Warn("companion left where it is: its new name is taken", slog.String("path", sourceAbs), slog.String("taken", destAbs))
+			continue
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			j.logger.Warn("companion left where it is: destination could not be checked", slog.String("path", destAbs), slog.Any("error", err))
 			continue
 		}
 		move := mover.PlannedMove{
@@ -344,7 +419,12 @@ func (j *Job) permissionsFor(moveJob library.Job) *mover.Permissions {
 // rootBase. Best-effort: any error, including "not empty", just stops --
 // TIDY is a courtesy cleanup, not a correctness guarantee.
 func (j *Job) tidy(dir, rootBase string) {
-	for dir != rootBase && dir != "." && dir != "/" && dir != "" {
+	// dir comes from mover.RootRelativePath, so it is compared with the resolved root, never the configured spelling.
+	root, err := j.fsys.Resolve(path.Clean(rootBase))
+	if err != nil {
+		return
+	}
+	for dir != root && fsx.Within(root, dir) {
 		if err := j.fsys.Remove(dir); err != nil {
 			return
 		}
@@ -379,8 +459,25 @@ func (j *Job) copyItem(
 	if !ok {
 		return fmt.Errorf("destination root %d has no known path", item.DestRootID)
 	}
-	sourceAbs, destAbs := path.Join(sourceRoot.Path, sourceRel), path.Join(destRoot.Path, item.DestRelPath)
-	if _, err := j.fsys.Stat(destAbs); err != nil {
+	sourceAbs, err := mover.RootRelativePath(j.fsys, sourceRoot.Path, sourceRel)
+	if err != nil {
+		return fmt.Errorf("copy source path: %w", err)
+	}
+	destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, item.DestRelPath)
+	if err != nil {
+		return fmt.Errorf("copy destination path: %w", err)
+	}
+	if info, err := j.fsys.Lstat(destAbs); err == nil {
+		if info.Mode&fs.ModeSymlink != 0 {
+			return fmt.Errorf("copy destination %q is a symlink", destAbs)
+		}
+		if err := mover.Verify(j.fsys, sourceAbs, destAbs, item.Bytes); err != nil {
+			return fmt.Errorf("destination %q is occupied by different content: %w", destAbs, err)
+		}
+		if err := j.links.AddLinkedPath(ctx, item.MediaObjectID, item.DestRootID, item.DestRelPath, library.LinkPrimary); err != nil {
+			return fmt.Errorf("record existing copy: %w", err)
+		}
+	} else if errors.Is(err, fs.ErrNotExist) {
 		method, err := mover.PlaceOne(j.fsys, sourceAbs, destAbs, item.Bytes, copyLadder)
 		if err != nil {
 			return fmt.Errorf("copy %q: %w", sourceAbs, err)
@@ -393,8 +490,8 @@ func (j *Job) copyItem(
 		if err := j.links.AddLinkedPath(ctx, item.MediaObjectID, item.DestRootID, item.DestRelPath, linkKindOf(method)); err != nil {
 			return errors.Join(fmt.Errorf("record the copy: %w", err), j.fsys.Remove(destAbs))
 		}
-	} else if err := j.links.AddLinkedPath(ctx, item.MediaObjectID, item.DestRootID, item.DestRelPath, library.LinkPrimary); err != nil {
-		return fmt.Errorf("%q is taken: %w", destAbs, err)
+	} else {
+		return fmt.Errorf("check copy destination %q: %w", destAbs, err)
 	}
 	j.copyCompanions(ctx, item, sourceRootID, sourceRoot, destRoot)
 	return j.moveJobs.SetItemState(ctx, item.MoveJobID, item.MediaObjectID, library.MoveItemDone, "")
@@ -408,12 +505,24 @@ func (j *Job) copyCompanions(ctx context.Context, item library.Item, sourceRootI
 		return
 	}
 	for _, companion := range companions {
-		sourceAbs, destAbs := path.Join(sourceRoot.Path, companion.SourceRelPath), path.Join(destRoot.Path, companion.DestRelPath)
+		sourceAbs, err := mover.RootRelativePath(j.fsys, sourceRoot.Path, companion.SourceRelPath)
+		if err != nil {
+			j.logger.Warn("companion not copied because its source path is invalid", slog.Any("error", err))
+			continue
+		}
+		destAbs, err := mover.RootRelativePath(j.fsys, destRoot.Path, companion.DestRelPath)
+		if err != nil {
+			j.logger.Warn("companion not copied because its destination path is invalid", slog.Any("error", err))
+			continue
+		}
 		info, err := j.fsys.Stat(sourceAbs)
 		if err != nil {
 			continue
 		}
 		if _, err := j.fsys.Stat(destAbs); err == nil {
+			continue
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			j.logger.Warn("companion not copied: destination could not be checked", slog.String("path", destAbs), slog.Any("error", err))
 			continue
 		}
 		if _, err := mover.PlaceOne(j.fsys, sourceAbs, destAbs, info.Size, copyLadder); err != nil {

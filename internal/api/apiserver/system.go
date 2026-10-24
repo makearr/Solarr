@@ -185,14 +185,16 @@ func (s *Server) SetMyTier(w http.ResponseWriter, r *http.Request) {
 			Permission: string(access.Permission(category.ID)),
 		})
 	}
-	user, ok := s.auth.Settings.Snapshot().User(access.UserID())
+	snapshot := s.auth.Settings.Snapshot()
+	user, ok := snapshot.User(access.UserID())
 	if !ok {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such user")
 		return
 	}
+	// The whole Me, as GET /me answers it.
 	writeJSON(w, s.logger, http.StatusOK, meView{
-		UserID: access.UserID(), Role: string(access.Role()), Tier: string(user.Tier),
-		TierMax: string(user.Limits.TierMax), Categories: categories,
+		UserID: access.UserID(), Username: user.Username, AuthRequired: snapshot.AuthRequired(),
+		Role: string(access.Role()), Tier: string(user.Tier), TierMax: string(user.Limits.TierMax), Categories: categories,
 	})
 }
 

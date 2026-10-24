@@ -57,6 +57,11 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := s.auth.Registry.LookupAll(settings.KeyAuthRequired); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+
 	// Requiring a login that nobody can satisfy locks the instance out of its own
 	// interface, which ADR-44 exists to prevent. An account existing is not
 	// enough: the one created when authentication was switched off carries no
@@ -76,10 +81,6 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.auth.Registry.LookupAll(settings.KeyAuthRequired); err != nil {
-		writeError(w, s.logger, err)
-		return
-	}
 	if err := s.auth.Settings.SetAuthRequired(r.Context(), s.auth.Clock, *request.AuthRequired); err != nil {
 		writeError(w, s.logger, err)
 		return

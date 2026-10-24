@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -294,7 +295,7 @@ func (s *Server) GetWork(w http.ResponseWriter, r *http.Request, id int64) {
 	requestRoots, requestCategories := s.visibleAt(access, settings.PermissionRequest)
 	view.CanRequest = workDetailVisible(requestRoots, requestCategories, row)
 	if view.Files != nil {
-		annotateWholeFiles(access, categoryIDs, *view.Files)
+		annotateWholeFiles(access, row.CategoryIDs, *view.Files)
 	}
 	writeJSON(w, s.logger, http.StatusOK, view)
 }
@@ -516,7 +517,12 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), settings.PermissionRead)
+	// Monitoring decides what is searched, as for one work; a preview only reads.
+	permission := settings.PermissionRequest
+	if derefOr(body.Preview, false) {
+		permission = settings.PermissionRead
+	}
+	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), permission)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -889,7 +895,10 @@ func (s *Server) RemoveWork(w http.ResponseWriter, r *http.Request, id int64) {
 		Exclude     bool `json:"exclude"`
 	}
 	if r.Body != nil {
-		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body)
+		if err := decodeOptionalJSONBody(w, r, &body); err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body must be valid JSON")
+			return
+		}
 	}
 
 	result, err := s.worksMonitor.RemoveWork(r.Context(), id, body.DeleteFiles, body.Exclude)
@@ -936,7 +945,10 @@ func (s *Server) RemovePart(w http.ResponseWriter, r *http.Request, id, partID i
 	// An absent body keeps the file, matching RemoveWork.
 	var body gen.RemovePartJSONRequestBody
 	if r.Body != nil {
-		_ = json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body)
+		if err := decodeOptionalJSONBody(w, r, &body); err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body must be valid JSON")
+			return
+		}
 	}
 	deleteFiles := body.DeleteFiles != nil && *body.DeleteFiles
 
@@ -950,6 +962,26 @@ func (s *Server) RemovePart(w http.ResponseWriter, r *http.Request, id, partID i
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.RemovePartResult{FilesRecycled: result.FilesRecycled})
+}
+
+// decodeOptionalJSONBody permits an empty body while requiring any supplied body to contain
+// exactly one JSON value. A second decode also forces the byte limit across trailing whitespace.
+func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, into any) error {
+	decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody))
+	if err := decoder.Decode(into); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return errors.New("multiple JSON values")
+		}
+		return err
+	}
+	return nil
 }
 
 func groupView(group GroupRow) gen.WorkGroup {

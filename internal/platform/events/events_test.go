@@ -165,6 +165,30 @@ func TestBus_SinceReportsAnIncompleteHistory(t *testing.T) {
 	}
 }
 
+// A client's id from before a restart is newer than anything this process issued: nothing it missed can be replayed.
+func TestBus_SinceAnIDFromBeforeARestartIsIncomplete(t *testing.T) {
+	bus, _ := newBus(t)
+	bus.Publish(events.Event{Topic: events.TopicJob, Entity: "job:1"})
+
+	missed, complete := bus.Since(500, nil)
+	if complete || len(missed) != 0 {
+		t.Errorf("Since(500) = %d events, complete %v; want none and incomplete", len(missed), complete)
+	}
+}
+
+// Eviction is judged on the whole ring: a topic with no event left in it still lost what fell out.
+func TestBus_SinceIsIncompleteWhenOtherTopicsFilledTheRing(t *testing.T) {
+	bus, _ := newBus(t)
+	bus.Publish(events.Event{Topic: events.TopicLibrary, Entity: "work:1"})
+	for range events.DefaultReplayBuffer + 1 {
+		bus.Publish(events.Event{Topic: events.TopicJob, Entity: "job:1"})
+	}
+
+	if _, complete := bus.Since(0, map[events.Topic]bool{events.TopicLibrary: true}); complete {
+		t.Error("complete = true although the library event fell out of the ring")
+	}
+}
+
 func TestBus_SinceFiltersByTopic(t *testing.T) {
 	bus, _ := newBus(t)
 	bus.Publish(events.Event{Topic: events.TopicJob, Entity: "job:1"})

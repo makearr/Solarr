@@ -197,12 +197,17 @@ func (q *Queue) Start(ctx context.Context, job Job, owner string) (Attempt, erro
 
 	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
 		queries := q.queries.WithTx(tx)
-		if err := queries.StartJob(ctx, jobsdb.StartJobParams{
+		started, err := queries.StartJob(ctx, jobsdb.StartJobParams{
 			UpdatedAt:  now.Unix(),
 			ID:         job.ID,
 			LeaseOwner: nullString(owner),
-		}); err != nil {
+		})
+		if err != nil {
 			return err
+		}
+		// Reaped between claim and start: another worker may hold it now, so this one must not run it.
+		if started == 0 {
+			return ErrLeaseLost
 		}
 		recorded, err := queries.RecordAttemptStart(ctx, jobsdb.RecordAttemptStartParams{
 			JobID:      job.ID,

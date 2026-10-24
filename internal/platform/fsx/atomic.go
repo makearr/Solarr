@@ -24,6 +24,12 @@ func WriteAtomicSecret(fsys FS, destination string, write func(io.Writer) error)
 	return writeAtomic(fsys, destination, fsys.CreateSecret, write)
 }
 
+// WriteAtomicSecretNew publishes a new secret file atomically and fails if destination exists: linked, not renamed,
+// so two first writers cannot replace each other's result.
+func WriteAtomicSecretNew(fsys FS, destination string, write func(io.Writer) error) error {
+	return writeAtomicNew(fsys, destination, fsys.CreateSecret, write)
+}
+
 func writeAtomic(
 	fsys FS,
 	destination string,
@@ -55,6 +61,39 @@ func writeAtomic(
 		_ = fsys.Remove(temporary)
 		return fmt.Errorf("rename into %q: %w", destination, err)
 	}
+	return nil
+}
+
+func writeAtomicNew(
+	fsys FS,
+	destination string,
+	create func(string) (io.WriteCloser, error),
+	write func(io.Writer) error,
+) error {
+	suffix, err := randomSuffix()
+	if err != nil {
+		return err
+	}
+	temporary := filepath.Join(filepath.Dir(destination), tempPrefix+filepath.Base(destination)+"."+suffix)
+	file, err := create(temporary)
+	if err != nil {
+		return fmt.Errorf("create temporary for %q: %w", destination, err)
+	}
+	cleanup := func() { _ = fsys.Remove(temporary) }
+	if err := write(file); err != nil {
+		_ = file.Close()
+		cleanup()
+		return fmt.Errorf("write %q: %w", destination, err)
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return fmt.Errorf("close temporary for %q: %w", destination, err)
+	}
+	if err := fsys.Link(temporary, destination); err != nil {
+		cleanup()
+		return fmt.Errorf("publish new file %q: %w", destination, err)
+	}
+	cleanup()
 	return nil
 }
 

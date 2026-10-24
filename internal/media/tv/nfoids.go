@@ -32,7 +32,8 @@ func ShowNFOIDs(fsys fsx.FS, folder string) FolderGuess {
 	}
 	defer func() { _ = file.Close() }()
 	var show nfoShow
-	if xml.NewDecoder(io.LimitReader(file, maxNFOBytes)).Decode(&show) != nil {
+	source, err := io.ReadAll(io.LimitReader(file, maxNFOBytes+1))
+	if err != nil || int64(len(source)) > maxNFOBytes || xml.Unmarshal(source, &show) != nil {
 		return FolderGuess{}
 	}
 	ids := FolderGuess{}

@@ -110,18 +110,27 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		return fmt.Errorf("tv: %w", err)
 	}
 
+	// A series folder is one group; loose files at the root group by the series they name, since two side by side may be
+	// two series (one lookup per series, not per file).
 	byFolder := map[string][]int{}
 	for i, observed := range readable {
-		folder, _, _ := strings.Cut(observed.File.RelPath, "/")
+		group, _, _ := strings.Cut(observed.File.RelPath, "/")
 		if !strings.Contains(observed.File.RelPath, "/") {
-			folder = ""
+			group = "/" + observed.File.RelPath
+			if info, ok := parsetv.Parse(observed.File.RelPath, now); ok && info.SeriesTitle != "" {
+				group = "/" + strings.ToLower(info.SeriesTitle)
+			}
 		}
-		byFolder[folder] = append(byFolder[folder], i)
+		byFolder[group] = append(byFolder[group], i)
 	}
 
 	var queued []library.QueueEntry
 	attached, matched := 0, 0
-	for folder, indexes := range byFolder {
+	for group, indexes := range byFolder {
+		folder := group
+		if strings.HasPrefix(group, "/") {
+			folder = ""
+		}
 		relPaths := make([]string, len(indexes))
 		for n, i := range indexes {
 			relPaths[n] = readable[i].File.RelPath

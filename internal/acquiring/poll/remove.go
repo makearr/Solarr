@@ -43,17 +43,18 @@ func (j *Job) Remove(ctx context.Context, acquisitionID int64, blocklist bool) e
 	if err := j.config.Acquisitions.SetState(ctx, acquisition.ID, StateCancelled, detail, now); err != nil {
 		return err
 	}
-	j.config.History(ctx, download.HistoryRemoved, acquisition, historyDetail)
 
 	clients, err := j.config.Clients(ctx)
 	if err != nil {
-		return err
+		return errors.Join(err, j.uncancel(ctx, acquisition))
 	}
 	if client, ok := clients[acquisition.DownloaderID]; ok {
 		if err := client.Client.Remove(ctx, acquisition.DownloadClientRef, true); err != nil {
-			return fmt.Errorf("remove from the download client: %w", err)
+			// Still in the client, so tracked again: cancelled, it would keep downloading with nothing watching it.
+			return errors.Join(fmt.Errorf("remove from the download client: %w", err), j.uncancel(ctx, acquisition))
 		}
 	}
+	j.config.History(ctx, download.HistoryRemoved, acquisition, historyDetail)
 	if blocklist && acquisition.DesiredItemID != nil {
 		if err := j.config.Search(ctx, *acquisition.DesiredItemID); err != nil {
 			j.config.Logger.Warn("search after removing a download did not run",
@@ -89,4 +90,9 @@ func (j *Job) SetPaused(ctx context.Context, downloaderID int64, paused bool) er
 		return client.Client.Pause(ctx, refs)
 	}
 	return client.Client.Resume(ctx, refs)
+}
+
+// uncancel puts a download whose removal failed back in the state it had.
+func (j *Job) uncancel(ctx context.Context, acquisition library.Acquisition) error {
+	return j.config.Acquisitions.SetState(ctx, acquisition.ID, acquisition.State, acquisition.LastError, j.config.Clock.Now().Unix())
 }

@@ -171,3 +171,34 @@ func TestWarnIfUnapplicable(t *testing.T) {
 		})
 	}
 }
+
+// A managed directory configured as a link is taken over where it really is; a link inside it is never followed.
+func TestChownTree_FollowsTheConfiguredLinkButNoLinkInside(t *testing.T) {
+	mem := fsx.NewMem(clock.NewFakeAtEpoch())
+	for _, dir := range []string{"/fast/cache", "/elsewhere", "/config"} {
+		if err := mem.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, file := range []string{"/fast/cache/entry", "/elsewhere/private"} {
+		if err := fsx.WriteAtomic(mem, file, func(w io.Writer) error { _, err := io.WriteString(w, "x"); return err }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := mem.Symlink("/fast/cache", "/config/cache"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mem.Symlink("/elsewhere/private", "/fast/cache/outside"); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := privilege.ChownTree(mem, "/config/cache", privilege.Identity{UID: 1000, GID: 1000}); err != nil {
+		t.Fatalf("ChownTree: %v", err)
+	}
+	if info, err := mem.Stat("/fast/cache/entry"); err != nil || info.UID != 1000 {
+		t.Errorf("the linked directory's file: uid %d, %v; want 1000", info.UID, err)
+	}
+	if info, err := mem.Stat("/elsewhere/private"); err != nil || info.UID == 1000 {
+		t.Errorf("the target of a link inside the tree was taken over: uid %d, %v", info.UID, err)
+	}
+}

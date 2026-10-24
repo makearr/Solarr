@@ -297,7 +297,7 @@ func (j *ArtworkJob) download(ctx context.Context, imageURL string) ([]byte, err
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("fetch image: status %d", response.StatusCode)
 	}
-	source, err := io.ReadAll(io.LimitReader(response.Body, maxImageBytes))
+	source, err := httpx.ReadLimited(response.Body, maxImageBytes)
 	if err != nil {
 		return nil, fmt.Errorf("read image: %w", err)
 	}

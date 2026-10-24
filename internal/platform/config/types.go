@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -37,7 +38,11 @@ func parseDuration(text string) (time.Duration, error) {
 	if days, found := strings.CutSuffix(trimmed, "d"); found {
 		count, err := strconv.ParseFloat(days, 64)
 		if err == nil {
-			return time.Duration(count * float64(24*time.Hour)), nil
+			nanoseconds, ok := scaledInt64(count, float64(24*time.Hour))
+			if !ok {
+				return 0, fmt.Errorf("duration %q is outside the supported range", text)
+			}
+			return time.Duration(nanoseconds), nil
 		}
 	}
 	parsed, err := time.ParseDuration(trimmed)
@@ -96,7 +101,11 @@ func (b *Bytes) UnmarshalYAML(raw []byte) error {
 		if err != nil {
 			return fmt.Errorf("expected a size such as 50GB, got %q", text)
 		}
-		*b = Bytes(int64(count * float64(unit.factor)))
+		bytes, ok := scaledInt64(count, float64(unit.factor))
+		if !ok {
+			return fmt.Errorf("size %q is outside the supported range", text)
+		}
+		*b = Bytes(bytes)
 		return nil
 	}
 
@@ -106,6 +115,16 @@ func (b *Bytes) UnmarshalYAML(raw []byte) error {
 	}
 	*b = Bytes(count)
 	return nil
+}
+
+// scaledInt64 converts a scaled floating-point config value without allowing
+// NaN, infinity, or out-of-range values to wrap during integer conversion.
+func scaledInt64(value, scale float64) (int64, bool) {
+	scaled := value * scale
+	if math.IsNaN(scaled) || math.IsInf(scaled, 0) || scaled >= float64(1<<63-1) || scaled < float64(-1<<63) {
+		return 0, false
+	}
+	return int64(scaled), true
 }
 
 // Mode is the dry-run level (ADR-20).

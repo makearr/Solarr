@@ -3,6 +3,7 @@ package movie
 import (
 	"cmp"
 	"context"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -79,7 +80,7 @@ func FromOMDb(in omdb.Movie) Movie {
 			score, _ = strconv.ParseFloat(strings.TrimSuffix(value, "%"), 64)
 			score /= 10
 		}
-		if score <= 0 {
+		if math.IsNaN(score) || math.IsInf(score, 0) || score <= 0 {
 			continue
 		}
 		switch rating.Source {

@@ -2,6 +2,7 @@ package tv
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,7 @@ func FromSkyhook(in skyhook.Series) Series {
 		Network: in.Network, OriginalNetwork: in.OriginalNetwork, Genres: in.Genres, ContentRating: in.ContentRating,
 		OriginalLanguage: in.OriginalLanguage, OriginalCountry: in.OriginalCountry, Sources: []string{sourceSkyhook},
 	}
-	if score, err := strconv.ParseFloat(in.Rating.Value, 64); err == nil {
+	if score, err := strconv.ParseFloat(in.Rating.Value, 64); err == nil && !math.IsNaN(score) && !math.IsInf(score, 0) {
 		series.Rating, series.RatingVotes = score, in.Rating.Count
 	}
 	if in.TimeOfDay != nil {

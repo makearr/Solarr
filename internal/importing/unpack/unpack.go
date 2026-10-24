@@ -169,9 +169,16 @@ func folderName(relative string) string {
 	}
 	name = strings.TrimSuffix(name, path.Ext(name))
 	// "Album.part01" from "Album.part01.rar": the volume marker is not part of the folder's name.
-	for _, marker := range []string{".part1", ".part01", ".part001"} {
-		if strings.HasSuffix(strings.ToLower(name), marker) {
-			return name[:len(name)-len(marker)]
+	lower := strings.ToLower(name)
+	if marker := strings.LastIndex(lower, ".part"); marker >= 0 {
+		volume := name[marker+len(".part"):]
+		if volume != "" {
+			for _, digit := range volume {
+				if digit < '0' || digit > '9' {
+					return name
+				}
+			}
+			return name[:marker]
 		}
 	}
 	return name
@@ -179,11 +186,18 @@ func folderName(relative string) string {
 
 // RemoveTree deletes a workspace, children first.
 func RemoveTree(fsys fsx.FS, root string) error {
-	entries, err := fsys.ReadDir(root)
+	info, err := fsys.Lstat(root)
 	if err != nil {
 		if isMissing(err) {
 			return nil
 		}
+		return err
+	}
+	if !info.IsDir || info.Mode&fs.ModeSymlink != 0 {
+		return fsys.Remove(root)
+	}
+	entries, err := fsys.ReadDir(root)
+	if err != nil {
 		return err
 	}
 	for _, entry := range entries {
@@ -203,18 +217,31 @@ func RemoveTree(fsys fsx.FS, root string) error {
 
 // SweepOlderThan removes the workspaces of dir last touched before cutoff and answers how many; a missing dir is none.
 func SweepOlderThan(fsys fsx.FS, dir string, cutoff time.Time) (int, error) {
-	entries, err := fsys.ReadDir(dir)
+	rootInfo, err := fsys.Lstat(dir)
 	if err != nil {
 		if isMissing(err) {
 			return 0, nil
 		}
 		return 0, err
 	}
+	if !rootInfo.IsDir || rootInfo.Mode&fs.ModeSymlink != 0 {
+		return 0, fmt.Errorf("unpack: workspace root %q is not a directory", dir)
+	}
+	entries, err := fsys.ReadDir(dir)
+	if err != nil {
+		return 0, err
+	}
 	removed := 0
 	for _, entry := range entries {
 		folder := path.Join(dir, entry.Name)
-		info, err := fsys.Stat(folder)
-		if err != nil || !info.ModTime.Before(cutoff) {
+		info, err := fsys.Lstat(folder)
+		if err != nil {
+			if isMissing(err) {
+				continue
+			}
+			return removed, err
+		}
+		if !info.ModTime.Before(cutoff) {
 			continue
 		}
 		if err := RemoveTree(fsys, folder); err != nil {

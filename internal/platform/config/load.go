@@ -16,6 +16,10 @@ import (
 // run writes one from the defaults.
 var ErrNotFound = errors.New("config: file not found")
 
+// MaxDocumentBytes bounds the bootstrap YAML read both at startup and when a
+// settings change patches server.port. A valid config is expected to be small.
+const MaxDocumentBytes int64 = 1 << 20
+
 // Parse decodes and validates a config document, returning every problem it finds rather than
 // the first (ADR-44).
 func Parse(data []byte) (Config, error) {
@@ -71,9 +75,12 @@ func Load(fsys fsx.FS, path string) (Config, error) {
 	}
 	defer func() { _ = file.Close() }()
 
-	data, err := io.ReadAll(file)
+	data, err := io.ReadAll(io.LimitReader(file, MaxDocumentBytes+1))
 	if err != nil {
 		return Default(), fmt.Errorf("config: read %s: %w", path, err)
+	}
+	if int64(len(data)) > MaxDocumentBytes {
+		return Default(), fmt.Errorf("config: %s exceeds the %d byte limit", path, MaxDocumentBytes)
 	}
 	return ParseWithEnv(data, os.LookupEnv)
 }

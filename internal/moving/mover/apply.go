@@ -1,12 +1,15 @@
 package mover
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"path"
+	"path/filepath"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -46,8 +49,38 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 	if !ok {
 		return fmt.Errorf("mover: destination root %d has no known path", move.DestRootFolderID)
 	}
-	sourceAbs := path.Join(sourceRoot, move.SourceRelPath)
-	destAbs := path.Join(destRoot, move.DestRelPath)
+	sourceAbs, err := RootRelativePath(fsys, sourceRoot, move.SourceRelPath)
+	if err != nil {
+		return fmt.Errorf("mover: source path: %w", err)
+	}
+	destAbs, err := RootRelativePath(fsys, destRoot, move.DestRelPath)
+	if err != nil {
+		return fmt.Errorf("mover: destination path: %w", err)
+	}
+	if sourceAbs == destAbs {
+		return nil
+	}
+	if destination, err := fsys.Lstat(destAbs); err == nil {
+		if !destination.Mode.IsRegular() {
+			return fmt.Errorf("mover: destination %q is not a regular file", destAbs)
+		}
+		if _, sourceErr := fsys.Lstat(sourceAbs); sourceErr == nil {
+			// A prior run may have copied the bytes before it persisted VERIFIED.
+			if err := Verify(fsys, sourceAbs, destAbs, move.SizeBytes); err != nil {
+				return fmt.Errorf("mover: existing destination %q does not match its source: %w", destAbs, err)
+			}
+			return nil
+		} else if errors.Is(sourceErr, fs.ErrNotExist) && move.SameFilesystem && destination.Size == move.SizeBytes {
+			// A same-filesystem rename is atomic: after it succeeds, the source
+			// is gone and this sized destination is the completed operation.
+			return nil
+		} else if !errors.Is(sourceErr, fs.ErrNotExist) {
+			return fmt.Errorf("mover: check source %q: %w", sourceAbs, sourceErr)
+		}
+		return fmt.Errorf("mover: destination %q exists without a verifiable source", destAbs)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("mover: check destination %q: %w", destAbs, err)
+	}
 
 	if err := fsys.MkdirAll(path.Dir(destAbs), 0o755); err != nil {
 		return fmt.Errorf("mover: create destination directory for %q: %w", destAbs, err)
@@ -62,11 +95,14 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 		return nil
 	}
 
-	tempAbs := destAbs + tempSuffix
+	tempAbs, err := temporaryMovePath(destAbs)
+	if err != nil {
+		return err
+	}
 	if err := copyFile(fsys, sourceAbs, tempAbs); err != nil {
 		return fmt.Errorf("mover: copy %q to %q: %w", sourceAbs, tempAbs, err)
 	}
-	if err := verify(fsys, sourceAbs, tempAbs, move.SizeBytes); err != nil {
+	if err := Verify(fsys, sourceAbs, tempAbs, move.SizeBytes); err != nil {
 		return err
 	}
 	// The rename from temp to final name is itself same-filesystem (both
@@ -76,6 +112,32 @@ func ApplyOne(fsys fsx.FS, move PlannedMove, roots RootPath) error {
 		return fmt.Errorf("mover: rename %q to %q: %w", tempAbs, destAbs, err)
 	}
 	return nil
+}
+
+// RootRelativePath resolves a stored relative path beneath its root, checked where it becomes a filesystem operation:
+// a persisted plan's path, or a symlinked parent, may lead outside the library.
+func RootRelativePath(fsys fsx.FS, root, relative string) (string, error) {
+	if !filepath.IsAbs(root) {
+		return "", fmt.Errorf("%w: root %q", fsx.ErrNotAbsolute, root)
+	}
+	if relative == "" || path.IsAbs(relative) {
+		return "", fmt.Errorf("%w: invalid relative path %q", fsx.ErrEscapesRoot, relative)
+	}
+	resolvedRoot, err := fsys.Resolve(filepath.Clean(root))
+	if err != nil {
+		return "", fmt.Errorf("resolve root %q: %w", root, err)
+	}
+	// The parent is resolved, the name is not: a symlinked file is moved or unlinked as the link, never its target.
+	candidate := path.Join(resolvedRoot, relative)
+	parent, err := fsys.Resolve(path.Dir(candidate))
+	if err != nil {
+		return "", fmt.Errorf("resolve %q: %w", candidate, err)
+	}
+	resolved := path.Join(parent, path.Base(candidate))
+	if resolved == resolvedRoot || !fsx.Within(resolvedRoot, resolved) {
+		return "", fmt.Errorf("%w: %q is not a file beneath %q", fsx.ErrEscapesRoot, resolved, resolvedRoot)
+	}
+	return resolved, nil
 }
 
 // PlaceMethod names which rung of the import ladder actually placed a file --
@@ -149,6 +211,11 @@ func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []
 			return "", fmt.Errorf("%w: %q", ErrUnknownMethod, method)
 		}
 	}
+	if _, err := fsys.Lstat(destAbs); err == nil {
+		return "", fmt.Errorf("mover: destination %q already exists", destAbs)
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("mover: check destination %q: %w", destAbs, err)
+	}
 	if err := fsys.MkdirAll(path.Dir(destAbs), 0o755); err != nil {
 		return "", fmt.Errorf("mover: create destination directory for %q: %w", destAbs, err)
 	}
@@ -166,6 +233,14 @@ func PlaceOne(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64, ladder []
 		lastErr = fmt.Errorf("mover: %s %q to %q: %w", method, sourceAbs, destAbs, err)
 	}
 	return "", fmt.Errorf("%w: %w", ErrNoRungSucceeded, lastErr)
+}
+
+func temporaryMovePath(destination string) (string, error) {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("mover: generate temporary name: %w", err)
+	}
+	return path.Join(path.Dir(destination), tempSuffix+hex.EncodeToString(random)), nil
 }
 
 // placeBy attempts exactly one rung, leaving no destination behind on failure
@@ -194,7 +269,7 @@ func copyVerified(fsys fsx.FS, sourceAbs, destAbs string, sizeBytes int64) error
 		_ = fsys.Remove(destAbs)
 		return err
 	}
-	if err := verify(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
+	if err := Verify(fsys, sourceAbs, destAbs, sizeBytes); err != nil {
 		_ = fsys.Remove(destAbs)
 		return err
 	}
@@ -237,13 +312,13 @@ func copyFile(fsys fsx.FS, sourceAbs, destAbs string) error {
 	return dest.Close()
 }
 
-// verify checks size then a full content hash, never skipped for a
+// Verify checks size then a full content hash, never skipped for a
 // cross-filesystem copy (ADR-51's own text: "verified (size plus hash)") --
 // unlike library.QuickHash's head-and-tail sample (cheap identity, not
 // proof), this reads every byte of both files, since the entire reason for
 // a cross-filesystem copy's own verify step is catching corruption
 // anywhere in the file, not just its ends.
-func verify(fsys fsx.FS, sourceAbs, destAbs string, expectedSize int64) error {
+func Verify(fsys fsx.FS, sourceAbs, destAbs string, expectedSize int64) error {
 	destInfo, err := fsys.Stat(destAbs)
 	if err != nil {
 		return fmt.Errorf("mover: stat copied file %q: %w", destAbs, err)

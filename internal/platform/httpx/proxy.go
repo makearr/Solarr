@@ -48,7 +48,7 @@ func bypassed(host string, patterns []string) bool {
 	for _, pattern := range patterns {
 		pattern = strings.ToLower(pattern)
 		if suffix, isSuffix := strings.CutPrefix(pattern, "."); isSuffix {
-			if strings.HasSuffix(host, suffix) {
+			if host == suffix || strings.HasSuffix(host, "."+suffix) {
 				return true
 			}
 			continue

@@ -7,6 +7,9 @@ package capacity
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -118,13 +121,17 @@ func (j *Job) refreshOne(ctx context.Context, root settings.RootFolder) error {
 // probeWritable is FilesystemRoots.probeWritable's own create-then-remove
 // check, duplicated rather than imported (see probeFileName's own comment).
 func (j *Job) probeWritable(directory string) (writable bool, reason string) {
-	probe := filepath.Join(directory, probeFileName)
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return false, fmt.Sprintf("create write probe name: %v", err)
+	}
+	probe := filepath.Join(directory, probeFileName+"-"+hex.EncodeToString(suffix))
 	file, err := j.fsys.Create(probe)
 	if err != nil {
 		return false, err.Error()
 	}
 	if err := file.Close(); err != nil {
-		return false, err.Error()
+		return false, errors.Join(err, j.fsys.Remove(probe)).Error()
 	}
 	if err := j.fsys.Remove(probe); err != nil {
 		// Wrote successfully but could not clean up: still writable, but

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -54,7 +53,7 @@ func ListProwlarr(ctx context.Context, client *httpx.Client, baseURL, apiKey str
 		return nil, fmt.Errorf("indexer: prowlarr: %w", err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxProwlarrResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxProwlarrResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("indexer: prowlarr: read: %w", err)
 	}

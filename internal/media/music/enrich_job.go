@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -120,6 +121,8 @@ type EnrichJob struct {
 	wikidataEnabled func() bool
 	backfillPerRun  func() int
 	checkpointEvery int
+	// editionlessAfter carries enrichEditionless' place between runs, so works that never gain an edition cannot hold every later one back.
+	editionlessAfter atomic.Int64
 }
 
 // TagReader reads the tags a set of files carry -- mediatool.Tool's own
@@ -324,7 +327,8 @@ func (j *EnrichJob) handOn(ctx context.Context, refinedWorkIDs []int64, manual b
 // a run and bounded by editionlessBudget.
 func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (withEdition []int64) {
 	enriched, failed, retired := 0, 0, 0
-	var afterWorkID int64
+	afterWorkID := j.editionlessAfter.Load()
+	defer func() { j.editionlessAfter.Store(afterWorkID) }()
 	for enriched+failed+retired < editionlessBudget {
 		if ctx.Err() != nil {
 			return withEdition
@@ -335,6 +339,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 			return withEdition
 		}
 		if len(batch) == 0 {
+			afterWorkID = 0
 			break
 		}
 		batch = batch[:min(len(batch), editionlessBudget-enriched-failed-retired)]
@@ -376,6 +381,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 			}
 		}
 		if len(batch) < editionlessBatchSize {
+			afterWorkID = 0
 			break
 		}
 	}
@@ -1016,7 +1022,7 @@ func (j *EnrichJob) fetchPersonImage(ctx context.Context, personID int64, imageU
 		}
 		return imageFailed
 	}
-	source, err := io.ReadAll(io.LimitReader(response.Body, maxPersonImageBytes))
+	source, err := httpx.ReadLimited(response.Body, maxPersonImageBytes)
 	if err != nil {
 		j.logger.WarnContext(ctx, "person image read failed",
 			slog.Int64("person_id", personID), slog.Any("error", err))

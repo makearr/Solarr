@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -197,6 +198,11 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
 		return
 	}
+	workCursor, err := worksCursorFor(sort, cursor)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
+		return
+	}
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
@@ -204,7 +210,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without, AboveRating: derefOr(params.AboveRating, false),
 			MediaType: derefOr(params.MediaType, ""),
 		},
-		worksCursorFor(sort, cursor), limit+1)
+		workCursor, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -227,33 +233,46 @@ func startAtLetter(sort WorkSort, letter string) paginate.TextCursor {
 // worksCursorFor decodes the cursor's opaque sort value against whichever
 // field the active sort actually reads -- ListWorks' own single paginate.TextCursor
 // carries a plain int64-as-string for year/added_at, never a second cursor codec.
-func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) WorksCursor {
+func worksCursorFor(sort WorkSort, cursor paginate.TextCursor) (WorksCursor, error) {
+	if cursor.Zero() {
+		return WorksCursor{}, nil
+	}
+	parseNumber := func() (int64, error) {
+		value, err := strconv.ParseInt(cursor.Sort, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("%w: numeric cursor key is not a number", paginate.ErrBadCursor)
+		}
+		return value, nil
+	}
 	switch sort {
 	case WorkSortYear:
-		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
-		return WorksCursor{SortYear: value, ID: cursor.ID}
+		value, err := parseNumber()
+		return WorksCursor{SortYear: value, ID: cursor.ID}, err
 	case WorkSortAdded:
-		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
-		return WorksCursor{SortAdded: value, ID: cursor.ID}
+		value, err := parseNumber()
+		return WorksCursor{SortAdded: value, ID: cursor.ID}, err
 	case WorkSortSearched:
-		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
-		return WorksCursor{SortSearched: value, ID: cursor.ID}
+		value, err := parseNumber()
+		return WorksCursor{SortSearched: value, ID: cursor.ID}, err
 	case WorkSortImported:
-		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
-		return WorksCursor{SortImported: value, ID: cursor.ID}
+		value, err := parseNumber()
+		return WorksCursor{SortImported: value, ID: cursor.ID}, err
 	case WorkSortSize, WorkSortProfile:
-		value, _ := strconv.ParseInt(cursor.Sort, 10, 64)
-		return WorksCursor{SortNumber: value, ID: cursor.ID}
+		value, err := parseNumber()
+		return WorksCursor{SortNumber: value, ID: cursor.ID}, err
 	case WorkSortStatus, WorkSortGenre, WorkSortTag:
-		return WorksCursor{SortText: cursor.Sort, ID: cursor.ID}
+		return WorksCursor{SortText: cursor.Sort, ID: cursor.ID}, nil
 	case WorkSortArtist:
-		artist, title, _ := strings.Cut(cursor.Sort, artistCursorSeparator)
-		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}
+		artist, title, found := strings.Cut(cursor.Sort, artistCursorSeparator)
+		if !found {
+			return WorksCursor{}, fmt.Errorf("%w: artist cursor is incomplete", paginate.ErrBadCursor)
+		}
+		return WorksCursor{SortArtist: artist, SortTitle: title, ID: cursor.ID}, nil
 	}
 	if sort.Facet() != "" {
-		return WorksCursor{SortText: cursor.Sort, ID: cursor.ID}
+		return WorksCursor{SortText: cursor.Sort, ID: cursor.ID}, nil
 	}
-	return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}
+	return WorksCursor{SortTitle: cursor.Sort, ID: cursor.ID}, nil
 }
 
 // visibility resolves what a caller may see into ADR-27's two halves -- root

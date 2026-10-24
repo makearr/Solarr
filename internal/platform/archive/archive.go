@@ -120,13 +120,18 @@ var (
 	sevenZipPartRe = regexp.MustCompile(`(?i)^(.+\.7z)\.(\d{3})$`)
 )
 
+// maxMultipartVolumes keeps malformed archive filenames from making a missing
+// volume report iterate or allocate an unbounded number of entries.
+const maxMultipartVolumes = 10_000
+
 // MultipartSet is one detected multi-volume archive: the primary volume List
 // and Extract should be pointed at, and every volume number this base name's
 // siblings actually have (1-based, contiguous or not).
 type MultipartSet struct {
-	Base    string
-	Primary string
-	Present map[int]bool
+	Base          string
+	Primary       string
+	Present       map[int]bool
+	primaryVolume int
 }
 
 // MissingVolumes reports which volume numbers, from 1 up to the highest one
@@ -143,6 +148,9 @@ func (m MultipartSet) MissingVolumes() []int {
 	for n := 1; n <= highest; n++ {
 		if !m.Present[n] {
 			missing = append(missing, n)
+		}
+		if n == highest {
+			break
 		}
 	}
 	return missing
@@ -165,12 +173,11 @@ func DetectMultipart(names []string) map[string]*MultipartSet {
 	}
 	setPrimary := func(set *MultipartSet, volume int, name string) {
 		set.Present[volume] = true
-		if volume == 1 {
-			set.Primary = name
-		} else if set.Primary == "" {
+		if set.primaryVolume == 0 || volume < set.primaryVolume || volume == set.primaryVolume && name < set.Primary {
 			// A set missing its own first volume still needs a primary to
 			// report MissingVolumes against; the lowest present volume
 			// stands in until MissingVolumes names what is actually gone.
+			set.primaryVolume = volume
 			set.Primary = name
 		}
 	}
@@ -179,15 +186,24 @@ func DetectMultipart(names []string) map[string]*MultipartSet {
 		switch {
 		case partNumberedRe.MatchString(name):
 			m := partNumberedRe.FindStringSubmatch(name)
-			volume, _ := strconv.Atoi(m[2])
+			volume, err := strconv.Atoi(m[2])
+			if err != nil || volume < 1 || volume > maxMultipartVolumes {
+				continue
+			}
 			setPrimary(ensure(m[1]), volume, name)
 		case sevenZipPartRe.MatchString(name):
 			m := sevenZipPartRe.FindStringSubmatch(name)
-			volume, _ := strconv.Atoi(m[2])
+			volume, err := strconv.Atoi(m[2])
+			if err != nil || volume < 1 || volume > maxMultipartVolumes {
+				continue
+			}
 			setPrimary(ensure(m[1]), volume, name)
 		case rNumberedRe.MatchString(name):
 			m := rNumberedRe.FindStringSubmatch(name)
-			volume, _ := strconv.Atoi(m[2])
+			volume, err := strconv.Atoi(m[2])
+			if err != nil || volume > maxMultipartVolumes-2 {
+				continue
+			}
 			// .r00 is volume 2 (the .rar itself, found separately below, is
 			// volume 1) -- rNN counts up from 00 for the second volume on.
 			setPrimary(ensure(m[1]), volume+2, name)

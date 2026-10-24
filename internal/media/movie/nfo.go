@@ -43,7 +43,8 @@ func readNFO(fsys fsx.FS, name string) IDs {
 	}
 	defer func() { _ = file.Close() }()
 	var movie nfoMovie
-	if xml.NewDecoder(io.LimitReader(file, maxNFOBytes)).Decode(&movie) != nil {
+	source, err := io.ReadAll(io.LimitReader(file, maxNFOBytes+1))
+	if err != nil || int64(len(source)) > maxNFOBytes || xml.Unmarshal(source, &movie) != nil {
 		return IDs{}
 	}
 	var ids IDs

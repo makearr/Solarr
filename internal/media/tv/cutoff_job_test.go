@@ -29,6 +29,7 @@ type upgradeFixture struct {
 	season1  int64
 	owned    int64
 	brought  int64
+	second   int64
 }
 
 // upgradeSeries is a series whose first episode has an owned file and, when brought is not empty, a downloaded one;
@@ -72,7 +73,7 @@ func upgradeSeries(t *testing.T, owned, brought string) upgradeFixture {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture.owned = registered[0].MediaObjectID
+	fixture.owned, fixture.second = registered[0].MediaObjectID, registered[len(registered)-1].MediaObjectID
 	// The second episode is already good, so the season is complete and only the first can be upgraded.
 	resolutions, episodes := []string{owned}, []int{1}
 	if brought != "" {
@@ -163,6 +164,25 @@ func TestCutoffJobKeepsTheBetterOfTwoFilesForAnEpisode(t *testing.T) {
 	same.run(t, recycled)
 	if replaced, found := recycled[same.brought]; len(recycled) != 1 || !found || replaced {
 		t.Errorf("recycled %v, want only the downloaded copy, as no better (a tie keeps the owned file)", recycled)
+	}
+}
+
+// A two-episode file beaten on one episode is still the other's only file, so it stays.
+func TestCutoffJobKeepsAMultiEpisodeFileStillTheOnlyCopyOfAnother(t *testing.T) {
+	fixture := upgradeSeries(t, "720p", "1080p")
+	desired := library.NewDesired(fixture.opened)
+	if err := desired.DetachAndRecompute(t.Context(), fixture.season1, fixture.workID, fixture.second, []string{"primary"}); err != nil {
+		t.Fatal(err)
+	}
+	links := []library.SeriesFileLink{{MediaObjectID: fixture.owned, Parts: []library.PartKey{{MediaRef: tv.MediaRef(1, 2)}}}}
+	if _, err := library.NewSeries(fixture.opened).AttachFiles(t.Context(), addNow.Add(-72*time.Hour), fixture.workID, 1, links); err != nil {
+		t.Fatal(err)
+	}
+
+	recycled := map[int64]bool{}
+	fixture.run(t, recycled)
+	if len(recycled) != 0 {
+		t.Errorf("recycled %v, want nothing: the owned file still holds episode 2 alone", recycled)
 	}
 }
 

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -153,7 +152,7 @@ func (c Client) get(ctx context.Context, path string, query url.Values, into any
 	default:
 		return fmt.Errorf("radarrmeta: %s: status %d", path, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("radarrmeta: %s: read: %w", path, err)
 	}

@@ -140,9 +140,13 @@ func resolvePassword(fromStdin bool) (string, bool, error) {
 		return password, true, err
 	}
 
-	read, err := io.ReadAll(io.LimitReader(os.Stdin, 1024))
+	const maxPasswordBytes = 1024
+	read, err := io.ReadAll(io.LimitReader(os.Stdin, maxPasswordBytes+1))
 	if err != nil {
 		return "", false, fmt.Errorf("user add: read password: %w", err)
+	}
+	if len(read) > maxPasswordBytes {
+		return "", false, fmt.Errorf("user add: password exceeds %d bytes", maxPasswordBytes)
 	}
 	password := strings.TrimRight(string(read), "\r\n")
 	if password == "" {

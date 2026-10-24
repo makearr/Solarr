@@ -89,19 +89,28 @@ func parseHash(encoded string) (parsedHash, error) {
 	if _, err := fmt.Sscanf(parts[2], "v=%d", &version); err != nil || version != argon2.Version {
 		return parsedHash{}, ErrMalformedHash
 	}
+	if parts[2] != fmt.Sprintf("v=%d", version) {
+		return parsedHash{}, ErrMalformedHash
+	}
 
 	var parsed parsedHash
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d",
 		&parsed.memoryKiB, &parsed.iterations, &parsed.threads); err != nil {
 		return parsedHash{}, ErrMalformedHash
 	}
+	// A damaged or hand-edited hash must not make a login allocate without bound or panic Argon2 on zero parameters.
+	if parts[3] != fmt.Sprintf("m=%d,t=%d,p=%d", parsed.memoryKiB, parsed.iterations, parsed.threads) ||
+		parsed.memoryKiB < 8*uint32(parsed.threads) || parsed.memoryKiB > 64*1024 ||
+		parsed.iterations == 0 || parsed.iterations > 10 || parsed.threads == 0 || parsed.threads > 16 {
+		return parsedHash{}, ErrMalformedHash
+	}
 
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil {
+	if err != nil || len(salt) < 8 || len(salt) > 64 {
 		return parsedHash{}, ErrMalformedHash
 	}
 	key, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil || len(key) == 0 {
+	if err != nil || len(key) < 16 || len(key) > 64 {
 		return parsedHash{}, ErrMalformedHash
 	}
 	parsed.salt, parsed.key = salt, key

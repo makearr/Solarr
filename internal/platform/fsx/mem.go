@@ -158,7 +158,12 @@ func (m *Mem) Stat(path string) (FileInfo, error) {
 func (m *Mem) Lstat(path string) (FileInfo, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	return m.statLocked("lstat", filepath.Clean(path))
+	cleaned := filepath.Clean(path)
+	parent, err := m.resolveLocked(filepath.Dir(cleaned), 0)
+	if err != nil {
+		return FileInfo{}, pathError("lstat", path, err)
+	}
+	return m.statLocked("lstat", filepath.Join(parent, filepath.Base(cleaned)))
 }
 
 func (m *Mem) statLocked(op, path string) (FileInfo, error) {

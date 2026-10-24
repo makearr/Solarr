@@ -15,6 +15,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -160,8 +161,14 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	var editOf []library.TagCandidate
 	for _, candidate := range candidates {
 		root := run.roots[candidate.RootFolderID]
+		filePath, err := mover.RootRelativePath(j.config.FS, root.Path, candidate.RelPath)
+		if err != nil {
+			run.failed++
+			j.config.Logger.Warn("tag candidate path is invalid", slog.Int64("media_object_id", candidate.MediaObjectID), slog.Any("error", err))
+			continue
+		}
 		if root.Options.Navidrome && candidate.CoverKey != "" {
-			j.folderCover(ctx, run, path.Dir(path.Join(root.Path, candidate.RelPath)), candidate.CoverKey)
+			j.folderCover(ctx, run, path.Dir(filePath), candidate.CoverKey)
 		}
 		edit, digest := tagEditFor(candidate, root.Options)
 		if digest == candidate.Digest || (len(edit.Fill) == 0 && len(edit.Set) == 0 && edit.Cover == "") {
@@ -175,7 +182,7 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 				edit, digest = tagEditFor(candidate, withoutCover)
 			}
 		}
-		edit.Path = path.Join(root.Path, candidate.RelPath)
+		edit.Path = filePath
 		edits = append(edits, edit)
 		digests = append(digests, digest)
 		editOf = append(editOf, candidate)
@@ -191,17 +198,18 @@ func (j *TagWritebackJob) writePage(ctx context.Context, run *tagRun, candidates
 	run.progress.Add(int64(len(results)))
 	now := j.config.Clock.Now().Unix()
 	for k, result := range results {
-		failure := ""
+		failure, digest := "", digests[k]
 		switch {
 		case result.Err != nil:
-			failure = result.Err.Error()
+			// No digest for a failed write, or the next run takes the file as done and never tries again.
+			failure, digest = result.Err.Error(), ""
 			run.failed++
 		case len(result.Changed) == 0:
 			run.current++
 		default:
 			run.written++
 		}
-		if err := j.config.Files.Record(ctx, editOf[k].MediaObjectID, now, digests[k],
+		if err := j.config.Files.Record(ctx, editOf[k].MediaObjectID, now, digest,
 			strings.Join(result.Changed, ","), failure); err != nil {
 			return err
 		}
@@ -220,7 +228,7 @@ func (j *TagWritebackJob) folderCover(ctx context.Context, run *tagRun, folder, 
 	}
 	run.folderCovers[folder] = true
 	for _, name := range coverFileNames {
-		if _, err := j.config.FS.Stat(path.Join(folder, name)); err == nil {
+		if _, err := j.config.FS.Lstat(path.Join(folder, name)); err == nil {
 			return
 		}
 	}
@@ -324,10 +332,16 @@ func (j *TagWritebackJob) convertCover(cacheKey string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	source, err := io.ReadAll(io.LimitReader(file, maxImageBytes))
-	_ = file.Close()
+	source, err := io.ReadAll(io.LimitReader(file, maxImageBytes+1))
+	closeErr := file.Close()
 	if err != nil {
 		return "", err
+	}
+	if closeErr != nil {
+		return "", closeErr
+	}
+	if int64(len(source)) > maxImageBytes {
+		return "", fmt.Errorf("cover image exceeds %d bytes", maxImageBytes)
 	}
 	img, err := artwork.Decode(source)
 	if err != nil {

@@ -374,4 +374,13 @@ func TestIPAllowlist_TrustsForwardedForOnlyBehindATrustedProxy(t *testing.T) {
 		t.Fatalf("status = %d, body = %s, want 403 -- an untrusted peer's forwarded claim must be ignored",
 			recorder.Code, recorder.Body)
 	}
+
+	// The proxy appends what it saw to what the client sent: an allowed address put first by the client is its own claim.
+	spoofed := httptest.NewRequest(http.MethodGet, "/api/v1/about", nil)
+	spoofed.Header.Set("X-Forwarded-For", "10.0.0.9, 203.0.113.9")
+	recorder = httptest.NewRecorder()
+	server.Handler().ServeHTTP(recorder, spoofed)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, body = %s, want 403 -- the leftmost entry is the client's to choose", recorder.Code, recorder.Body)
+	}
 }

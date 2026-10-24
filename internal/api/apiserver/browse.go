@@ -61,10 +61,6 @@ func (s *Server) BrowsePath(w http.ResponseWriter, r *http.Request, params gen.B
 		if prefix != "" && !strings.HasPrefix(strings.ToLower(entry.Name), strings.ToLower(prefix)) {
 			continue
 		}
-		if len(views) == browseMaxEntries {
-			truncated = true
-			break
-		}
 		views = append(views, gen.PathEntry{
 			Name: entry.Name, Path: path.Join(directory, entry.Name), IsDir: entry.IsDir,
 		})
@@ -77,6 +73,10 @@ func (s *Server) BrowsePath(w http.ResponseWriter, r *http.Request, params gen.B
 		}
 		return strings.ToLower(views[a].Name) < strings.ToLower(views[b].Name)
 	})
+	// Cut after sorting, so a directory listed late by the filesystem is not dropped while files stay.
+	if len(views) > browseMaxEntries {
+		views, truncated = views[:browseMaxEntries], true
+	}
 
 	listing := gen.PathListing{Path: directory, Entries: views}
 	if truncated {

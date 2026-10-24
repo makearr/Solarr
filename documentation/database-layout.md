@@ -201,7 +201,9 @@ waits until it finishes; the others keep working. A failed integrity check stops
 pass before `VACUUM`, which would otherwise rebuild it from whatever it could still read.
 `VACUUM` runs before the truncating checkpoint because in WAL mode its rewrite lands in the log.
 
-`settings.db` is backed up on every change instead and pruned by `backup.keep_settings`.
+`settings.db` is backed up on every change instead and pruned by `backup.keep_settings`. A value a sweep measured
+(root capacity, the cache measurement, placement affinity) is not a change in this sense and takes no backup, or it
+would push every real one out of the rotation. Backups are written `0600`, as the live file is.
 `config.yml`'s `backup.schedule` and `backup.keep` are still accepted but ignored, with a warning.
 
 ## Corruption recovery at startup

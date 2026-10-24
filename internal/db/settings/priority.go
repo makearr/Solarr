@@ -98,27 +98,30 @@ func (c *Cache) SetPrioritySettings(ctx context.Context, cl clock.Clock, ps Prio
 	if problems := validatePrioritySettings(ps); len(problems) > 0 {
 		return problems
 	}
+	values := map[string]string{}
 	for key, value := range map[string]int64{
 		KeyPriorityUserRequestWeight: ps.UserRequestWeight, KeyPriorityNewReleaseWeight: ps.NewReleaseWeight,
 		KeyPriorityGapWeight: ps.GapWeight, KeyPriorityUpgradeWeight: ps.UpgradeWeight,
 		KeyPriorityNewReleaseDays: ps.NewReleaseDays,
 	} {
-		if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(value, 10)); err != nil {
-			return err
-		}
+		values[key] = strconv.FormatInt(value, 10)
 	}
 	if ps.HuntMode != "" {
-		if err := c.setPolicy(ctx, cl, KeyHuntMode, ps.HuntMode); err != nil {
-			return err
-		}
+		values[KeyHuntMode] = ps.HuntMode
 	}
 	if ps.RSSFreshHours != nil {
-		if err := c.setPolicy(ctx, cl, KeyRSSFreshHours, strconv.FormatInt(*ps.RSSFreshHours, 10)); err != nil {
-			return err
-		}
+		values[KeyRSSFreshHours] = strconv.FormatInt(*ps.RSSFreshHours, 10)
 	}
 	if ps.SearchesPerHour != nil {
-		return c.setPolicy(ctx, cl, KeySearchesPerHour, strconv.FormatInt(*ps.SearchesPerHour, 10))
+		values[KeySearchesPerHour] = strconv.FormatInt(*ps.SearchesPerHour, 10)
+	}
+	return c.setPolicies(ctx, cl, values)
+}
+
+// ValidatePrioritySettings is SetPrioritySettings' check alone, for a caller with other writes to make first.
+func ValidatePrioritySettings(ps PrioritySettings) error {
+	if problems := validatePrioritySettings(ps); len(problems) > 0 {
+		return problems
 	}
 	return nil
 }

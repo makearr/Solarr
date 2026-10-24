@@ -9,7 +9,7 @@ process cannot write, discovered at the first import rather than at startup.
 By **writing to it**, not by reading its permission bits:
 
 1. `Stat` — create it if absent and the requirement allows creation.
-2. Write a `.mnx-writable` probe through `fsx.WriteAtomic`, then remove it.
+2. Write a uniquely named `.mnx-writable-*` probe through `fsx.WriteAtomic`, then remove it.
 
 The probe performs create, rename and delete — the same three operations an
 import performs. A directory that passes cannot then fail an import for a reason

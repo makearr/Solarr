@@ -184,69 +184,37 @@ func (c *Cache) SetMetadataSettings(ctx context.Context, cl clock.Clock, ms Meta
 	if problems := validateMetadataSettings(ms); len(problems) > 0 {
 		return problems
 	}
-	if err := c.setPolicy(ctx, cl, KeyBrainzMashUserAgent, ms.BrainzMashUserAgent); err != nil {
-		return err
-	}
-	if ms.CoverSources != nil {
-		encoded, err := json.Marshal(ms.CoverSources)
+	values := map[string]string{KeyBrainzMashUserAgent: ms.BrainzMashUserAgent}
+	for key, sources := range map[string][]string{
+		KeyMetadataCoverSources: ms.CoverSources, KeyMetadataTVSources: ms.TVSources,
+		KeyMetadataMovieSources: ms.MovieSources, KeyMetadataSourceOrder: ms.SourceOrder,
+	} {
+		// Sources nil leaves the stored order alone; an empty order does too.
+		if sources == nil || key == KeyMetadataSourceOrder && len(sources) == 0 {
+			continue
+		}
+		encoded, err := json.Marshal(sources)
 		if err != nil {
 			return err
 		}
-		if err := c.setPolicy(ctx, cl, KeyMetadataCoverSources, string(encoded)); err != nil {
-			return err
-		}
-	}
-	if ms.TVSources != nil {
-		encoded, err := json.Marshal(ms.TVSources)
-		if err != nil {
-			return err
-		}
-		if err := c.setPolicy(ctx, cl, KeyMetadataTVSources, string(encoded)); err != nil {
-			return err
-		}
-	}
-	if ms.MovieSources != nil {
-		encoded, err := json.Marshal(ms.MovieSources)
-		if err != nil {
-			return err
-		}
-		if err := c.setPolicy(ctx, cl, KeyMetadataMovieSources, string(encoded)); err != nil {
-			return err
-		}
+		values[key] = string(encoded)
 	}
 	for key, value := range map[string]*bool{
 		KeyMetadataWikidata: ms.Wikidata, KeyMetadataAcoustID: ms.AcoustID, KeyMetadataTheAudioDB: ms.TheAudioDB,
 	} {
-		if value == nil {
-			continue
-		}
-		if err := c.setPolicy(ctx, cl, key, strconv.FormatBool(*value)); err != nil {
-			return err
+		if value != nil {
+			values[key] = strconv.FormatBool(*value)
 		}
 	}
 	if ms.PeopleBackfillPerRun != nil {
-		if err := c.setPolicy(ctx, cl, KeyMetadataPeopleBackfillPerRun,
-			strconv.FormatInt(*ms.PeopleBackfillPerRun, 10)); err != nil {
-			return err
-		}
+		values[KeyMetadataPeopleBackfillPerRun] = strconv.FormatInt(*ms.PeopleBackfillPerRun, 10)
 	}
 	if grace := ms.AvailabilityGrace; grace != nil {
-		for key, hours := range map[string]int64{
-			KeyAvailabilityGraceHigh: grace.High, KeyAvailabilityGraceMedium: grace.Medium, KeyAvailabilityGraceLow: grace.Low,
-		} {
-			if err := c.setPolicy(ctx, cl, key, strconv.FormatInt(hours, 10)); err != nil {
-				return err
-			}
-		}
+		values[KeyAvailabilityGraceHigh] = strconv.FormatInt(grace.High, 10)
+		values[KeyAvailabilityGraceMedium] = strconv.FormatInt(grace.Medium, 10)
+		values[KeyAvailabilityGraceLow] = strconv.FormatInt(grace.Low, 10)
 	}
-	if len(ms.SourceOrder) == 0 {
-		return nil
-	}
-	encoded, err := json.Marshal(ms.SourceOrder)
-	if err != nil {
-		return err
-	}
-	return c.setPolicy(ctx, cl, KeyMetadataSourceOrder, string(encoded))
+	return c.setPolicies(ctx, cl, values)
 }
 
 func validateMetadataSettings(ms MetadataSettings) config.Problems {

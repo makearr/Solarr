@@ -106,9 +106,19 @@ func (j CutoffJob) settle(ctx context.Context, snapshot *settings.Snapshot, item
 			keeper = file
 		}
 	}
+	held := 0
+	for _, file := range files {
+		if !downloaded[file.File.MediaObjectID] {
+			held++
+		}
+	}
 	recycled := 0
 	for _, file := range files {
 		if file.File.MediaObjectID == keeper.File.MediaObjectID {
+			continue
+		}
+		// Two or more held files are editions kept on purpose: a download contests only other downloads then.
+		if held > 1 && !downloaded[file.File.MediaObjectID] {
 			continue
 		}
 		if err := j.Recycle(ctx, file.File.MediaObjectID, item.CategoryID, !downloaded[file.File.MediaObjectID]); err != nil {

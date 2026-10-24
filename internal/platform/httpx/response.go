@@ -2,10 +2,30 @@ package httpx
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
 )
+
+// ReadLimited reads a response body up to limit bytes and rejects a response
+// that has more data, rather than treating a truncated body as complete.
+func ReadLimited(body io.Reader, limit int64) ([]byte, error) {
+	if body == nil {
+		return nil, fmt.Errorf("httpx: nil response body")
+	}
+	if limit < 0 || limit == int64(^uint64(0)>>1) {
+		return nil, fmt.Errorf("httpx: invalid response limit %d", limit)
+	}
+	data, err := io.ReadAll(io.LimitReader(body, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("httpx: response exceeds %d bytes", limit)
+	}
+	return data, nil
+}
 
 // ResponseClass decides behaviour, which is the part that matters (§16).
 type ResponseClass string
@@ -59,6 +79,10 @@ func ParseRetryAfter(header string, now time.Time) time.Duration {
 	if seconds, err := strconv.Atoi(header); err == nil {
 		if seconds <= 0 {
 			return 0
+		}
+		maxSeconds := (1<<63 - 1) / int64(time.Second)
+		if int64(seconds) > maxSeconds {
+			return time.Duration(1<<63 - 1)
 		}
 		return time.Duration(seconds) * time.Second
 	}

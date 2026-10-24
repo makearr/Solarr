@@ -89,7 +89,7 @@ func (c Client) send(
 		return 0, nil, nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
-	data, err = io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	data, err = httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("qbittorrent: read response: %w", err)
 	}

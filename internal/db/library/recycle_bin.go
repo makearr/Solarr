@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"strings"
 	"syscall"
 	"time"
 
@@ -114,7 +113,7 @@ func NewRecycleBin(opened *store.Store, fsys fsx.FS, cl clock.Clock) RecycleBin 
 // file is already gone (deleted directly, per this type's own doc comment)
 // -- the caller must not retry or treat it as still present.
 func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
-	info, err := q.fsys.Stat(req.OriginalPath)
+	info, err := q.fsys.Lstat(req.OriginalPath)
 	if err != nil {
 		return Entry{}, fmt.Errorf("recycle bin: stat %q: %w", req.OriginalPath, err)
 	}
@@ -167,11 +166,10 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 // folder that still holds anything fails, which is what stops it.
 func (q RecycleBin) removeEmptyFolders(folder, rootPath string) {
 	root := filepath.Clean(rootPath)
-	for folder != root && strings.HasPrefix(folder, root+string(filepath.Separator)) {
+	for folder = filepath.Clean(folder); folder != root && fsx.Within(root, folder); folder = filepath.Dir(folder) {
 		if err := q.fsys.Remove(folder); err != nil {
 			return
 		}
-		folder = filepath.Dir(folder)
 	}
 }
 
@@ -199,7 +197,7 @@ func (q RecycleBin) reserveRecycledPath(rootPath, originalPath string) (string, 
 			name = fmt.Sprintf("%d-%s", attempt, base)
 		}
 		candidate := filepath.Join(dir, name)
-		if _, err := q.fsys.Stat(candidate); errors.Is(err, fs.ErrNotExist) {
+		if _, err := q.fsys.Lstat(candidate); errors.Is(err, fs.ErrNotExist) {
 			return candidate, nil
 		} else if err != nil {
 			return "", fmt.Errorf("recycle bin: check %q: %w", candidate, err)

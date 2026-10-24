@@ -145,8 +145,8 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	stopRenewing()
 	<-renewalDone
 
-	// Completion and failure are recorded against the parent context: the running context has just
-	// been cancelled, and a finished job must be recorded even so.
+	// Recorded without cancellation: at shutdown the parent context ends too, and an unrecorded outcome waits out the lease.
+	ctx = context.WithoutCancel(ctx)
 	if runErr == nil || errors.Is(runErr, ErrYield) {
 		if err := e.queue.Complete(ctx, job, e.owner, attempt); err != nil {
 			logger.Warn("could not record success", slog.Any("error", err))

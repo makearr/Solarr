@@ -288,6 +288,7 @@ const drainPageSize = 1000
 // answer.
 func (p Physical) PathsForRoot(ctx context.Context, rootFolderID int64) ([]FileOnRoot, error) {
 	var files []FileOnRoot
+	seen := map[int64]bool{}
 	afterID := int64(0)
 	for {
 		rows, err := librarydb.New(p.store.Read()).ListPathsForRootWithSize(ctx, librarydb.ListPathsForRootWithSizeParams{
@@ -297,10 +298,16 @@ func (p Physical) PathsForRoot(ctx context.Context, rootFolderID int64) ([]FileO
 			return nil, fmt.Errorf("library: paths for root %d: %w", rootFolderID, err)
 		}
 		for _, row := range rows {
+			// By path: one object may have several primary paths here, so its id is no cursor.
+			afterID = row.ID
+			// One entry per object, as a move job holds one item per object.
+			if seen[row.MediaObjectID] {
+				continue
+			}
+			seen[row.MediaObjectID] = true
 			files = append(files, FileOnRoot{
 				MediaObjectID: row.MediaObjectID, RelPath: row.RelPath, SizeBytes: row.SizeBytes,
 			})
-			afterID = row.MediaObjectID
 		}
 		if int64(len(rows)) < drainPageSize {
 			return files, nil

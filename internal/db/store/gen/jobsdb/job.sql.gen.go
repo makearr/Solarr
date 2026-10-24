@@ -1002,7 +1002,7 @@ func (q *Queries) SetRetentionState(ctx context.Context, arg SetRetentionStatePa
 	return err
 }
 
-const startJob = `-- name: StartJob :exec
+const startJob = `-- name: StartJob :execrows
 UPDATE job
 SET state = 'RUNNING', attempts = attempts + 1, updated_at = ?
 WHERE id = ? AND lease_owner = ? AND state = 'LEASED'
@@ -1014,7 +1014,10 @@ type StartJobParams struct {
 	LeaseOwner sql.NullString
 }
 
-func (q *Queries) StartJob(ctx context.Context, arg StartJobParams) error {
-	_, err := q.db.ExecContext(ctx, startJob, arg.UpdatedAt, arg.ID, arg.LeaseOwner)
-	return err
+func (q *Queries) StartJob(ctx context.Context, arg StartJobParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, startJob, arg.UpdatedAt, arg.ID, arg.LeaseOwner)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }

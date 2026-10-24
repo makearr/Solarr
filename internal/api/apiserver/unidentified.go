@@ -13,6 +13,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -154,7 +155,8 @@ func (s *Server) routeResolveUnidentified(w http.ResponseWriter, r *http.Request
 // A file under a root folder the caller cannot read answers 404, the same as
 // missing (Invariant 37).
 func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {
-	if !s.queuedFileVisible(w, r, mediaObjectID) {
+	access, entry, ok := s.queuedFile(w, r, mediaObjectID)
+	if !ok {
 		return
 	}
 	var body gen.ResolveUnidentifiedJSONRequestBody
@@ -162,6 +164,19 @@ func (s *Server) ResolveUnidentified(w http.ResponseWriter, r *http.Request, med
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
 			"Bad request", "the request body could not be read")
 		return
+	}
+	// Placing a file adds a work, as Add does: manage on the library it lands in.
+	if body.CategoryId == nil {
+		body.CategoryId = s.firstManagedLibrary(access, entry.RootFolderID)
+	}
+	if body.CategoryId == nil && !s.managesAnyLibraryOf(w, access, entry.RootFolderID) {
+		return
+	}
+	if body.CategoryId != nil {
+		if err := access.Require(*body.CategoryId, settings.PermissionManage); err != nil {
+			writeError(w, s.logger, err)
+			return
+		}
 	}
 
 	placement := FilePlacement{Provider: body.Provider, ExternalID: body.ExternalId}
@@ -196,7 +211,8 @@ func (s *Server) routeMarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Re
 
 // MarkUnidentifiedNotMedia takes a queued file out of the queue for good (F29's "not media").
 func (s *Server) MarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request, mediaObjectID int64) {
-	if !s.queuedFileVisible(w, r, mediaObjectID) {
+	access, entry, ok := s.queuedFile(w, r, mediaObjectID)
+	if !ok || !s.managesAnyLibraryOf(w, access, entry.RootFolderID) {
 		return
 	}
 	if err := s.unidentifiedResolver.MarkNotMedia(r.Context(), mediaObjectID); err != nil {
@@ -206,38 +222,59 @@ func (s *Server) MarkUnidentifiedNotMedia(w http.ResponseWriter, r *http.Request
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// queuedFileVisible answers 404 for a file that is not queued or sits under a root folder the
+// queuedFile answers 404 for a file that is not queued or sits under a root folder the
 // caller cannot read (Invariant 37); a queued file is by definition physical, so root folders decide.
-func (s *Server) queuedFileVisible(w http.ResponseWriter, r *http.Request, mediaObjectID int64) bool {
+func (s *Server) queuedFile(
+	w http.ResponseWriter, r *http.Request, mediaObjectID int64,
+) (authz.Access, UnidentifiedRow, bool) {
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)
-		return false
+		return access, UnidentifiedRow{}, false
 	}
 	if s.unidentifiedResolver == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "manual resolution is not available")
-		return false
+		return access, UnidentifiedRow{}, false
 	}
 	entry, err := s.unidentifiedResolver.GetUnidentified(r.Context(), mediaObjectID)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
-		return false
+		return access, UnidentifiedRow{}, false
 	}
 	if err != nil {
 		writeError(w, s.logger, err)
-		return false
+		return access, UnidentifiedRow{}, false
 	}
 	rootFolderIDs, _, err := s.visibility(access, nil)
 	if err != nil {
 		writeError(w, s.logger, err)
-		return false
+		return access, UnidentifiedRow{}, false
 	}
 	if !sharesAnID(rootFolderIDs, []int64{entry.RootFolderID}) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such queued file")
-		return false
+		return access, UnidentifiedRow{}, false
 	}
-	return true
+	return access, entry, true
+}
+
+// firstManagedLibrary is the first library of rootFolderID the caller manages, nil for none.
+func (s *Server) firstManagedLibrary(access authz.Access, rootFolderID int64) *int64 {
+	for _, categoryID := range s.auth.Settings.Snapshot().CategoriesForRootFolder(rootFolderID) {
+		if access.Permission(categoryID).AtLeast(settings.PermissionManage) {
+			return &categoryID
+		}
+	}
+	return nil
+}
+
+// managesAnyLibraryOf answers 403 unless the caller manages one of rootFolderID's libraries, or is an administrator.
+func (s *Server) managesAnyLibraryOf(w http.ResponseWriter, access authz.Access, rootFolderID int64) bool {
+	if access.IsSystem() || access.Role() == settings.RoleAdmin || s.firstManagedLibrary(access, rootFolderID) != nil {
+		return true
+	}
+	writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden, "Forbidden", "managing this library is not permitted")
+	return false
 }
 
 func buildUnidentifiedPage(rows []UnidentifiedRow, limit int) gen.UnidentifiedPage {

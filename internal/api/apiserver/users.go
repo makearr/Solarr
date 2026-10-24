@@ -105,6 +105,12 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 		return
 	}
 
+	// Every refusal comes before the first write, so a 400 changes nothing.
+	if request.Password != nil && *request.Password == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"Bad request", "a password is required")
+		return
+	}
 	if request.Role != nil {
 		role, ok := parseRole(*request.Role)
 		if !ok {
@@ -126,11 +132,6 @@ func (s *Server) UpdateUser(w http.ResponseWriter, r *http.Request, id int64) {
 	}
 
 	if request.Password != nil {
-		if *request.Password == "" {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"Bad request", "a password is required")
-			return
-		}
 		hashed, err := auth.HashPassword(*request.Password)
 		if err != nil {
 			writeError(w, s.logger, err)
@@ -311,11 +312,11 @@ func parsePermission(value string) (settings.Permission, bool) {
 
 // routeUser parses the id path parameter once, so each handler receives it
 // already typed and a malformed one answers the same way everywhere.
-func routeUser(handler func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
+func (s *Server) routeUser(handler func(http.ResponseWriter, *http.Request, int64)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 		if err != nil {
-			http.Error(w, "an account id must be a number", http.StatusBadRequest)
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an account id must be a number")
 			return
 		}
 		handler(w, r, id)

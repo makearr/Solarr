@@ -172,7 +172,10 @@ func affinityCandidate(rootFolderID, sizeBytes int64, candidates []RootCandidate
 }
 
 func qualifies(c RootCandidate, sizeBytes int64) bool {
-	return c.Online && c.Writable && !c.ReadOnly && c.AcceptsNew && c.FreeBytes-sizeBytes >= c.MinFreeBytes
+	if !c.Online || !c.Writable || c.ReadOnly || !c.AcceptsNew || sizeBytes < 0 || c.FreeBytes < 0 || c.MinFreeBytes < 0 {
+		return false
+	}
+	return sizeBytes <= c.FreeBytes && c.FreeBytes-sizeBytes >= c.MinFreeBytes
 }
 
 func rejectReason(c RootCandidate, sizeBytes int64) string {
@@ -185,6 +188,12 @@ func rejectReason(c RootCandidate, sizeBytes int64) string {
 		return "read-only"
 	case !c.AcceptsNew:
 		return "draining (accepts_new = 0)"
+	case c.FreeBytes < 0 || c.MinFreeBytes < 0:
+		return "invalid capacity reading"
+	case sizeBytes < 0:
+		return "invalid negative item size"
+	case c.FreeBytes < sizeBytes:
+		return fmt.Sprintf("%d bytes free, needs %d", c.FreeBytes, sizeBytes)
 	default:
 		return fmt.Sprintf("%d bytes free after this item, reserve %d", c.FreeBytes-sizeBytes, c.MinFreeBytes)
 	}

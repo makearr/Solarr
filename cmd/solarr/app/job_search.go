@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
@@ -33,7 +34,9 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 		}
 		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, indexer.ID)
 		if err != nil {
-			return nil, err
+			// One unreadable key (an encryption key changed) must not stop the searches of every other indexer.
+			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", indexer.ID), slog.Any("error", err))
+			continue
 		}
 		client := factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress())
 		conn := music.IndexerConn{
@@ -62,7 +65,9 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 		}
 		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, found.ID)
 		if err != nil {
-			return nil, err
+			// One unreadable key (an encryption key changed) must not stop the searches of every other indexer.
+			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
+			continue
 		}
 		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
 		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.TVCategories()}
@@ -91,7 +96,9 @@ func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 		}
 		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, found.ID)
 		if err != nil {
-			return nil, err
+			// One unreadable key (an encryption key changed) must not stop the searches of every other indexer.
+			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
+			continue
 		}
 		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
 		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.MovieCategories()}

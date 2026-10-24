@@ -84,8 +84,10 @@ func (j CutoffJob) settle(ctx context.Context, snapshot *settings.Snapshot, item
 		return 0, err
 	}
 	byEpisode := map[string][]library.SeasonFile{}
+	covers := map[int64]int{}
 	for _, file := range files {
 		byEpisode[file.Ref] = append(byEpisode[file.Ref], file)
+		covers[file.File.MediaObjectID]++
 	}
 	var contested bool
 	for _, episode := range byEpisode {
@@ -106,7 +108,9 @@ func (j CutoffJob) settle(ctx context.Context, snapshot *settings.Snapshot, item
 		return 0, err
 	}
 	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
-	recycled := 0
+	// A multi-episode file goes only once it lost every episode it holds: beaten on one, it is still another's only file.
+	lost := map[int64]int{}
+	var losers []library.SeasonFile
 	for _, episode := range byEpisode {
 		if len(episode) < 2 || !anyBrought(episode, downloaded) || !allMeasured(episode) {
 			continue
@@ -127,11 +131,18 @@ func (j CutoffJob) settle(ctx context.Context, snapshot *settings.Snapshot, item
 			if file.File.MediaObjectID == keeper.File.MediaObjectID {
 				continue
 			}
-			if err := j.Recycle(ctx, file.File.MediaObjectID, item.CategoryID, !downloaded[file.File.MediaObjectID]); err != nil {
-				return recycled, err
+			lost[file.File.MediaObjectID]++
+			if lost[file.File.MediaObjectID] == covers[file.File.MediaObjectID] {
+				losers = append(losers, file)
 			}
-			recycled++
 		}
+	}
+	recycled := 0
+	for _, file := range losers {
+		if err := j.Recycle(ctx, file.File.MediaObjectID, item.CategoryID, !downloaded[file.File.MediaObjectID]); err != nil {
+			return recycled, err
+		}
+		recycled++
 	}
 	return recycled, nil
 }

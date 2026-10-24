@@ -29,7 +29,8 @@ type WantedPartsCursor struct {
 // WantedParts lists a library's missing parts, newest first, up to pageSize after the cursor.
 func (w Works) WantedParts(ctx context.Context, categoryID int64, after WantedPartsCursor, pageSize int64, now time.Time) ([]WantedPart, error) {
 	afterDate, afterID := after.Date, after.ID
-	if afterDate == "" {
+	// The zero cursor alone is the first page: a page may end on a part with no date, which is Date "" too.
+	if afterDate == "" && afterID == 0 {
 		afterDate, afterID = "9999-99-99", 1<<62-1
 	}
 	rows, err := librarydb.New(w.store.Read()).ListWantedParts(ctx, librarydb.ListWantedPartsParams{

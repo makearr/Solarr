@@ -89,12 +89,13 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 
 	// Replay anything missed since the client's last id, before live events, so
 	// ordering holds across a reconnect.
-	if !stream.replay(s.events, r.Header.Get("Last-Event-ID"), subscription.Topics()) {
+	replayedThrough, ok := stream.replay(s.events, r.Header.Get("Last-Event-ID"), subscription.Topics())
+	if !ok {
 		return
 	}
 	ticker := s.newFlushTicker()
 	defer ticker.Stop()
-	stream.run(r, subscription, ticker.C())
+	stream.run(r, subscription, ticker.C(), replayedThrough)
 }
 
 // eventStream is one connection's state.
@@ -109,7 +110,7 @@ type eventStream struct {
 }
 
 // run buffers events and flushes them on a tick.
-func (e *eventStream) run(r *http.Request, subscription *events.Subscription, tick <-chan time.Time) {
+func (e *eventStream) run(r *http.Request, subscription *events.Subscription, tick <-chan time.Time, replayedThrough uint64) {
 	// Coalescing buffer: one entry per entity, holding the latest state. A
 	// hundred updates to one job in a tick become one message.
 	pending := make(map[string]events.Event)
@@ -125,11 +126,15 @@ func (e *eventStream) run(r *http.Request, subscription *events.Subscription, ti
 			if !open {
 				return
 			}
+			// Subscribed before replay, so nothing falls between them; the overlap was already in the replay frame.
+			if event.ID <= replayedThrough {
+				continue
+			}
 			e.collect(pending, event)
 
 		case <-tick:
 			// Take everything already queued before flushing.
-			e.drain(subscription, pending)
+			e.drain(subscription, pending, replayedThrough)
 
 			if subscription.Missed() {
 				// Events were dropped for this connection. Telling the client
@@ -178,35 +183,40 @@ func (e *eventStream) flush(pending map[string]events.Event) bool {
 }
 
 // replay re-sends what a reconnecting client missed, or tells it to refetch.
-func (e *eventStream) replay(bus *events.Bus, lastEventID string, topics map[events.Topic]bool) bool {
+func (e *eventStream) replay(bus *events.Bus, lastEventID string, topics map[events.Topic]bool) (uint64, bool) {
 	if lastEventID == "" {
-		return true
+		return 0, true
 	}
 	since, err := strconv.ParseUint(strings.TrimSpace(lastEventID), 10, 64)
 	if err != nil {
 		// A client that sends nonsense gets a resync rather than an argument.
-		return e.send(sseResync, 0, map[string]string{"reason": "unreadable Last-Event-ID"})
+		return 0, e.send(sseResync, 0, map[string]string{"reason": "unreadable Last-Event-ID"})
 	}
 
 	missed, complete := bus.Since(since, topics)
 	if !complete {
 		// The gap is older than the replay buffer. A partial history would turn
 		// a lossy channel into a source of truth it was never meant to be.
-		return e.send(sseResync, 0, map[string]string{
+		// The client refetches everything, so no live event is a duplicate of a replayed one.
+		return 0, e.send(sseResync, 0, map[string]string{
 			"reason": "too far behind to replay; refetch to resynchronise",
 		})
 	}
 
 	visible := make([]events.Event, 0, len(missed))
+	replayedThrough := since
 	for _, event := range missed {
+		if event.ID > replayedThrough {
+			replayedThrough = event.ID
+		}
 		if e.maySee(event) {
 			visible = append(visible, event)
 		}
 	}
 	if len(visible) == 0 {
-		return true
+		return replayedThrough, true
 	}
-	return e.send(sseUpdate, visible[len(visible)-1].ID, map[string]any{"events": visible})
+	return replayedThrough, e.send(sseUpdate, visible[len(visible)-1].ID, map[string]any{"events": visible})
 }
 
 func (e *eventStream) send(name string, id uint64, payload any) bool {
@@ -284,12 +294,15 @@ func (e *eventStream) collect(pending map[string]events.Event, event events.Even
 }
 
 // drain takes every event already queued, without waiting for more.
-func (e *eventStream) drain(subscription *events.Subscription, pending map[string]events.Event) {
+func (e *eventStream) drain(subscription *events.Subscription, pending map[string]events.Event, replayedThrough uint64) {
 	for {
 		select {
 		case event, open := <-subscription.Events():
 			if !open {
 				return
+			}
+			if event.ID <= replayedThrough {
+				continue
 			}
 			e.collect(pending, event)
 		default:

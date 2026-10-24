@@ -159,7 +159,9 @@ func runWithForeignKeysDisabled(
 		return checkForeignKeys(ctx, tx, database)
 	})
 
-	if _, err := db.ExecContext(ctx, "PRAGMA foreign_keys=ON"); err != nil {
+	// Restoring the connection invariant is cleanup, so it must still run after
+	// the operation's context has been canceled.
+	if _, err := db.ExecContext(context.WithoutCancel(ctx), "PRAGMA foreign_keys=ON"); err != nil {
 		return errors.Join(opErr, fmt.Errorf("store %s: re-enable foreign keys: %w", database, err))
 	}
 	return opErr

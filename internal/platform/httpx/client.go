@@ -103,9 +103,10 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 				if len(via) >= maxRedirects {
 					return fmt.Errorf("httpx: stopped after %d redirects", maxRedirects)
 				}
-				// The address is re-checked by the dialer on every new
-				// connection; the scheme is not, so it is checked here.
-				return guard.CheckURL(request.URL)
+				if err := guard.CheckURL(request.URL); err != nil {
+					return err
+				}
+				return checkProxiedDestination(request.Context(), guard, config.Proxy, request)
 			},
 		},
 	}
@@ -151,9 +152,9 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 
 	release, err := c.limiter.Acquire(ctx, c.provider)
 	if err != nil {
-		// The request never happened, so it is not evidence about the provider.
-		// Reporting it would let a cancelled shutdown open every circuit.
-		c.breaker.Observe(c.provider, true)
+		// The request never happened, so it is not evidence about the provider either way:
+		// failure would let a cancelled shutdown open every circuit, success would close one still down.
+		c.breaker.Abandon(c.provider)
 		return nil, err
 	}
 	defer release()
@@ -178,8 +179,13 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	}
 	if err != nil {
 		cancel()
-		c.limiter.Observe(c.provider, Outcome{Success: false})
-		c.breaker.Observe(c.provider, false)
+		// The caller gave up (shutdown, a closed page): says nothing of the provider; the request's own timeout still counts.
+		if ctx.Err() != nil {
+			c.breaker.Abandon(c.provider)
+		} else {
+			c.limiter.Observe(c.provider, Outcome{Success: false})
+			c.breaker.Observe(c.provider, false)
+		}
 		redacted := RedactURL(request.URL)
 		return nil, fmt.Errorf("httpx: %s %s: %w", request.Method, redacted,
 			redactRequestError(err, redacted))
@@ -245,14 +251,18 @@ func (c *Client) dropConnectionsOnProxyChange() {
 // checkProxiedDestination validates the destination directly when this
 // client proxies at all, since a proxied dial never reaches it otherwise.
 func (c *Client) checkProxiedDestination(ctx context.Context, request *http.Request) error {
-	if c.proxy == nil {
+	return checkProxiedDestination(ctx, c.guard, c.proxy, request)
+}
+
+func checkProxiedDestination(ctx context.Context, guard *Guard, proxy LiveProxyPolicy, request *http.Request) error {
+	if proxy == nil {
 		return nil
 	}
 	// A direct request's dial classifies the address it connects to; resolving here too cost a lookup per request.
-	if current := c.proxy(); current.URL == nil || bypassed(request.URL.Hostname(), current.Bypass) {
+	if current := proxy(); current.URL == nil || bypassed(request.URL.Hostname(), current.Bypass) {
 		return nil
 	}
-	return c.guard.CheckDestination(ctx, request.URL.Hostname())
+	return guard.CheckDestination(ctx, request.URL.Hostname())
 }
 
 // Get is the common case.
@@ -282,12 +292,9 @@ func (c *Client) GetJSON(ctx context.Context, address string, limit int64, into 
 	if parsed, err := url.Parse(address); err == nil {
 		shown = RedactURL(parsed)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, limit+1))
+	body, err := ReadLimited(response.Body, limit)
 	if err != nil {
 		return fmt.Errorf("httpx: read %s: %w", shown, err)
-	}
-	if int64(len(body)) > limit {
-		return fmt.Errorf("httpx: %s: answer over %d bytes", shown, limit)
 	}
 	if err := json.Unmarshal(body, into); err != nil {
 		return fmt.Errorf("httpx: decode %s: %w", shown, err)

@@ -27,6 +27,7 @@ type pipeline struct {
 
 type pending struct {
 	directory string
+	partial   bool
 	done      chan error
 }
 
@@ -46,7 +47,7 @@ func (p *pipeline) submit(ctx context.Context, batch Batch) error {
 		<-p.finished
 		p.running--
 	}
-	slot := pending{directory: batch.Directory, done: make(chan error, 1)}
+	slot := pending{directory: batch.Directory, partial: batch.Partial, done: make(chan error, 1)}
 	p.window = append(p.window, slot)
 	p.running++
 	go func() {
@@ -86,6 +87,9 @@ func (p *pipeline) settleOldest(ctx context.Context, observed error) error {
 	if observed != nil {
 		p.failed = observed
 		return observed
+	}
+	if oldest.partial {
+		return nil
 	}
 	if err := p.advance(ctx, oldest.directory); err != nil {
 		p.failed = err

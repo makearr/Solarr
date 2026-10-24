@@ -147,7 +147,7 @@ func recoverFromBackup(ctx context.Context, c clock.Clock, config Config, option
 func recycleBin(c clock.Clock, config Config) (string, error) {
 	stamp := strings.ReplaceAll(c.Now().UTC().Format(time.RFC3339), ":", "-")
 	corruptPath := fmt.Sprintf("%s.corrupt.%s", config.Path, stamp)
-	if _, err := config.FS.Stat(corruptPath); err == nil {
+	if _, err := config.FS.Lstat(corruptPath); err == nil {
 		return "", fmt.Errorf("store %s: recycle bin target %q already exists", config.Name, corruptPath)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("store %s: check recycle bin target %q: %w", config.Name, corruptPath, err)

@@ -117,7 +117,7 @@ SELECT id, phash FROM media_object WHERE phash IS NOT NULL ORDER BY id;
 -- name: ListUnmeasured :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.measured_attributes_id IS NULL AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
@@ -127,7 +127,7 @@ LIMIT sqlc.arg(page_size);
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
@@ -138,7 +138,7 @@ LIMIT sqlc.arg(page_size);
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_probe mp
 JOIN media_object o ON o.id = mp.media_object_id
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS NOT NULL AND o.id > sqlc.arg(after_id)
   AND o.kind = 'video'
 ORDER BY o.id
@@ -192,12 +192,12 @@ LIMIT sqlc.arg(page_size);
 -- primary key already forces (one item per object per job), not something
 -- this query can widen on its own.
 -- name: ListPathsForRootWithSize :many
-SELECT lp.media_object_id, lp.rel_path, o.size_bytes
+SELECT lp.id, lp.media_object_id, lp.rel_path, o.size_bytes
 FROM library_path lp
 JOIN media_object o ON o.id = lp.media_object_id
 WHERE lp.root_folder_id = sqlc.arg(root_folder_id) AND lp.is_primary = 1
-  AND lp.media_object_id > sqlc.arg(after_id)
-ORDER BY lp.media_object_id
+  AND lp.id > sqlc.arg(after_id)
+ORDER BY lp.id
 LIMIT sqlc.arg(page_size);
 
 -- One work's files on one root, each by its primary path: a rename scoped to one work.

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,6 +84,16 @@ func parseBackupName(name, prefix string) (BackupInfo, bool) {
 		at, err := time.Parse(backupStampLayout, stamped[:len(backupStampLayout)])
 		if err != nil {
 			return BackupInfo{}, false
+		}
+		suffix := stamped[len(backupStampLayout):]
+		if suffix != "" {
+			if !strings.HasPrefix(suffix, "-") {
+				return BackupInfo{}, false
+			}
+			disambiguation, err := strconv.Atoi(strings.TrimPrefix(suffix, "-"))
+			if err != nil || disambiguation < 1 || strconv.Itoa(disambiguation) != strings.TrimPrefix(suffix, "-") {
+				return BackupInfo{}, false
+			}
 		}
 		return BackupInfo{Kind: kind, At: at}, true
 	}

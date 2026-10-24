@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"path"
+	"sync/atomic"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -66,6 +67,8 @@ type Job struct {
 	fs       fsx.FS
 	clock    clock.Clock
 	logger   *slog.Logger
+	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
+	resumeAt [3]atomic.Int64
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -101,10 +104,10 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	started := j.clock.Now()
 	total, failed := 0, 0
 	// Unmeasured files first; then those measured before the probe read lyrics languages.
-	for _, list := range []func(context.Context, int64, int64) ([]library.UnmeasuredFile, error){
+	for index, list := range []func(context.Context, int64, int64) ([]library.UnmeasuredFile, error){
 		j.physical.ListUnmeasured, j.physical.ListStaleProbes, j.physical.ListStaleVideoProbes,
 	} {
-		var afterID int64
+		afterID := j.resumeAt[index].Swap(0)
 		for {
 			if err := ctx.Err(); err != nil {
 				return jobs.Retryablef("probe.context", string(JobType), err)
@@ -131,6 +134,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 				break
 			}
 			if j.clock.Now().Sub(started) >= yieldAfter {
+				j.resumeAt[index].Store(afterID)
 				j.logger.Info("probe sweep yielding", slog.Int("processed", total), slog.Int("failed", failed))
 				return fmt.Errorf("probe: %d files in %s: %w", total, yieldAfter, jobs.ErrYield)
 			}

@@ -303,6 +303,9 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 	return query, predicates.Args(pageSize)
 }
 
+// yearSortExpression is the year sort's column: a NULL year compares as nothing in a row-value cursor (index 0095).
+const yearSortExpression = "COALESCE(work.year, 0)"
+
 // leadSortExpression is the lead-person order, exactly as migration 0072 indexes it: a work without a lead sorts last.
 const leadSortExpression = "COALESCE(NULLIF(lead_person_sort_name, ''), char(1114111)) COLLATE NOCASE"
 
@@ -315,7 +318,7 @@ const leadSortCursor = "COALESCE(NULLIF(?, ''), char(1114111))"
 func sortColumn(sort WorkSort, after WorkCursor) (column string, cursorValue any) {
 	switch sort {
 	case WorkSortYear:
-		return "work.year", after.SortYear
+		return yearSortExpression, after.SortYear
 	case WorkSortAdded:
 		return "work.added_at", after.SortAdded
 	case WorkSortSearched:

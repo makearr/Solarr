@@ -81,7 +81,7 @@ func (s *Server) UpdateMetadataSettings(w http.ResponseWriter, r *http.Request) 
 		}
 		wanted.SourceOrder = order
 	}
-	if err := s.auth.Settings.SetMetadataSettings(r.Context(), clock.NewSystem(), wanted); err != nil {
+	if err := s.auth.Settings.SetMetadataSettings(r.Context(), s.auth.Clock, wanted); err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {
 			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -133,7 +133,7 @@ func (s *Server) SetAcoustIDAPIKey(w http.ResponseWriter, r *http.Request) {
 
 	key := secrets.Secret(strings.TrimSpace(derefOr(body.ApiKey, "")))
 	hadKey := s.auth.Settings.Snapshot().AcoustIDConfigured()
-	if err := s.auth.Settings.SetAcoustIDAPIKey(r.Context(), clock.NewSystem(), key); err != nil {
+	if err := s.auth.Settings.SetAcoustIDAPIKey(r.Context(), s.auth.Clock, key); err != nil {
 		if errors.Is(err, settings.ErrSecretsUnavailable) {
 			writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 				"Unavailable", "no encryption key is configured; an api key cannot be stored")
@@ -230,7 +230,7 @@ func (s *Server) setProviderKey(
 		return
 	}
 	key := secrets.Secret(strings.TrimSpace(derefOr(body.APIKey, "")))
-	if err := store(r.Context(), clock.NewSystem(), key); err != nil {
+	if err := store(r.Context(), s.auth.Clock, key); err != nil {
 		if errors.Is(err, settings.ErrSecretsUnavailable) {
 			writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 				"Unavailable", "no encryption key is configured; an api key cannot be stored")

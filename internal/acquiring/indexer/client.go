@@ -57,9 +57,12 @@ func (c Client) getBody(ctx context.Context, requestURL string) ([]byte, error) 
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("indexer: read response: %w", err)
+	}
+	if len(body) > maxResponseBytes {
+		return nil, fmt.Errorf("indexer: response exceeds %d bytes", maxResponseBytes)
 	}
 	return body, nil
 }

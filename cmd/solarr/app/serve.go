@@ -440,7 +440,7 @@ func (p *process) startJobs(ctx context.Context) error {
 
 	// The lease owner must be unique per process run, or the reaper cannot tell
 	// a stale lease from a live one after a restart.
-	owner := fmt.Sprintf("%s-%d-%d", hostname(), os.Getpid(), time.Now().UnixNano())
+	owner := fmt.Sprintf("%s-%d-%d", hostname(), os.Getpid(), wall.Now().UnixNano())
 
 	p.running, p.jobRegistry = jobs.NewRunning(wall), registry
 	p.indexerCaps = newIndexerCapsCache(wall)
@@ -552,8 +552,11 @@ func (p *process) startServer(ctx context.Context) error {
 	p.effectivePort, portSource = p.resolvedServerPort()
 
 	p.reportRootFolders()
+	// Ended at shutdown before the databases close, so no tick enqueues into a closing jobs.db.
+	background, stopBackground := context.WithCancel(ctx)
+	defer stopBackground()
 	// Startup runs are per task and switchable on the Scheduler screen (2026-09-19 review).
-	p.startSchedulers(ctx)
+	p.startSchedulers(background)
 	if err := p.seedAuthPolicy(ctx); err != nil {
 		return err
 	}
@@ -571,7 +574,7 @@ func (p *process) startServer(ctx context.Context) error {
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
 	})
-	go prober.Run(ctx)
+	go prober.Run(background)
 
 	server, err := p.newServer(authConfig, prober)
 	if err != nil {
@@ -608,6 +611,10 @@ func (p *process) startServer(ctx context.Context) error {
 
 	select {
 	case err := <-serverDone:
+		// The server failed on its own: the running jobs still drain before the databases close.
+		stopBackground()
+		stop()
+		<-dispatcherDone
 		return err
 	case <-stopping.Done():
 	}
@@ -615,6 +622,7 @@ func (p *process) startServer(ctx context.Context) error {
 	// Shutdown order matters (section 15.2): stop accepting first, then let the
 	// dispatcher drain, then close the databases in p.close.
 	p.logger.Info("shutting down")
+	stopBackground()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {

@@ -15,7 +15,6 @@ import (
 	"github.com/makearr/Solarr/internal/api/auth"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
@@ -169,7 +168,7 @@ func (s *Server) recordRootCapacity(ctx context.Context, id int64, path string, 
 		return false
 	}
 	if err := s.auth.Settings.SetRootFolderCapacity(ctx, id, settings.RootFolderCapacity{
-		Writable: writable, TotalBytes: total, FreeBytes: free, CheckedAt: clock.NewSystem().Now().Unix(),
+		Writable: writable, TotalBytes: total, FreeBytes: free, CheckedAt: s.auth.Clock.Now().Unix(),
 	}); err != nil {
 		s.logger.Warn("root folder capacity could not be recorded", "path", path, "error", err)
 		return false

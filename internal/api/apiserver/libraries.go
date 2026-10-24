@@ -493,12 +493,17 @@ func (s *Server) listLibraryLevelWorks(
 			"Unavailable", "the library is not available")
 		return
 	}
+	workCursor, err := levelWorksCursor(sort, cursor)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
+		return
+	}
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
 			Sort: sort, Direction: direction, Where: where,
 		},
-		levelWorksCursor(sort, cursor), limit+1)
+		workCursor, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -642,21 +647,39 @@ func artistStatus(row ArtistRow) AlbumStatus {
 
 // levelWorksCursor and encodeLevelWorksCursor carry whichever field the
 // active sort orders on through the level cursor's own generic text fields.
-// Year and added_at are numbers there, encoded as decimal text -- the cursor
-// exists to be handed back, never read.
-func levelWorksCursor(sort WorkSort, cursor levelCursor) WorksCursor {
+// Year and added_at are encoded as decimal text and validated when read.
+func levelWorksCursor(sort WorkSort, cursor levelCursor) (WorksCursor, error) {
 	out := WorksCursor{ID: cursor.id}
 	switch sort {
 	case WorkSortYear:
-		out.SortYear, _ = strconv.ParseInt(cursor.field(0), 10, 64)
+		value, err := parseLevelNumericCursor(cursor.field(0), cursor.id)
+		if err != nil {
+			return WorksCursor{}, err
+		}
+		out.SortYear = value
 	case WorkSortAdded:
-		out.SortAdded, _ = strconv.ParseInt(cursor.field(0), 10, 64)
+		value, err := parseLevelNumericCursor(cursor.field(0), cursor.id)
+		if err != nil {
+			return WorksCursor{}, err
+		}
+		out.SortAdded = value
 	case WorkSortArtist:
 		out.SortArtist, out.SortTitle = cursor.field(0), cursor.field(1)
 	default:
 		out.SortTitle = cursor.field(0)
 	}
-	return out
+	return out, nil
+}
+
+func parseLevelNumericCursor(value string, id int64) (int64, error) {
+	if value == "" && id == 0 {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%w: numeric cursor key is not a number", paginate.ErrBadCursor)
+	}
+	return parsed, nil
 }
 
 func encodeLevelWorksCursor(sort WorkSort, last WorkRow) string {

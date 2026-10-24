@@ -537,3 +537,40 @@ func TestCadenceIntervalIsTheGapBetweenFirings(t *testing.T) {
 		}
 	}
 }
+
+// A cadence changed while the runner sleeps takes effect within a minute: a weekly task made every-minute does not wait out
+// the week first.
+func TestTaskRunner_ACadenceChangedWhileAsleepTakesEffect(t *testing.T) {
+	states, fake := newScheduleStates(t)
+	source := newFakeScheduleSource()
+	source.cadence["sweep"] = []string{"0 0 * * 0"}
+	fired := make(chan struct{}, 10)
+	task := jobs.Task{Key: "sweep", DefaultCadence: "0 0 * * 0", Enqueue: func(context.Context) (jobs.EnqueueResult, error) {
+		fired <- struct{}{}
+		return jobs.EnqueueResult{}, nil
+	}}
+	runner := jobs.NewTaskRunner(task, source, states, fake, quietLogger())
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runner.Run(ctx)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	fake.BlockUntilWaiters(1)
+	source.cadence["sweep"] = []string{"* * * * *"}
+	fake.Advance(time.Minute)
+	fake.BlockUntilWaiters(1)
+	fake.Advance(time.Minute)
+
+	select {
+	case <-fired:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the task kept sleeping toward its old weekly time")
+	}
+}

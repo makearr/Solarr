@@ -134,9 +134,12 @@ func (p *Prober) ask(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("egress: %s answered %s", p.endpoint, response.Status)
 	}
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponse))
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponse+1))
 	if err != nil {
 		return "", err
+	}
+	if int64(len(body)) > maxResponse {
+		return "", fmt.Errorf("egress: response exceeds %d bytes", maxResponse)
 	}
 
 	// Parsed rather than trusted: this is a third party's response rendered in

@@ -101,17 +101,20 @@ func (c *Cache) SetNetworkSettings(ctx context.Context, cl clock.Clock, ns Netwo
 		return err
 	}
 
-	for key, value := range map[string]string{
+	return c.setPolicies(ctx, cl, map[string]string{
 		KeyNetworkPort:              strconv.Itoa(ns.Port),
 		KeyNetworkProxyEnabled:      boolPolicy(ns.ProxyEnabled),
 		KeyNetworkProxyURL:          ns.ProxyURL,
 		KeyNetworkProxyBypass:       string(proxyBypass),
 		KeyNetworkAllowCIDRsEnabled: boolPolicy(ns.AllowCIDRsEnabled),
 		KeyNetworkAllowCIDRs:        string(allowCIDRs),
-	} {
-		if err := c.setPolicy(ctx, cl, key, value); err != nil {
-			return err
-		}
+	})
+}
+
+// ValidateNetworkSettings is SetNetworkSettings' check alone, for a caller with a write of its own to make first.
+func ValidateNetworkSettings(ns NetworkSettings, callerAddress netip.Addr) error {
+	if problems := validateNetworkSettings(ns, callerAddress); len(problems) > 0 {
+		return problems
 	}
 	return nil
 }

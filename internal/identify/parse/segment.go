@@ -3,6 +3,7 @@ package parse
 import (
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // discMarkerRe catches a disc-subfolder name on its own ("CD1", "Disc 2") --
@@ -46,9 +47,8 @@ func SegmentConfidence(segment string) float64 {
 
 	meaningful := 0
 	for _, word := range strings.Fields(Normalize(body)) {
-		word = strings.TrimFunc(word, func(r rune) bool {
-			return (r < 'a' || r > 'z') && (r < '0' || r > '9')
-		})
+		// Any script's letters: an ASCII-only trim emptied every Cyrillic or Japanese word and scored the folder a container.
+		word = strings.TrimFunc(word, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 		if word == "" {
 			continue
 		}

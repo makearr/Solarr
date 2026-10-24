@@ -132,8 +132,11 @@ func stateOf(state string) download.State {
 		return download.StateQueued
 	case "downloading", "stalledDL", "forcedDL", "metaDL", "forcedMetaDL":
 		return download.StateDownloading
-	case "checkingDL", "checkingResumeData", "allocating", "moving", "unknown":
+	case "checkingDL", "checkingUP", "checkingResumeData", "allocating", "moving", "unknown":
 		return download.StateProcessing
+	case "uploading":
+		// Seeding to connected peers: finished, though it lacks the UP suffix the other seeding states share.
+		return download.StateCompleted
 	}
 	if strings.HasSuffix(state, "UP") {
 		return download.StateCompleted

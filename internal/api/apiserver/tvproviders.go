@@ -6,7 +6,6 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
-	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // TVProviderInfo is one TV metadata provider as the Metadata settings page lists it.
@@ -59,7 +58,7 @@ func (s *Server) TestTVProviders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	results := s.tvProviders.Test(r.Context())
-	now := clock.NewSystem().Now().UTC()
+	now := s.auth.Clock.Now().UTC()
 	view := make([]gen.TVProviderTest, 0, len(results))
 	for _, result := range results {
 		view = append(view, gen.TVProviderTest{Id: gen.TVProviderTestId(result.ID), Ok: result.OK, Message: result.Message, TestedAt: now})

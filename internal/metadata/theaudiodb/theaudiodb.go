@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -145,7 +144,7 @@ func (c Client) get(ctx context.Context, endpoint, mbid string, into any) error 
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("theaudiodb: %s: status %d", endpoint, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("theaudiodb: %s: read: %w", endpoint, err)
 	}

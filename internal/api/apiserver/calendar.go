@@ -8,7 +8,6 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
 // CalendarRow is one release in the window.
@@ -58,6 +57,9 @@ func isoDate(value string) bool {
 	return true
 }
 
+// calendarMaxLimit is api/openapi.yaml's maximum for /calendar's limit.
+const calendarMaxLimit = 500
+
 func (s *Server) routeListCalendar(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	from, to := query.Get("from"), query.Get("to")
@@ -91,7 +93,8 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 		return
 	}
 
-	limit := paginate.ClampLimit(derefOr(params.Limit, 0))
+	// The calendar has no cursor, so it keeps its spec's own ceiling (500) rather than the 200 a paged list has.
+	limit := min(max(derefOr(params.Limit, 200), 1), calendarMaxLimit)
 	rows, err := s.calendar.Entries(r.Context(), params.From, params.To,
 		access.VisibleCategoryIDs(settings.PermissionRead), limit)
 	if err != nil {

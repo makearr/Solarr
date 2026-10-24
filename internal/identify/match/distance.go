@@ -183,6 +183,13 @@ func differentNumbers(a, b string) bool {
 // comparison behind both titleDistance and TitleSimilarity.
 func bestTitleSimilarity(a, b string) (score float64, method string) {
 	normalizedA, normalizedB := normalizeTitle(a), normalizeTitle(b)
+	// Normalising empties a title of symbols ("+", "÷"): those are equal only as written, never all alike.
+	if normalizedA == "" || normalizedB == "" {
+		if symbolTitlesEqual(a, b) {
+			return 1, "exact"
+		}
+		return 0, "exact"
+	}
 	tokenSimilarity := jaccardWords(normalizedA, normalizedB)
 	jaroWinklerSimilarity := jaroWinkler(normalizedA, normalizedB)
 

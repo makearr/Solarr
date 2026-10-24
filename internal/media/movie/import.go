@@ -272,7 +272,11 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return nil, errNothingToPlace
 	}
 	// A second file is only for a film that wants a better one (Radarr's "existing file is better" rule).
-	if roots, err := i.config.Identity.WorkFileRoots(ctx, workID); err == nil && len(roots) > 0 && !upgrade {
+	roots, err := i.config.Identity.WorkFileRoots(ctx, workID)
+	if err != nil {
+		return nil, fmt.Errorf("movie %d: find existing roots: %w", workID, err)
+	}
+	if len(roots) > 0 && !upgrade {
 		return nil, errNothingToPlace
 	}
 	basics, err := i.config.Reader.Basics(ctx, workID)

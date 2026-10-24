@@ -8,7 +8,7 @@ func EditPenalty(a, b string) float64 {
 	left := []rune(strings.ReplaceAll(normalizeTitle(a), " ", ""))
 	right := []rune(strings.ReplaceAll(normalizeTitle(b), " ", ""))
 	switch {
-	case len(left) == 0 && len(right) == 0:
+	case len(left) == 0 && len(right) == 0 && symbolTitlesEqual(a, b):
 		return 0
 	case len(left) == 0 || len(right) == 0:
 		return 1
@@ -34,4 +34,9 @@ func levenshtein(left, right []rune) int {
 		previous, current = current, previous
 	}
 	return previous[len(right)]
+}
+
+// symbolTitlesEqual compares titles that normalise to nothing as they are written, case and outer space aside.
+func symbolTitlesEqual(a, b string) bool {
+	return strings.EqualFold(strings.TrimSpace(a), strings.TrimSpace(b))
 }

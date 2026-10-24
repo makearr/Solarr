@@ -6,6 +6,7 @@
 package parse
 
 import (
+	"math"
 	"regexp"
 	"strconv"
 	"strings"
@@ -527,8 +528,11 @@ func claimField(field string, claims *claimSet) bool {
 		return true
 	case sampleRateRe.MatchString(field):
 		matches := sampleRateRe.FindStringSubmatch(field)
-		khz, _ := strconv.ParseFloat(matches[1], 64)
-		claims.sampleRate = int(khz * 1000)
+		khz, err := strconv.ParseFloat(matches[1], 64)
+		hz := khz * 1000
+		if err == nil && !math.IsNaN(hz) && !math.IsInf(hz, 0) && hz < float64(int(^uint(0)>>1)) {
+			claims.sampleRate = int(hz)
+		}
 		return true
 	case barcodeRe.MatchString(field):
 		// An EAN/UPC run: recognised and discarded, not recorded -- see

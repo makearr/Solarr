@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"strings"
 
@@ -103,7 +102,8 @@ type directReleaseGroup struct {
 
 func (d direct) releaseGroup(ctx context.Context, mbid string) (ReleaseGroup, error) {
 	var parsed directReleaseGroup
-	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+url-rels", d.baseURL, mbid)
+	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
+	url := fmt.Sprintf("%s/release-group/%s?fmt=json&inc=artist-credits+genres+url-rels", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return ReleaseGroup{}, fmt.Errorf("musicbrainz: release-group %s: %w", mbid, err)
 	}
@@ -156,7 +156,8 @@ type directArtist struct {
 // relation, not a separate lookup.
 func (d direct) Artist(ctx context.Context, mbid string) (Artist, error) {
 	var parsed directArtist
-	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels+aliases", d.baseURL, mbid)
+	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
+	url := fmt.Sprintf("%s/artist/%s?fmt=json&inc=url-rels+aliases", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return Artist{}, fmt.Errorf("musicbrainz: artist %s: %w", mbid, err)
 	}
@@ -571,7 +572,8 @@ type directRelease struct {
 
 func (d direct) release(ctx context.Context, mbid string) (Release, error) {
 	var parsed directRelease
-	url := fmt.Sprintf("%s/release/%s?fmt=json&inc=recordings+labels+media", d.baseURL, mbid)
+	escaped := url.PathEscape(mbid) // an id from a file tag is not trusted to be a bare MBID
+	url := fmt.Sprintf("%s/release/%s?fmt=json&inc=recordings+labels+media", d.baseURL, escaped)
 	if err := getJSON(ctx, d.client, url, &parsed); err != nil {
 		return Release{}, fmt.Errorf("musicbrainz: release %s: %w", mbid, err)
 	}
@@ -646,7 +648,7 @@ func getJSON(ctx context.Context, client *httpx.Client, url string, into any) er
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("read response: %w", err)
 	}

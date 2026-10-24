@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"path"
 	"strconv"
-	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -21,11 +20,21 @@ type Permissions struct {
 // ApplyPermissions sets the file's mode and every folder's between it and rootPath, never the root
 // itself: the host's own folders are reported, never corrected (section 20.2).
 func ApplyPermissions(fsys fsx.FS, rootPath, fileAbs string, permissions Permissions) error {
-	if err := applyTo(fsys, fileAbs, permissions.FileMode, permissions.GID); err != nil {
+	root, err := fsys.Resolve(rootPath)
+	if err != nil {
+		return fmt.Errorf("mover: resolve permission root %q: %w", rootPath, err)
+	}
+	file, err := fsys.Resolve(fileAbs)
+	if err != nil {
+		return fmt.Errorf("mover: resolve permission path %q: %w", fileAbs, err)
+	}
+	if file == root || !fsx.Within(root, file) {
+		return fmt.Errorf("mover: %w: permission path %q is not a file beneath root %q", fsx.ErrEscapesRoot, fileAbs, rootPath)
+	}
+	if err := applyTo(fsys, file, permissions.FileMode, permissions.GID); err != nil {
 		return err
 	}
-	root := path.Clean(rootPath)
-	for folder := path.Dir(fileAbs); folder != root && strings.HasPrefix(folder, root+"/"); folder = path.Dir(folder) {
+	for folder := path.Dir(file); folder != root && fsx.Within(root, folder); folder = path.Dir(folder) {
 		if err := applyTo(fsys, folder, permissions.FolderMode, permissions.GID); err != nil {
 			return err
 		}

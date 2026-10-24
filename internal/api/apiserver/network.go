@@ -3,14 +3,15 @@ package apiserver
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/netip"
+	"net/url"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -44,11 +45,20 @@ func (s *Server) ipAllowlist(next http.Handler) http.Handler {
 // GetNetworkSettings answers ADR-58's own policy, plus the port this
 // instance actually bound to at startup.
 func (s *Server) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
-	writeJSON(w, s.logger, http.StatusOK, s.networkSettingsView())
+	view := s.networkSettingsView()
+	// A proxy's password is configuration only an administrator may read.
+	if access.Role() != settings.RoleAdmin && view.ProxyUrl != nil {
+		if parsed, err := url.Parse(*view.ProxyUrl); err == nil {
+			redacted := parsed.Redacted()
+			view.ProxyUrl = &redacted
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, view)
 }
 
 // UpdateNetworkSettings changes the port, egress proxy or IP allowlist.
@@ -87,6 +97,12 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	// undone by config.yml's own stale value on the next restart. Written
 	// first and required to succeed -- a settings.db write with no matching
 	// config.yml write is the exact inconsistency this exists to prevent.
+	caller := s.resolvedClientAddress(r)
+	// Checked before config.yml is touched, so a refused change leaves the file as it was too.
+	if err := settings.ValidateNetworkSettings(wanted, caller); err != nil {
+		s.writeNetworkSettingsError(w, err)
+		return
+	}
 	if wanted.Port != 0 && s.configPath != "" {
 		if err := s.writeConfigServerPort(wanted.Port); err != nil {
 			writeProblem(w, s.logger, http.StatusInternalServerError, TypeInternal,
@@ -95,18 +111,21 @@ func (s *Server) UpdateNetworkSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	caller := s.resolvedClientAddress(r)
-	if err := s.auth.Settings.SetNetworkSettings(r.Context(), clock.NewSystem(), wanted, caller); err != nil {
-		var problems config.Problems
-		if errors.As(err, &problems) {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
-				"The network settings have problems", problems.Report("the network settings", "Nothing was changed."))
-			return
-		}
-		writeError(w, s.logger, err)
+	if err := s.auth.Settings.SetNetworkSettings(r.Context(), s.auth.Clock, wanted, caller); err != nil {
+		s.writeNetworkSettingsError(w, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, s.networkSettingsView())
+}
+
+func (s *Server) writeNetworkSettingsError(w http.ResponseWriter, err error) {
+	var problems config.Problems
+	if errors.As(err, &problems) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"The network settings have problems", problems.Report("the network settings", "Nothing was changed."))
+		return
+	}
+	writeError(w, s.logger, err)
 }
 
 // writeConfigServerPort surgically patches server.port into config.yml on
@@ -117,10 +136,13 @@ func (s *Server) writeConfigServerPort(port int) error {
 	if err != nil {
 		return err
 	}
-	data, err := io.ReadAll(file)
+	data, err := io.ReadAll(io.LimitReader(file, config.MaxDocumentBytes+1))
 	closeErr := file.Close()
 	if err != nil {
 		return err
+	}
+	if int64(len(data)) > config.MaxDocumentBytes {
+		return fmt.Errorf("config: %s exceeds the %d byte limit", s.configPath, config.MaxDocumentBytes)
 	}
 	if closeErr != nil {
 		return closeErr

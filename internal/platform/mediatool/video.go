@@ -1,6 +1,7 @@
 package mediatool
 
 import (
+	"math"
 	"strconv"
 	"strings"
 )
@@ -14,8 +15,12 @@ func frameRate(average, nominal string) float64 {
 		}
 		top, errTop := strconv.ParseFloat(numerator, 64)
 		bottom, errBottom := strconv.ParseFloat(denominator, 64)
-		if errTop == nil && errBottom == nil && bottom > 0 && top > 0 {
-			return top / bottom
+		if errTop == nil && errBottom == nil && bottom > 0 && top > 0 &&
+			!math.IsNaN(top) && !math.IsInf(top, 0) && !math.IsNaN(bottom) && !math.IsInf(bottom, 0) {
+			rate := top / bottom
+			if !math.IsNaN(rate) && !math.IsInf(rate, 0) {
+				return rate
+			}
 		}
 	}
 	return 0

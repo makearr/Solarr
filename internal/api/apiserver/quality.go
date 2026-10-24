@@ -56,6 +56,29 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 			"Bad request", "the request body could not be read")
 		return
 	}
+	protocol, minutes := category.PreferredProtocol, category.ProtocolDelayMinutes
+	if body.PreferredProtocol != nil {
+		protocol = string(*body.PreferredProtocol)
+	}
+	if body.ProtocolDelayMinutes != nil {
+		minutes = *body.ProtocolDelayMinutes
+	}
+	// Validate the delay alongside the profiles before either is written, so a
+	// bad delay cannot leave a partially applied quality update.
+	var delayProblems config.Problems
+	if protocol != "" && protocol != "usenet" && protocol != "torrent" {
+		delayProblems = append(delayProblems, config.Problem{Path: "preferred_protocol", Value: protocol,
+			Expectation: "usenet, torrent or empty"})
+	}
+	if minutes < 0 || minutes > 7*24*60 {
+		delayProblems = append(delayProblems, config.Problem{Path: "protocol_delay_minutes", Value: fmt.Sprint(minutes),
+			Expectation: "0 to 10080"})
+	}
+	if len(delayProblems) > 0 {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+			"The delay profile has problems", delayProblems.Report("the delay profile", "Nothing was changed."))
+		return
+	}
 	err = s.auth.Settings.SetCategoryQuality(r.Context(), id, body.ProfileIds, body.CutoffProfileId, body.TargetId)
 	if err != nil {
 		var problems config.Problems
@@ -81,13 +104,6 @@ func (s *Server) SetLibraryQuality(w http.ResponseWriter, r *http.Request, id in
 		}
 	}
 	if body.PreferredProtocol != nil || body.ProtocolDelayMinutes != nil {
-		protocol, minutes := category.PreferredProtocol, category.ProtocolDelayMinutes
-		if body.PreferredProtocol != nil {
-			protocol = string(*body.PreferredProtocol)
-		}
-		if body.ProtocolDelayMinutes != nil {
-			minutes = *body.ProtocolDelayMinutes
-		}
 		if err := s.auth.Settings.SetCategoryProtocolDelay(r.Context(), id, protocol, minutes); err != nil {
 			var problems config.Problems
 			if errors.As(err, &problems) {

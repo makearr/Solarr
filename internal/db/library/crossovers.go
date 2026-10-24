@@ -330,7 +330,11 @@ func (s SameContentSuggestion) Plausible() bool {
 // within says two lengths differ by no more than percent of the longer.
 func within(a, b, percent int64) bool {
 	longer := max(a, b)
-	return max(a, b)-min(a, b) <= longer*percent/100
+	if percent <= 0 {
+		return a == b
+	}
+	threshold := (longer/100)*percent + (longer%100)*percent/100
+	return longer-min(a, b) <= threshold
 }
 
 var genericTitles = regexp.MustCompile(`^(the )?(pilot|premiere|finale|series premiere|series finale|season premiere|season finale|special|specials|trailer|recap|tba|tbd|untitled|christmas special|holiday special|(episode|part|chapter|special|part one|part two|part three)( ?[0-9ivx]+)?|[0-9]+)$`)

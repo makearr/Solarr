@@ -104,7 +104,9 @@ func TestDownloader_DownloadsMapsStatesAndOnlyACompletedOneHasAPath(t *testing.T
 	 {"hash":"a","name":"seeding","category":"c","state":"stalledUP","size":10,"amount_left":0,"content_path":"/downloads/x","ratio":1.5,"seeding_time":3600},
 	 {"hash":"b","name":"going","category":"c","state":"downloading","size":10,"amount_left":4,"content_path":"/downloads/y"},
 	 {"hash":"c","name":"stopped","category":"c","state":"stoppedDL","size":10,"amount_left":9},
-	 {"hash":"d","name":"bad","category":"c","state":"missingFiles","size":10,"amount_left":9}]`}}}
+	 {"hash":"d","name":"bad","category":"c","state":"missingFiles","size":10,"amount_left":9},
+	 {"hash":"e","name":"seeding to peers","category":"c","state":"uploading","size":10,"amount_left":0,"content_path":"/downloads/z"},
+	 {"hash":"f","name":"rechecking","category":"c","state":"checkingUP","size":10,"amount_left":0,"content_path":"/downloads/w"}]`}}}
 	got, err := qbittorrent.Downloader{Client: newClient(t, server, "")}.Downloads(t.Context(), "c")
 	if err != nil {
 		t.Fatalf("Downloads: %v", err)
@@ -113,7 +115,11 @@ func TestDownloader_DownloadsMapsStatesAndOnlyACompletedOneHasAPath(t *testing.T
 	for _, one := range got {
 		states = append(states, one.State)
 	}
-	want := []download.State{download.StateCompleted, download.StateDownloading, download.StatePaused, download.StateFailed}
+	want := []download.State{download.StateCompleted, download.StateDownloading, download.StatePaused, download.StateFailed,
+		download.StateCompleted, download.StateProcessing}
+	if len(states) != len(want) {
+		t.Fatalf("states = %v, want %v", states, want)
+	}
 	for i := range want {
 		if states[i] != want[i] {
 			t.Fatalf("states = %v, want %v", states, want)

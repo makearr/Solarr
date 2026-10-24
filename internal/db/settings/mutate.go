@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/config"
@@ -1068,7 +1069,7 @@ type RootFolderCapacity struct {
 // SetRootFolderPolicy instead, so the two paths can never race each other's
 // columns.
 func (c *Cache) SetRootFolderCapacity(ctx context.Context, id int64, capacity RootFolderCapacity) error {
-	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+	return c.writeFact(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
 		return queries.SetRootFolderCapacity(ctx, settingsdb.SetRootFolderCapacityParams{
 			Writable:          boolToInt(capacity.Writable),
 			WritableReason:    sql.NullString{String: capacity.WritableReason, Valid: capacity.WritableReason != ""},
@@ -1135,8 +1136,12 @@ func (c *Cache) PlacementAffinity(ctx context.Context, categoryID int64, affinit
 // SetPlacementAffinity commits Resolve's choice for an affinity key, so the
 // next item sharing it lands on the same root.
 func (c *Cache) SetPlacementAffinity(ctx context.Context, categoryID int64, affinityKey string, rootFolderID, updatedAt int64) error {
-	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.SetPlacementAffinity(ctx, settingsdb.SetPlacementAffinityParams{
+	// Called on every placement, and the snapshot holds no affinity: unchanged is no write, changed is no reload or backup.
+	if current, found, err := c.PlacementAffinity(ctx, categoryID, affinityKey); err == nil && found && current == rootFolderID {
+		return nil
+	}
+	return c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		return c.queries.WithTx(tx).SetPlacementAffinity(ctx, settingsdb.SetPlacementAffinityParams{
 			CategoryID: categoryID, AffinityKey: affinityKey, RootFolderID: rootFolderID, UpdatedAt: updatedAt,
 		})
 	})

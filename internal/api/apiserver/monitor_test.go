@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
@@ -335,6 +336,28 @@ func TestBulkSetWorkMonitored_UnreadableCategoryAnswers404(t *testing.T) {
 	}
 	if fixture.worksMonitor.bulkCalls != 0 {
 		t.Error("BulkSetMonitored must not be reached for a category the caller cannot read")
+	}
+}
+
+// Monitoring decides what is searched: a reader may preview a bulk monitor, not run it, as with one work.
+func TestBulkSetWorkMonitored_NeedsRequestUnlessPreviewing(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Music", "/media/music")
+	listener := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), listener.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatal(err)
+	}
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor",
+		fmt.Sprintf(`{"category_id":%d,"monitored":true}`, category.ID)))
+	if recorder.Code != http.StatusForbidden || fixture.worksMonitor.bulkCalls != 0 {
+		t.Errorf("monitor as a reader: status %d, calls %d; want 403 and none", recorder.Code, fixture.worksMonitor.bulkCalls)
+	}
+	recorder = fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/monitor",
+		fmt.Sprintf(`{"category_id":%d,"monitored":true,"preview":true}`, category.ID)))
+	if recorder.Code != http.StatusOK {
+		t.Errorf("preview as a reader: status %d, want 200", recorder.Code)
 	}
 }
 

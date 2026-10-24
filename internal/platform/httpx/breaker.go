@@ -169,6 +169,13 @@ func (b *Breaker) Observe(provider string, success bool) {
 	}
 }
 
+// Abandon gives back a half-open probe that never reached the provider, judging nothing: the next request probes instead.
+func (b *Breaker) Abandon(provider string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.entryLocked(provider).probing = false
+}
+
 // State reports the provider's breaker state.
 func (b *Breaker) State(provider string) BreakerSnapshot {
 	b.mu.Lock()

@@ -194,9 +194,46 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 		monitorDiscovered = string(*body.MonitorDiscovered)
 	}
 	// A further media type of a library keeps the library's name and priority; those are changed on the library.
-	library := s.auth.Settings.Snapshot().LibraryOf(id)
-	if categories := s.auth.Settings.Snapshot().LibraryCategories(id); len(categories) > 0 && library != id {
+	snapshot := s.auth.Settings.Snapshot()
+	library := snapshot.LibraryOf(id)
+	if categories := snapshot.LibraryCategories(id); len(categories) > 0 && library != id {
 		body.Name, body.PriorityRank = categories[0].Name, categories[0].PriorityRank
+	}
+	category, found := snapshot.Category(id)
+	if !found {
+		writeError(w, s.logger, fmt.Errorf("%w: category %d", settings.ErrNotFound, id))
+		return
+	}
+	// Every refusal before the first write, or a 400 would follow a name and profiles already committed.
+	if body.Kind != nil {
+		info, _ := s.mediaTypeInfo(category.MediaType)
+		if _, known := info.kindOf(*body.Kind); !known || *body.Kind == "" && len(info.Kinds) > 0 {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Unknown kind",
+				fmt.Sprintf("a %s library has no kind %q", category.MediaType, *body.Kind))
+			return
+		}
+	}
+	if body.RatingLimit != nil {
+		info, _ := s.mediaTypeInfo(category.MediaType)
+		if !info.Ratings {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "No ratings",
+				fmt.Sprintf("a %s library has no ratings to limit", category.MediaType))
+			return
+		}
+		if age := body.RatingLimit.MaxAge; age != nil && (*age < 0 || *age > 21) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Invalid rating limit",
+				"rating_limit.max_age must be between 0 and 21, or null")
+			return
+		}
+	}
+	if body.TvMonitor != nil {
+		switch *body.TvMonitor {
+		case settings.TVMonitorExisting, settings.TVMonitorAll, settings.TVMonitorNone:
+		default:
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Invalid TV monitor policy",
+				fmt.Sprintf("unknown TV monitor policy %q", *body.TvMonitor))
+			return
+		}
 	}
 	updated, err := s.auth.Settings.UpdateCategory(r.Context(), id, body.Name, body.PriorityRank,
 		body.QualityProfileId, body.LanguageProfileId, monitorDiscovered)
@@ -204,11 +241,6 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 		updated, err = s.auth.Settings.SetCategoryTVMonitor(r.Context(), id, string(*body.TvMonitor))
 	}
 	if err == nil && body.RatingLimit != nil {
-		if info, _ := s.mediaTypeInfo(updated.MediaType); !info.Ratings {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "No ratings",
-				fmt.Sprintf("a %s library has no ratings to limit", updated.MediaType))
-			return
-		}
 		_, err = s.auth.Settings.SetCategoryRatingLimit(r.Context(), library, body.RatingLimit.MaxAge, body.RatingLimit.AllowUnrated)
 		if err == nil {
 			err = s.auth.Settings.SyncLibrary(r.Context(), library)
@@ -221,12 +253,6 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 		updated = categoryOf(s.auth.Settings.Snapshot().LibraryCategories(id), id, updated)
 	}
 	if err == nil && body.Kind != nil {
-		info, _ := s.mediaTypeInfo(updated.MediaType)
-		if _, known := info.kindOf(*body.Kind); !known || *body.Kind == "" && len(info.Kinds) > 0 {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Unknown kind",
-				fmt.Sprintf("a %s library has no kind %q", updated.MediaType, *body.Kind))
-			return
-		}
 		updated, err = s.auth.Settings.SetCategoryKind(r.Context(), id, *body.Kind)
 	}
 	if err == nil {

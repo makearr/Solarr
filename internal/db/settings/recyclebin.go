@@ -37,10 +37,9 @@ func (c *Cache) SetRecycleBinLimits(ctx context.Context, cl clock.Clock, limits 
 	if problems := validateRecycleBinLimits(limits); len(problems) > 0 {
 		return problems
 	}
-	if err := c.setPolicy(ctx, cl, KeyRecycleBinMaxBytes, strconv.FormatInt(limits.MaxBytes, 10)); err != nil {
-		return err
-	}
-	return c.setPolicy(ctx, cl, KeyRecycleBinMaxPercentOfRoot, strconv.FormatInt(limits.MaxPercentOfRoot, 10))
+	return c.setPolicies(ctx, cl, formatInts(map[string]int64{
+		KeyRecycleBinMaxBytes: limits.MaxBytes, KeyRecycleBinMaxPercentOfRoot: limits.MaxPercentOfRoot,
+	}))
 }
 
 func validateRecycleBinLimits(limits RecycleBinLimits) config.Problems {

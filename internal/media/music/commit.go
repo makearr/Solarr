@@ -409,12 +409,24 @@ func (c Committer) CommitMatchedUnit(
 	undo := func(err error) (Placed, error) {
 		return Placed{}, errors.Join(err, c.undoPlaced(placedSoFar))
 	}
+	// Unmatched, the files' own disc tags are all there is: two discs named as one would collide on their track numbers.
+	claimedDiscs := 0
+	if matched == nil {
+		for _, media := range unit.Media {
+			if fileTags, err := tags.TagsFor(ctx, model.FileRef{RelPath: media.RelPath}); err == nil {
+				claimedDiscs = max(claimedDiscs, ReadTrackFile(0, fileTags).Disc)
+			}
+		}
+	}
 	for index, media := range unit.Media {
 		fileTags, err := tags.TagsFor(ctx, model.FileRef{RelPath: media.RelPath})
 		if err != nil {
 			return undo(fmt.Errorf("music: commit unit %q: %w", unit.Directory, err))
 		}
 		track, discCount := matched.trackOf(media.RelPath, fileTags)
+		if matched == nil && claimedDiscs > 1 {
+			discCount = claimedDiscs
+		}
 		destRelPath, warnings, err := importRelPath(names, work, artist, year, track, discCount, media.RelPath)
 		if err != nil {
 			return undo(fmt.Errorf("music: commit unit %q: %w", unit.Directory, err))

@@ -52,7 +52,7 @@ func DecodeKey(key string) ([]byte, error) {
 // Create writes a first-run config.yml with a freshly generated encryption key and returns the
 // configuration it represents.
 func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup Lookup) (Config, error) {
-	if _, err := fsys.Stat(path); err == nil {
+	if _, err := fsys.Lstat(path); err == nil {
 		return Config{}, fmt.Errorf("%w: %s", ErrAlreadyExists, path)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return Config{}, fmt.Errorf("config: check %s: %w", path, err)
@@ -77,7 +77,7 @@ func Create(fsys fsx.FS, path string, generateKey func() (string, error), lookup
 	}
 
 	// Secret, not plain: this carries the only copy of the encryption key.
-	if err := fsx.WriteAtomicSecret(fsys, path, func(w io.Writer) error {
+	if err := fsx.WriteAtomicSecretNew(fsys, path, func(w io.Writer) error {
 		_, writeErr := io.WriteString(w, document)
 		return writeErr
 	}); err != nil {

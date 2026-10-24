@@ -158,19 +158,33 @@ func chownTree(fsys fsx.FS, root string, identity Identity) (bool, error) {
 		return false, err
 	}
 
+	// The configured directory itself may be a link to where it really lives; links inside it are never followed.
+	resolved, err := fsys.Resolve(root)
+	if err != nil {
+		return false, err
+	}
 	// Walked every time: a directory's owner says nothing about its contents.
-	return true, walk(fsys, root, identity)
+	return true, walk(fsys, resolved, identity)
 }
 
 func walk(fsys fsx.FS, path string, identity Identity) error {
+	info, err := fsys.Lstat(path)
+	if err != nil {
+		return err
+	}
+	// A link inside the tree may point outside it, so it is never followed while taking ownership.
+	if info.Mode&fs.ModeSymlink != 0 {
+		return nil
+	}
 	if err := fsys.Chown(path, identity.UID, identity.GID); err != nil {
 		return err
 	}
-
+	if !info.IsDir {
+		return nil
+	}
 	entries, err := fsys.ReadDir(path)
 	if err != nil {
-		// A file rather than a directory: already chowned above.
-		return nil //nolint:nilerr // ReadDir on a regular file is not a failure here
+		return err
 	}
 	for _, entry := range entries {
 		if err := walk(fsys, filepath.Join(path, entry.Name), identity); err != nil {

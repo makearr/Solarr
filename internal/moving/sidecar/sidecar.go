@@ -66,7 +66,7 @@ func Document(value any) ([]byte, error) {
 
 // Once writes the file when nothing is at the path, answering 1 when it did.
 func (w Writer) Once(target string, content func() ([]byte, error)) (int, error) {
-	if _, err := w.FS.Stat(target); err == nil {
+	if _, err := w.FS.Lstat(target); err == nil {
 		return 0, nil
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return 0, err
@@ -87,7 +87,7 @@ func (w Writer) Once(target string, content func() ([]byte, error)) (int, error)
 // AnyExists says whether a picture of the name is there in either format a person may have put it in.
 func (w Writer) AnyExists(folder, name string) bool {
 	for _, extension := range []string{".jpg", ".jpeg", ".png", ".webp"} {
-		if _, err := w.FS.Stat(path.Join(folder, name+extension)); err == nil {
+		if _, err := w.FS.Lstat(path.Join(folder, name+extension)); err == nil {
 			return true
 		}
 	}

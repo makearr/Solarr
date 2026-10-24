@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -211,20 +212,43 @@ func (c LidarrClient) downloadClients(ctx context.Context, path string) ([]Downl
 			Name: entry.Name, Implementation: entry.Implementation, Protocol: entry.Protocol, Enabled: entry.Enable,
 		}
 		for _, field := range entry.Fields {
+			decode := func(target any) error {
+				// An *Arr leaves value out for an unset field: nothing to read, not a malformed answer.
+				if len(field.Value) == 0 {
+					return nil
+				}
+				if err := json.Unmarshal(field.Value, target); err != nil {
+					return fmt.Errorf("arrimport: download client %q field %q: %w", entry.Name, field.Name, err)
+				}
+				return nil
+			}
 			switch field.Name {
 			case "host":
-				_ = json.Unmarshal(field.Value, &client.Host)
+				if err := decode(&client.Host); err != nil {
+					return nil, err
+				}
 			case "port":
-				_ = json.Unmarshal(field.Value, &client.Port)
+				if err := decode(&client.Port); err != nil {
+					return nil, err
+				}
 			case "useSsl":
-				_ = json.Unmarshal(field.Value, &client.UseSSL)
+				if err := decode(&client.UseSSL); err != nil {
+					return nil, err
+				}
 			case "urlBase":
-				_ = json.Unmarshal(field.Value, &client.URLBase)
+				if err := decode(&client.URLBase); err != nil {
+					return nil, err
+				}
 			case "username":
-				_ = json.Unmarshal(field.Value, &client.Username)
+				if err := decode(&client.Username); err != nil {
+					return nil, err
+				}
 			case "category", "musicCategory", "tvCategory", "movieCategory":
 				var category string
-				if json.Unmarshal(field.Value, &category) == nil && category != "" && client.Category == "" {
+				if err := decode(&category); err != nil {
+					return nil, err
+				}
+				if category != "" && client.Category == "" {
 					client.Category = category
 				}
 			}
@@ -241,7 +265,7 @@ func (d DownloadClient) BaseURL() string {
 		scheme = "https"
 	}
 	base := strings.Trim(d.URLBase, "/")
-	address := scheme + "://" + d.Host + ":" + strconv.FormatInt(d.Port, 10)
+	address := scheme + "://" + net.JoinHostPort(strings.Trim(d.Host, "[]"), strconv.FormatInt(d.Port, 10))
 	if base != "" {
 		address += "/" + base
 	}

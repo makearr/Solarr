@@ -2,6 +2,7 @@ package settings
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -110,7 +111,7 @@ func validateRootFolderPolicy(minFreeBytes int64) config.Problems {
 // number ... for anyone who wants one" beyond the five named levels, so this only
 // bounds it to a real confidence, not to one of the five.
 func validateImportAutoCommitConfidence(confidence float64) config.Problems {
-	if confidence < 0 || confidence > 1 {
+	if math.IsNaN(confidence) || math.IsInf(confidence, 0) || confidence < 0 || confidence > 1 {
 		return config.Problems{{
 			Path: "import.auto_commit_confidence", Value: strconv.FormatFloat(confidence, 'f', -1, 64),
 			Expectation: "a confidence between 0 and 1",

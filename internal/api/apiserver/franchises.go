@@ -180,6 +180,15 @@ func (s *Server) AddFranchiseMember(w http.ResponseWriter, r *http.Request, id, 
 	if !ok {
 		return
 	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	// The work joins the collection, so it must be one the caller manages too.
+	if !s.workPermitted(w, r, access, workID, settings.PermissionManage) {
+		return
+	}
 	if err := s.franchises.AddMember(r.Context(), category.ID, id, workID); err != nil {
 		s.writeFranchiseError(w, err)
 		return

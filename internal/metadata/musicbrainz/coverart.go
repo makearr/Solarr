@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -138,7 +137,7 @@ func (c CoverArt) get(ctx context.Context, entity, mbid string) (coverArtRespons
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return coverArtResponse{}, fmt.Errorf("musicbrainz: cover art %s %s: read response: %w", entity, mbid, err)
 	}

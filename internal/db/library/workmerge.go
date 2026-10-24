@@ -161,11 +161,18 @@ func mergeWantedItems(ctx context.Context, queries *librarydb.Queries, dropID, k
 		return fmt.Errorf("items: %w", err)
 	}
 	for _, item := range dropItems {
+		// The same library's item first, so a want in another library is not folded away with the dropped work; one the
+		// move would collide with (edition, part and profile are the item's key) must take it all the same.
 		counterpart := int64(0)
 		for _, kept := range keepItems {
-			if kept.MediaRef == item.MediaRef && kept.SatisfactionKind == item.SatisfactionKind {
+			if kept.MediaRef == item.MediaRef && kept.SatisfactionKind == item.SatisfactionKind && kept.CategoryID == item.CategoryID {
 				counterpart = kept.ID
 				break
+			}
+		}
+		for _, kept := range keepItems {
+			if counterpart == 0 && kept.MediaRef == item.MediaRef && kept.EditionID == item.EditionID && kept.ProfileID == item.ProfileID {
+				counterpart = kept.ID
 			}
 		}
 		if counterpart == 0 {

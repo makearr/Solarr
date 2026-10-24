@@ -51,7 +51,7 @@ RETURNING id, type, pool, action_key, priority, payload_json, state, mutating,
           attempts, max_attempts, run_after, lease_owner, lease_expires_at,
           depends_on, correlation_id, user_id, last_error, created_at, updated_at, category_id, reclaims;
 
--- name: StartJob :exec
+-- name: StartJob :execrows
 UPDATE job
 SET state = 'RUNNING', attempts = attempts + 1, updated_at = ?
 WHERE id = ? AND lease_owner = ? AND state = 'LEASED';

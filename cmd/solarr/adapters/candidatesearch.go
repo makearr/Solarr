@@ -246,9 +246,14 @@ func (c CandidateSearch) SearchCategory(ctx context.Context, categoryID int64, w
 			if err != nil {
 				return false, err
 			}
-			if detail.Wanted != nil {
+			// Only this library's own wanted albums: another library's work is not the caller's to search from here.
+			if detail.Wanted != nil && slices.Contains(detail.CategoryIDs, categoryID) {
 				itemIDs = append(itemIDs, detail.Wanted.ID)
 			}
+		}
+		// No item ids would read as "the whole library" to the job; nothing named is wanted, so nothing is searched.
+		if len(itemIDs) == 0 {
+			return false, nil
 		}
 		enqueue = func() (jobs.EnqueueResult, error) { return music.EnqueueSearchItems(ctx, c.Queue, categoryID, itemIDs) }
 	}

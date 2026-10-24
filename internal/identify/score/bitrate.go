@@ -21,20 +21,25 @@ func parseBitRate(raw string) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("score: invalid bitrate %q: %w", raw, err)
 	}
+	var scaled float64
 	switch strings.ToLower(match[2]) {
 	case "mbps":
-		return value * 1_000_000, nil
+		scaled = value * 1_000_000
 	case "kbps":
-		return value * 1_000, nil
+		scaled = value * 1_000
 	case "bps":
-		return value, nil
+		scaled = value
 	case "mb/min":
-		return value * 1_000_000 * 8 / 60, nil
+		scaled = value * 1_000_000 * 8 / 60
 	case "kb/min":
-		return value * 1_000 * 8 / 60, nil
+		scaled = value * 1_000 * 8 / 60
 	default:
 		return 0, fmt.Errorf("score: unknown bitrate unit in %q", raw)
 	}
+	if math.IsNaN(scaled) || math.IsInf(scaled, 0) {
+		return 0, fmt.Errorf("score: bitrate %q is outside the supported range", raw)
+	}
+	return scaled, nil
 }
 
 var sampleRateExpression = regexp.MustCompile(`(?i)^([0-9]+(?:\.[0-9]+)?)\s*(khz|hz)$`)
@@ -50,12 +55,18 @@ func parseSampleRate(raw string) (float64, error) {
 			return 0, fmt.Errorf("score: invalid sample rate %q: %w", raw, err)
 		}
 		if strings.EqualFold(match[2], "khz") {
-			return value * 1000, nil
+			value *= 1000
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return 0, fmt.Errorf("score: invalid sample rate %q", raw)
 		}
 		return value, nil
 	}
 	value, err := strconv.ParseFloat(raw, 64)
 	if err != nil {
+		return 0, fmt.Errorf("score: invalid sample rate %q", raw)
+	}
+	if math.IsNaN(value) || math.IsInf(value, 0) {
 		return 0, fmt.Errorf("score: invalid sample rate %q", raw)
 	}
 	return value, nil
@@ -83,7 +94,7 @@ func parseTargetValue(dimension, raw string) (float64, error) {
 		return parseSampleRate(raw)
 	default:
 		value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
-		if err != nil {
+		if err != nil || math.IsNaN(value) || math.IsInf(value, 0) {
 			return 0, fmt.Errorf("score: invalid %s value %q", dimension, raw)
 		}
 		return value, nil

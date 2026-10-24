@@ -432,17 +432,24 @@ func convertAttachments(rows []settingsdb.CategoryRootFolder) []CategoryRoot {
 // write runs a mutation through the store's priority queue and then reloads, so
 // the snapshot is never stale after a call returns.
 func (c *Cache) write(ctx context.Context, mutate func(context.Context, *settingsdb.Queries) error) error {
+	if err := c.writeFact(ctx, mutate); err != nil {
+		return err
+	}
+	c.backupIfEnabled(context.WithoutCancel(ctx))
+	return nil
+}
+
+// writeFact is write without the rotation backup, for what a sweep measured rather than what a user chose:
+// those writes would otherwise push every real settings change out of the rotation.
+func (c *Cache) writeFact(ctx context.Context, mutate func(context.Context, *settingsdb.Queries) error) error {
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return mutate(ctx, c.queries.WithTx(tx))
 	})
 	if err != nil {
 		return err
 	}
-	if err := c.Reload(ctx); err != nil {
-		return err
-	}
-	c.backupIfEnabled(ctx)
-	return nil
+	// Committed: a caller that went away since must not leave the snapshot behind the database.
+	return c.Reload(context.WithoutCancel(ctx))
 }
 
 // backupIfEnabled runs EnableBackupOnChange's policy. Best-effort: the settings

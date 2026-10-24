@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -351,7 +350,7 @@ func (c Client) send(ctx context.Context, method, path string, query url.Values,
 		return nil, 0, fmt.Errorf("tvdb: %s: %w", path, err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	reply, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	reply, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return nil, 0, fmt.Errorf("tvdb: %s: read: %w", path, err)
 	}

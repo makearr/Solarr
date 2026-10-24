@@ -12,7 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"math"
 	"net/url"
 	"strconv"
 	"strings"
@@ -59,7 +59,7 @@ func (c Client) getJSON(ctx context.Context, requestURL string, into any) error 
 	}
 	defer func() { _ = response.Body.Close() }()
 
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("sabnzbd: read response: %w", err)
 	}
@@ -96,20 +96,22 @@ func (c Client) Version(ctx context.Context) (string, error) {
 // day format differently.
 func megabytesToBytes(mb string) int64 {
 	value, err := strconv.ParseFloat(mb, 64)
-	if err != nil {
+	bytes := value * 1024 * 1024
+	if err != nil || math.IsNaN(bytes) || math.IsInf(bytes, 0) || bytes < 0 || bytes >= float64(1<<63) {
 		return 0
 	}
-	return int64(value * 1024 * 1024)
+	return int64(bytes)
 }
 
 // kbPerSecToBytesPerSec converts one of SABnzbd's own "4800.00"-shaped
 // kilobyte-per-second strings to bytes/sec.
 func kbPerSecToBytesPerSec(kb string) int64 {
 	value, err := strconv.ParseFloat(kb, 64)
-	if err != nil {
+	bytes := value * 1024
+	if err != nil || math.IsNaN(bytes) || math.IsInf(bytes, 0) || bytes < 0 || bytes >= float64(1<<63) {
 		return 0
 	}
-	return int64(value * 1024)
+	return int64(bytes)
 }
 
 // CompleteFolder answers where SABnzbd puts finished downloads. It needs the full API key, so a

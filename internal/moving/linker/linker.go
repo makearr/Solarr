@@ -5,10 +5,12 @@ package linker
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"path"
+	"path/filepath"
 
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -30,9 +32,6 @@ var ErrContentDiffers = errors.New("linker: the two files differ")
 
 // ErrNoMethod means the filesystem offers neither reflink nor hardlink between the pair.
 var ErrNoMethod = errors.New("linker: neither reflink nor hardlink is possible between the two paths")
-
-// tempSuffix names the link under construction beside its destination, so the final rename is on one filesystem.
-const tempSuffix = ".solarr-link-tmp"
 
 // Path is one place a media object lives.
 type Path struct {
@@ -122,10 +121,15 @@ func Plan(fsys fsx.FS, objects []Object) ([]Link, []Skipped, error) {
 // probe asks the filesystem which method works between the pair by making the link beside the destination and
 // removing it again.
 func probe(fsys fsx.FS, keep, replace string) (Method, bool) {
-	scratch := replace + ".solarr-probe"
+	scratch, err := scratchPath(replace, ".solarr-probe")
+	if err != nil {
+		return "", false
+	}
 	for _, method := range ladder {
 		if err := place(fsys, method, keep, scratch); err == nil {
-			_ = fsys.Remove(scratch)
+			if err := fsys.Remove(scratch); err != nil {
+				return "", false
+			}
 			return method, true
 		}
 	}
@@ -163,15 +167,18 @@ func Apply(fsys fsx.FS, link Link) (Method, error) {
 	if !same {
 		return "", ErrContentDiffers
 	}
-	temp := link.Replace.Abs + tempSuffix
-	_ = fsys.Remove(temp)
+	temp, err := scratchPath(link.Replace.Abs, ".solarr-link-tmp")
+	if err != nil {
+		return "", err
+	}
 	for _, method := range ladder {
 		if err := place(fsys, method, link.Keep.Abs, temp); err != nil {
+			_ = fsys.Remove(temp)
 			continue
 		}
 		if err := fsys.Rename(temp, link.Replace.Abs); err != nil {
 			_ = fsys.Remove(temp)
-			return "", fmt.Errorf("linker: replace %s: %w", path.Base(link.Replace.Abs), err)
+			return "", fmt.Errorf("linker: replace %s: %w", filepath.Base(link.Replace.Abs), err)
 		}
 		return method, nil
 	}
@@ -219,17 +226,28 @@ func unexpected(err error) error {
 // Make puts destination in place as a link to keep, reflink first, replacing whatever is there; the caller has
 // already moved a file it wants to keep out of the way. The swap is atomic like Apply's.
 func Make(fsys fsx.FS, keep, destination string) (Method, error) {
-	temp := destination + tempSuffix
-	_ = fsys.Remove(temp)
+	temp, err := scratchPath(destination, ".solarr-link-tmp")
+	if err != nil {
+		return "", err
+	}
 	for _, method := range ladder {
 		if err := place(fsys, method, keep, temp); err != nil {
+			_ = fsys.Remove(temp)
 			continue
 		}
 		if err := fsys.Rename(temp, destination); err != nil {
 			_ = fsys.Remove(temp)
-			return "", fmt.Errorf("linker: place %s: %w", path.Base(destination), err)
+			return "", fmt.Errorf("linker: place %s: %w", filepath.Base(destination), err)
 		}
 		return method, nil
 	}
 	return "", ErrNoMethod
+}
+
+func scratchPath(destination, marker string) (string, error) {
+	random := make([]byte, 12)
+	if _, err := rand.Read(random); err != nil {
+		return "", fmt.Errorf("linker: generate temporary name: %w", err)
+	}
+	return filepath.Join(filepath.Dir(destination), marker+hex.EncodeToString(random)), nil
 }

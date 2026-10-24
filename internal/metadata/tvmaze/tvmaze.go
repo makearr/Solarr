@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -219,7 +218,7 @@ func (c Client) get(ctx context.Context, path string, into any) error {
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("tvmaze: %s: status %d", path, response.StatusCode)
 	}
-	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	body, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return fmt.Errorf("tvmaze: %s: read: %w", path, err)
 	}

@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -91,7 +93,11 @@ func checkDirectory(fsys fsx.FS, requirement DirectoryRequirement) (Problem, boo
 // probeWritable writes, renames and removes: the three operations an import
 // performs, so passing here means an import cannot fail for a reason this misses.
 func probeWritable(fsys fsx.FS, directory string) error {
-	probe := filepath.Join(directory, probeName)
+	suffix := make([]byte, 8)
+	if _, err := rand.Read(suffix); err != nil {
+		return fmt.Errorf("create write probe name: %w", err)
+	}
+	probe := filepath.Join(directory, probeName+"-"+hex.EncodeToString(suffix))
 
 	if err := fsx.WriteAtomic(fsys, probe, func(w io.Writer) error {
 		_, err := w.Write([]byte("solarr write probe\n"))
@@ -100,7 +106,7 @@ func probeWritable(fsys fsx.FS, directory string) error {
 		return err
 	}
 	if err := fsys.Remove(probe); err != nil {
-		return fmt.Errorf("wrote %s but could not remove it: %w", probeName, err)
+		return fmt.Errorf("wrote probe %s but could not remove it: %w", probe, err)
 	}
 	return nil
 }

@@ -161,14 +161,36 @@ func editable(err error) error {
 	return err
 }
 
+// inLibrary answers ErrNoFranchise for a collection the library does not list, the same set Get reads.
+func (a LibraryFranchises) inLibrary(ctx context.Context, categoryID, franchiseID int64) error {
+	category, err := a.category(categoryID)
+	if err != nil {
+		return err
+	}
+	rows, err := a.Store.InCategory(ctx, category.MediaType, categoryID)
+	if err != nil {
+		return err
+	}
+	if !slices.ContainsFunc(rows, func(row library.FranchiseRow) bool { return row.ID == franchiseID }) {
+		return apiserver.ErrNoFranchise
+	}
+	return nil
+}
+
 // Rename implements apiserver.Franchises.
-func (a LibraryFranchises) Rename(ctx context.Context, _, franchiseID int64, name string) error {
+func (a LibraryFranchises) Rename(ctx context.Context, categoryID, franchiseID int64, name string) error {
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return err
+	}
 	return editable(a.Store.Rename(ctx, franchiseID, name))
 }
 
 // Delete implements apiserver.Franchises: a collection made by hand is deleted; a provider's or Solarr's is deleted too,
 // and its works are remembered not to belong together, so no pass makes it again.
-func (a LibraryFranchises) Delete(ctx context.Context, _, franchiseID int64) error {
+func (a LibraryFranchises) Delete(ctx context.Context, categoryID, franchiseID int64) error {
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return err
+	}
 	err := a.Store.Delete(ctx, franchiseID)
 	if errors.Is(err, library.ErrNotCustomCollection) {
 		return a.Store.DeleteFranchise(ctx, franchiseID)
@@ -177,13 +199,19 @@ func (a LibraryFranchises) Delete(ctx context.Context, _, franchiseID int64) err
 }
 
 // AddMember implements apiserver.Franchises.
-func (a LibraryFranchises) AddMember(ctx context.Context, _, franchiseID, workID int64) error {
+func (a LibraryFranchises) AddMember(ctx context.Context, categoryID, franchiseID, workID int64) error {
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return err
+	}
 	return editable(a.Store.AddMember(ctx, franchiseID, workID))
 }
 
 // RemoveMember implements apiserver.Franchises: out of a collection made by hand, or out of a provider's or Solarr's with
 // a note that it does not belong with the rest.
-func (a LibraryFranchises) RemoveMember(ctx context.Context, _, franchiseID, workID int64) error {
+func (a LibraryFranchises) RemoveMember(ctx context.Context, categoryID, franchiseID, workID int64) error {
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return err
+	}
 	err := a.Store.RemoveMember(ctx, franchiseID, workID)
 	if errors.Is(err, library.ErrNotCustomCollection) {
 		return a.Store.Dismiss(ctx, franchiseID, workID)
@@ -200,6 +228,9 @@ func (a LibraryFranchises) Monitor(ctx context.Context, categoryID, franchiseID 
 	provider, ok := a.capability(category)
 	if !ok {
 		return 0, apiserver.ErrNoFranchise
+	}
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return 0, err
 	}
 	added, err := provider.MonitorFranchise(ctx, categoryID, franchiseID, monitored)
 	if errors.Is(err, media.ErrNoFranchise) {

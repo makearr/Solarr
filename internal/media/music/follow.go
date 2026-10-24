@@ -100,7 +100,7 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 	}
 	var candidates []media.FollowCandidate
 	for _, group := range groups {
-		if !filters.Admits(group) || (since != "" && group.FirstReleaseDate < since) {
+		if !filters.Admits(group) || (since != "" && releasedBefore(group.FirstReleaseDate, since)) {
 			continue
 		}
 		held, err := f.held(ctx, group.MBID, follow.CategoryID)
@@ -205,4 +205,9 @@ func (f Following) SearchFollowed(ctx context.Context, follow media.Follow) erro
 		return nil
 	}
 	return f.Search(ctx, follow.CategoryID, follow.SubjectID)
+}
+
+// releasedBefore compares at the precision the release date has: "2024-06" is not before "2024-06-05"; no date is.
+func releasedBefore(date, since string) bool {
+	return date == "" || date < since[:min(len(since), len(date))]
 }

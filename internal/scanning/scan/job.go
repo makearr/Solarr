@@ -237,8 +237,10 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	// that a path it did not re-observe is actually gone (section 10.4). An
 	// incremental sweep skips directories whose mtime did not move and would
 	// wrongly mark their contents missing.
+	// A resumed sweep did not see what lies before its cursor this run (an incremental one may never have), so it proves nothing gone.
+	resumed := progress.Cursor != ""
 	outcome := SweepOutcome{EmptyDirectories: result.EmptyDirectories}
-	if payload.Full && j.markMissing(ctx, root, result.State.SweptThrough) {
+	if payload.Full && !resumed && j.markMissing(ctx, root, result.State.SweptThrough) {
 		outcome.MissingSince = result.State.SweptThrough
 	}
 	if sweep.Housekeeping != nil {

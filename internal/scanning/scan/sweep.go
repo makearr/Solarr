@@ -59,6 +59,8 @@ type Batch struct {
 	// Directory is relative to the root, "" for the root itself.
 	Directory string
 	Files     []Found
+	// Partial is set when more of Directory's files follow in a later batch, so the cursor must not pass it yet.
+	Partial bool
 }
 
 // Result is what one sweep did.
@@ -270,10 +272,11 @@ func (w *sweep) filesIn(
 			RelPath: childRelative, SizeBytes: child.Size, ModTime: child.ModTime,
 		})
 		if len(batch.Files) == w.options.BatchSize {
+			batch.Partial = true
 			if err := w.commit(ctx, batch); err != nil {
 				return err
 			}
-			batch.Files = nil
+			batch.Files, batch.Partial = nil, false
 		}
 	}
 	// A directory whose files were all filtered out still counts as swept: the
@@ -348,6 +351,8 @@ func (w *sweep) commit(ctx context.Context, batch Batch) error {
 	w.files += len(batch.Files)
 	// Only after the caller has committed: the cursor means "everything up to
 	// here is durable", so advancing it first would skip a batch on restart.
-	w.cursor = batch.Directory
+	if !batch.Partial {
+		w.cursor = batch.Directory
+	}
 	return nil
 }

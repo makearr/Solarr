@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
-	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -253,7 +252,7 @@ func (j *Job) sweepWorkspaces() {
 // unpack opens the source's archives into a workspace of its own; none opened, or a failure, leaves the source to
 // be imported as it is. A workspace is never itself unpacked again.
 func (j *Job) unpack(ctx context.Context, sourcePath string) (workspace string, opened int) {
-	if j.workspace == "" || strings.HasPrefix(path.Clean(sourcePath), path.Clean(j.workspace)+"/") {
+	if j.workspace == "" || fsx.Within(j.workspace, sourcePath) {
 		return "", 0
 	}
 	j.sweepWorkspaces()

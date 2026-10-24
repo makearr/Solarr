@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/statistics"
@@ -62,6 +63,15 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 		}
 		job.Progress.SetTotal(int64(len(artists)))
 		rows := make([]statistics.DiscographyCoverage, 0, len(artists))
+		// The rows are replaced wholesale: an artist whose lookup fails keeps what was last measured rather than vanishing.
+		previous := map[int64]statistics.DiscographyCoverage{}
+		if figures, err := j.config.Coverage.ForCategory(ctx, statistics.StatDiscographyCoverage, categoryID); err == nil {
+			for _, figure := range figures {
+				if personID, err := strconv.ParseInt(figure.Key, 10, 64); err == nil {
+					previous[personID] = statistics.DiscographyCoverage{PersonID: personID, Held: int64(figure.Value), Total: figure.Count}
+				}
+			}
+		}
 		failed := 0
 		for _, artist := range artists {
 			if err := ctx.Err(); err != nil {
@@ -76,6 +86,9 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 			if err != nil {
 				failed++
 				j.config.Logger.Debug("discography coverage: artist skipped", "person_id", artist.PersonID, "error", err)
+				if kept, found := previous[artist.PersonID]; found {
+					rows = append(rows, kept)
+				}
 				continue
 			}
 			var total, held int64

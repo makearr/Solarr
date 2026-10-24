@@ -18,9 +18,27 @@ func TestEditPenalty(t *testing.T) {
 		{"Café del Mar", "Cafe Del Mar!", 0},
 		{"kitten", "sitting", 3.0 / 7},
 		{"Voca Pebu a Maha", "Voca Pebu Tepa", 4.0 / 13},
+		{"+", "+", 0},
+		{"+", "÷", 1},
 	} {
 		if got := match.EditPenalty(tc.a, tc.b); math.Abs(got-tc.want) > 1e-9 {
 			t.Errorf("EditPenalty(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
+		}
+	}
+}
+
+// Titles of symbols alone normalise to nothing: they are alike only as written, never all equal.
+func TestTitleSimilarity_SymbolOnlyTitlesCompareAsWritten(t *testing.T) {
+	for _, tc := range []struct {
+		a, b string
+		want float64
+	}{
+		{"+", "+", 1},
+		{"+", "÷", 0},
+		{"=", "Kebilegev", 0},
+	} {
+		if got := match.TitleSimilarity(tc.a, tc.b); got != tc.want {
+			t.Errorf("TitleSimilarity(%q, %q) = %v, want %v", tc.a, tc.b, got, tc.want)
 		}
 	}
 }

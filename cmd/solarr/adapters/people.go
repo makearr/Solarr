@@ -42,11 +42,12 @@ type People struct {
 // merely no longer followed, rather than a subscription pointing at a person
 // who no longer exists. Files are never touched: a work belongs to the
 // library, not to the person credited on it.
-func (a People) Remove(ctx context.Context, personID, userID int64) error {
+func (a People) Remove(ctx context.Context, personID, _ int64) error {
 	if _, err := a.People.Person(ctx, personID); err != nil {
 		return err
 	}
-	follows, err := a.Subscriptions.FollowsOf(ctx, library.Subject{Type: "person", ID: personID}, userID)
+	// Every account's follows (user 0): the person goes for everyone, and a follow left behind points at nothing.
+	follows, err := a.Subscriptions.FollowsOf(ctx, library.Subject{Type: "person", ID: personID}, 0)
 	if err != nil {
 		return fmt.Errorf("adapters: follows of person %d: %w", personID, err)
 	}
@@ -67,8 +68,12 @@ func (a People) ListPeople(ctx context.Context, query apiserver.PeopleQuery, aft
 	cursor := library.PeopleCursor{ID: after.ID, Set: after.Sort != "" || after.ID != 0}
 	if query.Sort == library.PeopleByName || query.Sort == "" {
 		cursor.Name = after.Sort
-	} else {
-		cursor.Value, _ = strconv.ParseInt(after.Sort, 10, 64)
+	} else if cursor.Set {
+		value, err := strconv.ParseInt(after.Sort, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid people cursor: %w", apiserver.ErrInvalidChoice, err)
+		}
+		cursor.Value = value
 	}
 	rows, err := a.People.List(ctx, library.PeopleFilter{
 		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored,

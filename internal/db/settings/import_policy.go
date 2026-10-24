@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/store/gen/settingsdb"
@@ -85,7 +86,7 @@ func (s *Snapshot) ImportAutoCommitConfidence() float64 {
 		return DefaultImportAutoCommitConfidence
 	}
 	parsed, err := strconv.ParseFloat(value, 64)
-	if err != nil {
+	if err != nil || math.IsNaN(parsed) || math.IsInf(parsed, 0) || parsed < 0 || parsed > 1 {
 		return DefaultImportAutoCommitConfidence
 	}
 	return parsed
@@ -128,5 +129,54 @@ func (c *Cache) SetImportRenameOnImport(ctx context.Context, cl clock.Clock, ren
 		return queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
 			Key: KeyImportRenameOnImport, ValueJson: boolPolicy(rename), UpdatedAt: cl.Now().Unix(),
 		})
+	})
+}
+
+// UpdateImportSettings validates and writes the supplied import policy values
+// in one transaction. A nil value leaves that setting untouched.
+func (c *Cache) UpdateImportSettings(ctx context.Context, cl clock.Clock, confidence *float64, ladder *[]string, rename *bool) error {
+	if confidence != nil {
+		if problems := validateImportAutoCommitConfidence(*confidence); len(problems) > 0 {
+			return problems
+		}
+	}
+	var encodedLadder []byte
+	if ladder != nil {
+		if problems := validateImportTransferLadder(*ladder); len(problems) > 0 {
+			return problems
+		}
+		var err error
+		encodedLadder, err = json.Marshal(*ladder)
+		if err != nil {
+			return err
+		}
+	}
+	if confidence == nil && ladder == nil && rename == nil {
+		return nil
+	}
+	updatedAt := cl.Now().Unix()
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if confidence != nil {
+			if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+				Key: KeyImportAutoCommitConfidence, ValueJson: strconv.FormatFloat(*confidence, 'f', -1, 64), UpdatedAt: updatedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		if ladder != nil {
+			if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+				Key: KeyImportTransferLadder, ValueJson: string(encodedLadder), UpdatedAt: updatedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		if rename != nil {
+			if err := queries.SetInstanceSetting(ctx, settingsdb.SetInstanceSettingParams{
+				Key: KeyImportRenameOnImport, ValueJson: boolPolicy(*rename), UpdatedAt: updatedAt,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }

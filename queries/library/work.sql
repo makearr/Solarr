@@ -543,6 +543,7 @@ WHERE EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = w.id AND d.category
                     ELSE CAST(strftime('%s', p.date) AS INTEGER)
                          + COALESCE(p.available_grace, CASE p.available_confidence WHEN 'high' THEN 7200 WHEN 'medium' THEN 43200 ELSE 129600 END) <= sqlc.arg(now) END))
   AND NOT EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id
+                  JOIN library_path lp ON lp.media_object_id = f.media_object_id AND lp.missing_since IS NULL
                   WHERE d2.work_id = p.work_id AND f.media_ref = p.media_ref AND f.role = 'primary')
   AND (COALESCE(p.date, '') < sqlc.arg(after_date) OR (COALESCE(p.date, '') = sqlc.arg(after_date) AND p.id < sqlc.arg(after_id)))
 ORDER BY COALESCE(p.date, '') DESC, p.id DESC

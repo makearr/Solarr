@@ -45,6 +45,18 @@ func (l *LoginLimiter) Failed(address netip.Addr) {
 		for other := range l.failures {
 			l.recentLocked(other)
 		}
+		// A burst from many live addresses would grow the table without end: when full, the oldest failer goes.
+		if _, tracked := l.failures[address]; !tracked && len(l.failures) >= sweepAbove {
+			var oldestAddress netip.Addr
+			var oldest time.Time
+			for other, attempts := range l.failures {
+				last := attempts[len(attempts)-1]
+				if oldest.IsZero() || last.Before(oldest) {
+					oldestAddress, oldest = other, last
+				}
+			}
+			delete(l.failures, oldestAddress)
+		}
 	}
 	l.failures[address] = append(l.recentLocked(address), l.clock.Now())
 }

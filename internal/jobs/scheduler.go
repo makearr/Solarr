@@ -77,7 +77,7 @@ func (r *TaskRunner) Run(ctx context.Context) {
 			r.logger.Warn("recording next run failed", slog.String("task", r.task.Key), slog.Any("error", err))
 		}
 
-		if err := r.clock.Sleep(ctx, r.clock.Until(next)); err != nil {
+		if !r.sleepUntil(ctx, next) {
 			return
 		}
 		if !r.source.Enabled(r.task.Key) {
@@ -91,6 +91,29 @@ func (r *TaskRunner) Run(ctx context.Context) {
 		}
 		r.fireAndRecord(ctx, r.task.Enqueue)
 		r.running.Unlock()
+	}
+}
+
+// scheduleRecheck bounds how long a cadence change waits to be seen: a weekly task changed to hourly must not sleep out the week.
+const scheduleRecheck = time.Minute
+
+// sleepUntil waits for next, re-resolving the cadence every scheduleRecheck and moving next when it changed; false once ctx ends.
+func (r *TaskRunner) sleepUntil(ctx context.Context, next time.Time) bool {
+	for {
+		wait := min(r.clock.Until(next), scheduleRecheck)
+		if err := r.clock.Sleep(ctx, wait); err != nil {
+			return false
+		}
+		now := r.clock.Now()
+		if !now.Before(next) {
+			return true
+		}
+		if latest := r.resolveSchedule().Next(now); !latest.Equal(next) {
+			next = latest
+			if err := r.states.SetNextRun(ctx, r.task.Key, next); err != nil {
+				r.logger.Warn("recording next run failed", slog.String("task", r.task.Key), slog.Any("error", err))
+			}
+		}
 	}
 }
 

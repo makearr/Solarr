@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -97,7 +96,7 @@ func (c Client) post(ctx context.Context, question string, id int64) ([]byte, er
 		return nil, fmt.Errorf("anilist: %d: %w", id, err)
 	}
 	defer func() { _ = response.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes))
+	raw, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("anilist: %d: read: %w", id, err)
 	}

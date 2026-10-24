@@ -190,7 +190,8 @@ func (r ImportRevert) recycleObject(ctx context.Context, file UnitFile, recyclin
 		Reason: ReasonFailedImport, Retain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 	})
 	if err != nil {
-		if !errors.Is(err, ErrCrossDevice) {
+		// A file deleted by hand since is as gone as one deleted across devices: its rows still go, or the revert never finishes.
+		if !errors.Is(err, ErrCrossDevice) && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("recycle bin %q: %w", target.RelPath, err)
 		}
 		// Already gone (deleted directly, Recycle bin's own doc comment) -- nothing to

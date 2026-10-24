@@ -189,8 +189,12 @@ type DownloaderTester interface {
 
 // TestDownloader runs a connection test against the real download client.
 func (s *Server) TestDownloader(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	// A test makes an outbound connection, as TestDownloaderConfig does.
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.downloaderTester == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "download client tests are not available")
 		return
 	}
 	result, err := s.downloaderTester.TestDownloader(r.Context(), id)

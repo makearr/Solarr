@@ -40,6 +40,8 @@ func TestParse(t *testing.T) {
 		{"Ebulo Hugtel 3 ()", "Ebulo Hugtel 3", 0, "", ""},
 		{"No Year Movie 1080p BluRay x264-GRP", "No Year Movie", 0, "", "GRP"},
 		{"Uvvurwaih", "Uvvurwaih", 0, "", ""},
+		{"Uncut Example (2019) 1080p BluRay", "Uncut Example", 2019, "", ""},
+		{"The.Solut.Tah.Example.2004.1080p.BluRay.x264-GRP", "The Solut Tah Example", 2004, "", "GRP"},
 	}
 	for _, c := range cases {
 		info, ok := parsemovie.Parse(c.name)

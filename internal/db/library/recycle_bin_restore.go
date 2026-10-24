@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -35,12 +36,16 @@ func (q RecycleBin) Restore(ctx context.Context, id int64) (Entry, error) {
 		return Entry{}, fmt.Errorf("%w: id %d", ErrAlreadyRestored, id)
 	}
 
-	if _, err := q.fsys.Stat(entry.OriginalPath); err == nil {
+	if _, err := q.fsys.Lstat(entry.OriginalPath); err == nil {
 		return Entry{}, fmt.Errorf("%w: %s", ErrRestoreConflict, entry.OriginalPath)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return Entry{}, fmt.Errorf("recycle bin: check %q before restoring: %w", entry.OriginalPath, err)
 	}
 
+	// Recycling with "delete empty folders" took the file's folder with it.
+	if err := q.fsys.MkdirAll(filepath.Dir(entry.OriginalPath), 0o755); err != nil {
+		return Entry{}, fmt.Errorf("recycle bin: recreate the folder of %q: %w", entry.OriginalPath, err)
+	}
 	if err := q.fsys.Rename(entry.RecycledPath, entry.OriginalPath); err != nil {
 		return Entry{}, fmt.Errorf(
 			"recycle bin: restore %q to %q: %w", entry.RecycledPath, entry.OriginalPath, err)
