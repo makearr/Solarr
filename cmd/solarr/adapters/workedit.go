@@ -259,6 +259,19 @@ func applyBulkChange(edit apiserver.WorkEditRow, change apiserver.BulkEditChange
 	return edit
 }
 
+// LibraryTags answers the tags the libraries' works carry, with how many carry each or one below it.
+func (a WorkEdit) LibraryTags(ctx context.Context, categoryIDs []int64) ([]apiserver.TagRow, error) {
+	nodes, err := a.Monitor.Works.TagsInCategories(ctx, categoryIDs)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]apiserver.TagRow, len(nodes))
+	for i, node := range nodes {
+		rows[i] = apiserver.TagRow(node)
+	}
+	return rows, nil
+}
+
 // TagTree answers the tags of a genre tree, "*" for all.
 func (a WorkEdit) TagTree(ctx context.Context, genreTree string) ([]apiserver.TagRow, error) {
 	nodes, err := a.People.TagTree(ctx, genreTree)

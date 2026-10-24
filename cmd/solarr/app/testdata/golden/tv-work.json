@@ -103,6 +103,16 @@
   },
   "runtime_ms": 2700000,
   "sort_title": "marble stations",
+  "tags": [
+    {
+      "id": 1,
+      "name": "Drama"
+    },
+    {
+      "id": 2,
+      "name": "Mystery"
+    }
+  ],
   "title": "The Marble Stations",
   "updated_at": "2021-03-04T05:06:07Z",
   "wanted": null,

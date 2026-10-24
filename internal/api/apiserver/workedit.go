@@ -54,6 +54,8 @@ type WorkEditor interface {
 	// SaveWorkEdit answers a missing work id with an error wrapping sql.ErrNoRows and an unknown profile with
 	// ErrInvalidWorkEdit.
 	SaveWorkEdit(ctx context.Context, workID int64, edit WorkEditRow) error
+	// LibraryTags answers the tags the libraries' works carry, with how many carry each or one below it.
+	LibraryTags(ctx context.Context, categoryIDs []int64) ([]TagRow, error)
 	// TagTree answers the tags of a genre tree, "*" for every one and the free labels.
 	TagTree(ctx context.Context, genreTree string) ([]TagRow, error)
 	// CreateTag answers a taken name with ErrTagNameTaken, a parent of another genre tree with ErrTagMove.

@@ -43,3 +43,7 @@ moves its children up; a provider's genre comes back with the next refresh unles
 The works list takes `tags=12,-7`: each positive id must be carried by the work or by a tag below it
 (`tag_closure`), each negative one must not. Bulk selections carry the same chips. The custom filter's `genre` field
 matches genre-tree tags by name, `tag` the free labels.
+
+The list's Tags dropdown offers only what the library holds: `GET /categories/{id}/tags` (`whole_library` for a mixed
+library's members) counts the works carrying each tag or one below it, so Rock counts the Metal albums. A work's page
+shows its tags as links to its library's list filtered to that tag.

@@ -221,3 +221,33 @@ func TestWorksList_FiltersByTagChipsWithTheirSubtree(t *testing.T) {
 		t.Errorf("Rock and Hip Hop = %v, want none: chips must all hold", got)
 	}
 }
+
+// A library's tag filter offers the tags its works carry and the tags above them, counted for that library only.
+func TestTagsInCategories_CountsTheLibrarysWorks(t *testing.T) {
+	opened, _ := newLibrary(t)
+	people := library.NewPeople(opened)
+	if err := people.SeedGenreTree(t.Context(), "music", 1, musicTree); err != nil {
+		t.Fatal(err)
+	}
+	for title, entry := range map[string]struct {
+		genre    string
+		category int64
+	}{"Loud": {"Metal", 1}, "Plain": {"Rock", 1}, "Elsewhere": {"rap", 2}} {
+		work := createWork(t, opened, "music", title)
+		if err := people.AssignGenres(t.Context(), work.ID, "music", []library.GenreLink{{Name: entry.genre}}); err != nil {
+			t.Fatal(err)
+		}
+		createDesiredInCategory(t, opened, work.ID, entry.category)
+	}
+	tags, err := library.NewWorks(opened).TagsInCategories(t.Context(), []int64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, tag := range tags {
+		got = append(got, tag.Name+" "+strconv.FormatInt(tag.Works, 10))
+	}
+	if want := []string{"Metal 1", "Rock 2"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("library 1's tags = %v, want %v (Rock counts the metal album too, Hip Hop is another library's)", got, want)
+	}
+}

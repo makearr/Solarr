@@ -235,6 +235,7 @@ function WorkHeader({
   );
   const facts = headerFacts(work, info);
   const genres = work.facets?.genre ?? work.genres;
+  const workLevel = library?.levels.find((level) => level.entity === "work")?.key;
   const links = externalLinks(work.external_ids);
 
   return (
@@ -307,12 +308,30 @@ function WorkHeader({
             </div>
             {work.description && <p className="max-w-3xl text-sm text-ink-muted">{work.description}</p>}
             <PeopleLine work={work} info={info} categoryId={categoryId} />
-            {genres.length > 0 && (
+            {(work.tags?.length ?? 0) > 0 && categoryId !== undefined && workLevel ? (
               <div className="flex flex-wrap gap-1.5">
-                {genres.map((genre) => (
-                  <Chip key={genre}>{genre}</Chip>
+                {/* A tag opens this library's list of everything carrying it (2026-10-24). */}
+                {work.tags!.map((tag) => (
+                  <Link
+                    key={tag.id}
+                    to="/library/$categoryId/$level"
+                    params={{ categoryId, level: workLevel }}
+                    search={{ tags: String(tag.id) }}
+                    title={`Everything in this library tagged ${tag.name}`}
+                    className="inline-flex w-fit items-center rounded-full border border-border-subtle px-2 py-px text-xs text-ink-muted hover:border-accent hover:text-accent"
+                  >
+                    {tag.name}
+                  </Link>
                 ))}
               </div>
+            ) : (
+              genres.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {genres.map((genre) => (
+                    <Chip key={genre}>{genre}</Chip>
+                  ))}
+                </div>
+              )
             )}
             {links.length > 0 && (
               <p className="flex flex-wrap gap-3 text-xs">

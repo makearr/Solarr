@@ -3110,6 +3110,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/tags": {
+        parameters: {
+            query?: {
+                /** @description Every media type of the library (its All list), not that one category. */
+                whole_library?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** Every tag the library's works carry, and every tag above one, with how many of its works carry it or one below it (works): what the list's tag filter offers. */
+        get: operations["listLibraryTags"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/rules": {
         parameters: {
             query?: never;
@@ -5063,6 +5085,11 @@ export interface components {
             /** @description Carries the name of who was played. */
             character: boolean;
         };
+        TagRef: {
+            /** Format: int64 */
+            id: number;
+            name: string;
+        };
         TagNode: {
             /** Format: int64 */
             id: number;
@@ -6785,6 +6812,8 @@ export interface components {
             editions: components["schemas"]["Edition"][];
             credits: components["schemas"]["Credit"][];
             genres: string[];
+            /** @description The work's tags, genres and free labels, each once; a tag's id filters a library's list by it. */
+            tags?: components["schemas"]["TagRef"][];
             /** @description The work's certification; absent when it has none. */
             rating?: {
                 /** @example PG-13 */
@@ -13386,6 +13415,33 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    listLibraryTags: {
+        parameters: {
+            query?: {
+                /** @description Every media type of the library (its All list), not that one category. */
+                whole_library?: boolean;
+            };
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tags, by name. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TagNode"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getLibraryRules: {

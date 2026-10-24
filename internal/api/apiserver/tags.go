@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // ListTags answers the tag tree, one genre tree's when asked for one.
@@ -150,4 +152,46 @@ func parseTagChips(chips string) (carry, without []int64, err error) {
 		}
 	}
 	return carry, without, nil
+}
+
+func (s *Server) routeListLibraryTags(w http.ResponseWriter, r *http.Request) {
+	if id, ok := s.workIDParam(w, r); ok {
+		s.ListLibraryTags(w, r, id, gen.ListLibraryTagsParams{WholeLibrary: boolParam(r, "whole_library")})
+	}
+}
+
+// boolParam reads a true/false query parameter; absent is nil.
+func boolParam(r *http.Request, name string) *bool {
+	if !r.URL.Query().Has(name) {
+		return nil
+	}
+	value := r.URL.Query().Get(name) == "true"
+	return &value
+}
+
+// ListLibraryTags answers the tags a library's works carry, for its list's tag filter.
+func (s *Server) ListLibraryTags(w http.ResponseWriter, r *http.Request, id int64, params gen.ListLibraryTagsParams) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !s.tagsAvailable(w) {
+		return
+	}
+	_, categoryIDs, err := s.libraryVisibility(access, &id, derefOr(params.WholeLibrary, false), settings.PermissionRead)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	rows, err := s.workEditor.LibraryTags(r.Context(), categoryIDs)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	nodes := make([]gen.TagNode, len(rows))
+	for i, row := range rows {
+		nodes[i] = tagNode(row)
+	}
+	writeJSON(w, s.logger, http.StatusOK, nodes)
 }

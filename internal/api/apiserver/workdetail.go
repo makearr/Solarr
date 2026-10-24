@@ -148,6 +148,8 @@ type WorkDetailRow struct {
 	PartCount   int64
 	Credits     []CreditRow
 	Genres      []string
+	// Tags are the work's tags with their ids, each once.
+	Tags []TagRef
 	// Rating is the work's certification ("" for none), RatingAge its youngest age (-1 unrated), AboveLimit whether a
 	// library holding it does not admit it.
 	Rating        string
@@ -627,6 +629,13 @@ func buildWorkDetailView(row WorkDetailRow) gen.WorkDetail {
 		Credits:     buildCreditViews(row.Credits),
 		Genres:      row.Genres,
 	}
+	if len(row.Tags) > 0 {
+		tags := make([]gen.TagRef, len(row.Tags))
+		for i, tag := range row.Tags {
+			tags[i] = gen.TagRef{Id: tag.ID, Name: tag.Name}
+		}
+		view.Tags = &tags
+	}
 	if row.Rating != "" || row.AboveLimit {
 		view.Rating = &struct {
 			AboveLimit bool   `json:"above_limit"`
@@ -958,4 +967,10 @@ func groupView(group GroupRow) gen.WorkGroup {
 		view.NextOut = &at
 	}
 	return view
+}
+
+// TagRef is one tag of a work: its id, which filters a library's list, and its name.
+type TagRef struct {
+	ID   int64
+	Name string
 }

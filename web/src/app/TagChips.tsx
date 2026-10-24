@@ -1,4 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
+import { ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
+
+import { api, ok } from "@/api/client";
 
 import type { components } from "@/api/schema";
 import { useTagTree } from "@/lib/resources";
@@ -10,9 +14,10 @@ export function parseChips(value: string): number[] {
   return value.split(",").map((field) => Number(field.trim())).filter((id) => Number.isInteger(id) && id !== 0);
 }
 
-/** Each tag with its depth, parents before children, by name: the genre tree's tree, then the free labels. */
+/** Each tag with its depth, parents before children, by name: the genre tree's tags ("*" every tree's), then the free
+ *  labels. */
 export function orderedTags(tags: readonly TagNode[], genreTree: string): { tag: TagNode; depth: number }[] {
-  const mine = tags.filter((tag) => tag.genre_tree === genreTree || tag.genre_tree === "");
+  const mine = tags.filter((tag) => genreTree === "*" || tag.genre_tree === genreTree || tag.genre_tree === "");
   const children = new Map<number, TagNode[]>();
   const roots: TagNode[] = [];
   for (const tag of mine) {
@@ -31,15 +36,21 @@ export function orderedTags(tags: readonly TagNode[], genreTree: string): { tag:
   return out;
 }
 
-/** Filter by tags: pick from the library's genre tree and the free labels; a chip includes what is below it, a click
- *  on a chip turns it into "not", the cross removes it. */
-export function TagChips({ genreTree, value, onChange }: { genreTree: string; value: string; onChange: (value: string) => void }) {
+/** Filter by tags: a dropdown of every tag the library's items carry, as a tree with how many carry each; a chip
+ *  includes what is below it, a click on a chip turns it into "not", the cross removes it. */
+export function TagChips({ categoryId, wholeLibrary = false, value, onChange }: {
+  categoryId: number; wholeLibrary?: boolean; value: string; onChange: (value: string) => void;
+}) {
   const tree = useTagTree();
+  const inLibrary = useQuery({
+    queryKey: ["library-tags", categoryId, wholeLibrary],
+    queryFn: () => ok(api.GET("/categories/{id}/tags", { params: { path: { id: categoryId }, query: { whole_library: wholeLibrary || undefined } } })),
+  });
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const chips = parseChips(value);
-  const byId = useMemo(() => new Map((tree.data ?? []).map((tag) => [tag.id, tag])), [tree.data]);
-  const options = useMemo(() => orderedTags(tree.data ?? [], genreTree), [tree.data, genreTree]);
+  const byId = useMemo(() => new Map([...(tree.data ?? []), ...(inLibrary.data ?? [])].map((tag) => [tag.id, tag])), [tree.data, inLibrary.data]);
+  const options = useMemo(() => orderedTags(inLibrary.data ?? [], "*"), [inLibrary.data]);
   const needle = search.trim().toLowerCase();
   const shown = options.filter(({ tag }) => (needle === "" || tag.name.toLowerCase().includes(needle)) && !chips.some((chip) => Math.abs(chip) === tag.id));
   const set = (next: number[]) => onChange(next.join(","));
@@ -63,6 +74,7 @@ export function TagChips({ genreTree, value, onChange }: { genreTree: string; va
           className="rounded-md border border-border-subtle px-3 py-1.5 text-sm"
         >
           Tags{chips.length > 0 ? ` (${chips.length})` : ""}
+          <ChevronDown aria-hidden className="ml-1 inline size-3.5" />
         </button>
         {open && (
         <div className="absolute left-0 top-full z-20 mt-1 flex w-72 flex-col gap-1 rounded-md border border-border-subtle bg-surface p-2 shadow-lg">
@@ -93,7 +105,9 @@ export function TagChips({ genreTree, value, onChange }: { genreTree: string; va
                 </button>
               </li>
             ))}
-            {shown.length === 0 && <li className="px-2 py-1 text-ink-muted">{tree.isLoading ? "Loading…" : "No tag matches."}</li>}
+            {shown.length === 0 && (
+              <li className="px-2 py-1 text-ink-muted">{inLibrary.isLoading ? "Loading…" : options.length === 0 ? "Nothing here carries a tag yet." : "No tag matches."}</li>
+            )}
           </ul>
         </div>
         )}

@@ -108,6 +108,8 @@ type WorkDetail struct {
 	Parts       []PartDetail
 	Credits     []Credit
 	Genres      []string
+	// Tags are the work's tags, genres and free labels, by name, each once.
+	Tags []TagName
 	// Rating is the work's certification ("PG-13"), "" when it has none; RatingAge its youngest age, -1 unrated.
 	Rating        string
 	RatingAge     int64
@@ -206,9 +208,14 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	if err != nil {
 		return WorkDetail{}, fmt.Errorf("library: work detail: genres: %w", err)
 	}
-	genres := make([]string, len(tagRows))
-	for index, row := range tagRows {
-		genres[index] = row.TagName
+	genres := make([]string, 0, len(tagRows))
+	var tags []TagName
+	for _, row := range tagRows {
+		if len(tags) > 0 && tags[len(tags)-1].ID == row.TagID {
+			continue // the same tag from a second source
+		}
+		genres = append(genres, row.TagName)
+		tags = append(tags, TagName{ID: row.TagID, Name: row.TagName})
 	}
 
 	items, err := queries.ListDesiredItemsForWork(ctx, id)
@@ -306,7 +313,7 @@ func (w Works) Detail(ctx context.Context, id int64) (WorkDetail, error) {
 	}
 
 	return WorkDetail{
-		Rating: rating.Rating, RatingAge: rating.Age,
+		Rating: rating.Rating, RatingAge: rating.Age, Tags: tags,
 		Files: wholeFiles, Organisations: named,
 		Work: work, ExternalIDs: externalIDs, Editions: editionDetails,
 		Parts: partDetails, Credits: credits, Genres: genres, RootFolderIDs: rootFolderIDs,

@@ -18,12 +18,13 @@ type fakeWorkEditor struct {
 	err   error
 	saved *apiserver.WorkEditRow
 
-	bulkSelection apiserver.BulkSelection
-	bulkChange    apiserver.BulkEditChange
-	bulkPreview   bool
-	edited        string
-	merged        string
-	deleted       int64
+	bulkSelection  apiserver.BulkSelection
+	bulkChange     apiserver.BulkEditChange
+	bulkPreview    bool
+	edited         string
+	libraryTagsFor []int64
+	merged         string
+	deleted        int64
 }
 
 func (f *fakeWorkEditor) GetWorkEdit(context.Context, int64) (apiserver.WorkEditRow, error) {
@@ -48,6 +49,11 @@ func (f *fakeWorkEditor) TagTree(_ context.Context, genreTree string) ([]apiserv
 		{ID: 2, Name: "Metal", ParentID: 1, GenreTree: "music", Source: "musicbrainz", Works: 2},
 		{ID: 3, Name: genreTree, Source: "user"},
 	}, nil
+}
+
+func (f *fakeWorkEditor) LibraryTags(_ context.Context, categoryIDs []int64) ([]apiserver.TagRow, error) {
+	f.libraryTagsFor = categoryIDs
+	return []apiserver.TagRow{{ID: 1, Name: "Rock", GenreTree: "music", Works: 3}}, nil
 }
 
 func (f *fakeWorkEditor) CreateTag(_ context.Context, name, genreTree string, parentID int64) (apiserver.TagRow, error) {
@@ -209,5 +215,17 @@ func TestBulkEditWorks_CarriesTheTagChips(t *testing.T) {
 	}
 	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/works/bulk/edit", `{"category_id":1,"tags":"rock"}`)); recorder.Code != http.StatusBadRequest {
 		t.Fatalf("a tag name for an id: status %d, want 400", recorder.Code)
+	}
+}
+
+// A library's tag filter offers the tags its works carry, read for that library only.
+func TestListLibraryTags_AsksForTheLibrary(t *testing.T) {
+	fixture, cookies := visibleWorksFixture(t)
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories/1/tags"))
+	if recorder.Code != http.StatusOK || recorder.Body.String() != `[{"aliases":[],"genre_tree":"music","id":1,"name":"Rock","source":"","works":3}]`+"\n" {
+		t.Fatalf("status %d, body %q", recorder.Code, recorder.Body)
+	}
+	if !reflect.DeepEqual(fixture.workEditor.libraryTagsFor, []int64{1}) {
+		t.Errorf("asked for libraries %v, want [1]", fixture.workEditor.libraryTagsFor)
 	}
 }

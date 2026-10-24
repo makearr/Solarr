@@ -4386,6 +4386,12 @@ type TagNode struct {
 	Works  int64  `json:"works"`
 }
 
+// TagRef defines model for TagRef.
+type TagRef struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
+}
+
 // Tagging What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder.
 type Tagging struct {
 	// EmbedCover Embed the fetched cover into files that carry no picture.
@@ -4730,8 +4736,11 @@ type WorkDetail struct {
 		Age  int64  `json:"age"`
 		Text string `json:"text"`
 	} `json:"rating,omitempty"`
-	RuntimeMs *int64    `json:"runtime_ms,omitempty"`
-	SortTitle string    `json:"sort_title"`
+	RuntimeMs *int64 `json:"runtime_ms,omitempty"`
+	SortTitle string `json:"sort_title"`
+
+	// Tags The work's tags, genres and free labels, each once; a tag's id filters a library's list by it.
+	Tags      *[]TagRef `json:"tags,omitempty"`
 	Title     string    `json:"title"`
 	UpdatedAt time.Time `json:"updated_at"`
 
@@ -4999,6 +5008,12 @@ type SearchCategoryJSONBody struct {
 	// CutoffUnmet Search the monitored albums below the library's cutoff (Lidarr's Cutoff Unmet "Search all") instead of the missing ones; each is judged strictly: only a better release is sent.
 	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
 	WorkIds     *[]int64 `json:"work_ids,omitempty"`
+}
+
+// ListLibraryTagsParams defines parameters for ListLibraryTags.
+type ListLibraryTagsParams struct {
+	// WholeLibrary Every media type of the library (its All list), not that one category.
+	WholeLibrary *bool `form:"whole_library,omitempty" json:"whole_library,omitempty"`
 }
 
 // AddLibraryTypeJSONBody defines parameters for AddLibraryType.
@@ -6352,6 +6367,9 @@ type ServerInterface interface {
 	// Save a library's tagging; the tag writer runs at once. Administrator only.
 	// (PUT /categories/{id}/tagging)
 	SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64)
+	// Every tag the library's works carry, and every tag above one, with how many of its works carry it or one below it (works): what the list's tag filter offers.
+	// (GET /categories/{id}/tags)
+	ListLibraryTags(w http.ResponseWriter, r *http.Request, id int64, params ListLibraryTagsParams)
 	// Let a library hold a further media type (an Anime library holding movies as well as series). Administrator only. The type gets its own settings and root folders inside the library; name, priority, maximum rating, search share and access stay the library's.
 	// (POST /categories/{id}/types)
 	AddLibraryType(w http.ResponseWriter, r *http.Request, id int64)
@@ -7360,6 +7378,12 @@ func (_ Unimplemented) GetLibraryTagging(w http.ResponseWriter, r *http.Request,
 // Save a library's tagging; the tag writer runs at once. Administrator only.
 // (PUT /categories/{id}/tagging)
 func (_ Unimplemented) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every tag the library's works carry, and every tag above one, with how many of its works carry it or one below it (works): what the list's tag filter offers.
+// (GET /categories/{id}/tags)
+func (_ Unimplemented) ListLibraryTags(w http.ResponseWriter, r *http.Request, id int64, params ListLibraryTagsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10490,6 +10514,50 @@ func (siw *ServerInterfaceWrapper) SetLibraryTagging(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetLibraryTagging(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListLibraryTags operation middleware
+func (siw *ServerInterfaceWrapper) ListLibraryTags(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListLibraryTagsParams
+
+	// ------------- Optional query parameter "whole_library" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "whole_library", r.URL.Query(), &params.WholeLibrary)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "whole_library", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListLibraryTags(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18262,6 +18330,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/categories/{id}/tagging", wrapper.SetLibraryTagging)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/tags", wrapper.ListLibraryTags)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/types", wrapper.AddLibraryType)

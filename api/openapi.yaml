@@ -5045,6 +5045,33 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/tags:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+      - name: whole_library
+        in: query
+        description: Every media type of the library (its All list), not that one category.
+        schema: { type: boolean, default: false }
+    get:
+      operationId: listLibraryTags
+      tags: [library]
+      summary: >-
+        Every tag the library's works carry, and every tag above one, with how many of its works carry it or one below
+        it (works): what the list's tag filter offers.
+      responses:
+        "200":
+          description: The tags, by name.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TagNode" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/rules:
     parameters:
       - name: id
@@ -7961,6 +7988,13 @@ components:
         part_scoped: { type: boolean, description: Credited per part rather than per work. }
         character: { type: boolean, description: Carries the name of who was played. }
 
+    TagRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
+
     TagNode:
       type: object
       required: [id, name, genre_tree, source, works, aliases]
@@ -10009,6 +10043,10 @@ components:
         genres:
           type: array
           items: { type: string }
+        tags:
+          type: array
+          items: { $ref: "#/components/schemas/TagRef" }
+          description: The work's tags, genres and free labels, each once; a tag's id filters a library's list by it.
         rating:
           type: object
           description: The work's certification; absent when it has none.

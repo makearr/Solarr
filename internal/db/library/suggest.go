@@ -77,3 +77,30 @@ func (w Works) TraitsInCategory(ctx context.Context, categoryID int64) ([]WorkTr
 	}
 	return traits, nil
 }
+
+// TagsInCategories answers every tag the libraries' works carry, and every tag above one, with how many of those works
+// carry it or a tag below it: what a library's tag filter offers.
+func (w Works) TagsInCategories(ctx context.Context, categoryIDs []int64) ([]TagNode, error) {
+	if len(categoryIDs) == 0 {
+		return nil, nil
+	}
+	marks, arguments := idList(categoryIDs)
+	rows, err := w.store.Read().QueryContext(ctx,
+		"SELECT t.id, t.name, COALESCE(t.parent_id, 0), t.genre_tree, COUNT(DISTINCT a.subject_id)"+
+			" FROM tag_assignment a JOIN tag_closure c ON c.descendant_id = a.tag_id JOIN tag t ON t.id = c.ancestor_id"+
+			" WHERE a.subject_type = 'work' AND a.subject_id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id IN ("+marks+"))"+
+			" GROUP BY t.id ORDER BY t.name COLLATE NOCASE, t.id", arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("library: tags of libraries %v: %w", categoryIDs, err)
+	}
+	defer func() { _ = rows.Close() }()
+	var tags []TagNode
+	for rows.Next() {
+		var tag TagNode
+		if err := rows.Scan(&tag.ID, &tag.Name, &tag.ParentID, &tag.GenreTree, &tag.Works); err != nil {
+			return nil, fmt.Errorf("library: tags of libraries: %w", err)
+		}
+		tags = append(tags, tag)
+	}
+	return tags, rows.Err()
+}

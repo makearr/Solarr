@@ -546,6 +546,7 @@ func New(config Config) (*Server, error) {
 				server.ListTags(w, r, params)
 			})
 			secured.Post("/tags", server.CreateTag)
+			secured.Get("/categories/{id}/tags", server.routeListLibraryTags)
 			secured.Put("/tags/{id}", server.withTagID(server.EditTag))
 			secured.Delete("/tags/{id}", server.withTagID(server.DeleteTag))
 			secured.Post("/tags/{id}/merge", server.withTagID(server.MergeTag))

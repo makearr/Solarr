@@ -1501,7 +1501,7 @@ SELECT t.id AS tag_id, t.name AS tag_name
 FROM tag_assignment a
 JOIN tag t ON t.id = a.tag_id
 WHERE a.subject_type = ? AND a.subject_id = ?
-ORDER BY t.name
+ORDER BY t.name, t.id
 `
 
 type ListTagsForSubjectWithNameParams struct {

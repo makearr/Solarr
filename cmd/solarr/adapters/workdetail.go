@@ -50,6 +50,9 @@ func (a WorkDetail) GetWorkDetail(ctx context.Context, id int64) (apiserver.Work
 		RootFolderIDs: detail.RootFolderIDs,
 		CategoryIDs:   detail.CategoryIDs,
 	}
+	for _, tag := range detail.Tags {
+		row.Tags = append(row.Tags, apiserver.TagRef(tag))
+	}
 	for _, categoryID := range detail.CategoryIDs {
 		row.AboveLimit = row.AboveLimit || a.Admits != nil && !a.Admits(categoryID, detail.RatingAge)
 	}
