@@ -6,7 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
-import { useMediaType } from "@/lib/useMediaTypes";
+import { useMediaType, useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
@@ -72,14 +72,15 @@ export function Categories() {
   if (categories.error !== null) return null;
 
   return (
-    <Card title="Every library" help="Each library holds one kind of media in its own root folders; its quality, naming and searching are set inside it.">
+    <Card title="Every library" help="A library holds one or more kinds of media (Anime: series and movies), each kind in its own root folders with its own quality, naming and searching; name, priority, maximum rating and access are the library's.">
       {categories.data && categories.data.length > 0 ? (
         <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
-          {categories.data.map((category) =>
+          {libraryOrder(categories.data).map((category) =>
             editingId === category.id ? (
               <li key={category.id} className="p-3">
                 <EditCategoryForm
                   categoryId={category.id}
+                  isFurtherType={category.library_id != null}
                   onDone={() => {
                     setEditingId(null);
                     invalidate();
@@ -91,6 +92,7 @@ export function Categories() {
               <Row
                 key={category.id}
                 category={category}
+                heldTypes={categories.data.filter((other) => other.id === category.id || other.library_id === category.id).map((other) => other.media_type)}
                 onEdit={() => setEditingId(category.id)}
                 onRemove={() => remove.mutate(category.id)}
                 busy={remove.isPending}
@@ -119,8 +121,48 @@ export function Categories() {
   );
 }
 
+/** Each library followed by the further media types it holds. */
+function libraryOrder(categories: readonly Category[]): Category[] {
+  return categories
+    .filter((category) => category.library_id == null)
+    .flatMap((library) => [library, ...categories.filter((category) => category.library_id === library.id)]);
+}
+
+/** Let a library hold a further media type: a select of the types it does not hold yet. */
+function AddLibraryType({ libraryId, held }: { libraryId: number; held: readonly string[] }) {
+  const queryClient = useQueryClient();
+  const missing = useMediaTypes().filter((info) => !held.includes(info.key));
+  const add = useMutation({
+    mutationFn: async (mediaType: string) => {
+      await ok(api.POST("/categories/{id}/types", { params: { path: { id: libraryId } }, body: { media_type: mediaType } }));
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+    },
+  });
+  if (missing.length === 0) return null;
+  return (
+    <select
+      aria-label="Also holds"
+      value=""
+      disabled={add.isPending}
+      onChange={(event) => event.target.value && add.mutate(event.target.value)}
+      className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink-muted"
+    >
+      <option value="">Also holds…</option>
+      {missing.map((info) => (
+        <option key={info.key} value={info.key}>
+          {info.work.many}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function Row({
   category,
+  heldTypes,
   onEdit,
   onRemove,
   busy,
@@ -129,6 +171,7 @@ function Row({
   searchMessage,
 }: {
   category: Category;
+  heldTypes: readonly string[];
   onEdit: () => void;
   onRemove: () => void;
   busy: boolean;
@@ -137,9 +180,10 @@ function Row({
   searchMessage: string | undefined;
 }) {
   const mediaType = useMediaType(category.media_type);
+  const further = category.library_id != null;
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5">
-      <span className="text-sm font-medium">{category.name}</span>
+    <li className={`flex items-center gap-3 py-2.5 pr-3 ${further ? "pl-8" : "pl-3"}`}>
+      {further ? <span className="text-sm text-ink-muted">also holds</span> : <span className="text-sm font-medium">{category.name}</span>}
       <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem]
                        text-ink-muted">
         {mediaTypeName(category.media_type)}
@@ -165,6 +209,7 @@ function Row({
           </button>
         </>
       )}
+      {!further && <AddLibraryType libraryId={category.id} held={heldTypes} />}
       <button
         type="button"
         onClick={onEdit}
@@ -193,10 +238,12 @@ function Row({
 // which carries none of priority_rank/the two profile ids/monitor_discovered.
 export function EditCategoryForm({
   categoryId,
+  isFurtherType = false,
   onDone,
   onCancel,
 }: {
   categoryId: number;
+  isFurtherType?: boolean;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -215,6 +262,7 @@ export function EditCategoryForm({
   return (
     <EditCategoryFields
       categoryId={categoryId}
+      isFurtherType={isFurtherType}
       initial={detail.data}
       qualityProfiles={qualityProfiles.data ?? []}
       languageProfiles={languageProfiles.data ?? []}
@@ -226,6 +274,7 @@ export function EditCategoryForm({
 
 function EditCategoryFields({
   categoryId,
+  isFurtherType,
   initial,
   qualityProfiles,
   languageProfiles,
@@ -233,6 +282,7 @@ function EditCategoryFields({
   onCancel,
 }: {
   categoryId: number;
+  isFurtherType: boolean;
   initial: CategorySettings;
   qualityProfiles: components["schemas"]["QualityProfile"][];
   languageProfiles: components["schemas"]["LanguageProfile"][];
@@ -265,7 +315,7 @@ function EditCategoryFields({
           monitor_discovered: monitorDiscovered,
           tv_monitor: monitorsParts ? tvMonitor : undefined,
           kind: kind || undefined,
-          rating_limit: info?.ratings ? { max_age: maxAge, allow_unrated: allowUnrated } : undefined,
+          rating_limit: info?.ratings && !isFurtherType ? { max_age: maxAge, allow_unrated: allowUnrated } : undefined,
         },
       }));
     },
@@ -287,6 +337,7 @@ function EditCategoryFields({
       }}
     >
       <div className="grid grid-cols-2 gap-2">
+        {!isFurtherType && (
         <label className={labelStyle}>
           Name
           <input
@@ -297,6 +348,8 @@ function EditCategoryFields({
             onChange={(event) => setName(event.target.value)}
           />
         </label>
+        )}
+        {!isFurtherType && (
         <label className={labelStyle}>
           Priority rank
           <input
@@ -307,6 +360,7 @@ function EditCategoryFields({
             onChange={(event) => setPriorityRank(Number(event.target.value))}
           />
         </label>
+        )}
         <label className={labelStyle}>
           Quality profile
           <select
@@ -358,7 +412,7 @@ function EditCategoryFields({
             </select>
           </label>
         )}
-        {info?.ratings && (
+        {info?.ratings && !isFurtherType && (
           <label className={labelStyle}>
             Maximum rating
             <select
@@ -374,14 +428,14 @@ function EditCategoryFields({
             </select>
           </label>
         )}
-        {info?.ratings && maxAge !== null && (
+        {info?.ratings && !isFurtherType && maxAge !== null && (
           <label className="flex items-center gap-2 self-end pb-2 text-sm">
             <input type="checkbox" checked={allowUnrated} onChange={(event) => setAllowUnrated(event.target.checked)} />
             Also allow unrated
           </label>
         )}
       </div>
-      {info?.ratings && maxAge !== null && (
+      {info?.ratings && !isFurtherType && maxAge !== null && (
         <p className="text-xs text-ink-muted">
           Anything rated higher{allowUnrated ? "" : ", or not rated at all,"} stays where it is but is never searched in this library; a
           notice says how many, and Above rating in the library lists them.

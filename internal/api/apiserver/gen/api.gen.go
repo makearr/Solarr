@@ -2621,7 +2621,10 @@ type Library struct {
 	LastLevel *string        `json:"last_level,omitempty"`
 	Levels    []LibraryLevel `json:"levels"`
 	MediaType string         `json:"media_type"`
-	Name      string         `json:"name"`
+
+	// Members The library's further media types, each a library of its own under the same name (its levels, its id in the URL); absent for a library of one type.
+	Members *[]Library `json:"members,omitempty"`
+	Name    string     `json:"name"`
 
 	// Permission What the caller may do here, so a screen offers only the actions the server would accept: searching and monitoring need request.
 	Permission Permission `json:"permission"`
@@ -2639,9 +2642,12 @@ type LibraryCategory struct {
 	Id    int64 `json:"id"`
 
 	// Kind The library's kind within its media type; absent for none.
-	Kind      *string `json:"kind,omitempty"`
-	MediaType string  `json:"media_type"`
-	Name      string  `json:"name"`
+	Kind *string `json:"kind,omitempty"`
+
+	// LibraryId The library this is a further media type of; absent for a library's first type.
+	LibraryId *int64 `json:"library_id,omitempty"`
+	MediaType string `json:"media_type"`
+	Name      string `json:"name"`
 
 	// Works From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once.
 	Works *int `json:"works,omitempty"`
@@ -4918,6 +4924,11 @@ type SearchCategoryJSONBody struct {
 	WorkIds     *[]int64 `json:"work_ids,omitempty"`
 }
 
+// AddLibraryTypeJSONBody defines parameters for AddLibraryType.
+type AddLibraryTypeJSONBody struct {
+	MediaType string `json:"media_type"`
+}
+
 // ListCrossoversParams defines parameters for ListCrossovers.
 type ListCrossoversParams struct {
 	CategoryId int64 `form:"category_id" json:"category_id"`
@@ -5506,6 +5517,12 @@ type ListWorksParams struct {
 	// AboveRating Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
 	AboveRating *bool `form:"above_rating,omitempty" json:"above_rating,omitempty"`
 
+	// WholeLibrary With category_id, every media type of that library (its All list), not that one category.
+	WholeLibrary *bool `form:"whole_library,omitempty" json:"whole_library,omitempty"`
+
+	// MediaType Only works of this media type (the All list's type chip).
+	MediaType *string `form:"media_type,omitempty" json:"media_type,omitempty"`
+
 	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status.
 	Where *string `form:"where,omitempty" json:"where,omitempty"`
 
@@ -5525,9 +5542,10 @@ type BulkEditWorksJSONBody struct {
 	ExcludedIds *[]int64  `json:"excluded_ids,omitempty"`
 
 	// Fields The type's editable facets to set, by key ("" returns one to its sources).
-	Fields *map[string]string `json:"fields,omitempty"`
-	Fresh  *bool              `json:"fresh,omitempty"`
-	Ids    *[]int64           `json:"ids,omitempty"`
+	Fields    *map[string]string `json:"fields,omitempty"`
+	Fresh     *bool              `json:"fresh,omitempty"`
+	Ids       *[]int64           `json:"ids,omitempty"`
+	MediaType *string            `json:"media_type,omitempty"`
 
 	// MonitorOption One of the type's monitor options, applied after the rest.
 	MonitorOption *string `json:"monitor_option,omitempty"`
@@ -5539,10 +5557,11 @@ type BulkEditWorksJSONBody struct {
 	RemoveTags *[]string `json:"remove_tags,omitempty"`
 
 	// Specials With monitor_option
-	Specials *bool   `json:"specials,omitempty"`
-	Tags     *string `json:"tags,omitempty"`
-	Wanted   *bool   `json:"wanted,omitempty"`
-	Where    *string `json:"where,omitempty"`
+	Specials     *bool   `json:"specials,omitempty"`
+	Tags         *string `json:"tags,omitempty"`
+	Wanted       *bool   `json:"wanted,omitempty"`
+	Where        *string `json:"where,omitempty"`
+	WholeLibrary *bool   `json:"whole_library,omitempty"`
 }
 
 // BulkMoveWorksToLibraryJSONBody defines parameters for BulkMoveWorksToLibrary.
@@ -5558,11 +5577,13 @@ type BulkMoveWorksToLibraryJSONBody struct {
 	Ids         *[]int64 `json:"ids,omitempty"`
 
 	// LibraryId The library the selection was made in.
-	LibraryId *int64  `json:"library_id,omitempty"`
-	Preview   *bool   `json:"preview,omitempty"`
-	Tags      *string `json:"tags,omitempty"`
-	Wanted    *bool   `json:"wanted,omitempty"`
-	Where     *string `json:"where,omitempty"`
+	LibraryId    *int64  `json:"library_id,omitempty"`
+	MediaType    *string `json:"media_type,omitempty"`
+	Preview      *bool   `json:"preview,omitempty"`
+	Tags         *string `json:"tags,omitempty"`
+	Wanted       *bool   `json:"wanted,omitempty"`
+	Where        *string `json:"where,omitempty"`
+	WholeLibrary *bool   `json:"whole_library,omitempty"`
 }
 
 // BulkSetWorkMonitoredJSONBody defines parameters for BulkSetWorkMonitored.
@@ -5579,9 +5600,12 @@ type BulkSetWorkMonitoredJSONBody struct {
 	Fresh *bool `json:"fresh,omitempty"`
 
 	// Ids Explicit ids ("select all matching" was never used). Takes precedence over category_id/excluded_ids when non-empty.
-	Ids       *[]int64 `json:"ids,omitempty"`
-	Monitored bool     `json:"monitored"`
-	Preview   *bool    `json:"preview,omitempty"`
+	Ids *[]int64 `json:"ids,omitempty"`
+
+	// MediaType The All list's type chip.
+	MediaType *string `json:"media_type,omitempty"`
+	Monitored bool    `json:"monitored"`
+	Preview   *bool   `json:"preview,omitempty"`
 
 	// Tags The list's tag chips
 	Tags *string `json:"tags,omitempty"`
@@ -5591,6 +5615,9 @@ type BulkSetWorkMonitoredJSONBody struct {
 
 	// Where The list's custom filter (the JSON the list carried)
 	Where *string `json:"where,omitempty"`
+
+	// WholeLibrary The selection is of the library's All list.
+	WholeLibrary *bool `json:"whole_library,omitempty"`
 }
 
 // RemoveWorkExclusionParams defines parameters for RemoveWorkExclusion.
@@ -5804,6 +5831,9 @@ type SearchCategoryJSONRequestBody SearchCategoryJSONBody
 
 // SetLibraryTaggingJSONRequestBody defines body for SetLibraryTagging for application/json ContentType.
 type SetLibraryTaggingJSONRequestBody = Tagging
+
+// AddLibraryTypeJSONRequestBody defines body for AddLibraryType for application/json ContentType.
+type AddLibraryTypeJSONRequestBody AddLibraryTypeJSONBody
 
 // CreateCrossoverJSONRequestBody defines body for CreateCrossover for application/json ContentType.
 type CreateCrossoverJSONRequestBody = CrossoverWrite
@@ -6233,6 +6263,9 @@ type ServerInterface interface {
 	// Save a library's tagging; the tag writer runs at once. Administrator only.
 	// (PUT /categories/{id}/tagging)
 	SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64)
+	// Let a library hold a further media type (an Anime library holding movies as well as series). Administrator only. The type gets its own settings and root folders inside the library; name, priority, maximum rating, search share and access stay the library's.
+	// (POST /categories/{id}/types)
+	AddLibraryType(w http.ResponseWriter, r *http.Request, id int64)
 	// A library's crossover events, and episodes that look like one broadcast listed under two series.
 	// (GET /crossovers)
 	ListCrossovers(w http.ResponseWriter, r *http.Request, params ListCrossoversParams)
@@ -7220,6 +7253,12 @@ func (_ Unimplemented) GetLibraryTagging(w http.ResponseWriter, r *http.Request,
 // Save a library's tagging; the tag writer runs at once. Administrator only.
 // (PUT /categories/{id}/tagging)
 func (_ Unimplemented) SetLibraryTagging(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Let a library hold a further media type (an Anime library holding movies as well as series). Administrator only. The type gets its own settings and root folders inside the library; name, priority, maximum rating, search share and access stay the library's.
+// (POST /categories/{id}/types)
+func (_ Unimplemented) AddLibraryType(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10245,6 +10284,39 @@ func (siw *ServerInterfaceWrapper) SetLibraryTagging(w http.ResponseWriter, r *h
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetLibraryTagging(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddLibraryType operation middleware
+func (siw *ServerInterfaceWrapper) AddLibraryType(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddLibraryType(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -16305,6 +16377,22 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Optional query parameter "whole_library" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "whole_library", r.URL.Query(), &params.WholeLibrary)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "whole_library", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "media_type" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "media_type", r.URL.Query(), &params.MediaType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "media_type", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "where" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
@@ -17959,6 +18047,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/categories/{id}/tagging", wrapper.SetLibraryTagging)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/types", wrapper.AddLibraryType)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/crossovers", wrapper.ListCrossovers)

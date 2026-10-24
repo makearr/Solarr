@@ -24,7 +24,8 @@ address to check refuses conservatively rather than risk a lockout it cannot ver
 
 The Backups page downloads the document and restores one (2026-09-24).
 
-A category's `naming` block is present only once the library's naming has been saved; absent,
+A further media type of a library carries `library_of: <media_type>/<name>` of the library it belongs to; import
+links it again. A category's `naming` block is present only once the library's naming has been saved; absent,
 the library uses its media type's default. On import it is checked by the media type's own
 naming scheme (every slot, every token), the same check a save through the interface gets.
 

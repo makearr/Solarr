@@ -96,6 +96,12 @@ of the same kind, a series to Anime say: preview shows every file's new place un
 subtitles and pictures that come along; a copy is unmonitored in the other library and shares the file's bytes where
 the disk allows.
 
+**A library of several kinds** (Settings → Libraries → **Also holds…**): an Anime library can hold movies as well as
+series. Each kind has its own root folders, quality, naming and monitoring (Edit on its "also holds" row); name,
+priority, maximum rating and who may see it are the library's. The library is one entry in the tree: **All** lists
+every kind with a Series/Movies chip, each kind's own pages follow (Cast · Movies where a name repeats), Add switches
+between the kinds, and Wanted, Insights, Files and Settings have a tab per kind.
+
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most
 missing first, with one click to follow the artist and add the rest. It fills in after the weekly

@@ -83,6 +83,8 @@ type WorksFilter struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating keeps the works the library's maximum rating does not admit.
 	AboveRating bool
+	// MediaType keeps only works of one media type, "" all (a mixed library's type chip).
+	MediaType string
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
 }
@@ -178,7 +180,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 
-	rootFolderIDs, categoryIDs, err := s.visibility(access, params.CategoryId)
+	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, params.CategoryId, derefOr(params.WholeLibrary, false), settings.PermissionRead)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -200,6 +202,7 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
 			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without, AboveRating: derefOr(params.AboveRating, false),
+			MediaType: derefOr(params.MediaType, ""),
 		},
 		worksCursorFor(sort, cursor), limit+1)
 	if err != nil {
@@ -275,6 +278,25 @@ func (s *Server) visibilityAt(
 	}
 	rootFolderIDs, categoryIDs = s.visibleAt(access, required)
 	return rootFolderIDs, categoryIDs, nil
+}
+
+// libraryVisibility is visibilityAt, widened to every media type of the library when whole is set (its All list).
+func (s *Server) libraryVisibility(
+	access authz.Access, categoryID *int64, whole bool, required settings.Permission,
+) (rootFolderIDs, categoryIDs []int64, err error) {
+	if !whole || categoryID == nil {
+		return s.visibilityAt(access, categoryID, required)
+	}
+	for _, category := range s.auth.Settings.Snapshot().LibraryCategories(*categoryID) {
+		if _, err := access.Category(category.ID, required); err != nil {
+			return nil, nil, err
+		}
+		categoryIDs = append(categoryIDs, category.ID)
+	}
+	if len(categoryIDs) == 0 {
+		return s.visibilityAt(access, categoryID, required)
+	}
+	return s.rootsOf(categoryIDs), categoryIDs, nil
 }
 
 // visibleAt is every library the caller holds required in, and those libraries' root folders.

@@ -4,6 +4,7 @@ import { HardDrive, Pencil, Plus, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useCategories, useRootFolders } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { EditCategoryForm } from "./Categories";
@@ -214,6 +215,7 @@ function RootFolderCard({
   removeBusy: boolean;
   removeError: unknown;
 }) {
+  const libraryLabel = useLibraryLabel();
   const [readOnly, setReadOnly] = useState(root.read_only ?? false);
   const [allowRename, setAllowRename] = useState(root.allow_rename ?? false);
   const [minFreeBytes, setMinFreeBytes] = useState(root.min_free_bytes ?? 0);
@@ -290,7 +292,7 @@ function RootFolderCard({
                 onClick={() => setEditingLibraryId(editingLibraryId === category.id ? undefined : category.id)}
                 className="flex items-center gap-1 hover:text-accent"
               >
-                {category.name}
+                {libraryLabel(category)}
                 <Pencil aria-hidden className="size-2.5 text-ink-muted" />
               </button>
               <button
@@ -417,6 +419,7 @@ function AttachCategory({
   busy: boolean;
   onAttach: (categoryId: number) => void;
 }) {
+  const libraryLabel = useLibraryLabel();
   const attachedIds = new Set(alreadyAttached.map((category) => category.id));
   const available = categories.filter((category) => !attachedIds.has(category.id));
   const [selected, setSelected] = useState("");
@@ -435,7 +438,7 @@ function AttachCategory({
         <option value="">+ Add to library</option>
         {available.map((category) => (
           <option key={category.id} value={category.id}>
-            {category.name}
+            {libraryLabel(category)}
           </option>
         ))}
       </select>
@@ -472,6 +475,7 @@ function AddRootFolder({
   categories: LibraryCategory[];
   onAdded: () => void;
 }) {
+  const libraryLabel = useLibraryLabel();
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
   const [libraryChoice, setLibraryChoice] = useState<string>(NEW_LIBRARY);
@@ -558,7 +562,7 @@ function AddRootFolder({
         >
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name} ({mediaTypeName(category.media_type)})
+              {libraryLabel(category)} ({mediaTypeName(category.media_type)})
             </option>
           ))}
           <option value={NEW_LIBRARY}>+ New library…</option>

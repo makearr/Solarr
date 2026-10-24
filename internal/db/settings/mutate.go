@@ -236,6 +236,72 @@ func (c *Cache) SetCategoryKind(ctx context.Context, id int64, kind string) (Cat
 	return updated, nil
 }
 
+// AddLibraryType gives a library a further media type: a member category of that type with the library's name,
+// priority, rating limit, search share and access, its own settings otherwise (plan 10-libraries L4).
+func (c *Cache) AddLibraryType(ctx context.Context, libraryID int64, mediaType string) (Category, error) {
+	snapshot := c.Snapshot()
+	head, found := snapshot.Category(libraryID)
+	if !found || head.LibraryID != 0 {
+		return Category{}, fmt.Errorf("%w: library %d", ErrNotFound, libraryID)
+	}
+	for _, existing := range snapshot.LibraryCategories(libraryID) {
+		if existing.MediaType == mediaType {
+			return Category{}, config.Problems{{Path: "media_type", Value: mediaType, Expectation: "a media type the library does not hold yet"}}
+		}
+	}
+	member, err := c.CreateCategory(ctx, mediaType, head.Name, head.PriorityRank)
+	if err != nil {
+		return Category{}, err
+	}
+	err = c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if err := queries.SetCategoryLibrary(ctx, settingsdb.SetCategoryLibraryParams{LibraryID: sql.NullInt64{Int64: libraryID, Valid: true}, ID: member.ID}); err != nil {
+			return err
+		}
+		return syncLibraryMembers(ctx, queries, snapshot, libraryID, []int64{member.ID})
+	})
+	if err != nil {
+		return Category{}, fmt.Errorf("settings: add %s to library %d: %w", mediaType, libraryID, err)
+	}
+	updated, _ := c.Snapshot().Category(member.ID)
+	return updated, nil
+}
+
+// SyncLibrary makes a library's members follow it again after the library itself changed.
+func (c *Cache) SyncLibrary(ctx context.Context, libraryID int64) error {
+	snapshot := c.Snapshot()
+	var members []int64
+	for _, category := range snapshot.LibraryCategories(libraryID)[1:] {
+		members = append(members, category.ID)
+	}
+	if len(members) == 0 {
+		return nil
+	}
+	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return syncLibraryMembers(ctx, queries, snapshot, libraryID, members)
+	})
+}
+
+// syncLibraryMembers copies the library's shared settings and every account's access to it onto members.
+func syncLibraryMembers(ctx context.Context, queries *settingsdb.Queries, snapshot *Snapshot, libraryID int64, members []int64) error {
+	if err := queries.SyncLibraryMembers(ctx, libraryID); err != nil {
+		return err
+	}
+	for userID, granted := range snapshot.accessByUser {
+		permission, found := granted[libraryID]
+		if !found {
+			continue
+		}
+		for _, member := range members {
+			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
+				UserID: userID, CategoryID: member, Permission: string(permission),
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 // SetCategoryRatingLimit sets a library's maximum rating as an age (nil for none) and whether unrated works may be in it.
 func (c *Cache) SetCategoryRatingLimit(ctx context.Context, id int64, maxAge *int64, allowUnrated bool) (Category, error) {
 	if _, found := c.Snapshot().Category(id); !found {
@@ -310,6 +376,9 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 	}
 	if discoveryJobs > 0 {
 		references = append(references, Reference{Kind: "discovery jobs", Count: discoveryJobs})
+	}
+	if members := len(c.Snapshot().LibraryCategories(id)) - 1; members > 0 && c.Snapshot().LibraryOf(id) == id {
+		references = append(references, Reference{Kind: "further media types of the library", Count: int64(members)})
 	}
 	if len(references) > 0 {
 		return &InUseError{Entity: "category", ID: id, References: references}
@@ -1226,10 +1295,14 @@ func (c *Cache) SetUserTier(ctx context.Context, id int64, tier Tier) error {
 // RevokeCategoryAccess removes a grant entirely. An absent row denies, so this
 // is not the same as storing "none" -- it returns the user to the default.
 func (c *Cache) RevokeCategoryAccess(ctx context.Context, userID, categoryID int64) error {
+	categories := c.Snapshot().LibraryCategories(categoryID)
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.RevokeCategoryAccess(ctx, settingsdb.RevokeCategoryAccessParams{
-			UserID: userID, CategoryID: categoryID,
-		})
+		for _, category := range categories {
+			if err := queries.RevokeCategoryAccess(ctx, settingsdb.RevokeCategoryAccessParams{UserID: userID, CategoryID: category.ID}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 
@@ -1261,10 +1334,16 @@ func (c *Cache) SetCategoryAccess(ctx context.Context, userID, categoryID int64,
 		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
 	}
 
+	// A library's access is one: every media type of it is granted alike.
 	return c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
-		return queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
-			UserID: userID, CategoryID: categoryID, Permission: string(permission),
-		})
+		for _, category := range snapshot.LibraryCategories(categoryID) {
+			if err := queries.SetCategoryAccess(ctx, settingsdb.SetCategoryAccessParams{
+				UserID: userID, CategoryID: category.ID, Permission: string(permission),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 }
 

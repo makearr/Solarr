@@ -228,3 +228,26 @@ func newSnapshot(users []User, categories []Category, rootFolders []RootFolder,
 	}
 	return snapshot
 }
+
+// LibraryOf is the first category of the library categoryID belongs to: itself unless it is a further media type.
+func (s *Snapshot) LibraryOf(categoryID int64) int64 {
+	if category, found := s.Category(categoryID); found && category.LibraryID != 0 {
+		return category.LibraryID
+	}
+	return categoryID
+}
+
+// LibraryCategories is every category of the library categoryID belongs to, its first category first.
+func (s *Snapshot) LibraryCategories(categoryID int64) []Category {
+	head := s.LibraryOf(categoryID)
+	var categories []Category
+	if first, found := s.Category(head); found {
+		categories = append(categories, first)
+	}
+	for _, category := range s.Categories() {
+		if category.LibraryID == head {
+			categories = append(categories, category)
+		}
+	}
+	return categories
+}

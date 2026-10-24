@@ -437,3 +437,53 @@ func TestLibraries_ArtistsCountIsOmittedWhenZero(t *testing.T) {
 		}
 	}
 }
+
+// A library holding a further media type answers once, the further type inside it with its own levels; its All list
+// covers both types' categories, and access to the library is access to both (plan 10-libraries L4).
+func TestListLibraries_NestsAFurtherMediaType(t *testing.T) {
+	navigation := fakeNavigation{
+		"tv":    {{Key: "series", Label: "Series", Entity: model.LevelEntityWork}},
+		"movie": {{Key: "movies", Label: "Movies", Entity: model.LevelEntityWork}},
+	}
+	fixture := newWorksFixtureWithLibrarySizeAndNavigation(t, nil, navigation)
+	anime, err := fixture.cache.CreateCategory(t.Context(), "tv", "Anime", 100)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	user := fixture.createUser(t, "watcher", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, anime.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	movies, err := fixture.cache.AddLibraryType(t.Context(), anime.ID, "movie")
+	if err != nil {
+		t.Fatalf("AddLibraryType: %v", err)
+	}
+	cookies := fixture.signIn(t, "watcher")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/libraries"))
+	var body []struct {
+		ID      int64  `json:"id"`
+		Name    string `json:"name"`
+		Members []struct {
+			ID        int64  `json:"id"`
+			MediaType string `json:"media_type"`
+			Levels    []struct {
+				Key string `json:"key"`
+			} `json:"levels"`
+		} `json:"members"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatalf("unmarshal %s: %v", recorder.Body, err)
+	}
+	if len(body) != 1 || body[0].ID != anime.ID || len(body[0].Members) != 1 || body[0].Members[0].ID != movies.ID ||
+		body[0].Members[0].MediaType != "movie" || len(body[0].Members[0].Levels) != 1 || body[0].Members[0].Levels[0].Key != "movies" {
+		t.Fatalf("libraries = %s, want Anime once with its movies inside", recorder.Body)
+	}
+
+	if recorder := fixture.do(authedGet(t, cookies, fmt.Sprintf("/api/v1/works?category_id=%d&whole_library=true&media_type=movie", anime.ID))); recorder.Code != http.StatusOK {
+		t.Fatalf("All list: status %d, %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.works.lastFilter.CategoryIDs; len(got) != 2 || got[0] != anime.ID || got[1] != movies.ID || fixture.works.lastFilter.MediaType != "movie" {
+		t.Errorf("All list asked for categories %v of type %q, want both of Anime, movies", got, fixture.works.lastFilter.MediaType)
+	}
+}

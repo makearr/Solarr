@@ -70,6 +70,7 @@ type Category struct {
 	SearchShare            int64
 	MaxAge                 sql.NullInt64
 	AllowUnrated           int64
+	LibraryID              sql.NullInt64
 }
 
 type CategoryFileManagement struct {

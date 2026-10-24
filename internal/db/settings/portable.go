@@ -206,6 +206,8 @@ type CategoryEntry struct {
 	Naming *NamingEntry `yaml:"naming,omitempty"`
 	// FileManagement is absent for a library still on Sonarr's defaults.
 	FileManagement *FileManagementEntry `yaml:"file_management,omitempty"`
+	// LibraryOf is the library this is a further media type of, as "media_type/name"; absent for a library's first.
+	LibraryOf string `yaml:"library_of,omitempty"`
 }
 
 // FileManagementEntry is one library's File Management and Permissions.
@@ -509,6 +511,9 @@ func (c *Cache) Export() Document {
 			MonitorDiscovered: category.MonitorDiscovered,
 		}
 		entry.Kind = category.Kind
+		if head, found := snapshot.Category(category.LibraryID); found && category.LibraryID != 0 {
+			entry.LibraryOf = head.MediaType + "/" + head.Name
+		}
 		if category.TVMonitor != TVMonitorExisting {
 			entry.TVMonitor = category.TVMonitor
 		}
@@ -1194,6 +1199,17 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 				if err := writeCategoryFileManagement(ctx, queries, id, category.FileManagement.fileManagement()); err != nil {
 					return fmt.Errorf("category %q file management: %w", key, err)
 				}
+			}
+		}
+		for _, category := range document.Categories {
+			head, found := categoryIDByKey[category.LibraryOf]
+			if category.LibraryOf == "" || !found {
+				continue
+			}
+			if err := queries.SetCategoryLibrary(ctx, settingsdb.SetCategoryLibraryParams{
+				LibraryID: sql.NullInt64{Int64: head, Valid: true}, ID: categoryIDByKey[category.MediaType+"/"+category.Name],
+			}); err != nil {
+				return fmt.Errorf("category %s/%s library: %w", category.MediaType, category.Name, err)
 			}
 		}
 

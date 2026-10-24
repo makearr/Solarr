@@ -35,7 +35,7 @@ func aboveRating(on bool, categoryIDs []int64, limitOf func(int64) (library.Rati
 	if !on {
 		return nil
 	}
-	if len(categoryIDs) == 1 && limitOf != nil {
+	if len(categoryIDs) > 0 && limitOf != nil {
 		if limit, found := limitOf(categoryIDs[0]); found {
 			return &limit
 		}
@@ -93,6 +93,7 @@ func (a Works) ListWorks(
 			TagIDs:          filter.TagIDs,
 			ExcludedTagIDs:  filter.ExcludedTagIDs,
 			AboveRating:     aboveRating(filter.AboveRating, filter.CategoryIDs, a.RatingLimit),
+			MediaType:       filter.MediaType,
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,

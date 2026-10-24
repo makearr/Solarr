@@ -1,7 +1,7 @@
 import { Link } from "@tanstack/react-router";
 
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
-import { useLibraries } from "@/lib/resources";
+import { useLibraryTree } from "@/lib/resources";
 import type { components } from "@/api/schema";
 
 import { AddLibraryForm } from "./NewLibrary";
@@ -14,7 +14,7 @@ type LibraryEntry = components["schemas"]["Library"];
  *  as a card, and the only place a new one can be created from the interface.
  *  A library is a category (ADR-54), so creating one is POST /categories. */
 export function Libraries() {
-  const libraries = useLibraries();
+  const libraries = useLibraryTree();
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-6">

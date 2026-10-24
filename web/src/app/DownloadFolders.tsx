@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Download, File, Folder, Trash2 } from "lucid
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories, useDownloadFolders, useImportSettings } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { inputStyle, labelStyle } from "@/ui/form";
@@ -91,6 +92,7 @@ function DownloadFolderCard({
   onRemove: () => void;
   busy: boolean;
 }) {
+  const libraryLabel = useLibraryLabel();
   const queryClient = useQueryClient();
   const [confirmingRemove, setConfirmingRemove] = useState(false);
   const importSettings = useImportSettings();
@@ -180,7 +182,7 @@ function DownloadFolderCard({
             <option value="">No library</option>
             {libraries.map((library) => (
               <option key={library.id} value={library.id}>
-                {library.name}
+                {libraryLabel(library)}
               </option>
             ))}
           </select>
@@ -264,6 +266,7 @@ function AddDownloadFolder({
   categories: readonly { id: number; name: string }[];
   onAdded: () => void;
 }) {
+  const libraryLabel = useLibraryLabel();
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
   const [categoryId, setCategoryId] = useState("");
@@ -320,7 +323,7 @@ function AddDownloadFolder({
           <option value="">All libraries</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name}
+              {libraryLabel(category)}
             </option>
           ))}
         </select>

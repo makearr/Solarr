@@ -3110,6 +3110,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Let a library hold a further media type (an Anime library holding movies as well as series). Administrator only. The type gets its own settings and root folders inside the library; name, priority, maximum rating, search share and access stay the library's. */
+        post: operations["addLibraryType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}": {
         parameters: {
             query?: never;
@@ -7316,6 +7335,11 @@ export interface components {
             name: string;
             /** @description The library's kind within its media type; absent for none. */
             kind?: string;
+            /**
+             * Format: int64
+             * @description The library this is a further media type of; absent for a library's first type.
+             */
+            library_id?: number;
             /** @description From the counter table (section 21.12), never a live COUNT. 0 until the reconciliation sweep has run at least once. */
             works?: number;
             files?: number;
@@ -7392,6 +7416,8 @@ export interface components {
             /** @example music */
             media_type: string;
             name: string;
+            /** @description The library's further media types, each a library of its own under the same name (its levels, its id in the URL); absent for a library of one type. */
+            members?: components["schemas"]["Library"][];
             /** @description The library's maximum rating; absent when it has none. */
             rating_limit?: components["schemas"]["RatingLimit"];
             /** @description What the caller may do here, so a screen offers only the actions the server would accept: searching and monitoring need request. */
@@ -9927,6 +9953,9 @@ export interface operations {
                     /** @default false */
                     above_rating?: boolean;
                     /** @default false */
+                    whole_library?: boolean;
+                    media_type?: string;
+                    /** @default false */
                     wanted?: boolean;
                     /** @default false */
                     cutoff_unmet?: boolean;
@@ -10318,6 +10347,10 @@ export interface operations {
                 cutoff_unmet?: boolean;
                 /** @description Only the works the library's maximum rating does not admit (held, never searched); needs category_id. */
                 above_rating?: boolean;
+                /** @description With category_id, every media type of that library (its All list), not that one category. */
+                whole_library?: boolean;
+                /** @description Only works of this media type (the All list's type chip). */
+                media_type?: string;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
                 where?: string;
                 /** @description The list's tag chips, comma-separated tag ids: a work must carry each (or a tag below it); a negative id is a tag it must not carry. */
@@ -11585,6 +11618,13 @@ export interface operations {
                      */
                     above_rating?: boolean;
                     /**
+                     * @description The selection is of the library's All list.
+                     * @default false
+                     */
+                    whole_library?: boolean;
+                    /** @description The All list's type chip. */
+                    media_type?: string;
+                    /**
                      * @description The list's Wanted filter.
                      * @default false
                      */
@@ -11635,6 +11675,9 @@ export interface operations {
                     tags?: string;
                     /** @default false */
                     above_rating?: boolean;
+                    /** @default false */
+                    whole_library?: boolean;
+                    media_type?: string;
                     /** @default false */
                     wanted?: boolean;
                     /** @default false */
@@ -13256,6 +13299,38 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    addLibraryType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    media_type: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The library's new media type, as a category of its own. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategorySettings"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     getCategory: {

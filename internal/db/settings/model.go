@@ -102,6 +102,8 @@ type Category struct {
 	// a work with no rating understood.
 	MaxAge       *int64
 	AllowUnrated bool
+	// LibraryID is the library this category is a further media type of, its first category; 0 for a first.
+	LibraryID int64
 	// MonitorReleaseTypes is which release types a monitored artist in this
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).

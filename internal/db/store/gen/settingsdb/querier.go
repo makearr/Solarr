@@ -138,6 +138,7 @@ type Querier interface {
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
 	SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error
 	SetCategoryLanguageProfile(ctx context.Context, arg SetCategoryLanguageProfileParams) error
+	SetCategoryLibrary(ctx context.Context, arg SetCategoryLibraryParams) error
 	SetCategoryMonitorDiscovered(ctx context.Context, arg SetCategoryMonitorDiscoveredParams) error
 	SetCategoryMonitorReleaseTypes(ctx context.Context, arg SetCategoryMonitorReleaseTypesParams) error
 	SetCategoryNamingProfile(ctx context.Context, arg SetCategoryNamingProfileParams) error
@@ -181,6 +182,8 @@ type Querier interface {
 	SetUserPasswordHash(ctx context.Context, arg SetUserPasswordHashParams) error
 	SetUserRole(ctx context.Context, arg SetUserRoleParams) error
 	SetUserTier(ctx context.Context, arg SetUserTierParams) error
+	// What a library's members keep equal to it: name, priority, rating limit and search share.
+	SyncLibraryMembers(ctx context.Context, headID int64) error
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
 	UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error

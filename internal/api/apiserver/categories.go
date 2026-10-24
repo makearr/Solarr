@@ -34,6 +34,9 @@ func (s *Server) ListCategories(w http.ResponseWriter, r *http.Request) {
 			Id: category.ID, MediaType: category.MediaType, Name: category.Name, Kind: strPtr(category.Kind),
 			Works: &works, Files: &files,
 		}
+		if category.LibraryID != 0 {
+			views[index].LibraryId = &category.LibraryID
+		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
@@ -190,6 +193,11 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 	if body.MonitorDiscovered != nil {
 		monitorDiscovered = string(*body.MonitorDiscovered)
 	}
+	// A further media type of a library keeps the library's name and priority; those are changed on the library.
+	library := s.auth.Settings.Snapshot().LibraryOf(id)
+	if categories := s.auth.Settings.Snapshot().LibraryCategories(id); len(categories) > 0 && library != id {
+		body.Name, body.PriorityRank = categories[0].Name, categories[0].PriorityRank
+	}
 	updated, err := s.auth.Settings.UpdateCategory(r.Context(), id, body.Name, body.PriorityRank,
 		body.QualityProfileId, body.LanguageProfileId, monitorDiscovered)
 	if err == nil && body.TvMonitor != nil {
@@ -201,10 +209,16 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 				fmt.Sprintf("a %s library has no ratings to limit", updated.MediaType))
 			return
 		}
-		updated, err = s.auth.Settings.SetCategoryRatingLimit(r.Context(), id, body.RatingLimit.MaxAge, body.RatingLimit.AllowUnrated)
-		if err == nil && s.replanning != nil {
-			err = s.replanning.MarkLibraryDirty(r.Context(), id)
+		_, err = s.auth.Settings.SetCategoryRatingLimit(r.Context(), library, body.RatingLimit.MaxAge, body.RatingLimit.AllowUnrated)
+		if err == nil {
+			err = s.auth.Settings.SyncLibrary(r.Context(), library)
 		}
+		for _, category := range s.auth.Settings.Snapshot().LibraryCategories(library) {
+			if err == nil && s.replanning != nil {
+				err = s.replanning.MarkLibraryDirty(r.Context(), category.ID)
+			}
+		}
+		updated = categoryOf(s.auth.Settings.Snapshot().LibraryCategories(id), id, updated)
 	}
 	if err == nil && body.Kind != nil {
 		info, _ := s.mediaTypeInfo(updated.MediaType)
@@ -214,6 +228,10 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 			return
 		}
 		updated, err = s.auth.Settings.SetCategoryKind(r.Context(), id, *body.Kind)
+	}
+	if err == nil {
+		err = s.auth.Settings.SyncLibrary(r.Context(), library)
+		updated = categoryOf(s.auth.Settings.Snapshot().LibraryCategories(id), id, updated)
 	}
 	if err != nil {
 		var problems config.Problems
@@ -226,6 +244,40 @@ func (s *Server) UpdateCategory(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(updated))
+}
+
+func (s *Server) routeAddLibraryType(w http.ResponseWriter, r *http.Request) {
+	if id, ok := s.workIDParam(w, r); ok {
+		s.AddLibraryType(w, r, id)
+	}
+}
+
+// AddLibraryType lets a library hold a further media type; administrator only.
+func (s *Server) AddLibraryType(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.AddLibraryTypeJSONRequestBody
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
+		return
+	}
+	if _, known := s.mediaTypeInfo(body.MediaType); !known {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Unknown media type", fmt.Sprintf("no media type %q", body.MediaType))
+		return
+	}
+	member, err := s.auth.Settings.AddLibraryType(r.Context(), id, body.MediaType)
+	if err != nil {
+		var problems config.Problems
+		if errors.As(err, &problems) {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
+				"The library cannot hold that", problems.Report("the media type", "Nothing was changed."))
+			return
+		}
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, categorySettingsView(member))
 }
 
 func tvMonitorView(policy string) *gen.CategorySettingsTvMonitor {
@@ -434,4 +486,14 @@ func (s *Server) categoryCounts(ctx context.Context, categoryID int64) (works, f
 // Replanning has every item of a library planned again. Satisfied by library.Desired.
 type Replanning interface {
 	MarkLibraryDirty(ctx context.Context, categoryID int64) error
+}
+
+// categoryOf is the category id among a library's, or fallback when it is not there.
+func categoryOf(categories []settings.Category, id int64, fallback settings.Category) settings.Category {
+	for _, category := range categories {
+		if category.ID == id {
+			return category
+		}
+	}
+	return fallback
 }

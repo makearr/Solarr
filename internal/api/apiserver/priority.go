@@ -54,7 +54,11 @@ func (s *Server) UpdatePrioritySettings(w http.ResponseWriter, r *http.Request) 
 	}
 	if body.SearchShares != nil {
 		for _, share := range *body.SearchShares {
-			if err := s.auth.Settings.SetCategorySearchShare(r.Context(), share.LibraryId, share.Share); err != nil {
+			err := s.auth.Settings.SetCategorySearchShare(r.Context(), share.LibraryId, share.Share)
+			if err == nil {
+				err = s.auth.Settings.SyncLibrary(r.Context(), share.LibraryId)
+			}
+			if err != nil {
 				var problems config.Problems
 				if errors.As(err, &problems) {
 					writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest,
@@ -85,6 +89,9 @@ func (s *Server) prioritySettingsView() gen.PrioritySettings {
 	huntMode := gen.PrioritySettingsHuntMode(stored.HuntMode)
 	shares := []gen.LibrarySearchShare{}
 	for _, category := range snapshot.Categories() {
+		if category.LibraryID != 0 {
+			continue // a further media type shares its library's share
+		}
 		name := category.Name
 		shares = append(shares, gen.LibrarySearchShare{LibraryId: category.ID, Name: &name, Share: category.SearchShare})
 	}

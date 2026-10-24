@@ -418,7 +418,8 @@ export function Users({ currentUserId }: { currentUserId: number }) {
   // Only administrators can read this list at all, so a 403 means the viewer is
   // not one rather than that something broke.
   if (users.error !== null) return null;
-  const libraries = categories.data ?? [];
+  // A grant covers the whole library, so a further media type of one is not listed apart.
+  const libraries = (categories.data ?? []).filter((category) => category.library_id == null);
 
   return (
     <Card title="Users" help="Who may sign in: what each may change, which libraries each sees, and how much of the interface each may choose.">

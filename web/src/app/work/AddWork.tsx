@@ -7,7 +7,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
-import { useQualityProfiles } from "@/lib/resources";
+import { useLibraries, useQualityProfiles } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
@@ -34,7 +34,11 @@ export function AddWork() {
   const { categoryId } = useParams({ strict: false }) as { categoryId: string };
   const opened = useSearch({ strict: false }) as { q?: string; kind?: string };
   const library = useLibrary(categoryId);
-  const info = useMediaTypes().find((entry) => entry.key === library?.media_type);
+  const mediaTypes = useMediaTypes();
+  const info = mediaTypes.find((entry) => entry.key === library?.media_type);
+  // Every media type of a mixed library, so Add offers series and movies alike (L4).
+  const head = library?.library_id ?? library?.id;
+  const siblings = (useLibraries().data ?? []).filter((entry) => entry.id === head || entry.library_id === head);
   const kinds = info?.add_kinds ?? [];
   const [query, setQuery] = useState(opened.q ?? "");
   const [chosenKind, setKind] = useState(opened.kind);
@@ -59,6 +63,22 @@ export function AddWork() {
     <div className="mx-auto flex h-full max-w-3xl flex-col gap-4 overflow-y-auto p-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-base font-semibold">Add to {library.name}</h1>
+        {siblings.length > 1 && (
+          <div className="flex gap-1" role="group" aria-label="Type">
+            {siblings.map((entry) => (
+              <Link
+                key={entry.id}
+                to="/library/$categoryId/discover"
+                params={{ categoryId: String(entry.id) }}
+                search={{ q: query || undefined }}
+                aria-current={entry.id === library.id ? "page" : undefined}
+                className={`rounded-md border px-3 py-1.5 text-sm ${entry.id === library.id ? "border-accent bg-accent text-accent-ink" : "border-border-subtle text-ink-muted hover:text-ink"}`}
+              >
+                {mediaTypes.find((type) => type.key === entry.media_type)?.work.many ?? entry.media_type}
+              </Link>
+            ))}
+          </div>
+        )}
         {kinds.length > 1 && (
           <div className="ml-auto flex gap-1" role="group" aria-label="What to look for">
             {kinds.map((entry) => (

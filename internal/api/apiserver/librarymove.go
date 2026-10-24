@@ -7,6 +7,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // LibraryMover moves or copies works to another library (plan 10-libraries L3). Defined here, implemented by the caller.
@@ -82,7 +83,7 @@ func (s *Server) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) 
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "name the library they go to")
 		return
 	}
-	rootFolderIDs, categoryIDs, err := s.visibility(access, body.LibraryId)
+	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.LibraryId, derefOr(body.WholeLibrary, false), settings.PermissionRead)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -90,7 +91,7 @@ func (s *Server) BulkMoveWorksToLibrary(w http.ResponseWriter, r *http.Request) 
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
-		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false),
+		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), MediaType: derefOr(body.MediaType, ""),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")

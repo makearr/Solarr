@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { factsOf } from "@/lib/identificationEvidence";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useCategories, useImportSettings } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
@@ -478,6 +479,7 @@ function TransferMethodHelp({ onClose }: { onClose: () => void }) {
 }
 
 function InspectForm() {
+  const libraryLabel = useLibraryLabel();
   const queryClient = useQueryClient();
   // Opened from a library's own sidebar (/library/$categoryId/import): the
   // category is already known, so the form starts on it rather than making
@@ -579,7 +581,7 @@ function InspectForm() {
             <option value="">Decide later</option>
             {categories.data?.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {libraryLabel(category)}
               </option>
             ))}
           </select>
@@ -869,6 +871,7 @@ function SessionRow({
  *  "decide per unit" gets one from here, which also places every unit it
  *  already decided COMMIT but never placed. */
 function AssignCategory({ sessionId }: { sessionId: number }) {
+  const libraryLabel = useLibraryLabel();
   const queryClient = useQueryClient();
   const categories = useCategories();
   const [categoryId, setCategoryId] = useState<number | "">("");
@@ -895,7 +898,7 @@ function AssignCategory({ sessionId }: { sessionId: number }) {
         <option value="">No category yet</option>
         {categories.data?.map((category) => (
           <option key={category.id} value={category.id}>
-            {category.name}
+            {libraryLabel(category)}
           </option>
         ))}
       </select>

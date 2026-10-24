@@ -6,6 +6,7 @@ import { Search } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibraries } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/EmptyState";
@@ -30,6 +31,7 @@ interface Target {
 
 /** The dashboard's Add to library, Seerr's search: every library at once or one, grouped by what it adds. */
 export function AddAnywhere() {
+  const libraryLabel = useLibraryLabel();
   const navigate = useNavigate();
   const opened = useSearch({ strict: false }) as { q?: string; library?: string };
   const libraries = useLibraries().data ?? [];
@@ -84,7 +86,7 @@ export function AddAnywhere() {
           <option value="">All libraries</option>
           {libraries.map((library) => (
             <option key={library.id} value={String(library.id)}>
-              {library.name}
+              {libraryLabel(library)}
             </option>
           ))}
         </select>

@@ -7,6 +7,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 
 import { isSearchShortcut } from "@/lib/searchShortcut";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useLibraries } from "@/lib/resources";
@@ -30,6 +31,7 @@ const DEBOUNCE_MS = 250;
  *  the compact one in the status bar. A result links to its work -- it used
  *  not to, from a comment that outlived the /works/$id page it predates. */
 export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" }) {
+  const libraryLabel = useLibraryLabel();
   const [query, setQuery] = useState("");
   const [focused, setFocused] = useState(false);
   const input = useRef<HTMLInputElement>(null);
@@ -179,7 +181,7 @@ export function SearchBox({ variant = "header" }: { variant?: "header" | "hero" 
                 >
                   {addable.map((library) => (
                     <option key={library.id} value={library.id}>
-                      {library.name}
+                      {libraryLabel(library)}
                     </option>
                   ))}
                 </select>

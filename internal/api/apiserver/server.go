@@ -654,6 +654,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/categories/{id}/links", server.routeLinkCategoryCopies)
 			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)
 			secured.Patch("/categories/{id}", server.routeUpdateCategory)
+			secured.Post("/categories/{id}/types", server.routeAddLibraryType)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)
@@ -1000,6 +1001,13 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := query.Get("tags"); raw != "" {
 		params.Tags = &raw
+	}
+	if raw := query.Get("whole_library"); raw != "" {
+		whole := raw == "true"
+		params.WholeLibrary = &whole
+	}
+	if raw := query.Get("media_type"); raw != "" {
+		params.MediaType = &raw
 	}
 	if raw := query.Get("above_rating"); raw != "" {
 		above := raw == "true"

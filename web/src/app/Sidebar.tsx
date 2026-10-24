@@ -15,7 +15,8 @@ import {
 
 import { useSidebarCollapsed } from "@/list/useNarrow";
 import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
-import { useLibraries } from "@/lib/resources";
+import { useLibraryTree } from "@/lib/resources";
+import { useMediaTypes } from "@/lib/useMediaTypes";
 import { useShowCalendar } from "@/lib/interfacePreferences";
 import { useOpenSections } from "@/lib/useOpenSections";
 import { useIsAdministrator } from "@/lib/useAdministrator";
@@ -55,6 +56,7 @@ function groupByMediaType(libraries: readonly LibraryEntry[]): { mediaType: stri
  *  declares, else Artists (the Lidarr landing view), else whatever it
  *  declared first. */
 export function defaultLevelKey(library: LibraryEntry): string | undefined {
+  if (library.members?.length) return "all";
   const keys = new Set(library.levels.map((level) => level.key));
   if (library.last_level && keys.has(library.last_level)) return library.last_level;
   return library.levels.find((level) => level.key === "artists")?.key ?? library.levels[0]?.key;
@@ -76,7 +78,7 @@ export function Sidebar() {
   const collapsed = useSidebarCollapsed();
   const [showCalendar] = useShowCalendar();
 
-  const libraries = useLibraries();
+  const libraries = useLibraryTree();
 
   const groups = groupByMediaType(libraries.data ?? []);
   const viewer = { tier, administrator };
@@ -85,7 +87,11 @@ export function Sidebar() {
   // Which branches the current route sits inside, so they open themselves.
   const activeKeys: string[] = [];
   if (path.startsWith("/library") || routeParams.categoryId) activeKeys.push("library");
-  if (routeParams.categoryId) activeKeys.push(`library:${routeParams.categoryId}`);
+  // A further media type's pages open its library's entry.
+  const openLibrary = (libraries.data ?? []).find((library) =>
+    [library, ...(library.members ?? [])].some((entry) => String(entry.id) === routeParams.categoryId),
+  );
+  if (openLibrary) activeKeys.push(`library:${openLibrary.id}`);
   if (path === "/unidentified" && search.category_id) activeKeys.push(`library:${search.category_id}`);
 
   // Library starts open on a first visit: it is where the collection lives.
@@ -101,7 +107,7 @@ export function Sidebar() {
             collapsed={collapsed}
             tier={tier}
             administrator={administrator}
-            isActive={routeParams.categoryId === String(library.id)}
+            activeId={[library, ...(library.members ?? [])].some((entry) => String(entry.id) === routeParams.categoryId) ? routeParams.categoryId : undefined}
             activeLevel={routeParams.level}
             place={place}
             isOpen={sections.isOpen(`library:${library.id}`)}
@@ -254,7 +260,7 @@ function LibraryNode({
   collapsed,
   tier,
   administrator,
-  isActive,
+  activeId,
   activeLevel,
   place,
   isOpen,
@@ -264,15 +270,33 @@ function LibraryNode({
   collapsed: boolean;
   tier: Tier;
   administrator: boolean;
-  isActive: boolean;
+  activeId: string | undefined;
   activeLevel: string | undefined;
   place: Place;
   isOpen: boolean;
   onToggle: () => void;
 }) {
+  const mediaTypes = useMediaTypes();
+  const members = library.members ?? [];
   const target = defaultLevelKey(library);
   const Icon = mediaTypeIcon(library.media_type);
   const categoryId = String(library.id);
+  const isActive = activeId !== undefined;
+  const kinds = [library, ...members].map((entry) => ({
+    categoryId: String(entry.id), label: mediaTypes.find((info) => info.key === entry.media_type)?.work.many ?? entry.media_type,
+  }));
+  // A mixed library's levels: its own, then each further type's, the type named where a label repeats (L4).
+  const ownLabels = new Set(library.levels.map((level) => level.label));
+  const entries = [
+    ...(members.length > 0 ? [{ id: categoryId, key: "all", label: "All", count: undefined as number | null | undefined }] : []),
+    ...[library, ...members].flatMap((entry, index) =>
+      entry.levels.map((level) => {
+        const typeName = mediaTypes.find((info) => info.key === entry.media_type)?.work.many ?? entry.media_type;
+        const label = index > 0 && ownLabels.has(level.label) ? `${level.label} · ${typeName}` : level.label;
+        return { id: String(entry.id), key: level.key, label, count: level.count };
+      }),
+    ),
+  ];
 
   return (
     <li>
@@ -298,13 +322,13 @@ function LibraryNode({
 
       {!collapsed && isOpen && (
         <ul className="ml-5 flex flex-col gap-0.5 border-l border-border-subtle pl-2">
-          {library.levels.map((level) => {
-            const here = isActive && activeLevel === level.key;
+          {entries.map((level) => {
+            const here = activeId === level.id && activeLevel === level.key;
             return (
-              <li key={level.key}>
+              <li key={`${level.id}:${level.key}`}>
                 <Link
                   to="/library/$categoryId/$level"
-                  params={{ categoryId, level: level.key }}
+                  params={{ categoryId: level.id, level: level.key }}
                   className={sectionLinkClass(here, false)}
                 >
                   <span className="truncate" title={level.label}>{level.label}</span>
@@ -318,7 +342,7 @@ function LibraryNode({
             );
           })}
           {/* After its own levels every library has the same four entries, each with tabs (2026-10-04). */}
-          {librarySections(categoryId).map((section) => {
+          {librarySections(categoryId, kinds).map((section) => {
             const tab = entryTab(section, { tier, administrator });
             if (!tab) return null;
             const active = visibleTabs(section, { tier, administrator }).some((entry) => isAt(entry, place));

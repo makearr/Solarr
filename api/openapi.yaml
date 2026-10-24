@@ -1816,6 +1816,8 @@ paths:
                 where: { type: string }
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
+                whole_library: { type: boolean, default: false }
+                media_type: { type: string }
                 wanted: { type: boolean, default: false }
                 cutoff_unmet: { type: boolean, default: false }
                 category_id: { type: integer, format: int64, description: The library they go to. }
@@ -2226,6 +2228,14 @@ paths:
           in: query
           description: Only the works the library's maximum rating does not admit (held, never searched); needs category_id.
           schema: { type: boolean, default: false }
+        - name: whole_library
+          in: query
+          description: With category_id, every media type of that library (its All list), not that one category.
+          schema: { type: boolean, default: false }
+        - name: media_type
+          in: query
+          description: Only works of this media type (the All list's type chip).
+          schema: { type: string }
         - name: where
           in: query
           description: >-
@@ -3398,6 +3408,8 @@ paths:
                 where: { type: string, description: The list's custom filter (the JSON the list carried), when "select all matching" was made under it. }
                 tags: { type: string, description: The list's tag chips, as listWorks takes them. }
                 above_rating: { type: boolean, default: false, description: The list's Above rating filter. }
+                whole_library: { type: boolean, default: false, description: The selection is of the library's All list. }
+                media_type: { type: string, description: The All list's type chip. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
                 cutoff_unmet: { type: boolean, default: false, description: The list's Cutoff Unmet filter. }
                 monitored: { type: boolean }
@@ -3442,6 +3454,8 @@ paths:
                 where: { type: string }
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
+                whole_library: { type: boolean, default: false }
+                media_type: { type: string }
                 wanted: { type: boolean, default: false }
                 cutoff_unmet: { type: boolean, default: false }
                 preview: { type: boolean, default: false }
@@ -5030,6 +5044,39 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+
+  /categories/{id}/types:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: addLibraryType
+      tags: [settings]
+      summary: >-
+        Let a library hold a further media type (an Anime library holding movies as well as series). Administrator
+        only. The type gets its own settings and root folders inside the library; name, priority, maximum rating,
+        search share and access stay the library's.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [media_type]
+              properties:
+                media_type: { type: string }
+      responses:
+        "200":
+          description: The library's new media type, as a category of its own.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CategorySettings" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
   /categories/{id}:
     parameters:
@@ -10731,6 +10778,10 @@ components:
         media_type: { type: string, example: "music" }
         name: { type: string }
         kind: { type: string, description: "The library's kind within its media type; absent for none." }
+        library_id:
+          type: integer
+          format: int64
+          description: The library this is a further media type of; absent for a library's first type.
         works:
           type: integer
           description: >-
@@ -10821,6 +10872,12 @@ components:
         id: { type: integer, format: int64 }
         media_type: { type: string, example: "music" }
         name: { type: string }
+        members:
+          type: array
+          items: { $ref: "#/components/schemas/Library" }
+          description: >-
+            The library's further media types, each a library of its own under the same name (its levels, its id
+            in the URL); absent for a library of one type.
         rating_limit:
           allOf: [{ $ref: "#/components/schemas/RatingLimit" }]
           description: The library's maximum rating; absent when it has none.

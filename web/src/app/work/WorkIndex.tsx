@@ -41,7 +41,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "above_rating"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "above_rating", "type"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -105,29 +105,40 @@ function selectionBody(request: SelectionRequest) {
     where: whereWithTitle(request.filters.where, request.filters.q),
     tags: request.filters.tags || undefined,
     above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
+    whole_library: request.filters.whole_library === "1" ? true : undefined,
+    media_type: request.filters.type || undefined,
   };
 }
 
 /** One library's works, as Radarr's three views: posters, overview, table (R1.6). Columns, sorts and filters come from
  *  the type's facets; an album wall is grouped by artist as Lidarr's, a poster type is tall as Sonarr's. */
-export function WorkIndex() {
+export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) {
   const { categoryId, level } = useParams({ strict: false }) as { categoryId: string; level: string };
   useRecordLastLevel(categoryId, level);
   const library = useLibrary(categoryId);
-  const info = useMediaTypes().find((entry) => entry.key === library?.media_type);
+  const mediaTypes = useMediaTypes();
+  // A mixed library's All list (L4): every type's works, its type chip narrowing to one, each work in its own type.
+  const types = wholeLibrary && library ? [library, ...(library.members ?? [])] : [];
+  const baseFilters = useRouteView(FILTER_KEYS).query.filters;
+  const chosenType = wholeLibrary ? (baseFilters.type ?? "") : "";
+  const info = mediaTypes.find((entry) => entry.key === (wholeLibrary ? chosenType : library?.media_type));
+  const infoOf = (mediaType: string) => mediaTypes.find((entry) => entry.key === mediaType);
+  const memberOf = (mediaType: string) => String(types.find((entry) => entry.media_type === mediaType)?.id ?? categoryId);
   const words = vocabularyOf(info);
-  const levelLabel = library?.levels.find((entry) => entry.key === level)?.label ?? words.Works;
+  const levelLabel = wholeLibrary ? "All" : (library?.levels.find((entry) => entry.key === level)?.label ?? words.Works);
   const lead = info?.roles.find((role) => role.lead);
   const portrait = info?.work_image === "poster";
 
   const baseView = useRouteView(FILTER_KEYS);
   const routeView = useMemo<ViewState>(
     () => ({
-      query: { ...baseView.query, filters: { ...baseView.query.filters, category_id: categoryId } },
+      query: { ...baseView.query, filters: { ...baseView.query.filters, category_id: categoryId, ...(wholeLibrary ? { whole_library: "1" } : {}) } },
       // The library is the route's, never a URL filter.
-      setQuery: (next) => baseView.setQuery({ ...next, filters: Object.fromEntries(Object.entries(next.filters).filter(([key]) => key !== "category_id")) }),
+      setQuery: (next) => baseView.setQuery({
+        ...next, filters: Object.fromEntries(Object.entries(next.filters).filter(([key]) => key !== "category_id" && key !== "whole_library")),
+      }),
     }),
-    [baseView, categoryId],
+    [baseView, categoryId, wholeLibrary],
   );
   const [storedView, setView] = usePreference<IndexView>(`works.view.${categoryId}`, "poster");
   const view: IndexView = storedView === "list" || storedView === "overview" ? storedView : "poster";
@@ -146,7 +157,7 @@ export function WorkIndex() {
     () => (grouped ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } } : routeView),
     [grouped, routeView],
   );
-  const entryOf = (work: Work) => workEntry(work, categoryId, info);
+  const entryOf = (work: Work) => (wholeLibrary ? workEntry(work, memberOf(work.media_type), infoOf(work.media_type)) : workEntry(work, categoryId, info));
 
   const list = useLibraryList<Work>(
     {
@@ -170,6 +181,8 @@ export function WorkIndex() {
             from: query.filters.from || undefined,
             tags: query.filters.tags || undefined,
             above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
+            whole_library: wholeLibrary || undefined,
+            media_type: chosenType || undefined,
           },
         },
         signal,
@@ -207,7 +220,21 @@ export function WorkIndex() {
             Above rating
           </Button>
         )}
-        <TagChips taxonomy={info?.taxonomy.key ?? ""} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
+        {types.length > 1 && (
+          <span className="flex items-center gap-1" role="group" aria-label="Type">
+            {[{ key: "", label: "All" }, ...types.map((entry) => ({ key: entry.media_type, label: infoOf(entry.media_type)?.work.many ?? entry.media_type }))].map((choice) => (
+              <Button
+                key={choice.key || "all"}
+                variant={chosenType === choice.key ? "primary" : "secondary"}
+                aria-pressed={chosenType === choice.key}
+                onClick={() => setFilter("type", choice.key)}
+              >
+                {choice.label}
+              </Button>
+            ))}
+          </span>
+        )}
+        <TagChips taxonomy={(info ?? infoOf(library?.media_type ?? ""))?.taxonomy.key ?? ""} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
         <CustomFilterMenu
           fields={filterFieldsOf(info)}
           storageKey={`${categoryId}.${level}`}

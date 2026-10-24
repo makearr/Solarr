@@ -1,10 +1,28 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import type { components } from "@/api/schema";
 
 // One hook per resource many screens read whole, so each has one query key and is cached once across the app.
 
-export const useLibraries = () => useQuery({ queryKey: ["libraries"], queryFn: () => ok(api.GET("/libraries")) });
+type Library = components["schemas"]["Library"];
+
+/** A library, or a further media type of one (library_id names the library it belongs to). */
+export type LibraryEntry = Library & { library_id?: number };
+
+const fetchLibraries = () => ok(api.GET("/libraries"));
+
+/** Every library and every further media type of one, each with its own id and levels, as most screens want them. */
+export const useLibraries = () =>
+  useQuery({
+    queryKey: ["libraries"],
+    queryFn: fetchLibraries,
+    select: (libraries): LibraryEntry[] =>
+      libraries.flatMap((library) => [library, ...(library.members ?? []).map((member) => ({ ...member, library_id: library.id }))]),
+  });
+
+/** The libraries as the tree shows them: one entry each, its further media types inside (members). */
+export const useLibraryTree = () => useQuery({ queryKey: ["libraries"], queryFn: fetchLibraries });
 
 export const useCategories = () => useQuery({ queryKey: ["categories"], queryFn: () => ok(api.GET("/categories")) });
 

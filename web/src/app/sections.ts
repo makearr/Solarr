@@ -77,7 +77,24 @@ export const GLOBAL_SECTIONS: readonly Section[] = [ACTIVITY, STORAGE, CONNECTIO
 
 /** A library's four entries after its own levels: what it lacks, what happened and how it stands, its files, its
  *  configuration. */
-export function librarySections(categoryId: string): readonly Section[] {
+export function librarySections(categoryId: string, kinds: readonly LibraryKind[] = []): readonly Section[] {
+  if (kinds.length < 2) return ownSections(categoryId);
+  // A mixed library's entries hold each of its types' pages, named by type (plan 10-libraries L4).
+  return ownSections(categoryId).map((section, index) => ({
+    ...section,
+    tabs: kinds.flatMap((kind) =>
+      ownSections(kind.categoryId)[index]!.tabs.map((tab) => ({ ...tab, label: `${tab.label} · ${kind.label}` })),
+    ),
+  }));
+}
+
+/** One media type of a library: its category and what its works are called ("Movies"). */
+export interface LibraryKind {
+  readonly categoryId: string;
+  readonly label: string;
+}
+
+function ownSections(categoryId: string): readonly Section[] {
   const base = `/library/${categoryId}`;
   return [
     {
@@ -139,8 +156,8 @@ export function isAt(tab: SectionTab, place: Place): boolean {
 }
 
 /** The section the current page belongs to, if any; the library sections are tried for the library in the address. */
-export function sectionAt(place: Place, libraryId: string | undefined): Section | undefined {
-  const candidates = [...(libraryId ? librarySections(libraryId) : []), ...GLOBAL_SECTIONS];
+export function sectionAt(place: Place, libraryId: string | undefined, kinds: readonly LibraryKind[] = []): Section | undefined {
+  const candidates = [...(libraryId ? librarySections(libraryId, kinds) : []), ...GLOBAL_SECTIONS];
   return candidates.find((section) => section.tabs.some((tab) => isAt(tab, place)));
 }
 

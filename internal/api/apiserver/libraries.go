@@ -39,22 +39,23 @@ func (s *Server) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	}
 
 	visible := access.Categories(settings.PermissionRead)
-	views := make([]gen.Library, len(visible))
-	for index, category := range visible {
-		values := s.counterValues(r.Context(), category.ID)
-		views[index] = gen.Library{
-			Id: category.ID, MediaType: category.MediaType, Name: category.Name,
-			Permission: gen.Permission(access.Permission(category.ID)),
-			Levels:     s.libraryLevels(category, values),
-			LastLevel:  s.lastLibraryLevel(r.Context(), access.UserID(), category.ID),
+	views := []gen.Library{}
+	byID := map[int64]int{}
+	for _, category := range visible {
+		view := s.libraryView(r.Context(), access, category)
+		if category.LibraryID == 0 {
+			byID[category.ID] = len(views)
+			views = append(views, view)
 		}
-		if category.MaxAge != nil {
-			views[index].RatingLimit = &gen.RatingLimit{MaxAge: category.MaxAge, AllowUnrated: category.AllowUnrated}
+	}
+	// A further media type is shown inside its library, never as a library of its own (plan 10-libraries L4).
+	for _, category := range visible {
+		index, found := byID[category.LibraryID]
+		if category.LibraryID == 0 || !found {
+			continue
 		}
-		if wanted, ok := values["works_wanted"]; ok {
-			count := int(wanted)
-			views[index].Wanted = &count
-		}
+		members := append(derefOr(views[index].Members, nil), s.libraryView(r.Context(), access, category))
+		views[index].Members = &members
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
 }
@@ -140,6 +141,25 @@ func (s *Server) SetLibraryLastLevel(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// libraryView is one category as a navigation root: its levels with their counts, its rating limit and Wanted count.
+func (s *Server) libraryView(ctx context.Context, access authz.Access, category settings.Category) gen.Library {
+	values := s.counterValues(ctx, category.ID)
+	view := gen.Library{
+		Id: category.ID, MediaType: category.MediaType, Name: category.Name,
+		Permission: gen.Permission(access.Permission(category.ID)),
+		Levels:     s.libraryLevels(category, values),
+		LastLevel:  s.lastLibraryLevel(ctx, access.UserID(), category.ID),
+	}
+	if category.MaxAge != nil {
+		view.RatingLimit = &gen.RatingLimit{MaxAge: category.MaxAge, AllowUnrated: category.AllowUnrated}
+	}
+	if wanted, ok := values["works_wanted"]; ok {
+		count := int(wanted)
+		view.Wanted = &count
+	}
+	return view
 }
 
 // libraryLevels renders one category's declared levels with their counts.

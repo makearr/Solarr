@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Link, useParams, useRouterState, useSearch } from "@tanstack/react-router";
 
 import { useIsAdministrator } from "@/lib/useAdministrator";
+import { useLibraryKinds } from "@/lib/libraryLabel";
 import { useLibrary } from "@/lib/useLibrary";
 import { useTier } from "@/lib/useTier";
 
@@ -17,9 +18,10 @@ export function SectionTabs() {
   const search = useSearch({ strict: false }) as { category_id?: string };
   const libraryId = params.categoryId ?? (path === "/unidentified" ? search.category_id : undefined);
   const library = useLibrary(libraryId);
+  const { libraryId: head, kinds } = useLibraryKinds(libraryId);
 
   const place = { path, categoryId: search.category_id };
-  const section = sectionAt(place, libraryId);
+  const section = sectionAt(place, head, kinds);
   const tabs = section ? visibleTabs(section, { tier, administrator }) : [];
   const active = tabs.find((tab) => isAt(tab, place));
 

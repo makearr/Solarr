@@ -79,6 +79,7 @@ function LevelForLibrary() {
   const library = useLibrary(categoryId);
   // Nothing until the library is known: a guess would ask the server for a list this level does not have.
   if (!library) return null;
+  if (level === "all" && library.members?.length) return <WorkIndex wholeLibrary />;
   const entity = library.levels.find((entry) => entry.key === level)?.entity;
   if (entity === "person") return <PeopleIndex />;
   if (entity === "organisation") return <OrganisationIndex />;

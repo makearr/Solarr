@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, RefreshCw, RotateCcw, Trash2 } from "lucide-
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
@@ -287,6 +288,7 @@ function AddInstance({
   categories: readonly { id: number; name: string }[];
   onAdded: () => void;
 }) {
+  const libraryLabel = useLibraryLabel();
   const [app, setApp] = useState<ArrApp>("lidarr");
   const [name, setName] = useState("");
   const [baseUrl, setBaseUrl] = useState("");
@@ -369,7 +371,7 @@ function AddInstance({
           <option value="">Match by root folder path</option>
           {categories.map((category) => (
             <option key={category.id} value={category.id}>
-              {category.name}
+              {libraryLabel(category)}
             </option>
           ))}
         </select>

@@ -4,7 +4,7 @@ import { AlertTriangle, Plus, XCircle } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
-import { useLibraries } from "@/lib/resources";
+import { useLibraryTree } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
@@ -29,7 +29,7 @@ export function Dashboard() {
     queryKey: ["dashboard"],
     queryFn: () => ok(api.GET("/dashboard")),
   });
-  const libraries = useLibraries();
+  const libraries = useLibraryTree();
   const recent = useQuery({
     queryKey: ["works", "recent"],
     queryFn: () => ok(api.GET("/works", {

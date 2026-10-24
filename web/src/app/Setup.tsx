@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { useCategories } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import type { components } from "@/api/schema";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
@@ -412,6 +413,7 @@ function CreateAdministrator() {
 }
 
 function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () => void }) {
+  const libraryLabel = useLibraryLabel();
   const [path, setPath] = useState("");
   const [label, setLabel] = useState("");
   // A root folder belongs to a library (2026-09-19): one created here with
@@ -485,7 +487,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
           >
             {existing.map((category) => (
               <option key={category.id} value={category.id}>
-                {category.name}
+                {libraryLabel(category)}
               </option>
             ))}
             <option value="new">Create a new library…</option>

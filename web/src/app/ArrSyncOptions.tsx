@@ -5,6 +5,7 @@ import { Plus, X } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLibraries } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrImportRun = components["schemas"]["ArrImportRun"];
@@ -33,6 +34,7 @@ export function ArrSyncOptions({
   onCancel: () => void;
   cancelLabel?: string;
 }) {
+  const libraryLabel = useLibraryLabel();
   const words = APP_WORDS[instance.app] ?? APP_WORDS.lidarr!;
   const [monitored, setMonitored] = useState(true);
   const [unmonitored, setUnmonitored] = useState(false);
@@ -103,7 +105,7 @@ export function ArrSyncOptions({
           <option value="">Choose a library</option>
           {appLibraries.map((library) => (
             <option key={library.id} value={library.id}>
-              {library.name}
+              {libraryLabel(library)}
             </option>
           ))}
         </select>

@@ -190,7 +190,7 @@ func (s *Server) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the request body could not be read")
 		return
 	}
-	rootFolderIDs, categoryIDs, err := s.visibilityAt(access, body.CategoryId, settings.PermissionRequest)
+	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), settings.PermissionRequest)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -198,7 +198,7 @@ func (s *Server) BulkEditWorks(w http.ResponseWriter, r *http.Request) {
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
-		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false),
+		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), MediaType: derefOr(body.MediaType, ""),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")

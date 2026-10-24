@@ -77,7 +77,7 @@ INSERT INTO category (media_type, name, priority_rank)
 VALUES (?, ?, ?)
 RETURNING id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
           monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated, library_id
 `
 
 type CreateCategoryParams struct {
@@ -108,6 +108,7 @@ func (q *Queries) CreateCategory(ctx context.Context, arg CreateCategoryParams) 
 		&i.SearchShare,
 		&i.MaxAge,
 		&i.AllowUnrated,
+		&i.LibraryID,
 	)
 	return i, err
 }
@@ -194,7 +195,7 @@ func (q *Queries) DetachRootFolderFromCategory(ctx context.Context, arg DetachRo
 const getCategory = `-- name: GetCategory :one
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated, library_id
 FROM category WHERE id = ?
 `
 
@@ -220,6 +221,7 @@ func (q *Queries) GetCategory(ctx context.Context, id int64) (Category, error) {
 		&i.SearchShare,
 		&i.MaxAge,
 		&i.AllowUnrated,
+		&i.LibraryID,
 	)
 	return i, err
 }
@@ -277,7 +279,7 @@ func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, erro
 const listCategories = `-- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,
-       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated
+       preferred_protocol, protocol_delay_minutes, tv_monitor, kind, search_share, max_age, allow_unrated, library_id
 FROM category ORDER BY priority_rank, name
 `
 
@@ -309,6 +311,7 @@ func (q *Queries) ListCategories(ctx context.Context) ([]Category, error) {
 			&i.SearchShare,
 			&i.MaxAge,
 			&i.AllowUnrated,
+			&i.LibraryID,
 		); err != nil {
 			return nil, err
 		}
@@ -418,6 +421,20 @@ type SetCategoryKindParams struct {
 
 func (q *Queries) SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error {
 	_, err := q.db.ExecContext(ctx, setCategoryKind, arg.Kind, arg.ID)
+	return err
+}
+
+const setCategoryLibrary = `-- name: SetCategoryLibrary :exec
+UPDATE category SET library_id = ? WHERE id = ?
+`
+
+type SetCategoryLibraryParams struct {
+	LibraryID sql.NullInt64
+	ID        int64
+}
+
+func (q *Queries) SetCategoryLibrary(ctx context.Context, arg SetCategoryLibraryParams) error {
+	_, err := q.db.ExecContext(ctx, setCategoryLibrary, arg.LibraryID, arg.ID)
 	return err
 }
 
@@ -626,6 +643,22 @@ func (q *Queries) SetRootFolderReachability(ctx context.Context, arg SetRootFold
 		arg.SeenEntries,
 		arg.ID,
 	)
+	return err
+}
+
+const syncLibraryMembers = `-- name: SyncLibraryMembers :exec
+UPDATE category SET
+  name          = (SELECT p.name FROM category p WHERE p.id = ?1),
+  priority_rank = (SELECT p.priority_rank FROM category p WHERE p.id = ?1),
+  max_age       = (SELECT p.max_age FROM category p WHERE p.id = ?1),
+  allow_unrated = (SELECT p.allow_unrated FROM category p WHERE p.id = ?1),
+  search_share  = (SELECT p.search_share FROM category p WHERE p.id = ?1)
+WHERE category.library_id = ?1
+`
+
+// What a library's members keep equal to it: name, priority, rating limit and search share.
+func (q *Queries) SyncLibraryMembers(ctx context.Context, headID int64) error {
+	_, err := q.db.ExecContext(ctx, syncLibraryMembers, headID)
 	return err
 }
 

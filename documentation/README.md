@@ -17,6 +17,7 @@ named file, linked from the code by path.
 | [startup-checks.md](startup-checks.md) | How directories are checked at startup, and what deliberately is not |
 | [configuration-export.md](configuration-export.md) | F9 export and import |
 | [library-quality.md](library-quality.md) | A library's ordered quality profiles, cutoff and target, and what "fits" means |
+| [mixed-libraries.md](mixed-libraries.md) | A library of several media types: member categories, what they share, the All list |
 | [rating-limit.md](rating-limit.md) | A library's maximum rating: how certifications become ages, and what a work above it is |
 | [tags.md](tags.md) | Tags and genre taxonomies: shipped trees, aliases, where a provider's genre lands, the tag filter |
 | [naming.md](naming.md) | How a library names files: slots, tokens, character replacement, apply to library |

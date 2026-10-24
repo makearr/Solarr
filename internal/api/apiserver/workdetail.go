@@ -187,6 +187,8 @@ type BulkSelection struct {
 	TagIDs, ExcludedTagIDs []int64
 	// AboveRating is the list's Above rating filter.
 	AboveRating bool
+	// MediaType is the All list's type chip, "" for every type.
+	MediaType string
 }
 
 // WorksMonitor toggles monitored state at the album and part level (section
@@ -512,7 +514,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rootFolderIDs, categoryIDs, err := s.visibility(access, body.CategoryId)
+	rootFolderIDs, categoryIDs, err := s.libraryVisibility(access, body.CategoryId, derefOr(body.WholeLibrary, false), settings.PermissionRead)
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -521,7 +523,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 	selection := BulkSelection{
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
-		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false),
+		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), MediaType: derefOr(body.MediaType, ""),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")
