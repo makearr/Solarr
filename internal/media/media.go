@@ -183,6 +183,8 @@ type LibraryKind struct {
 	QualityProfiles []string
 	// Language is the language profile it starts with, found by name or created; nil starts with none.
 	Language *settings.LanguageProfile
+	// Rules suggest a library of the kind for a new work until the library states its own (plan 10-libraries L5).
+	Rules []settings.LibraryRule
 }
 
 // ExtraFilesDefault is a media type's "Import Extra Files" for a library that has not chosen.
@@ -230,6 +232,18 @@ type AddCandidate struct {
 	Year                                  int64
 	// LibraryID is the work or person already held for it, 0 when it is new.
 	LibraryID int64
+	// Traits are what the source says that decides which library it belongs in.
+	Traits Traits
+}
+
+// Traits are the facts a library's rules read to suggest it for a work (plan 10-libraries L5): its genres as the
+// source names them, original language and countries as ISO codes, whether AniList knows it, its certification.
+type Traits struct {
+	Genres           []string
+	OriginalLanguage string
+	OriginCountries  []string
+	AniList          bool
+	Rating           string
 }
 
 // AddRequest is one add a person asked for.

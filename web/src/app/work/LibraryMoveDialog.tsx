@@ -19,11 +19,11 @@ export type MoveSubject = { workId: number; title: string } | { selection: Recor
 /** Move or copy to another library of the same media type: pick it, see what moves where, then start. A move takes the
  *  work along; a copy places the files again in the other library, unmonitored there. */
 export function LibraryMoveDialog({
-  subject, mediaType, fromLibraryId, onClose, onDone,
-}: { subject: MoveSubject; mediaType: string; fromLibraryId: number; onClose: () => void; onDone: () => void }) {
+  subject, mediaType, fromLibraryId, initialTarget = 0, onClose, onDone,
+}: { subject: MoveSubject; mediaType: string; fromLibraryId: number; initialTarget?: number; onClose: () => void; onDone: () => void }) {
   const queryClient = useQueryClient();
   const targets = (useLibraries().data ?? []).filter((library) => library.media_type === mediaType && library.id !== fromLibraryId);
-  const [target, setTarget] = useState(0);
+  const [target, setTarget] = useState(initialTarget);
   const [copy, setCopy] = useState(false);
   const chosen = target || targets[0]?.id || 0;
   const one = "workId" in subject;

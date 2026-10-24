@@ -147,6 +147,7 @@ type Querier interface {
 	SetCategoryQualityProfile(ctx context.Context, arg SetCategoryQualityProfileParams) error
 	SetCategoryQualityUpgrades(ctx context.Context, arg SetCategoryQualityUpgradesParams) error
 	SetCategoryRatingLimit(ctx context.Context, arg SetCategoryRatingLimitParams) error
+	SetCategoryRules(ctx context.Context, arg SetCategoryRulesParams) error
 	SetCategorySearchShare(ctx context.Context, arg SetCategorySearchShareParams) error
 	SetCategoryTVMonitor(ctx context.Context, arg SetCategoryTVMonitorParams) error
 	SetCategoryTarget(ctx context.Context, arg SetCategoryTargetParams) error

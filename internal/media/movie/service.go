@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
@@ -296,6 +297,8 @@ type Candidate struct {
 	Year     int
 	Overview string
 	Poster   string
+	// Traits say which library it belongs in.
+	Traits media.Traits
 }
 
 // Search finds movies by name through TMDB, else Radarr's service; an empty answer is not an error.
@@ -312,6 +315,7 @@ func (s Service) Search(ctx context.Context, term string, year, limit int) ([]Ca
 			for _, hit := range hits {
 				candidates = append(candidates, Candidate{
 					TMDBID: hit.ID, Title: hit.Title, Year: yearOf(hit.ReleaseDate), Overview: hit.Overview, Poster: tmdb.ImageURL(hit.PosterPath),
+					Traits: media.Traits{Genres: tmdb.Genres(hit.GenreIDs), OriginalLanguage: hit.OriginalLanguage},
 				})
 			}
 			return capped(candidates, limit), nil
@@ -324,7 +328,10 @@ func (s Service) Search(ctx context.Context, term string, year, limit int) ([]Ca
 		if err == nil {
 			candidates := make([]Candidate, 0, len(hits))
 			for _, hit := range hits {
-				candidates = append(candidates, Candidate{TMDBID: hit.TMDBID, IMDbID: hit.IMDbID, Title: hit.Title, Year: hit.Year, Overview: hit.Overview, Poster: posterOf(hit.Images)})
+				candidates = append(candidates, Candidate{
+					TMDBID: hit.TMDBID, IMDbID: hit.IMDbID, Title: hit.Title, Year: hit.Year, Overview: hit.Overview, Poster: posterOf(hit.Images),
+					Traits: media.Traits{Genres: hit.Genres, OriginalLanguage: hit.OriginalLanguage, Rating: radarrCertification(hit, "US")},
+				})
 			}
 			return capped(candidates, limit), nil
 		}

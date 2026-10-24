@@ -637,6 +637,14 @@ const (
 	RootFolderDrainStatePAUSED   RootFolderDrainState = "PAUSED"
 )
 
+// Defines values for RuleConditionField.
+const (
+	RuleConditionFieldAnilist  RuleConditionField = "anilist"
+	RuleConditionFieldCountry  RuleConditionField = "country"
+	RuleConditionFieldGenre    RuleConditionField = "genre"
+	RuleConditionFieldLanguage RuleConditionField = "language"
+)
+
 // Defines values for ScheduleCategory.
 const (
 	ScheduleCategoryDownloads   ScheduleCategory = "downloads"
@@ -987,8 +995,11 @@ type AddCandidate struct {
 
 	// Subtitle Tells candidates apart: an album's artist, an artist's disambiguation, a series' network.
 	Subtitle *string `json:"subtitle,omitempty"`
-	Title    string  `json:"title"`
-	Year     *int64  `json:"year,omitempty"`
+
+	// Suggestion The library a work belongs in by the libraries' rules (ADR-56), and why; absent when no rule says. Only libraries the caller may add to are suggested.
+	Suggestion *LibrarySuggestion `json:"suggestion,omitempty"`
+	Title      string             `json:"title"`
+	Year       *int64             `json:"year,omitempty"`
 }
 
 // AddDownloaderRequest defines model for AddDownloaderRequest.
@@ -2653,6 +2664,12 @@ type LibraryCategory struct {
 	Works *int `json:"works,omitempty"`
 }
 
+// LibraryCheck defines model for LibraryCheck.
+type LibraryCheck struct {
+	Misplaced    []MisplacedWork `json:"misplaced"`
+	MissingKinds []MissingKind   `json:"missing_kinds"`
+}
+
 // LibraryCounts Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run.
 type LibraryCounts struct {
 	Files int `json:"files"`
@@ -2858,6 +2875,22 @@ type LibraryRenamePlan struct {
 	Roots []RootRenamePlan `json:"roots"`
 }
 
+// LibraryRule defines model for LibraryRule.
+type LibraryRule struct {
+	Conditions []RuleCondition `json:"conditions"`
+}
+
+// LibraryRules defines model for LibraryRules.
+type LibraryRules struct {
+	KindRules []LibraryRule `json:"kind_rules"`
+
+	// Own The library states its own rules; false while it follows its kind's.
+	Own bool `json:"own"`
+
+	// Rules The rules in force; a work matching any of them is suggested this library.
+	Rules []LibraryRule `json:"rules"`
+}
+
 // LibrarySearchShare defines model for LibrarySearchShare.
 type LibrarySearchShare struct {
 	LibraryId int64 `json:"library_id"`
@@ -2867,6 +2900,13 @@ type LibrarySearchShare struct {
 
 	// Share 0 is never searched automatically. Default 1.
 	Share int64 `json:"share"`
+}
+
+// LibrarySuggestion The library a work belongs in by the libraries' rules (ADR-56), and why; absent when no rule says. Only libraries the caller may add to are suggested.
+type LibrarySuggestion struct {
+	CategoryId int64  `json:"category_id"`
+	Name       string `json:"name"`
+	Reason     string `json:"reason"`
 }
 
 // LinkPreview defines model for LinkPreview.
@@ -3171,6 +3211,27 @@ type MetadataSettingsTvSources string
 
 // MetadataSource A metadata source. brainzmash and musicbrainz-proxy are third-party proxies of musicbrainz; musicbrainz is the direct upstream and cannot be removed from the order, only reordered.
 type MetadataSource string
+
+// MisplacedWork defines model for MisplacedWork.
+type MisplacedWork struct {
+	FromCategoryId int64  `json:"from_category_id"`
+	MediaType      string `json:"media_type"`
+
+	// Suggestion The library a work belongs in by the libraries' rules (ADR-56), and why; absent when no rule says. Only libraries the caller may add to are suggested.
+	Suggestion LibrarySuggestion `json:"suggestion"`
+	Title      string            `json:"title"`
+	WorkId     int64             `json:"work_id"`
+}
+
+// MissingKind defines model for MissingKind.
+type MissingKind struct {
+	Kind      string `json:"kind"`
+	Label     string `json:"label"`
+	MediaType string `json:"media_type"`
+
+	// Works How many of this library's works such a library would hold.
+	Works int64 `json:"works"`
+}
 
 // MoveCompanion defines model for MoveCompanion.
 type MoveCompanion struct {
@@ -4029,6 +4090,17 @@ type RootRenamePlan struct {
 	Plan         DrainPlan `json:"plan"`
 	RootFolderId int64     `json:"root_folder_id"`
 }
+
+// RuleCondition defines model for RuleCondition.
+type RuleCondition struct {
+	Field RuleConditionField `json:"field"`
+
+	// Value A genre (one below it matches too), an ISO language or country code; unused for anilist.
+	Value *string `json:"value,omitempty"`
+}
+
+// RuleConditionField defines model for RuleCondition.Field.
+type RuleConditionField string
 
 // RunningJob defines model for RunningJob.
 type RunningJob struct {
@@ -4915,6 +4987,11 @@ type RenameLibraryJSONBody struct {
 type AttachRootFolderToCategoryJSONBody struct {
 	AcceptsNew   *bool `json:"accepts_new,omitempty"`
 	RootFolderId int64 `json:"root_folder_id"`
+}
+
+// SetLibraryRulesJSONBody defines parameters for SetLibraryRules.
+type SetLibraryRulesJSONBody struct {
+	Rules *[]LibraryRule `json:"rules"`
 }
 
 // SearchCategoryJSONBody defines parameters for SearchCategory.
@@ -5826,6 +5903,9 @@ type RenameLibraryJSONRequestBody RenameLibraryJSONBody
 // AttachRootFolderToCategoryJSONRequestBody defines body for AttachRootFolderToCategory for application/json ContentType.
 type AttachRootFolderToCategoryJSONRequestBody AttachRootFolderToCategoryJSONBody
 
+// SetLibraryRulesJSONRequestBody defines body for SetLibraryRules for application/json ContentType.
+type SetLibraryRulesJSONRequestBody SetLibraryRulesJSONBody
+
 // SearchCategoryJSONRequestBody defines body for SearchCategory for application/json ContentType.
 type SearchCategoryJSONRequestBody SearchCategoryJSONBody
 
@@ -6203,6 +6283,9 @@ type ServerInterface interface {
 	// Rename a category, reprioritise it, or change its default quality/ language profile or monitor-discovered policy. Administrator only. `media_type` never changes -- it is identity, not policy.
 	// (PATCH /categories/{id})
 	UpdateCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// The library's works whose rules point to another library, and the kinds of library that do not exist yet although some of its works would go there.
+	// (GET /categories/{id}/check)
+	CheckLibrary(w http.ResponseWriter, r *http.Request, id int64)
 	// Tracks one library holds more than once, found by artist, title and length (read only).
 	// (GET /categories/{id}/duplicates)
 	GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64)
@@ -6251,6 +6334,12 @@ type ServerInterface interface {
 	// Take a root folder out of a category. Administrator only.
 	// (DELETE /categories/{id}/rootfolders/{rootFolderId})
 	DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64)
+	// The rules a library suggests itself by for a new work, its own or its kind's (plan 10-libraries L5).
+	// (GET /categories/{id}/rules)
+	GetLibraryRules(w http.ResponseWriter, r *http.Request, id int64)
+	// State a library's own rules, or with rules null follow its kind's again. Administrator only.
+	// (PUT /categories/{id}/rules)
+	SetLibraryRules(w http.ResponseWriter, r *http.Request, id int64)
 	// Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 	// (POST /categories/{id}/search)
 	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
@@ -7136,6 +7225,12 @@ func (_ Unimplemented) UpdateCategory(w http.ResponseWriter, r *http.Request, id
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// The library's works whose rules point to another library, and the kinds of library that do not exist yet although some of its works would go there.
+// (GET /categories/{id}/check)
+func (_ Unimplemented) CheckLibrary(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Tracks one library holds more than once, found by artist, title and length (read only).
 // (GET /categories/{id}/duplicates)
 func (_ Unimplemented) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request, id int64) {
@@ -7229,6 +7324,18 @@ func (_ Unimplemented) AttachRootFolderToCategory(w http.ResponseWriter, r *http
 // Take a root folder out of a category. Administrator only.
 // (DELETE /categories/{id}/rootfolders/{rootFolderId})
 func (_ Unimplemented) DetachRootFolderFromCategory(w http.ResponseWriter, r *http.Request, id int64, rootFolderId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The rules a library suggests itself by for a new work, its own or its kind's (plan 10-libraries L5).
+// (GET /categories/{id}/rules)
+func (_ Unimplemented) GetLibraryRules(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// State a library's own rules, or with rules null follow its kind's again. Administrator only.
+// (PUT /categories/{id}/rules)
+func (_ Unimplemented) SetLibraryRules(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9624,6 +9731,39 @@ func (siw *ServerInterfaceWrapper) UpdateCategory(w http.ResponseWriter, r *http
 	handler.ServeHTTP(w, r)
 }
 
+// CheckLibrary operation middleware
+func (siw *ServerInterfaceWrapper) CheckLibrary(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CheckLibrary(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetCategoryDuplicates operation middleware
 func (siw *ServerInterfaceWrapper) GetCategoryDuplicates(w http.ResponseWriter, r *http.Request) {
 
@@ -10152,6 +10292,72 @@ func (siw *ServerInterfaceWrapper) DetachRootFolderFromCategory(w http.ResponseW
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.DetachRootFolderFromCategory(w, r, id, rootFolderId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetLibraryRules operation middleware
+func (siw *ServerInterfaceWrapper) GetLibraryRules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetLibraryRules(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetLibraryRules operation middleware
+func (siw *ServerInterfaceWrapper) SetLibraryRules(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetLibraryRules(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17989,6 +18195,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/categories/{id}", wrapper.UpdateCategory)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/check", wrapper.CheckLibrary)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/duplicates", wrapper.GetCategoryDuplicates)
 	})
 	r.Group(func(r chi.Router) {
@@ -18035,6 +18244,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/categories/{id}/rootfolders/{rootFolderId}", wrapper.DetachRootFolderFromCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/rules", wrapper.GetLibraryRules)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/categories/{id}/rules", wrapper.SetLibraryRules)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/search", wrapper.SearchCategory)

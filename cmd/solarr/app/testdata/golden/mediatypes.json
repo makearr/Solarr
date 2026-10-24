@@ -939,6 +939,28 @@
       "one": ""
     },
     "key": "movie",
+    "kinds": [
+      {
+        "help": "Films.",
+        "key": "movies",
+        "label": "Movies"
+      },
+      {
+        "help": "Anime films.",
+        "key": "anime",
+        "label": "Anime"
+      },
+      {
+        "help": "Documentary films.",
+        "key": "documentary",
+        "label": "Documentary"
+      },
+      {
+        "help": "Children's and family films.",
+        "key": "kids",
+        "label": "Kids"
+      }
+    ],
     "label": "Movies",
     "lead_people": {
       "many": "Directors",

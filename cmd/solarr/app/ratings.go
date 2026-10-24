@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/media"
 )
@@ -40,4 +41,11 @@ func (p *process) ratingLimit(categoryID int64) (library.RatingLimit, bool) {
 		return library.RatingLimit{}, false
 	}
 	return library.RatingLimit{MaxAge: *category.MaxAge, AllowUnrated: category.AllowUnrated}, true
+}
+
+// suggester names the library a work belongs in by the libraries' rules (plan 10-libraries L5).
+func (p *process) suggester() adapters.Suggester {
+	return adapters.Suggester{
+		Registry: p.media, Settings: p.cache, People: library.NewPeople(p.library), Works: library.NewWorks(p.library),
+	}
 }

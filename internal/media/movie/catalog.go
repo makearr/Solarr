@@ -47,7 +47,7 @@ func (c Catalog) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]med
 	for i, film := range found {
 		candidate := media.AddCandidate{
 			Kind: "movie", Provider: ProviderTMDB, ExternalID: strconv.FormatInt(film.TMDBID, 10), Title: film.Title,
-			Overview: film.Overview, PosterURL: film.Poster, Year: int64(film.Year),
+			Overview: film.Overview, PosterURL: film.Poster, Year: int64(film.Year), Traits: film.Traits,
 		}
 		if film.TMDBID == 0 {
 			candidate.Provider, candidate.ExternalID = ProviderIMDb, film.IMDbID

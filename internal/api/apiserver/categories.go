@@ -267,6 +267,13 @@ func (s *Server) AddLibraryType(w http.ResponseWriter, r *http.Request, id int64
 		return
 	}
 	member, err := s.auth.Settings.AddLibraryType(r.Context(), id, body.MediaType)
+	if categories := s.auth.Settings.Snapshot().LibraryCategories(id); err == nil && len(categories) > 0 && categories[0].Kind != "" {
+		// The further type is the library's kind too when its type has one: Anime's movies are anime films.
+		info, _ := s.mediaTypeInfo(body.MediaType)
+		if kind, known := info.kindOf(categories[0].Kind); known {
+			member, err = s.applyKind(r.Context(), member, kind)
+		}
+	}
 	if err != nil {
 		var problems config.Problems
 		if errors.As(err, &problems) {

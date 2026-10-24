@@ -71,6 +71,7 @@ type Category struct {
 	MaxAge                 sql.NullInt64
 	AllowUnrated           int64
 	LibraryID              sql.NullInt64
+	RulesJson              sql.NullString
 }
 
 type CategoryFileManagement struct {

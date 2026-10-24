@@ -118,6 +118,7 @@ function ownSections(categoryId: string): readonly Section[] {
         { label: "Import", path: `${base}/import`, tier: "advanced", administrator: true },
         { label: "Duplicates", path: `${base}/duplicates`, tier: "advanced" },
         { label: "Packs", path: `${base}/packs`, tier: "expert" },
+        { label: "Belongs elsewhere", path: `${base}/check`, tier: "normal" },
       ],
     },
     {
@@ -129,6 +130,7 @@ function ownSections(categoryId: string): readonly Section[] {
         { label: "Metadata", path: `${base}/config/metadata`, tier: "advanced", administrator: true },
         { label: "File management", path: `${base}/config/file-management`, tier: "expert", administrator: true },
         { label: "Import lists", path: `${base}/config/import-lists`, tier: "advanced", administrator: true },
+        { label: "Suggested for", path: `${base}/config/rules`, tier: "advanced", administrator: true },
       ],
     },
   ];

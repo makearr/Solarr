@@ -14,6 +14,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/metaresolve"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
@@ -762,6 +763,8 @@ type Candidate struct {
 	Poster   string
 	// AltTitles are other names providers give it (TMDB's original title), which a folder may be named by.
 	AltTitles []string
+	// Traits say which library it belongs in.
+	Traits media.Traits
 }
 
 // Search finds series by name through Skyhook, and through TMDB when a key is stored for shows TheTVDB does not list
@@ -779,6 +782,12 @@ func (s Service) Search(ctx context.Context, term string, limit int) ([]Candidat
 		}
 		for _, hit := range hits {
 			candidate := Candidate{TVDBID: hit.TVDBID, TMDBID: hit.TMDBID, Title: hit.Title, Year: yearOf(hit.FirstAired), Network: hit.Network, Status: statusOf(hit.Status), Overview: hit.Overview}
+			candidate.Traits = media.Traits{
+				Genres: hit.Genres, OriginalLanguage: hit.OriginalLanguage, AniList: len(hit.AniListIDs) > 0, Rating: hit.ContentRating,
+			}
+			if hit.OriginalCountry != "" {
+				candidate.Traits.OriginCountries = []string{hit.OriginalCountry}
+			}
 			for _, image := range hit.Images {
 				if imageKind(image.CoverType) == "poster" {
 					candidate.Poster = image.URL
@@ -828,7 +837,10 @@ func (s Service) searchTMDB(ctx context.Context, term string, have []Candidate) 
 			}
 			continue
 		}
-		found = append(found, Candidate{TMDBID: hit.ID, Title: hit.Name, Year: year, Overview: hit.Overview, Poster: tmdb.ImageURL(hit.PosterPath)})
+		found = append(found, Candidate{
+			TMDBID: hit.ID, Title: hit.Name, Year: year, Overview: hit.Overview, Poster: tmdb.ImageURL(hit.PosterPath),
+			Traits: media.Traits{Genres: tmdb.Genres(hit.GenreIDs), OriginalLanguage: hit.OriginalLanguage, OriginCountries: hit.OriginCountry},
+		})
 	}
 	return found, alternatives
 }

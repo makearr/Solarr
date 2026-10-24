@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import { useLibraries, useQualityProfiles } from "@/lib/resources";
+import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
@@ -176,6 +177,15 @@ export function CandidateCard({
             {candidate.provider === "tmdb" && <Chip title="TheTVDB does not list it; its episodes come from TMDB">TMDB only</Chip>}
           </div>
           {candidate.overview && <p className="line-clamp-3 text-xs text-ink-muted">{candidate.overview}</p>}
+          {!libraries && held === undefined && candidate.suggestion && String(candidate.suggestion.category_id) !== categoryId && (
+            <p className="text-xs text-warn">
+              Fits{" "}
+              <Link to="/library/$categoryId/discover" params={{ categoryId: String(candidate.suggestion.category_id) }} search={{ q: candidate.title }} className="underline">
+                {candidate.suggestion.name}
+              </Link>{" "}
+              better: {candidate.suggestion.reason}
+            </p>
+          )}
           <div className="mt-auto">
             {held !== undefined ? (
               <Link {...heldLink} className="inline-flex items-center gap-1 text-xs text-ok">
@@ -213,7 +223,10 @@ function AddPanel({
   onAdded: (result: components["schemas"]["AddWorkResult"]) => void;
 }) {
   const queryClient = useQueryClient();
-  const [categoryId, setCategoryId] = useState(firstCategoryId);
+  const libraryLabel = useLibraryLabel();
+  // The libraries' rules suggest where it goes (ADR-56); always shown with its reason, always changeable.
+  const suggested = candidate.suggestion && libraries?.some((library) => library.id === candidate.suggestion!.category_id) ? candidate.suggestion : undefined;
+  const [categoryId, setCategoryId] = useState(suggested ? String(suggested.category_id) : firstCategoryId);
   const words = vocabularyOf(info);
   const options = info.monitor_options;
   const [monitored, setMonitored] = useState(true);
@@ -255,10 +268,15 @@ function AddPanel({
           <select value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={field}>
             {libraries.map((library) => (
               <option key={library.id} value={String(library.id)}>
-                {library.name}
+                {libraryLabel(library)}
               </option>
             ))}
           </select>
+          {suggested && (
+            <span className="text-xs text-ink-muted">
+              {String(suggested.category_id) === categoryId ? "Suggested" : `${suggested.name} suggested`}: {suggested.reason}
+            </span>
+          )}
         </label>
       )}
       {options.length > 0 ? (

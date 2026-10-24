@@ -299,6 +299,7 @@ func convertCategories(rows []settingsdb.Category, naming map[int64]*NamingProfi
 			MaxAge:              nullInt64Ptr(row.MaxAge),
 			AllowUnrated:        row.AllowUnrated != 0,
 			LibraryID:           row.LibraryID.Int64,
+			Rules:               decodeRules(row.RulesJson),
 			MonitorReleaseTypes: decodeReleaseTypes(row.MonitorReleaseTypes),
 			Naming:              profile,
 			QualityCutoffID:     nullInt64Ptr(row.QualityCutoffProfileID),
@@ -483,4 +484,17 @@ func withMetadataSources(categories []Category, rows []settingsdb.CategoryMetada
 		}
 	}
 	return categories
+}
+
+// decodeRules reads a library's stored rules; nil, a library following its kind, when none are stored or they cannot
+// be read.
+func decodeRules(stored sql.NullString) []LibraryRule {
+	if !stored.Valid {
+		return nil
+	}
+	rules := []LibraryRule{}
+	if err := json.Unmarshal([]byte(stored.String), &rules); err != nil {
+		return nil
+	}
+	return rules
 }

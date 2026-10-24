@@ -8,10 +8,10 @@ test("a tab the viewer may not open is absent", () => {
   const [, insights, files, settings] = librarySections("7");
   expect(labels(visibleTabs(insights!, { tier: "normal", administrator: false }))).toEqual(["Statistics"]);
   expect(labels(visibleTabs(insights!, { tier: "advanced", administrator: false }))).toEqual(["Statistics", "Activity"]);
-  expect(labels(visibleTabs(files!, { tier: "normal", administrator: false }))).toEqual(["Unidentified"]);
-  expect(labels(visibleTabs(files!, { tier: "advanced", administrator: false }))).toEqual(["Unidentified", "Duplicates"]);
+  expect(labels(visibleTabs(files!, { tier: "normal", administrator: false }))).toEqual(["Unidentified", "Belongs elsewhere"]);
+  expect(labels(visibleTabs(files!, { tier: "advanced", administrator: false }))).toEqual(["Unidentified", "Duplicates", "Belongs elsewhere"]);
   expect(labels(visibleTabs(files!, { tier: "expert", administrator: true }))).toEqual([
-    "Unidentified", "Import", "Duplicates", "Packs",
+    "Unidentified", "Import", "Duplicates", "Packs", "Belongs elsewhere",
   ]);
   expect(labels(visibleTabs(settings!, { tier: "expert", administrator: false }))).toEqual([]);
   expect(labels(visibleTabs(STORAGE, { tier: "normal", administrator: true }))).toEqual([]);
@@ -44,4 +44,11 @@ test("a section's entry leads to the first tab the viewer may see", () => {
 
 test("a page's tier is its tab's, and normal when no section lists it", () => {
   expect([pageTier("/settings/cache"), pageTier("/storage/folders"), pageTier("/calendar")]).toEqual(["expert", "advanced", "normal"]);
+});
+
+test("a library of several types has each type's pages in its sections", () => {
+  const kinds = [{ categoryId: "7", label: "Series" }, { categoryId: "9", label: "Movies" }];
+  const [wanted] = librarySections("7", kinds);
+  expect(labels(wanted!.tabs)).toEqual(["Wanted · Series", "Wanted · Movies"]);
+  expect(sectionAt({ path: "/library/9/wanted" }, "7", kinds)?.key).toBe("library:7:wanted");
 });

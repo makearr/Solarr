@@ -5045,6 +5045,72 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/rules:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getLibraryRules
+      tags: [settings]
+      summary: The rules a library suggests itself by for a new work, its own or its kind's (plan 10-libraries L5).
+      responses:
+        "200":
+          description: The rules.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryRules" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setLibraryRules
+      tags: [settings]
+      summary: State a library's own rules, or with rules null follow its kind's again. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rules]
+              properties:
+                rules:
+                  type: array
+                  nullable: true
+                  items: { $ref: "#/components/schemas/LibraryRule" }
+      responses:
+        "200":
+          description: The rules now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryRules" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /categories/{id}/check:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: checkLibrary
+      tags: [library]
+      summary: >-
+        The library's works whose rules point to another library, and the kinds of library that do not exist yet
+        although some of its works would go there.
+      responses:
+        "200":
+          description: The check.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryCheck" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/types:
     parameters:
       - name: id
@@ -9217,6 +9283,76 @@ components:
         status: { type: string }
         year: { type: integer, format: int64 }
         library_id: { type: integer, format: int64, description: The work or person the library already holds for it. }
+        suggestion: { $ref: "#/components/schemas/LibrarySuggestion" }
+
+    LibrarySuggestion:
+      type: object
+      description: >-
+        The library a work belongs in by the libraries' rules (ADR-56), and why; absent when no rule says. Only
+        libraries the caller may add to are suggested.
+      required: [category_id, name, reason]
+      properties:
+        category_id: { type: integer, format: int64 }
+        name: { type: string }
+        reason: { type: string, example: "Animation, original language ja" }
+
+    LibraryRule:
+      type: object
+      required: [conditions]
+      properties:
+        conditions:
+          type: array
+          items: { $ref: "#/components/schemas/RuleCondition" }
+
+    RuleCondition:
+      type: object
+      required: [field]
+      properties:
+        field: { type: string, enum: [genre, language, country, anilist] }
+        value: { type: string, description: "A genre (one below it matches too), an ISO language or country code; unused for anilist." }
+
+    LibraryRules:
+      type: object
+      required: [rules, own, kind_rules]
+      properties:
+        rules:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryRule" }
+          description: The rules in force; a work matching any of them is suggested this library.
+        own: { type: boolean, description: The library states its own rules; false while it follows its kind's. }
+        kind_rules:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryRule" }
+
+    LibraryCheck:
+      type: object
+      required: [misplaced, missing_kinds]
+      properties:
+        misplaced:
+          type: array
+          items: { $ref: "#/components/schemas/MisplacedWork" }
+        missing_kinds:
+          type: array
+          items: { $ref: "#/components/schemas/MissingKind" }
+
+    MisplacedWork:
+      type: object
+      required: [work_id, title, media_type, from_category_id, suggestion]
+      properties:
+        work_id: { type: integer, format: int64 }
+        title: { type: string }
+        media_type: { type: string }
+        from_category_id: { type: integer, format: int64 }
+        suggestion: { $ref: "#/components/schemas/LibrarySuggestion" }
+
+    MissingKind:
+      type: object
+      required: [media_type, kind, label, works]
+      properties:
+        media_type: { type: string }
+        kind: { type: string }
+        label: { type: string }
+        works: { type: integer, format: int64, description: How many of this library's works such a library would hold. }
 
     AddWorkRequest:
       type: object

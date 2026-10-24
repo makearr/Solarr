@@ -168,13 +168,14 @@ func (c Client) Movie(ctx context.Context, id int64) (Movie, error) {
 
 // MovieHit is one film a search found.
 type MovieHit struct {
-	ID               int64  `json:"id"`
-	Title            string `json:"title"`
-	OriginalTitle    string `json:"original_title"`
-	Overview         string `json:"overview"`
-	ReleaseDate      string `json:"release_date"`
-	PosterPath       string `json:"poster_path"`
-	OriginalLanguage string `json:"original_language"`
+	ID               int64   `json:"id"`
+	Title            string  `json:"title"`
+	OriginalTitle    string  `json:"original_title"`
+	Overview         string  `json:"overview"`
+	ReleaseDate      string  `json:"release_date"`
+	PosterPath       string  `json:"poster_path"`
+	OriginalLanguage string  `json:"original_language"`
+	GenreIDs         []int64 `json:"genre_ids"`
 }
 
 // SearchPageSize is how many hits TMDB answers per search page.

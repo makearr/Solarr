@@ -208,6 +208,8 @@ type CategoryEntry struct {
 	FileManagement *FileManagementEntry `yaml:"file_management,omitempty"`
 	// LibraryOf is the library this is a further media type of, as "media_type/name"; absent for a library's first.
 	LibraryOf string `yaml:"library_of,omitempty"`
+	// Rules are the library's own rules for suggesting it; absent while it follows its kind's.
+	Rules []LibraryRule `yaml:"rules,omitempty"`
 }
 
 // FileManagementEntry is one library's File Management and Permissions.
@@ -511,6 +513,7 @@ func (c *Cache) Export() Document {
 			MonitorDiscovered: category.MonitorDiscovered,
 		}
 		entry.Kind = category.Kind
+		entry.Rules = category.Rules
 		if head, found := snapshot.Category(category.LibraryID); found && category.LibraryID != 0 {
 			entry.LibraryOf = head.MediaType + "/" + head.Name
 		}
@@ -1202,6 +1205,17 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			}
 		}
 		for _, category := range document.Categories {
+			if category.Rules != nil {
+				encoded, err := json.Marshal(category.Rules)
+				if err != nil {
+					return fmt.Errorf("category %s/%s rules: %w", category.MediaType, category.Name, err)
+				}
+				if err := queries.SetCategoryRules(ctx, settingsdb.SetCategoryRulesParams{
+					RulesJson: sql.NullString{String: string(encoded), Valid: true}, ID: categoryIDByKey[category.MediaType+"/"+category.Name],
+				}); err != nil {
+					return fmt.Errorf("category %s/%s rules: %w", category.MediaType, category.Name, err)
+				}
+			}
 			head, found := categoryIDByKey[category.LibraryOf]
 			if category.LibraryOf == "" || !found {
 				continue

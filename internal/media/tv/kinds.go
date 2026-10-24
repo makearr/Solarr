@@ -3,6 +3,7 @@ package tv
 import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/screen"
 )
 
 // The kinds of TV library (T3): each is defaults only, and anime also types its series (seriesTypeOfKind).
@@ -29,19 +30,19 @@ var libraryKinds = []media.LibraryKind{
 	},
 	{
 		Key: KindAnime, Label: "Anime", Help: "Its series are anime: searched by absolute episode number as well and in the indexers' anime category.",
-		QualityProfiles: []string{"Anime 1080p", "WEB 1080p"}, Language: animeLanguages,
+		QualityProfiles: []string{"Anime 1080p", "WEB 1080p"}, Language: animeLanguages, Rules: screen.AnimeRules,
 	},
 	{
 		Key: KindDocumentary, Label: "Documentary", Help: "Documentary series.",
-		QualityProfiles: []string{"WEB 1080p", "HD 720p/1080p"}, Language: seriesLanguages,
+		QualityProfiles: []string{"WEB 1080p", "HD 720p/1080p"}, Language: seriesLanguages, Rules: screen.DocumentaryRules,
 	},
 	{
 		Key: KindReality, Label: "Reality", Help: "Reality and game shows, where a smaller file is plenty.",
-		QualityProfiles: []string{"Space conscious (x265 1080p)", "HD 720p/1080p"}, Language: seriesLanguages,
+		QualityProfiles: []string{"Space conscious (x265 1080p)", "HD 720p/1080p"}, Language: seriesLanguages, Rules: screen.RealityRules,
 	},
 	{
 		Key: KindKids, Label: "Kids", Help: "Children's series.",
-		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages,
+		QualityProfiles: []string{"HD 720p/1080p", "WEB 1080p"}, Language: seriesLanguages, Rules: screen.KidsRules,
 	},
 }
 

@@ -208,6 +208,7 @@ func (Module) Descriptor() media.Descriptor {
 		MonitorOptions: monitorChoices,
 		WorkImage:      media.ImagePoster,
 		AddKinds:       []media.Choice{{Key: "movie", Label: "Movies"}},
+		Kinds:          libraryKinds,
 		// A held import folder is committed by hand, and a removed movie's files are left out by the scan.
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,

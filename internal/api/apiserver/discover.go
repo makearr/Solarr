@@ -22,6 +22,8 @@ type AddCandidateRow struct {
 	Year                                  int64
 	// LibraryID is the work or person already held for it, 0 when new.
 	LibraryID int64
+	// Suggestion is the library it belongs in by the libraries' rules; nil when none says.
+	Suggestion *LibrarySuggestion
 }
 
 // AddWorkRequest is one add a person asked for; Kind empty is the type's first.
@@ -105,6 +107,13 @@ func (s *Server) LookupWorks(w http.ResponseWriter, r *http.Request, params gen.
 		}
 		if candidate.LibraryID != 0 {
 			views[i].LibraryId = &candidate.LibraryID
+		}
+		// Only a library the caller may add to is suggested.
+		if suggestion := candidate.Suggestion; suggestion != nil {
+			if _, err := access.Category(suggestion.CategoryID, settings.PermissionRequest); err == nil {
+				view := suggestionView(*suggestion)
+				views[i].Suggestion = &view
+			}
 		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)

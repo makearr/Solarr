@@ -162,6 +162,8 @@ type Config struct {
 	WorkMover WorkMover
 	// LibraryMover moves or copies works to another library; nil answers 503.
 	LibraryMover LibraryMover
+	// LibrarySuggester checks libraries against their rules; nil answers 503 and no kind's rules.
+	LibrarySuggester LibrarySuggester
 	// Franchises are the groups a provider puts works in. Optional: without it every library lists none.
 	Franchises Franchises
 	// Crossovers are events across works and one broadcast listed twice. Optional: without it, 503.
@@ -310,6 +312,7 @@ type Server struct {
 	drainStarter            DrainStarter
 	workMover               WorkMover
 	libraryMover            LibraryMover
+	librarySuggester        LibrarySuggester
 	vanishedFiles           VanishedFiles
 	workMerger              WorkMerger
 	workNumbering           WorkNumbering
@@ -425,6 +428,7 @@ func New(config Config) (*Server, error) {
 		drainStarter:            config.DrainStarter,
 		workMover:               config.WorkMover,
 		libraryMover:            config.LibraryMover,
+		librarySuggester:        config.LibrarySuggester,
 		vanishedFiles:           config.VanishedFiles,
 		workMerger:              config.WorkMerger,
 		workNumbering:           config.WorkNumbering,
@@ -655,6 +659,9 @@ func New(config Config) (*Server, error) {
 			secured.Get("/discover/incomplete", server.routeListIncompleteDiscographies)
 			secured.Patch("/categories/{id}", server.routeUpdateCategory)
 			secured.Post("/categories/{id}/types", server.routeAddLibraryType)
+			secured.Get("/categories/{id}/rules", server.routeGetLibraryRules)
+			secured.Put("/categories/{id}/rules", server.routeSetLibraryRules)
+			secured.Get("/categories/{id}/check", server.routeCheckLibrary)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)

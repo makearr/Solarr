@@ -89,3 +89,24 @@ DELETE FROM work_classification WHERE work_id = ? AND kind = 'genre';
 SELECT DISTINCT t.name FROM tag_assignment a JOIN tag t ON t.id = a.tag_id
 WHERE a.subject_type = 'work' AND a.subject_id = ? AND t.taxonomy <> ''
 ORDER BY t.name;
+
+-- name: ListTagAncestorNames :many
+SELECT t.name FROM tag_closure c JOIN tag t ON t.id = c.ancestor_id WHERE c.descendant_id = ? ORDER BY c.depth;
+
+-- The facts a library's rules read of each of its works (plan 10-libraries L5).
+-- name: ListWorkTraitsInCategory :many
+SELECT w.id, w.canonical_title, w.media_type, CAST(COALESCE(w.original_language, '') AS TEXT) AS language,
+       CAST(COALESCE((SELECT MAX(f.value) FROM work_field f WHERE f.work_id = w.id AND f.field = 'original_country'), '') AS TEXT) AS country,
+       CAST(EXISTS (SELECT 1 FROM work_external_id x WHERE x.work_id = w.id AND x.provider = 'anilist') AS INTEGER) AS anilist,
+       CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = w.id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
+FROM work w
+WHERE w.id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?)
+ORDER BY w.sort_title, w.id;
+
+-- name: ListWorkGenreTreesInCategory :many
+SELECT DISTINCT a.subject_id AS work_id, t.name
+FROM tag_assignment a
+JOIN tag_closure c ON c.descendant_id = a.tag_id
+JOIN tag t ON t.id = c.ancestor_id
+WHERE a.subject_type = 'work' AND t.taxonomy <> ''
+  AND a.subject_id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?);

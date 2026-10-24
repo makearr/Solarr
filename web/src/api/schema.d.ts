@@ -3110,6 +3110,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The rules a library suggests itself by for a new work, its own or its kind's (plan 10-libraries L5). */
+        get: operations["getLibraryRules"];
+        /** State a library's own rules, or with rules null follow its kind's again. Administrator only. */
+        put: operations["setLibraryRules"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories/{id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The library's works whose rules point to another library, and the kinds of library that do not exist yet although some of its works would go there. */
+        get: operations["checkLibrary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/types": {
         parameters: {
             query?: never;
@@ -6129,6 +6168,54 @@ export interface components {
              * @description The work or person the library already holds for it.
              */
             library_id?: number;
+            suggestion?: components["schemas"]["LibrarySuggestion"];
+        };
+        /** @description The library a work belongs in by the libraries' rules (ADR-56), and why; absent when no rule says. Only libraries the caller may add to are suggested. */
+        LibrarySuggestion: {
+            /** Format: int64 */
+            category_id: number;
+            name: string;
+            /** @example Animation, original language ja */
+            reason: string;
+        };
+        LibraryRule: {
+            conditions: components["schemas"]["RuleCondition"][];
+        };
+        RuleCondition: {
+            /** @enum {string} */
+            field: "genre" | "language" | "country" | "anilist";
+            /** @description A genre (one below it matches too), an ISO language or country code; unused for anilist. */
+            value?: string;
+        };
+        LibraryRules: {
+            /** @description The rules in force; a work matching any of them is suggested this library. */
+            rules: components["schemas"]["LibraryRule"][];
+            /** @description The library states its own rules; false while it follows its kind's. */
+            own: boolean;
+            kind_rules: components["schemas"]["LibraryRule"][];
+        };
+        LibraryCheck: {
+            misplaced: components["schemas"]["MisplacedWork"][];
+            missing_kinds: components["schemas"]["MissingKind"][];
+        };
+        MisplacedWork: {
+            /** Format: int64 */
+            work_id: number;
+            title: string;
+            media_type: string;
+            /** Format: int64 */
+            from_category_id: number;
+            suggestion: components["schemas"]["LibrarySuggestion"];
+        };
+        MissingKind: {
+            media_type: string;
+            kind: string;
+            label: string;
+            /**
+             * Format: int64
+             * @description How many of this library's works such a library would hold.
+             */
+            works: number;
         };
         AddWorkRequest: {
             /** Format: int64 */
@@ -13299,6 +13386,86 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getLibraryRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The rules. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryRules"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    setLibraryRules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    rules: components["schemas"]["LibraryRule"][] | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The rules now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryRules"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    checkLibrary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The check. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryCheck"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
         };
     };
     addLibraryType: {

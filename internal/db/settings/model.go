@@ -104,6 +104,8 @@ type Category struct {
 	AllowUnrated bool
 	// LibraryID is the library this category is a further media type of, its first category; 0 for a first.
 	LibraryID int64
+	// Rules are the library's own rules for suggesting it; nil follows its kind's shipped rules.
+	Rules []LibraryRule
 	// MonitorReleaseTypes is which release types a monitored artist in this
 	// library brings in, overridable per artist by the subscription's own
 	// filters (2026-09-19).
@@ -334,3 +336,29 @@ func (c Category) AdmitsAge(age int64) bool {
 		return age <= *c.MaxAge
 	}
 }
+
+// LibraryRule says a work belongs in a library when every condition holds (plan 10-libraries L5).
+type LibraryRule struct {
+	Conditions []RuleCondition `json:"conditions" yaml:"conditions"`
+}
+
+// RuleCondition is one fact a rule asks of a work: a genre (or one below it), its original language or a country it
+// comes from (ISO codes), or that AniList knows it (Value unused).
+type RuleCondition struct {
+	Field RuleField `json:"field" yaml:"field"`
+	Value string    `json:"value,omitempty" yaml:"value,omitempty"`
+}
+
+// RuleField names what a condition reads.
+type RuleField string
+
+// The facts a rule may ask.
+const (
+	RuleGenre    RuleField = "genre"
+	RuleLanguage RuleField = "language"
+	RuleCountry  RuleField = "country"
+	RuleAniList  RuleField = "anilist"
+)
+
+// RuleFields are every field a condition may name.
+var RuleFields = []RuleField{RuleGenre, RuleLanguage, RuleCountry, RuleAniList}

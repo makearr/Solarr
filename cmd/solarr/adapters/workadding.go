@@ -18,6 +18,8 @@ type WorkAdding struct {
 	AddKinds func(mediaType string) []media.Choice
 	// AfterAdd runs once something was added, so the library's counts follow at once; nil does nothing.
 	AfterAdd func(ctx context.Context)
+	// Suggest names the library a candidate belongs in by the libraries' rules; nil suggests none.
+	Suggest func(ctx context.Context, mediaType string, traits media.Traits) (apiserver.LibrarySuggestion, bool, error)
 }
 
 // adder resolves a library's type's add and the kind asked for, the type's first when none is.
@@ -50,12 +52,23 @@ func (a WorkAdding) Lookup(ctx context.Context, categoryID int64, kind, query st
 	if err != nil {
 		return nil, notWired(err)
 	}
+	mediaType, _ := a.Categories.MediaTypeOf(categoryID)
 	rows := make([]apiserver.AddCandidateRow, len(found))
 	for i, candidate := range found {
 		rows[i] = apiserver.AddCandidateRow{
 			Kind: candidate.Kind, Provider: candidate.Provider, ExternalID: candidate.ExternalID, Title: candidate.Title,
 			Subtitle: candidate.Subtitle, Overview: candidate.Overview, PosterURL: candidate.PosterURL, Status: candidate.Status,
 			Year: candidate.Year, LibraryID: candidate.LibraryID,
+		}
+		if a.Suggest == nil {
+			continue
+		}
+		suggestion, found, err := a.Suggest(ctx, mediaType, candidate.Traits)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			rows[i].Suggestion = &suggestion
 		}
 	}
 	return rows, nil

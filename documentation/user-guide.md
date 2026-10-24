@@ -102,6 +102,12 @@ priority, maximum rating and who may see it are the library's. The library is on
 every kind with a Series/Movies chip, each kind's own pages follow (Cast · Movies where a name repeats), Add switches
 between the kinds, and Wanted, Insights, Files and Settings have a tab per kind.
 
+**Which library?** Adding from the dashboard picks the library the libraries' rules suggest (an anime goes to Anime:
+"Animation, original language ja"), always shown with its reason and changeable; a library's own Add says when another
+fits better. A library's kind brings its rules (Anime, Documentary, Kids, Reality); its settings' **Suggested for**
+tab (advanced) changes them. **Files → Belongs elsewhere** lists what a library holds that belongs in another, to move
+there, and says when a kind of library is missing ("No Documentary library: 4 here would go there").
+
 With an empty search box, Discover lists **artists you have albums of, but not all**, from your own
 library compared with each artist's discography (live albums and compilations left out): the most
 missing first, with one click to follow the artist and add the rest. It fills in after the weekly

@@ -39,6 +39,7 @@ func (c SeriesCatalog) LookupWorks(ctx context.Context, lookup media.AddLookup) 
 		candidate := media.AddCandidate{
 			Kind: "series", Provider: tv.ProviderTVDB, ExternalID: strconv.FormatInt(series.TVDBID, 10), Title: series.Title,
 			Subtitle: series.Network, Overview: series.Overview, PosterURL: series.Poster, Status: string(series.Status), Year: int64(series.Year),
+			Traits: series.Traits,
 		}
 		if series.TVDBID == 0 {
 			candidate.Provider, candidate.ExternalID = tv.ProviderTMDB, strconv.FormatInt(series.TMDBID, 10)

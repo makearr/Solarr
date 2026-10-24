@@ -769,6 +769,7 @@ type Querier interface {
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
 	ListSubscriptionsForSubject(ctx context.Context, arg ListSubscriptionsForSubjectParams) ([]Subscription, error)
 	ListTagAliases(ctx context.Context) ([]TagAlias, error)
+	ListTagAncestorNames(ctx context.Context, descendantID int64) ([]string, error)
 	ListTagChildren(ctx context.Context, parentID sql.NullInt64) ([]int64, error)
 	ListTagNamesForSubjectBySource(ctx context.Context, arg ListTagNamesForSubjectBySourceParams) ([]ListTagNamesForSubjectBySourceRow, error)
 	ListTagTree(ctx context.Context, taxonomy interface{}) ([]ListTagTreeRow, error)
@@ -832,6 +833,7 @@ type Querier interface {
 	ListWorkFilePaths(ctx context.Context, workID int64) ([]ListWorkFilePathsRow, error)
 	// Every file of one work, for deleting an album's files along with it.
 	ListWorkFiles(ctx context.Context, workID int64) ([]int64, error)
+	ListWorkGenreTreesInCategory(ctx context.Context, categoryID int64) ([]ListWorkGenreTreesInCategoryRow, error)
 	// The works a file counts towards.
 	ListWorkIDsOfObject(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Every work of a media type with its name, for finding which belong together.
@@ -852,6 +854,8 @@ type Querier interface {
 	ListWorkReleaseFilters(ctx context.Context, workID int64) ([]WorkReleaseFilter, error)
 	ListWorkReleaseMBIDs(ctx context.Context, workID int64) ([]string, error)
 	ListWorkTitles(ctx context.Context, workID int64) ([]WorkTitle, error)
+	// The facts a library's rules read of each of its works (plan 10-libraries L5).
+	ListWorkTraitsInCategory(ctx context.Context, categoryID int64) ([]ListWorkTraitsInCategoryRow, error)
 	// Cover art attaches to the work (subject_type='work'), but Cover Art Archive is
 	// queried by release (edition) MBID -- any refined (kind != 'unknown') edition
 	// with one is a usable source. is_default is never set to 1 anywhere in this

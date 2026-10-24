@@ -24,6 +24,8 @@ import { Import } from "./Import";
 import { LibraryFileManagement } from "./LibraryFileManagement";
 import { LibraryMetadata } from "./LibraryMetadata";
 import { ImportLists } from "./ImportLists";
+import { LibraryCheck } from "./LibraryCheck";
+import { LibraryRules } from "./LibraryRules";
 import { CacheSettingsPage } from "./CacheSettings";
 import { LibraryNaming } from "./LibraryNaming";
 import { UnknownConfigSection } from "./UnknownConfigSection";
@@ -153,6 +155,8 @@ const routes = [
     path: "/library/$categoryId/config/naming",
     component: LibraryNaming,
   }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/config/rules", component: LibraryRules }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/library/$categoryId/check", component: LibraryCheck }),
   createRoute({
     getParentRoute: () => rootRoute,
     path: "/library/$categoryId/config/metadata",

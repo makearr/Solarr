@@ -302,6 +302,47 @@ func syncLibraryMembers(ctx context.Context, queries *settingsdb.Queries, snapsh
 	return nil
 }
 
+// SetCategoryRules stores a library's own rules for suggesting it, or with nil returns it to its kind's shipped rules.
+func (c *Cache) SetCategoryRules(ctx context.Context, id int64, rules []LibraryRule) (Category, error) {
+	if _, found := c.Snapshot().Category(id); !found {
+		return Category{}, fmt.Errorf("%w: category %d", ErrNotFound, id)
+	}
+	var problems config.Problems
+	for i, rule := range rules {
+		if len(rule.Conditions) == 0 {
+			problems = append(problems, config.Problem{Path: fmt.Sprintf("rules[%d]", i), Expectation: "at least one condition"})
+		}
+		for j, condition := range rule.Conditions {
+			path := fmt.Sprintf("rules[%d].conditions[%d]", i, j)
+			switch {
+			case !slices.Contains(RuleFields, condition.Field):
+				problems = append(problems, config.Problem{Path: path + ".field", Value: string(condition.Field), Expectation: "genre, language, country or anilist"})
+			case condition.Field != RuleAniList && strings.TrimSpace(condition.Value) == "":
+				problems = append(problems, config.Problem{Path: path + ".value", Expectation: "a value"})
+			}
+		}
+	}
+	if len(problems) > 0 {
+		return Category{}, problems
+	}
+	stored := sql.NullString{}
+	if rules != nil {
+		encoded, err := json.Marshal(rules)
+		if err != nil {
+			return Category{}, fmt.Errorf("settings: encode rules: %w", err)
+		}
+		stored = sql.NullString{String: string(encoded), Valid: true}
+	}
+	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		return queries.SetCategoryRules(ctx, settingsdb.SetCategoryRulesParams{RulesJson: stored, ID: id})
+	})
+	if err != nil {
+		return Category{}, err
+	}
+	updated, _ := c.Snapshot().Category(id)
+	return updated, nil
+}
+
 // SetCategoryRatingLimit sets a library's maximum rating as an age (nil for none) and whether unrated works may be in it.
 func (c *Cache) SetCategoryRatingLimit(ctx context.Context, id int64, maxAge *int64, allowUnrated bool) (Category, error) {
 	if _, found := c.Snapshot().Category(id); !found {

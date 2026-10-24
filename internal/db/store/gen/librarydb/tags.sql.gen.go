@@ -239,6 +239,33 @@ func (q *Queries) ListTagAliases(ctx context.Context) ([]TagAlias, error) {
 	return items, nil
 }
 
+const listTagAncestorNames = `-- name: ListTagAncestorNames :many
+SELECT t.name FROM tag_closure c JOIN tag t ON t.id = c.ancestor_id WHERE c.descendant_id = ? ORDER BY c.depth
+`
+
+func (q *Queries) ListTagAncestorNames(ctx context.Context, descendantID int64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listTagAncestorNames, descendantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		items = append(items, name)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTagChildren = `-- name: ListTagChildren :many
 SELECT id FROM tag WHERE parent_id = ? ORDER BY id
 `
@@ -374,6 +401,95 @@ func (q *Queries) ListTagsOfTaxonomy(ctx context.Context, taxonomy string) ([]Ta
 			&i.Description,
 			&i.Source,
 			&i.Taxonomy,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkGenreTreesInCategory = `-- name: ListWorkGenreTreesInCategory :many
+SELECT DISTINCT a.subject_id AS work_id, t.name
+FROM tag_assignment a
+JOIN tag_closure c ON c.descendant_id = a.tag_id
+JOIN tag t ON t.id = c.ancestor_id
+WHERE a.subject_type = 'work' AND t.taxonomy <> ''
+  AND a.subject_id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?)
+`
+
+type ListWorkGenreTreesInCategoryRow struct {
+	WorkID int64
+	Name   string
+}
+
+func (q *Queries) ListWorkGenreTreesInCategory(ctx context.Context, categoryID int64) ([]ListWorkGenreTreesInCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkGenreTreesInCategory, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkGenreTreesInCategoryRow{}
+	for rows.Next() {
+		var i ListWorkGenreTreesInCategoryRow
+		if err := rows.Scan(&i.WorkID, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkTraitsInCategory = `-- name: ListWorkTraitsInCategory :many
+SELECT w.id, w.canonical_title, w.media_type, CAST(COALESCE(w.original_language, '') AS TEXT) AS language,
+       CAST(COALESCE((SELECT MAX(f.value) FROM work_field f WHERE f.work_id = w.id AND f.field = 'original_country'), '') AS TEXT) AS country,
+       CAST(EXISTS (SELECT 1 FROM work_external_id x WHERE x.work_id = w.id AND x.provider = 'anilist') AS INTEGER) AS anilist,
+       CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = w.id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
+FROM work w
+WHERE w.id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?)
+ORDER BY w.sort_title, w.id
+`
+
+type ListWorkTraitsInCategoryRow struct {
+	ID             int64
+	CanonicalTitle string
+	MediaType      string
+	Language       string
+	Country        string
+	Anilist        int64
+	RatingAge      int64
+}
+
+// The facts a library's rules read of each of its works (plan 10-libraries L5).
+func (q *Queries) ListWorkTraitsInCategory(ctx context.Context, categoryID int64) ([]ListWorkTraitsInCategoryRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkTraitsInCategory, categoryID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkTraitsInCategoryRow{}
+	for rows.Next() {
+		var i ListWorkTraitsInCategoryRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CanonicalTitle,
+			&i.MediaType,
+			&i.Language,
+			&i.Country,
+			&i.Anilist,
+			&i.RatingAge,
 		); err != nil {
 			return nil, err
 		}
