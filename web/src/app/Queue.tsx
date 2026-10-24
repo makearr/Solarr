@@ -41,12 +41,16 @@ export function Queue() {
 }
 
 /** The queue, or one work's part of it. */
-export function useQueue(workId?: number) {
-  return useQuery({
+/** The queue's query, for a caller polling on its own interval. */
+export function queueQuery(workId?: number) {
+  return {
     queryKey: ["queue", workId],
     queryFn: () => ok(api.GET("/queue", { params: { query: { work_id: workId } } })),
-    refetchInterval: REFRESH_MS,
-  });
+  };
+}
+
+export function useQueue(workId?: number) {
+  return useQuery({ ...queueQuery(workId), refetchInterval: REFRESH_MS });
 }
 
 function ClientList({ clients, items }: { clients: readonly QueueClient[]; items: readonly QueueItem[] }) {

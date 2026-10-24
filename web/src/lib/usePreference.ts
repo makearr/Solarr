@@ -10,7 +10,7 @@ const KEY = ["me", "preferences"] as const;
  *  the server per user, not in localStorage, because the same person on a
  *  second machine asked for the same list they left (2026-09-19). Falls back
  *  to `fallback` while loading and whenever nothing is stored. */
-export function usePreference<T>(key: string, fallback: T): [T, (value: T) => void] {
+export function usePreference<T>(key: string, fallback: T): [T, (value: T) => void, boolean] {
   const queryClient = useQueryClient();
   const stored = useQuery({
     queryKey: KEY,
@@ -18,6 +18,8 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
   });
 
   const save = useMutation({
+    // One key's writes go out in order, so an earlier one cannot land last and win.
+    scope: { id: `preference.${key}` },
     mutationFn: async (value: T) => {
       await ok(api.PUT("/me/preferences/{key}", {
         params: { path: { key } },
@@ -55,5 +57,5 @@ export function usePreference<T>(key: string, fallback: T): [T, (value: T) => vo
     [key, queryClient, save, raw],
   );
 
-  return [justSet && justSet.over === raw ? justSet.value : value, set];
+  return [justSet && justSet.over === raw ? justSet.value : value, set, stored.isSuccess];
 }

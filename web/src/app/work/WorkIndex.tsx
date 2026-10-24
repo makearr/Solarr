@@ -119,7 +119,8 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
   const mediaTypes = useMediaTypes();
   // A mixed library's All list (L4): every type's works, its type chip narrowing to one, each work in its own type.
   const types = wholeLibrary && library ? [library, ...(library.members ?? [])] : [];
-  const baseFilters = useRouteView(FILTER_KEYS).query.filters;
+  const baseView = useRouteView(FILTER_KEYS);
+  const baseFilters = baseView.query.filters;
   const chosenType = wholeLibrary ? (baseFilters.type ?? "") : "";
   const info = mediaTypes.find((entry) => entry.key === (wholeLibrary ? chosenType : library?.media_type));
   const infoOf = (mediaType: string) => mediaTypes.find((entry) => entry.key === mediaType);
@@ -129,7 +130,6 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
   const lead = info?.roles.find((role) => role.lead);
   const portrait = info?.work_image === "poster";
 
-  const baseView = useRouteView(FILTER_KEYS);
   const routeView = useMemo<ViewState>(
     () => ({
       query: { ...baseView.query, filters: { ...baseView.query.filters, category_id: categoryId, ...(wholeLibrary ? { whole_library: "1" } : {}) } },

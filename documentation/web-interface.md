@@ -63,6 +63,17 @@ without a total (a first scan, the cover sweep) the count is shown alone. Only j
 `Definition.Name` appear, so a one-second housekeeping job does not flicker in the bar; a
 library's job is shown only to those who can see that library.
 
+Each item (events, work running, download queue, public IP, server time, version) is switched on and placed by the
+user in Settings -> Web UI (`ui.footer_items`, `src/lib/interfacePreferences.ts`); IP and time start off so a
+screenshot shows neither. The gap opens after the last shown events or work item. The queue item polls `/queue`
+every 15 s, and only while shown, since that asks the download clients.
+
+## Remembered list views
+
+A list's filters and sort are stored per user and list route (`list.view.<route with dots>`, `useRouteView`); a list
+reached with a bare URL, from the sidebar or a typed address, gets its last view back, as the *Arrs do. A URL that
+carries a view wins and becomes the remembered one. The title search is not kept.
+
 ## The navigation tree (ADR-54)
 
 **One sidebar entry per section, its pages as tabs** (2026-10-04; the sidebar listed every page before). After
