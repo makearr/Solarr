@@ -41,6 +41,7 @@ config.local.yml
 # Local-only working documents — never published
 /private/
 /CLAUDE.md
+/AGENTS.md
 /*.local.md
 
 

@@ -1,9 +1,12 @@
-# Benchmarks the TV metadata providers (latency, parallel throughput); needs private/secrets.md and a sample list at /tmp/claude-1000/sample_series.json of [title, tvdb id, tmdb id, tvmaze id].
-import json,re,time,statistics,sys,urllib.request,urllib.error,concurrent.futures as cf
-sec=open("/home/avs/Private/Hobby/HomeLab/programs/Solarr/private/secrets.md").read()
+# Benchmarks the TV metadata providers (latency, parallel throughput); pass a JSON sample list of [title, tvdb id, tmdb id, tvmaze id].
+import json,re,time,statistics,sys,math,urllib.request,urllib.error,concurrent.futures as cf
+from pathlib import Path
+if len(sys.argv) != 2:
+    raise SystemExit(f"usage: {Path(sys.argv[0]).name} <sample-series.json>")
+sec=(Path(__file__).resolve().parents[1]/"private/secrets.md").read_text()
 TMDB=re.search(r"TMDB read access token \(v4, bearer\) \| `([^`]+)`",sec).group(1)
 TVDBKEY=re.search(r"TVDB v4 \(new public project key\) \| `([^`]+)`",sec).group(1)
-rows=json.load(open("/tmp/claude-1000/sample_series.json"))
+rows=json.loads(Path(sys.argv[1]).read_text())
 UA={"User-Agent":"Solarr-bench/1.0"}
 def get(url,headers=None,data=None,method=None,timeout=40):
     req=urllib.request.Request(url,headers={**UA,**(headers or {})},data=data,method=method)
@@ -42,7 +45,11 @@ for name in providers:
         if res[1]!=200: bad+=1
         else: bodies[(name,r[1])]=res[2]
     lat.sort()
-    print(f"{name:8s} n={len(lat)} median={statistics.median(lat):.2f}s p90={lat[int(len(lat)*0.9)-1]:.2f}s max={lat[-1]:.2f}s errors={bad}")
+    if lat:
+        p90=lat[math.ceil(len(lat)*0.9)-1]
+        print(f"{name:8s} n={len(lat)} median={statistics.median(lat):.2f}s p90={p90:.2f}s max={lat[-1]:.2f}s errors={bad}")
+    else:
+        print(f"{name:8s} n=0 median=n/a p90=n/a max=n/a errors={bad}")
 print("== parallel throughput (40 requests)")
 for name in providers:
     for conc in (1,4,8,16):

@@ -11,7 +11,7 @@ die() { echo "release: $*" >&2; exit 1; }
 
 token() {
   if [ -n "${GITHUB_TOKEN:-}" ]; then printf '%s' "$GITHUB_TOKEN"; return; fi
-  grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1 ||
+  grep -oP '(ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)' private/secrets.md 2>/dev/null | sed -n '1p' ||
     die "no token: set GITHUB_TOKEN or add it to private/secrets.md"
 }
 
@@ -64,7 +64,7 @@ body=$(printf '%s\n\n---\n\nImage: `ghcr.io/makearr/solarr:%s`\nPlatforms: linux
 code=$(python3 - "$tag" "$title" "$body" <<'PY'
 import json, os, sys, urllib.request, re
 tag, title, body = sys.argv[1], sys.argv[2], sys.argv[3]
-tok = re.search(r'ghp_[A-Za-z0-9]+', open('private/secrets.md').read()).group(0) \
+tok = re.search(r'(?:ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)', open('private/secrets.md').read()).group(0) \
       if not os.environ.get('GITHUB_TOKEN') else os.environ['GITHUB_TOKEN']
 payload = json.dumps({"tag_name": tag, "name": title, "body": body,
                       "draft": False, "prerelease": False}).encode()

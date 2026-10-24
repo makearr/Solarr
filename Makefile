@@ -84,7 +84,7 @@ HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
 # The default "docker" driver cannot export a manifest list, so a multi-arch build needs a
 # container-driver builder.
 BUILDER     ?= solarr
-TOKEN       ?= $(shell grep -oP 'ghp_[A-Za-z0-9]+' private/secrets.md 2>/dev/null | head -1)
+TOKEN       ?= $(shell grep -oP '(ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)' private/secrets.md 2>/dev/null | head -1)
 
 help:  ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
