@@ -57,6 +57,8 @@ export function Tags() {
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["tags"] });
+    // The tag dropdown counts a library's tags under a key of its own.
+    void queryClient.invalidateQueries({ queryKey: ["library-tags"] });
     void queryClient.invalidateQueries({ queryKey: ["works"] });
   };
   const failure = (status: number) => new Error(status === 409 ? "conflict" : "failed");

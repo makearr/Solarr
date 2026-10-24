@@ -44,7 +44,10 @@ export function CrossoverIndex() {
     mutationFn: async (suggestion: Suggestion) => {
       await ok(api.POST("/parts/{id}/same-content", { params: { path: { id: suggestion.part_id } }, body: { part_id: suggestion.other_part_id } }));
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["crossovers", categoryId] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["crossovers", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["work-crossovers"] });
+    },
   });
   if (list.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>;
   if (!list.data) return <p className="p-6 text-sm text-danger">{t("crossover.failed")}</p>;
@@ -352,9 +355,18 @@ export function CrossoverDialog({ part, categoryId, onClose }: { part: { id: num
         </section>
         <section className="flex flex-col gap-2">
           <h3 className="font-medium">{t("crossover.sameAs")}</h3>
-          <input className={inputStyle} value={query} placeholder={t("crossover.findSeries")} aria-label={t("crossover.findSeries")} onChange={(changeEvent) => setQuery(changeEvent.target.value)} />
+          <input className={inputStyle} value={query} placeholder={t("crossover.findSeries")} aria-label={t("crossover.findSeries")} onChange={(changeEvent) => {
+            // Another search lists other series: what was chosen from the last one no longer stands.
+            setQuery(changeEvent.target.value);
+            setSeriesId(undefined);
+            setOtherPart(undefined);
+          }} />
           {series.data && (
-            <select className={inputStyle} value={seriesId ?? ""} aria-label={t("crossover.series")} onChange={(changeEvent) => setSeriesId(Number(changeEvent.target.value) || undefined)}>
+            <select className={inputStyle} value={seriesId ?? ""} aria-label={t("crossover.series")} onChange={(changeEvent) => {
+              setSeriesId(Number(changeEvent.target.value) || undefined);
+              // The episode was the old series'; kept, the link would join it while nothing shows chosen.
+              setOtherPart(undefined);
+            }}>
               <option value="">{t("crossover.series")}</option>
               {series.data.items.map((work) => (
                 <option key={work.id} value={work.id}>

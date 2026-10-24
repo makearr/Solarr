@@ -18,9 +18,12 @@ export const api = createClient<paths>({
 });
 
 /** ok answers a call's data or throws its problem: what every query and mutation wants of a response. */
-export async function ok<T>(call: Promise<{ data?: T; error?: unknown }>): Promise<T> {
-  const { data, error } = await call;
-  if (error) throw error;
+export async function ok<T>(call: Promise<{ data?: T; error?: unknown; response?: Response }>): Promise<T> {
+  const { data, error, response } = await call;
+  // The status decides, not the body: a proxy's empty 502 parses to an error of "", which is falsy.
+  if (error !== undefined || (response !== undefined && !response.ok)) {
+    throw error || { status: response?.status, title: response?.statusText || "The request failed" };
+  }
   return data as T;
 }
 
@@ -34,11 +37,27 @@ let transportKey: Promise<Uint8Array | null> | undefined;
 function serverTransportKey(): Promise<Uint8Array | null> {
   transportKey ??= fetch(`${API_PREFIX}/auth/transport-key`, { credentials: "same-origin" })
     .then(async (response) => (response.ok ? fromBase64(((await response.json()) as { public_key: string }).public_key) : null))
-    .catch(() => null);
+    .catch(() => null)
+    .then((key) => {
+      // A failure is not kept: one blip (a restart) would otherwise send every later secret of this tab unsealed.
+      if (key === null) transportKey = undefined;
+      return key;
+    });
   return transportKey;
 }
 
-const SECRET_FIELD = /"(password|api_key|credentials|[a-z]+_api_key)"\s*:\s*"[^"]/;
+const SECRET_FIELD = /"(password|api_key|credentials|[a-z]+_api_key)"\s*:\s*"(?:[^"\\]|\\.)*"/;
+
+// A failure with no body (a proxy's 502 while the server restarts) parses to an error of "", which every `if (error)`
+// reads as success: it is given a problem body here, once, for every call.
+api.use({
+  async onResponse({ response }) {
+    if (response.ok || (await response.clone().text()) !== "") return undefined;
+    return new Response(JSON.stringify({ status: response.status, title: response.statusText || "The request failed" }), {
+      status: response.status, statusText: response.statusText, headers: { "Content-Type": "application/problem+json" },
+    });
+  },
+});
 
 // Passwords and API keys are sealed for the server before they leave the browser (internal/api/auth/transport.go).
 api.use({

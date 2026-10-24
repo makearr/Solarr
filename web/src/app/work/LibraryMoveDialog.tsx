@@ -3,7 +3,7 @@ import { useState } from "react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
-import { useLibraries } from "@/lib/resources";
+import { invalidateWorkLists, useLibraries } from "@/lib/resources";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 
@@ -40,9 +40,8 @@ export function LibraryMoveDialog({
     },
     onSuccess: (_, preview) => {
       if (preview) return;
-      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      invalidateWorkLists(queryClient);
       void queryClient.invalidateQueries({ queryKey: ["work"] });
-      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
       void queryClient.invalidateQueries({ queryKey: ["move-jobs"] });
       onDone();
     },

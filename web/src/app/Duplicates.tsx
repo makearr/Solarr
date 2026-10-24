@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { type Vocabulary, vocabularyOf } from "@/lib/i18n";
+import { invalidateWorkLists } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
@@ -273,6 +274,8 @@ export function Duplicates() {
   const report = useQuery({
     queryKey: ["duplicates", categoryId],
     enabled: categoryId !== undefined,
+    // Read afresh on every visit: a resolved group stays on screen as "Done", so the cached report still offers it.
+    refetchOnMount: "always",
     queryFn: () => ok(api.GET("/categories/{id}/duplicates", { params: { path: { id: Number(categoryId) } } })),
   });
   const data = report.data;
@@ -309,7 +312,11 @@ export function Duplicates() {
                 group={group}
                 categoryId={Number(categoryId)}
                 words={words}
-                onDone={() => void queryClient.invalidateQueries({ queryKey: ["links", Number(categoryId)] })}
+                onDone={() => {
+                  void queryClient.invalidateQueries({ queryKey: ["links", Number(categoryId)] });
+                  // A recycled copy can leave a part missing.
+                  invalidateWorkLists(queryClient);
+                }}
               />
             )}
           />

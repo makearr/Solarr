@@ -70,16 +70,17 @@ export function PartWanted({ info }: { info: MediaTypeInfo | undefined }) {
   };
 
   const sentinel = useRef<HTMLDivElement>(null);
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = pages;
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = pages;
   useEffect(() => {
     const element = sentinel.current;
-    if (!element || !hasNextPage) return;
+    // A failed page is not asked again from here: a visible sentinel would loop on it.
+    if (!element || !hasNextPage || isFetchNextPageError) return;
     const observer = new IntersectionObserver((entries) => {
       if (entries[0]?.isIntersecting && !isFetchingNextPage) void fetchNextPage();
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, rows.length]);
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, rows.length]);
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-3 p-4">

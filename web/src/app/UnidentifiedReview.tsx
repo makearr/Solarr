@@ -6,7 +6,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { vocabularyOf } from "@/lib/i18n";
 import { attemptLabel, outcomeLabel, passLabel } from "@/lib/identificationEvidence";
-import { useLibraries, useRootFolders } from "@/lib/resources";
+import { invalidateWorkLists, useLibraries, useRootFolders } from "@/lib/resources";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 
 import { IdentificationCandidates, type IdentificationCandidateView } from "./IdentificationCandidates";
@@ -57,6 +57,7 @@ export function UnidentifiedReview() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+      invalidateWorkLists(queryClient);
       void navigate({ to: "/unidentified" });
     },
   });
@@ -69,6 +70,7 @@ export function UnidentifiedReview() {
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+      invalidateWorkLists(queryClient);
       void navigate({ to: "/unidentified" });
     },
   });

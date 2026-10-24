@@ -8,7 +8,7 @@ import type { components } from "@/api/schema";
 import { albumStatusLabel, albumStatusText } from "@/lib/albumStatus";
 import { mediaTypeIcon, mediaTypeName } from "@/lib/mediaTypeIcon";
 import { remoteImage } from "@/lib/remoteImage";
-import { useLibraries } from "@/lib/resources";
+import { invalidatePeopleLists, invalidateWorkLists, useLibraries } from "@/lib/resources";
 import { discCountOf, formatTrackNumber } from "@/lib/trackNumber";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
@@ -105,7 +105,7 @@ export function PersonPage() {
       await ok(api.POST("/people/{id}/remove", { params: { path: { id } } }));
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["people"] });
+      invalidatePeopleLists(queryClient);
       void navigate({ to: "/people" });
     },
   });
@@ -265,7 +265,11 @@ function usePersonAction(id: number, path: "/people/{id}/search" | "/people/{id}
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => ok(api.POST(path, { params: { path: { id } } })),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["person", id] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["person", id] });
+      // Monitor-all changes the person's albums too.
+      invalidateWorkLists(queryClient);
+    },
   });
 }
 

@@ -45,13 +45,13 @@ beforeEach(() => {
 
 /** Renders the hook inside a real router, and hands back both the latest hook
  *  result and the router driving it. */
-function mount(options: { search?: string; topics?: readonly string[] } = {}) {
+function mount(options: { search?: string; topics?: readonly string[]; fetchPage?: (args: { cursor?: string }) => Promise<Page<Row>> } = {}) {
   const seen: {
     list?: ReturnType<typeof useLibraryList<Row>>;
     setRowHeight?: (height: number) => void;
   } = {};
   const fetchPage = vi.fn(
-    async (): Promise<Page<Row>> => ({ items: [{ id: 1 }], next_cursor: undefined }),
+    options.fetchPage ?? (async (): Promise<Page<Row>> => ({ items: [{ id: 1 }], next_cursor: undefined })),
   );
 
   function Screen() {
@@ -150,6 +150,36 @@ describe("the list's view state", () => {
       seen.list?.filterBy("state", "failed");
     });
     await waitFor(() => expect(seen.list?.selectionIsEmpty).toBe(true));
+  });
+});
+
+describe("the selection and paging", () => {
+  // Back, forward or a link changes the view without the hook's own setQuery.
+  test("a view the URL changes clears the selection", async () => {
+    const { seen, goTo } = mount();
+    await waitFor(() => expect(seen.list?.items.length).toBe(1));
+    await act(async () => seen.list?.toggle(1));
+    await waitFor(() => expect(seen.list?.selectionIsEmpty).toBe(false));
+
+    await act(async () => {
+      await goTo({ state: "failed" });
+    });
+
+    await waitFor(() => expect(seen.list?.selectionIsEmpty).toBe(true));
+  });
+
+  // Each failure re-renders the list; asking again from the effect would never stop.
+  test("a page that failed is not asked for again and again", async () => {
+    const { fetchPage } = mount({
+      fetchPage: async ({ cursor }) => {
+        if (cursor) throw new Error("the server is restarting");
+        return { items: [{ id: 1 }], next_cursor: "page-2" };
+      },
+    });
+    await waitFor(() => expect(fetchPage).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+
+    expect(fetchPage).toHaveBeenCalledTimes(2);
   });
 });
 

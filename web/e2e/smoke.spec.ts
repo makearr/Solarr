@@ -142,9 +142,10 @@ test("a scan fills the artist wall with photos and the album wall with covers", 
   await signIn(page);
 
   await page.goto("/storage/roots");
-  await page.getByLabel("Path").fill(MOUNTED_MUSIC);
-  // Named explicitly: the form's default is the first library listed, which is not always Music.
+  // The page holds the download folders' form too, with a Path of its own.
   const form = page.locator("form").filter({ has: page.getByRole("button", { name: /add root folder/i }) });
+  await form.getByLabel("Path").fill(MOUNTED_MUSIC);
+  // Named explicitly: the form's default is the first library listed, which is not always Music.
   await form.getByRole("combobox").selectOption({ label: "Music (Music)" });
   await form.getByRole("button", { name: /add root folder/i }).click();
   await expect(page.getByText(MOUNTED_MUSIC).first()).toBeVisible();
@@ -219,7 +220,8 @@ test("a target quality can be made under quality profiles, and language profiles
 test("a custom filter can be built on the Albums level", async ({ page }) => {
   await signIn(page);
   await page.goto("/library/1/albums");
-  await page.getByRole("button", { name: "Filter" }).click();
+  // Exact: the tag dropdown beside it is "Filter by tags".
+  await page.getByRole("button", { name: "Filter", exact: true }).click();
   await page.getByRole("menuitem", { name: "Custom filter…" }).click();
   await page.getByLabel("Field", { exact: true }).selectOption("year");
   await page.getByLabel("Condition", { exact: true }).selectOption("gt");

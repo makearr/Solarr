@@ -8,6 +8,7 @@ import type { components } from "@/api/schema";
 import { HistoryKind, historySource, historyWhen } from "@/lib/downloadHistory";
 import { t, vocabularyOf, type Vocabulary } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
+import { invalidateWorkLists } from "@/lib/resources";
 import { useIsAdministrator } from "@/lib/useAdministrator";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { usePreference } from "@/lib/usePreference";
@@ -60,7 +61,8 @@ export function WorkPage() {
   if (detail.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>;
   if (!detail.data) return <p className="p-6 text-sm text-danger">{t("work.notFound", vocabularyOf(info))}</p>;
   const categoryId = params.categoryId ?? (detail.data.library_ids?.[0] !== undefined ? String(detail.data.library_ids[0]) : undefined);
-  return <WorkView work={detail.data} info={info} categoryId={categoryId} tab={tab} />;
+  // Keyed: going to another work whose detail is cached keeps this mounted, with the last work's search group and notes.
+  return <WorkView key={detail.data.id} work={detail.data} info={info} categoryId={categoryId} tab={tab} />;
 }
 
 function WorkView({ work, info, categoryId, tab }: { work: Work; info: MediaTypeInfo | undefined; categoryId: string | undefined; tab: TabKey }) {
@@ -112,7 +114,7 @@ function MergeSuggestion({ work, words, categoryId }: { work: Work; words: Vocab
     },
     onSuccess: (result, preview) => {
       if (preview || !result) return;
-      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      invalidateWorkLists(queryClient, result.keep_id);
       void navigate(
         categoryId
           ? { to: "/library/$categoryId/works/$workId/$tab", params: { categoryId, workId: String(result.keep_id), tab: "overview" } }
@@ -175,7 +177,7 @@ function WorkHeader({
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const administrator = useIsAdministrator();
-  const changed = () => void queryClient.invalidateQueries({ queryKey: ["work", work.id] });
+  const changed = () => invalidateWorkLists(queryClient, work.id);
   const groups = work.groups ?? [];
   const monitored = groups.some((group) => group.monitored);
   const [searchOnMonitor] = usePreference("discover.search_on_add", true);
@@ -220,7 +222,7 @@ function WorkHeader({
     mutationFn: () => ok(api.POST("/works/{id}/remove", { params: { path: { id: work.id } }, body: { delete_files: removal.deleteFiles, exclude: removal.exclude } })),
     onSuccess: (result) => {
       setRemoving(false);
-      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      invalidateWorkLists(queryClient, work.id);
       if (result?.work_deleted) void navigate(categoryId ? { to: "/library/$categoryId/overview", params: { categoryId } } : { to: "/" });
       else changed();
     },
@@ -503,7 +505,7 @@ function PeopleLine({ work, info, categoryId }: { work: Work; info: MediaTypeInf
 function OverviewTab({ work, info, words, categoryId }: { work: Work; info: MediaTypeInfo | undefined; words: Vocabulary; categoryId: string | undefined }) {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
-  const changed = () => void queryClient.invalidateQueries({ queryKey: ["work", work.id] });
+  const changed = () => invalidateWorkLists(queryClient, work.id);
   const [interactive, setInteractive] = useState<{ scope: SearchScope; title: string }>();
   const [notes, setNotes] = useState<Record<string, string>>({});
   const groups = [...(work.groups ?? [])].reverse();

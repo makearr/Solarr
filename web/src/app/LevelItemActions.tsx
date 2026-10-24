@@ -3,6 +3,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { invalidateWorkLists } from "@/lib/resources";
 
 import { grabNote } from "./work/grabNote";
 
@@ -42,7 +43,7 @@ export function useItemActions(level: string | undefined, id: number, monitored:
     mutationFn: async (next: boolean) => {
       await ok(api.POST("/works/{id}/monitor", { params: { path: { id } }, body: { monitored: next } }));
     },
-    onSuccess: () => void queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("library-level") }),
+    onSuccess: () => invalidateWorkLists(queryClient, id),
     onError: () => setNote("Monitoring could not be changed"),
   });
   return { album, id, refresh, search, monitor, monitored, note };

@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
-import { useQualityProfiles, useRootFolders } from "@/lib/resources";
+import { invalidateWorkLists, useQualityProfiles, useRootFolders } from "@/lib/resources";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { Pencil } from "lucide-react";
 
@@ -93,9 +93,11 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
     },
     onSuccess: (result) => {
       if (result === "confirm") return;
-      void queryClient.invalidateQueries({ queryKey: ["work", work.id] });
+      invalidateWorkLists(queryClient, work.id);
       void queryClient.invalidateQueries({ queryKey: ["work-edit", work.id] });
       void queryClient.invalidateQueries({ queryKey: ["tags"] });
+      // The tag dropdown counts a library's tags under a key of its own.
+      void queryClient.invalidateQueries({ queryKey: ["library-tags"] });
       onClose();
     },
   });

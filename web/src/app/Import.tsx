@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
@@ -7,7 +7,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { factsOf } from "@/lib/identificationEvidence";
 import { useLibraryLabel } from "@/lib/libraryLabel";
-import { useCategories, useImportSettings } from "@/lib/resources";
+import { invalidateWorkLists, useCategories, useImportSettings } from "@/lib/resources";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Dialog } from "@/ui/Dialog";
@@ -42,6 +42,9 @@ interface ImportProgress {
 function useImportProgressStream(
   onSessionUpdated: (sessionId: number, progress: ImportProgress) => void,
 ) {
+  const callback = useRef(onSessionUpdated);
+  callback.current = onSessionUpdated;
+
   useEffect(() => {
     const source = new EventSource("/api/v1/events?topics=job");
     source.addEventListener("update", (message) => {
@@ -53,14 +56,12 @@ function useImportProgressStream(
       }
       for (const event of batch.events) {
         if (!event.entity.startsWith("import_session:") || !event.data) continue;
-        onSessionUpdated(event.data.session_id, event.data);
+        callback.current(event.data.session_id, event.data);
       }
     });
     return () => source.close();
-    // onSessionUpdated is a fresh closure every render by design (it closes
-    // over selectedSessionId); re-subscribing on every change would thrash
-    // the connection, so it is intentionally excluded and read fresh via a ref.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Re-subscribing for every selection change would thrash the connection;
+    // the latest callback is read through callback instead.
   }, []);
 }
 
@@ -735,6 +736,9 @@ function SessionRow({
     onSuccess: () => {
       invalidate();
       void queryClient.invalidateQueries({ queryKey: ["import-units", session.id] });
+      // Placed or taken back: the library's lists and counts move with it.
+      invalidateWorkLists(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
     },
   });
 
@@ -753,6 +757,9 @@ function SessionRow({
     onSuccess: () => {
       invalidate();
       void queryClient.invalidateQueries({ queryKey: ["import-units", session.id] });
+      // Placed or taken back: the library's lists and counts move with it.
+      invalidateWorkLists(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
     },
   });
 
@@ -951,6 +958,8 @@ function UnitList({ sessionId }: { sessionId: number }) {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: ["import-units", sessionId] });
       void queryClient.invalidateQueries({ queryKey: ["import-sessions"] });
+      invalidateWorkLists(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
     },
   });
 

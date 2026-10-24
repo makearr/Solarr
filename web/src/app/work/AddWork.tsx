@@ -7,7 +7,7 @@ import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { t, vocabularyOf } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
-import { useLibraries, useQualityProfiles } from "@/lib/resources";
+import { invalidatePeopleLists, invalidateWorkLists, useLibraries, useQualityProfiles } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
@@ -253,9 +253,8 @@ function AddPanel({
       return data;
     },
     onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ["works"] });
-      void queryClient.invalidateQueries({ queryKey: ["libraries"] });
-      void queryClient.invalidateQueries({ queryKey: ["people"] });
+      invalidateWorkLists(queryClient);
+      invalidatePeopleLists(queryClient);
       onAdded(data);
     },
   });

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Film, LayoutGrid, List, Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
+import { invalidateWorkLists } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { remoteImage } from "@/lib/remoteImage";
 import { t } from "@/lib/i18n";
@@ -79,7 +80,7 @@ export function FranchiseIndex() {
     })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
-      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      invalidateWorkLists(queryClient);
     },
   });
   const shown = useMemo(() => {
@@ -399,7 +400,7 @@ export function CollectionPage() {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
       void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId, Number(franchiseId)] });
-      void queryClient.invalidateQueries({ queryKey: ["works"] });
+      invalidateWorkLists(queryClient);
     },
   });
   return (

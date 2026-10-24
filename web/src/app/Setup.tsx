@@ -114,15 +114,22 @@ function ConnectArr({
     if (!mediaTypeTouched) setMediaType(suggestion.mediaType);
   };
 
+  // The library an attempt made, so a retry after the connection failed reuses it rather than meet its own name taken.
+  const [madeLibrary, setMadeLibrary] = useState<{ name: string; mediaType: string; id: number }>();
   const connect = useMutation({
     mutationFn: async (): Promise<ConnectOutcome> => {
-      const { data: category, error: categoryError } = await api.POST("/categories", {
-        body: { name: libraryName, media_type: mediaType, kind: connectKind || undefined },
-      });
-      if (categoryError) throw categoryError;
+      let category = madeLibrary?.name === libraryName && madeLibrary.mediaType === mediaType ? { id: madeLibrary.id } : undefined;
+      if (!category) {
+        const { data: created, error: categoryError } = await api.POST("/categories", {
+          body: { name: libraryName, media_type: mediaType, kind: connectKind || undefined },
+        });
+        if (categoryError) throw categoryError;
+        category = created!;
+        setMadeLibrary({ name: libraryName, mediaType, id: category.id });
+      }
 
       const { data: instance, error: instanceError } = await api.POST("/arr/instances", {
-        body: { app, name, base_url: baseUrl, api_key: apiKey, category_id: category!.id, enabled: true },
+        body: { app, name, base_url: baseUrl, api_key: apiKey, category_id: category.id, enabled: true },
       });
       if (instanceError) throw instanceError;
 
@@ -148,7 +155,7 @@ function ConnectArr({
               continue;
             }
             const { error: attachError } = await api.POST("/categories/{id}/rootfolders", {
-              params: { path: { id: category!.id } },
+              params: { path: { id: category.id } },
               body: { root_folder_id: root.id },
             });
             if (attachError) {
@@ -420,6 +427,7 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
   // no library attached is invisible to every import and scan afterwards.
   const [chosenCategory, setCategoryId] = useState<number | "new" | null>(null);
   const library = useNewLibrary();
+  const queryClient = useQueryClient();
 
   const categories = useCategories();
 
@@ -432,6 +440,9 @@ function AddRootFolder({ onAdded, onSkip }: { onAdded: () => void; onSkip: () =>
       let attachTo = categoryId;
       if (attachTo === "new") {
         attachTo = (await library.create()).id;
+        // Chosen from now on: a retry after the folder was refused attaches to it rather than make it twice.
+        setCategoryId(attachTo);
+        void queryClient.invalidateQueries({ queryKey: ["categories"] });
       }
 
       const { data: root, error } = await api.POST("/rootfolders", {

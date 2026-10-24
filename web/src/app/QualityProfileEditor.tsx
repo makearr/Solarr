@@ -74,11 +74,16 @@ export function QualityProfilesPage() {
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/qualityprofiles/{id}", { params: { path: { id } } }));
     },
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["qualityProfiles"] }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["qualityProfiles"] });
+      // A library's Quality page names its profiles and warns from them.
+      void queryClient.invalidateQueries({ queryKey: ["libraryQuality"] });
+    },
   });
   const done = () => {
     setEditing(null);
     void queryClient.invalidateQueries({ queryKey: ["qualityProfiles"] });
+    void queryClient.invalidateQueries({ queryKey: ["libraryQuality"] });
   };
 
   const groups = MEDIA_TYPES.map((mediaType) => ({

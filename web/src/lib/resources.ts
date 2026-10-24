@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -47,3 +47,19 @@ export const useUserDefaults = () => useQuery({ queryKey: ["user-defaults"], que
 
 /** The whole tag tree, every genre tree's and the free labels; screens narrow it themselves. */
 export const useTagTree = () => useQuery({ queryKey: ["tags"], queryFn: () => ok(api.GET("/tags")) });
+
+/** After a work changes: its page, and every list and count that shows it (each has its own key, so none sees it alone). */
+export function invalidateWorkLists(queryClient: QueryClient, workId?: number) {
+  if (workId !== undefined) void queryClient.invalidateQueries({ queryKey: ["work", workId] });
+  void queryClient.invalidateQueries({ queryKey: ["works"] });
+  void queryClient.invalidateQueries({ queryKey: ["wanted"] });
+  void queryClient.invalidateQueries({ queryKey: ["libraries"] });
+  void queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("library-level") });
+}
+
+/** After a person or organisation changes: their lists are named per scope ("people-all-artist"), so no plain key matches them. */
+export function invalidatePeopleLists(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({
+    predicate: (query) => /^(people|organisations)-/.test(String(query.queryKey[0])),
+  });
+}

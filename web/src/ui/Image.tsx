@@ -26,10 +26,10 @@ export function Image({
   src?: string;
   className?: string;
 }) {
-  const [failed, setFailed] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string>();
   const classes = `w-full border border-border-subtle bg-surface ${SHAPES[shape]} ${className ?? ""}`;
-  if (src && !failed) {
-    return <img src={src} alt={title} loading="lazy" className={classes} onError={() => setFailed(true)} />;
+  if (src && failedSrc !== src) {
+    return <img src={src} alt={title} loading="lazy" className={classes} onError={() => setFailedSrc(src)} />;
   }
   if (artwork) {
     return <CoverArt subject={artwork.subject} workId={artwork.id} title={title} size={artwork.size ?? "small"} className={`${classes} text-2xl`} />;

@@ -9,6 +9,7 @@ import { isTierVisible, useTier } from "@/lib/useTier";
 import { pageTier } from "./sections";
 
 const SEEN_KEY = "solarr.notifications.seen";
+const SEEN_EVENT = "solarr:notifications-seen";
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function readSeen(): number {
@@ -46,7 +47,16 @@ function useNotificationCentre() {
 /** The header's bell: a count of standing warnings plus failures this browser has not looked at yet. */
 export function NotificationBell() {
   const { warnings, events } = useNotificationCentre();
-  const [seen] = useState(readSeen);
+  const [seen, setSeen] = useState(readSeen);
+  useEffect(() => {
+    const update = () => setSeen(readSeen());
+    window.addEventListener(SEEN_EVENT, update);
+    window.addEventListener("storage", update);
+    return () => {
+      window.removeEventListener(SEEN_EVENT, update);
+      window.removeEventListener("storage", update);
+    };
+  }, []);
   const fresh = events.filter((item) => item.kind === "failed" && new Date(item.at).getTime() > seen).length;
   const count = warnings.length + fresh;
   return (
@@ -73,6 +83,7 @@ export function Notifications() {
     const timer = window.setTimeout(() => {
       try {
         localStorage.setItem(SEEN_KEY, String(Date.now()));
+        window.dispatchEvent(new Event(SEEN_EVENT));
       } catch {
         // A per-browser convenience; losing it costs a badge that stays.
       }

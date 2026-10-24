@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useMediaTypes, type MediaTypeInfo } from "@/lib/useMediaTypes";
 import { remoteImage } from "@/lib/remoteImage";
-import { useLibraries } from "@/lib/resources";
+import { invalidatePeopleLists, invalidateWorkLists, useLibraries } from "@/lib/resources";
 
 type Follow = components["schemas"]["Follow"];
 type FollowRequest = components["schemas"]["FollowRequest"];
@@ -41,7 +41,8 @@ export function FollowPanel({ subject, subjectId, libraryIds }: { subject: Subje
     <div className="flex flex-col gap-2 text-xs">
       {shown.map((library) => (
         <FollowRow
-          key={library.id}
+          // Remounted once the follow loads: its form copies the follow in when it mounts.
+          key={`${subjectId}:${library.id}:${follows.isSuccess}`}
           subject={subject}
           subjectId={subjectId}
           library={library}
@@ -108,6 +109,9 @@ function FollowRow({
   const changed = () => {
     void queryClient.invalidateQueries({ queryKey: ["follows", subject, subjectId] });
     void queryClient.invalidateQueries({ queryKey: [subject === "person" ? "person" : "organisation", subjectId] });
+    // The Followed filter, and the works a follow adds or monitors.
+    invalidatePeopleLists(queryClient);
+    invalidateWorkLists(queryClient);
   };
   const save = useMutation({
     mutationFn: async (search: boolean) => {

@@ -20,14 +20,13 @@ interface CoverArtProps {
   className?: string;
 }
 
-// A subject with no image recorded yet answers 404 (section 21.6) -- onError
-// swaps to a title-initial placeholder rather than the browser's broken-image
-// icon. Reset per subject/workId/size so a virtualised row reused for a
-// different subject does not keep showing a stale failure.
+// A subject with no image yet answers 404 (section 21.6): a title-initial placeholder instead of a broken image. The
+// failure belongs to one subject, size and version, so a reused row or a newly chosen image is tried afresh.
 export function CoverArt({ subject = "works", workId, title, size = "small", className }: CoverArtProps) {
-  const [failed, setFailed] = useState(false);
   const version = useArtworkVersion(subject, workId);
   const key = `${subject}-${workId}-${size}-${version}`;
+  const [failedKey, setFailedKey] = useState<string>();
+  const failed = failedKey === key;
 
   if (failed) {
     return (
@@ -48,7 +47,7 @@ export function CoverArt({ subject = "works", workId, title, size = "small", cla
       alt={title}
       loading="lazy"
       className={className}
-      onError={() => setFailed(true)}
+      onError={() => setFailedKey(key)}
     />
   );
 }

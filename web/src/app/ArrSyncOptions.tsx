@@ -62,16 +62,24 @@ export function ArrSyncOptions({
       const problems: string[] = [];
       // The library's folders first, so the import below finds each artist's library by them.
       if (importFolders && libraryId !== undefined) {
+        let known: { id: number; path: string }[] | undefined;
         for (const folder of folders.data ?? []) {
           const path = rewrite(folder.path);
-          const { data: root, error } = await api.POST("/rootfolders", { body: { path } });
-          if (error || !root) {
+          const { data: added, error } = await api.POST("/rootfolders", { body: { path } });
+          let rootId = added?.id;
+          // A folder already added (the usual case on a second import) is attached as it is.
+          if (rootId === undefined) {
+            const listed: { id: number; path: string }[] = known ?? (await api.GET("/rootfolders")).data ?? [];
+            known = listed;
+            rootId = listed.find((existing) => existing.path === path)?.id;
+          }
+          if (rootId === undefined) {
             problems.push(`${path}: ${(error as { detail?: string } | undefined)?.detail ?? "could not be used here"}`);
             continue;
           }
           const attached = await api.POST("/categories/{id}/rootfolders", {
             params: { path: { id: libraryId } },
-            body: { root_folder_id: root.id },
+            body: { root_folder_id: rootId },
           });
           if (attached.error) problems.push(`${path}: added, but not to the library`);
         }
@@ -157,7 +165,7 @@ export function ArrSyncOptions({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          disabled={(!monitored && !unmonitored) || (importFolders && libraryId === undefined) || start.isPending}
+          disabled={(!monitored && !unmonitored) || (importFolders && (libraryId === undefined || folders.isPending)) || start.isPending}
           onClick={() => start.mutate()}
           className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
         >

@@ -29,7 +29,8 @@ export function InteractiveSearch({
   const query = { ...(scope.group !== undefined ? { group: scope.group } : {}), ...(scope.part ? { part: scope.part } : {}) };
   // A query, not a mutation: opening the dialog is the search, and reopening reuses it for a minute.
   const found = useQuery({
-    queryKey: ["work", workId, "interactive-search", query],
+    // Not under ["work", id]: invalidating the work after a send would search every indexer again.
+    queryKey: ["interactive-search", workId, query],
     queryFn: () => ok(api.POST("/works/{id}/search", { params: { path: { id: workId }, query } })),
     staleTime: 60_000,
     retry: false,

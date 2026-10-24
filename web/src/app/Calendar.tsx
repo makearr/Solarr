@@ -248,7 +248,7 @@ function YearView({ year }: { year: number }) {
   const counts = new Map<string, number>();
   for (const row of dates.data ?? []) counts.set(row.date, row.releases);
   const yearOnly = counts.get(String(year)) ?? 0;
-  const today = new Date().toISOString().slice(0, 10);
+  const today = isoDate(new Date());
 
   return (
     <>
@@ -355,7 +355,7 @@ function MonthSquare({
               type="button"
               disabled={releases === 0}
               title={releases > 0 ? `${releases} ${releases === 1 ? "release" : "releases"}` : undefined}
-              onClick={() => onPick({ label: new Date(date).toLocaleDateString(), from: date, to: date })}
+              onClick={() => onPick({ label: parseIso(date).toLocaleDateString(), from: date, to: date })}
               className={`flex h-6 flex-col items-center justify-center rounded tabular-nums ${
                 date === today ? "ring-1 ring-accent" : ""
               } ${isPicked ? "bg-accent/15" : ""} ${releases > 0 ? "text-ink hover:bg-canvas" : ""}`}
@@ -494,7 +494,7 @@ function ReleaseList({ entries }: { entries: readonly CalendarEntry[] }) {
 /** A partial date is shown as given: "2024-03" means the month is all the
  *  provider knows, and inventing a day would be a claim nobody made. */
 function formatDate(date: string): string {
-  if (date.length === 10) return new Date(date).toLocaleDateString();
+  if (date.length === 10) return parseIso(date).toLocaleDateString();
   return date;
 }
 
@@ -504,7 +504,7 @@ function windowDates(back: number, forward: number): { from: string; to: string 
   start.setDate(start.getDate() - back);
   const end = new Date(now);
   end.setDate(end.getDate() + forward);
-  return { from: start.toISOString().slice(0, 10), to: end.toISOString().slice(0, 10) };
+  return { from: isoDate(start), to: isoDate(end) };
 }
 
 function Message({ children }: { children: React.ReactNode }) {

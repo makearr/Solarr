@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import { invalidatePeopleLists } from "@/lib/resources";
 
 /** Library-derived discovery: artists the library holds an album of whose discography has albums it does not. */
 export function IncompleteDiscographies({ categoryId }: { categoryId: number }) {
@@ -19,7 +20,7 @@ export function IncompleteDiscographies({ categoryId }: { categoryId: number }) 
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["discover-incomplete", categoryId] });
-      void queryClient.invalidateQueries({ queryKey: ["people"] });
+      invalidatePeopleLists(queryClient);
     },
   });
 

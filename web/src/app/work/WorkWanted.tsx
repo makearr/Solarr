@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -70,9 +70,13 @@ export function WorkWanted({ info }: { info: MediaTypeInfo | undefined }) {
   const posterOptions = { ...DEFAULT_POSTER_OPTIONS, ...storedOptions };
 
   // Cursor paging (never OFFSET): the cursor that opened each page seen so far.
-  const [cursors, setCursors] = useState<(string | undefined)[]>([undefined]);
+  // Kept per view, so the first fetch after a sort or view change already starts over rather than sending the old cursor.
+  const pagingKey = [categoryId, sort, dir, size, view].join("|");
+  const [paging, setPaging] = useState<{ key: string; cursors: (string | undefined)[] }>({ key: pagingKey, cursors: [undefined] });
+  const cursors = paging.key === pagingKey ? paging.cursors : [undefined];
+  const setCursors = (next: (held: (string | undefined)[]) => (string | undefined)[]) =>
+    setPaging({ key: pagingKey, cursors: next(cursors) });
   const page = cursors.length - 1;
-  useEffect(() => setCursors([undefined]), [categoryId, sort, dir, size, view]);
 
   const works = useQuery({
     queryKey: ["wanted", categoryId, view, sort, dir, size, cursors[page]],

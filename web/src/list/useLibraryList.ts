@@ -68,6 +68,14 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   const listQuery = view.query;
   const [selected, setSelected] = useState<selection.Selection>(selection.NOTHING);
   const [lastToggled, setLastToggled] = useState<selection.Id | null>(null);
+  // Back, forward or a link changes the view without setQuery: the selection goes with it, or it acts on rows not shown.
+  const viewKey = query.key(listQuery);
+  const [selectedIn, setSelectedIn] = useState(viewKey);
+  if (selectedIn !== viewKey) {
+    setSelectedIn(viewKey);
+    setSelected(selection.NOTHING);
+    setLastToggled(null);
+  }
 
   // The view state is the URL, so a navigation into a filtered view arrives here
   // as a re-render. Holding a copy in state would ignore it (section 21.12).
@@ -132,7 +140,8 @@ export function useLibraryList<T>(source: ListSource<T>, view: ViewState) {
   const virtualItems = virtualizer.getVirtualItems();
   const lastVisible = virtualItems[virtualItems.length - 1]?.index ?? 0;
   useEffect(() => {
-    if (pages.hasNextPage && !pages.isFetchingNextPage && lastVisible >= rowCount - 1) {
+    // Not after a failed page: each failure re-renders, and asking again from here would never stop.
+    if (pages.hasNextPage && !pages.isFetchingNextPage && !pages.isFetchNextPageError && lastVisible >= rowCount - 1) {
       void pages.fetchNextPage();
     }
   }, [lastVisible, rowCount, pages]);

@@ -3,6 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import { invalidateWorkLists } from "@/lib/resources";
 import { ListTable, type Column } from "@/list/ListTable";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
@@ -62,7 +63,9 @@ export function Unidentified() {
       }));
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+      void queryClient.invalidateQueries({ queryKey: ["unidentified"] });
+      // A placed file adds to a work, or adds the work.
+      invalidateWorkLists(queryClient);
     },
   });
 

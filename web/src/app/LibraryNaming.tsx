@@ -520,7 +520,8 @@ function TokenBuilder({
 function ApplyToLibrary({ categoryId, unsaved }: { categoryId: number; unsaved: boolean }) {
   return (
     <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
-      <RenamePlanner title={<h2 className="text-sm font-medium">Apply to library</h2>} categoryId={categoryId} unsaved={unsaved} />
+      {/* Keyed: a plan belongs to one library, and another library's tab reuses this page. */}
+      <RenamePlanner key={categoryId} title={<h2 className="text-sm font-medium">Apply to library</h2>} categoryId={categoryId} unsaved={unsaved} />
     </section>
   );
 }

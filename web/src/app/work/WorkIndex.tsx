@@ -3,6 +3,7 @@ import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
+import { invalidateWorkLists } from "@/lib/resources";
 import type { components } from "@/api/schema";
 import { albumStatusLabel } from "@/lib/albumStatus";
 import { t, vocabularyOf } from "@/lib/i18n";
@@ -153,9 +154,12 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
   const sort = routeView.query.sort ?? defaultSort;
   // Albums as posters are grouped by artist (2026-09-17), which needs them in artist order.
   const grouped = isPoster && lead !== undefined && !portrait && sort === "artist";
+  // The default sort rides in the query, so the cache key moves when the library's details arrive and change it.
   const listView = useMemo<ViewState>(
-    () => (grouped ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } } : routeView),
-    [grouped, routeView],
+    () => (grouped
+      ? { ...routeView, query: { ...routeView.query, sort: "artist", direction: "asc" } }
+      : { ...routeView, query: { ...routeView.query, sort: routeView.query.sort ?? defaultSort } }),
+    [grouped, routeView, defaultSort],
   );
   const entryOf = (work: Work) => (wholeLibrary ? workEntry(work, memberOf(work.media_type), infoOf(work.media_type)) : workEntry(work, categoryId, info));
 
@@ -395,7 +399,7 @@ function BulkBar({
   const changed = () => {
     setConfirm(undefined);
     onDone();
-    void queryClient.invalidateQueries({ queryKey: ["works"] });
+    invalidateWorkLists(queryClient);
   };
   const preview = useMutation({
     mutationFn: async (monitored: boolean) => {
@@ -494,6 +498,8 @@ function BulkBar({
             setEditing(false);
             changed();
             void queryClient.invalidateQueries({ queryKey: ["tags"] });
+            // The tag dropdown counts a library's tags under a key of its own.
+            void queryClient.invalidateQueries({ queryKey: ["library-tags"] });
           }}
         />
       )}

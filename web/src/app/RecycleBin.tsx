@@ -34,15 +34,18 @@ export function RecycleBin() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["recycleBinEntries"] }),
   });
 
+  // The field shows whole GB; a limit set to something finer is kept unless the field itself was changed.
+  const storedBytes = limits.data?.max_bytes ?? 0;
+  const maxBytes = maxGB === Math.round(storedBytes / GB) ? storedBytes : maxGB * GB;
   const save = useMutation({
     mutationFn: () => ok(api.PATCH("/recyclebin", {
-      body: { max_bytes: maxGB * GB, max_percent_of_root: percent },
+      body: { max_bytes: maxBytes, max_percent_of_root: percent },
     })),
     onSuccess: (data) => queryClient.setQueryData(["recycleBinLimits"], data),
   });
 
   if (!limits.data) return <p className="p-6 text-sm text-ink-muted">{limits.isError ? "The limits could not be read." : "Loading…"}</p>;
-  const dirty = maxGB * GB !== limits.data.max_bytes || percent !== limits.data.max_percent_of_root;
+  const dirty = maxBytes !== limits.data.max_bytes || percent !== limits.data.max_percent_of_root;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-3 p-6">

@@ -5,7 +5,7 @@ import { Trash2 } from "lucide-react";
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
+import { invalidateWorkLists, useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
 import { useMediaType, useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
@@ -50,7 +50,11 @@ export function Categories() {
     mutationFn: async (id: number) => {
       await ok(api.DELETE("/categories/{id}", { params: { path: { id } } }));
     },
-    onSuccess: invalidate,
+    onSuccess: () => {
+      void invalidate();
+      // The sidebar reads the libraries, and the lists and counts showed its works.
+      invalidateWorkLists(queryClient);
+    },
   });
 
   const [searchMessages, setSearchMessages] = useState<Record<number, string>>({});

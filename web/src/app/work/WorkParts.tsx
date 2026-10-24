@@ -28,10 +28,11 @@ export function useAllParts(workId: number, group: string | undefined, enabled =
     })),
     getNextPageParam: (last) => last.next_cursor || undefined,
   });
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = parts;
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = parts;
+  // Not after a failed page, or the effect asks again on every render it causes.
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (hasNextPage && !isFetchingNextPage && !isFetchNextPageError) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   return { parts: (parts.data?.pages ?? []).flatMap((page) => page.items), loading: parts.isLoading, error: parts.isError };
 }
 

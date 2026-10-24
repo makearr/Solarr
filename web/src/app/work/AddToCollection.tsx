@@ -29,6 +29,9 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
     },
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["franchises", categoryId] });
+      // The work page's own "part of" strip and the collection's page read these.
+      void queryClient.invalidateQueries({ queryKey: ["work-franchises", categoryId] });
+      void queryClient.invalidateQueries({ queryKey: ["franchise", categoryId] });
       onClose();
     },
   });
