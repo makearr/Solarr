@@ -20,7 +20,7 @@ named file, linked from the code by path.
 | [library-suggestions.md](library-suggestions.md) | Which library a work belongs in: facts, rules per library and kind, the check |
 | [mixed-libraries.md](mixed-libraries.md) | A library of several media types: member categories, what they share, the All list |
 | [rating-limit.md](rating-limit.md) | A library's maximum rating: how certifications become ages, and what a work above it is |
-| [tags.md](tags.md) | Tags and genre taxonomies: shipped trees, aliases, where a provider's genre lands, the tag filter |
+| [tags.md](tags.md) | Tags and genre trees: shipped trees, aliases, where a provider's genre lands, the tag filter |
 | [naming.md](naming.md) | How a library names files: slots, tokens, character replacement, apply to library |
 | [file-management.md](file-management.md) | A library's Sonarr-style folders, recycling bin, file dates and permissions |
 | [downloads.md](downloads.md) | Downloads at once, held releases, who asked and the order they are sent in |

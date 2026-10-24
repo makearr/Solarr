@@ -22,7 +22,7 @@ func sampleSeries() library.SeriesWrite {
 		OriginalLanguage: "eng", RuntimeMs: &runtime, Description: "Plot.",
 		IDs:     []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "1234"}, {Provider: "tvmaze", ExternalID: "42"}},
 		Aliases: []string{"Alt Name"}, AliasSource: "tvmaze",
-		Genres: []string{"Drama"}, GenreSource: "skyhook", GenreTaxonomy: "screen", Network: "Example Net", NetworkCountry: "US",
+		Genres: []string{"Drama"}, GenreSource: "skyhook", GenreTree: "screen", Network: "Example Net", NetworkCountry: "US",
 		Dates: []library.SeriesDateWrite{{Kind: "first_aired", Date: "2020-01-05", Source: "skyhook"}},
 		Parts: []library.SeriesPartWrite{
 			{MediaRef: "s01e01", SortKey: "s0001e0001", Title: "Pilot", RuntimeMs: &runtime, Date: "2020-01-05", AvailableAt: &available,

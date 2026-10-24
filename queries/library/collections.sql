@@ -418,7 +418,7 @@ SELECT sqlc.arg(into_id), cm.work_id, cm.part_id, cm.ord FROM collection_member 
 -- name: ListGenresOfType :many
 SELECT a.subject_id AS work_id, t.name AS genre
 FROM tag_assignment a JOIN tag t ON t.id = a.tag_id JOIN work w ON w.id = a.subject_id
-WHERE a.subject_type = 'work' AND w.media_type = ? AND t.taxonomy <> '';
+WHERE a.subject_type = 'work' AND w.media_type = ? AND t.genre_tree <> '';
 
 -- name: ListOrganisationLinksOfType :many
 SELECT wo.work_id, wo.organisation_id FROM work_organisation wo JOIN work w ON w.id = wo.work_id WHERE w.media_type = ?;

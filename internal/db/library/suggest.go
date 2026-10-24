@@ -10,17 +10,17 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-// GenreTree answers the taxonomy's genres the names mean, by name or alias, and every genre above them, lower-cased;
-// a name the taxonomy does not know is left out. It only reads.
-func (p People) GenreTree(ctx context.Context, taxonomy string, names []string) (map[string]bool, error) {
+// GenreTree answers the genre tree's genres the names mean, by name or alias, and every genre above them, lower-cased;
+// a name the genre tree does not know is left out. It only reads.
+func (p People) GenreTree(ctx context.Context, genreTree string, names []string) (map[string]bool, error) {
 	queries := librarydb.New(p.store.Read())
 	tree := map[string]bool{}
 	for _, name := range names {
-		ids, err := queries.ListTagsByAlias(ctx, librarydb.ListTagsByAliasParams{Alias: slugify(name), Taxonomy: taxonomy})
+		ids, err := queries.ListTagsByAlias(ctx, librarydb.ListTagsByAliasParams{Alias: slugify(name), GenreTree: genreTree})
 		if err != nil {
 			return nil, fmt.Errorf("library: genre %q: %w", name, err)
 		}
-		if tag, err := queries.GetTagBySlug(ctx, taxonomySlug(taxonomy, name)); err == nil {
+		if tag, err := queries.GetTagBySlug(ctx, genreTreeSlug(genreTree, name)); err == nil {
 			ids = append(ids, tag.ID)
 		} else if !errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("library: genre %q: %w", name, err)

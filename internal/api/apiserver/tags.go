@@ -9,13 +9,13 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 )
 
-// ListTags answers the tag tree, one taxonomy's when asked for one.
+// ListTags answers the tag tree, one genre tree's when asked for one.
 func (s *Server) ListTags(w http.ResponseWriter, r *http.Request, params gen.ListTagsParams) {
 	if s.workEditor == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "tags are not available")
 		return
 	}
-	rows, err := s.workEditor.TagTree(r.Context(), derefOr(params.Taxonomy, "*"))
+	rows, err := s.workEditor.TagTree(r.Context(), derefOr(params.GenreTree, "*"))
 	if err != nil {
 		writeError(w, s.logger, err)
 		return
@@ -28,7 +28,7 @@ func (s *Server) ListTags(w http.ResponseWriter, r *http.Request, params gen.Lis
 }
 
 func tagNode(row TagRow) gen.TagNode {
-	node := gen.TagNode{Id: row.ID, Name: row.Name, Taxonomy: row.Taxonomy, Source: row.Source, Works: row.Works, Aliases: row.Aliases}
+	node := gen.TagNode{Id: row.ID, Name: row.Name, GenreTree: row.GenreTree, Source: row.Source, Works: row.Works, Aliases: row.Aliases}
 	if node.Aliases == nil {
 		node.Aliases = []string{}
 	}
@@ -47,7 +47,7 @@ func (s *Server) CreateTag(w http.ResponseWriter, r *http.Request) {
 	if !s.decodeTagBody(w, r, &body) || !s.tagNamed(w, body.Name) {
 		return
 	}
-	row, err := s.workEditor.CreateTag(r.Context(), strings.TrimSpace(body.Name), body.Taxonomy, derefOr(body.ParentId, 0))
+	row, err := s.workEditor.CreateTag(r.Context(), strings.TrimSpace(body.Name), body.GenreTree, derefOr(body.ParentId, 0))
 	if err != nil {
 		s.writeWorkEditError(w, err)
 		return
@@ -55,7 +55,7 @@ func (s *Server) CreateTag(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusOK, tagNode(row))
 }
 
-// EditTag renames a tag and places it in its taxonomy's tree; administrator only.
+// EditTag renames a tag and places it in its genre tree's tree; administrator only.
 func (s *Server) EditTag(w http.ResponseWriter, r *http.Request, id int64) {
 	if !s.requireAdministrator(w, r) || !s.tagsAvailable(w) {
 		return

@@ -539,9 +539,9 @@ func New(config Config) (*Server, error) {
 			secured.Put("/works/{id}/edit", server.routeSaveWorkEdit)
 			secured.Get("/tags", func(w http.ResponseWriter, r *http.Request) {
 				var params gen.ListTagsParams
-				if r.URL.Query().Has("taxonomy") {
-					taxonomy := r.URL.Query().Get("taxonomy")
-					params.Taxonomy = &taxonomy
+				if r.URL.Query().Has("genre_tree") {
+					genreTree := r.URL.Query().Get("genre_tree")
+					params.GenreTree = &genreTree
 				}
 				server.ListTags(w, r, params)
 			})

@@ -20,7 +20,7 @@ import (
 type PersonIdentity struct {
 	Name           string
 	Disambiguation string
-	// Kind is the provider's own taxonomy ("Person", "Group", ...), stored
+	// Kind is the provider's own genre tree ("Person", "Group", ...), stored
 	// as-is, same reasoning as ReleaseGroup.Subtype.
 	Kind    string
 	Gender  string
@@ -232,22 +232,22 @@ func (p People) addCredit(ctx context.Context, workID, personID int64, role stri
 	return nil
 }
 
-// AssignGenres replaces a work's provider genres of the taxonomy with MusicBrainz's; a person's own stay (ADR-33).
-func (p People) AssignGenres(ctx context.Context, workID int64, taxonomy string, genres []GenreLink) error {
-	return p.AssignGenresFrom(ctx, workID, taxonomy, providerSourceMusicBrainz, genres)
+// AssignGenres replaces a work's provider genres of the genre tree with MusicBrainz's; a person's own stay (ADR-33).
+func (p People) AssignGenres(ctx context.Context, workID int64, genreTree string, genres []GenreLink) error {
+	return p.AssignGenresFrom(ctx, workID, genreTree, providerSourceMusicBrainz, genres)
 }
 
 // GenreSourceWikidata is the source of the genres Wikidata names, which replace MusicBrainz's where it has any.
 const GenreSourceWikidata = "wikidata"
 
-// AssignGenresFrom replaces a work's provider genres of the taxonomy with one provider's, mapped onto its tree.
-func (p People) AssignGenresFrom(ctx context.Context, workID int64, taxonomy, source string, genres []GenreLink) error {
+// AssignGenresFrom replaces a work's provider genres of the genre tree with one provider's, mapped onto its tree.
+func (p People) AssignGenresFrom(ctx context.Context, workID int64, genreTree, source string, genres []GenreLink) error {
 	names := make([]string, len(genres))
 	for i, genre := range genres {
 		names[i] = genre.Name
 	}
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return assignGenres(ctx, librarydb.New(tx), workID, taxonomy, source, names)
+		return assignGenres(ctx, librarydb.New(tx), workID, genreTree, source, names)
 	})
 	if err != nil {
 		return fmt.Errorf("library: assign genres to work %d: %w", workID, err)
@@ -388,7 +388,7 @@ type SubscriptionRequest struct {
 	Roles                []string
 	MonitorBackCatalogue bool
 	// FiltersJSON is opaque here (subscription.FiltersJSON's own doc comment):
-	// which taxonomy it filters on is a media type's own concern (ADR-23).
+	// which genre tree it filters on is a media type's own concern (ADR-23).
 	// Empty means "use that media type's own default" -- never written as an
 	// empty JSON object, so a caller that never sets this changes nothing.
 	FiltersJSON string

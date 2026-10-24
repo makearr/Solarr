@@ -14,7 +14,7 @@ certification's age (`library.Works.TraitsInCategory`).
 ## Rules
 
 A library suggests itself when every condition of one of its rules holds (`settings.LibraryRule`): a genre (a genre
-below it matches too, through the taxonomy), an original language or a country (ISO codes, two- or three-letter), or
+below it matches too, through the genre tree), an original language or a country (ISO codes, two- or three-letter), or
 AniList. A library states its own rules (`category.rules_json`, Settings tab "Suggested for", advanced) or follows its
 kind's shipped ones (`media.LibraryKind.Rules`, `internal/media/screen/kinds.go`):
 

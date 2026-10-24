@@ -78,7 +78,7 @@ func ToWrite(movie Movie, options WriteOptions) library.SeriesWrite {
 		AliasSource:         "movie-merge",
 		Genres:              movie.Genres,
 		GenreSource:         source,
-		GenreTaxonomy:       screen.Taxonomy.Key,
+		GenreTree:           screen.GenreTree.Key,
 		Network:             movie.Studio,
 		OrganisationKind:    "studio",
 		Certification:       movie.Certification,

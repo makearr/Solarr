@@ -2111,6 +2111,12 @@ type GateResult struct {
 	Wanted string `json:"wanted"`
 }
 
+// GenreTree defines model for GenreTree.
+type GenreTree struct {
+	Key   string `json:"key"`
+	Label string `json:"label"`
+}
+
 // GrabResult One automatic search.
 type GrabResult struct {
 	// AlreadyDownloading A download for the album was on its way, so nothing was searched.
@@ -3042,6 +3048,7 @@ type MediaTypeInfo struct {
 
 	// FollowOptions The settings a follow of a person or organisation offers in this type's libraries.
 	FollowOptions []FollowOption `json:"follow_options"`
+	GenreTree     GenreTree      `json:"genre_tree"`
 	Group         MediaTerm      `json:"group"`
 
 	// Key Manga, magazines, music videos and adult galleries are categories of these rather than types of their own.
@@ -3087,8 +3094,7 @@ type MediaTypeInfo struct {
 	} `json:"search_terms"`
 
 	// SearchesLibrary Every wanted work of a library can be searched at once (POST /categories/{id}/search).
-	SearchesLibrary bool     `json:"searches_library"`
-	Taxonomy        Taxonomy `json:"taxonomy"`
+	SearchesLibrary bool `json:"searches_library"`
 
 	// UnidentifiedRetry The schedule that tries a library's unidentified files again (POST /schedules/{key}/run); absent when the type has none.
 	UnidentifiedRetry *string `json:"unidentified_retry,omitempty"`
@@ -4366,18 +4372,18 @@ type TVProviderTestId string
 // TagNode defines model for TagNode.
 type TagNode struct {
 	Aliases []string `json:"aliases"`
-	Id      int64    `json:"id"`
-	Name    string   `json:"name"`
 
-	// ParentId Absent at the top of its taxonomy.
+	// GenreTree The genre tree's key; empty for a free label.
+	GenreTree string `json:"genre_tree"`
+	Id        int64  `json:"id"`
+	Name      string `json:"name"`
+
+	// ParentId Absent at the top of its genre tree.
 	ParentId *int64 `json:"parent_id,omitempty"`
 
-	// Source user, taxonomy (the shipped tree) or the provider that named it
+	// Source user, shipped (the shipped tree) or the provider that named it
 	Source string `json:"source"`
-
-	// Taxonomy The taxonomy's key; empty for a free label.
-	Taxonomy string `json:"taxonomy"`
-	Works    int64  `json:"works"`
+	Works  int64  `json:"works"`
 }
 
 // Tagging What the tag writer puts into this library's files once enrichment has identified them (revision D3, widened 2026-09-29). Only the library's own root folders are written, never a read-only one and never a download folder.
@@ -4396,12 +4402,6 @@ type Tagging struct {
 
 	// WriteMetadata Write album, album artist, track title, track and disc number, date and genre.
 	WriteMetadata bool `json:"write_metadata"`
-}
-
-// Taxonomy defines model for Taxonomy.
-type Taxonomy struct {
-	Key   string `json:"key"`
-	Label string `json:"label"`
 }
 
 // TestDownloaderRequest defines model for TestDownloaderRequest.
@@ -5506,14 +5506,14 @@ type ListLogsParamsLevel string
 
 // ListTagsParams defines parameters for ListTags.
 type ListTagsParams struct {
-	Taxonomy *string `form:"taxonomy,omitempty" json:"taxonomy,omitempty"`
+	GenreTree *string `form:"genre_tree,omitempty" json:"genre_tree,omitempty"`
 }
 
 // CreateTagJSONBody defines parameters for CreateTag.
 type CreateTagJSONBody struct {
-	Name     string `json:"name"`
-	ParentId *int64 `json:"parent_id"`
-	Taxonomy string `json:"taxonomy"`
+	GenreTree string `json:"genre_tree"`
+	Name      string `json:"name"`
+	ParentId  *int64 `json:"parent_id"`
 }
 
 // EditTagJSONBody defines parameters for EditTag.
@@ -6877,19 +6877,19 @@ type ServerInterface interface {
 	// The most recent log records, newest first.
 	// (GET /system/logs)
 	ListLogs(w http.ResponseWriter, r *http.Request, params ListLogsParams)
-	// The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels).
+	// The tag tree, every genre tree's and the free labels, by name; genre tree narrows it to one ("" for the free labels).
 	// (GET /tags)
 	ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams)
-	// Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only.
+	// Add a tag to a genre tree ("" for a free label), under a parent of the same genre tree or at the top. Administrator only.
 	// (POST /tags)
 	CreateTag(w http.ResponseWriter, r *http.Request)
 	// Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only.
 	// (DELETE /tags/{id})
 	DeleteTag(w http.ResponseWriter, r *http.Request, id int64)
-	// Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
+	// Rename a tag and place it under another of its genre tree (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
 	// (PUT /tags/{id})
 	EditTag(w http.ResponseWriter, r *http.Request, id int64)
-	// Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias. Administrator only.
+	// Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias. Administrator only.
 	// (POST /tags/{id}/merge)
 	MergeTag(w http.ResponseWriter, r *http.Request, id int64)
 	// Every account, with its role and category grants.
@@ -8413,13 +8413,13 @@ func (_ Unimplemented) ListLogs(w http.ResponseWriter, r *http.Request, params L
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels).
+// The tag tree, every genre tree's and the free labels, by name; genre tree narrows it to one ("" for the free labels).
 // (GET /tags)
 func (_ Unimplemented) ListTags(w http.ResponseWriter, r *http.Request, params ListTagsParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only.
+// Add a tag to a genre tree ("" for a free label), under a parent of the same genre tree or at the top. Administrator only.
 // (POST /tags)
 func (_ Unimplemented) CreateTag(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -8431,13 +8431,13 @@ func (_ Unimplemented) DeleteTag(w http.ResponseWriter, r *http.Request, id int6
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
+// Rename a tag and place it under another of its genre tree (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only.
 // (PUT /tags/{id})
 func (_ Unimplemented) EditTag(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias. Administrator only.
+// Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias. Administrator only.
 // (POST /tags/{id}/merge)
 func (_ Unimplemented) MergeTag(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -16138,11 +16138,11 @@ func (siw *ServerInterfaceWrapper) ListTags(w http.ResponseWriter, r *http.Reque
 	// Parameter object where we will unmarshal all parameters from the context
 	var params ListTagsParams
 
-	// ------------- Optional query parameter "taxonomy" -------------
+	// ------------- Optional query parameter "genre_tree" -------------
 
-	err = runtime.BindQueryParameter("form", true, false, "taxonomy", r.URL.Query(), &params.Taxonomy)
+	err = runtime.BindQueryParameter("form", true, false, "genre_tree", r.URL.Query(), &params.GenreTree)
 	if err != nil {
-		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "taxonomy", Err: err})
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "genre_tree", Err: err})
 		return
 	}
 

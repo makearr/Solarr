@@ -79,7 +79,7 @@ type Querier interface {
 	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error
 	// A refresh replaces every provider's genres of a work at once: every source but a person's own.
-	ClearWorkProviderTagsOfTaxonomy(ctx context.Context, arg ClearWorkProviderTagsOfTaxonomyParams) error
+	ClearWorkProviderTagsOfGenreTree(ctx context.Context, arg ClearWorkProviderTagsOfGenreTreeParams) error
 	// "You have 4 of 6 Ihaol films" is the first thing library-derived discovery
 	// looks for, so held and stated counts come back together (ADR-38).
 	CollectionCoverage(ctx context.Context, id int64) (CollectionCoverageRow, error)
@@ -377,6 +377,7 @@ type Querier interface {
 	GetDesiredProfileOverride(ctx context.Context, desiredItemID int64) (int64, error)
 	GetEdition(ctx context.Context, id int64) (Edition, error)
 	GetEditionByExternalID(ctx context.Context, arg GetEditionByExternalIDParams) (Edition, error)
+	GetGenreTreeSeed(ctx context.Context, key string) (int64, error)
 	// Scoring reads the bounded value, never the raw rate (ADR-45).
 	GetGroupReputation(ctx context.Context, releaseGroup string) (GroupReputation, error)
 	// An album's page says when it is next searched, and why not (F2).
@@ -410,10 +411,9 @@ type Querier interface {
 	GetSeriesInCategory(ctx context.Context, arg GetSeriesInCategoryParams) (GetSeriesInCategoryRow, error)
 	// One follow per subject, user and library; "IS" matches NULL as the constraint's own NULLs do not.
 	GetSubscriptionForSubject(ctx context.Context, arg GetSubscriptionForSubjectParams) (Subscription, error)
-	// The tag tree: taxonomies, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
+	// The tag tree: genre trees, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
 	GetTag(ctx context.Context, id int64) (Tag, error)
 	GetTagBySlug(ctx context.Context, slug string) (Tag, error)
-	GetTaxonomySeed(ctx context.Context, key string) (int64, error)
 	// One entry, for the manual resolve action -- confirming a candidate needs the
 	// file's own root_folder_id (to link work_root_folder), which the ranked
 	// candidates list alone does not carry.
@@ -604,7 +604,7 @@ type Querier interface {
 	// Who belongs to which franchise, of a media type: the provider's and the automatic ones.
 	ListFranchiseMembershipsOfType(ctx context.Context, mediaType string) ([]ListFranchiseMembershipsOfTypeRow, error)
 	ListFranchisesOfType(ctx context.Context, mediaType string) ([]ListFranchisesOfTypeRow, error)
-	// A work's genres: its tags of any taxonomy, whoever assigned them.
+	// A work's genres: its tags of any genre tree, whoever assigned them.
 	ListGenreTagsOfWork(ctx context.Context, subjectID int64) ([]string, error)
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
@@ -772,16 +772,16 @@ type Querier interface {
 	ListTagAncestorNames(ctx context.Context, descendantID int64) ([]string, error)
 	ListTagChildren(ctx context.Context, parentID sql.NullInt64) ([]int64, error)
 	ListTagNamesForSubjectBySource(ctx context.Context, arg ListTagNamesForSubjectBySourceParams) ([]ListTagNamesForSubjectBySourceRow, error)
-	ListTagTree(ctx context.Context, taxonomy interface{}) ([]ListTagTreeRow, error)
+	ListTagTree(ctx context.Context, genreTree interface{}) ([]ListTagTreeRow, error)
 	// Identified files under the given roots with everything their tags could take and the digest
 	// of what was last written. Providers are arguments: the query knows no media type.
 	ListTagWritebackCandidates(ctx context.Context, arg ListTagWritebackCandidatesParams) ([]ListTagWritebackCandidatesRow, error)
-	// The tags of one taxonomy an alias names; one alias may name several ("Action & Adventure").
+	// The tags of one genre tree an alias names; one alias may name several ("Action & Adventure").
 	ListTagsByAlias(ctx context.Context, arg ListTagsByAliasParams) ([]int64, error)
 	ListTagsForSubject(ctx context.Context, arg ListTagsForSubjectParams) ([]TagAssignment, error)
 	// The work detail page's own need, same reasoning as ListCreditsForWorkWithPerson.
 	ListTagsForSubjectWithName(ctx context.Context, arg ListTagsForSubjectWithNameParams) ([]ListTagsForSubjectWithNameRow, error)
-	ListTagsOfTaxonomy(ctx context.Context, taxonomy string) ([]Tag, error)
+	ListTagsOfGenreTree(ctx context.Context, genreTree string) ([]Tag, error)
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
@@ -1081,6 +1081,7 @@ type Querier interface {
 	// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
 	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
+	SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error
 	SetHuntEligibleAfter(ctx context.Context, arg SetHuntEligibleAfterParams) error
 	// From no category, or a no-op onto the same one -- the second form is what
@@ -1127,7 +1128,6 @@ type Querier interface {
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetTagName(ctx context.Context, arg SetTagNameParams) error
 	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
-	SetTaxonomySeed(ctx context.Context, arg SetTaxonomySeedParams) error
 	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error

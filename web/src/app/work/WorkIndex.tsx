@@ -234,7 +234,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             ))}
           </span>
         )}
-        <TagChips taxonomy={(info ?? infoOf(library?.media_type ?? ""))?.taxonomy.key ?? ""} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
+        <TagChips genreTree={(info ?? infoOf(library?.media_type ?? ""))?.genre_tree.key ?? ""} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
         <CustomFilterMenu
           fields={filterFieldsOf(info)}
           storageKey={`${categoryId}.${level}`}

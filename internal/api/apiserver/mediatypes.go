@@ -27,8 +27,8 @@ type MediaRole struct {
 type MediaTypeInfo struct {
 	Key   string
 	Label string
-	// TaxonomyKey and TaxonomyLabel name the genre tree the type's tags are mapped onto.
-	TaxonomyKey, TaxonomyLabel string
+	// GenreTreeKey and GenreTreeLabel name the genre tree the type's tags are mapped onto.
+	GenreTreeKey, GenreTreeLabel string
 	// Ratings says its works carry certifications a library's maximum rating limits.
 	Ratings      bool
 	Work         MediaTerm
@@ -152,7 +152,7 @@ func (s *Server) ListMediaTypes(w http.ResponseWriter, _ *http.Request) {
 			}
 			out = append(out, gen.MediaTypeInfo{
 				Key: gen.MediaType(info.Key), Label: info.Label, Roles: roles,
-				Taxonomy: gen.Taxonomy{Key: info.TaxonomyKey, Label: info.TaxonomyLabel}, Ratings: info.Ratings,
+				GenreTree: gen.GenreTree{Key: info.GenreTreeKey, Label: info.GenreTreeLabel}, Ratings: info.Ratings,
 				Work: termView(info.Work), Part: termView(info.Part), Group: termView(info.Group),
 				LeadPeople: termView(info.LeadPeople), Organisation: termView(info.Organisation),
 				FollowOptions: nonNilOptions(info.FollowOptions), Facets: nonNilFacets(info.Facets),

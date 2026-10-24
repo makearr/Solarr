@@ -21,18 +21,18 @@ var ErrInvalidWorkEdit = errors.New("apiserver: invalid work edit")
 // ErrTagNameTaken marks a rename onto a name another tag has; the answer is 409.
 var ErrTagNameTaken = errors.New("apiserver: tag name taken")
 
-// ErrTagMove marks a tag put under another taxonomy's or its own subtree; the answer is 409.
-var ErrTagMove = errors.New("apiserver: a tag moves only within its taxonomy, never under itself")
+// ErrTagMove marks a tag put under another genre tree's or its own subtree; the answer is 409.
+var ErrTagMove = errors.New("apiserver: a tag moves only within its genre tree, never under itself")
 
-// TagRow is one tag of the tree; ParentID 0 is the top of its taxonomy, Taxonomy "" a free label.
+// TagRow is one tag of the tree; ParentID 0 is the top of its genre tree, Genre tree "" a free label.
 type TagRow struct {
-	ID       int64
-	Name     string
-	ParentID int64
-	Taxonomy string
-	Source   string
-	Works    int64
-	Aliases  []string
+	ID        int64
+	Name      string
+	ParentID  int64
+	GenreTree string
+	Source    string
+	Works     int64
+	Aliases   []string
 }
 
 // WorkEditRow is an album's Edit dialog: its monitoring, its own quality profile (nil is the library's) and the
@@ -54,13 +54,13 @@ type WorkEditor interface {
 	// SaveWorkEdit answers a missing work id with an error wrapping sql.ErrNoRows and an unknown profile with
 	// ErrInvalidWorkEdit.
 	SaveWorkEdit(ctx context.Context, workID int64, edit WorkEditRow) error
-	// TagTree answers the tags of a taxonomy, "*" for every one and the free labels.
-	TagTree(ctx context.Context, taxonomy string) ([]TagRow, error)
-	// CreateTag answers a taken name with ErrTagNameTaken, a parent of another taxonomy with ErrTagMove.
-	CreateTag(ctx context.Context, name, taxonomy string, parentID int64) (TagRow, error)
+	// TagTree answers the tags of a genre tree, "*" for every one and the free labels.
+	TagTree(ctx context.Context, genreTree string) ([]TagRow, error)
+	// CreateTag answers a taken name with ErrTagNameTaken, a parent of another genre tree with ErrTagMove.
+	CreateTag(ctx context.Context, name, genreTree string, parentID int64) (TagRow, error)
 	// EditTag renames and places a tag; a missing id wraps sql.ErrNoRows.
 	EditTag(ctx context.Context, id int64, name string, parentID int64) error
-	// MergeTag folds one tag into another of its taxonomy.
+	// MergeTag folds one tag into another of its genre tree.
 	MergeTag(ctx context.Context, fromID, intoID int64) error
 	// DeleteTag removes the tag from every work; a missing id wraps sql.ErrNoRows.
 	DeleteTag(ctx context.Context, id int64) error
@@ -166,7 +166,7 @@ func (s *Server) writeWorkEditError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrTagNameTaken):
 		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict", "another tag already has that name")
 	case errors.Is(err, ErrTagMove):
-		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict", "a tag moves only within its taxonomy, never under itself")
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Conflict", "a tag moves only within its genre tree, never under itself")
 	case errors.Is(err, sql.ErrNoRows):
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such work")
 	default:

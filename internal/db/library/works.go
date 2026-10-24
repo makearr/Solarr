@@ -354,10 +354,10 @@ func sortTextColumn(sort WorkSort, facet WorkFacet) string {
 const workTagTree = "(SELECT 1 FROM tag_assignment ta JOIN tag_closure tc ON tc.descendant_id = ta.tag_id" +
 	" WHERE ta.subject_type = 'work' AND ta.subject_id = work.id AND tc.ancestor_id = ?)"
 
-// tagNameColumn reads the genres (a taxonomy's tags, operator <>) or the free labels (=).
+// tagNameColumn reads the genres (a genre tree's tags, operator <>) or the free labels (=).
 func tagNameColumn(operator string) string {
 	return "COALESCE((SELECT MIN(st.name) FROM tag_assignment sa JOIN tag st ON st.id = sa.tag_id" +
-		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND st.taxonomy " + operator + " ''), '') COLLATE NOCASE"
+		" WHERE sa.subject_type = 'work' AND sa.subject_id = work.id AND st.genre_tree " + operator + " ''), '') COLLATE NOCASE"
 }
 
 // setTotalsColumns sum a work's monitored SET items, what a list shows for a work of many groups.

@@ -26,8 +26,8 @@ type WorkEdit struct {
 	Facets func(mediaType string) []media.Facet
 	// Refreshing answers a media type's refresh, for a field the type derives other data from; nil refreshes nothing.
 	Refreshing func(mediaType string) (media.Refreshing, bool)
-	// Taxonomy answers a media type's genre taxonomy key, which a typed tag name is looked up in first.
-	Taxonomy func(mediaType string) string
+	// Genre tree answers a media type's genre tree key, which a typed tag name is looked up in first.
+	GenreTree func(mediaType string) string
 }
 
 // editable answers the editable facets of a work's media type.
@@ -145,7 +145,7 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			return err
 		}
 	}
-	if err := a.People.SetUserTags(ctx, workID, a.Taxonomy(mediaType), names); err != nil {
+	if err := a.People.SetUserTags(ctx, workID, a.GenreTree(mediaType), names); err != nil {
 		return err
 	}
 	refresh := false
@@ -259,9 +259,9 @@ func applyBulkChange(edit apiserver.WorkEditRow, change apiserver.BulkEditChange
 	return edit
 }
 
-// TagTree answers the tags of a taxonomy, "*" for all.
-func (a WorkEdit) TagTree(ctx context.Context, taxonomy string) ([]apiserver.TagRow, error) {
-	nodes, err := a.People.TagTree(ctx, taxonomy)
+// TagTree answers the tags of a genre tree, "*" for all.
+func (a WorkEdit) TagTree(ctx context.Context, genreTree string) ([]apiserver.TagRow, error) {
+	nodes, err := a.People.TagTree(ctx, genreTree)
 	if err != nil {
 		return nil, err
 	}
@@ -273,12 +273,12 @@ func (a WorkEdit) TagTree(ctx context.Context, taxonomy string) ([]apiserver.Tag
 }
 
 // CreateTag adds a person's tag.
-func (a WorkEdit) CreateTag(ctx context.Context, name, taxonomy string, parentID int64) (apiserver.TagRow, error) {
-	id, err := a.People.CreateTag(ctx, name, taxonomy, parentID)
+func (a WorkEdit) CreateTag(ctx context.Context, name, genreTree string, parentID int64) (apiserver.TagRow, error) {
+	id, err := a.People.CreateTag(ctx, name, genreTree, parentID)
 	if err != nil {
 		return apiserver.TagRow{}, tagError(err)
 	}
-	return apiserver.TagRow{ID: id, Name: name, ParentID: parentID, Taxonomy: taxonomy, Source: "user"}, nil
+	return apiserver.TagRow{ID: id, Name: name, ParentID: parentID, GenreTree: genreTree, Source: "user"}, nil
 }
 
 // EditTag renames and places a tag.

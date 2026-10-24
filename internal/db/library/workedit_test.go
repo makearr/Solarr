@@ -30,7 +30,7 @@ func TestProfileOverride_SetReadClear(t *testing.T) {
 	}
 }
 
-// A person's tags replace only their own; a name the taxonomy knows is that genre, any other a free label.
+// A person's tags replace only their own; a name the genre tree knows is that genre, any other a free label.
 func TestSetUserTags_ReplacesOnlyTheUsersOwn(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
@@ -66,7 +66,7 @@ func TestSetUserTags_ReplacesOnlyTheUsersOwn(t *testing.T) {
 	}
 	var every []string
 	for _, tag := range tree {
-		every = append(every, tag.Taxonomy+":"+tag.Name)
+		every = append(every, tag.GenreTree+":"+tag.Name)
 	}
 	if want := []string{":Road trip", ":Sleep", "music:Jazz", "music:Rock"}; !reflect.DeepEqual(every, want) {
 		t.Fatalf("every tag = %v, want %v (one Rock, the genre)", every, want)

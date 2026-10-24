@@ -188,7 +188,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err := running.startJobs(ctx); err != nil {
 		return err
 	}
-	running.seedTaxonomies(ctx)
+	running.seedGenreTrees(ctx)
 	running.readCertificationAges(ctx)
 	return running.startServer(ctx)
 }
@@ -668,7 +668,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorkEditor: adapters.WorkEdit{
 			Monitor: p.worksMonitor(), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 			Settings: p.cache, Identity: library.NewIdentity(p.library), Facets: adapters.MediaTypes{Registry: p.media}.Facets,
-			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf, Taxonomy: adapters.MediaTypes{Registry: p.media}.TaxonomyKey,
+			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf, GenreTree: adapters.MediaTypes{Registry: p.media}.GenreTreeKey,
 		},
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,

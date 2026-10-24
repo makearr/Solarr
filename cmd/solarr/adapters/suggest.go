@@ -38,7 +38,7 @@ func (s Suggester) ForCandidate(ctx context.Context, mediaType string, traits me
 	if !found {
 		return apiserver.LibrarySuggestion{}, false, nil
 	}
-	genres, err := s.People.GenreTree(ctx, descriptor.Taxonomy.Key, traits.Genres)
+	genres, err := s.People.GenreTree(ctx, descriptor.GenreTree.Key, traits.Genres)
 	if err != nil {
 		return apiserver.LibrarySuggestion{}, false, err
 	}

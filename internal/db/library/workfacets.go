@@ -18,7 +18,7 @@ const (
 	FacetField          = "field"
 	FacetOrganisation   = "organisation"
 	FacetClassification = "classification"
-	FacetTaxonomy       = "taxonomy"
+	FacetGenreTree      = "genre_tree"
 )
 
 // facetColumns are the work columns a facet may read; the media registry refuses any other.
@@ -73,9 +73,9 @@ func facetCondition(condition listfilter.Condition, facet WorkFacet) (string, []
 			" WHERE fo.work_id = work.id AND fo.role = ?", "fon.name", facet.Name)
 	case FacetClassification:
 		return existsValue(condition, "FROM work_classification fc WHERE fc.work_id = work.id AND fc.kind = ?", "fc.value", facet.Name)
-	case FacetTaxonomy:
+	case FacetGenreTree:
 		return existsValue(condition, "FROM tag_assignment ft JOIN tag ftn ON ftn.id = ft.tag_id"+
-			" WHERE ft.subject_type = 'work' AND ft.subject_id = work.id AND ftn.taxonomy = ?", "ftn.name", facet.Name)
+			" WHERE ft.subject_type = 'work' AND ft.subject_id = work.id AND ftn.genre_tree = ?", "ftn.name", facet.Name)
 	}
 	return "", nil, false
 }
@@ -97,9 +97,9 @@ func facetSortColumn(facet WorkFacet) string {
 			" WHERE so.work_id = work.id AND so.role = " + name + "), '') COLLATE NOCASE"
 	case FacetClassification:
 		return "COALESCE((SELECT MIN(sc.value) FROM work_classification sc WHERE sc.work_id = work.id AND sc.kind = " + name + "), '') COLLATE NOCASE"
-	case FacetTaxonomy:
+	case FacetGenreTree:
 		return "COALESCE((SELECT MIN(stn.name) FROM tag_assignment st JOIN tag stn ON stn.id = st.tag_id" +
-			" WHERE st.subject_type = 'work' AND st.subject_id = work.id AND stn.taxonomy = " + name + "), '') COLLATE NOCASE"
+			" WHERE st.subject_type = 'work' AND st.subject_id = work.id AND stn.genre_tree = " + name + "), '') COLLATE NOCASE"
 	}
 	return "''"
 }
@@ -191,8 +191,8 @@ func (w Works) FacetValues(ctx context.Context, facets []WorkFacet, workIDs []in
 		FacetOrganisation: "SELECT wo.work_id, wo.role, o.name FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id" +
 			" WHERE wo.work_id IN (%s) AND wo.role IN (%s) ORDER BY wo.work_id, o.name",
 		FacetClassification: "SELECT work_id, kind, value FROM work_classification WHERE work_id IN (%s) AND kind IN (%s) ORDER BY work_id, value",
-		FacetTaxonomy: "SELECT DISTINCT ta.subject_id, t.taxonomy, t.name FROM tag_assignment ta JOIN tag t ON t.id = ta.tag_id" +
-			" WHERE ta.subject_type = 'work' AND ta.subject_id IN (%s) AND t.taxonomy IN (%s) ORDER BY ta.subject_id, t.name",
+		FacetGenreTree: "SELECT DISTINCT ta.subject_id, t.genre_tree, t.name FROM tag_assignment ta JOIN tag t ON t.id = ta.tag_id" +
+			" WHERE ta.subject_type = 'work' AND ta.subject_id IN (%s) AND t.genre_tree IN (%s) ORDER BY ta.subject_id, t.name",
 	} {
 		named := bySource[source]
 		if len(named) == 0 {

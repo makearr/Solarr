@@ -10,9 +10,9 @@ export function parseChips(value: string): number[] {
   return value.split(",").map((field) => Number(field.trim())).filter((id) => Number.isInteger(id) && id !== 0);
 }
 
-/** Each tag with its depth, parents before children, by name: the taxonomy's tree, then the free labels. */
-export function orderedTags(tags: readonly TagNode[], taxonomy: string): { tag: TagNode; depth: number }[] {
-  const mine = tags.filter((tag) => tag.taxonomy === taxonomy || tag.taxonomy === "");
+/** Each tag with its depth, parents before children, by name: the genre tree's tree, then the free labels. */
+export function orderedTags(tags: readonly TagNode[], genreTree: string): { tag: TagNode; depth: number }[] {
+  const mine = tags.filter((tag) => tag.genre_tree === genreTree || tag.genre_tree === "");
   const children = new Map<number, TagNode[]>();
   const roots: TagNode[] = [];
   for (const tag of mine) {
@@ -22,7 +22,7 @@ export function orderedTags(tags: readonly TagNode[], taxonomy: string): { tag: 
   }
   const out: { tag: TagNode; depth: number }[] = [];
   const walk = (nodes: TagNode[], depth: number) => {
-    for (const tag of [...nodes].sort((a, b) => (a.taxonomy === b.taxonomy ? a.name.localeCompare(b.name) : a.taxonomy === "" ? 1 : -1))) {
+    for (const tag of [...nodes].sort((a, b) => (a.genre_tree === b.genre_tree ? a.name.localeCompare(b.name) : a.genre_tree === "" ? 1 : -1))) {
       out.push({ tag, depth });
       walk(children.get(tag.id) ?? [], depth + 1);
     }
@@ -33,13 +33,13 @@ export function orderedTags(tags: readonly TagNode[], taxonomy: string): { tag: 
 
 /** Filter by tags: pick from the library's genre tree and the free labels; a chip includes what is below it, a click
  *  on a chip turns it into "not", the cross removes it. */
-export function TagChips({ taxonomy, value, onChange }: { taxonomy: string; value: string; onChange: (value: string) => void }) {
+export function TagChips({ genreTree, value, onChange }: { genreTree: string; value: string; onChange: (value: string) => void }) {
   const tree = useTagTree();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const chips = parseChips(value);
   const byId = useMemo(() => new Map((tree.data ?? []).map((tag) => [tag.id, tag])), [tree.data]);
-  const options = useMemo(() => orderedTags(tree.data ?? [], taxonomy), [tree.data, taxonomy]);
+  const options = useMemo(() => orderedTags(tree.data ?? [], genreTree), [tree.data, genreTree]);
   const needle = search.trim().toLowerCase();
   const shown = options.filter(({ tag }) => (needle === "" || tag.name.toLowerCase().includes(needle)) && !chips.some((chip) => Math.abs(chip) === tag.id));
   const set = (next: number[]) => onChange(next.join(","));
@@ -88,7 +88,7 @@ export function TagChips({ taxonomy, value, onChange }: { taxonomy: string; valu
                   className="flex w-full items-center gap-2 rounded px-2 py-0.5 text-left hover:bg-canvas"
                 >
                   <span className="min-w-0 flex-1 truncate">{tag.name}</span>
-                  {tag.taxonomy === "" && <span className="text-xs text-ink-muted">label</span>}
+                  {tag.genre_tree === "" && <span className="text-xs text-ink-muted">label</span>}
                   <span className="text-xs tabular-nums text-ink-muted">{tag.works}</span>
                 </button>
               </li>
@@ -125,16 +125,16 @@ export function TagChips({ taxonomy, value, onChange }: { taxonomy: string; valu
   );
 }
 
-/** Tags on one work: chips for the chosen names and a field that suggests the taxonomy's genres and the free labels;
+/** Tags on one work: chips for the chosen names and a field that suggests the genre tree's genres and the free labels;
  *  Enter or a comma takes what was typed, a new label when no tag has the name. */
-export function TagPicker({ taxonomy, names, onChange, label }: { taxonomy: string; names: string[]; onChange: (names: string[]) => void; label: string }) {
+export function TagPicker({ genreTree, names, onChange, label }: { genreTree: string; names: string[]; onChange: (names: string[]) => void; label: string }) {
   const tree = useTagTree();
   const [text, setText] = useState("");
   const needle = text.trim().toLowerCase();
   const chosen = new Set(names.map((name) => name.toLowerCase()));
   const suggestions = needle === ""
     ? []
-    : orderedTags(tree.data ?? [], taxonomy).filter(({ tag }) => tag.name.toLowerCase().includes(needle) && !chosen.has(tag.name.toLowerCase())).slice(0, 8);
+    : orderedTags(tree.data ?? [], genreTree).filter(({ tag }) => tag.name.toLowerCase().includes(needle) && !chosen.has(tag.name.toLowerCase())).slice(0, 8);
   const add = (name: string) => {
     const trimmed = name.trim();
     if (trimmed !== "" && !chosen.has(trimmed.toLowerCase())) onChange([...names, trimmed]);

@@ -51,11 +51,11 @@ func (m MediaTypes) Facets(mediaType string) []media.Facet {
 	return nil
 }
 
-// TaxonomyKey answers the key of the genre taxonomy a media type's tags are mapped onto; "" when it has none.
-func (m MediaTypes) TaxonomyKey(mediaType string) string {
+// GenreTreeKey answers the key of the genre tree a media type's tags are mapped onto; "" when it has none.
+func (m MediaTypes) GenreTreeKey(mediaType string) string {
 	for _, descriptor := range m.Registry.Descriptors() {
 		if string(descriptor.Key) == mediaType {
-			return descriptor.Taxonomy.Key
+			return descriptor.GenreTree.Key
 		}
 	}
 	return ""
@@ -200,7 +200,7 @@ func (m MediaTypes) List() []apiserver.MediaTypeInfo {
 	for _, descriptor := range descriptors {
 		info := apiserver.MediaTypeInfo{
 			Key: string(descriptor.Key), Label: descriptor.Label,
-			TaxonomyKey: descriptor.Taxonomy.Key, TaxonomyLabel: descriptor.Taxonomy.Label,
+			GenreTreeKey: descriptor.GenreTree.Key, GenreTreeLabel: descriptor.GenreTree.Label,
 			Work:         apiserver.MediaTerm(descriptor.Vocabulary.Work),
 			Part:         apiserver.MediaTerm(descriptor.Vocabulary.Part),
 			Group:        apiserver.MediaTerm(descriptor.Vocabulary.Group),

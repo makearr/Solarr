@@ -33,20 +33,20 @@ func (q *Queries) ClearClassificationGenres(ctx context.Context, workID int64) e
 	return err
 }
 
-const clearWorkProviderTagsOfTaxonomy = `-- name: ClearWorkProviderTagsOfTaxonomy :exec
+const clearWorkProviderTagsOfGenreTree = `-- name: ClearWorkProviderTagsOfGenreTree :exec
 DELETE FROM tag_assignment
 WHERE subject_type = 'work' AND subject_id = ?1 AND source <> 'user'
-  AND tag_id IN (SELECT t.id FROM tag t WHERE t.taxonomy = ?2)
+  AND tag_id IN (SELECT t.id FROM tag t WHERE t.genre_tree = ?2)
 `
 
-type ClearWorkProviderTagsOfTaxonomyParams struct {
-	WorkID   int64
-	Taxonomy string
+type ClearWorkProviderTagsOfGenreTreeParams struct {
+	WorkID    int64
+	GenreTree string
 }
 
 // A refresh replaces every provider's genres of a work at once: every source but a person's own.
-func (q *Queries) ClearWorkProviderTagsOfTaxonomy(ctx context.Context, arg ClearWorkProviderTagsOfTaxonomyParams) error {
-	_, err := q.db.ExecContext(ctx, clearWorkProviderTagsOfTaxonomy, arg.WorkID, arg.Taxonomy)
+func (q *Queries) ClearWorkProviderTagsOfGenreTree(ctx context.Context, arg ClearWorkProviderTagsOfGenreTreeParams) error {
+	_, err := q.db.ExecContext(ctx, clearWorkProviderTagsOfGenreTree, arg.WorkID, arg.GenreTree)
 	return err
 }
 
@@ -74,12 +74,23 @@ func (q *Queries) DeleteTag(ctx context.Context, id int64) (int64, error) {
 	return result.RowsAffected()
 }
 
-const getTag = `-- name: GetTag :one
-
-SELECT id, name, slug, parent_id, description, source, taxonomy FROM tag WHERE id = ?
+const getGenreTreeSeed = `-- name: GetGenreTreeSeed :one
+SELECT seeded_version FROM genre_tree WHERE key = ?
 `
 
-// The tag tree: taxonomies, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
+func (q *Queries) GetGenreTreeSeed(ctx context.Context, key string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getGenreTreeSeed, key)
+	var seeded_version int64
+	err := row.Scan(&seeded_version)
+	return seeded_version, err
+}
+
+const getTag = `-- name: GetTag :one
+
+SELECT id, name, slug, parent_id, description, source, genre_tree FROM tag WHERE id = ?
+`
+
+// The tag tree: genre trees, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
 func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 	row := q.db.QueryRowContext(ctx, getTag, id)
 	var i Tag
@@ -90,20 +101,9 @@ func (q *Queries) GetTag(ctx context.Context, id int64) (Tag, error) {
 		&i.ParentID,
 		&i.Description,
 		&i.Source,
-		&i.Taxonomy,
+		&i.GenreTree,
 	)
 	return i, err
-}
-
-const getTaxonomySeed = `-- name: GetTaxonomySeed :one
-SELECT seeded_version FROM tag_taxonomy WHERE key = ?
-`
-
-func (q *Queries) GetTaxonomySeed(ctx context.Context, key string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, getTaxonomySeed, key)
-	var seeded_version int64
-	err := row.Scan(&seeded_version)
-	return seeded_version, err
 }
 
 const isTagInSubtree = `-- name: IsTagInSubtree :one
@@ -184,11 +184,11 @@ func (q *Queries) ListClassificationGenres(ctx context.Context, pageSize int64) 
 
 const listGenreTagsOfWork = `-- name: ListGenreTagsOfWork :many
 SELECT DISTINCT t.name FROM tag_assignment a JOIN tag t ON t.id = a.tag_id
-WHERE a.subject_type = 'work' AND a.subject_id = ? AND t.taxonomy <> ''
+WHERE a.subject_type = 'work' AND a.subject_id = ? AND t.genre_tree <> ''
 ORDER BY t.name
 `
 
-// A work's genres: its tags of any taxonomy, whoever assigned them.
+// A work's genres: its tags of any genre tree, whoever assigned them.
 func (q *Queries) ListGenreTagsOfWork(ctx context.Context, subjectID int64) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, listGenreTagsOfWork, subjectID)
 	if err != nil {
@@ -294,12 +294,12 @@ func (q *Queries) ListTagChildren(ctx context.Context, parentID sql.NullInt64) (
 }
 
 const listTagTree = `-- name: ListTagTree :many
-SELECT t.id, t.name, t.slug, t.parent_id, t.description, t.source, t.taxonomy,
+SELECT t.id, t.name, t.slug, t.parent_id, t.description, t.source, t.genre_tree,
        CAST((SELECT COUNT(DISTINCT a.subject_id) FROM tag_assignment a
              WHERE a.tag_id = t.id AND a.subject_type = 'work') AS INTEGER) AS works
 FROM tag t
-WHERE ?1 = '*' OR t.taxonomy = ?1
-ORDER BY t.taxonomy, t.name COLLATE NOCASE, t.id
+WHERE ?1 = '*' OR t.genre_tree = ?1
+ORDER BY t.genre_tree, t.name COLLATE NOCASE, t.id
 `
 
 type ListTagTreeRow struct {
@@ -309,12 +309,12 @@ type ListTagTreeRow struct {
 	ParentID    sql.NullInt64
 	Description sql.NullString
 	Source      string
-	Taxonomy    string
+	GenreTree   string
 	Works       int64
 }
 
-func (q *Queries) ListTagTree(ctx context.Context, taxonomy interface{}) ([]ListTagTreeRow, error) {
-	rows, err := q.db.QueryContext(ctx, listTagTree, taxonomy)
+func (q *Queries) ListTagTree(ctx context.Context, genreTree interface{}) ([]ListTagTreeRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTagTree, genreTree)
 	if err != nil {
 		return nil, err
 	}
@@ -329,7 +329,7 @@ func (q *Queries) ListTagTree(ctx context.Context, taxonomy interface{}) ([]List
 			&i.ParentID,
 			&i.Description,
 			&i.Source,
-			&i.Taxonomy,
+			&i.GenreTree,
 			&i.Works,
 		); err != nil {
 			return nil, err
@@ -347,18 +347,18 @@ func (q *Queries) ListTagTree(ctx context.Context, taxonomy interface{}) ([]List
 
 const listTagsByAlias = `-- name: ListTagsByAlias :many
 SELECT t.id FROM tag_alias a JOIN tag t ON t.id = a.tag_id
-WHERE a.alias = ?1 AND t.taxonomy = ?2
+WHERE a.alias = ?1 AND t.genre_tree = ?2
 ORDER BY t.id
 `
 
 type ListTagsByAliasParams struct {
-	Alias    string
-	Taxonomy string
+	Alias     string
+	GenreTree string
 }
 
-// The tags of one taxonomy an alias names; one alias may name several ("Action & Adventure").
+// The tags of one genre tree an alias names; one alias may name several ("Action & Adventure").
 func (q *Queries) ListTagsByAlias(ctx context.Context, arg ListTagsByAliasParams) ([]int64, error) {
-	rows, err := q.db.QueryContext(ctx, listTagsByAlias, arg.Alias, arg.Taxonomy)
+	rows, err := q.db.QueryContext(ctx, listTagsByAlias, arg.Alias, arg.GenreTree)
 	if err != nil {
 		return nil, err
 	}
@@ -380,12 +380,12 @@ func (q *Queries) ListTagsByAlias(ctx context.Context, arg ListTagsByAliasParams
 	return items, nil
 }
 
-const listTagsOfTaxonomy = `-- name: ListTagsOfTaxonomy :many
-SELECT id, name, slug, parent_id, description, source, taxonomy FROM tag WHERE taxonomy = ? ORDER BY id
+const listTagsOfGenreTree = `-- name: ListTagsOfGenreTree :many
+SELECT id, name, slug, parent_id, description, source, genre_tree FROM tag WHERE genre_tree = ? ORDER BY id
 `
 
-func (q *Queries) ListTagsOfTaxonomy(ctx context.Context, taxonomy string) ([]Tag, error) {
-	rows, err := q.db.QueryContext(ctx, listTagsOfTaxonomy, taxonomy)
+func (q *Queries) ListTagsOfGenreTree(ctx context.Context, genreTree string) ([]Tag, error) {
+	rows, err := q.db.QueryContext(ctx, listTagsOfGenreTree, genreTree)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (q *Queries) ListTagsOfTaxonomy(ctx context.Context, taxonomy string) ([]Ta
 			&i.ParentID,
 			&i.Description,
 			&i.Source,
-			&i.Taxonomy,
+			&i.GenreTree,
 		); err != nil {
 			return nil, err
 		}
@@ -420,7 +420,7 @@ SELECT DISTINCT a.subject_id AS work_id, t.name
 FROM tag_assignment a
 JOIN tag_closure c ON c.descendant_id = a.tag_id
 JOIN tag t ON t.id = c.ancestor_id
-WHERE a.subject_type = 'work' AND t.taxonomy <> ''
+WHERE a.subject_type = 'work' AND t.genre_tree <> ''
   AND a.subject_id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?)
 `
 
@@ -534,6 +534,21 @@ func (q *Queries) MoveTagAssignments(ctx context.Context, arg MoveTagAssignments
 	return err
 }
 
+const setGenreTreeSeed = `-- name: SetGenreTreeSeed :exec
+INSERT INTO genre_tree (key, seeded_version) VALUES (?, ?)
+ON CONFLICT (key) DO UPDATE SET seeded_version = excluded.seeded_version
+`
+
+type SetGenreTreeSeedParams struct {
+	Key           string
+	SeededVersion int64
+}
+
+func (q *Queries) SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error {
+	_, err := q.db.ExecContext(ctx, setGenreTreeSeed, arg.Key, arg.SeededVersion)
+	return err
+}
+
 const setTagName = `-- name: SetTagName :exec
 UPDATE tag SET name = ?, slug = ? WHERE id = ?
 `
@@ -560,20 +575,5 @@ type SetTagParentColumnParams struct {
 
 func (q *Queries) SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error {
 	_, err := q.db.ExecContext(ctx, setTagParentColumn, arg.ParentID, arg.ID)
-	return err
-}
-
-const setTaxonomySeed = `-- name: SetTaxonomySeed :exec
-INSERT INTO tag_taxonomy (key, seeded_version) VALUES (?, ?)
-ON CONFLICT (key) DO UPDATE SET seeded_version = excluded.seeded_version
-`
-
-type SetTaxonomySeedParams struct {
-	Key           string
-	SeededVersion int64
-}
-
-func (q *Queries) SetTaxonomySeed(ctx context.Context, arg SetTaxonomySeedParams) error {
-	_, err := q.db.ExecContext(ctx, setTaxonomySeed, arg.Key, arg.SeededVersion)
 	return err
 }

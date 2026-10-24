@@ -79,8 +79,8 @@ type SeriesWrite struct {
 	Fields      []SeriesFieldWrite
 	Genres      []string
 	GenreSource string
-	// GenreTaxonomy is the tag tree the genres are mapped onto, the media type's.
-	GenreTaxonomy  string
+	// GenreTree is the tag tree the genres are mapped onto, the media type's.
+	GenreTree      string
 	Network        string
 	NetworkCountry string
 	// OrganisationKind is what Network and MoreNetworks are: a TV "network" (the default), a movie "studio".
@@ -319,8 +319,8 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 			return fmt.Errorf("library: set date: %w", err)
 		}
 	}
-	if len(write.Genres) > 0 && write.GenreTaxonomy != "" {
-		if err := assignGenres(ctx, queries, workID, write.GenreTaxonomy, write.GenreSource, write.Genres); err != nil {
+	if len(write.Genres) > 0 && write.GenreTree != "" {
+		if err := assignGenres(ctx, queries, workID, write.GenreTree, write.GenreSource, write.Genres); err != nil {
 			return fmt.Errorf("library: genres: %w", err)
 		}
 	}

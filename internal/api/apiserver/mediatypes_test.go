@@ -63,7 +63,7 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 				"options": []any{map[string]any{"key": "release_date", "label": "Album Release Date"}}}},
 			"scan_monitor": map[string]any{"setting": "monitor_discovered", "label": "Monitor discovered",
 				"options": []any{map[string]any{"key": "none", "label": "None"}}},
-			"searches_library": true, "cover_sources": true, "release_filters": false, "taxonomy": map[string]any{"key": "", "label": ""}, "ratings": false,
+			"searches_library": true, "cover_sources": true, "release_filters": false, "genre_tree": map[string]any{"key": "", "label": ""}, "ratings": false,
 		},
 		{
 			"key": "tv", "label": "TV", "work": term("Series", "Series"), "part": term("", ""), "group": term("", ""),
@@ -71,7 +71,7 @@ func TestListMediaTypes_AnswersOnlyTheRegisteredTypesInOrder(t *testing.T) {
 			"kinds":         []any{map[string]any{"key": "series", "label": "Series"}, map[string]any{"key": "anime", "label": "Anime", "help": "Anime."}},
 			"file_settings": []any{}, "scan_monitor": map[string]any{"setting": "", "label": "", "options": []any{}},
 			"unidentified_retry": "tv_retry", "searches_library": false, "cover_sources": false, "release_filters": true,
-			"taxonomy": map[string]any{"key": "", "label": ""}, "ratings": false,
+			"genre_tree": map[string]any{"key": "", "label": ""}, "ratings": false,
 		},
 	}
 	if !reflect.DeepEqual(got, want) {

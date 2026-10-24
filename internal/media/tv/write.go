@@ -157,7 +157,7 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		AliasSource:      "series-merge",
 		Genres:           series.Genres,
 		GenreSource:      source,
-		GenreTaxonomy:    screen.Taxonomy.Key,
+		GenreTree:        screen.GenreTree.Key,
 		Network:          series.Network,
 		NetworkCountry:   series.OriginalCountry,
 		Certification:    series.ContentRating,

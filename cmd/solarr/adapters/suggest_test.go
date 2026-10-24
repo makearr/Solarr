@@ -49,8 +49,8 @@ func TestSuggester_NamesTheLibraryAWorkBelongsIn(t *testing.T) {
 	cache := newSweepCache(t)
 	opened := newSuggestLibrary(t)
 	people := library.NewPeople(opened)
-	if err := people.SeedTaxonomy(t.Context(), screen.Taxonomy.Key, 1, []library.TaxonomyTag{
-		{Name: "Animation", Children: []library.TaxonomyTag{{Name: "Anime"}}}, {Name: "Family"}, {Name: "Drama"}, {Name: "Documentary"},
+	if err := people.SeedGenreTree(t.Context(), screen.GenreTree.Key, 1, []library.GenreTreeTag{
+		{Name: "Animation", Children: []library.GenreTreeTag{{Name: "Anime"}}}, {Name: "Family"}, {Name: "Drama"}, {Name: "Documentary"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestSuggester_ChecksALibrary(t *testing.T) {
 	cache := newSweepCache(t)
 	opened := newSuggestLibrary(t)
 	people := library.NewPeople(opened)
-	if err := people.SeedTaxonomy(t.Context(), screen.Taxonomy.Key, 1, []library.TaxonomyTag{{Name: "Animation"}, {Name: "Documentary"}}); err != nil {
+	if err := people.SeedGenreTree(t.Context(), screen.GenreTree.Key, 1, []library.GenreTreeTag{{Name: "Animation"}, {Name: "Documentary"}}); err != nil {
 		t.Fatal(err)
 	}
 	registry, err := media.NewRegistry(tv.Module{})
@@ -139,7 +139,7 @@ func TestSuggester_ChecksALibrary(t *testing.T) {
 	}{{"Cartoon", "ja", "Animation"}, {"Nature", "en", "Documentary"}} {
 		write := library.SeriesWrite{
 			Work: library.WorkIdentity{MediaType: "tv", CanonicalTitle: entry.title, SortTitle: entry.title}, OriginalLanguage: entry.language,
-			IDs: []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: entry.title}}, Genres: []string{entry.genre}, GenreSource: "tmdb", GenreTaxonomy: "screen",
+			IDs: []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: entry.title}}, Genres: []string{entry.genre}, GenreSource: "tmdb", GenreTree: "screen",
 		}
 		result, err := library.NewSeries(opened).Upsert(t.Context(), clock.NewFakeAtEpoch().Now(), write)
 		if err != nil {

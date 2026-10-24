@@ -1,37 +1,37 @@
--- The tag tree: taxonomies, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
+-- The tag tree: genre trees, aliases, moving and merging tags (plan 10-libraries L1). Column lists follow table order.
 
 -- name: GetTag :one
-SELECT id, name, slug, parent_id, description, source, taxonomy FROM tag WHERE id = ?;
+SELECT id, name, slug, parent_id, description, source, genre_tree FROM tag WHERE id = ?;
 
 -- name: ListTagTree :many
-SELECT t.id, t.name, t.slug, t.parent_id, t.description, t.source, t.taxonomy,
+SELECT t.id, t.name, t.slug, t.parent_id, t.description, t.source, t.genre_tree,
        CAST((SELECT COUNT(DISTINCT a.subject_id) FROM tag_assignment a
              WHERE a.tag_id = t.id AND a.subject_type = 'work') AS INTEGER) AS works
 FROM tag t
-WHERE sqlc.arg(taxonomy) = '*' OR t.taxonomy = sqlc.arg(taxonomy)
-ORDER BY t.taxonomy, t.name COLLATE NOCASE, t.id;
+WHERE sqlc.arg(genre_tree) = '*' OR t.genre_tree = sqlc.arg(genre_tree)
+ORDER BY t.genre_tree, t.name COLLATE NOCASE, t.id;
 
 -- name: ListTagAliases :many
 SELECT tag_id, alias FROM tag_alias ORDER BY tag_id, alias;
 
--- The tags of one taxonomy an alias names; one alias may name several ("Action & Adventure").
+-- The tags of one genre tree an alias names; one alias may name several ("Action & Adventure").
 -- name: ListTagsByAlias :many
 SELECT t.id FROM tag_alias a JOIN tag t ON t.id = a.tag_id
-WHERE a.alias = sqlc.arg(alias) AND t.taxonomy = sqlc.arg(taxonomy)
+WHERE a.alias = sqlc.arg(alias) AND t.genre_tree = sqlc.arg(genre_tree)
 ORDER BY t.id;
 
 -- name: AddTagAlias :exec
 INSERT INTO tag_alias (tag_id, alias) VALUES (?, ?) ON CONFLICT (tag_id, alias) DO NOTHING;
 
--- name: GetTaxonomySeed :one
-SELECT seeded_version FROM tag_taxonomy WHERE key = ?;
+-- name: GetGenreTreeSeed :one
+SELECT seeded_version FROM genre_tree WHERE key = ?;
 
--- name: SetTaxonomySeed :exec
-INSERT INTO tag_taxonomy (key, seeded_version) VALUES (?, ?)
+-- name: SetGenreTreeSeed :exec
+INSERT INTO genre_tree (key, seeded_version) VALUES (?, ?)
 ON CONFLICT (key) DO UPDATE SET seeded_version = excluded.seeded_version;
 
--- name: ListTagsOfTaxonomy :many
-SELECT id, name, slug, parent_id, description, source, taxonomy FROM tag WHERE taxonomy = ? ORDER BY id;
+-- name: ListTagsOfGenreTree :many
+SELECT id, name, slug, parent_id, description, source, genre_tree FROM tag WHERE genre_tree = ? ORDER BY id;
 
 -- name: SetTagName :exec
 UPDATE tag SET name = ?, slug = ? WHERE id = ?;
@@ -69,10 +69,10 @@ SELECT id FROM tag WHERE parent_id = ? ORDER BY id;
 DELETE FROM tag WHERE id = ?;
 
 -- A refresh replaces every provider's genres of a work at once: every source but a person's own.
--- name: ClearWorkProviderTagsOfTaxonomy :exec
+-- name: ClearWorkProviderTagsOfGenreTree :exec
 DELETE FROM tag_assignment
 WHERE subject_type = 'work' AND subject_id = sqlc.arg(work_id) AND source <> 'user'
-  AND tag_id IN (SELECT t.id FROM tag t WHERE t.taxonomy = sqlc.arg(taxonomy));
+  AND tag_id IN (SELECT t.id FROM tag t WHERE t.genre_tree = sqlc.arg(genre_tree));
 
 -- Genres stored before they were tags, a page of works at a time.
 -- name: ListClassificationGenres :many
@@ -84,10 +84,10 @@ ORDER BY wc.work_id, wc.value;
 -- name: ClearClassificationGenres :exec
 DELETE FROM work_classification WHERE work_id = ? AND kind = 'genre';
 
--- A work's genres: its tags of any taxonomy, whoever assigned them.
+-- A work's genres: its tags of any genre tree, whoever assigned them.
 -- name: ListGenreTagsOfWork :many
 SELECT DISTINCT t.name FROM tag_assignment a JOIN tag t ON t.id = a.tag_id
-WHERE a.subject_type = 'work' AND a.subject_id = ? AND t.taxonomy <> ''
+WHERE a.subject_type = 'work' AND a.subject_id = ? AND t.genre_tree <> ''
 ORDER BY t.name;
 
 -- name: ListTagAncestorNames :many
@@ -108,5 +108,5 @@ SELECT DISTINCT a.subject_id AS work_id, t.name
 FROM tag_assignment a
 JOIN tag_closure c ON c.descendant_id = a.tag_id
 JOIN tag t ON t.id = c.ancestor_id
-WHERE a.subject_type = 'work' AND t.taxonomy <> ''
+WHERE a.subject_type = 'work' AND t.genre_tree <> ''
   AND a.subject_id IN (SELECT d.work_id FROM desired_item d WHERE d.category_id = ?);

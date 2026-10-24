@@ -65,9 +65,9 @@ func (p People) UserTags(ctx context.Context, workID int64) ([]TagName, error) {
 	return tags, nil
 }
 
-// SetUserTags makes names the work's own tags: a name its taxonomy knows is that tag, any other a free label, created
+// SetUserTags makes names the work's own tags: a name its genre tree knows is that tag, any other a free label, created
 // when new; provider-assigned tags are untouched.
-func (p People) SetUserTags(ctx context.Context, workID int64, taxonomy string, names []string) error {
+func (p People) SetUserTags(ctx context.Context, workID int64, genreTree string, names []string) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if err := queries.ClearProviderTagAssignments(ctx, librarydb.ClearProviderTagAssignmentsParams{
@@ -76,7 +76,7 @@ func (p People) SetUserTags(ctx context.Context, workID int64, taxonomy string, 
 			return fmt.Errorf("clear existing: %w", err)
 		}
 		for _, name := range names {
-			ids, err := userTag(ctx, queries, taxonomy, name)
+			ids, err := userTag(ctx, queries, genreTree, name)
 			if err != nil {
 				return fmt.Errorf("tag %q: %w", name, err)
 			}
@@ -96,18 +96,18 @@ func (p People) SetUserTags(ctx context.Context, workID int64, taxonomy string, 
 	return nil
 }
 
-// userTag is the tag a person's name means: the taxonomy's by name or alias, else the free label, created when new.
-func userTag(ctx context.Context, queries *librarydb.Queries, taxonomy, name string) ([]int64, error) {
-	if taxonomy != "" {
-		if tag, err := queries.GetTagBySlug(ctx, taxonomySlug(taxonomy, name)); err == nil {
+// userTag is the tag a person's name means: the genre tree's by name or alias, else the free label, created when new.
+func userTag(ctx context.Context, queries *librarydb.Queries, genreTree, name string) ([]int64, error) {
+	if genreTree != "" {
+		if tag, err := queries.GetTagBySlug(ctx, genreTreeSlug(genreTree, name)); err == nil {
 			return []int64{tag.ID}, nil
 		}
-		ids, err := queries.ListTagsByAlias(ctx, librarydb.ListTagsByAliasParams{Alias: slugify(name), Taxonomy: taxonomy})
+		ids, err := queries.ListTagsByAlias(ctx, librarydb.ListTagsByAliasParams{Alias: slugify(name), GenreTree: genreTree})
 		if err != nil || len(ids) > 0 {
 			return ids, err
 		}
 	}
-	if tag, err := queries.GetTagBySlug(ctx, taxonomySlug("", name)); err == nil {
+	if tag, err := queries.GetTagBySlug(ctx, genreTreeSlug("", name)); err == nil {
 		return []int64{tag.ID}, nil
 	}
 	if slugify(name) == "" {

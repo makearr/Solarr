@@ -42,16 +42,16 @@ func (f *fakeWorkEditor) BulkEdit(
 	return 7, f.err
 }
 
-func (f *fakeWorkEditor) TagTree(_ context.Context, taxonomy string) ([]apiserver.TagRow, error) {
+func (f *fakeWorkEditor) TagTree(_ context.Context, genreTree string) ([]apiserver.TagRow, error) {
 	return []apiserver.TagRow{
-		{ID: 1, Name: "Rock", Taxonomy: "music", Source: "taxonomy", Works: 4, Aliases: []string{"rock-music"}},
-		{ID: 2, Name: "Metal", ParentID: 1, Taxonomy: "music", Source: "musicbrainz", Works: 2},
-		{ID: 3, Name: taxonomy, Source: "user"},
+		{ID: 1, Name: "Rock", GenreTree: "music", Source: "shipped", Works: 4, Aliases: []string{"rock-music"}},
+		{ID: 2, Name: "Metal", ParentID: 1, GenreTree: "music", Source: "musicbrainz", Works: 2},
+		{ID: 3, Name: genreTree, Source: "user"},
 	}, nil
 }
 
-func (f *fakeWorkEditor) CreateTag(_ context.Context, name, taxonomy string, parentID int64) (apiserver.TagRow, error) {
-	return apiserver.TagRow{ID: 9, Name: name, ParentID: parentID, Taxonomy: taxonomy, Source: "user"}, f.err
+func (f *fakeWorkEditor) CreateTag(_ context.Context, name, genreTree string, parentID int64) (apiserver.TagRow, error) {
+	return apiserver.TagRow{ID: 9, Name: name, ParentID: parentID, GenreTree: genreTree, Source: "user"}, f.err
 }
 
 func (f *fakeWorkEditor) EditTag(_ context.Context, id int64, name string, parentID int64) error {
@@ -102,18 +102,18 @@ func TestWorkEdit_AnUnknownProfileIs400AndAMissingWorkIs404(t *testing.T) {
 	}
 }
 
-// The tree comes with parents, aliases and counts; taxonomy narrows it, "*" when absent.
+// The tree comes with parents, aliases and counts; genre tree narrows it, "*" when absent.
 func TestListTags_AnswersTheTree(t *testing.T) {
 	fixture, cookies := visibleWorksFixture(t)
-	recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags?taxonomy="))
-	want := `[{"aliases":["rock-music"],"id":1,"name":"Rock","source":"taxonomy","taxonomy":"music","works":4},` +
-		`{"aliases":[],"id":2,"name":"Metal","parent_id":1,"source":"musicbrainz","taxonomy":"music","works":2},` +
-		`{"aliases":[],"id":3,"name":"","source":"user","taxonomy":"","works":0}]` + "\n"
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags?genre_tree="))
+	want := `[{"aliases":["rock-music"],"genre_tree":"music","id":1,"name":"Rock","source":"shipped","works":4},` +
+		`{"aliases":[],"genre_tree":"music","id":2,"name":"Metal","parent_id":1,"source":"musicbrainz","works":2},` +
+		`{"aliases":[],"genre_tree":"","id":3,"name":"","source":"user","works":0}]` + "\n"
 	if recorder.Code != http.StatusOK || recorder.Body.String() != want {
 		t.Fatalf("status %d, body %q", recorder.Code, recorder.Body)
 	}
 	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/tags")); !strings.Contains(recorder.Body.String(), `"name":"*"`) {
-		t.Fatalf("without taxonomy: body %q, want every taxonomy asked for", recorder.Body)
+		t.Fatalf("without genre tree: body %q, want every genre tree asked for", recorder.Body)
 	}
 }
 
@@ -154,7 +154,7 @@ func TestTags_ChangingThemIsAdministratorWork(t *testing.T) {
 		authedPut(t, cookies, "/api/v1/tags/3", `{"name":"Nap","parent_id":null}`),
 		authedDelete(t, cookies, "/api/v1/tags/3"),
 		authedPost(t, cookies, "/api/v1/tags/3/merge", `{"into_id":1}`),
-		authedPost(t, cookies, "/api/v1/tags", `{"name":"Nap","taxonomy":""}`),
+		authedPost(t, cookies, "/api/v1/tags", `{"name":"Nap","genre_tree":""}`),
 	} {
 		if recorder := fixture.do(request); recorder.Code != http.StatusForbidden {
 			t.Fatalf("%s %s by a listener: status %d, want 403", request.Method, request.URL.Path, recorder.Code)
@@ -179,8 +179,8 @@ func TestTags_AnAdministratorEditsMergesDeletesAndConflictsAre409(t *testing.T) 
 	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/tags/3/merge", `{"into_id":1}`)); recorder.Code != http.StatusNoContent || fixture.workEditor.merged != "3 into 1" {
 		t.Fatalf("merge: status %d, merged %q", recorder.Code, fixture.workEditor.merged)
 	}
-	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/tags", `{"name":"Jazz","taxonomy":"music"}`)); recorder.Code != http.StatusOK ||
-		recorder.Body.String() != `{"aliases":[],"id":9,"name":"Jazz","source":"user","taxonomy":"music","works":0}`+"\n" {
+	if recorder := fixture.do(authedPost(t, cookies, "/api/v1/tags", `{"name":"Jazz","genre_tree":"music"}`)); recorder.Code != http.StatusOK ||
+		recorder.Body.String() != `{"aliases":[],"genre_tree":"music","id":9,"name":"Jazz","source":"user","works":0}`+"\n" {
 		t.Fatalf("create: status %d, body %q", recorder.Code, recorder.Body)
 	}
 	if recorder := fixture.do(authedDelete(t, cookies, "/api/v1/tags/3")); recorder.Code != http.StatusNoContent || fixture.workEditor.deleted != 3 {

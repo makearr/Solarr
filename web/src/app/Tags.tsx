@@ -19,33 +19,33 @@ const field = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-s
 /** Where a tag came from, in a person's words. */
 function sourceLabel(source: string): string {
   if (source === "user") return "yours";
-  if (source === "taxonomy") return "shipped";
+  if (source === "shipped") return "shipped";
   return `from ${source}`;
 }
 
-/** Every tag as a tree per genre taxonomy, plus the free labels: renamed, moved under another, merged, added or
+/** Every tag as a tree per genre tree, plus the free labels: renamed, moved under another, merged, added or
  *  deleted here. A provider's genre renamed or merged keeps its old name as an alias, so a refresh follows. */
 export function Tags() {
   const queryClient = useQueryClient();
   const administrator = useIsAdministrator();
   const navigate = useNavigate();
-  const search = useSearch({ strict: false }) as { taxonomy?: string };
+  const search = useSearch({ strict: false }) as { tree?: string };
   const tree = useTagTree();
-  const taxonomies = [...new Map(useMediaTypes().filter((info) => info.taxonomy.key !== "").map((info) => [info.taxonomy.key, info.taxonomy.label]))];
-  const taxonomy = search.taxonomy ?? taxonomies[0]?.[0] ?? "";
-  const choose = (key: string) => void navigate({ to: ".", search: (previous: Record<string, unknown>) => ({ ...previous, taxonomy: key }) });
+  const genreTrees = [...new Map(useMediaTypes().filter((info) => info.genre_tree.key !== "").map((info) => [info.genre_tree.key, info.genre_tree.label]))];
+  const genreTree = search.tree ?? genreTrees[0]?.[0] ?? "";
+  const choose = (key: string) => void navigate({ to: ".", search: (previous: Record<string, unknown>) => ({ ...previous, tree: key }) });
   const [editing, setEditing] = useState<{ id: number; name: string; parentId: number; mergeInto: number } | null>(null);
   const [adding, setAdding] = useState<{ name: string; parentId: number } | null>(null);
 
   const all = tree.data ?? [];
-  const rows = orderedTags(all, taxonomy).filter(({ tag }) => tag.taxonomy === taxonomy);
-  const inTaxonomy = all.filter((tag) => tag.taxonomy === taxonomy);
+  const rows = orderedTags(all, genreTree).filter(({ tag }) => tag.genre_tree === genreTree);
+  const inGenreTree = all.filter((tag) => tag.genre_tree === genreTree);
   // A tag may not go under itself or anything below it.
   const below = (id: number): Set<number> => {
     const out = new Set([id]);
     for (let grew = true; grew; ) {
       grew = false;
-      for (const tag of inTaxonomy) {
+      for (const tag of inGenreTree) {
         if (tag.parent_id && out.has(tag.parent_id) && !out.has(tag.id)) {
           out.add(tag.id);
           grew = true;
@@ -82,7 +82,7 @@ export function Tags() {
   });
   const create = useMutation({
     mutationFn: async (target: NonNullable<typeof adding>) => {
-      const { error, response } = await api.POST("/tags", { body: { name: target.name, taxonomy, parent_id: target.parentId || null } });
+      const { error, response } = await api.POST("/tags", { body: { name: target.name, genre_tree: genreTree, parent_id: target.parentId || null } });
       if (error) throw failure(response.status);
     },
     onSuccess: () => {
@@ -99,8 +99,8 @@ export function Tags() {
   });
 
   const parentChoices = (exclude: Set<number>) =>
-    orderedTags(inTaxonomy, taxonomy)
-      .filter(({ tag }) => tag.taxonomy === taxonomy && !exclude.has(tag.id))
+    orderedTags(inGenreTree, genreTree)
+      .filter(({ tag }) => tag.genre_tree === genreTree && !exclude.has(tag.id))
       .map(({ tag, depth }) => (
         <option key={tag.id} value={tag.id}>
           {"  ".repeat(depth)}
@@ -146,15 +146,15 @@ export function Tags() {
       title="Tags"
       help="Genres are tags in a tree per kind of media: choosing Rock in a library's Tags filter finds Metal too. Providers' genres land in it by name or alias; yours are never removed by a refresh. Free labels are tags of your own outside any tree."
     >
-      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Taxonomy">
-        {[...taxonomies, ["", "Free labels"] as [string, string]].map(([key, label]) => (
+      <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Genre tree">
+        {[...genreTrees, ["", "Free labels"] as [string, string]].map(([key, label]) => (
           <button
             key={key || "free"}
             type="button"
             role="tab"
-            aria-selected={key === taxonomy}
+            aria-selected={key === genreTree}
             onClick={() => choose(key)}
-            className={`rounded-md border px-3 py-1 text-sm ${key === taxonomy ? "border-accent text-ink" : "border-border-subtle text-ink-muted"}`}
+            className={`rounded-md border px-3 py-1 text-sm ${key === genreTree ? "border-accent text-ink" : "border-border-subtle text-ink-muted"}`}
           >
             {label}
           </button>
@@ -174,7 +174,7 @@ export function Tags() {
           }}
         >
           <input autoFocus value={adding.name} onChange={(event) => setAdding({ ...adding, name: event.target.value })} aria-label="New tag name" placeholder="Name" className={`min-w-0 flex-1 ${field}`} />
-          {taxonomy !== "" && (
+          {genreTree !== "" && (
             <select value={adding.parentId} onChange={(event) => setAdding({ ...adding, parentId: Number(event.target.value) })} aria-label="Under" className={field}>
               <option value={0}>(top)</option>
               {parentChoices(new Set())}
@@ -191,7 +191,7 @@ export function Tags() {
       {tree.isLoading && <p className="text-sm text-ink-muted">Loading…</p>}
       {tree.error !== null && !tree.isLoading && <p className="text-sm text-danger">The tags could not be read.</p>}
       {tree.data && rows.length === 0 && (
-        <p className="text-sm text-ink-muted">{taxonomy === "" ? "No labels yet. Add one here or from an Edit dialog." : "No genres yet; a refresh brings the providers'."}</p>
+        <p className="text-sm text-ink-muted">{genreTree === "" ? "No labels yet. Add one here or from an Edit dialog." : "No genres yet; a refresh brings the providers'."}</p>
       )}
       <ul className="flex max-w-3xl flex-col rounded-md border border-border-subtle">
         {rows.map(({ tag, depth }) => (
@@ -214,7 +214,7 @@ export function Tags() {
                       type="button"
                       disabled={remove.isPending}
                       onClick={() => {
-                        const back = tag.source === "user" || tag.source === "taxonomy" ? "" : " A provider's genre comes back with the next refresh; merge it instead to keep it away.";
+                        const back = tag.source === "user" || tag.source === "shipped" ? "" : " A provider's genre comes back with the next refresh; merge it instead to keep it away.";
                         if (confirm(`Delete the tag "${tag.name}"? It comes off ${tag.works} ${tag.works === 1 ? "item" : "items"}; tags below it move up.${back}`)) {
                           remove.mutate(tag.id);
                         }

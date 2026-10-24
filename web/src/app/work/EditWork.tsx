@@ -209,7 +209,7 @@ export function EditWork({ work, info, onClose }: { work: Work; info: MediaTypeI
               {rootChanged && <span className="text-xs text-ink-muted">Its files move there when you save.</span>}
             </label>
           )}
-          <TagPicker label="Tags" taxonomy={info?.taxonomy.key ?? ""} names={form.tags} onChange={(tags) => change({ tags })} />
+          <TagPicker label="Tags" genreTree={info?.genre_tree.key ?? ""} names={form.tags} onChange={(tags) => change({ tags })} />
           {save.isError && <p className="text-xs text-danger">{(save.error as { detail?: string }).detail ?? "That could not be saved."}</p>}
         </div>
       )}
@@ -410,8 +410,8 @@ export function BulkEditWork({
             </select>
           </label>
         ))}
-        <TagPicker label="Add tags" taxonomy={info?.taxonomy.key ?? ""} names={addTags} onChange={(tags) => { setAddTags(tags); changed(); }} />
-        <TagPicker label="Remove tags" taxonomy={info?.taxonomy.key ?? ""} names={removeTags} onChange={(tags) => { setRemoveTags(tags); changed(); }} />
+        <TagPicker label="Add tags" genreTree={info?.genre_tree.key ?? ""} names={addTags} onChange={(tags) => { setAddTags(tags); changed(); }} />
+        <TagPicker label="Remove tags" genreTree={info?.genre_tree.key ?? ""} names={removeTags} onChange={(tags) => { setRemoveTags(tags); changed(); }} />
         {send.isError && <p className="text-sm text-danger">That could not be applied.</p>}
       </div>
     </Dialog>

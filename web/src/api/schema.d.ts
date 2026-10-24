@@ -2055,10 +2055,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels). */
+        /** The tag tree, every genre tree's and the free labels, by name; genre tree narrows it to one ("" for the free labels). */
         get: operations["listTags"];
         put?: never;
-        /** Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only. */
+        /** Add a tag to a genre tree ("" for a free label), under a parent of the same genre tree or at the top. Administrator only. */
         post: operations["createTag"];
         delete?: never;
         options?: never;
@@ -2076,7 +2076,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only. */
+        /** Rename a tag and place it under another of its genre tree (parent_id null for the top). A provider's genre keeps its old name as an alias, so the next refresh finds it again. Administrator only. */
         put: operations["editTag"];
         post?: never;
         /** Delete a tag and take it off every work; its children move up. A provider's genre comes back with the next refresh: merge it instead. Administrator only. */
@@ -2097,7 +2097,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias. Administrator only. */
+        /** Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias. Administrator only. */
         post: operations["mergeTag"];
         delete?: never;
         options?: never;
@@ -5069,18 +5069,18 @@ export interface components {
             name: string;
             /**
              * Format: int64
-             * @description Absent at the top of its taxonomy.
+             * @description Absent at the top of its genre tree.
              */
             parent_id?: number;
-            /** @description The taxonomy's key; empty for a free label. */
-            taxonomy: string;
-            /** @description user, taxonomy (the shipped tree) or the provider that named it */
+            /** @description The genre tree's key; empty for a free label. */
+            genre_tree: string;
+            /** @description user, shipped (the shipped tree) or the provider that named it */
             source: string;
             /** Format: int64 */
             works: number;
             aliases: string[];
         };
-        Taxonomy: {
+        GenreTree: {
             key: string;
             label: string;
         };
@@ -5088,7 +5088,7 @@ export interface components {
             key: components["schemas"]["MediaType"];
             /** @description Also the default name of a library of this type. */
             label: string;
-            taxonomy: components["schemas"]["Taxonomy"];
+            genre_tree: components["schemas"]["GenreTree"];
             /** @description Its works carry certifications a library's maximum rating limits. */
             ratings: boolean;
             work: components["schemas"]["MediaTerm"];
@@ -11507,7 +11507,7 @@ export interface operations {
     listTags: {
         parameters: {
             query?: {
-                taxonomy?: string;
+                genre_tree?: string;
             };
             header?: never;
             path?: never;
@@ -11538,7 +11538,7 @@ export interface operations {
             content: {
                 "application/json": {
                     name: string;
-                    taxonomy: string;
+                    genre_tree: string;
                     /** Format: int64 */
                     parent_id?: number | null;
                 };

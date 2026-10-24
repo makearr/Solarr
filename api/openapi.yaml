@@ -3226,9 +3226,9 @@ paths:
     get:
       operationId: listTags
       tags: [library]
-      summary: The tag tree, every taxonomy's and the free labels, by name; taxonomy narrows it to one ("" for the free labels).
+      summary: The tag tree, every genre tree's and the free labels, by name; genre tree narrows it to one ("" for the free labels).
       parameters:
-        - name: taxonomy
+        - name: genre_tree
           in: query
           schema: { type: string }
       responses:
@@ -3243,17 +3243,17 @@ paths:
     post:
       operationId: createTag
       tags: [library]
-      summary: Add a tag to a taxonomy ("" for a free label), under a parent of the same taxonomy or at the top. Administrator only.
+      summary: Add a tag to a genre tree ("" for a free label), under a parent of the same genre tree or at the top. Administrator only.
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [name, taxonomy]
+              required: [name, genre_tree]
               properties:
                 name: { type: string }
-                taxonomy: { type: string }
+                genre_tree: { type: string }
                 parent_id: { type: integer, format: int64, nullable: true }
       responses:
         "200":
@@ -3275,7 +3275,7 @@ paths:
       operationId: editTag
       tags: [library]
       summary: >-
-        Rename a tag and place it under another of its taxonomy (parent_id null for the top). A provider's genre keeps
+        Rename a tag and place it under another of its genre tree (parent_id null for the top). A provider's genre keeps
         its old name as an alias, so the next refresh finds it again. Administrator only.
       requestBody:
         required: true
@@ -3314,7 +3314,7 @@ paths:
       operationId: mergeTag
       tags: [library]
       summary: >-
-        Fold this tag into another of its taxonomy: works, aliases and children move over, its name becomes an alias.
+        Fold this tag into another of its genre tree: works, aliases and children move over, its name becomes an alias.
         Administrator only.
       requestBody:
         required: true
@@ -7963,19 +7963,19 @@ components:
 
     TagNode:
       type: object
-      required: [id, name, taxonomy, source, works, aliases]
+      required: [id, name, genre_tree, source, works, aliases]
       properties:
         id: { type: integer, format: int64 }
         name: { type: string }
-        parent_id: { type: integer, format: int64, description: Absent at the top of its taxonomy. }
-        taxonomy: { type: string, description: The taxonomy's key; empty for a free label. }
-        source: { type: string, description: "user, taxonomy (the shipped tree) or the provider that named it" }
+        parent_id: { type: integer, format: int64, description: Absent at the top of its genre tree. }
+        genre_tree: { type: string, description: The genre tree's key; empty for a free label. }
+        source: { type: string, description: "user, shipped (the shipped tree) or the provider that named it" }
         works: { type: integer, format: int64 }
         aliases:
           type: array
           items: { type: string }
 
-    Taxonomy:
+    GenreTree:
       type: object
       required: [key, label]
       properties:
@@ -7984,11 +7984,11 @@ components:
 
     MediaTypeInfo:
       type: object
-      required: [key, label, taxonomy, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
+      required: [key, label, genre_tree, ratings, work, part, group, lead_people, organisation, roles, follow_options, facets, monitor_options, search_terms, work_image, wanted_grain, add_kinds, commits_held_imports, duplicates_by_name, file_settings, scan_monitor, searches_library, cover_sources, release_filters]
       properties:
         key: { $ref: "#/components/schemas/MediaType" }
         label: { type: string, description: Also the default name of a library of this type. }
-        taxonomy: { $ref: "#/components/schemas/Taxonomy" }
+        genre_tree: { $ref: "#/components/schemas/GenreTree" }
         ratings: { type: boolean, description: Its works carry certifications a library's maximum rating limits. }
         work: { $ref: "#/components/schemas/MediaTerm" }
         part: { $ref: "#/components/schemas/MediaTerm" }

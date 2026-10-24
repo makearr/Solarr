@@ -12,15 +12,15 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 )
 
-var musicTree = []library.TaxonomyTag{
-	{Name: "Rock", Children: []library.TaxonomyTag{{Name: "Metal"}}},
+var musicTree = []library.GenreTreeTag{
+	{Name: "Rock", Children: []library.GenreTreeTag{{Name: "Metal"}}},
 	{Name: "Hip Hop", Aliases: []string{"rap", "hip hop music"}},
 }
 
-// tagPaths renders a taxonomy's tree as "Parent/Child" paths with their work counts, sorted.
-func tagPaths(t *testing.T, people library.People, taxonomy string) []string {
+// tagPaths renders a genre tree's tree as "Parent/Child" paths with their work counts, sorted.
+func tagPaths(t *testing.T, people library.People, genreTree string) []string {
 	t.Helper()
-	tree, err := people.TagTree(t.Context(), taxonomy)
+	tree, err := people.TagTree(t.Context(), genreTree)
 	if err != nil {
 		t.Fatalf("TagTree: %v", err)
 	}
@@ -42,7 +42,7 @@ func tagPaths(t *testing.T, people library.People, taxonomy string) []string {
 
 // The shipped tree takes over a provider's tag of the same name, places the rest by the genre their name ends with
 // and is applied once per version.
-func TestSeedTaxonomy_PlacesProviderGenresUnderTheShippedTree(t *testing.T) {
+func TestSeedGenreTree_PlacesProviderGenresUnderTheShippedTree(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 	work := createWork(t, opened, "music", "Alpha")
@@ -52,16 +52,16 @@ func TestSeedTaxonomy_PlacesProviderGenresUnderTheShippedTree(t *testing.T) {
 		t.Fatalf("AssignGenres: %v", err)
 	}
 
-	if err := people.SeedTaxonomy(t.Context(), "music", 1, musicTree); err != nil {
-		t.Fatalf("SeedTaxonomy: %v", err)
+	if err := people.SeedGenreTree(t.Context(), "music", 1, musicTree); err != nil {
+		t.Fatalf("SeedGenreTree: %v", err)
 	}
 	want := []string{"Hip Hop 1", "Polka 1", "Rock 1", "Rock/Metal 0", "Rock/Metal/Alternative Metal 1"}
 	if got := tagPaths(t, people, "music"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("tree = %v\nwant %v", got, want)
 	}
 
-	if err := people.SeedTaxonomy(t.Context(), "music", 1, []library.TaxonomyTag{{Name: "Polka"}}); err != nil {
-		t.Fatalf("SeedTaxonomy again: %v", err)
+	if err := people.SeedGenreTree(t.Context(), "music", 1, []library.GenreTreeTag{{Name: "Polka"}}); err != nil {
+		t.Fatalf("SeedGenreTree again: %v", err)
 	}
 	if got := tagPaths(t, people, "music"); !reflect.DeepEqual(got, want) {
 		t.Fatalf("the same version applied twice: tree = %v", got)
@@ -76,13 +76,13 @@ func TestSeedTaxonomy_PlacesProviderGenresUnderTheShippedTree(t *testing.T) {
 	}
 }
 
-// A provider's genre renamed keeps its old name as an alias; a move refuses another taxonomy and its own subtree; a
+// A provider's genre renamed keeps its old name as an alias; a move refuses another genre tree and its own subtree; a
 // merge carries works and the merged name; a delete moves the children up.
 func TestTagTree_EditMergeDelete(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	if err := people.SeedTaxonomy(t.Context(), "music", 1, musicTree); err != nil {
-		t.Fatalf("SeedTaxonomy: %v", err)
+	if err := people.SeedGenreTree(t.Context(), "music", 1, musicTree); err != nil {
+		t.Fatalf("SeedGenreTree: %v", err)
 	}
 	work := createWork(t, opened, "music", "Alpha")
 	if err := people.AssignGenres(t.Context(), work.ID, "music", []library.GenreLink{{Name: "thrash"}}); err != nil {
@@ -106,7 +106,7 @@ func TestTagTree_EditMergeDelete(t *testing.T) {
 		t.Fatalf("CreateTag: %v", err)
 	}
 	for name, move := range map[string]func() error{
-		"under another taxonomy":   func() error { return people.EditTag(t.Context(), ids["Rock"], "Rock", free) },
+		"under another genre tree": func() error { return people.EditTag(t.Context(), ids["Rock"], "Rock", free) },
 		"under its own descendant": func() error { return people.EditTag(t.Context(), ids["Rock"], "Rock", ids["Metal"]) },
 		"into its own descendant":  func() error { return people.MergeTag(t.Context(), ids["Rock"], ids["Metal"]) },
 	} {
@@ -153,14 +153,14 @@ func tagIDs(t *testing.T, people library.People) map[string]int64 {
 	return ids
 }
 
-// Genres stored before they were tags move into the work's type's taxonomy, aliases splitting a combined one.
-func TestConvertClassificationGenres_MovesThemIntoTheTaxonomy(t *testing.T) {
+// Genres stored before they were tags move into the work's type's genre tree, aliases splitting a combined one.
+func TestConvertClassificationGenres_MovesThemIntoTheGenreTree(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	if err := people.SeedTaxonomy(t.Context(), "screen", 1, []library.TaxonomyTag{
+	if err := people.SeedGenreTree(t.Context(), "screen", 1, []library.GenreTreeTag{
 		{Name: "Action", Aliases: []string{"Action & Adventure"}}, {Name: "Adventure", Aliases: []string{"Action & Adventure"}},
 	}); err != nil {
-		t.Fatalf("SeedTaxonomy: %v", err)
+		t.Fatalf("SeedGenreTree: %v", err)
 	}
 	series := createWork(t, opened, "tv", "Show")
 	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
@@ -190,8 +190,8 @@ func TestConvertClassificationGenres_MovesThemIntoTheTaxonomy(t *testing.T) {
 func TestWorksList_FiltersByTagChipsWithTheirSubtree(t *testing.T) {
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
-	if err := people.SeedTaxonomy(t.Context(), "music", 1, musicTree); err != nil {
-		t.Fatalf("SeedTaxonomy: %v", err)
+	if err := people.SeedGenreTree(t.Context(), "music", 1, musicTree); err != nil {
+		t.Fatalf("SeedGenreTree: %v", err)
 	}
 	metal, rap, _ := createWork(t, opened, "music", "Metal album"), createWork(t, opened, "music", "Rap album"), createWork(t, opened, "music", "Plain album")
 	for work, genre := range map[int64]string{metal.ID: "Metal", rap.ID: "rap"} {

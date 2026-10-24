@@ -153,9 +153,9 @@ var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorDiscovered, Lab
 
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
-		Key:      MediaType,
-		Label:    "Music",
-		Taxonomy: Taxonomy,
+		Key:       MediaType,
+		Label:     "Music",
+		GenreTree: GenreTree,
 		Vocabulary: media.Vocabulary{
 			Work:         media.Term{One: "Album", Many: "Albums"},
 			Part:         media.Term{One: "Track", Many: "Tracks"},

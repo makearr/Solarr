@@ -210,6 +210,10 @@
         "many": true
       }
     ],
+    "genre_tree": {
+      "key": "music",
+      "label": "Music"
+    },
     "group": {
       "many": "Discs",
       "one": "Disc"
@@ -270,10 +274,6 @@
       }
     ],
     "searches_library": true,
-    "taxonomy": {
-      "key": "music",
-      "label": "Music"
-    },
     "wanted_grain": "work",
     "work": {
       "many": "Albums",
@@ -595,6 +595,10 @@
         "many": false
       }
     ],
+    "genre_tree": {
+      "key": "screen",
+      "label": "Film and TV"
+    },
     "group": {
       "many": "Seasons",
       "one": "Season"
@@ -774,10 +778,6 @@
     },
     "search_terms": [],
     "searches_library": false,
-    "taxonomy": {
-      "key": "screen",
-      "label": "Film and TV"
-    },
     "unidentified_retry": "tv_retry",
     "wanted_grain": "part",
     "work": {
@@ -934,6 +934,10 @@
       }
     ],
     "follow_options": [],
+    "genre_tree": {
+      "key": "screen",
+      "label": "Film and TV"
+    },
     "group": {
       "many": "",
       "one": ""
@@ -1056,10 +1060,6 @@
     },
     "search_terms": [],
     "searches_library": false,
-    "taxonomy": {
-      "key": "screen",
-      "label": "Film and TV"
-    },
     "wanted_grain": "work",
     "work": {
       "many": "Movies",

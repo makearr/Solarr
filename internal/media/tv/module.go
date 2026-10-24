@@ -254,9 +254,9 @@ var scanMonitoring = media.ScanMonitor{Setting: media.ScanMonitorParts, Label: "
 
 func (Module) Descriptor() media.Descriptor {
 	return media.Descriptor{
-		Key:      media.Key(MediaType),
-		Label:    "TV",
-		Taxonomy: screen.Taxonomy,
+		Key:       media.Key(MediaType),
+		Label:     "TV",
+		GenreTree: screen.GenreTree,
 		Vocabulary: media.Vocabulary{
 			Work:         media.Term{One: "Series", Many: "Series"},
 			Part:         media.Term{One: "Episode", Many: "Episodes"},
