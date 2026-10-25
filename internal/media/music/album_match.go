@@ -327,7 +327,7 @@ func fitTracklist(locals []LocalTrack, release musicbrainz.Release) tracklistFit
 
 // scoreRelease scores one release, pairing its tracklist once per distinct tracklist in fits:
 // a group's pressings mostly share one, and pairing is the costly part (Kocose Cici, 2026-09-26).
-func scoreRelease(locals []LocalTrack, candidate AlbumCandidate, fits map[string]tracklistFit) ReleaseScore {
+func scoreRelease(locals []LocalTrack, facts folderFacts, candidate AlbumCandidate, fits map[string]tracklistFit) ReleaseScore {
 	key := tracklistKey(candidate.Release)
 	fit, found := fits[key]
 	if !found {
@@ -344,7 +344,7 @@ func scoreRelease(locals []LocalTrack, candidate AlbumCandidate, fits map[string
 		d.add(dimensionTracks, cost)
 	}
 
-	artistOK := addAlbumDimensions(&d, locals, candidate)
+	artistOK := addAlbumDimensions(&d, facts, candidate)
 	for range min(fit.trackCount-score.Mapped, len(locals)) {
 		d.add(dimensionMissingTracks, 1)
 	}
@@ -357,7 +357,7 @@ func scoreRelease(locals []LocalTrack, candidate AlbumCandidate, fits map[string
 	score.GateDistance = d.normalized(dimensionMissingTracks, dimensionReleaseType)
 	// Positions and lengths agree with too many albums; enough titles or recordings must too.
 	quorum := score.Supported >= min(2, len(locals))
-	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum && !playlistOnCompilation(locals, score) &&
+	score.Accepted = len(locals) > 0 && !score.Contradicted && artistOK && quorum && !playlistOnCompilation(locals, facts, score) &&
 		score.GateDistance <= albumAcceptDistance &&
 		float64(score.Mapped)/float64(len(locals)) >= minMappedFraction
 	return score
@@ -366,12 +366,11 @@ func scoreRelease(locals []LocalTrack, candidate AlbumCandidate, fits map[string
 // playlistOnCompilation is a compilation the folder does not name, holding its files in another
 // order than theirs: a playlist of hits it happens to contain, not the folder's album (XT/QK's
 // "Essentials" on the box set "The Collection", 2026-09-27). Its tracks are identified one by one.
-func playlistOnCompilation(locals []LocalTrack, score ReleaseScore) bool {
+func playlistOnCompilation(locals []LocalTrack, facts folderFacts, score ReleaseScore) bool {
 	if releaseTypePenalty(score.Candidate.ReleaseGroup) < 1 {
 		return false
 	}
-	album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album })
-	if (album.present() || folderAlbum(locals) != "") && albumTitlePenalty(locals, album, score.Candidate) <= namedAlbumPenalty {
+	if (facts.album.present() || facts.folderAlbum != "") && albumTitlePenalty(facts, score.Candidate) <= namedAlbumPenalty {
 		return false
 	}
 	claimed, agreeing := 0, 0
@@ -388,9 +387,9 @@ func playlistOnCompilation(locals []LocalTrack, score ReleaseScore) bool {
 }
 
 // addAlbumDimensions adds artist, album and year, answering whether the artist is plausible.
-func addAlbumDimensions(d *distance, locals []LocalTrack, candidate AlbumCandidate) bool {
+func addAlbumDimensions(d *distance, facts folderFacts, candidate AlbumCandidate) bool {
 	artistOK := true
-	if artist := consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist }); artist.present() &&
+	if artist := facts.artist; artist.present() &&
 		!isVariousArtists(candidate) && candidate.ArtistCredit != "" {
 		penalty := artistPenalty(artist.Value, candidate.ArtistCredit)
 		if candidate.ArtistNames != "" {
@@ -399,10 +398,10 @@ func addAlbumDimensions(d *distance, locals []LocalTrack, candidate AlbumCandida
 		artistOK = penalty <= maxArtistPenalty
 		d.add(dimensionArtist, dampened(penalty, artist.Provenance))
 	}
-	if album := consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }); album.present() {
-		d.add(dimensionAlbum, dampened(albumTitlePenalty(locals, album, candidate), album.Provenance))
+	if album := facts.album; album.present() {
+		d.add(dimensionAlbum, dampened(albumTitlePenalty(facts, candidate), album.Provenance))
 	}
-	if year, releaseYear := consensusYear(locals), yearOf(candidate.Release.Date); year > 0 && releaseYear > 0 {
+	if year, releaseYear := facts.year, yearOf(candidate.Release.Date); year > 0 && releaseYear > 0 {
 		gap := math.Abs(float64(year - releaseYear))
 		d.add(dimensionYear, min(1, gap/10))
 	}
@@ -410,9 +409,9 @@ func addAlbumDimensions(d *distance, locals []LocalTrack, candidate AlbumCandida
 }
 
 // albumTitlePenalty is how far the closest title the files give for their album is from the candidate's.
-func albumTitlePenalty(locals []LocalTrack, album Claim, candidate AlbumCandidate) float64 {
+func albumTitlePenalty(facts folderFacts, candidate AlbumCandidate) float64 {
 	penalty := 1.0
-	for _, title := range []string{album.Value, cleanAlbumTag(album.Value), folderAlbum(locals)} {
+	for _, title := range facts.albumTitles {
 		if title == "" {
 			continue
 		}
@@ -550,8 +549,9 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 	locals = withoutCollidingDiscs(locals)
 	scores := make([]ReleaseScore, len(candidates))
 	fits := make(map[string]tracklistFit)
+	facts := factsOf(locals)
 	for i, candidate := range candidates {
-		scores[i] = scoreRelease(locals, candidate, fits)
+		scores[i] = scoreRelease(locals, facts, candidate, fits)
 	}
 	slices.SortStableFunc(scores, func(a, b ReleaseScore) int { return compareScores(a, b, len(locals)) })
 	decision := AlbumDecision{Scores: scores}
@@ -603,6 +603,27 @@ func DecideAlbum(locals []LocalTrack, candidates []AlbumCandidate) AlbumDecision
 // settled is a decision that identified the album or put it to the user; anything else may yet split.
 func (d AlbumDecision) settled() bool {
 	return d.Outcome == AlbumIdentified || d.Outcome == AlbumAmbiguous
+}
+
+// folderFacts is what the files claim as a whole, read once per decision rather than once per candidate: cleaning the
+// album tag parses it as a release name, and a popular album is pressed a hundred times.
+type folderFacts struct {
+	artist, album Claim
+	folderAlbum   string
+	// albumTitles are the titles the files give their album: the tag, the tag cleaned, the folder's.
+	albumTitles []string
+	year        int
+}
+
+func factsOf(locals []LocalTrack) folderFacts {
+	facts := folderFacts{
+		artist:      consensusClaim(locals, func(t LocalTrack) Claim { return t.Artist }),
+		album:       consensusClaim(locals, func(t LocalTrack) Claim { return t.Album }),
+		folderAlbum: folderAlbum(locals),
+		year:        consensusYear(locals),
+	}
+	facts.albumTitles = []string{facts.album.Value, cleanAlbumTag(facts.album.Value), facts.folderAlbum}
+	return facts
 }
 
 // folderAlbum is the album the folder names, empty when no file's path gave one.

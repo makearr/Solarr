@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
+	"github.com/makearr/Solarr/internal/db/library"
 )
 
 func TestApplyBulkChange_LaysOnlyWhatIsPresentOverTheAlbum(t *testing.T) {
@@ -41,5 +42,19 @@ func TestApplyBulkChange_LaysOnlyWhatIsPresentOverTheAlbum(t *testing.T) {
 				t.Errorf("got %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// Saving the tags a work already has, in whatever order, writes nothing.
+func TestSameTagNames_IgnoresOrderButNotContent(t *testing.T) {
+	current := []library.TagName{{ID: 1, Name: "Rock"}, {ID: 2, Name: "Live"}}
+	if !sameTagNames(current, []string{"Live", "Rock"}) {
+		t.Error("the same tags in another order read as a change")
+	}
+	if sameTagNames(current, []string{"Live"}) || sameTagNames(current, []string{"Live", "Jazz"}) {
+		t.Error("different tags read as the same")
+	}
+	if !sameTagNames(nil, []string{}) {
+		t.Error("no tags before and after read as a change")
 	}
 }

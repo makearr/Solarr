@@ -3,6 +3,7 @@ package judge
 import (
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/identify/model"
 )
@@ -90,10 +91,37 @@ func ApplyFilters(decision model.Decision, filters []ReleaseFilter, title, group
 
 func (f ReleaseFilter) matches(text string) bool {
 	if f.IsRegex {
-		pattern, err := regexp.Compile("(?i)" + f.Value)
-		return err == nil && pattern.MatchString(text)
+		pattern := compiledFilter(f.Value)
+		return pattern != nil && pattern.MatchString(text)
 	}
 	return strings.Contains(strings.ToLower(text), strings.ToLower(f.Value))
+}
+
+// filterPatterns keeps each regex rule compiled once: a search judges every release against every rule, and compiling
+// cost more than matching. Nil records a pattern that does not compile.
+var filterPatterns = struct {
+	sync.Mutex
+	compiled map[string]*regexp.Regexp
+}{compiled: map[string]*regexp.Regexp{}}
+
+// maxFilterPatterns bounds the cache; rules are few, and one past it starts the cache over.
+const maxFilterPatterns = 1024
+
+func compiledFilter(value string) *regexp.Regexp {
+	filterPatterns.Lock()
+	defer filterPatterns.Unlock()
+	if pattern, found := filterPatterns.compiled[value]; found {
+		return pattern
+	}
+	pattern, err := regexp.Compile("(?i)" + value)
+	if err != nil {
+		pattern = nil
+	}
+	if len(filterPatterns.compiled) >= maxFilterPatterns {
+		clear(filterPatterns.compiled)
+	}
+	filterPatterns.compiled[value] = pattern
+	return pattern
 }
 
 func anyMatches(filters []ReleaseFilter, text string) bool {

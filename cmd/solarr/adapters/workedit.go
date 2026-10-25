@@ -140,13 +140,28 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 			return err
 		}
 	}
+	// Written only where it changes: a write marks the item for the planner again, and a bulk edit that only tags
+	// thousands of works must not have every one of them planned over.
 	for _, item := range items {
+		current, found, err := a.Desired.ProfileOverride(ctx, item.ID)
+		if err != nil {
+			return err
+		}
+		if found == (edit.ProfileID != nil) && (!found || current == *edit.ProfileID) {
+			continue
+		}
 		if err := a.Desired.SetProfileOverride(ctx, item.ID, edit.ProfileID); err != nil {
 			return err
 		}
 	}
-	if err := a.People.SetUserTags(ctx, workID, a.GenreTree(mediaType), names); err != nil {
+	tags, err := a.People.UserTags(ctx, workID)
+	if err != nil {
 		return err
+	}
+	if !sameTagNames(tags, names) {
+		if err := a.People.SetUserTags(ctx, workID, a.GenreTree(mediaType), names); err != nil {
+			return err
+		}
 	}
 	refresh := false
 	manual, err := a.Monitor.Works.ManualFields(ctx, workID)
@@ -170,6 +185,22 @@ func (a WorkEdit) SaveWorkEdit(ctx context.Context, workID int64, edit apiserver
 		}
 	}
 	return nil
+}
+
+// sameTagNames says whether the work already carries exactly these tags, in any order. A name that is an alias of the
+// tag it resolves to reads as a change, which only costs the rewrite.
+func sameTagNames(current []library.TagName, names []string) bool {
+	if len(current) != len(names) {
+		return false
+	}
+	have := make([]string, len(current))
+	for i, tag := range current {
+		have[i] = tag.Name
+	}
+	want := slices.Clone(names)
+	slices.Sort(have)
+	slices.Sort(want)
+	return slices.Equal(have, want)
 }
 
 // refreshesWork says whether changing the work field reads the work again.

@@ -1,10 +1,17 @@
 package match
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // EditPenalty is normalised Levenshtein distance (0 identical, 1 nothing shared) over normalized
 // titles; unlike TitleSimilarity a shared prefix earns nothing, so "Voca Pebu a Maha" stays far from "Voca Pebu Tepa".
 func EditPenalty(a, b string) float64 {
+	// Equal titles are the common case, and normalising and comparing them would only confirm it.
+	if a == b {
+		return 0
+	}
 	left := []rune(strings.ReplaceAll(normalizeTitle(a), " ", ""))
 	right := []rune(strings.ReplaceAll(normalizeTitle(b), " ", ""))
 	switch {
@@ -12,13 +19,15 @@ func EditPenalty(a, b string) float64 {
 		return 0
 	case len(left) == 0 || len(right) == 0:
 		return 1
+	case slices.Equal(left, right):
+		return 0
 	}
 	return float64(levenshtein(left, right)) / float64(max(len(left), len(right)))
 }
 
 func levenshtein(left, right []rune) int {
-	previous := make([]int, len(right)+1)
-	current := make([]int, len(right)+1)
+	rows := make([]int, 2*(len(right)+1))
+	previous, current := rows[:len(right)+1], rows[len(right)+1:]
 	for j := range previous {
 		previous[j] = j
 	}
