@@ -43,7 +43,7 @@ suite("custom filters", () => {
 
   test("an item must pass every condition", () => {
     const read = (field: string) => (field === "title" ? ["Hutepagpo"] : field === "year" ? [2022] : []);
-    const both = [{ field: "title", op: "contains", value: "sever" }, { field: "year", op: "gt", value: "2020" }];
+    const both = [{ field: "title", op: "contains", value: "hutep" }, { field: "year", op: "gt", value: "2020" }];
     expect(passes(both, fields, read)).toBe(true);
     expect(passes([...both, { field: "year", op: "lt", value: "2000" }], fields, read)).toBe(false);
   });

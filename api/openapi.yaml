@@ -7049,7 +7049,7 @@ components:
       type: object
       required: [version, commit, build_date, source_url, license, sqlite_driver]
       properties:
-        version: { type: string, example: "26.09.1.35" }
+        version: { type: string, example: "2026.10.001.512" }
         milestone:
           type: string
           example: "music, usenet"

@@ -4327,7 +4327,7 @@ export interface components {
         /** @enum {string} */
         ProblemType: "not-found" | "forbidden" | "conflict" | "bad-request" | "method-not-allowed" | "unavailable" | "internal" | "unauthorized";
         BuildInfo: {
-            /** @example 26.09.1.35 */
+            /** @example 2026.10.001.512 */
             version: string;
             /**
              * @description A name, not a version component (documentation/versioning.md). Empty until set with `make milestone NAME="name"`.

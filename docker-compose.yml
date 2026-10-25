@@ -2,7 +2,7 @@
 # See documentation/container-runtime.md.
 services:
   solarr:
-    image: ghcr.io/makearr/solarr:latest
+    image: makearr/solarr:latest
     container_name: solarr
     restart: unless-stopped
 
