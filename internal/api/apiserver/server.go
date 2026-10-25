@@ -256,16 +256,19 @@ type Config struct {
 // Server is the HTTP listener. Everything stays an http.Handler (ADR-31), so
 // nothing here owns the shape of the code.
 type Server struct {
-	http    *http.Server
-	router  chi.Router
-	logger  *slog.Logger
-	build   BuildInfo
-	checker Checker
-	auth    AuthConfig
-	jobs    *jobs.Queue
-	running *jobs.Running
-	jobDefs *jobs.Registry
-	events  *events.Bus
+	http *http.Server
+	// streams is cancelled when shutdown begins: an event stream never goes idle, so Shutdown would wait out its grace.
+	streams      context.Context
+	closeStreams context.CancelFunc
+	router       chi.Router
+	logger       *slog.Logger
+	build        BuildInfo
+	checker      Checker
+	auth         AuthConfig
+	jobs         *jobs.Queue
+	running      *jobs.Running
+	jobDefs      *jobs.Registry
+	events       *events.Bus
 	// logins limits failed sign-ins per client address.
 	logins  *auth.LoginLimiter
 	wall    clock.Clock
@@ -793,6 +796,8 @@ func New(config Config) (*Server, error) {
 		IdleTimeout:       idleTimeout,
 		ErrorLog:          slog.NewLogLogger(config.Logger.Handler(), slog.LevelWarn),
 	}
+	server.streams, server.closeStreams = context.WithCancel(context.Background())
+	server.http.RegisterOnShutdown(server.closeStreams)
 	return server, nil
 }
 

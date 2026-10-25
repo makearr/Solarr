@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -136,6 +137,32 @@ func TestEvents_CoalescesRepeatedChangesToOneEntity(t *testing.T) {
 	_ = json.Unmarshal(raw, &payload)
 	if payload["progress"] != 49 {
 		t.Errorf("progress = %d, want the latest value 49", payload["progress"])
+	}
+}
+
+// An open stream never goes idle, so shutdown has to end it or wait out the whole grace (found live 2026-10-25: 30 s).
+func TestEvents_ShutdownEndsAnOpenStream(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal)
+	body, closeStream := fixture.openStream(t, "avs", "")
+	defer closeStream()
+
+	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
+	defer cancel()
+	if err := fixture.server.Shutdown(ctx); err != nil {
+		t.Fatalf("Shutdown with a stream open: %v", err)
+	}
+	ended := make(chan error, 1)
+	go func() {
+		_, err := io.Copy(io.Discard, body)
+		ended <- err
+	}()
+	select {
+	case err := <-ended:
+		if err != nil {
+			t.Errorf("stream ended with %v, want a clean end", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the stream was still open 2 s after Shutdown")
 	}
 }
 

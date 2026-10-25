@@ -10,7 +10,7 @@ document (`categories[].file_management`).
 | Setting | Default | When it acts | Where |
 |---|---|---|---|
 | Create Empty Artist Folders | off | every disk scan: a monitored artist of this library with no folder on any of its roots gets one, on the root an import would choose (affinity, then most free space) | `music.Housekeeping` |
-| Delete Empty Folders | off | every disk scan, from the empty folders the sweep met; and when files are deleted (remove album/track, import revert) | `music.Housekeeping`, `library.RecycleBin.Put` |
+| Delete Empty Folders | off | every disk scan, from the empty folders the sweep met; and when files are deleted (remove album/track, import revert) | `music.Housekeeping`, `housekeeping.Sweep` (TV, movies), `library.RecycleBin.Put` |
 | Unmonitor Deleted Tracks | off | a **full** scan: an album holding a file the scan found missing is unmonitored. Only a full scan is evidence of absence (section 10.4) | `library.Desired.UnmonitorItemsLosingFiles` |
 | Unmonitor Deleted Episodes (a TV library's name for the same switch) | off | a **full** scan: the episode whose only file the scan found missing is unmonitored, not its season (`Desired.UnmonitorPartsLosingFiles`, `tv.Housekeeping`), so a file deleted on purpose is not fetched again |
 | Merge Artists Stored Under Several Names | off | every disk scan: a local artist named like an identified artist (or one of its MusicBrainz aliases) joins it; local artists named alike (case and punctuation ignored) join the one with most albums. Never two identified artists, never an artist with work in another library; files stay put | `library.People.PlanArtistMerges`, `MergeArtists` |

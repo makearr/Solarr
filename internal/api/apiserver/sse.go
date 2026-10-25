@@ -85,6 +85,7 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 		access:     access,
 		visible:    visibleCategorySet(access),
 		allowAll:   allowsSystemEvents(access),
+		closing:    s.streams.Done(),
 	}
 
 	// Replay anything missed since the client's last id, before live events, so
@@ -107,6 +108,7 @@ type eventStream struct {
 	access     authz.Access
 	visible    map[int64]bool
 	allowAll   bool
+	closing    <-chan struct{}
 }
 
 // run buffers events and flushes them on a tick.
@@ -120,6 +122,9 @@ func (e *eventStream) run(r *http.Request, subscription *events.Subscription, ti
 	for {
 		select {
 		case <-r.Context().Done():
+			return
+
+		case <-e.closing:
 			return
 
 		case event, open := <-subscription.Events():

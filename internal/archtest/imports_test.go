@@ -338,7 +338,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/importing/placer":  {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
 	"internal/media/knownfor":    {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
 	// File Management a sweep applies alike for every type that wants whole works or their parts.
-	"internal/media/housekeeping": {"internal/db/library", "internal/db/settings", "internal/media", "internal/scanning/scan"},
+	"internal/media/housekeeping": {"internal/db/library", "internal/db/settings", "internal/media", "internal/platform/fsx", "internal/scanning/scan"},
 	// The picture cache sweep video types share: posters, organisation logos, billed-first photos.
 	"internal/media/picturesweep": {"internal/db/library", "internal/jobs", "internal/platform/parallel"},
 	// What film and TV share as data: their genre tree.

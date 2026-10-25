@@ -141,9 +141,9 @@ func (p *process) tvModule() tv.Module {
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
-			Housekeeping: housekeeping.UnmonitorDeleted{
+			Housekeeping: housekeeping.Sweep{
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
-				Grain: tv.Module{}.Descriptor().WantedGrain, Logger: p.logger,
+				Grain: tv.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
 		},
 		Hunt:     p.tvHunt,
@@ -356,9 +356,9 @@ func (p *process) movieModule() movie.Module {
 		TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: movie.IsFeature,
-			Housekeeping: housekeeping.UnmonitorDeleted{
+			Housekeeping: housekeeping.Sweep{
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
-				Grain: movie.Module{}.Descriptor().WantedGrain, Logger: p.logger,
+				Grain: movie.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
 			},
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 		},
