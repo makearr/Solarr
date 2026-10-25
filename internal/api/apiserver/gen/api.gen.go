@@ -203,6 +203,13 @@ const (
 	FileManagementChangeFileDateReleaseDate FileManagementChangeFileDate = "release_date"
 )
 
+// Defines values for FileManagementEpisodeTitleRequired.
+const (
+	FileManagementEpisodeTitleRequiredAlways     FileManagementEpisodeTitleRequired = "always"
+	FileManagementEpisodeTitleRequiredBulkSeason FileManagementEpisodeTitleRequired = "bulk_season"
+	FileManagementEpisodeTitleRequiredNever      FileManagementEpisodeTitleRequired = "never"
+)
+
 // Defines values for FileManagementPropersRepacks.
 const (
 	FileManagementPropersRepacksDoNotPrefer      FileManagementPropersRepacks = "do_not_prefer"
@@ -414,6 +421,7 @@ const (
 	MediaTypeInfoFileSettingsKeyChangeFileDate           MediaTypeInfoFileSettingsKey = "change_file_date"
 	MediaTypeInfoFileSettingsKeyCreateEmptyArtistFolders MediaTypeInfoFileSettingsKey = "create_empty_artist_folders"
 	MediaTypeInfoFileSettingsKeyDeleteEmptyFolders       MediaTypeInfoFileSettingsKey = "delete_empty_folders"
+	MediaTypeInfoFileSettingsKeyEpisodeTitleRequired     MediaTypeInfoFileSettingsKey = "episode_title_required"
 	MediaTypeInfoFileSettingsKeyExtraFileExtensions      MediaTypeInfoFileSettingsKey = "extra_file_extensions"
 	MediaTypeInfoFileSettingsKeyImportExtraFiles         MediaTypeInfoFileSettingsKey = "import_extra_files"
 	MediaTypeInfoFileSettingsKeyMediaServerFiles         MediaTypeInfoFileSettingsKey = "media_server_files"
@@ -1963,6 +1971,9 @@ type FileManagement struct {
 	CreateEmptyArtistFolders bool   `json:"create_empty_artist_folders"`
 	DeleteEmptyFolders       bool   `json:"delete_empty_folders"`
 
+	// EpisodeTitleRequired Sonarr's Episode Title Required: an episode whose title is still TBA is held from import for up to 48 hours after it aired, from any release (always, the default), only from a whole-season release, or never. Omitted on a save keeps what is stored.
+	EpisodeTitleRequired *FileManagementEpisodeTitleRequired `json:"episode_title_required,omitempty"`
+
 	// ExtraFileExtensions Extensions without the dot, such as srt. A file named like a track follows the track's new name; any other keeps its own name in the album folder. In a TV library only a file named after an episode comes along, keeping what follows the name (".en.srt"). Omitted on a save keeps what is stored.
 	ExtraFileExtensions *[]string `json:"extra_file_extensions,omitempty"`
 
@@ -1991,6 +2002,9 @@ type FileManagement struct {
 
 // FileManagementChangeFileDate defines model for FileManagement.ChangeFileDate.
 type FileManagementChangeFileDate string
+
+// FileManagementEpisodeTitleRequired Sonarr's Episode Title Required: an episode whose title is still TBA is held from import for up to 48 hours after it aired, from any release (always, the default), only from a whole-season release, or never. Omitted on a save keeps what is stored.
+type FileManagementEpisodeTitleRequired string
 
 // FileManagementPropersRepacks defines model for FileManagement.PropersRepacks.
 type FileManagementPropersRepacks string

@@ -97,6 +97,7 @@ type CategoryFileManagement struct {
 	MediaServerFiles         int64
 	SharedFileFallback       string
 	IgnoreNewSeasons         int64
+	EpisodeTitleRequired     string
 }
 
 type CategoryMetadataSource struct {

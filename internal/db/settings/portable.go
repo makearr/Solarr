@@ -238,6 +238,8 @@ type FileManagementEntry struct {
 	// SharedFileFallback is absent while it is the default, copy.
 	SharedFileFallback string `yaml:"shared_file_fallback,omitempty"`
 	IgnoreNewSeasons   bool   `yaml:"ignore_new_seasons,omitempty"`
+	// EpisodeTitleRequired is absent while it is the default, always.
+	EpisodeTitleRequired string `yaml:"episode_title_required,omitempty"`
 }
 
 func (e FileManagementEntry) fileManagement() FileManagement {
@@ -253,9 +255,13 @@ func (e FileManagementEntry) fileManagement() FileManagement {
 		},
 		ExtraFiles:       ExtraFiles{Import: e.ImportExtraFiles, Extensions: e.ExtraFileExtensions},
 		MediaServerFiles: e.MediaServerFiles, SharedFileFallback: SharedFileCopy, IgnoreNewSeasons: e.IgnoreNewSeasons,
+		EpisodeTitleRequired: TitleRequiredAlways,
 	}
 	if e.SharedFileFallback != "" {
 		f.SharedFileFallback = SharedFileFallback(e.SharedFileFallback)
+	}
+	if e.EpisodeTitleRequired != "" {
+		f.EpisodeTitleRequired = EpisodeTitleRequired(e.EpisodeTitleRequired)
 	}
 	return f
 }
@@ -275,6 +281,9 @@ func fileManagementEntry(f FileManagement) FileManagementEntry {
 	}
 	if f.SharedFileFallback != SharedFileCopy {
 		entry.SharedFileFallback = string(f.SharedFileFallback)
+	}
+	if f.EpisodeTitleRequired != TitleRequiredAlways && f.EpisodeTitleRequired != "" {
+		entry.EpisodeTitleRequired = string(f.EpisodeTitleRequired)
 	}
 	return entry
 }

@@ -134,7 +134,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			decision.Reason = refused.Error()
 			result.Decisions[index] = decision
 		case errors.Is(err, placer.ErrNoRoot):
-			result.Decisions[index] = batch.WaitForRoot(decision, workID, err)
+			result.Decisions[index] = batch.WaitToPlace(decision, workID, err)
 		case err != nil:
 			i.logger.Warn("movie import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
 			decision.Decision, decision.Reason, decision.WorkID = library.UnitFailed, err.Error(), nil

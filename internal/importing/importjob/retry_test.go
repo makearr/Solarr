@@ -122,7 +122,7 @@ func TestPlaceUnplaced_RetriesAWaitingUnitAsTheWorkItResolvedTo(t *testing.T) {
 	fx := newFixture(t, "Artist/Album/01.flac")
 	sessionID, unit := unplacedSession(t, fx)
 	work := seedWork(t, fx)
-	waiting := batch.WaitForRoot(library.UnitDecision{UnitID: unit.ID}, work, errors.New("no room"))
+	waiting := batch.WaitToPlace(library.UnitDecision{UnitID: unit.ID}, work, errors.New("no room"))
 	if err := fx.sessions().SetUnitDecisions(t.Context(), sessionID, []library.UnitDecision{waiting}); err != nil {
 		t.Fatal(err)
 	}

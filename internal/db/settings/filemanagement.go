@@ -49,6 +49,16 @@ const (
 	SharedFileSymlink SharedFileFallback = "symlink"
 )
 
+// EpisodeTitleRequired is Sonarr's Episode Title Required: when an episode still titled TBA is held from import.
+type EpisodeTitleRequired string
+
+// Held from any release, only from a whole-season release, or never.
+const (
+	TitleRequiredAlways     EpisodeTitleRequired = "always"
+	TitleRequiredBulkSeason EpisodeTitleRequired = "bulk_season"
+	TitleRequiredNever      EpisodeTitleRequired = "never"
+)
+
 // FileManagement is Sonarr's File Management and Permissions for one library (2026-09-24).
 type FileManagement struct {
 	PropersRepacks     PropersRepacks
@@ -77,6 +87,8 @@ type FileManagement struct {
 	SharedFileFallback SharedFileFallback
 	// IgnoreNewSeasons leaves a season that appears on refresh unmonitored (Sonarr's "Monitor New Seasons: None").
 	IgnoreNewSeasons bool
+	// EpisodeTitleRequired holds a TBA-titled episode from import for up to TitleWaitAfterAiring; empty is always.
+	EpisodeTitleRequired EpisodeTitleRequired
 }
 
 // Tagging is one library's tag writing (revision D3, widened 2026-09-29). Nothing is written on a
@@ -98,6 +110,7 @@ type Tagging struct {
 var DefaultFileManagement = FileManagement{
 	PropersRepacks: PropersPreferAndUpgrade, RescanAfterRefresh: RescanAlways, ChangeFileDate: FileDateNone,
 	RecycleRetentionDays: 7, ChmodFolder: "755", Tagging: Tagging{WriteIDs: true}, SharedFileFallback: SharedFileCopy,
+	EpisodeTitleRequired: TitleRequiredAlways,
 }
 
 var (
@@ -115,7 +128,7 @@ func (f FileManagement) IsDefault() bool {
 		f.SetPermissions == d.SetPermissions && f.ChmodFolder == d.ChmodFolder && f.ChownGroup == d.ChownGroup &&
 		f.Tagging == d.Tagging && f.ExtraFiles.Import == nil && f.ExtraFiles.Extensions == nil &&
 		f.MediaServerFiles == d.MediaServerFiles && f.SharedFileFallback == d.SharedFileFallback &&
-		f.IgnoreNewSeasons == d.IgnoreNewSeasons
+		f.IgnoreNewSeasons == d.IgnoreNewSeasons && f.EpisodeTitleRequired == d.EpisodeTitleRequired
 }
 
 // FolderMode is ChmodFolder as a mode; FileMode drops the execute bits, as Sonarr does.
@@ -149,6 +162,12 @@ func validateFileManagement(f FileManagement) config.Problems {
 	if f.SharedFileFallback != "" && f.SharedFileFallback != SharedFileCopy && f.SharedFileFallback != SharedFileSymlink {
 		problems = append(problems, config.Problem{Path: "shared_file_fallback", Value: string(f.SharedFileFallback),
 			Expectation: "copy or symlink"})
+	}
+	switch f.EpisodeTitleRequired {
+	case "", TitleRequiredAlways, TitleRequiredBulkSeason, TitleRequiredNever:
+	default:
+		problems = append(problems, config.Problem{Path: "episode_title_required", Value: string(f.EpisodeTitleRequired),
+			Expectation: "always, bulk_season or never"})
 	}
 	if f.ChangeFileDate != FileDateNone && f.ChangeFileDate != FileDateReleaseDate {
 		problems = append(problems, config.Problem{Path: "change_file_date", Value: string(f.ChangeFileDate),
@@ -196,6 +215,9 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 	if f.SharedFileFallback == "" {
 		f.SharedFileFallback = SharedFileCopy
 	}
+	if f.EpisodeTitleRequired == "" {
+		f.EpisodeTitleRequired = TitleRequiredAlways
+	}
 	return queries.UpsertCategoryFileManagement(ctx, settingsdb.UpsertCategoryFileManagementParams{
 		CategoryID: categoryID, PropersRepacks: string(f.PropersRepacks),
 		RescanAfterRefresh: string(f.RescanAfterRefresh), ChangeFileDate: string(f.ChangeFileDate),
@@ -208,7 +230,7 @@ func writeCategoryFileManagement(ctx context.Context, queries *settingsdb.Querie
 		MergeArtistAliases: boolToInt(f.MergeArtistAliases),
 		ImportExtraFiles:   extrasOn, ExtraFileExtensions: extensions,
 		MediaServerFiles: boolToInt(f.MediaServerFiles), SharedFileFallback: string(f.SharedFileFallback),
-		IgnoreNewSeasons: boolToInt(f.IgnoreNewSeasons),
+		IgnoreNewSeasons: boolToInt(f.IgnoreNewSeasons), EpisodeTitleRequired: string(f.EpisodeTitleRequired),
 	})
 }
 
@@ -236,10 +258,11 @@ func withFileManagement(categories []Category, rows []settingsdb.CategoryFileMan
 				WriteMetadata: row.WriteMetadataToTags != 0, EmbedCover: row.EmbedCoverInTags != 0,
 				Navidrome: row.NavidromeProfile != 0,
 			},
-			ExtraFiles:         decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
-			MediaServerFiles:   row.MediaServerFiles != 0,
-			SharedFileFallback: SharedFileFallback(row.SharedFileFallback),
-			IgnoreNewSeasons:   row.IgnoreNewSeasons != 0,
+			ExtraFiles:           decodeExtraFiles(row.ImportExtraFiles, row.ExtraFileExtensions),
+			MediaServerFiles:     row.MediaServerFiles != 0,
+			SharedFileFallback:   SharedFileFallback(row.SharedFileFallback),
+			IgnoreNewSeasons:     row.IgnoreNewSeasons != 0,
+			EpisodeTitleRequired: EpisodeTitleRequired(row.EpisodeTitleRequired),
 		}
 	}
 	return categories

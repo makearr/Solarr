@@ -20,6 +20,7 @@ import (
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
+	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -339,7 +340,46 @@ func (p *process) musicJobs() []media.JobRegistration {
 
 // tvJobs are the job types the TV module brings besides its own typed ones.
 func (p *process) tvJobs() []media.JobRegistration {
-	return []media.JobRegistration{p.tvRefreshJob(), p.bridgeJob(), p.tvArtworkJob()}
+	return []media.JobRegistration{p.tvRefreshJob(), p.bridgeJob(), p.tvArtworkJob(), p.tvTitleRenameJob()}
+}
+
+// tvTitleRenameJob renames episode files named TBA once their title has arrived, through the one rename engine.
+func (p *process) tvTitleRenameJob() media.JobRegistration {
+	engine := p.renameEngine()
+	return media.JobRegistration{Definition: tv.TitleRenameDefinition, Handler: tv.NewTitleRenameJob(tv.TitleRenameConfig{
+		Files: library.NewPhysical(p.library),
+		Namer: tv.RenameConfig{Series: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		Rename: func(ctx context.Context, namer renamejob.Namer, category settings.Category, rootFolderID, workID int64) error {
+			_, _, _, err := engine.Start(ctx, namer, category, rootFolderID, workID, false)
+			return err
+		},
+		Libraries: func() []tv.TitleRenameLibrary {
+			snapshot := p.cache.Snapshot()
+			var libraries []tv.TitleRenameLibrary
+			for _, category := range snapshot.Categories() {
+				if category.MediaType == tv.MediaType {
+					libraries = append(libraries, tv.TitleRenameLibrary{Category: category, Roots: snapshot.RootFoldersForCategory(category.ID)})
+				}
+			}
+			return libraries
+		},
+		Logger: p.logger,
+	})}
+}
+
+// tvTitleRenameTask is the registered "Rename episodes whose title arrived" task.
+func (p *process) tvTitleRenameTask() jobs.Task {
+	return jobs.Task{
+		Key: tv.TitleRenameScheduleKey, Name: "Rename episodes whose title arrived", DefaultCadence: tvTitleRenameScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary,
+		Enqueue: func(ctx context.Context) (jobs.EnqueueResult, error) {
+			result, err := tv.EnqueueTitleRename(ctx, p.queue)
+			if err != nil {
+				p.logger.Warn("enqueue tv title rename", slog.Any("error", err))
+			}
+			return result, err
+		},
+	}
 }
 
 // movieModule wires movies: the sweep that finds movie files, the add and refresh over TMDB and Radarr's service, and the

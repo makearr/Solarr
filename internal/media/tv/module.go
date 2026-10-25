@@ -239,6 +239,7 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 var fileSettings = []media.FileSetting{
 	{Key: media.FileDeleteEmptyFolders, Label: "Delete Empty Folders", Help: "Delete a series or season folder left empty when episode files are deleted."},
 	{Key: media.FileUnmonitorDeleted, Label: "Unmonitor Deleted Episodes", Help: "An episode whose file is deleted from disk is unmonitored instead of being fetched again."},
+	{Key: media.FileEpisodeTitleRequired, Label: "Episode Title Required", Help: "Hold an episode whose title is still TBA from import until the title is known, at most 48 hours after it aired.", Options: []media.Choice{{Key: "always", Label: "Always"}, {Key: "bulk_season", Label: "Only for Bulk Season Releases"}, {Key: "never", Label: "Never"}}},
 	{Key: media.FileChangeFileDate, Label: "Change File Date", Help: "Change the file date on import and rescan.", Options: []media.Choice{{Key: "none", Label: "None"}, {Key: "release_date", Label: "Episode Air Date"}}},
 	{Key: media.FileImportExtraFiles, Label: "Import Extra Files", Help: "Bring files named after an episode along with it, such as its subtitles, under the episode's new name."},
 	{Key: media.FileExtraFileExtensions, Label: "Extra File Extensions", Help: "Comma separated, such as srt,ass. A subtitle keeps what follows the video's name (.en.srt)."},

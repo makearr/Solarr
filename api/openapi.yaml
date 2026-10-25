@@ -8096,7 +8096,7 @@ components:
             properties:
               key:
                 type: string
-                enum: [create_empty_artist_folders, delete_empty_folders, unmonitor_deleted, merge_artist_aliases, rescan_after_refresh, change_file_date, import_extra_files, extra_file_extensions, media_server_files, monitor_new_seasons, shared_file_fallback]
+                enum: [create_empty_artist_folders, delete_empty_folders, unmonitor_deleted, merge_artist_aliases, rescan_after_refresh, change_file_date, import_extra_files, extra_file_extensions, media_server_files, monitor_new_seasons, shared_file_fallback, episode_title_required]
               label: { type: string }
               help: { type: string }
               options:
@@ -10533,6 +10533,13 @@ components:
                  delete_empty_folders, create_empty_artist_folders, unmonitor_deleted,
                  merge_artist_aliases, set_permissions, chmod_folder, chown_group]
       properties:
+        episode_title_required:
+          type: string
+          enum: [always, bulk_season, never]
+          description: >-
+            Sonarr's Episode Title Required: an episode whose title is still TBA is held from import for up to 48
+            hours after it aired, from any release (always, the default), only from a whole-season release, or
+            never. Omitted on a save keeps what is stored.
         shared_file_fallback:
           type: string
           enum: [copy, symlink]

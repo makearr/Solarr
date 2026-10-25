@@ -22,9 +22,9 @@ const ReasonNothingNew = "nothing in it is missing from the library or better th
 // StrategyResolved is the candidate a unit was resolved to before its library could not take it.
 const StrategyResolved = "resolved"
 
-// WaitForRoot is a unit resolved to workID that its library could not take: decided but not placed, so the download is
-// kept and the import retry places it once a root can. The work rides in the candidates; a work id means placed.
-func WaitForRoot(decision library.UnitDecision, workID int64, err error) library.UnitDecision {
+// WaitToPlace is a unit resolved to workID that its library could not take yet (no root, an episode still TBA): decided
+// but not placed, so the download is kept and the import retry places it once it can. A work id would mean placed.
+func WaitToPlace(decision library.UnitDecision, workID int64, err error) library.UnitDecision {
 	decision.Decision, decision.Confidence, decision.Reason, decision.WorkID = library.UnitCommit, 1, err.Error(), nil
 	// The whole form, not library.CandidatesJSON's compact one, which has no work id.
 	resolved, _ := json.Marshal([]model.Identification{{

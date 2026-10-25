@@ -5171,7 +5171,7 @@ export interface components {
             /** @description The File Management settings that mean something for the type, in its words; one left out is not offered. The rest of File Management is the same for every type. */
             file_settings: {
                 /** @enum {string} */
-                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback";
+                key: "create_empty_artist_folders" | "delete_empty_folders" | "unmonitor_deleted" | "merge_artist_aliases" | "rescan_after_refresh" | "change_file_date" | "import_extra_files" | "extra_file_extensions" | "media_server_files" | "monitor_new_seasons" | "shared_file_fallback" | "episode_title_required";
                 label: string;
                 help: string;
                 /** @description A choice's values in the type's words. */
@@ -7164,6 +7164,11 @@ export interface components {
         };
         /** @description Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here. */
         FileManagement: {
+            /**
+             * @description Sonarr's Episode Title Required: an episode whose title is still TBA is held from import for up to 48 hours after it aired, from any release (always, the default), only from a whole-season release, or never. Omitted on a save keeps what is stored.
+             * @enum {string}
+             */
+            episode_title_required?: "always" | "bulk_season" | "never";
             /**
              * @description How a file one broadcast shares with another series reaches this library's series when the two are on different filesystems and no link can be made: a second copy (the default) or a symbolic link. Omitted on a save keeps what is stored.
              * @enum {string}

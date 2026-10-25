@@ -65,6 +65,15 @@ folder moves to one new folder (an album, a season, a movie, and the artist or s
 other files (`cover.jpg`, `tvshow.nfo`) go with it. An audio or video file is never a companion, and a companion
 whose new name is taken stays where it is.
 
+## Episodes named before their title was known
+
+An episode still titled TBA is held from import for up to 48 hours after it aired, as the library's **Episode Title
+Required** asks (File management, Importing: always, the default; only for whole-season releases; never); see
+[downloads](downloads.md). One imported anyway is named "TBA". The registered task **Rename episodes whose title
+arrived** (every 6 hours, `tv.TitleRenameJob`) renames such files once a refresh has brought the title, in libraries
+that rename their files. Only the file's name changes, with its companions: it stays in its folder, so a series is
+never split between an old folder and a new one, and no other file of the series is touched.
+
 ## Moving a work to another library
 
 Work page or a selection -> **Move to library** (administrator): a work goes to another library of its media type,

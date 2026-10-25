@@ -50,6 +50,7 @@ const (
 	bridgeScheduleCron             = "50 3 * * *"   // daily at 03:50; 300 people a run, after the night's refreshes
 	tvRetryScheduleCron            = "30 4 * * *"   // daily at 04:30: providers learn new series and fix old data overnight
 	importRetryScheduleCron        = "*/30 * * * *" // twice an hour; a full disk or an offline root is not fixed in a minute
+	tvTitleRenameScheduleCron      = "25 */6 * * *" // every 6 hours; a TBA title is usually filled within a day
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -78,6 +79,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	})
 	registry.MustRegister(p.tvRetryTask())
 	registry.MustRegister(p.importRetryTask())
+	registry.MustRegister(p.tvTitleRenameTask())
 	registry.MustRegister(jobs.Task{
 		Key: "tv_crossovers", Name: "Find crossover episodes", DefaultCadence: crossoverPassScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,

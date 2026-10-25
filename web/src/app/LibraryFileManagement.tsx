@@ -131,9 +131,18 @@ export function LibraryFileManagement() {
         )}
       </section>
 
-      {setting("import_extra_files") && (
+      {(setting("import_extra_files") || setting("episode_title_required")) && (
       <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-4">
         <h2 className="text-sm font-medium">Importing</h2>
+        {setting("episode_title_required") && (
+          <Choice
+            label={setting("episode_title_required")!.label}
+            help={setting("episode_title_required")!.help}
+            value={draft.episode_title_required ?? "always"}
+            options={options(setting("episode_title_required")!)}
+            onChange={(value) => set({ episode_title_required: value as FileManagement["episode_title_required"] })}
+          />
+        )}
         <DeclaredToggle entry={setting("import_extra_files")} checked={draft.import_extra_files ?? false} onChange={(checked) => set({ import_extra_files: checked })} />
         {draft.import_extra_files && setting("extra_file_extensions") && (
           <SettingRow label={setting("extra_file_extensions")!.label} help={setting("extra_file_extensions")!.help}>

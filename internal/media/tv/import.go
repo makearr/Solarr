@@ -139,6 +139,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		}
 		placed, err := i.placeUnit(ctx, request, unit, workID, upgrade && workID == seeded)
 		var refused *rejectedError
+		var untitled *titleWaitError
 		switch {
 		case errors.Is(err, errNothingToPlace):
 			decision.Decision, decision.Reason = library.UnitSkip, batch.ReasonNothingNew
@@ -148,8 +149,8 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			decision.WorkID = &workID
 			decision.Reason = refused.Error()
 			result.Decisions[index] = decision
-		case errors.Is(err, placer.ErrNoRoot):
-			result.Decisions[index] = batch.WaitForRoot(decision, workID, err)
+		case errors.Is(err, placer.ErrNoRoot), errors.As(err, &untitled):
+			result.Decisions[index] = batch.WaitToPlace(decision, workID, err)
 		case err != nil:
 			i.logger.Warn("tv import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
 			decision.Decision, decision.Reason = library.UnitFailed, err.Error()
@@ -353,6 +354,11 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return nil, errNothingToPlace
 	}
 
+	names, fileManagement := i.namingFor(request.CategoryID)
+	if err := titleWait(fileManagement.EpisodeTitleRequired, files, airedAt(detail.Episodes), now); err != nil {
+		return nil, err
+	}
+
 	toCheck := make([]placer.File, len(files))
 	for index, file := range files {
 		toCheck[index] = placer.File{RelPath: file.media.RelPath, SizeBytes: file.media.SizeBytes}
@@ -361,7 +367,6 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	if err != nil {
 		return nil, err
 	}
-	names, fileManagement := i.namingFor(request.CategoryID)
 	destRoot, err := i.placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(detail.Summary.Title), totalBytes)
 	if err != nil {
 		return nil, err

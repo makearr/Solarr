@@ -505,6 +505,25 @@
         "label": "Unmonitor Deleted Episodes"
       },
       {
+        "help": "Hold an episode whose title is still TBA from import until the title is known, at most 48 hours after it aired.",
+        "key": "episode_title_required",
+        "label": "Episode Title Required",
+        "options": [
+          {
+            "key": "always",
+            "label": "Always"
+          },
+          {
+            "key": "bulk_season",
+            "label": "Only for Bulk Season Releases"
+          },
+          {
+            "key": "never",
+            "label": "Never"
+          }
+        ]
+      },
+      {
         "help": "Change the file date on import and rescan.",
         "key": "change_file_date",
         "label": "Change File Date",
