@@ -3,6 +3,20 @@
 Version is `YYYY.MM.RRR.BBB` (year.month.release.build) from 2026-10-25; see `documentation/versioning.md`.
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
+## 2026.10.001.515 — 2026-10-25
+
+**First public release — early alpha.** Use at your own risk, and please report problems as issues.
+
+- Music, TV, anime and movies in one engine: a successor to Lidarr, Sonarr and Radarr, with any number of libraries, mixed libraries, rating limits and library suggestions
+- Hunting within a budget, RSS, upgrade hunting, held releases and free-space gating; SABnzbd and qBittorrent; Newznab/Torznab indexers searched in parallel
+- Evidence-based recognition of any folder at any depth, packs and archives, previewed and revertible in one click
+- Quality judged from the measured file; ties keep the incumbent; remove-and-block by content hash
+- Several metadata providers per library type, in a per-library order, tied together by Wikidata; collections and franchises
+- Import from Lidarr, Sonarr, Radarr and Prowlarr (read-only)
+- Privacy: no telemetry; the optional public-IP check is now off by default
+- Images for linux/amd64 and linux/arm64 on Docker Hub (`makearr/solarr`) and ghcr.io; version scheme `YYYY.MM.RRR.BBB`
+
+
 ## 0.0.22 — 2026-09-04
 
 - Add root folder placement policy and section 11.7's Resolve engine
