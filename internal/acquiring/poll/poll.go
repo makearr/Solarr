@@ -116,6 +116,9 @@ type Job struct {
 	// vanishLogged is when each client's mass loss was last reported: a poll runs every minute and the condition
 	// outlasts it, so it is reported again only after vanishRepeat.
 	vanishLogged map[string]time.Time
+	// lastRead is the latest round of client reads the queue answered from, reading the one under way.
+	lastRead *clientRead
+	reading  chan struct{}
 }
 
 // vanishRepeat is how long a mass loss is left unmentioned after it was reported.
