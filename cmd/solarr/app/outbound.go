@@ -27,6 +27,10 @@ const (
 	providerMDBList        = "mdblist"
 	providerOMDb           = "omdb"
 	providerFanart         = "fanart"
+	providerOpenLibrary    = "openlibrary"
+	providerGoogleBooks    = "googlebooks"
+	// providerAudible is Audible's catalog and Audnexus together: Audnexus publishes the pace both are asked at.
+	providerAudible = "audible"
 	// Each indexer and each download client connection has a bucket of its own, named by its id.
 	providerIndexerPrefix    = "indexer:"
 	providerDownloaderPrefix = "downloader:"

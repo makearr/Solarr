@@ -65,6 +65,11 @@ func isArchivePart(name string) bool {
 // demotes an otherwise-media extension to Junk -- ADR-48's "sample.mp3" case: a
 // file that looks like a track but is too small to be one.
 func Classify(relPath string, sizeBytes, floor int64) Class {
+	return classify(relPath, sizeBytes, floor, false)
+}
+
+// classify is Classify with ebooks counted as media too, for a book library's import; otherwise they are unknown.
+func classify(relPath string, sizeBytes, floor int64, books bool) Class {
 	name := path.Base(relPath)
 	// macOS resource forks, and the files Sonarr and Radarr refuse outright (scripts, shortcuts, programs), are debris.
 	if junkNames[strings.ToLower(name)] || rules.HiddenFile(name) != nil || rules.Extension(name, nil) != nil {
@@ -76,7 +81,7 @@ func Classify(relPath string, sizeBytes, floor int64) Class {
 	ext := strings.ToLower(path.Ext(name))
 	kind := filekind.Of(name)
 	switch {
-	case kind == filekind.Audio || kind == filekind.Video:
+	case kind == filekind.Audio || kind == filekind.Video || (books && kind == filekind.Book):
 		if sizeBytes < floor {
 			return ClassJunk
 		}

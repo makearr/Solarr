@@ -55,6 +55,8 @@ type Options struct {
 	// "sample.mp3", is exactly what this guards against. Zero uses
 	// DefaultMediaSizeFloorBytes.
 	MediaSizeFloorBytes int64
+	// Books counts ebook files as media, for a book library's import.
+	Books bool
 }
 
 // Session is everything one Run found under one root.
@@ -77,7 +79,7 @@ func Run(ctx context.Context, fsys fsx.FS, root string, opts Options) (Session, 
 		opts.MediaSizeFloorBytes = DefaultMediaSizeFloorBytes
 	}
 
-	files, err := walk(ctx, fsys, root, opts.MediaSizeFloorBytes)
+	files, err := walk(ctx, fsys, root, opts.MediaSizeFloorBytes, opts.Books)
 	if err != nil {
 		return Session{}, fmt.Errorf("inspect: walk %q: %w", root, err)
 	}

@@ -17,7 +17,9 @@ const (
 	Video    Kind = "video"
 	Subtitle Kind = "subtitle"
 	Image    Kind = "image"
-	Other    Kind = "other"
+	// Book is an ebook: media to a book library, a booklet beside an album to the rest.
+	Book  Kind = "book"
+	Other Kind = "other"
 )
 
 var byExtension = map[string]Kind{}
@@ -28,6 +30,7 @@ func init() {
 		Video:    {".mkv", ".mp4", ".m4v", ".avi", ".ts", ".m2ts", ".mov", ".wmv", ".webm", ".mpg", ".mpeg", ".flv", ".ogm", ".iso"},
 		Subtitle: {".srt", ".vtt", ".ass", ".ssa", ".sub", ".idx"},
 		Image:    {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"},
+		Book:     {".epub", ".azw3", ".azw", ".kfx", ".mobi", ".pdf", ".fb2", ".djvu", ".lit"},
 	} {
 		for _, extension := range extensions {
 			byExtension[extension] = kind

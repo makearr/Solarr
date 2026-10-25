@@ -112,6 +112,25 @@ later is unreliable, and AGPL-3.0 §5 requires that modified files carry promine
   | TV identity — season/episode/absolute/daily/multi-episode | Sonarr `Parser.cs` | **Ported 2026-10-02** into `internal/identify/parsetv` (see "TV parser — from Sonarr" below) |
   | Movie identity — edition and year-disambiguation | Radarr `Parser.cs` | Not fetched. Lands at stage 10, when a consumer exists |
 
+### Book parser and providers — from Readarr, Bookshelf and Audiobookshelf (GPL-3.0)
+
+- Source: `github.com/readarr/readarr`, `github.com/pennydreadful/bookshelf` and `github.com/advplyr/audiobookshelf`,
+  default branches, cloned 2026-10-25 on the project owner's instruction to follow their implementations of book and
+  audiobook libraries; `github.com/anthonypdawson/LazyLibrarian` was read for its providers, nothing taken.
+  - Readarr `src/NzbDrone.Core/Parser/Parser.cs` (`ReportBookTitleRegex`, `ParseBookTitleWithSearchCriteria`),
+    `QualityParser.cs` (the format words), `Organizer/NamingConfig.cs` and `FileNameBuilder.cs` (the naming tokens).
+  - Audiobookshelf `server/providers/Audible.js`, `Audnexus.js`, `OpenLibrary.js`, `GoogleBooks.js`: which endpoints
+    are asked, the Audible regions, the series-position clean-up.
+- Taken, rewritten in Go rather than copied: the release shapes "Author - Title (Year)", "Title by Author" and scene
+  names; the format vocabulary (EPUB, AZW3, MOBI, PDF, M4B, MP3, FLAC); the search-criteria match (a release is the book
+  when it names the title and the author); Readarr's slots and token spellings and its default formats; the Audible
+  catalogue and Audnexus requests and the "Book 1" position clean-up.
+- Changed: **no regex is taken verbatim**: `parsebook` splits on separators after removing bracketed tags, which RE2
+  allows. The fuzzy title score is not ported: a title and an author must appear as whole words. Readarr's single
+  metadata service is replaced by Open Library, Google Books and Audible in each library's order, steered by Wikidata.
+- Files: `internal/identify/parsebook/`, `internal/media/book/`, `internal/metadata/openlibrary/`,
+  `internal/metadata/googlebooks/`, `internal/metadata/audible/` (new).
+
 When code is incorporated, record it as:
 
 ```

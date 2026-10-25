@@ -695,6 +695,9 @@ func (j *Job) walkOptions(categoryID *int64, only []string) inspect.WalkOptions 
 		if floor, ok := importer.(importbatch.SizeFloor); ok {
 			options.MediaSizeFloorBytes = floor.MediaSizeFloorBytes()
 		}
+		if books, ok := importer.(importbatch.BookFiles); ok {
+			options.Books = books.TakesBookFiles()
+		}
 	}
 	if len(only) > 0 {
 		options.Only = make(map[string]bool, len(only))

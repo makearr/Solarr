@@ -4,7 +4,7 @@
 
 <p align="center"><b>Your media library, managed properly.</b><br>
 One self-hosted app that finds out what you have, what's missing and what could be better, then goes and gets it.<br>
-Music, TV, anime and movies in one engine: a successor to Lidarr, Sonarr and Radarr, not a port of them.</p>
+Music, TV, anime, movies, books and audiobooks in one engine: a successor to Lidarr, Sonarr, Radarr and Readarr, not a port of them.</p>
 
 <p align="center"><img src="documentation/screenshots/dashboard.png" alt="The dashboard: recently added series and the libraries" width="900"></p>
 
@@ -29,7 +29,7 @@ you expected and what happened (logs help: *Settings → Logs*). Every report ma
 
 ## At a glance
 
-- **One app, many libraries.** Music, TV, anime and movies side by side, each library with its own
+- **One app, many libraries.** Music, TV, anime, movies, books and audiobooks side by side, each library with its own
   folders, quality, naming and users. People are shared: an actor who also makes records is one person.
 - **It hunts.** A planner decides what to search for and when, inside a budget you set, plus RSS and
   upgrade hunting. You don't press *Search all*.
@@ -157,7 +157,7 @@ never changes it). Naming defaults match theirs, so adopting an existing library
 
 | | Lidarr / Sonarr / Radarr | Solarr |
 |---|---|---|
-| Media types | One per app | Music, TV, anime and movies in one app |
+| Media types | One per app | Music, TV, anime, movies, books and audiobooks in one app |
 | Libraries | One per instance | Any number, each with its own folders, quality, users and rating limit; mixed types allowed |
 | Searching | You press *Search all* | A planner hunts within a budget, plus RSS and upgrade hunting |
 | Full download client | Grabs fail or wait | Held releases, sent in priority order as the client frees up |

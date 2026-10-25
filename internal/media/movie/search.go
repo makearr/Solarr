@@ -2,7 +2,6 @@ package movie
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -13,30 +12,28 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
-	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
-	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrNotSearchable reports an item the movie search does not handle: not the one wanted item of a movie.
-var ErrNotSearchable = errors.New("movie: search: only a movie's own item is searched")
+var ErrNotSearchable = works.ErrNotSearchable
 
 // Item states the cutoff check and the search move a movie between.
 const (
-	ItemStateUpgradable = "UPGRADABLE"
-	ItemStateComplete   = "COMPLETE"
+	ItemStateUpgradable = works.StateUpgradable
+	ItemStateComplete   = works.StateComplete
 )
 
 // ItemSearchResult is one movie's search; the shared result under the movie name.
 type ItemSearchResult = judge.Result
 
-// upgradeMinFileAge keeps a file that has just arrived from being replaced at once.
-const upgradeMinFileAge = 24 * time.Hour
-
-// Search is the movie candidate pipeline over one wanted item at a time.
+// Search is the movie specialisation of the shared candidate pipeline (works.Search): what a movie wants, the queries
+// Radarr asks, and whether a release is the film.
 type Search struct {
 	Desired    library.Desired
 	Reader     library.SeriesReader
@@ -52,74 +49,115 @@ type Search struct {
 	IndexerDeadline time.Duration
 }
 
+func (s Search) shared() works.Search[wanted] {
+	return works.Search[wanted]{
+		Name: "movie", Spec: movieSpec{s}, Desired: s.Desired, Candidates: s.Candidates, Settings: s.Settings, Clock: s.Clock,
+		Blocklist: s.Blocklist, Sightings: s.Sightings, ReleaseFilters: s.ReleaseFilters, IndexerDeadline: s.IndexerDeadline,
+	}
+}
+
+// SearchItem searches one movie's item: tiers widen until one finds a release of the movie.
+func (s Search) SearchItem(ctx context.Context, itemID int64, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
+	return s.shared().SearchItem(ctx, itemID, conns, at)
+}
+
+// SearchPart implements works.Searcher; a movie has no parts, so it is SearchItem.
+func (s Search) SearchPart(ctx context.Context, itemID int64, _ int, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
+	return s.shared().SearchItem(ctx, itemID, conns, at)
+}
+
+// JudgeFeed judges releases a feed listed against one wanted movie, exactly as a search's would be.
+func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, raws []indexer.RawItem, at time.Time) (ItemSearchResult, error) {
+	return s.shared().JudgeFeed(ctx, itemID, conn, raws, at)
+}
+
 // wanted is what a search needs to know of a movie it looks for.
 type wanted struct {
 	title     string
 	aliases   []string
+	titles    map[string]bool
 	year      int
 	tmdb      string
 	imdb      string
 	runtimeMs int64
 	// owned is, for an upgrade, the file the movie has now: a release must strictly beat it.
-	owned *library.EpisodeFile
+	owned *score.Facts
 }
 
-func (s Search) wantedFor(ctx context.Context, itemID int64) (library.WantedItemDetail, wanted, error) {
-	item, err := s.Desired.Get(ctx, itemID)
-	if err != nil {
-		return library.WantedItemDetail{}, wanted{}, err
+// movieSpec is works.Spec for movies.
+type movieSpec struct{ search Search }
+
+// Wanted implements works.Spec: a movie wants a file until it has one, then one that beats a file below its cutoff.
+func (m movieSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int, now time.Time) (wanted, bool, error) {
+	if err := works.WholeItem(item); err != nil {
+		return wanted{}, false, err
 	}
-	if item.SatisfactionKind != "SET" || item.MediaRef != "" || item.EditionID.Valid {
-		return library.WantedItemDetail{}, wanted{}, ErrNotSearchable
-	}
-	basics, err := s.Reader.Basics(ctx, item.WorkID)
+	basics, err := m.search.Reader.Basics(ctx, item.WorkID)
 	if err != nil {
-		return library.WantedItemDetail{}, wanted{}, err
+		return wanted{}, false, err
 	}
-	ids, err := s.Reader.ProviderIDs(ctx, item.WorkID)
+	ids, err := m.search.Reader.ProviderIDs(ctx, item.WorkID)
 	if err != nil {
-		return library.WantedItemDetail{}, wanted{}, err
+		return wanted{}, false, err
 	}
 	w := wanted{title: basics.Title, aliases: basics.Aliases, year: int(basics.Year), tmdb: ids[ProviderTMDB], imdb: ids[ProviderIMDb], runtimeMs: basics.RuntimeMs}
-	detail := library.WantedItemDetail{ItemID: item.ID, WorkID: item.WorkID, CategoryID: item.CategoryID, ProfileID: item.ProfileID, State: item.State, Present: item.PresentCount}
-	if item.PresentCount > 0 {
-		owned, err := s.belowCutoff(ctx, item.ID, item.CategoryID)
-		if err != nil {
-			return detail, w, err
-		}
-		w.owned = owned
+	w.titles = w.titleSet()
+	if item.PresentCount == 0 {
+		return w, true, nil
 	}
-	return detail, w, nil
+	if m.search.Settings == nil {
+		return w, false, nil
+	}
+	files, err := itemFiles(ctx, m.search.Reader, item.ID)
+	if err != nil {
+		return w, false, err
+	}
+	if owned, below := works.BelowCutoff(m.search.Settings.Snapshot(), item.CategoryID, files, now.Add(-works.UpgradeMinFileAge).Unix())[""]; below {
+		w.owned = &owned.Facts
+	}
+	return w, w.owned != nil, nil
 }
 
-// belowCutoff is the file a movie has that misses its library's cutoff, once it has settled; nil when it needs no upgrade.
-func (s Search) belowCutoff(ctx context.Context, itemID, categoryID int64) (*library.EpisodeFile, error) {
-	if s.Settings == nil {
-		return nil, nil
+// Owned implements works.Spec.
+func (movieSpec) Owned(w wanted) map[int]score.Facts {
+	if w.owned == nil {
+		return nil
 	}
-	snapshot := s.Settings.Snapshot()
-	category, found := snapshot.Category(categoryID)
-	if !found || !category.QualityUpgrades {
-		return nil, nil
+	return map[int]score.Facts{0: *w.owned}
+}
+
+// Queries implements works.Spec.
+func (movieSpec) Queries(w wanted) [][]judge.Query { return w.queries() }
+
+// Read implements works.Spec: a release is the movie when it names one of its titles in its year, give or take one.
+func (movieSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Time) (works.Release, bool) {
+	info, ok := parsemovie.Parse(raw.Title)
+	if !ok || !w.isTheMovie(info) {
+		return works.Release{}, false
 	}
-	files, err := s.Reader.ItemFiles(ctx, itemID)
+	facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
+	releasefacts.EstimateBitrate(&facts, raw.SizeBytes, 1, w.runtimeMs)
+	return works.Release{Facts: facts, ReleaseGroup: info.ReleaseGroup, Revised: info.Claims.Version > 1}, true
+}
+
+// itemFiles are a movie's files as the cutoff check and the upgrade search judge them.
+func itemFiles(ctx context.Context, reader library.SeriesReader, itemID int64) ([]works.File, error) {
+	files, err := reader.ItemFiles(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
-	tooNew := s.Clock.Now().Add(-upgradeMinFileAge).Unix()
-	for _, file := range files {
-		if !file.Measured || file.AddedAt > tooNew {
-			continue
-		}
-		if judged, ok := quality.Judge(snapshot, category, releasefacts.FromFile(file.File)); ok && !judged.MeetsCutoff {
-			return &file.File, nil
+	out := make([]works.File, len(files))
+	for index, file := range files {
+		out[index] = works.File{
+			MediaObjectID: file.File.MediaObjectID, AddedAt: file.AddedAt, Measured: file.Measured, Monitored: file.Monitored,
+			Facts: releasefacts.FromFile(file.File),
 		}
 	}
-	return nil, nil
+	return out, nil
 }
 
-// titles are every name a release may call the movie by, cleaned for comparison.
-func (w wanted) titles() map[string]bool {
+// titleSet is every name a release may call the movie by, cleaned for comparison.
+func (w wanted) titleSet() map[string]bool {
 	names := map[string]bool{}
 	for _, title := range append([]string{w.title}, w.aliases...) {
 		if clean := parsetv.CleanTitle(title); clean != "" {
@@ -163,130 +201,14 @@ func (w wanted) queries() [][]judge.Query {
 	return append(tiers, bare)
 }
 
-// SearchItem searches one movie's item: tiers widen until one finds a release of the movie, and every release that is
-// one is judged and recorded (a REJECT or DEFER is a finding, not silence).
-func (s Search) SearchItem(ctx context.Context, itemID int64, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
-	detail, w, err := s.wantedFor(ctx, itemID)
-	if err != nil {
-		return ItemSearchResult{}, err
-	}
-	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
-		return ItemSearchResult{}, fmt.Errorf("movie: search item %d: %w", itemID, err)
-	}
-	if detail.Present > 0 && w.owned == nil {
-		return ItemSearchResult{}, nil
-	}
-	yardstick, err := s.yardstick(ctx, detail, w)
-	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("movie: search item %d: %w", itemID, err)
-	}
-	result, err := s.pipeline().Search(ctx, itemID, conns, w.queries(), yardstick.evaluate, at)
-	if err != nil {
-		return result, fmt.Errorf("movie: search item %d: %w", itemID, err)
-	}
-	return result, nil
-}
-
-// JudgeFeed judges releases a feed listed against one wanted movie, exactly as a search's would be; nothing is
-// searched and the item's search record is left alone.
-func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, raws []indexer.RawItem, at time.Time) (ItemSearchResult, error) {
-	detail, w, err := s.wantedFor(ctx, itemID)
-	if err != nil || (detail.Present > 0 && w.owned == nil) {
-		return ItemSearchResult{}, err
-	}
-	measure, err := s.yardstick(ctx, detail, w)
-	if err != nil {
-		return ItemSearchResult{}, err
-	}
-	return s.pipeline().Feed(ctx, itemID, conn, raws, measure.evaluate, at)
-}
-
-func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Desired: s.Desired, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
-}
-
-// yardstick judges a release against the movie and the library's rules.
-type yardstick struct {
-	wanted         wanted
-	titles         map[string]bool
-	rules          []judge.RankedProfile
-	languagePolicy *score.LanguagePolicy
-	preferPropers  bool
-	delay          judge.ProtocolDelay
-	incumbent      *model.Decision
-	filters        []judge.ReleaseFilter
-}
-
-func (s Search) yardstick(ctx context.Context, detail library.WantedItemDetail, w wanted) (yardstick, error) {
-	snapshot := s.Settings.Snapshot()
-	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, detail.ItemID, detail.CategoryID, detail.ProfileID)
-	if err != nil {
-		return yardstick{}, err
-	}
-	built := yardstick{wanted: w, titles: w.titles(), rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, detail.CategoryID), preferPropers: true}
-	if w.owned != nil {
-		owned := judge.EvaluateInOrder(rules, releasefacts.FromFile(*w.owned), built.languagePolicy)
-		built.incumbent = &owned
-	}
-	if category, found := snapshot.Category(detail.CategoryID); found {
-		built.preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
-		built.delay = judge.ProtocolDelay{Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: s.Clock.Now()}
-	}
-	if s.ReleaseFilters != nil {
-		stored, err := s.ReleaseFilters.List(ctx, detail.WorkID)
-		if err != nil {
-			return yardstick{}, err
-		}
-		for _, filter := range stored {
-			built.filters = append(built.filters, judge.ReleaseFilter{Prefix: filter.Prefix, Kind: filter.Kind, Value: filter.Value, IsRegex: filter.IsRegex, Score: int(filter.Score)})
-		}
-	}
-	return built, nil
-}
-
-func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Find {
-	var finds []judge.Find
-	for _, raw := range raws {
-		info, ok := parsemovie.Parse(raw.Title)
-		if !ok || !y.isTheMovie(info) {
-			continue
-		}
-		facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
-		releasefacts.EstimateBitrate(&facts, raw.SizeBytes, 1, y.wanted.runtimeMs)
-		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
-		decision = judge.ApplyFilters(decision, y.filters, raw.Title, info.ReleaseGroup, "")
-		y.requireUpgrade(&decision, facts)
-		finds = append(finds, judge.Find{Conn: conn, Raw: raw, ParseConfidence: 1, MatchConfidence: 1, Decision: decision})
-	}
-	y.delay.Apply(finds)
-	return finds
-}
-
 // isTheMovie says a release names this movie: one of its titles, in its year give or take one. A release with no year is
 // not taken: a title alone cannot tell a film from its remake.
-func (y yardstick) isTheMovie(info parsemovie.Info) bool {
+func (w wanted) isTheMovie(info parsemovie.Info) bool {
 	named := false
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
-		if y.titles[parsetv.CleanTitle(title)] {
+		if w.titles[parsetv.CleanTitle(title)] {
 			named = true
 		}
 	}
-	return named && yearsAgree(y.wanted.year, info.Year)
-}
-
-// requireUpgrade rejects an accepted release that does not beat the file the movie has now by quality (Invariant 72: a
-// tie keeps what is owned). Only what a file can show is compared: a name states a source, a group and a repack that the
-// measured file does not, so with them it would always out-rank the file it replaces.
-func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts) {
-	if decision.Outcome != model.OutcomeAccept || y.incumbent == nil {
-		return
-	}
-	facts.File.Source, facts.File.ReleaseGroup, facts.File.ProperRepack = "", "", false
-	likeForLike := judge.EvaluateInOrder(y.rules, facts, y.languagePolicy)
-	if winner, _ := model.Compare(likeForLike.Quality, y.incumbent.Quality); winner >= 0 {
-		decision.Outcome = model.OutcomeReject
-		decision.Rejections = append(decision.Rejections, model.Rejection{
-			Rule: "upgrade", Field: "quality", Wanted: "better than the file you have", Got: "not better",
-		})
-	}
+	return named && yearsAgree(w.year, info.Year)
 }

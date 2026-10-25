@@ -72,6 +72,13 @@ const LINKS: Record<string, { label: string; url: (id: string) => string }> = {
   tmdb: { label: "TMDB", url: (id) => `https://www.themoviedb.org/tv/${id}` },
   "tmdb:movie": { label: "TMDB", url: (id) => `https://www.themoviedb.org/movie/${id}` },
   "musicbrainz:release-group": { label: "MusicBrainz", url: (id) => `https://musicbrainz.org/release-group/${id}` },
+  openlibrary: { label: "Open Library", url: (id) => `https://openlibrary.org/works/${id}` },
+  "openlibrary:audiobook": { label: "Open Library", url: (id) => `https://openlibrary.org/works/${id}` },
+  googlebooks: { label: "Google Books", url: (id) => `https://books.google.com/books?id=${id}` },
+  "googlebooks:audiobook": { label: "Google Books", url: (id) => `https://books.google.com/books?id=${id}` },
+  goodreads: { label: "Goodreads", url: (id) => `https://www.goodreads.com/work/show/${id}` },
+  "goodreads:audiobook": { label: "Goodreads", url: (id) => `https://www.goodreads.com/work/show/${id}` },
+  audible: { label: "Audible", url: (id) => `https://www.audible.com/pd/${id}` },
 };
 
 /** The provider pages of a work's ids, once each. */

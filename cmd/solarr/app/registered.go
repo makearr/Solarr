@@ -15,6 +15,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/housekeeping"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/movie"
@@ -23,6 +24,7 @@ import (
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/moving/sidecar"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/keyedlock"
 	"github.com/makearr/Solarr/internal/scanning/scan"
 	"github.com/makearr/Solarr/internal/service/follow"
 )
@@ -30,7 +32,11 @@ import (
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
 // A new type is one more module here; nothing else in this package names a type's scan.
 func (p *process) registerMedia() error {
-	registry, err := media.NewRegistry(append([]media.Module{p.musicModule(), p.tvModule(), p.movieModule()}, p.extraMedia...)...)
+	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule()}
+	for _, format := range book.Formats {
+		modules = append(modules, p.bookModule(format))
+	}
+	registry, err := media.NewRegistry(append(modules, p.extraMedia...)...)
 	if err != nil {
 		return err
 	}
@@ -434,7 +440,7 @@ func (p *process) movieModule() movie.Module {
 			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache,
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
-		Searching: movie.Searching{Acquire: p.movieGrab(), Conns: p.movieIndexerConns, Clock: clock.NewSystem()},
+		Searching: movie.NewSearching(p.movieGrab(), p.movieIndexerConns, clock.NewSystem()),
 		Pictures:  adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
 		Service:   p.movieService(),
 		// A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
@@ -523,4 +529,106 @@ func (p *process) enqueueFranchisePass(ctx context.Context) (jobs.EnqueueResult,
 // enqueueCrossoverPass submits the pass that finds crossover episodes.
 func (p *process) enqueueCrossoverPass(ctx context.Context) (jobs.EnqueueResult, error) {
 	return tv.EnqueueCrossoverPass(ctx, p.queue)
+}
+
+// bookModule wires one of the two book types: the sweep that finds its files, the add and refresh over Open Library,
+// Google Books and Audible, the search and the jobs that keep its metadata and covers current.
+func (p *process) bookModule(format book.Format) book.Module {
+	service := p.bookService(format)
+	catalog := p.bookCatalog(format)
+	resolver := book.Resolver{
+		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		Locks: &keyedlock.Locks{},
+	}
+	grab := p.bookGrab(format)
+	conns := p.bookIndexerConns(format)
+	module := book.Module{Format: format}
+	return book.Module{
+		Format: format,
+		Registrations: []media.JobRegistration{
+			{Definition: format.RefreshDefinition(), Handler: format.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
+			{Definition: format.ArtworkDefinition(), Handler: format.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
+		},
+		Sweep: scan.Sweep{
+			Consumer: book.NewConsumer(book.ConsumerConfig{
+				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
+				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+			}),
+			Include: format.Includes,
+			Housekeeping: housekeeping.Sweep{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
+				Grain: module.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
+			},
+			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		},
+		Adder:    catalog,
+		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
+		Files:    book.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
+		Rename:   &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+			found, err := conns(ctx)
+			if err != nil {
+				return plan.OutcomeSearched, err
+			}
+			result, err := grab.SearchAndSend(ctx, itemID, found, dispatch.GrabAutomatic, clock.NewSystem().Now())
+			switch {
+			case errors.Is(err, book.ErrNotSearchable):
+				return plan.OutcomeNotWanted, nil
+			case err != nil:
+				return plan.OutcomeSearched, err
+			case result.AlreadyInFlight:
+				return plan.OutcomeInFlight, nil
+			}
+			if result.Sent != nil || result.Held {
+				p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
+			}
+			return plan.OutcomeSearched, nil
+		},
+		Feed: book.Feed{
+			Format: format, Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
+		},
+		CutoffJob: book.CutoffJob{
+			Format: format, Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
+			Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
+		},
+		Searching: format.NewSearching(grab, conns, clock.NewSystem()),
+		Service:   service,
+		// A book is read again at once, as Readarr's Refresh: it is one work and a few requests.
+		Refresh: func(ctx context.Context, workID int64) (bool, error) {
+			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+			if err != nil {
+				return false, err
+			}
+			if len(libraries) == 0 {
+				return false, fmt.Errorf("%s %d is in no library", format.MediaType, workID)
+			}
+			return false, catalog.Refresh(ctx, libraries[0], workID)
+		},
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := format.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := format.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
+	}
+}
+
+// bookGrab builds a book type's automatic search over the real stores.
+func (p *process) bookGrab(format book.Format) book.Grab {
+	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
+	return book.Grab{
+		Search: book.Search{
+			Format: format, Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
+			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
+			Sightings: &sightings, ReleaseFilters: &filters,
+		},
+		Automatic: dispatch.Automatic{
+			Dispatch: p.dispatchFor(format.MediaType), Name: format.MediaType,
+			FreeSpace: func(categoryID int64) (int64, bool) { return p.cache.Snapshot().AcquisitionHeadroom(categoryID) },
+		},
+	}
 }

@@ -16,10 +16,9 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
-	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
-	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
@@ -68,8 +67,10 @@ type wanted struct {
 	absolute map[int]int
 	// runtimeMs is an episode's usual length, to turn a release's size into a bitrate; zero when nothing says.
 	runtimeMs int64
-	// owned is, for an upgrade, the file each wanted episode has now: a release must strictly beat it.
-	owned map[int]library.EpisodeFile
+	// owned is, for an upgrade, what the file each wanted episode has now is: a release must strictly beat it.
+	owned map[int]score.Facts
+	// names are every title a release may call the series by, cleaned for comparison.
+	names map[string]bool
 }
 
 func seasonNumber(mediaRef string) (int, bool) {
@@ -122,6 +123,7 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 	if err := s.addUpgrades(ctx, item, only, detail, &w); err != nil {
 		return wanted{}, err
 	}
+	w.names = w.titles()
 	switch {
 	case runtimeCount > 0:
 		w.runtimeMs = runtimeSum / runtimeCount
@@ -137,41 +139,39 @@ func (s Search) addUpgrades(ctx context.Context, item librarydb.DesiredItem, onl
 	if only > 0 || len(w.missing) > 0 || s.Settings == nil || (item.State != ItemStateUpgradable && item.State != "PARTIAL") {
 		return nil
 	}
-	snapshot := s.Settings.Snapshot()
-	category, found := snapshot.Category(item.CategoryID)
-	if !found || !category.QualityUpgrades {
-		return nil
-	}
-	files, err := s.Series.SeasonFiles(ctx, item.ID)
+	files, err := seasonFiles(ctx, s.Series, item.ID)
 	if err != nil {
 		return err
 	}
-	tooNew := s.Clock.Now().Add(-upgradeMinFileAge).Unix()
-	owned := map[int]library.EpisodeFile{}
-	for _, file := range files {
-		if !file.Measured || file.AddedAt > tooNew {
-			continue
-		}
-		if judged, ok := quality.Judge(snapshot, category, FileFacts(file.File)); ok && !judged.MeetsCutoff {
-			if _, has := owned[file.Episode]; !has {
-				owned[file.Episode] = file.File
-			}
-		}
-	}
+	below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, s.Clock.Now().Add(-works.UpgradeMinFileAge).Unix())
 	for _, episode := range detail.Episodes {
-		if file, below := owned[episode.Number]; below && episode.Season == w.season && episode.Monitored {
+		if file, isBelow := below[strconv.Itoa(episode.Number)]; isBelow && episode.Season == w.season && episode.Monitored {
 			w.missing[episode.Number] = episode
 			if w.owned == nil {
-				w.owned = map[int]library.EpisodeFile{}
+				w.owned = map[int]score.Facts{}
 			}
-			w.owned[episode.Number] = file
+			w.owned[episode.Number] = file.Facts
 		}
 	}
 	return nil
 }
 
-// upgradeMinFileAge keeps a file that has just arrived from being replaced at once.
-const upgradeMinFileAge = 24 * time.Hour
+// seasonFiles are a season item's files as the cutoff check and the upgrade search judge them, one per episode a file
+// holds; Ref is the episode's number within the season.
+func seasonFiles(ctx context.Context, reader library.SeriesReader, itemID int64) ([]works.File, error) {
+	files, err := reader.SeasonFiles(ctx, itemID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]works.File, len(files))
+	for index, file := range files {
+		out[index] = works.File{
+			MediaObjectID: file.File.MediaObjectID, Ref: strconv.Itoa(file.Episode), AddedAt: file.AddedAt, Measured: file.Measured,
+			Monitored: file.Monitored, Facts: FileFacts(file.File),
+		}
+	}
+	return out, nil
+}
 
 // titles are every name a release may call the series by, cleaned for comparison.
 func (w wanted) titles() map[string]bool {
@@ -260,129 +260,80 @@ func (w wanted) absoluteQueries(names []string) []judge.Query {
 	return queries
 }
 
+func (s Search) shared() works.Search[wanted] {
+	return works.Search[wanted]{
+		Name: "tv", Spec: seasonSpec{s}, Desired: s.Desired, Candidates: s.Candidates, Settings: s.Settings, Clock: s.Clock,
+		Blocklist: s.Blocklist, Sightings: s.Sightings, ReleaseFilters: s.ReleaseFilters, IndexerDeadline: s.IndexerDeadline,
+	}
+}
+
 // SearchItem searches one season item: tiers widen until one finds a release that covers a missing episode, and every
 // release that did is judged and recorded (a REJECT or DEFER is a finding, not silence).
 func (s Search) SearchItem(ctx context.Context, itemID int64, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
-	return s.SearchEpisode(ctx, itemID, 0, conns, at)
+	return s.shared().SearchPart(ctx, itemID, 0, conns, at)
 }
 
 // SearchEpisode is SearchItem for one episode of the season, whether or not it is monitored or already on disk; zero
 // searches what the season is missing.
 func (s Search) SearchEpisode(ctx context.Context, itemID int64, episode int, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
-	item, err := s.Desired.Get(ctx, itemID)
-	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("tv: search item %d: %w", itemID, err)
-	}
-	w, err := s.wantedFor(ctx, item, episode)
-	if err != nil {
-		return ItemSearchResult{}, err
-	}
-	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
-		return ItemSearchResult{}, fmt.Errorf("tv: search item %d: %w", itemID, err)
-	}
-	if len(w.missing) == 0 {
-		return ItemSearchResult{}, nil
-	}
-	yardstick, err := s.yardstick(ctx, item, w)
-	if err != nil {
-		return ItemSearchResult{}, fmt.Errorf("tv: search item %d: %w", itemID, err)
-	}
-
-	result, err := s.pipeline().Search(ctx, itemID, conns, w.queries(), yardstick.evaluate, at)
-	if err != nil {
-		return result, fmt.Errorf("tv: search item %d: %w", itemID, err)
-	}
-	return result, nil
+	return s.shared().SearchPart(ctx, itemID, episode, conns, at)
 }
 
-// pipeline is the shared search over this type's stores.
-func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Desired: s.Desired, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
+// SearchPart implements works.Searcher: a part of a season is an episode.
+func (s Search) SearchPart(ctx context.Context, itemID int64, part int, conns []judge.Conn, at time.Time) (ItemSearchResult, error) {
+	return s.shared().SearchPart(ctx, itemID, part, conns, at)
 }
 
-// yardstick judges a release against what the season wants and the library's rules.
-type yardstick struct {
-	wanted         wanted
-	titles         map[string]bool
-	rules          []judge.RankedProfile
-	languagePolicy *score.LanguagePolicy
-	preferPropers  bool
-	delay          judge.ProtocolDelay
-	now            time.Time
-	// incumbents are the decisions the files an upgrade replaces would get; empty when the search is not an upgrade.
-	incumbents map[int]model.Decision
-	filters    []judge.ReleaseFilter
-	mediaRef   string
+// JudgeFeed judges releases a feed listed against one wanted season, exactly as a search's would be; nothing is
+// searched and the season's search record is left alone.
+func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, raws []indexer.RawItem, at time.Time) (ItemSearchResult, error) {
+	return s.shared().JudgeFeed(ctx, itemID, conn, raws, at)
 }
 
-func (s Search) yardstick(ctx context.Context, item librarydb.DesiredItem, w wanted) (yardstick, error) {
-	snapshot := s.Settings.Snapshot()
-	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
-	if err != nil {
-		return yardstick{}, err
-	}
-	built := yardstick{
-		wanted: w, titles: w.titles(), rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, item.CategoryID),
-		preferPropers: true, now: s.Clock.Now(), incumbents: map[int]model.Decision{}, mediaRef: item.MediaRef,
-	}
-	if s.ReleaseFilters != nil {
-		stored, err := s.ReleaseFilters.List(ctx, item.WorkID)
-		if err != nil {
-			return yardstick{}, err
-		}
-		for _, filter := range stored {
-			built.filters = append(built.filters, judge.ReleaseFilter{
-				Prefix: filter.Prefix, Kind: filter.Kind, Value: filter.Value, IsRegex: filter.IsRegex, Score: int(filter.Score),
-			})
-		}
-	}
-	for number, file := range w.owned {
-		built.incumbents[number] = judge.EvaluateInOrder(rules, FileFacts(file), built.languagePolicy)
-	}
-	if category, found := snapshot.Category(item.CategoryID); found {
-		built.preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
-		built.delay = judge.ProtocolDelay{Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: built.now}
-	}
-	return built, nil
+// seasonSpec is works.Spec for a season item: its parts are its episodes, numbered within the season.
+type seasonSpec struct{ search Search }
+
+// Wanted implements works.Spec: the monitored episodes that have aired and lack a file, else those below the cutoff.
+func (t seasonSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, episode int, _ time.Time) (wanted, bool, error) {
+	w, err := t.search.wantedFor(ctx, item, episode)
+	return w, len(w.missing) > 0, err
 }
 
-func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Find {
-	var finds []judge.Find
-	for _, raw := range raws {
-		info, ok := parsetv.Parse(raw.Title, y.now)
-		if !ok {
-			continue
-		}
-		numbers, ok := y.coverage(info)
-		if !ok {
-			continue
-		}
-		covered := len(numbers)
-		facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
-		held := releaseEpisodes(info, covered, y.wanted.allCount)
-		releasefacts.EstimateBitrate(&facts, raw.SizeBytes, held, y.wanted.runtimeMs)
-		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Claims.Version > 1, y.preferPropers)
-		decision = judge.ApplyFilters(decision, y.filters, raw.Title, info.ReleaseGroup, y.mediaRef)
-		y.requireUpgrade(&decision, facts, numbers, held)
-		fraction := float64(covered) / float64(len(y.wanted.missing))
-		finds = append(finds, judge.Find{
-			Conn: conn, Raw: raw, ParseConfidence: 1, Distance: 1 - fraction, MatchConfidence: max(0.5, fraction), Decision: decision,
-		})
+// Queries implements works.Spec.
+func (seasonSpec) Queries(w wanted) [][]judge.Query { return w.queries() }
+
+// Owned implements works.Spec.
+func (seasonSpec) Owned(w wanted) map[int]score.Facts { return w.owned }
+
+// Read implements works.Spec: a release is wanted when it names the series and holds a wanted episode of the season.
+func (seasonSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, now time.Time) (works.Release, bool) {
+	info, ok := parsetv.Parse(raw.Title, now)
+	if !ok {
+		return works.Release{}, false
 	}
-	y.delay.Apply(finds)
-	return finds
+	numbers, ok := w.coverage(info)
+	if !ok {
+		return works.Release{}, false
+	}
+	facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
+	held := releaseEpisodes(info, len(numbers), w.allCount)
+	releasefacts.EstimateBitrate(&facts, raw.SizeBytes, held, w.runtimeMs)
+	return works.Release{
+		Facts: facts, ReleaseGroup: info.ReleaseGroup, Revised: info.Claims.Version > 1, Parts: numbers, Held: held,
+		Share: float64(len(numbers)) / float64(len(w.missing)),
+	}, true
 }
 
 // coverage says which of the wanted episodes the release holds; false when it is not this series, this season or
 // anything wanted.
-func (y yardstick) coverage(info parsetv.Info) ([]int, bool) {
-	if !y.titles[parsetv.CleanTitle(info.SeriesTitle)] && !y.titles[parsetv.CleanTitle(info.TitleWithoutYear)] {
+func (w wanted) coverage(info parsetv.Info) ([]int, bool) {
+	if !w.names[parsetv.CleanTitle(info.SeriesTitle)] && !w.names[parsetv.CleanTitle(info.TitleWithoutYear)] {
 		return nil, false
 	}
 	if info.SeasonExtra {
 		return nil, false
 	}
-	wantedSeason := y.wanted.season
+	wantedSeason := w.season
 	switch {
 	case info.FullSeason || info.MultiSeason && len(info.EpisodeNumbers) == 0:
 		inSeason := info.SeasonNumber == wantedSeason
@@ -392,8 +343,8 @@ func (y yardstick) coverage(info parsetv.Info) ([]int, bool) {
 		if !inSeason {
 			return nil, false
 		}
-		numbers := make([]int, 0, len(y.wanted.missing))
-		for number := range y.wanted.missing {
+		numbers := make([]int, 0, len(w.missing))
+		for number := range w.missing {
 			numbers = append(numbers, number)
 		}
 		return numbers, true
@@ -403,61 +354,29 @@ func (y yardstick) coverage(info parsetv.Info) ([]int, bool) {
 		}
 		var numbers []int
 		for _, number := range info.EpisodeNumbers {
-			if _, missing := y.wanted.missing[number]; missing {
+			if _, missing := w.missing[number]; missing {
 				numbers = append(numbers, number)
 			}
 		}
 		return numbers, len(numbers) > 0
-	case len(info.AbsoluteNumbers) > 0 && y.wanted.anime:
+	case len(info.AbsoluteNumbers) > 0 && w.anime:
 		var numbers []int
 		for _, absolute := range info.AbsoluteNumbers {
-			if number, known := y.wanted.absolute[absolute]; known {
-				if _, missing := y.wanted.missing[number]; missing {
+			if number, known := w.absolute[absolute]; known {
+				if _, missing := w.missing[number]; missing {
 					numbers = append(numbers, number)
 				}
 			}
 		}
 		return numbers, len(numbers) > 0
 	case info.AirDate != "":
-		for number, episode := range y.wanted.missing {
+		for number, episode := range w.missing {
 			if episode.Date == info.AirDate {
 				return []int{number}, true
 			}
 		}
 	}
 	return nil, false
-}
-
-// requireUpgrade rejects an accepted release that does not beat the file of every episode it would replace by quality
-// (Invariant 72: a tie keeps what is owned). Only what a file can show is compared: a release name states a source, a
-// group and a repack that the measured file does not, so with them it would always out-rank the file it replaces.
-func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts, numbers []int, held int) {
-	if decision.Outcome != model.OutcomeAccept || len(y.incumbents) == 0 {
-		return
-	}
-	// A pack mostly of episodes that are fine as they are would place a second copy of each.
-	if held > 1 && len(numbers)*2 < held {
-		decision.Outcome = model.OutcomeReject
-		decision.Rejections = append(decision.Rejections, model.Rejection{
-			Rule: "upgrade", Field: "pack", Wanted: "a pack mostly of episodes below the cutoff", Got: "most of it is already good enough",
-		})
-		return
-	}
-	facts.File.Source, facts.File.ReleaseGroup, facts.File.ProperRepack = "", "", false
-	likeForLike := judge.EvaluateInOrder(y.rules, facts, y.languagePolicy)
-	for _, number := range numbers {
-		owned, replacing := y.incumbents[number]
-		if !replacing {
-			continue
-		}
-		if winner, _ := model.Compare(likeForLike.Quality, owned.Quality); winner >= 0 {
-			decision.Outcome = model.OutcomeReject
-			decision.Rejections = append(decision.Rejections, model.Rejection{
-				Rule: "upgrade", Field: "quality", Wanted: "better than the files you have", Got: "not better",
-			})
-			return
-		}
-	}
 }
 
 // releaseEpisodes is how many episodes a release holds: the ones its name numbers, else the season it is a pack of.

@@ -28,6 +28,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
@@ -125,6 +126,9 @@ type process struct {
 	// movieOnce builds the movie providers once, on the same TMDB bucket as TV.
 	movieOnce   sync.Once
 	movieShared movie.Service
+	// bookOnce builds the book providers once, books and audiobooks sharing their buckets; bookShared by media type.
+	bookOnce   sync.Once
+	bookShared map[string]book.Service
 	// wikidataOnce builds the one cache of what Wikidata says of works, shared by TV and movies.
 	wikidataOnce   sync.Once
 	wikidataShared *wikidata.Cached

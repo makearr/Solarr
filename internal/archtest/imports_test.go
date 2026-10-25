@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
+	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -39,7 +39,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/solarr/adapters": {
+	"cmd/solarr/adapters": {"internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
@@ -376,11 +376,11 @@ var allowedInternalImports = map[string][]string{
 	"internal/media/picturesweep": {"internal/db/library", "internal/jobs", "internal/platform/parallel"},
 	// What film and TV share as data: their genre tree.
 	"internal/media/screen": {"internal/media", "internal/db/settings"},
-	"internal/media/tv":     {"internal/media/picturesweep", "internal/media/screen", "internal/metadata/anilist", "internal/metadata/wikidata", "internal/media/knownfor", "internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/importing/placer", "internal/importing/rules", "internal/acquiring/releasefacts", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/keyedlock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
+	"internal/media/tv":     {"internal/media/works", "internal/media/picturesweep", "internal/media/screen", "internal/metadata/anilist", "internal/metadata/wikidata", "internal/media/knownfor", "internal/platform/filekind", "internal/db/statistics", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/platform/parallel", "internal/media", "internal/acquiring/plan", "internal/importing/batch", "internal/importing/inspect", "internal/moving/mover", "internal/importing/placer", "internal/importing/rules", "internal/acquiring/releasefacts", "internal/acquiring/dispatch", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/judge", "internal/db/store/gen/librarydb", "internal/identify/score", "internal/identify/parsetv", "internal/scanning/scan", "internal/platform/fsx", "internal/identify/model", "internal/db/library", "internal/db/settings", "internal/metadata/skyhook", "internal/metadata/tvmaze", "internal/metadata/tmdb", "internal/metadata/anilist", "internal/metadata/tvdb", "internal/metadata/metaresolve", "internal/moving/naming", "internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/keyedlock", "internal/platform/mediatool", "internal/platform/paginate", "internal/jobs", "internal/identify/quality"},
 	// One lock per key, for work on the same series folder or movie.
 	"internal/platform/keyedlock": {},
 	// The movie module (stage 10), built beside music and TV on the same seams.
-	"internal/media/movie": {
+	"internal/media/movie": {"internal/media/works",
 		"internal/media/knownfor", "internal/media/picturesweep", "internal/media/screen",
 		"internal/db/library", "internal/db/settings", "internal/db/store/gen/librarydb", "internal/identify/model",
 		"internal/identify/parsemovie", "internal/identify/parsetv", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
@@ -390,6 +390,28 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/filekind", "internal/platform/fsx", "internal/platform/keyedlock",
 		"internal/platform/mediatool", "internal/platform/parallel", "internal/platform/paginate", "internal/scanning/scan", "internal/db/statistics",
 	},
+	"internal/media/book": {
+		"internal/media/works", "internal/db/store/gen/librarydb", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
+		"internal/identify/parsebook", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
+		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media",
+		"internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/audible", "internal/metadata/wikidata",
+		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
+		"internal/acquiring/releasefacts", "internal/acquiring/plan", "internal/acquiring/rss", "internal/moving/mover", "internal/moving/naming",
+		"internal/moving/renamejob", "internal/platform/clock", "internal/platform/fsx", "internal/platform/keyedlock",
+		"internal/platform/parallel", "internal/scanning/scan", "internal/db/statistics",
+	},
+	// What TV, movies and books do alike with their works: search, grab, feeds, cutoff, adding, placing and refreshing.
+	"internal/media/works": {
+		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
+		"internal/acquiring/rss", "internal/db/library", "internal/db/settings", "internal/db/statistics", "internal/db/store/gen/librarydb",
+		"internal/identify/model", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
+		"internal/platform/clock", "internal/platform/parallel",
+	},
+	// The book providers: Open Library, Google Books, Audible's catalog with Audnexus.
+	"internal/metadata/openlibrary": {"internal/platform/httpx"},
+	"internal/metadata/googlebooks": {"internal/platform/httpx"},
+	"internal/metadata/audible":     {"internal/platform/httpx"},
+	"internal/identify/parsebook":   {},
 	// Radarr's own keyless movie metadata service, the fallback behind TMDB.
 	"internal/metadata/radarrmeta": {"internal/platform/httpx"},
 	"internal/metadata/mdblist":    {"internal/platform/httpx"},

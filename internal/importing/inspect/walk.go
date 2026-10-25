@@ -14,7 +14,7 @@ import (
 // ListFiles is every file under root, classified: what the import decides what to do with, and what unpack looks
 // for archives in.
 func ListFiles(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64) ([]File, error) {
-	return walk(ctx, fsys, root, sizeFloor)
+	return walk(ctx, fsys, root, sizeFloor, false)
 }
 
 // RecycleFolder is where a source archive goes once it has been imported; the walk never enters it.
@@ -22,15 +22,15 @@ const RecycleFolder = ".solarr-recycle"
 
 // walk recurses to arbitrary depth under root and classifies every file it finds.
 // An archive is classified, not opened here: importing/unpack expands them into a workspace first (ADR-49).
-func walk(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64) ([]File, error) {
+func walk(ctx context.Context, fsys fsx.FS, root string, sizeFloor int64, books bool) ([]File, error) {
 	var files []File
-	if err := walkDir(ctx, fsys, root, "", sizeFloor, &files); err != nil {
+	if err := walkDir(ctx, fsys, root, "", sizeFloor, books, &files); err != nil {
 		return nil, err
 	}
 	return files, nil
 }
 
-func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor int64, files *[]File) error {
+func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor int64, books bool, files *[]File) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -51,7 +51,7 @@ func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor 
 			if entry.Name == RecycleFolder {
 				continue
 			}
-			if err := walkDir(ctx, fsys, root, childRelative, sizeFloor, files); err != nil {
+			if err := walkDir(ctx, fsys, root, childRelative, sizeFloor, books, files); err != nil {
 				return err
 			}
 			continue
@@ -67,7 +67,7 @@ func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor 
 		}
 		*files = append(*files, File{
 			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,
-			Class: Classify(childRelative, info.Size, sizeFloor),
+			Class: classify(childRelative, info.Size, sizeFloor, books),
 		})
 	}
 	return nil

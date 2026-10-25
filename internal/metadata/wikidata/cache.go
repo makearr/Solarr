@@ -103,6 +103,16 @@ func (c *Cached) MovieIDs(ctx context.Context, tmdb int64, imdb string) (WorkIDs
 	return found.IDs, ok && err == nil, err
 }
 
+// BookIDs answers the ids Wikidata records for the book Open Library's work id names, from the book's facts.
+func (c *Cached) BookIDs(ctx context.Context, openLibrary string) (WorkIDs, bool, error) {
+	if openLibrary == "" {
+		return WorkIDs{}, false, nil
+	}
+	facts, err := c.FactsOf(ctx, FactBook, []string{openLibrary})
+	found, ok := facts[openLibrary]
+	return found.IDs, ok && err == nil, err
+}
+
 // forgetOldest drops the older half of what is kept; called with the lock held.
 func (c *Cached) forgetOldest() {
 	times := make([]time.Time, 0, len(c.entries))

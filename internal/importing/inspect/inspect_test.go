@@ -319,3 +319,27 @@ func TestClassify_EveryClass(t *testing.T) {
 		}
 	}
 }
+
+func TestRun_AnEbookIsMediaOnlyForABookLibrary(t *testing.T) {
+	tr := newTree(t, "Album/01 Track.flac", "Album/booklet.pdf", "Novel/Mara Quell - The Lantern Keeper.epub")
+	music, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(music.Units) != 1 || len(music.Units[0].Media) != 1 || music.Units[0].Media[0].RelPath != "Album/01 Track.flac" {
+		t.Errorf("a booklet or a novel became media of a music import: %+v", music.Units)
+	}
+	books, err := inspect.Run(t.Context(), tr.fsys, root, inspect.Options{Books: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var novel bool
+	for _, unit := range books.Units {
+		for _, file := range unit.Media {
+			novel = novel || file.RelPath == "Novel/Mara Quell - The Lantern Keeper.epub"
+		}
+	}
+	if !novel {
+		t.Errorf("the novel is no media of a book import: %+v", books.Units)
+	}
+}

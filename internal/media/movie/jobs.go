@@ -2,16 +2,14 @@ package movie
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/picturesweep"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 // RefreshJobType is the registered type of the movie refresh sweep.
@@ -31,11 +29,10 @@ const (
 	activeRefresh   = 7 * 24 * time.Hour
 	releasedRefresh = 30 * 24 * time.Hour
 	// refreshPerRun bounds one sweep so a large library is spread over the hour's runs.
-	refreshPerRun  = 60
-	refreshWorkers = 4
+	refreshPerRun = 60
 )
 
-// RefreshConfig is what a RefreshJob needs; Logger is optional.
+// RefreshConfig is what the refresh sweep needs; Logger is optional.
 type RefreshConfig struct {
 	Reader  library.SeriesReader
 	Service Service
@@ -43,57 +40,23 @@ type RefreshConfig struct {
 	Logger  *slog.Logger
 }
 
-// RefreshJob re-reads the movies that are due, so new release dates, cuts and artwork reach the library on their own.
-type RefreshJob struct {
-	config RefreshConfig
-	logger *slog.Logger
-}
-
-// NewRefreshJob builds the handler.
-func NewRefreshJob(config RefreshConfig) *RefreshJob {
-	logger := config.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return &RefreshJob{config: config, logger: logger}
-}
-
-// Run refreshes the due movies, refreshWorkers at a time; one failing never stops the rest.
-func (j *RefreshJob) Run(ctx context.Context, _ jobs.Job) error {
-	due, err := j.config.Reader.DueForRefreshOf(ctx, MediaType, string(StatusReleased), j.config.Clock.Now(), activeRefresh, releasedRefresh, refreshPerRun)
-	if err != nil {
-		return fmt.Errorf("movie: refresh sweep: %w", err)
-	}
-	j.config.Service.WarmWikidata(ctx, due)
-	outcomes := parallel.Do(ctx, len(due), refreshWorkers, func(ctx context.Context, index int) error {
-		if err := ctx.Err(); err != nil {
+// NewRefreshJob is the shared refresh sweep over the movies that are due, so new release dates, cuts and artwork
+// reach the library on their own.
+func NewRefreshJob(config RefreshConfig) works.RefreshJob {
+	return works.RefreshJob{
+		Name: MediaType, JobType: RefreshJobType, NoSource: ErrNoSource, Clock: config.Clock, Logger: config.Logger,
+		Due: func(ctx context.Context) ([]library.RefreshCandidate, error) {
+			return config.Reader.DueForRefreshOf(ctx, MediaType, string(StatusReleased), config.Clock.Now(), activeRefresh, releasedRefresh, refreshPerRun)
+		},
+		Warm: config.Service.WarmWikidata,
+		Refresh: func(ctx context.Context, candidate library.RefreshCandidate) error {
+			_, err := config.Service.Refresh(ctx, RefreshRequest{WorkID: candidate.WorkID, CategoryID: candidate.CategoryID})
 			return err
-		}
-		candidate := due[index]
-		_, err := j.config.Service.Refresh(ctx, RefreshRequest{WorkID: candidate.WorkID, CategoryID: candidate.CategoryID})
-		if err != nil {
-			_ = j.config.Service.Series.MarkRefreshAttempt(ctx, j.config.Clock.Now(), candidate.WorkID)
-		}
-		return err
-	})
-	if err := ctx.Err(); err != nil {
-		return jobs.Retryablef("movie.refresh.context", string(RefreshJobType), err)
+		},
+		MarkAttempt: func(ctx context.Context, workID int64) error {
+			return config.Service.Series.MarkRefreshAttempt(ctx, config.Clock.Now(), workID)
+		},
 	}
-	refreshed, failed := 0, 0
-	for index, err := range outcomes {
-		switch {
-		case err == nil:
-			refreshed++
-		case errors.Is(err, ErrNoSource):
-			failed++
-			j.logger.WarnContext(ctx, "movie refresh: no provider answered", slog.Int64("work_id", due[index].WorkID))
-		default:
-			failed++
-			j.logger.WarnContext(ctx, "movie refresh failed", slog.Int64("work_id", due[index].WorkID), slog.Any("error", err))
-		}
-	}
-	j.logger.Info("movie refresh sweep finished", slog.Int("refreshed", refreshed), slog.Int("failed", failed))
-	return nil
 }
 
 // EnqueueRefresh submits one refresh sweep, deduplicated by RefreshActionKey.

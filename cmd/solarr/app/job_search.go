@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -54,39 +57,27 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 
 // tvIndexerConns is indexerConns for TV: the same connections, searched in TV's categories with tvsearch's parameters.
 func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
-	configured, err := p.cache.Indexers(ctx)
-	if err != nil {
-		return nil, err
-	}
-	conns := make([]judge.Conn, 0, len(configured))
-	for _, found := range configured {
-		if !found.Enabled {
-			continue
-		}
-		apiKey, err := p.cache.DecryptedIndexerAPIKey(ctx, found.ID)
-		if err != nil {
-			// One unreadable key (an encryption key changed) must not stop the searches of every other indexer.
-			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
-			continue
-		}
-		client, known := p.indexerDriver(found, apiKey.Reveal())
-		if !known {
-			continue
-		}
-		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.TVCategories()}
-		if p.indexerCaps != nil {
-			if params := p.indexerCaps.tvParams(ctx, found.ID, found.BaseURL, client); params != nil {
-				conn.Params = map[string][]string{"tvsearch": params}
-			}
-		}
-		conns = append(conns, conn)
-	}
-	return conns, nil
+	return p.searchConns(ctx, settings.Indexer.TVCategories, "tvsearch", "tv-search")
 }
 
 // movieIndexerConns is indexerConns for movies: the same connections, searched in the movie categories with the
 // movie function's parameters.
 func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
+	return p.searchConns(ctx, settings.Indexer.MovieCategories, "movie", "movie-search")
+}
+
+// bookIndexerConns is indexerConns for a book type: the same connections, searched in its Newznab categories with the
+// book function's parameters.
+func (p *process) bookIndexerConns(format book.Format) func(ctx context.Context) ([]judge.Conn, error) {
+	categories := func(settings.Indexer) []int { return slices.Clone(format.FeedCategories) }
+	return func(ctx context.Context) ([]judge.Conn, error) {
+		return p.searchConns(ctx, categories, "book", "book-search")
+	}
+}
+
+// searchConns resolves every enabled indexer fresh, as indexerConns does, searched in categories with the parameters
+// the indexer's caps list for capsSearch under function.
+func (p *process) searchConns(ctx context.Context, categories func(settings.Indexer) []int, function, capsSearch string) ([]judge.Conn, error) {
 	configured, err := p.cache.Indexers(ctx)
 	if err != nil {
 		return nil, err
@@ -106,10 +97,10 @@ func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 		if !known {
 			continue
 		}
-		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.MovieCategories()}
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: categories(found)}
 		if p.indexerCaps != nil {
-			if params := p.indexerCaps.movieParams(ctx, found.ID, found.BaseURL, client); params != nil {
-				conn.Params = map[string][]string{"movie": params}
+			if params := p.indexerCaps.searchParams(ctx, found.ID, found.BaseURL, client, capsSearch); params != nil {
+				conn.Params = map[string][]string{function: params}
 			}
 		}
 		conns = append(conns, conn)

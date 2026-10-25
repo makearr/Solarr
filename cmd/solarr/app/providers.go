@@ -14,16 +14,20 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
+	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
@@ -331,6 +335,44 @@ func (p *process) movieService() movie.Service {
 		}
 	})
 	return p.movieShared
+}
+
+// bookService is the process's one book service of a format: Open Library, Google Books and Audible on buckets books
+// and audiobooks share, steered by the one Wikidata cache.
+func (p *process) bookService(format book.Format) book.Service {
+	p.bookOnce.Do(func() {
+		openLibrary := openlibrary.New(p.providerClient(providerOpenLibrary, nil, httpx.ClientConfig{}))
+		googleBooks := googlebooks.New(p.providerClient(providerGoogleBooks, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceGoogleBooks))
+		audibleClient := p.providerClient(providerAudible, nil, httpx.ClientConfig{})
+		catalog := audible.New(audibleClient, audibleClient, nil)
+		p.bookShared = map[string]book.Service{}
+		for _, each := range book.Formats {
+			p.bookShared[each.MediaType] = book.Service{
+				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, Wikidata: p.wikidataFacts(),
+				PriorityFor: func(categoryID int64) []string {
+					snapshot := p.cache.Snapshot()
+					category, found := snapshot.Category(categoryID)
+					if !found {
+						return nil
+					}
+					return snapshot.MetadataSourcesFor(category)
+				},
+				Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+				Franchises: library.NewFranchises(p.library), Exclusions: library.NewExclusions(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+			}
+		}
+	})
+	return p.bookShared[format.MediaType]
+}
+
+// bookCatalog is a book type's screens' data source.
+func (p *process) bookCatalog(format book.Format) book.Catalog {
+	return book.Catalog{
+		Service: p.bookService(format), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		AllowAgain: func(ctx context.Context, provider, externalID string) error {
+			return adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)}.Allow(ctx, format.MediaType, provider, externalID)
+		},
+	}
 }
 
 // movieCatalog is the movie screens' data source.

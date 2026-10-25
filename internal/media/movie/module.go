@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/knownfor"
 	"github.com/makearr/Solarr/internal/media/screen"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -33,8 +34,8 @@ type Module struct {
 	Feed
 	// CutoffJob is the movie module's part of the cutoff check.
 	CutoffJob
-	// Searching is the movie module's part of a search a person asks for.
-	Searching
+	// Searching is the movie module's part of a search a person asks for (NewSearching).
+	works.Searching
 	// Files places a library file nothing identified; nil leaves such files to wait.
 	Files media.PlacingFiles
 	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.

@@ -18,6 +18,8 @@ const (
 	FactFilm   FactKind = "P4947"
 	FactSeries FactKind = "P4835"
 	FactAlbum  FactKind = "P436"
+	// FactBook is Open Library's work id ("OL27482W"), which a literary work's item records.
+	FactBook FactKind = "P648"
 )
 
 // WorkFacts are what Wikidata's item, and its English Wikipedia article, say of a film, a series or an album.
@@ -36,6 +38,13 @@ type WorkFacts struct {
 	Labels, Makers []string
 	// Summary is the English Wikipedia article's lead, empty without one.
 	Summary string
+	// Series is the series the work is part of (P179), with its place in it; nil when it names none.
+	Series *SeriesPlace
+}
+
+// SeriesPlace is a work's series and the work's place in it ("3", "2.5"; empty when unnumbered).
+type SeriesPlace struct {
+	QID, Name, Position string
 }
 
 // factsPerQuery bounds the works one facts query asks about.
@@ -61,7 +70,9 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
   (GROUP_CONCAT(DISTINCT ?country; separator="|") AS ?countries) (GROUP_CONCAT(DISTINCT ?labelName; separator="|") AS ?labels)
   (GROUP_CONCAT(DISTINCT ?makerName; separator="|") AS ?makers) (SAMPLE(?tvdb) AS ?tvdbID) (SAMPLE(?tmdbSeries) AS ?tmdbSeriesID)
   (SAMPLE(?tmdbFilm) AS ?tmdbFilmID) (SAMPLE(?imdb) AS ?imdbID) (SAMPLE(?tvmaze) AS ?tvmazeID)
-  (GROUP_CONCAT(DISTINCT ?anilist; separator="|") AS ?anilistIDs) WHERE {
+  (GROUP_CONCAT(DISTINCT ?anilist; separator="|") AS ?anilistIDs) (SAMPLE(?openLibrary) AS ?openLibraryID)
+  (SAMPLE(?goodreads) AS ?goodreadsID) (SAMPLE(?googleBooks) AS ?googleBooksID) (SAMPLE(?isbn) AS ?isbnID)
+  (SAMPLE(?seriesEntry) AS ?series) WHERE {
   VALUES ?id { ` + strings.Join(values, " ") + ` } ?item wdt:` + string(kind) + ` ?id .
   OPTIONAL { ?item wdt:P1476 ?title }
   OPTIONAL { ?item wdt:P577|wdt:P580 ?date }
@@ -70,9 +81,14 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
   OPTIONAL { ?item wdt:P364|wdt:P407 ?languageItem . ?languageItem wdt:P218 ?language }
   OPTIONAL { ?item wdt:P495 ?countryItem . ?countryItem wdt:P297 ?country }
   OPTIONAL { ?item wdt:P264 ?label . ?label rdfs:label ?labelName . FILTER(LANG(?labelName) = "en") }
-  OPTIONAL { ?item wdt:P57|wdt:P170|wdt:P175 ?maker . ?maker rdfs:label ?makerName . FILTER(LANG(?makerName) = "en") }
+  OPTIONAL { ?item wdt:P57|wdt:P170|wdt:P175|wdt:P50 ?maker . ?maker rdfs:label ?makerName . FILTER(LANG(?makerName) = "en") }
   OPTIONAL { ?item wdt:P4835 ?tvdb } OPTIONAL { ?item wdt:P4983 ?tmdbSeries } OPTIONAL { ?item wdt:P4947 ?tmdbFilm }
   OPTIONAL { ?item wdt:P345 ?imdb } OPTIONAL { ?item wdt:P8600 ?tvmaze } OPTIONAL { ?item wdt:P8729 ?anilist }
+  OPTIONAL { ?item wdt:P648 ?openLibrary } OPTIONAL { ?item wdt:P8383 ?goodreads } OPTIONAL { ?item wdt:P675 ?googleBooks }
+  OPTIONAL { ?item wdt:P212 ?isbn }
+  OPTIONAL { ?item p:P179 ?seriesStatement . ?seriesStatement ps:P179 ?seriesItem . OPTIONAL { ?seriesStatement pq:P1545 ?ordinal }
+    ?seriesItem rdfs:label ?seriesName . FILTER(LANG(?seriesName) = "en")
+    BIND(CONCAT(STR(?seriesItem), "|", ?seriesName, "|", COALESCE(?ordinal, "")) AS ?seriesEntry) }
 } GROUP BY ?id ?item`
 		rows, err := f.sparql(ctx, query)
 		if err != nil {
@@ -91,6 +107,7 @@ func (f Fetcher) FactsOf(ctx context.Context, kind FactKind, ids []string) (map[
 			facts := WorkFacts{QID: qid, OriginalTitle: row["original"].Value, Languages: split(row["languages"].Value),
 				Countries: split(row["countries"].Value), Labels: split(row["labels"].Value), Makers: split(row["makers"].Value)}
 			facts.IDs = factIDs(kind, qid, row)
+			facts.Series = seriesPlace(row["series"].Value)
 			if first := row["first"].Value; len(first) >= 10 {
 				facts.Date = first[:10]
 			}
@@ -143,12 +160,23 @@ func factIDs(kind FactKind, qid string, row map[string]struct {
 	if imdb := row["imdbID"].Value; imdbPattern.MatchString(imdb) {
 		ids.IMDb = imdb
 	}
+	ids.OpenLibrary, ids.Goodreads = row["openLibraryID"].Value, row["goodreadsID"].Value
+	ids.GoogleBooks, ids.ISBN = row["googleBooksID"].Value, strings.ReplaceAll(row["isbnID"].Value, "-", "")
 	for _, anilist := range split(row["anilistIDs"].Value) {
 		if id, err := strconv.ParseInt(anilist, 10, 64); err == nil {
 			ids.AniList = append(ids.AniList, id)
 		}
 	}
 	return ids
+}
+
+// seriesPlace reads a series entry, "item address|name|position".
+func seriesPlace(entry string) *SeriesPlace {
+	parts := strings.SplitN(entry, "|", 3)
+	if len(parts) != 3 || !qidPattern.MatchString(qidOf(parts[0])) || parts[1] == "" {
+		return nil
+	}
+	return &SeriesPlace{QID: qidOf(parts[0]), Name: parts[1], Position: strings.TrimSpace(parts[2])}
 }
 
 func split(joined string) []string {

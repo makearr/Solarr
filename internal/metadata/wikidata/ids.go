@@ -15,6 +15,8 @@ type WorkIDs struct {
 	TVDB, TMDB, TVmaze int64
 	IMDb               string
 	AniList            []int64
+	// OpenLibrary is a book's work id, Goodreads its work id, GoogleBooks a volume id, ISBN an ISBN-13 of it.
+	OpenLibrary, Goodreads, GoogleBooks, ISBN string
 }
 
 // SeriesIDs answers the ids Wikidata records for the series TheTVDB's id names, else TMDB's, else IMDb's; false when no
