@@ -1,5 +1,35 @@
 # Downloads: what is sent, and what waits
 
+## Indexers
+
+Connections -> Indexers -> **Add indexers…** opens Prowlarr's add list: every indexer Solarr can search
+(`GET /indexers/schema`), narrowed by words, protocol, privacy (public, semi-private, private) and media. Tick any
+number, then **Next** asks each for its address (a mirror where it has several) and its key, with a Test for each
+(`POST /indexers/test`); nothing is added until **Add**. Every entry is optional. An indexer remembers the entry it
+came from (`definition`), so the list marks it as already added.
+
+| Kind | Entries | Signs in with |
+|---|---|---|
+| Newznab / Torznab (generic) | any Newznab or Torznab address, Prowlarr's per-indexer ones included | API key, optional |
+| Prowlarr's Newznab presets | abNZB, altHUB, DOGnzb, DrunkenSlug, GingaDADDY, Miatrix, Newz-Complex, NinjaCentral, Nzb.su, NZBCat, NZBFinder, NZBgeek, NZBNDX, NzbPlanet, NZBStars, OZnzb, SimplyNZBs, SpotNZB, Tabula Rasa, Usenet Crawler | API key |
+| Public torrent | AnimeTosho (usenet and torrent feeds), The Pirate Bay (apibay), Nyaa, YTS, Knaben, Internet Archive, SubsPlease | nothing |
+| Private torrent | Redacted, Orpheus (Gazelle, music), FileList, HDBits, PassThePopcorn, BeyondHD, BroadcasTheNet | API key, or user name and passkey |
+| Soulseek | slskd's search | slskd API key |
+
+Each is Prowlarr's native implementation of the site's own API, on `indexer.Base`
+(`internal/acquiring/indexer/base.go`): bounded requests, fetching a result's file with the indexer's headers,
+declared capabilities, and the words of a structured query for a site that takes only words. Results are mapped onto
+Newznab categories and kept to the ones a search asks for, so a movie tracker answers a music search with nothing.
+Prowlarr's scraped sites (its Cardigann definitions) are not ported: ADR-43 keeps Solarr to documented APIs; add them
+through Prowlarr or Jackett as Torznab. A private site's test makes its cheapest signed-in call, so it proves the key.
+
+**Soulseek** searches through slskd (`internal/acquiring/indexer/soulseek`): a search is started, awaited for 12 seconds
+and read, and each peer's folder holding audio becomes one release, named "Artist - Album [FLAC]" from its folders.
+Its link carries the folder's files as a direct release, which slskd as a download client fetches. Searching needs
+slskd as an indexer and downloading needs it as a download client; each offers the other, at the same address with
+the same key, and neither is added unless the person asks: a tick when adding either, or the offer on its row
+(`POST /indexers/{id}/companion`, `POST /downloaders/{id}/companion`), which "Not now" hides.
+
 ## Download clients
 
 Every kind of client Lidarr and Sonarr offer is offered here, and none is configured until the person adds one

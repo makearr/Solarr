@@ -15,13 +15,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
-// IndexerClientFactory builds a Newznab/Torznab client for one connection's
-// own base URL, decrypted API key and egress settings -- injected so this
-// package never builds an httpx.Client itself (cmd/solarr/app/
-// providers.go's own job, the same rate limiter/breaker/proxy wiring every
-// other provider already gets), the same split LidarrClientFactory already
-// uses.
-type IndexerClientFactory func(indexerID int64, baseURL, apiKey string, egress settings.IndexerEgress) indexer.Client
+// IndexerHTTPFactory builds the HTTP client of one indexer connection: its own rate-limit and breaker bucket, the SSRF
+// guard for its host and its egress proxy -- injected so this package never builds an httpx.Client itself.
+type IndexerHTTPFactory func(indexerID int64, baseURL string, egress settings.IndexerEgress) *httpx.Client
 
 // DownloaderHTTPFactory builds the HTTP client of one download connection: its own rate-limit and breaker bucket,
 // the SSRF guard for the configured host.
@@ -32,7 +28,7 @@ type DownloaderHTTPFactory func(downloaderID int64, baseURL string) *httpx.Clien
 // or download client, never a search or dispatch action.
 type ConnectionTester struct {
 	Cache      *settings.Cache
-	Indexer    IndexerClientFactory
+	Indexer    IndexerHTTPFactory
 	Downloader DownloaderHTTPFactory
 	// FS is where a blackhole's folders are looked for.
 	FS    fsx.FS
@@ -55,26 +51,50 @@ func (c ConnectionTester) TestIndexer(ctx context.Context, id int64) (apiserver.
 		return apiserver.ConnectionTestResult{}, err
 	}
 
-	at := c.Clock.Now()
-	client := c.Indexer(id, found.BaseURL, apiKey.Reveal(), found.Egress())
-	caps, err := client.Capabilities(ctx)
-	if err != nil {
-		// A connection problem is the answer this method exists to report,
-		// not a failure of the method call itself -- ok:false, never an error.
-		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}, nil //nolint:nilerr
-	}
-
-	if encoded, err := json.Marshal(caps); err == nil {
+	result := c.testIndexer(ctx, found.Impl, c.Indexer(id, found.BaseURL, found.Egress()), found.BaseURL, apiKey.Reveal())
+	if result.OK {
 		// Best-effort: a failed write must not turn a successful connection
 		// test into a reported failure -- the caps response itself is what
 		// answers the request either way.
-		_ = c.Cache.SetIndexerCaps(ctx, id, string(encoded), at.Unix())
+		_ = c.Cache.SetIndexerCaps(ctx, id, result.capsJSON, result.TestedAt.Unix())
 	}
-	return apiserver.ConnectionTestResult{
-		OK:       true,
-		Message:  fmt.Sprintf("Connected. %d categories, %d search modes.", len(caps.Categories), countAvailable(caps.Search)),
-		TestedAt: at,
-	}, nil
+	return result.ConnectionTestResult, nil
+}
+
+// TestIndexerConfig tests an indexer before it is saved: the add page's "Test" before "Add".
+func (c ConnectionTester) TestIndexerConfig(ctx context.Context, impl, baseURL, apiKey string) (apiserver.ConnectionTestResult, error) {
+	return c.testIndexer(ctx, impl, c.Indexer(0, baseURL, settings.IndexerEgress{}), baseURL, apiKey).ConnectionTestResult, nil
+}
+
+type indexerTest struct {
+	apiserver.ConnectionTestResult
+	capsJSON string
+}
+
+// testIndexer asks any implementation for its capabilities: Newznab's t=caps, or an API indexer's cheapest
+// authenticated call.
+func (c ConnectionTester) testIndexer(ctx context.Context, impl string, client *httpx.Client, baseURL, apiKey string) indexerTest {
+	at := c.Clock.Now()
+	driver, known := NewIndexer(impl, IndexerDeps{HTTP: client, Clock: c.Clock}, indexer.Connection{BaseURL: baseURL, APIKey: apiKey})
+	if !known {
+		return indexerTest{ConnectionTestResult: apiserver.ConnectionTestResult{
+			Message: fmt.Sprintf("%q is not an indexer Solarr knows", impl), TestedAt: at,
+		}}
+	}
+	caps, err := driver.Capabilities(ctx)
+	if err != nil {
+		// A connection problem is the answer this method exists to report, not a failure of the call itself.
+		return indexerTest{ConnectionTestResult: apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}}
+	}
+	encoded, _ := json.Marshal(caps)
+	return indexerTest{
+		ConnectionTestResult: apiserver.ConnectionTestResult{
+			OK:       true,
+			Message:  fmt.Sprintf("Connected. %d categories, %d search modes.", len(caps.Categories), countAvailable(caps.Search)),
+			TestedAt: at,
+		},
+		capsJSON: string(encoded),
+	}
 }
 
 // TestDownloader runs the client's own probe: its version, and what else it can say without changing anything.

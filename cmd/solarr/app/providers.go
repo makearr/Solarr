@@ -190,12 +190,17 @@ func (p *process) indexerLiveProxyPolicy(egress settings.IndexerEgress) httpx.Li
 // than one indexer concurrently (stage 5's own candidate pipeline). A bucket
 // is created lazily by the limiter/breaker registries the first time an id
 // is used, so a newly added indexer needs no code change here.
-func (p *process) indexerClientFactory() adapters.IndexerClientFactory {
-	return func(indexerID int64, baseURL, apiKey string, egress settings.IndexerEgress) indexer.Client {
-		client := p.providerClient(providerIndexerPrefix+strconv.FormatInt(indexerID, 10), connectionGuard(baseURL),
+func (p *process) indexerClientFactory() adapters.IndexerHTTPFactory {
+	return func(indexerID int64, baseURL string, egress settings.IndexerEgress) *httpx.Client {
+		return p.providerClient(providerIndexerPrefix+strconv.FormatInt(indexerID, 10), connectionGuard(baseURL),
 			httpx.ClientConfig{Proxy: p.indexerLiveProxyPolicy(egress)})
-		return indexer.NewClient(client, baseURL, apiKey)
 	}
+}
+
+// indexerDriver builds one configured indexer on its implementation; known is false for one Solarr has none of.
+func (p *process) indexerDriver(found settings.Indexer, apiKey string) (indexer.Driver, bool) {
+	deps := adapters.IndexerDeps{HTTP: p.indexerClientFactory()(found.ID, found.BaseURL, found.Egress()), Clock: clock.NewSystem()}
+	return adapters.NewIndexer(found.Impl, deps, indexer.Connection{BaseURL: found.BaseURL, APIKey: apiKey})
 }
 
 // downloaderClientFactory builds adapters.DownloaderHTTPFactory, one

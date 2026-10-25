@@ -199,6 +199,8 @@ func (fakeDownloaderKinds) DownloaderKinds() []apiserver.DownloaderKind {
 	return []apiserver.DownloaderKind{
 		{Impl: "sabnzbd", Label: "SABnzbd", Protocol: "usenet", AddressPlaceholder: "http://sabnzbd:8080", SecretLabel: "API key", Categories: true},
 		{Impl: "qbittorrent", Label: "qBittorrent", Protocol: "torrent", AddressPlaceholder: "http://qbittorrent:8080", UserName: true, SecretLabel: "Password"},
+		{Impl: "slskd", Label: "slskd (Soulseek)", Protocol: "ddl", AddressPlaceholder: "http://slskd:5030", SecretLabel: "API key",
+			CompanionIndexer: "soulseek"},
 		{Impl: "torrentblackhole", Label: "Torrent Blackhole", Protocol: "torrent", Fields: []apiserver.DownloaderField{
 			{Key: "drop_folder", Kind: "path", Label: "Torrent folder", Required: true},
 			{Key: "watch_folder", Kind: "path", Label: "Watch folder", Required: true},
@@ -225,8 +227,8 @@ func TestListDownloaderKinds_AnswersEveryKindWithItsFields(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &kinds); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(kinds) != 3 || kinds[0].Impl != "sabnzbd" || !kinds[0].HasAddress || !kinds[1].UserName || kinds[2].HasAddress ||
-		len(kinds[2].Fields) != 2 || !kinds[2].Fields[0].Required {
+	if len(kinds) != 4 || kinds[0].Impl != "sabnzbd" || !kinds[0].HasAddress || !kinds[1].UserName || kinds[3].HasAddress ||
+		len(kinds[3].Fields) != 2 || !kinds[3].Fields[0].Required {
 		t.Errorf("kinds = %+v", kinds)
 	}
 }

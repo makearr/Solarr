@@ -25,8 +25,6 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 	if err != nil {
 		return nil, err
 	}
-	factory := p.indexerClientFactory()
-
 	conns := make([]music.IndexerConn, 0, len(configured))
 	for _, indexer := range configured {
 		if !indexer.Enabled {
@@ -38,7 +36,10 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", indexer.ID), slog.Any("error", err))
 			continue
 		}
-		client := factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress())
+		client, known := p.indexerDriver(indexer, apiKey.Reveal())
+		if !known {
+			continue
+		}
 		conn := music.IndexerConn{
 			ID: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, Priority: indexer.Priority, Client: client,
 			Categories: indexer.MusicCategories(),
@@ -57,7 +58,6 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	factory := p.indexerClientFactory()
 	conns := make([]judge.Conn, 0, len(configured))
 	for _, found := range configured {
 		if !found.Enabled {
@@ -69,7 +69,10 @@ func (p *process) tvIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
 			continue
 		}
-		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
+		client, known := p.indexerDriver(found, apiKey.Reveal())
+		if !known {
+			continue
+		}
 		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.TVCategories()}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.tvParams(ctx, found.ID, found.BaseURL, client); params != nil {
@@ -88,7 +91,6 @@ func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	factory := p.indexerClientFactory()
 	conns := make([]judge.Conn, 0, len(configured))
 	for _, found := range configured {
 		if !found.Enabled {
@@ -100,7 +102,10 @@ func (p *process) movieIndexerConns(ctx context.Context) ([]judge.Conn, error) {
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
 			continue
 		}
-		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
+		client, known := p.indexerDriver(found, apiKey.Reveal())
+		if !known {
+			continue
+		}
 		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: found.MovieCategories()}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.movieParams(ctx, found.ID, found.BaseURL, client); params != nil {
@@ -211,7 +216,11 @@ func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string
 		if err != nil {
 			return nil, err
 		}
-		return p.indexerClientFactory()(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress()).Fetch(ctx, link)
+		client, known := p.indexerDriver(found, apiKey.Reveal())
+		if !known {
+			return nil, fmt.Errorf("indexer %d is a kind Solarr has no implementation of", indexerID)
+		}
+		return client.Fetch(ctx, link)
 	}
 	return nil, fmt.Errorf("indexer %d is no longer configured", indexerID)
 }

@@ -65,6 +65,9 @@ type Definition struct {
 	// Categories is a client that files downloads under a category or label.
 	Categories bool
 	Fields     []Field
+	// CompanionIndexer is the catalog entry that searches for this client's releases, offered when it is added
+	// ("soulseek" for slskd).
+	CompanionIndexer string
 }
 
 // HasAddress is a client reached over the network rather than through a folder.

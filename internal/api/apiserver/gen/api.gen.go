@@ -347,6 +347,29 @@ const (
 	IncompleteWorkStatePARTIAL IncompleteWorkState = "PARTIAL"
 )
 
+// Defines values for IndexerKindMediaTypes.
+const (
+	IndexerKindMediaTypesAnime  IndexerKindMediaTypes = "anime"
+	IndexerKindMediaTypesBooks  IndexerKindMediaTypes = "books"
+	IndexerKindMediaTypesMovies IndexerKindMediaTypes = "movies"
+	IndexerKindMediaTypesMusic  IndexerKindMediaTypes = "music"
+	IndexerKindMediaTypesTv     IndexerKindMediaTypes = "tv"
+)
+
+// Defines values for IndexerKindPrivacy.
+const (
+	IndexerKindPrivacyPrivate     IndexerKindPrivacy = "private"
+	IndexerKindPrivacyPublic      IndexerKindPrivacy = "public"
+	IndexerKindPrivacySemiPrivate IndexerKindPrivacy = "semi-private"
+)
+
+// Defines values for IndexerKindProtocol.
+const (
+	IndexerKindProtocolDdl     IndexerKindProtocol = "ddl"
+	IndexerKindProtocolTorrent IndexerKindProtocol = "torrent"
+	IndexerKindProtocolUsenet  IndexerKindProtocol = "usenet"
+)
+
 // Defines values for JobPool.
 const (
 	JobPoolAcquire      JobPool = "acquire"
@@ -1059,8 +1082,11 @@ type AddDownloaderRequestProtocol string
 // AddIndexerRequest defines model for AddIndexerRequest.
 type AddIndexerRequest struct {
 	// ApiKey Omitted or empty for a public endpoint that needs none (ADR-47).
-	ApiKey         *string `json:"api_key,omitempty"`
-	BaseUrl        string  `json:"base_url"`
+	ApiKey  *string `json:"api_key,omitempty"`
+	BaseUrl string  `json:"base_url"`
+
+	// Definition The /indexers/schema entry it is added from; on update, absent keeps the stored one.
+	Definition     *string `json:"definition,omitempty"`
 	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
@@ -1879,6 +1905,9 @@ type DownloaderKind struct {
 	// Categories It files downloads under a category or label.
 	Categories bool `json:"categories"`
 
+	// CompanionIndexer The /indexers/schema entry that searches for its releases
+	CompanionIndexer *string `json:"companion_indexer,omitempty"`
+
 	// Fields The settings it needs beyond the shared ones, each stored under options by its key.
 	Fields []DownloaderField `json:"fields"`
 
@@ -2693,12 +2722,15 @@ type Indexer struct {
 	CategoriesJson *string   `json:"categories_json,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 
+	// Definition The /indexers/schema entry it was added from ("nzbgeek"); absent for one added before the catalog.
+	Definition *string `json:"definition,omitempty"`
+
 	// EgressProxyUrl ADR-47, expert tier: an HTTP/SOCKS5 proxy for this indexer's own requests only. Empty means "use the global egress proxy, if any" -- not "no proxy". FlareSolverr is not yet built.
 	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
 	Enabled        bool    `json:"enabled"`
 	Id             int64   `json:"id"`
 
-	// Impl "newznab" or "torznab" (ADR-43).
+	// Impl The implementation, one of /indexers/schema's impl values ("newznab", "torznab", "redacted", ...).
 	Impl string `json:"impl"`
 
 	// MusicCategories Newznab categories music is searched and RSS-read in (D17). Always answered; [3000] (Audio) unless set.
@@ -2707,6 +2739,41 @@ type Indexer struct {
 	Priority        int64     `json:"priority"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
+
+// IndexerKind One entry of the indexer catalog, as Prowlarr's add list describes it.
+type IndexerKind struct {
+	// BaseUrls The addresses it answers at, the default first; empty for a generic entry, which asks for one.
+	BaseUrls []string `json:"base_urls"`
+
+	// CompanionDownloader The download client impl its releases need
+	CompanionDownloader *string `json:"companion_downloader,omitempty"`
+	Description         string  `json:"description"`
+
+	// Id The entry's own stable name: "nzbgeek", "thepiratebay".
+	Id         string                  `json:"id"`
+	Impl       string                  `json:"impl"`
+	Language   string                  `json:"language"`
+	MediaTypes []IndexerKindMediaTypes `json:"media_types"`
+	Name       string                  `json:"name"`
+	Privacy    IndexerKindPrivacy      `json:"privacy"`
+	Protocol   IndexerKindProtocol     `json:"protocol"`
+
+	// SecretLabel What its secret is called; absent for an indexer that needs none.
+	SecretLabel    *string `json:"secret_label,omitempty"`
+	SecretOptional bool    `json:"secret_optional"`
+
+	// UserLabel Its credentials' first part ("User name", "API user"), stored as "user:secret"; absent for none.
+	UserLabel *string `json:"user_label,omitempty"`
+}
+
+// IndexerKindMediaTypes defines model for IndexerKind.MediaTypes.
+type IndexerKindMediaTypes string
+
+// IndexerKindPrivacy defines model for IndexerKind.Privacy.
+type IndexerKindPrivacy string
+
+// IndexerKindProtocol defines model for IndexerKind.Protocol.
+type IndexerKindProtocol string
 
 // IndexerSearchError defines model for IndexerSearchError.
 type IndexerSearchError struct {
@@ -4695,7 +4762,10 @@ type UpdateDownloaderRequestProtocol string
 
 // UpdateIndexerRequest defines model for UpdateIndexerRequest.
 type UpdateIndexerRequest struct {
-	BaseUrl        string  `json:"base_url"`
+	BaseUrl string `json:"base_url"`
+
+	// Definition The /indexers/schema entry it is added from; on update, absent keeps the stored one.
+	Definition     *string `json:"definition,omitempty"`
 	EgressProxyUrl *string `json:"egress_proxy_url,omitempty"`
 	Enabled        *bool   `json:"enabled,omitempty"`
 	Impl           string  `json:"impl"`
@@ -5354,6 +5424,13 @@ type CommitImportUnitJSONBody struct {
 type ListProwlarrIndexersJSONBody struct {
 	ApiKey  string `json:"api_key"`
 	BaseUrl string `json:"base_url"`
+}
+
+// TestIndexerConfigJSONBody defines parameters for TestIndexerConfig.
+type TestIndexerConfigJSONBody struct {
+	ApiKey  *string `json:"api_key,omitempty"`
+	BaseUrl string  `json:"base_url"`
+	Impl    string  `json:"impl"`
 }
 
 // SetIndexerAPIKeyJSONBody defines parameters for SetIndexerAPIKey.
@@ -6186,6 +6263,9 @@ type AddIndexerJSONRequestBody = AddIndexerRequest
 // ListProwlarrIndexersJSONRequestBody defines body for ListProwlarrIndexers for application/json ContentType.
 type ListProwlarrIndexersJSONRequestBody ListProwlarrIndexersJSONBody
 
+// TestIndexerConfigJSONRequestBody defines body for TestIndexerConfig for application/json ContentType.
+type TestIndexerConfigJSONRequestBody TestIndexerConfigJSONBody
+
 // UpdateIndexerJSONRequestBody defines body for UpdateIndexer for application/json ContentType.
 type UpdateIndexerJSONRequestBody = UpdateIndexerRequest
 
@@ -6602,6 +6682,9 @@ type ServerInterface interface {
 	// Change a connection's own facts. Administrator only. Never touches credentials -- see /downloaders/{id}/credentials.
 	// (PATCH /downloaders/{id})
 	UpdateDownloader(w http.ResponseWriter, r *http.Request, id int64)
+	// Add the indexer that searches for a download client's releases (Soulseek for slskd), at the client's address and with its key. Administrator only; optional, the user is only offered it.
+	// (POST /downloaders/{id}/companion)
+	AddDownloaderCompanion(w http.ResponseWriter, r *http.Request, id int64)
 	// Replace or clear a connection's own credentials. Administrator only. A separate endpoint from PATCH, the same reasoning /indexers/{id}/apikey already gives.
 	// (POST /downloaders/{id}/credentials)
 	SetDownloaderCredentials(w http.ResponseWriter, r *http.Request, id int64)
@@ -6725,6 +6808,12 @@ type ServerInterface interface {
 	// Every indexer a Prowlarr serves, each reachable through Prowlarr as Lidarr's Prowlarr sync reaches it. Nothing is saved; adding one is POST /indexers with its base_url and the same API key. Administrator only.
 	// (POST /indexers/prowlarr)
 	ListProwlarrIndexers(w http.ResponseWriter, r *http.Request)
+	// Every indexer Solarr can add, as Prowlarr's add list shows them.
+	// (GET /indexers/schema)
+	ListIndexerKinds(w http.ResponseWriter, r *http.Request)
+	// Test an indexer before it is added. Administrator only.
+	// (POST /indexers/test)
+	TestIndexerConfig(w http.ResponseWriter, r *http.Request)
 	// Remove a connection. Administrator only.
 	// (DELETE /indexers/{id})
 	DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64)
@@ -6734,6 +6823,9 @@ type ServerInterface interface {
 	// Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one.
 	// (POST /indexers/{id}/apikey)
 	SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int64)
+	// Add the download client an indexer's releases need (slskd for Soulseek), at the indexer's address and with its key. Administrator only; optional, the user is only offered it.
+	// (POST /indexers/{id}/companion)
+	AddIndexerCompanion(w http.ResponseWriter, r *http.Request, id int64)
 	// Fetch t=caps against the real indexer (todo 5.2's own "every connection tested before it is accepted"). Records the response via the same path a periodic caps refresh would (ADR-43); never a t=search, so this never counts as an acquisition search.
 	// (POST /indexers/{id}/test)
 	TestIndexer(w http.ResponseWriter, r *http.Request, id int64)
@@ -7673,6 +7765,12 @@ func (_ Unimplemented) UpdateDownloader(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Add the indexer that searches for a download client's releases (Soulseek for slskd), at the client's address and with its key. Administrator only; optional, the user is only offered it.
+// (POST /downloaders/{id}/companion)
+func (_ Unimplemented) AddDownloaderCompanion(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Replace or clear a connection's own credentials. Administrator only. A separate endpoint from PATCH, the same reasoning /indexers/{id}/apikey already gives.
 // (POST /downloaders/{id}/credentials)
 func (_ Unimplemented) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request, id int64) {
@@ -7919,6 +8017,18 @@ func (_ Unimplemented) ListProwlarrIndexers(w http.ResponseWriter, r *http.Reque
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Every indexer Solarr can add, as Prowlarr's add list shows them.
+// (GET /indexers/schema)
+func (_ Unimplemented) ListIndexerKinds(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Test an indexer before it is added. Administrator only.
+// (POST /indexers/test)
+func (_ Unimplemented) TestIndexerConfig(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Remove a connection. Administrator only.
 // (DELETE /indexers/{id})
 func (_ Unimplemented) DeleteIndexer(w http.ResponseWriter, r *http.Request, id int64) {
@@ -7934,6 +8044,12 @@ func (_ Unimplemented) UpdateIndexer(w http.ResponseWriter, r *http.Request, id 
 // Replace or clear a connection's own API key. Administrator only. A separate endpoint from PATCH: resealing on every unrelated edit would be silent, pointless churn. An empty api_key clears it, for a public endpoint that no longer needs one.
 // (POST /indexers/{id}/apikey)
 func (_ Unimplemented) SetIndexerAPIKey(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Add the download client an indexer's releases need (slskd for Soulseek), at the indexer's address and with its key. Administrator only; optional, the user is only offered it.
+// (POST /indexers/{id}/companion)
+func (_ Unimplemented) AddIndexerCompanion(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11257,6 +11373,39 @@ func (siw *ServerInterfaceWrapper) UpdateDownloader(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// AddDownloaderCompanion operation middleware
+func (siw *ServerInterfaceWrapper) AddDownloaderCompanion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddDownloaderCompanion(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // SetDownloaderCredentials operation middleware
 func (siw *ServerInterfaceWrapper) SetDownloaderCredentials(w http.ResponseWriter, r *http.Request) {
 
@@ -12691,6 +12840,50 @@ func (siw *ServerInterfaceWrapper) ListProwlarrIndexers(w http.ResponseWriter, r
 	handler.ServeHTTP(w, r)
 }
 
+// ListIndexerKinds operation middleware
+func (siw *ServerInterfaceWrapper) ListIndexerKinds(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListIndexerKinds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TestIndexerConfig operation middleware
+func (siw *ServerInterfaceWrapper) TestIndexerConfig(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TestIndexerConfig(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // DeleteIndexer operation middleware
 func (siw *ServerInterfaceWrapper) DeleteIndexer(w http.ResponseWriter, r *http.Request) {
 
@@ -12781,6 +12974,39 @@ func (siw *ServerInterfaceWrapper) SetIndexerAPIKey(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SetIndexerAPIKey(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddIndexerCompanion operation middleware
+func (siw *ServerInterfaceWrapper) AddIndexerCompanion(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddIndexerCompanion(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18640,6 +18866,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/downloaders/{id}", wrapper.UpdateDownloader)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/downloaders/{id}/companion", wrapper.AddDownloaderCompanion)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/downloaders/{id}/credentials", wrapper.SetDownloaderCredentials)
 	})
 	r.Group(func(r chi.Router) {
@@ -18763,6 +18992,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Post(options.BaseURL+"/indexers/prowlarr", wrapper.ListProwlarrIndexers)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/indexers/schema", wrapper.ListIndexerKinds)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers/test", wrapper.TestIndexerConfig)
+	})
+	r.Group(func(r chi.Router) {
 		r.Delete(options.BaseURL+"/indexers/{id}", wrapper.DeleteIndexer)
 	})
 	r.Group(func(r chi.Router) {
@@ -18770,6 +19005,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/indexers/{id}/apikey", wrapper.SetIndexerAPIKey)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/indexers/{id}/companion", wrapper.AddIndexerCompanion)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/indexers/{id}/test", wrapper.TestIndexer)

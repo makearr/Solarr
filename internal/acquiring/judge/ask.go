@@ -21,7 +21,7 @@ type Searcher interface {
 type Conn struct {
 	ID   int64
 	Name string
-	Impl string // "newznab" | "torznab"
+	Impl string // indexer.ImplNewznab, indexer.ImplTorznab, ...
 	// Priority is the indexer's, 1 to 50, lower preferred: it breaks ties between otherwise equal releases.
 	Priority int64
 	Client   Searcher

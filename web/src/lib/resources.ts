@@ -35,6 +35,10 @@ export const useDownloadFolders = () =>
 export const useDownloaderKinds = () =>
   useQuery({ queryKey: ["downloader-kinds"], queryFn: () => ok(api.GET("/downloaders/schema")), staleTime: Infinity });
 
+/** The indexer catalog, as the add list offers it; fixed for the life of the server. */
+export const useIndexerKinds = () =>
+  useQuery({ queryKey: ["indexer-kinds"], queryFn: () => ok(api.GET("/indexers/schema")), staleTime: Infinity });
+
 export const useQualityProfiles = () =>
   useQuery({ queryKey: ["qualityProfiles"], queryFn: () => ok(api.GET("/qualityprofiles")) });
 

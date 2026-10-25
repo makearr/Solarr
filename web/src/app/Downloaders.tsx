@@ -4,7 +4,9 @@ import { Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { fieldOptions, fieldValues, kindSecret, missingFields, newLabel, type FieldValues } from "@/lib/downloaderKinds";
-import { useDownloaderKinds, useDownloadFolders } from "@/lib/resources";
+import { missingIndexer } from "@/lib/indexerCatalog";
+import { useDownloaderKinds, useDownloadFolders, useIndexerKinds } from "@/lib/resources";
+import { usePreference } from "@/lib/usePreference";
 import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
@@ -21,6 +23,13 @@ export function Downloaders() {
   const queryClient = useQueryClient();
   const kinds = useDownloaderKinds();
   const kindOf = (impl: string) => kinds.data?.find((kind) => kind.impl === impl);
+  const indexerKinds = useIndexerKinds();
+  const indexers = useQuery({ queryKey: ["indexers"], queryFn: () => ok(api.GET("/indexers")) });
+  const [dismissed, setDismissed] = usePreference<string[]>("companion.dismissed", []);
+  const addCompanion = useMutation({
+    mutationFn: (id: number) => ok(api.POST("/downloaders/{id}/companion", { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["indexers"] }),
+  });
 
   const downloaders = useQuery({
     queryKey: ["downloaders"],
@@ -144,6 +153,27 @@ export function Downloaders() {
                 />
               )}
               {(() => {
+                const companion = missingIndexer(kindOf(downloader.impl), downloader.base_url, indexers.data ?? [], indexerKinds.data ?? []);
+                const key = `downloader:${downloader.id}`;
+                return companion && indexers.data && !dismissed.includes(key) && (
+                  <span className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-xs text-ink-muted">
+                    Nothing searches {companion.name} for it yet.
+                    <button
+                      type="button"
+                      disabled={addCompanion.isPending}
+                      onClick={() => addCompanion.mutate(downloader.id)}
+                      className="rounded-md border border-border-subtle px-2 py-0.5 text-ink hover:border-accent disabled:opacity-50"
+                    >
+                      Add the {companion.name} indexer
+                    </button>
+                    <button type="button" onClick={() => setDismissed([...dismissed, key])} className="hover:text-ink">
+                      Not now
+                    </button>
+                    {addCompanion.isError && <span className="text-danger">It could not be added.</span>}
+                  </span>
+                );
+              })()}
+              {(() => {
                 const result = testResults[downloader.id];
                 return result && (
                   <span className={`text-xs ${result.ok ? "text-ok" : "text-danger"}`}>{result.message}</span>
@@ -196,6 +226,9 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
   const [seedMinutes, setSeedMinutes] = useState("");
   const [addFolder, setAddFolder] = useState(true);
   const [localFolder, setLocalFolder] = useState("");
+  const [addSearcher, setAddSearcher] = useState(false);
+  const indexerKinds = useIndexerKinds();
+  const searcher = indexerKinds.data?.find((one) => one.id === kind?.companion_indexer);
   const missing = missingFields(kind, fields);
   const reachable = kind !== undefined && (!kind.has_address || baseUrl.trim() !== "") && missing.length === 0;
   const address = kind?.has_address ? baseUrl : "";
@@ -239,12 +272,16 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
         }
         folderId = added.data?.id;
       }
-      const { error } = await api.POST("/downloaders", {
+      const { data, error } = await api.POST("/downloaders", {
         body: { name: shownName, impl, base_url: address, protocol: kind.protocol, credentials: secret || undefined, enabled: true, options },
       });
       if (error) {
         if (folderId !== undefined) await api.DELETE("/downloadfolders/{id}", { params: { path: { id: folderId } } });
         throw error;
+      }
+      if (searcher && addSearcher && data) {
+        const companion = await api.POST("/downloaders/{id}/companion", { params: { path: { id: data.id } } });
+        if (companion.error) throw new Error(`The client was added; the ${searcher.name} indexer was not.`);
       }
     },
     onSuccess: () => {
@@ -252,6 +289,7 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
       setCredentials("");
       setUsername("");
       setFields({});
+      setAddSearcher(false);
       test.reset();
       onAdded();
     },
@@ -333,6 +371,12 @@ function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: (
         onSendRSS={setSendRSS}
         seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
       />
+      {searcher && (
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <input type="checkbox" checked={addSearcher} onChange={(event) => setAddSearcher(event.target.checked)} />
+          Also search {searcher.name} through it: add its indexer at this address, with the same key
+        </label>
+      )}
       {missing.length > 0 && <p className="text-xs text-ink-muted">Still needed: {missing.join(", ")}.</p>}
       {test.data && (
         <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>

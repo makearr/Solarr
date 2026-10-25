@@ -14,7 +14,7 @@ import (
 func Definition() download.Definition {
 	return download.Definition{
 		Impl: "slskd", Label: "slskd (Soulseek)", Protocol: download.ProtocolDDL,
-		AddressPlaceholder: "http://slskd:5030", SecretLabel: "API key",
+		AddressPlaceholder: "http://slskd:5030", SecretLabel: "API key", CompanionIndexer: "soulseek",
 	}
 }
 

@@ -735,6 +735,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			}.SharedCategories,
 		},
 		DownloaderKinds:   adapters.DownloaderKinds{},
+		IndexerKinds:      adapters.IndexerKinds{},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
 		RemoteImages:      p.remoteImages(),

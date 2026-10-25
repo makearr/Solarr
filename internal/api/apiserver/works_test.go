@@ -309,6 +309,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		IndexerTester:        indexerTester,
 		DownloaderTester:     downloaderTester,
 		DownloaderKinds:      fakeDownloaderKinds{},
+		IndexerKinds:         fakeIndexerKinds{},
 		CandidateSearcher:    candidateSearcher,
 		WantedParts:          wantedParts,
 		Crossovers:           crossovers,

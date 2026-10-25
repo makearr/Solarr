@@ -97,12 +97,7 @@ func sameSize(a, b int64) bool {
 }
 
 // ProtocolFor maps an indexer implementation to candidate.protocol's vocabulary.
-func ProtocolFor(impl string) string {
-	if impl == "torznab" {
-		return "torrent"
-	}
-	return "usenet"
-}
+func ProtocolFor(impl string) string { return indexer.ProtocolOf(impl) }
 
 // ProtocolDelay is a delay profile (D16): protocol preference as a wait, never a filter. Within the window after a
 // release was posted only the preferred protocol is acted on; the other's accepted releases are held as DEFER.
@@ -149,7 +144,7 @@ func Persist(
 		sizeBytes = &size
 	}
 	var seeders, leechers *int64
-	if find.Conn.Impl == "torznab" {
+	if ProtocolFor(find.Conn.Impl) == "torrent" {
 		s, l := int64(find.Raw.Seeders), int64(find.Raw.Peers)
 		seeders, leechers = &s, &l
 	}

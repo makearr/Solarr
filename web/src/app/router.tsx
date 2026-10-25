@@ -20,6 +20,7 @@ import { ArrImport } from "./ArrImport";
 import { Dashboard } from "./Dashboard";
 import { Downloaders } from "./Downloaders";
 import { Indexers } from "./Indexers";
+import { IndexerCatalog, IndexerSetup } from "./IndexerCatalog";
 import { Import } from "./Import";
 import { LibraryFileManagement } from "./LibraryFileManagement";
 import { LibraryMetadata } from "./LibraryMetadata";
@@ -335,6 +336,8 @@ const routes = [
   // separate, deliberately deferred item) and metadata sources are not
   // selectable per library yet either.
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers", component: Indexers }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers/add", component: IndexerCatalog }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/connections/indexers/add/setup", component: IndexerSetup }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/downloaders", component: Downloaders }),
   createRoute({ getParentRoute: () => rootRoute, path: "/connections/arr", component: ArrImport }),
   // Activity holds History and Jobs, as Lidarr's holds Queue and History (2026-09-25).

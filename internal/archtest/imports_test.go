@@ -45,6 +45,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
 		"internal/acquiring/utorrent", "internal/acquiring/flood", "internal/acquiring/rtorrent", "internal/acquiring/transmission",
 		"internal/acquiring/slskd", "internal/acquiring/blackhole",
+		"internal/acquiring/indexer/thepiratebay", "internal/acquiring/indexer/nyaa", "internal/acquiring/indexer/yts", "internal/acquiring/indexer/knaben", "internal/acquiring/indexer/internetarchive", "internal/acquiring/indexer/subsplease", "internal/acquiring/indexer/gazelle", "internal/acquiring/indexer/filelist", "internal/acquiring/indexer/hdbits", "internal/acquiring/indexer/passthepopcorn", "internal/acquiring/indexer/beyondhd", "internal/acquiring/indexer/broadcasthenet", "internal/acquiring/indexer/soulseek",
 		"internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
 		"internal/media", "internal/scanning/scan", "internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
@@ -174,6 +175,23 @@ var allowedInternalImports = map[string][]string{
 	// database of its own, no title parsing or scoring (ADR-18/40 stay
 	// the candidate pipeline's own job).
 	"internal/acquiring/indexer": {"internal/platform/httpx"},
+	// Prowlarr's API-based indexers, each on indexer.Base: "just a client" over its site's documented API.
+	"internal/acquiring/indexer/thepiratebay":    {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/nyaa":            {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/yts":             {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/knaben":          {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/internetarchive": {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/subsplease":      {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/gazelle":         {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/filelist":        {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/hdbits":          {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/passthepopcorn":  {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/beyondhd":        {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/broadcasthenet":  {"internal/acquiring/indexer", "internal/platform/httpx"},
+	// Soulseek through slskd's search API: its releases are download.DirectRelease, awaited on the clock.
+	"internal/acquiring/indexer/soulseek": {
+		"internal/acquiring/download", "internal/acquiring/indexer", "internal/platform/clock", "internal/platform/httpx",
+	},
 	// Stage 5's own SABnzbd downloader client (ADR-46/57): the same "just a
 	// client" shape as internal/acquiring/indexer, one dependency, no
 	// Downloader interface yet since only one implementation exists.

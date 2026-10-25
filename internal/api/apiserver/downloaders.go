@@ -358,9 +358,9 @@ func validStallCleanup(cleanup gen.StallCleanup) bool {
 
 // DownloaderKind is one kind of download client the user may add (Sonarr's download client schema).
 type DownloaderKind struct {
-	Impl, Label, Protocol, AddressPlaceholder, SecretLabel string
-	UserName, KeepsCompleted, Categories                   bool
-	Fields                                                 []DownloaderField
+	Impl, Label, Protocol, AddressPlaceholder, SecretLabel, CompanionIndexer string
+	UserName, KeepsCompleted, Categories                                     bool
+	Fields                                                                   []DownloaderField
 }
 
 // HasAddress is a kind reached over the network rather than through folders.
@@ -404,6 +404,7 @@ func downloaderKindView(kind DownloaderKind) gen.DownloaderKind {
 		Impl: kind.Impl, Label: kind.Label, Protocol: gen.DownloaderKindProtocol(kind.Protocol), HasAddress: kind.HasAddress(),
 		AddressPlaceholder: strPtr(kind.AddressPlaceholder), UserName: kind.UserName, SecretLabel: strPtr(kind.SecretLabel),
 		KeepsCompleted: kind.KeepsCompleted, Categories: kind.Categories, Fields: fields,
+		CompanionIndexer: strPtr(kind.CompanionIndexer),
 	}
 }
 

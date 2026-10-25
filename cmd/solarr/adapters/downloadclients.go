@@ -150,6 +150,7 @@ func (DownloaderKinds) DownloaderKinds() []apiserver.DownloaderKind {
 			Impl: definition.Impl, Label: definition.Label, Protocol: string(definition.Protocol),
 			AddressPlaceholder: definition.AddressPlaceholder, SecretLabel: definition.SecretLabel, UserName: definition.UserName,
 			KeepsCompleted: definition.KeepsCompleted, Categories: definition.Categories, Fields: fields,
+			CompanionIndexer: definition.CompanionIndexer,
 		}
 	}
 	return kinds

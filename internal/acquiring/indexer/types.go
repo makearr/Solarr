@@ -1,7 +1,7 @@
 // Package indexer is stage 5's own Newznab/Torznab protocol client (ADR-37,
-// 43, 47): Solarr speaks both natively rather than implementing
-// Cardigann (ADR-43), so this package knows only the shared Newznab-style
-// XML shape, never a per-site scraping definition. It has no opinion on
+// 43, 47), and the Driver, Base and catalog every API indexer below it builds
+// on: Solarr speaks documented APIs rather than implementing Cardigann
+// (ADR-43), never a per-site scraping definition. It has no opinion on
 // rate limiting, circuit breaking or proxying -- the caller supplies an
 // already-configured httpx.Client, the same split internal/importing/
 // arrimport's own LidarrClient already uses for a per-connection external
