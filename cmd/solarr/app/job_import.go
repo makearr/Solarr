@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/jobs"
+	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -178,9 +179,36 @@ func (p *process) manualCommitter() importjob.ManualCommitter {
 
 // batchImporters are each media type's own identify-and-place of an import, by type.
 func (p *process) batchImporters() map[string]batch.Importer {
-	return map[string]batch.Importer{
+	importers := map[string]batch.Importer{
 		string(music.MediaType): p.musicImporter(), tv.MediaType: p.tvImporter(), movie.MediaType: p.movieImporter(),
 	}
+	for _, format := range book.Formats {
+		importers[format.MediaType] = p.bookImporter(format)
+	}
+	return importers
+}
+
+// bookImporter is a book type's batch importer, placing through the same steps as a movie's.
+func (p *process) bookImporter(format book.Format) book.Importer {
+	categories := adapters.Categories{Cache: p.cache}
+	identity := library.NewIdentity(p.library)
+	return book.NewImporter(book.ImporterConfig{
+		FS: p.fsys, Physical: library.NewPhysical(p.library), Series: library.NewSeries(p.library),
+		Reader: library.NewSeriesReader(p.library), Identity: identity, Desired: library.NewDesired(p.library),
+		Acquisitions: library.NewAcquisitions(p.library),
+		Placer: placer.New(placer.Config{
+			FS: p.fsys, Roots: adapters.DrainRoots{Cache: p.cache}, Affinity: p.cache, Identity: identity,
+			Blocked: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+			TransferLadder: p.transferLadder, GroupID: lookupGroupID,
+		}),
+		Resolver: book.Resolver{
+			Service: p.bookService(format), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
+			Locks: &keyedlock.Locks{},
+		},
+		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
+		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
+		RenameOnImport: p.renameOnImport, ExtraFiles: p.extraFileExtensions,
+	})
 }
 
 // musicImporter is Lidarr's import: tags, MusicBrainz search, album matching and fingerprints, placed by importCommitter.

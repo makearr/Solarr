@@ -13,7 +13,7 @@ import { Card, Toggle } from "./SettingsCard";
 type Settings = components["schemas"]["MetadataSettings"];
 type Provider = components["schemas"]["MetadataProviderInfo"];
 
-const LIBRARY_LABEL: Record<string, string> = { music: "Music", tv: "Series", movie: "Movies" };
+const LIBRARY_LABEL: Record<string, string> = { music: "Music", tv: "Series", movie: "Movies", book: "Books", audiobook: "Audiobooks" };
 
 /** What a provider is beyond what it carries. BrainzMash's is a privacy disclosure: a third party sees the searches. */
 const NOTES: Record<string, string> = {
@@ -40,6 +40,10 @@ const NOTES: Record<string, string> = {
   mdblist: "Every site's rating of a film in one request: IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes, Metacritic. Free key, 1,000 requests a day.",
   omdb: "IMDb, Rotten Tomatoes and Metacritic ratings and the full English plot of a film. Free key, 1,000 requests a day.",
   fanart: "Clear logos, clear art, disc art and banners of films, as media servers show them. Free personal key.",
+  openlibrary: "The Internet Archive's open catalogue: works, editions, ISBNs, authors and covers. Names a book in book libraries. No key.",
+  googlebooks:
+    "Descriptions, publishers, page counts and covers. Answers without a key on a small quota everyone shares; your own free key raises it.",
+  audible: "Audible's catalogue, read through Audnexus as Audiobookshelf does: narrators, length, series and covers of audiobooks. No key.",
 };
 
 /** Where the owner gets the key of a provider that takes one through the generic key endpoint. */
@@ -47,6 +51,7 @@ const KEY_SIGNUP: Record<string, { url: string; label: string }> = {
   mdblist: { url: "https://mdblist.com/preferences/", label: "mdblist.com/preferences" },
   omdb: { url: "https://www.omdbapi.com/apikey.aspx", label: "omdbapi.com/apikey.aspx" },
   fanart: { url: "https://fanart.tv/get-an-api-key/", label: "fanart.tv/get-an-api-key" },
+  googlebooks: { url: "https://console.cloud.google.com/apis/library/books.googleapis.com", label: "console.cloud.google.com" },
 };
 
 /** One overview of every metadata provider: what it serves, whether it is on, and its key. The order a library asks them

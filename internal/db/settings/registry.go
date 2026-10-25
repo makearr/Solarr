@@ -435,6 +435,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyGoogleBooksAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "Google Books key",
+		HelpText: "Optional: your own free key from the Google Cloud console. Without one Google Books answers on a small quota everyone shares.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",

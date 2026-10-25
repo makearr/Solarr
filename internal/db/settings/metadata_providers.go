@@ -22,6 +22,19 @@ const (
 	MovieSourceFanart  = "fanart"
 )
 
+// The book and audiobook providers.
+const (
+	BookSourceOpenLibrary = "openlibrary"
+	BookSourceGoogleBooks = "googlebooks"
+	BookSourceAudible     = "audible"
+)
+
+// DefaultBookSources is Wikidata to steer, Open Library, which names a book, then Google Books to fill what it lacks.
+var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSourceGoogleBooks}
+
+// DefaultAudiobookSources is Wikidata to steer, Audible for the reading (narrators, length, series), then the book providers.
+var DefaultAudiobookSources = []string{SourceWikidata, BookSourceAudible, BookSourceOpenLibrary, BookSourceGoogleBooks}
+
 // SourceWikidata is Wikidata in a library's order: the ids its item records steer the other providers to the right entry.
 const SourceWikidata = "wikidata"
 
@@ -69,7 +82,7 @@ const KeyMetadataProviderPaces = "metadata.provider_paces"
 
 // MetadataProviders are the providers a library's order is made of.
 var MetadataProviders = []MetadataProvider{
-	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
+	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
 		PerMinute: 60, Published: "one request at a time; no rate published"},
 	{Key: SourceBrainzMash, Label: "BrainzMash", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"},
 		PerMinute: 600, Published: "none published (its DroppedNeedle pool documents 10 a second)"},
@@ -95,6 +108,12 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 60, Published: "1,000 a day on a free key"},
 	{Key: MovieSourceFanart, Label: "fanart.tv", MediaTypes: []string{"movie"}, Carries: []string{"clear logos", "clear art", "disc art", "banners", "backgrounds"}, NeedsKey: true,
 		PerMinute: 240, Published: "none published"},
+	{Key: BookSourceOpenLibrary, Label: "Open Library", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"works and editions", "authors", "ISBNs", "subjects", "covers", "first publication"},
+		PerMinute: 60, Published: "none published; it asks clients to identify themselves and stay gentle"},
+	{Key: BookSourceGoogleBooks, Label: "Google Books", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"descriptions", "publishers", "page counts", "categories", "ratings", "covers"},
+		PerMinute: 60, Published: "1,000 a day without a key; your own free key raises it"},
+	{Key: BookSourceAudible, Label: "Audible (through Audnexus)", MediaTypes: []string{"audiobook"}, Carries: []string{"narrators", "length", "series and position", "publishers", "genres", "covers"},
+		PerMinute: 100, MaxPerMinute: 100, Published: "Audnexus: 100 a minute"},
 	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"},
 		PerMinute: 120, Published: "none published for the free key"},
 	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},
@@ -224,6 +243,10 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 		return []string{SourceWikidata, TVSourceSkyhook, TVSourceTMDB, TVSourceTVDB, TVSourceTVmaze}
 	case "movie":
 		return slices.Clone(DefaultMovieSources)
+	case "book":
+		return slices.Clone(DefaultBookSources)
+	case "audiobook":
+		return slices.Clone(DefaultAudiobookSources)
 	case "music":
 		return slices.Clone(DefaultMetadataSourceOrder)
 	}

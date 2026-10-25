@@ -23,14 +23,15 @@ internal/
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
-│               skyhook  tvmaze  tmdb  tvdb
-├── identify/   model  parse  parsetv  match  score  priority
+│               skyhook  tvmaze  tmdb  tvdb  openlibrary  googlebooks  audible
+├── identify/   model  parse  parsetv  parsebook  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  arrimport
 ├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar
 ├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  qbittorrent  poll  plan
 │               judge  dispatch  rss
-├── media/      the media-type registry  +  music  tv  movie  +  shared by types: knownfor  picturesweep  housekeeping
+├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)
+│               +  shared by types: knownfor  picturesweep  housekeeping
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```
 

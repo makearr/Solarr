@@ -92,10 +92,30 @@ documentation states is from memory and should be checked before relying on it.
 | fanart.tv | clear logos, clear art, disc art, banners, backgrounds (best liked, English first) | yes | a free personal key |
 | Trakt, Letterboxd, IMDb lists | lists to import from, not metadata | no | import lists |
 
+## Books and audiobooks
+
+Readarr asked one service of its own (Goodreads, then Bookshelf's rreading-glasses over Hardcover); Audiobookshelf asks
+Audible through Audnexus, Open Library, Google Books and iTunes; LazyLibrarian asks Open Library, Google Books and
+Hardcover. Solarr asks the keyless ones in each library's order, Wikidata first. How the two types are built:
+`documentation/books.md`.
+
+| Provider | Carries | Built | Notes |
+|---|---|---|---|
+| Wikidata | the ids a book is known by (Open Library work, Goodreads, Google Books, ISBN-13), the English Wikipedia lead, first publication, original language, authors, the series and the book's place in it | yes | first by default; found by Open Library's work id (P648) |
+| Open Library | works, their editions' ISBNs, publishers and page counts, authors with photos, subjects, covers | yes | no key; names a book: its work id is the book's id |
+| Google Books | descriptions, publishers, page counts, categories, ratings, covers | yes | no key on a shared quota; the owner's free key raises it |
+| Audible (Audnexus) | an audiobook's narrators, length, abridgement, series and position, publisher, genres, cover; Audible's catalogue to search | yes | no key; audiobooks only; Audnexus allows 100 a minute |
+| Hardcover | works, editions, series, ratings | no | a key; what Bookshelf's service reads |
+| iTunes, FantLab | covers, descriptions | no | Audiobookshelf's further sources |
+
+**Wikidata leads what it holds** for books as for films: the overview and the year of first publication, and the
+series, which Open Library does not keep. It never names the title: its title is the original language's, kept as an
+alias. An audiobook's ISBN is its own reading's, so Wikidata's ISBN fills only a book's.
+
 ## Other media types (planned)
 
-Books and audiobooks: Open Library, Hardcover, Google Books, Audible metadata; comics: ComicVine, Metron; games: IGDB,
-ScreenScraper. None is built; a media type is only as viable as its source (ADR-42).
+Comics: ComicVine, Metron; games: IGDB, ScreenScraper. None is built; a media type is only as viable as its source
+(ADR-42).
 
 ## How collections are found
 
