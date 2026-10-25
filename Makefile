@@ -40,28 +40,30 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
                  -v solarr-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE)
 
 .PHONY: help verify build test race bench bench-drivers lint vet fmt fmt-check sqlc sqlc-check \
-        api web web-test web-dev e2e image image-local builder binfmt milestone version cache-init clean-cache deps tidy \
+        api web web-test web-dev e2e image image-local push scan-image builder binfmt milestone version cache-init clean-cache deps tidy \
         license-check
 
-# Version is year.month.release.build (documentation/versioning.md). Never parse a
-# component as a decimal integer for display -- the month is zero-padded and must stay so.
-VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0.0.0.0)
+# Version is year.month.release.build, YYYY.MM.RRR.BBB (documentation/versioning.md). Never parse
+# it as one decimal; the parts are zero-padded strings, so arithmetic goes through expr and pad3.
+VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0000.00.000.000)
 VERSION_PARTS := $(subst ., ,$(VERSION))
 CUR_YEAR    := $(word 1,$(VERSION_PARTS))
 CUR_MONTH   := $(word 2,$(VERSION_PARTS))
 CUR_RELEASE := $(word 3,$(VERSION_PARTS))
 CUR_BUILD   := $(word 4,$(VERSION_PARTS))
-TODAY_YEAR  := $(shell date -u +%y)
+TODAY_YEAR  := $(shell date -u +%Y)
 TODAY_MONTH := $(shell date -u +%m)
-# make image's next version: same month means release+1, a new month resets release to 1.
-# build advances unconditionally -- it is the all-time count of successful images, never reset.
+pad3         = $(shell printf %03d $(1))
+NEXT_BUILD  := $(call pad3,$(shell expr $(CUR_BUILD) + 1))
+# A release (make image, on the user's word only) is release+1 in the same month, 001 in a new one.
 ifeq ($(TODAY_YEAR)-$(TODAY_MONTH),$(CUR_YEAR)-$(CUR_MONTH))
-NEXT_RELEASE := $(shell expr $(CUR_RELEASE) + 1)
+NEXT_RELEASE := $(call pad3,$(shell expr $(CUR_RELEASE) + 1))
 else
-NEXT_RELEASE := 1
+NEXT_RELEASE := 001
 endif
-NEXT_BUILD    := $(shell expr $(CUR_BUILD) + 1)
 NEXT_VERSION  := $(TODAY_YEAR).$(TODAY_MONTH).$(NEXT_RELEASE).$(NEXT_BUILD)
+# Every successful build or push that is not a release advances only the build number.
+BUILD_VERSION := $(CUR_YEAR).$(CUR_MONTH).$(CUR_RELEASE).$(NEXT_BUILD)
 # Only trailing whitespace is trimmed -- a milestone name legitimately contains
 # internal spaces ("music, usenet"), unlike VERSION's single unspaced token.
 MILESTONE   := $(shell head -n1 MILESTONE 2>/dev/null | sed -e 's/[[:space:]]*$$//')
@@ -74,6 +76,7 @@ DIRTY       := $(shell git diff --quiet && git diff --cached --quiet || echo -di
 LDFLAGS     := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILD_DATE) \
                -X 'main.milestone=$(MILESTONE)'
 IMAGE       ?= ghcr.io/makearr/solarr
+HUB_IMAGE   ?= docker.io/makearr/solarr
 PLATFORMS   ?= linux/amd64,linux/arm64
 ARCH        := $(shell uname -m | sed -e s/x86_64/amd64/ -e s/aarch64/arm64/)
 
@@ -85,6 +88,12 @@ HAS_BUILDX  := $(shell docker buildx version >/dev/null 2>&1 && echo yes)
 # container-driver builder.
 BUILDER     ?= solarr
 TOKEN       ?= $(shell grep -oP '(ghp_[A-Za-z0-9]+|github_pat_[A-Za-z0-9_]+)' private/secrets.md 2>/dev/null | head -1)
+hub_field    = $(shell sed -n '/^\#\# Docker Hub/,/^\#\# /s/^| $(1) | `\(.*\)` |$$/\1/p' private/secrets.md 2>/dev/null)
+HUB_USER    ?= $(call hub_field,User)
+SCAN_DIR    ?= /tmp/solarr-release-scan
+comma       := ,
+RELEASE_ARGS = --build-arg VERSION=$(NEXT_VERSION) --build-arg COMMIT=$(COMMIT) \
+               --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg MILESTONE="$(MILESTONE)"
 
 help:  ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -181,12 +190,12 @@ web-dev:    ## Vite dev server on :5173, proxying the API
 	docker run --rm -it -u $(UID):$(GID) $(MOUNT)/web -w /src/web -p 5173:5173 \
 	  -v solarr-npm:/tmp/.npm -e npm_config_cache=/tmp/.npm $(NODE_IMAGE) npm run dev
 
-## ---- versioning: builds advance BUILD, milestones advance MINOR ----
+## ---- versioning: builds and pushes advance BUILD, releases advance RELEASE ----
 ## Full scheme: documentation/versioning.md
 version:    ## Print the current version (and milestone, if named)
 	@echo "$(VERSION)$(if $(MILESTONE), -- $(MILESTONE),)"
 
-image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, push, release
+image:      ## Release (user's word only): secrets scan, multi-arch, push ghcr + Docker Hub, bump, changelog, tag, release
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
 	@test -n "$(HAS_BUILDX)" || { \
 	  echo "docker buildx is not installed, and a release must be multi-arch."; \
@@ -197,15 +206,34 @@ image:      ## Release build: multi-arch, push to ghcr, bump, changelog, tag, pu
 	@$(MAKE) --no-print-directory builder
 	@# A release image must correspond to a commit, or the About page (AGPL §13)
 	@# claims a source revision that does not describe the running binary.
-	@git diff --quiet && git diff --cached --quiet || 	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
+	@git diff --quiet && git diff --cached --quiet || \
+	  { echo "working tree is dirty — commit first, or use 'make image-local'"; exit 1; }
+	@# Each platform's filesystem is scanned for private keys before anything is pushed.
+	@rm -rf $(SCAN_DIR) && mkdir -p $(SCAN_DIR)
+	@for p in $(subst $(comma), ,$(PLATFORMS)); do \
+	  docker buildx build --builder $(BUILDER) --platform $$p $(RELEASE_ARGS) \
+	    --output type=tar,dest=$(SCAN_DIR)/$${p##*/}.tar . || exit 1; \
+	  ./scripts/scan-image-secrets.sh $(SCAN_DIR)/$${p##*/}.tar || exit 1; \
+	done; rm -rf $(SCAN_DIR)
 	@echo "$(TOKEN)" | docker login ghcr.io -u makearr --password-stdin
-	docker buildx build --builder $(BUILDER) --push --platform $(PLATFORMS) \
-	  --build-arg VERSION=$(NEXT_VERSION) --build-arg COMMIT=$(COMMIT) \
-	  --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg MILESTONE="$(MILESTONE)" \
-	  -t $(IMAGE):$(NEXT_VERSION) -t $(IMAGE):$(TODAY_YEAR).$(TODAY_MONTH) -t $(IMAGE):latest .
+	@printf '%s' '$(call hub_field,Password)' | docker login docker.io -u '$(HUB_USER)' --password-stdin
+	docker buildx build --builder $(BUILDER) --push --platform $(PLATFORMS) $(RELEASE_ARGS) \
+	  -t $(IMAGE):$(NEXT_VERSION) -t $(IMAGE):latest \
+	  -t $(HUB_IMAGE):$(NEXT_VERSION) -t $(HUB_IMAGE):latest .
 	@NEXT_VERSION=$(NEXT_VERSION) MILESTONE="$(MILESTONE)" ./scripts/release.sh
 
-image-local: ## Local single-arch build: allows a dirty tree, advances the build number, no push
+scan-image: ## Scan a local image for private keys: make scan-image [REF=ghcr.io/makearr/solarr:dev]
+	@./scripts/scan-image-secrets.sh $(or $(REF),$(IMAGE):dev)
+
+push:       ## Advance the build number, commit VERSION, push main to GitHub
+	@git diff --cached --quiet || { echo "staged changes: commit them first"; exit 1; }
+	@echo "$(BUILD_VERSION)" > VERSION
+	@git add VERSION && git commit -q -m "Build $(BUILD_VERSION)" -m "Pushed to GitHub; every push advances the build number."
+	@git push -q "https://x-access-token:$(TOKEN)@github.com/makearr/Solarr.git" HEAD:main || \
+	  { git reset -q HEAD~1 && git checkout -- VERSION; echo "push failed; build number left at $(VERSION)"; exit 1; }
+	@echo "pushed - version $(BUILD_VERSION)"
+
+image-local: ## Local single-arch build: allows a dirty tree, advances only the build number, no push
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
 	@# Falls back to the legacy builder when buildx is absent. The Dockerfile
 	@# gives its platform args defaults for exactly this, so a machine without
@@ -213,17 +241,17 @@ image-local: ## Local single-arch build: allows a dirty tree, advances the build
 	@if [ -n "$(HAS_BUILDX)" ]; then \
 	  $(MAKE) --no-print-directory builder; \
 	  docker buildx build --builder $(BUILDER) --load --platform linux/$(ARCH) \
-	    --build-arg VERSION=$(NEXT_VERSION)$(DIRTY) --build-arg COMMIT=$(COMMIT) \
+	    --build-arg VERSION=$(BUILD_VERSION)$(DIRTY) --build-arg COMMIT=$(COMMIT) \
 	    --build-arg BUILD_DATE=$(BUILD_DATE) -t $(IMAGE):dev . || exit 1; \
 	else \
 	  echo "buildx not found; building single-arch with the legacy builder"; \
-	  docker build --build-arg VERSION=$(NEXT_VERSION)$(DIRTY) --build-arg COMMIT=$(COMMIT) \
+	  docker build --build-arg VERSION=$(BUILD_VERSION)$(DIRTY) --build-arg COMMIT=$(COMMIT) \
 	    --build-arg BUILD_DATE=$(BUILD_DATE) --build-arg TARGETARCH=$(ARCH) \
 	    -t $(IMAGE):dev . || exit 1; \
 	fi
 	@# Answered 2026-09-25: a local image advances the build number too; only `make image` releases.
-	@echo "$(NEXT_VERSION)" > VERSION
-	@echo "built $(IMAGE):dev - version $(NEXT_VERSION)$(DIRTY)"
+	@echo "$(BUILD_VERSION)" > VERSION
+	@echo "built $(IMAGE):dev - version $(BUILD_VERSION)$(DIRTY)"
 
 milestone:  ## Name the milestone shown beside the version: make milestone NAME="music, usenet"
 	@test -n "$(NAME)" || { echo 'usage: make milestone NAME="name"'; exit 1; }

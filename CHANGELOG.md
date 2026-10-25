@@ -1,7 +1,7 @@
 # Changelog
 
-Version is `year.month.release.build`; see `documentation/versioning.md`. Entries at and
-below `0.0.x` predate that scheme and are left as history, unconverted.
+Version is `YYYY.MM.RRR.BBB` (year.month.release.build) from 2026-10-25; see `documentation/versioning.md`.
+Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## 0.0.22 — 2026-09-04
 

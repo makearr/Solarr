@@ -41,17 +41,17 @@ if [ -f "$CHANGELOG" ]; then
   { head -n 4 "$CHANGELOG"; echo; echo "$entry"; tail -n +5 "$CHANGELOG"; } > "$CHANGELOG.tmp"
   mv "$CHANGELOG.tmp" "$CHANGELOG"
 else
-  printf '# Changelog\n\nVersion is `year.month.release.build`; see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
+  printf '# Changelog\n\nVersion is `YYYY.MM.RRR.BBB` (year.month.release.build); see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
 fi
 
 # ── commit, tag, push ─────────────────────────────────────────────────────────
 git add VERSION "$CHANGELOG"
-git commit -q -m "Build ${new_version}
+git commit -q -m "Release ${new_version}
 
-Image ghcr.io/makearr/solarr:${new_version} built and pushed for
-linux/amd64 and linux/arm64 from $(git rev-parse --short HEAD)."
+Images ghcr.io/makearr/solarr and makearr/solarr (Docker Hub), tags
+${new_version} and latest, built for linux/amd64 and linux/arm64 from $(git rev-parse --short HEAD)."
 
-git tag -a "$tag" -m "Build ${title}
+git tag -a "$tag" -m "Release ${title}
 
 ${subjects}"
 
@@ -60,7 +60,7 @@ git push -q "https://x-access-token:${TOKEN}@${REMOTE}" HEAD:main "$tag" ||
   die "git push failed — VERSION is already ${new_version} locally; re-run push manually"
 
 # ── GitHub release ────────────────────────────────────────────────────────────
-body=$(printf '%s\n\n---\n\nImage: `ghcr.io/makearr/solarr:%s`\nPlatforms: linux/amd64, linux/arm64' "$subjects" "$new_version")
+body=$(printf '%s\n\n---\n\nImages: `makearr/solarr:%s` (Docker Hub), `ghcr.io/makearr/solarr:%s`\nPlatforms: linux/amd64, linux/arm64' "$subjects" "$new_version" "$new_version")
 code=$(python3 - "$tag" "$title" "$body" <<'PY'
 import json, os, sys, urllib.request, re
 tag, title, body = sys.argv[1], sys.argv[2], sys.argv[3]

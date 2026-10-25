@@ -2,51 +2,55 @@
 
 ```text
 YEAR . MONTH . RELEASE . BUILD
- 26  .  09   .    1    .  35
- │       │        │        └── build   never resets, ever. Count of successful images, all time
- │       │        └─────────── release resets to 1 on the first release of each month
- │       └──────────────────── month   zero-padded, always two digits
- └──────────────────────────── year    two digits
+2026 .  10   .   001   .  512
+ │       │        │        └── build    +1 on every successful build or GitHub push; never resets
+ │       │        └─────────── release  +1 on every release; 001 on the first release of a month
+ │       └──────────────────── month    of the latest release, two digits
+ └──────────────────────────── year     of the latest release, four digits
 ```
 
-Both `release` and `build` advance on every successful `make image`. `release` is simply the
-monthly-scoped count: the first successful build in a calendar month is release 1, the next is
-release 2, and so on until the month rolls over. `build` is the same all-time counter it always
-was, just relabelled — it never resets.
+`YYYY.MM.RRR.BBB`, in use since 2026-10-25. `release` and `build` are zero-padded to three digits;
+`build` simply grows a fourth past 999. A **release** is a build published on the maintainer's
+explicit word (`make image`); everything else — a local image, a push — advances only `build`, so
+any commit or image can be traced back to one number. Until the first release of a month, builds
+keep the year, month and release of the previous one (`2026.10.000.510` means "no release yet
+under this scheme").
 
 **There is no MAJOR or MINOR, and no `1.0`.** Milestones survive as a **name**, not a version
 number (see below); nothing in this scheme is ever "reached".
 
-**The month is always two digits.** `year`, `month`, `release` and `build` are stored and
-compared as four separate parts, never as one parsed decimal — treating `.09` as `9` loses the
-padding and breaks the string format.
+The four parts are stored and compared separately, never as one parsed decimal — `.09` read as
+`9` loses the padding and breaks the format.
 
-## BUILD and RELEASE — advanced by every successful image
+## What advances what
 
-Both advance when `make image` **or `make image-local`** completes successfully (the latter since
-2026-09-25). Commits do not change them, so the numbers mean "this many images have been
-produced" and "this many this month", not "this much has been typed". `make image-local` writes
-the new `VERSION` and nothing else: no push, tag or release. Its image carries `-dirty` when the
-tree had uncommitted changes.
+| Action | Advances | Writes |
+|---|---|---|
+| `make image-local` | `build` | `VERSION` only; no push, tag or release. Image stamped `-dirty` when the tree is |
+| `make push` | `build` | commits `VERSION` as `Build <version>` and pushes `main`; a failed push undoes the commit |
+| `make image` | `release` and `build`, year and month set to today | everything below |
 
-A failed build leaves the version untouched.
+A failed build or push leaves the version untouched.
 
 ### What `make image` does
 
 ```text
-1  refuse if the working tree is dirty                    ← see below
-2  compute the next version from today's date + VERSION   ← same month: release+1, new month: release=1; build+1 always
-3  docker login ghcr.io
-4  buildx --push, linux/amd64 + linux/arm64, tagged with the next version, YEAR.MONTH, and latest
-5  prepend a CHANGELOG.md entry — commits since the previous tag
-6  commit VERSION + CHANGELOG.md
-7  annotated tag v<version>
-8  git push main + tag
-9  create the GitHub release, body = the changelog entry, title includes the milestone name if set
+1  refuse if the working tree is dirty                       ← see below
+2  compute the release version from today's date + VERSION
+3  build each platform's filesystem and scan it for private keys (scripts/scan-image-secrets.sh)
+4  docker login ghcr.io and Docker Hub (credentials from private/secrets.md, never in the image)
+5  buildx --push, linux/amd64 + linux/arm64, to ghcr.io/makearr/solarr and makearr/solarr,
+   tagged with the version and latest
+6  prepend a CHANGELOG.md entry — commits since the previous tag
+7  commit VERSION + CHANGELOG.md
+8  annotated tag v<version>
+9  git push main + tag
+10 create the GitHub release, body = the changelog entry, title includes the milestone name if set
 ```
 
-Everything after step 4 runs only if the build and push succeeded, so a failed build leaves the
-repository untouched.
+Nothing is pushed if the scan finds a value from `private/secrets.md` in either image. The one
+key compiled in on purpose (TheTVDB project key) is marked `shippable` there and skipped.
+`make scan-image REF=<image>` runs the same scan on any local image.
 
 ### Why a dirty tree is refused
 
@@ -64,16 +68,16 @@ release.
 
 | Surface | Content |
 |---|---|
-| `CHANGELOG.md` | One section per build, newest first, in the repository |
+| `CHANGELOG.md` | One section per release, newest first, in the repository |
 | Annotated git tag | The same entry, attached to `v<version>` |
-| **GitHub release** | Published per build, body is the changelog entry plus the image reference, platforms, and the milestone name if one is set |
+| **GitHub release** | Published per release, body is the changelog entry plus the image references, platforms, and the milestone name if one is set |
 
 ## Milestones — names, not numbers
 
 `make milestone NAME="music, usenet"` records a name in the `MILESTONE` file at the repository root,
 sitting beside `VERSION`. It does not change any version component. The name shows up:
 
-- In the GitHub release title: `26.09.3 — music, usenet`
+- In the GitHub release title: `2026.10.001.512 — music, usenet`
 - On the About page and `/api/v1/about`, next to the version, when one is set
 - In `solarr version`'s CLI output
 
@@ -88,10 +92,8 @@ keeps for the file.
 - Not semver. There is no API-stability contract implied by any component.
 - **Not a progress bar.** A higher `release` does not mean "more done this month" — some months
   ship once, some ship ten times, depending on what landed.
-- Sortable as text **only because every component is fixed-width or left-padded to compare
-  correctly within its own field** (`26.09` before `26.10`, etc.) — still prefer `sort -V` and
-  git's own tag ordering over a plain string comparison, since `release` and `build` are not
-  zero-padded.
+- Sortable as text while `build` stays at three digits, because every part is fixed-width — still
+  prefer `sort -V` and git's own tag ordering, which keep working once `build` passes 999.
 
 ## Injecting it into the binary
 
