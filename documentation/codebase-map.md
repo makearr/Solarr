@@ -28,8 +28,12 @@ internal/
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  arrimport
 ├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar
-├── acquiring/  indexer (Newznab/Torznab client)  download (client interface)  sabnzbd  qbittorrent  poll  plan
-│               judge  dispatch  rss
+├── acquiring/  indexer (Newznab/Torznab client, indexer base and catalog)  download (client interface and bases)
+│               poll  plan  judge  dispatch  rss
+│               indexers: indexer/thepiratebay  nyaa  yts  knaben  internetarchive  subsplease  gazelle  filelist
+│               hdbits  passthepopcorn  beyondhd  broadcasthenet  soulseek
+│               clients: sabnzbd  nzbget  qbittorrent  transmission (+ Vuze)  deluge  rtorrent  utorrent  flood  aria2
+│               slskd  blackhole (Torrent and Usenet)
 ├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)
 │               +  shared by types: works  knownfor  picturesweep  housekeeping
 └── archtest/   layering, access and Invariant-90 checks, as tests

@@ -9,25 +9,54 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/download"
 )
 
-// Downloader is qBittorrent behind download.Client. A torrent's reference is its info hash.
+// Definition is qBittorrent as the settings screen offers it.
+func Definition() download.Definition {
+	return download.Definition{
+		Impl: "qbittorrent", Label: "qBittorrent", Protocol: download.ProtocolTorrent,
+		AddressPlaceholder: "http://qbittorrent:8080", UserName: true, SecretLabel: "Password",
+		KeepsCompleted: true, Categories: true,
+	}
+}
+
+// Downloader is qBittorrent's part of download.TorrentClient; download.NewTorrent supplies the rest. A torrent's
+// reference is its info hash.
 type Downloader struct{ Client Client }
 
-var _ download.Client = Downloader{}
+var (
+	_ download.TorrentClient = Downloader{}
+	_ download.TransferSpeed = Downloader{}
+	_ download.FinishedFiles = Downloader{}
+)
 
-// Add sends the torrent file, or a magnet link when the indexer answered one.
-func (d Downloader) Add(ctx context.Context, request download.AddRequest) (string, error) {
-	hash, err := download.InfoHash(request.File)
-	if err != nil {
-		return "", err
-	}
-	add := AddRequest{File: request.File, Category: request.Category}
-	if strings.HasPrefix(string(request.File), "magnet:") {
-		add = AddRequest{Magnet: string(request.File), Category: request.Category}
-	}
+// AddTorrentFile sends the torrent file.
+func (d Downloader) AddTorrentFile(ctx context.Context, hash string, request download.AddRequest) (string, error) {
+	return d.add(ctx, hash, AddRequest{File: request.File, Category: request.Category})
+}
+
+// AddMagnet sends a magnet link the indexer answered.
+func (d Downloader) AddMagnet(ctx context.Context, hash, magnet string, request download.AddRequest) (string, error) {
+	return d.add(ctx, hash, AddRequest{Magnet: magnet, Category: request.Category})
+}
+
+func (d Downloader) add(ctx context.Context, hash string, add AddRequest) (string, error) {
 	if err := d.Client.Add(ctx, add); err != nil {
 		return "", fmt.Errorf("%w: %w", download.ErrRefused, err)
 	}
 	return hash, nil
+}
+
+// Probe proves the address and the login (the version call needs it); qBittorrent creates a missing category.
+func (d Downloader) Probe(ctx context.Context) (download.Probe, error) {
+	version, err := d.Client.Version(ctx)
+	if err != nil {
+		return download.Probe{}, err
+	}
+	probe := download.Probe{Version: "qBittorrent " + version, CreatesCategories: true}
+	if categories, err := d.Client.Categories(ctx); err == nil {
+		probe.Categories = categories
+	}
+	probe.DownloadFolder, _ = d.Client.SavePath(ctx)
+	return probe, nil
 }
 
 // Downloads answers the torrents in category. A finished torrent is completed whether it is seeding or stopped.
@@ -86,24 +115,10 @@ func (d Downloader) FinishedFiles(ctx context.Context, clientRef string) (string
 	return path.Join(base, top), finished, nil
 }
 
-// QueueStatus answers the totals over every torrent still downloading.
-func (d Downloader) QueueStatus(ctx context.Context) (download.QueueStatus, error) {
-	torrents, err := d.Client.Torrents(ctx, "")
-	if err != nil {
-		return download.QueueStatus{}, err
-	}
+// TransferSpeed answers qBittorrent's overall download speed.
+func (d Downloader) TransferSpeed(ctx context.Context) (int64, error) {
 	transfer, err := d.Client.Transfer(ctx)
-	if err != nil {
-		return download.QueueStatus{}, err
-	}
-	status := download.QueueStatus{SpeedBytesPerSec: transfer.DLSpeed}
-	for _, torrent := range torrents {
-		if torrent.AmountLeft > 0 && stateOf(torrent.State) != download.StateFailed {
-			status.Items++
-			status.SizeLeftBytes += torrent.AmountLeft
-		}
-	}
-	return status, nil
+	return transfer.DLSpeed, err
 }
 
 // Remove deletes one torrent; deleteFiles also deletes its data.

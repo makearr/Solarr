@@ -42,7 +42,11 @@ var allowedInternalImports = map[string][]string{
 	"cmd/solarr/adapters": {"internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
-		"internal/acquiring/sabnzbd", "internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
+		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
+		"internal/acquiring/utorrent", "internal/acquiring/flood", "internal/acquiring/rtorrent", "internal/acquiring/transmission",
+		"internal/acquiring/slskd", "internal/acquiring/blackhole",
+		"internal/acquiring/indexer/thepiratebay", "internal/acquiring/indexer/nyaa", "internal/acquiring/indexer/yts", "internal/acquiring/indexer/knaben", "internal/acquiring/indexer/internetarchive", "internal/acquiring/indexer/subsplease", "internal/acquiring/indexer/gazelle", "internal/acquiring/indexer/filelist", "internal/acquiring/indexer/hdbits", "internal/acquiring/indexer/passthepopcorn", "internal/acquiring/indexer/beyondhd", "internal/acquiring/indexer/broadcasthenet", "internal/acquiring/indexer/soulseek",
+		"internal/api/apiserver", "internal/db/library", "internal/db/settings", "internal/platform/listfilter",
 		"internal/media", "internal/scanning/scan", "internal/identify/model", "internal/identify/priority", "internal/identify/quality", "internal/identify/score", "internal/importing/arrimport",
 		"internal/importing/importjob", "internal/importing/inspect", "internal/jobs",
 		"internal/jobs/cachebudget", "internal/media/music", "internal/media/tv", "internal/metadata/tmdb", "internal/moving/naming", "internal/api/apiserver/gen", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/metadata/musicbrainz",
@@ -171,6 +175,23 @@ var allowedInternalImports = map[string][]string{
 	// database of its own, no title parsing or scoring (ADR-18/40 stay
 	// the candidate pipeline's own job).
 	"internal/acquiring/indexer": {"internal/platform/httpx"},
+	// Prowlarr's API-based indexers, each on indexer.Base: "just a client" over its site's documented API.
+	"internal/acquiring/indexer/thepiratebay":    {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/nyaa":            {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/yts":             {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/knaben":          {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/internetarchive": {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/subsplease":      {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/gazelle":         {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/filelist":        {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/hdbits":          {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/passthepopcorn":  {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/beyondhd":        {"internal/acquiring/indexer", "internal/platform/httpx"},
+	"internal/acquiring/indexer/broadcasthenet":  {"internal/acquiring/indexer", "internal/platform/httpx"},
+	// Soulseek through slskd's search API: its releases are download.DirectRelease, awaited on the clock.
+	"internal/acquiring/indexer/soulseek": {
+		"internal/acquiring/download", "internal/acquiring/indexer", "internal/platform/clock", "internal/platform/httpx",
+	},
 	// Stage 5's own SABnzbd downloader client (ADR-46/57): the same "just a
 	// client" shape as internal/acquiring/indexer, one dependency, no
 	// Downloader interface yet since only one implementation exists.
@@ -182,8 +203,20 @@ var allowedInternalImports = map[string][]string{
 		"internal/acquiring/download", "internal/db/library", "internal/jobs", "internal/platform/clock",
 		"internal/platform/fsx",
 	},
-	"internal/acquiring/sabnzbd":     {"internal/platform/httpx", "internal/acquiring/download"},
-	"internal/acquiring/qbittorrent": {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/sabnzbd":      {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/qbittorrent":  {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/nzbget":       {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/deluge":       {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/aria2":        {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/utorrent":     {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/flood":        {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/rtorrent":     {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/transmission": {"internal/platform/httpx", "internal/acquiring/download"},
+	"internal/acquiring/slskd":        {"internal/platform/httpx", "internal/acquiring/download"},
+	// Sonarr's Torrent and Usenet Blackhole: folders, not an API, so the filesystem seam instead of httpx.
+	"internal/acquiring/blackhole": {"internal/acquiring/download", "internal/platform/clock", "internal/platform/fsx"},
+	// The fake server and release files the download clients' tests share.
+	"internal/acquiring/clienttest": {},
 	// ADR-6's planner and hunt: decides from desired items; searching is supplied by the media type.
 	"internal/acquiring/plan": {
 		"internal/db/library", "internal/identify/priority", "internal/jobs", "internal/platform/clock",

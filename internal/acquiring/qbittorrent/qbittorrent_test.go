@@ -67,7 +67,7 @@ func torrentFile() []byte { return []byte("d8:announce3:url4:info" + torrentInfo
 
 func TestDownloader_AddSendsTheTorrentUnderTheCategoryAndAnswersTheInfoHash(t *testing.T) {
 	server := &fakeServer{routes: map[string]route{"/api/v2/torrents/add": {body: "Ok."}}}
-	downloader := qbittorrent.Downloader{Client: newClient(t, server, "")}
+	downloader := download.NewTorrent(qbittorrent.Downloader{Client: newClient(t, server, "")})
 	ref, err := downloader.Add(t.Context(), download.AddRequest{Name: "x", File: torrentFile(), Category: "solarr-music"})
 	if err != nil {
 		t.Fatalf("Add: %v", err)

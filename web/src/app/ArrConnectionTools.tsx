@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
-import { joinCredentials } from "@/lib/downloadCredentials";
+import { kindSecret } from "@/lib/downloaderKinds";
+import { useDownloaderKinds } from "@/lib/resources";
 import type { components } from "@/api/schema";
 
 type ArrApp = components["schemas"]["ArrApp"];
@@ -123,14 +124,17 @@ function UseDownloadClients({ instanceId, app }: { instanceId: number; app: ArrA
 function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDownloadClient; instanceId: number; keepCategory: boolean }) {
   const queryClient = useQueryClient();
   const [key, setKey] = useState("");
-  const torrent = client.impl === "qbittorrent";
+  const kinds = useDownloaderKinds();
+  const kind = kinds.data?.find((one) => one.impl === client.impl);
+  const withUser = kind?.user_name ?? false;
   const [username, setUsername] = useState(client.username ?? "");
   const add = useMutation({
     mutationFn: async () => {
+      if (!kind) return;
       const { error } = await api.POST("/downloaders", {
         body: {
-          name: client.name, impl: torrent ? "qbittorrent" : "sabnzbd", base_url: client.base_url, protocol: torrent ? "torrent" : "usenet",
-          credentials: torrent ? joinCredentials(username, key) : key, enabled: client.enabled,
+          name: client.name, impl: kind.impl, base_url: client.base_url, protocol: kind.protocol,
+          credentials: kindSecret(kind, username, key) || undefined, enabled: client.enabled,
           // Lidarr's category is a music one; Prowlarr's is for its own grabs, so Solarr's default applies.
           options: { category: keepCategory ? client.category : undefined },
         },
@@ -149,11 +153,13 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
       <span className="text-ink-muted">{client.impl}{client.category ? ` · ${client.category}` : ""}</span>
       {client.already_added ? (
         <span className="text-ink-muted">already added</span>
-      ) : !client.supported ? (
+      ) : !client.supported || !kind ? (
         <span className="text-warn">not supported yet</span>
+      ) : !kind.has_address ? (
+        <span className="text-ink-muted">add it under Download clients, with its folders</span>
       ) : (
         <>
-          {torrent && (
+          {withUser && (
             <input
               autoComplete="off"
               aria-label={`${client.name} user name`}
@@ -163,16 +169,23 @@ function DownloadClientRow({ client, instanceId, keepCategory }: { client: ArrDo
               className={`${input} w-40`}
             />
           )}
-          <input
-            type="password"
-            autoComplete="off"
-            aria-label={torrent ? `${client.name} password` : `${client.name} API key`}
-            placeholder={torrent ? "Its password (the *Arr hides it)" : "Its API key (the *Arr hides it)"}
-            value={key}
-            onChange={(event) => setKey(event.target.value)}
-            className={`${input} w-64`}
-          />
-          <button type="button" disabled={(!torrent && !key.trim()) || add.isPending} onClick={() => add.mutate()} className={button}>
+          {kind.secret_label && (
+            <input
+              type="password"
+              autoComplete="off"
+              aria-label={`${client.name} ${kind.secret_label}`}
+              placeholder={`Its ${kind.secret_label} (the *Arr hides it)`}
+              value={key}
+              onChange={(event) => setKey(event.target.value)}
+              className={`${input} w-64`}
+            />
+          )}
+          <button
+            type="button"
+            disabled={(!withUser && kind.secret_label !== undefined && !key.trim()) || add.isPending}
+            onClick={() => add.mutate()}
+            className={button}
+          >
             {add.isPending ? "Adding…" : "Add"}
           </button>
           {add.isError && <span className="text-danger">{(add.error as { detail?: string }).detail ?? "It could not be added."}</span>}

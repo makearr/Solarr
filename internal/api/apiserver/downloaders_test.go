@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
@@ -188,5 +189,70 @@ func TestDeleteDownloader_MissingAnswers404(t *testing.T) {
 	recorder := fixture.do(authedDelete(t, cookies, "/api/v1/downloaders/999"))
 	if recorder.Code != http.StatusNotFound {
 		t.Errorf("status = %d, want 404", recorder.Code)
+	}
+}
+
+// fakeDownloaderKinds offers one client with an address and one blackhole.
+type fakeDownloaderKinds struct{}
+
+func (fakeDownloaderKinds) DownloaderKinds() []apiserver.DownloaderKind {
+	return []apiserver.DownloaderKind{
+		{Impl: "sabnzbd", Label: "SABnzbd", Protocol: "usenet", AddressPlaceholder: "http://sabnzbd:8080", SecretLabel: "API key", Categories: true},
+		{Impl: "qbittorrent", Label: "qBittorrent", Protocol: "torrent", AddressPlaceholder: "http://qbittorrent:8080", UserName: true, SecretLabel: "Password"},
+		{Impl: "slskd", Label: "slskd (Soulseek)", Protocol: "ddl", AddressPlaceholder: "http://slskd:5030", SecretLabel: "API key",
+			CompanionIndexer: "soulseek"},
+		{Impl: "torrentblackhole", Label: "Torrent Blackhole", Protocol: "torrent", Fields: []apiserver.DownloaderField{
+			{Key: "drop_folder", Kind: "path", Label: "Torrent folder", Required: true},
+			{Key: "watch_folder", Kind: "path", Label: "Watch folder", Required: true},
+		}},
+	}
+}
+
+func TestListDownloaderKinds_AnswersEveryKindWithItsFields(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	recorder := fixture.do(authedGet(t, fixture.signIn(t, "admin"), "/api/v1/downloaders/schema"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	var kinds []struct {
+		Impl       string `json:"impl"`
+		HasAddress bool   `json:"has_address"`
+		UserName   bool   `json:"user_name"`
+		Fields     []struct {
+			Key      string `json:"key"`
+			Required bool   `json:"required"`
+		} `json:"fields"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &kinds); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(kinds) != 4 || kinds[0].Impl != "sabnzbd" || !kinds[0].HasAddress || !kinds[1].UserName || kinds[3].HasAddress ||
+		len(kinds[3].Fields) != 2 || !kinds[3].Fields[0].Required {
+		t.Errorf("kinds = %+v", kinds)
+	}
+}
+
+// Each kind needs what it needs: an address, its own protocol, a blackhole's folders; an unknown kind is refused.
+func TestAddDownloader_ChecksWhatItsKindNeeds(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	cases := []struct {
+		name, body string
+		want       int
+	}{
+		{"an unknown kind", `{"name":"x","impl":"putio","base_url":"http://p","protocol":"torrent"}`, http.StatusBadRequest},
+		{"no address", `{"name":"x","impl":"sabnzbd","base_url":"","protocol":"usenet"}`, http.StatusBadRequest},
+		{"another protocol", `{"name":"x","impl":"qbittorrent","base_url":"http://q","protocol":"usenet"}`, http.StatusBadRequest},
+		{"a blackhole without its watch folder", `{"name":"x","impl":"torrentblackhole","base_url":"","protocol":"torrent",
+			"options":{"drop_folder":"/drop"}}`, http.StatusBadRequest},
+		{"a blackhole with both folders", `{"name":"x","impl":"torrentblackhole","base_url":"","protocol":"torrent",
+			"options":{"drop_folder":"/drop","watch_folder":"/done"}}`, http.StatusCreated},
+	}
+	for _, test := range cases {
+		if recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders", test.body)); recorder.Code != test.want {
+			t.Errorf("%s: status = %d, want %d (%s)", test.name, recorder.Code, test.want, recorder.Body)
+		}
 	}
 }

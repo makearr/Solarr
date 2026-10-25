@@ -56,6 +56,8 @@ type indexerSettingsJSON struct {
 	Egress IndexerEgress `json:"egress,omitempty"`
 	// MusicCategories are the Newznab categories music is asked for in (D17); absent is the default.
 	MusicCategories []int `json:"music_categories,omitempty"`
+	// Definition is the catalog entry the indexer was added from ("nzbgeek"); absent for one added before the catalog.
+	Definition string `json:"definition,omitempty"`
 }
 
 // DefaultMusicCategories is Newznab's Audio: without a category an indexer's feed is mostly
@@ -102,14 +104,24 @@ func (i Indexer) Egress() IndexerEgress {
 	return parsed.Egress
 }
 
+// Definition is the catalog entry the indexer was added from; empty for one added before the catalog.
+func (i Indexer) Definition() string {
+	var parsed indexerSettingsJSON
+	if i.SettingsJSON == "" || json.Unmarshal([]byte(i.SettingsJSON), &parsed) != nil {
+		return ""
+	}
+	return parsed.Definition
+}
+
 // buildIndexerSettingsJSON encodes the request's egress and categories into SettingsJSON, or "" when
 // both are unset, so an indexer nobody configured still reads back with SettingsJSON == "".
 func buildIndexerSettingsJSON(request IndexerRequest) string {
-	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 {
+	if request.EgressProxyURL == "" && len(request.MusicCategories) == 0 && request.Definition == "" {
 		return ""
 	}
 	encoded, err := json.Marshal(indexerSettingsJSON{
 		Egress: IndexerEgress{ProxyURL: request.EgressProxyURL}, MusicCategories: request.MusicCategories,
+		Definition: request.Definition,
 	})
 	if err != nil {
 		return ""
@@ -130,6 +142,8 @@ type IndexerRequest struct {
 	EgressProxyURL string
 	// MusicCategories empty means DefaultMusicCategories.
 	MusicCategories []int
+	// Definition is the catalog entry it is added from; empty for none.
+	Definition string
 }
 
 // defaultIndexerPriority is Lidarr's default, what a request without one gets.

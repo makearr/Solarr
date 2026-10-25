@@ -125,3 +125,37 @@ func TorrentContentHash(file []byte) string {
 	}
 	return "bt:" + hash
 }
+
+// TorrentName answers the name a torrent's content is saved under: the info dictionary's name, or a magnet link's
+// display name. Empty when the bytes name none.
+func TorrentName(file []byte) string {
+	if text := strings.TrimSpace(string(file)); strings.HasPrefix(text, "magnet:") {
+		if parsed, err := url.Parse(text); err == nil {
+			return parsed.Query().Get("dn")
+		}
+		return ""
+	}
+	start, end, err := infoSpan(file)
+	if err != nil {
+		return ""
+	}
+	info := file[start:end]
+	position := 1
+	for position < len(info) && info[position] != 'e' {
+		key, next, err := readString(info, position)
+		if err != nil {
+			return ""
+		}
+		if key == "name" {
+			name, _, err := readString(info, next)
+			if err != nil {
+				return ""
+			}
+			return name
+		}
+		if position, err = skipValue(info, next); err != nil {
+			return ""
+		}
+	}
+	return ""
+}

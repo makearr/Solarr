@@ -246,6 +246,12 @@ type Config struct {
 	// Prowlarr lists a Prowlarr's indexers to add from.
 	Prowlarr         ProwlarrLister
 	DownloaderTester DownloaderTester
+	// DownloaderKinds are the download clients the user may add. Optional: without it none are listed, and a client
+	// is checked only for an address.
+	DownloaderKinds DownloaderKinds
+	// IndexerKinds is the indexer catalog the user may add from. Optional: without it none is listed, and any impl
+	// is accepted.
+	IndexerKinds IndexerKinds
 	// CandidateSearcher is stage 5's own candidate pipeline (section 10.1/10.2).
 	CandidateSearcher CandidateSearcher
 	// RemoteImages serves provider pictures from the local cache. Optional: nil answers 503.
@@ -347,6 +353,8 @@ type Server struct {
 	indexerTester           IndexerTester
 	prowlarr                ProwlarrLister
 	downloaderTester        DownloaderTester
+	downloaderKinds         DownloaderKinds
+	indexerKinds            IndexerKinds
 	tvProviders             TVProviders
 	remoteImages            RemoteImages
 	candidateSearcher       CandidateSearcher
@@ -467,6 +475,8 @@ func New(config Config) (*Server, error) {
 		indexerTester:           config.IndexerTester,
 		prowlarr:                config.Prowlarr,
 		downloaderTester:        config.DownloaderTester,
+		downloaderKinds:         config.DownloaderKinds,
+		indexerKinds:            config.IndexerKinds,
 		candidateSearcher:       config.CandidateSearcher,
 		tvProviders:             config.TVProviders,
 		remoteImages:            config.RemoteImages,
@@ -632,12 +642,17 @@ func New(config Config) (*Server, error) {
 			secured.Get("/indexers", server.ListIndexers)
 			secured.Post("/indexers", server.AddIndexer)
 			secured.Post("/indexers/prowlarr", server.ListProwlarrIndexers)
+			secured.Get("/indexers/schema", server.ListIndexerKinds)
+			secured.Post("/indexers/test", server.TestIndexerConfig)
+			secured.Post("/indexers/{id}/companion", server.routeAddIndexerCompanion)
 			secured.Patch("/indexers/{id}", server.routeUpdateIndexer)
 			secured.Delete("/indexers/{id}", server.routeDeleteIndexer)
 			secured.Post("/indexers/{id}/apikey", server.routeSetIndexerAPIKey)
 			secured.Post("/indexers/{id}/test", server.routeTestIndexer)
 			secured.Get("/downloaders", server.ListDownloaders)
 			secured.Post("/downloaders", server.AddDownloader)
+			secured.Get("/downloaders/schema", server.ListDownloaderKinds)
+			secured.Post("/downloaders/{id}/companion", server.routeAddDownloaderCompanion)
 			secured.Post("/downloaders/test", server.TestDownloaderConfig)
 			secured.Patch("/downloaders/{id}", server.routeUpdateDownloader)
 			secured.Delete("/downloaders/{id}", server.routeDeleteDownloader)

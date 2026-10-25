@@ -30,6 +30,14 @@ type DownloaderOptions struct {
 	SeedMinutes *int     `json:"seed_minutes,omitempty"`
 	// StallCleanup removes and blocklists Solarr's own downloads that stop making progress (2026-10-15, off by default).
 	StallCleanup *StallCleanup `json:"stall_cleanup,omitempty"`
+	// URLBase is the path of a client's API below its address (Transmission's /transmission/, rTorrent's RPC2).
+	URLBase string `json:"url_base,omitempty"`
+	// DropFolder and WatchFolder are a blackhole's: where Solarr writes what it sends, and where finished downloads
+	// appear, both as Solarr sees them.
+	DropFolder  string `json:"drop_folder,omitempty"`
+	WatchFolder string `json:"watch_folder,omitempty"`
+	// SaveMagnetFiles lets a torrent blackhole write a magnet link to a file rather than refuse it.
+	SaveMagnetFiles bool `json:"save_magnet_files,omitempty"`
 }
 
 // StallCleanup is one client's stalled-download cleanup; an absent number takes its default.

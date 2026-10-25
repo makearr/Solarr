@@ -38,11 +38,11 @@ func newIndexerCapsCache(cl clock.Clock) *indexerCapsCache {
 
 // musicParams answers the cached parameters, asking the indexer when they are missing, stale or
 // for another address; nil when it cannot say, so the search sends everything as before.
-func (c *indexerCapsCache) musicParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client) []string {
+func (c *indexerCapsCache) musicParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Driver) []string {
 	return c.searchParams(ctx, indexerID, baseURL, client, "music-search")
 }
 
-func (c *indexerCapsCache) searchParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Client, search string) []string {
+func (c *indexerCapsCache) searchParams(ctx context.Context, indexerID int64, baseURL string, client indexer.Driver, search string) []string {
 	now := c.clock.Now()
 	key := capsKey{indexerID, search}
 	c.mu.Lock()

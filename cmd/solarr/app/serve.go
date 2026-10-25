@@ -732,12 +732,14 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Clock: clock.NewSystem(),
 		},
 		DownloaderTester: adapters.ConnectionTester{
-			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(),
+			Cache: p.cache, Indexer: p.indexerClientFactory(), Downloader: p.downloaderClientFactory(), FS: p.fsys,
 			Clock: clock.NewSystem(),
 			SharedCategories: adapters.Prowlarr{
 				Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
 			}.SharedCategories,
 		},
+		DownloaderKinds:   adapters.DownloaderKinds{},
+		IndexerKinds:      adapters.IndexerKinds{},
 		CandidateSearcher: p.candidateSearcher(),
 		TVProviders:       p.tvProviders(),
 		RemoteImages:      p.remoteImages(),

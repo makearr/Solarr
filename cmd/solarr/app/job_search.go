@@ -28,8 +28,6 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 	if err != nil {
 		return nil, err
 	}
-	factory := p.indexerClientFactory()
-
 	conns := make([]music.IndexerConn, 0, len(configured))
 	for _, indexer := range configured {
 		if !indexer.Enabled {
@@ -41,7 +39,10 @@ func (p *process) indexerConns(ctx context.Context) ([]music.IndexerConn, error)
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", indexer.ID), slog.Any("error", err))
 			continue
 		}
-		client := factory(indexer.ID, indexer.BaseURL, apiKey.Reveal(), indexer.Egress())
+		client, known := p.indexerDriver(indexer, apiKey.Reveal())
+		if !known {
+			continue
+		}
 		conn := music.IndexerConn{
 			ID: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, Priority: indexer.Priority, Client: client,
 			Categories: indexer.MusicCategories(),
@@ -81,7 +82,6 @@ func (p *process) searchConns(ctx context.Context, categories func(settings.Inde
 	if err != nil {
 		return nil, err
 	}
-	factory := p.indexerClientFactory()
 	conns := make([]judge.Conn, 0, len(configured))
 	for _, found := range configured {
 		if !found.Enabled {
@@ -93,7 +93,10 @@ func (p *process) searchConns(ctx context.Context, categories func(settings.Inde
 			p.logger.Warn("indexer skipped: its API key cannot be read", slog.Int64("indexer_id", found.ID), slog.Any("error", err))
 			continue
 		}
-		client := factory(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress())
+		client, known := p.indexerDriver(found, apiKey.Reveal())
+		if !known {
+			continue
+		}
 		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: categories(found)}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.searchParams(ctx, found.ID, found.BaseURL, client, capsSearch); params != nil {
@@ -147,7 +150,9 @@ func (p *process) downloaderConnsFor(ctx context.Context, mediaType string) ([]m
 		if err != nil {
 			return nil, err
 		}
-		client, known := adapters.NewDownloadClient(downloader.Impl, factory(downloader.ID, downloader.BaseURL), downloader.BaseURL, credentials.Reveal())
+		client, known := adapters.NewDownloadClient(downloader.Impl,
+			adapters.DownloadClientDeps{HTTP: factory(downloader.ID, downloader.BaseURL), FS: p.fsys, Clock: clock.NewSystem()},
+			adapters.DownloadConnection(downloader.BaseURL, credentials.Reveal(), downloader.Options()))
 		if !known {
 			continue
 		}
@@ -202,7 +207,11 @@ func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string
 		if err != nil {
 			return nil, err
 		}
-		return p.indexerClientFactory()(found.ID, found.BaseURL, apiKey.Reveal(), found.Egress()).Fetch(ctx, link)
+		client, known := p.indexerDriver(found, apiKey.Reveal())
+		if !known {
+			return nil, fmt.Errorf("indexer %d is a kind Solarr has no implementation of", indexerID)
+		}
+		return client.Fetch(ctx, link)
 	}
 	return nil, fmt.Errorf("indexer %d is no longer configured", indexerID)
 }

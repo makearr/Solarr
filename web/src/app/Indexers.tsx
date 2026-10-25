@@ -1,9 +1,13 @@
 import { useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CircleHelp, Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
+import { missingDownloader } from "@/lib/indexerCatalog";
+import { useDownloaderKinds, useIndexerKinds } from "@/lib/resources";
+import { usePreference } from "@/lib/usePreference";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { Button } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
@@ -11,11 +15,20 @@ import { inputStyle, labelStyle } from "@/ui/form";
 type Indexer = components["schemas"]["Indexer"];
 type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
 
-/** Stage 5, ADR-37/43/47: Newznab/Torznab search providers. A public
- *  Torznab endpoint may need no API key at all -- left blank, the
- *  connection is created with none rather than refused. */
+/** Stage 5, ADR-37/43/47: search providers -- Newznab/Torznab, Prowlarr's API indexers and Soulseek, chosen from
+ *  the catalog (/connections/indexers/add). A public one may need no API key at all. */
 export function Indexers() {
   const queryClient = useQueryClient();
+  const kinds = useIndexerKinds();
+  const clientKinds = useDownloaderKinds();
+  const downloaders = useQuery({ queryKey: ["downloaders"], queryFn: () => ok(api.GET("/downloaders")) });
+  const [dismissed, setDismissed] = usePreference<string[]>("companion.dismissed", []);
+  const kindOf = (indexer: Indexer) =>
+    kinds.data?.find((kind) => kind.id === indexer.definition) ?? kinds.data?.find((kind) => kind.impl === indexer.impl);
+  const addCompanion = useMutation({
+    mutationFn: (id: number) => ok(api.POST("/indexers/{id}/companion", { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["downloaders"] }),
+  });
   const expert = isTierVisible(useTier(), "expert");
   const [explainPriority, setExplainPriority] = useState(false);
 
@@ -67,8 +80,15 @@ export function Indexers() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">Indexers</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
-          Where releases are searched for. Add them from Prowlarr, or one at a time below.
+          Where releases are searched for. Choose them from the list of every indexer Solarr can search, add them from
+          Prowlarr, or add one by hand below.
         </p>
+        <Link
+          to="/connections/indexers/add"
+          className="mt-1 w-fit rounded-md bg-accent px-3 py-1.5 text-sm text-accent-ink"
+        >
+          Add indexers…
+        </Link>
       </header>
 
       <AddFromProwlarr onAdded={invalidate} />
@@ -107,13 +127,16 @@ export function Indexers() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{indexer.name}</span>
                 <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted">
-                  {indexer.impl}
+                  {kindOf(indexer)?.name ?? indexer.impl}
                 </span>
                 <span className="truncate font-mono text-xs text-ink-muted">{indexer.base_url}</span>
                 <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">
-                  <Badge tone={indexer.api_key.has_value ? "ok" : "warn"}>
-                    {indexer.api_key.has_value ? "key set" : "no key"}
-                  </Badge>
+                  {/* A public indexer that takes no key has nothing to warn about. */}
+                  {!kindOf(indexer) || kindOf(indexer)?.secret_label !== undefined ? (
+                    <Badge tone={indexer.api_key.has_value || kindOf(indexer)?.secret_optional ? "ok" : "warn"}>
+                      {indexer.api_key.has_value ? "key set" : "no key"}
+                    </Badge>
+                  ) : null}
                   <label className="flex items-center gap-1 text-ink-muted">
                     <input
                       type="checkbox"
@@ -153,6 +176,27 @@ export function Indexers() {
                 {expert && indexer.egress_proxy_url ? ` · FlareSolverr proxy ${indexer.egress_proxy_url}` : ""}
               </span>
               <MusicCategories indexer={indexer} onSaved={invalidate} />
+              {(() => {
+                const companion = missingDownloader(kindOf(indexer), indexer.base_url, downloaders.data ?? [], clientKinds.data ?? []);
+                const key = `indexer:${indexer.id}`;
+                return companion && downloaders.data && !dismissed.includes(key) && (
+                  <span className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-xs text-ink-muted">
+                    Its releases download through {companion.label}, which is not a download client yet.
+                    <button
+                      type="button"
+                      disabled={addCompanion.isPending}
+                      onClick={() => addCompanion.mutate(indexer.id)}
+                      className="rounded-md border border-border-subtle px-2 py-0.5 text-ink hover:border-accent disabled:opacity-50"
+                    >
+                      Add {companion.label} as a download client
+                    </button>
+                    <button type="button" onClick={() => setDismissed([...dismissed, key])} className="hover:text-ink">
+                      Not now
+                    </button>
+                    {addCompanion.isError && <span className="text-danger">It could not be added.</span>}
+                  </span>
+                );
+              })()}
               {(() => {
                 const result = testResults[indexer.id];
                 return result && (
@@ -312,8 +356,7 @@ function AddFromProwlarr({ onAdded }: { onAdded: () => void }) {
 
   const load = useMutation({
     mutationFn: () => ok(api.POST("/indexers/prowlarr", { body: { base_url: baseUrl, api_key: apiKey } })),
-    // Offered by default: usenet indexers that can find music and are enabled in Prowlarr.
-    // Torrents wait for a torrent client, which Solarr does not have yet.
+    // Offered by default: usenet indexers that can find music and are enabled in Prowlarr; torrents are a tick away.
     onSuccess: (found) =>
       setChosen(
         new Set(
@@ -385,7 +428,7 @@ function AddFromProwlarr({ onAdded }: { onAdded: () => void }) {
                   }}
                 />
                 <span>{entry.name}</span>
-                {entry.impl === "torznab" ? <Badge tone="warn">torrent: no torrent client yet</Badge> : <Badge tone="ok">usenet</Badge>}
+                <Badge tone="ok">{entry.impl === "torznab" ? "torrent" : "usenet"}</Badge>
                 {!entry.music && <Badge tone="warn">no music categories</Badge>}
                 {!entry.enabled && <Badge tone="warn">disabled in Prowlarr</Badge>}
                 {entry.already_added && <span className="text-xs text-ink-muted">already added</span>}

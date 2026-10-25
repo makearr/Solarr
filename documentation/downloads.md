@@ -1,5 +1,82 @@
 # Downloads: what is sent, and what waits
 
+## Indexers
+
+Connections -> Indexers -> **Add indexers…** opens Prowlarr's add list: every indexer Solarr can search
+(`GET /indexers/schema`), narrowed by words, protocol, privacy (public, semi-private, private) and media. Tick any
+number, then **Next** asks each for its address (a mirror where it has several) and its key, with a Test for each
+(`POST /indexers/test`); nothing is added until **Add**. Every entry is optional. An indexer remembers the entry it
+came from (`definition`), so the list marks it as already added.
+
+| Kind | Entries | Signs in with |
+|---|---|---|
+| Newznab / Torznab (generic) | any Newznab or Torznab address, Prowlarr's per-indexer ones included | API key, optional |
+| Prowlarr's Newznab presets | abNZB, altHUB, DOGnzb, DrunkenSlug, GingaDADDY, Miatrix, Newz-Complex, NinjaCentral, Nzb.su, NZBCat, NZBFinder, NZBgeek, NZBNDX, NzbPlanet, NZBStars, OZnzb, SimplyNZBs, SpotNZB, Tabula Rasa, Usenet Crawler | API key |
+| Public torrent | AnimeTosho (usenet and torrent feeds), The Pirate Bay (apibay), Nyaa, YTS, Knaben, Internet Archive, SubsPlease | nothing |
+| Private torrent | Redacted, Orpheus (Gazelle, music), FileList, HDBits, PassThePopcorn, BeyondHD, BroadcasTheNet | API key, or user name and passkey |
+| Soulseek | slskd's search: music, films, TV, anime and books | slskd API key |
+
+Each is Prowlarr's native implementation of the site's own API, on `indexer.Base`
+(`internal/acquiring/indexer/base.go`): bounded requests, fetching a result's file with the indexer's headers,
+declared capabilities, and the words of a structured query for a site that takes only words. Results are mapped onto
+Newznab categories and kept to the ones a search asks for, so a movie tracker answers a music search with nothing.
+Prowlarr's scraped sites (its Cardigann definitions) are not ported: ADR-43 keeps Solarr to documented APIs; add them
+through Prowlarr or Jackett as Torznab. A private site's test makes its cheapest signed-in call, so it proves the key.
+
+**Soulseek** searches through slskd (`internal/acquiring/indexer/soulseek`) for every media type: a search is started,
+awaited for 12 seconds and read. A peer's folder holding audio is one release, named "Artist - Album [FLAC]" from its
+folders (an .m4b one is an audiobook). Video and books are releases too: a folder of them named for what was searched
+(a season, a film with its extras) is one release, and any other film, episode or book is one of its own with the
+files that share its name (its subtitles). A name with an episode or season in it is filed as TV; other video as both
+films and TV, since an anime episode's name often looks like a film's. Soulseek has no feed of what is new, so RSS
+sync asks it nothing. A release's link carries its files as a direct release, which slskd as a download client fetches;
+slskd follows a whole folder by the folder, and one file by its name. Searching needs
+slskd as an indexer and downloading needs it as a download client; each offers the other, at the same address with
+the same key, and neither is added unless the person asks: a tick when adding either, or the offer on its row
+(`POST /indexers/{id}/companion`, `POST /downloaders/{id}/companion`), which "Not now" hides.
+
+## Download clients
+
+Every kind of client Lidarr and Sonarr offer is offered here, and none is configured until the person adds one
+(Connections -> Download clients). `GET /downloaders/schema` lists the kinds, as Sonarr's `/downloadclient/schema`
+does: each kind's protocol, what it signs in with, and the settings it needs beyond the shared ones. The add dialog
+is drawn from it, and a client is refused on write when it lacks what its kind needs (an address, a blackhole's
+folders) or names a kind Solarr cannot drive.
+
+| Kind (`impl`) | Protocol | Signs in with | Its own settings | Category |
+|---|---|---|---|---|
+| SABnzbd (`sabnzbd`) | usenet | API key | | category |
+| NZBGet (`nzbget`) | usenet | user name, password | | category |
+| Usenet Blackhole (`usenetblackhole`) | usenet | | NZB folder, watch folder | |
+| qBittorrent (`qbittorrent`) | torrent | user name, password | | category, created on first send |
+| Transmission (`transmission`) | torrent | user name, password | URL base (`/transmission/`) | a folder below its download folder |
+| Vuze (`vuze`) | torrent | user name, password | URL base (`/transmission/`) | as Transmission, through its Web Remote |
+| Deluge (`deluge`) | torrent | web UI password | | Label plugin label, created on first send |
+| rTorrent (`rtorrent`) | torrent | user name, password (HTTP) | URL path (`RPC2`) | label (`custom1`) |
+| µTorrent (`utorrent`) | torrent | user name, password | | label |
+| Flood (`flood`) | torrent | user name, password | | tag |
+| aria2 (`aria2`) | torrent | RPC secret | RPC path (`/rpc`) | none |
+| Torrent Blackhole (`torrentblackhole`) | torrent | | torrent folder, watch folder, save magnet links | |
+| slskd (`slskd`) | ddl | API key | | |
+
+**One base for every kind** (`internal/acquiring/download`, Sonarr's `DownloadClientBase` and its
+`TorrentClientBase`/`UsenetClientBase`). A kind declares a `Definition` and implements only what differs:
+`TorrentClient` (`AddTorrentFile`, `AddMagnet`, ...), `UsenetClient` (`AddNZB`, ...) or `DirectClient`
+(`AddDirect`, ...), each with `Probe` for its connection test. `NewTorrent`, `NewUsenet` and `NewDirect` supply the
+rest: the info hash every torrent is tracked by and the magnet-or-file choice, refusing what is plainly not an NZB,
+reading a direct release, queue totals, never asking a client to pause nothing. The registry
+(`cmd/solarr/adapters/downloadclients.go`) lists the kinds; searching, polling and the connection test build every
+client through it.
+
+What a kind cannot do: aria2 and rTorrent never delete a removed torrent's files themselves (rTorrent's are deleted
+when ruTorrent's erasedata plugin is installed); NZBGet keeps the files of a job it finished; a blackhole and slskd
+cannot pause, and a blackhole forgets a download only by deleting it. A blackhole download counts as finished once its
+files have not changed for a minute, and its watch folder becomes a download folder when it is added.
+
+**slskd** takes a direct release: JSON naming the peer and the files of one of its folders
+(`{"source": "user", "files": [{"path": "@@music\\Artist\\Album\\01.flac", "size": 123}]}`). No indexer answers
+one yet, so an slskd client receives nothing until a Soulseek search source exists.
+
 ## Missing albums are searched on their own
 
 Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pressing *Search all*:

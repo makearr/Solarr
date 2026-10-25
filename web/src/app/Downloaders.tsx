@@ -3,22 +3,33 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
-import { joinCredentials } from "@/lib/downloadCredentials";
-import { useDownloadFolders } from "@/lib/resources";
+import { fieldOptions, fieldValues, kindSecret, missingFields, newLabel, type FieldValues } from "@/lib/downloaderKinds";
+import { missingIndexer } from "@/lib/indexerCatalog";
+import { useDownloaderKinds, useDownloadFolders, useIndexerKinds } from "@/lib/resources";
+import { usePreference } from "@/lib/usePreference";
 import type { components } from "@/api/schema";
 import { Button } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
 type Downloader = components["schemas"]["Downloader"];
+type DownloaderKind = components["schemas"]["DownloaderKind"];
 
 type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
 
 
-/** Stage 5, ADR-46/57: download clients. SABnzbd (usenet) and qBittorrent (torrent).
- *  Actually dispatching a download waits on the candidate pipeline -- this
- *  screen manages the connection record and can test it, nothing more. */
+/** Stage 5, ADR-46/57: download clients, every kind /downloaders/schema offers (Sonarr's and Lidarr's list); none is
+ *  configured until the person adds it. */
 export function Downloaders() {
   const queryClient = useQueryClient();
+  const kinds = useDownloaderKinds();
+  const kindOf = (impl: string) => kinds.data?.find((kind) => kind.impl === impl);
+  const indexerKinds = useIndexerKinds();
+  const indexers = useQuery({ queryKey: ["indexers"], queryFn: () => ok(api.GET("/indexers")) });
+  const [dismissed, setDismissed] = usePreference<string[]>("companion.dismissed", []);
+  const addCompanion = useMutation({
+    mutationFn: (id: number) => ok(api.POST("/downloaders/{id}/companion", { params: { path: { id } } })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["indexers"] }),
+  });
 
   const downloaders = useQuery({
     queryKey: ["downloaders"],
@@ -77,20 +88,22 @@ export function Downloaders() {
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-medium">{downloader.name}</span>
                 <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted">
-                  {downloader.impl}
+                  {kindOf(downloader.impl)?.label ?? downloader.impl}
                 </span>
                 <span className="rounded-full border border-border-subtle px-1.5 py-px text-[0.6875rem] text-ink-muted">
                   {downloader.protocol}
                 </span>
                 <span className="truncate font-mono text-xs text-ink-muted">{downloader.base_url}</span>
                 <span className="ml-auto flex shrink-0 items-center gap-2 text-xs">
-                  <span
-                    className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${
-                      downloader.credentials.has_value ? "border-border-subtle text-ink-muted" : "border-warn text-warn"
-                    }`}
-                  >
-                    {downloader.credentials.has_value ? "credentials set" : "no credentials"}
-                  </span>
+                  {kindOf(downloader.impl)?.secret_label !== undefined && (
+                    <span
+                      className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${
+                        downloader.credentials.has_value ? "border-border-subtle text-ink-muted" : "border-warn text-warn"
+                      }`}
+                    >
+                      {downloader.credentials.has_value ? "credentials set" : "no credentials"}
+                    </span>
+                  )}
                   <label className="flex items-center gap-1 text-ink-muted">
                     <input
                       type="checkbox"
@@ -120,7 +133,7 @@ export function Downloaders() {
                 </span>
               </div>
               <span className="flex items-center gap-2 text-xs text-ink-muted">
-                {describeOptions(downloader.options)}
+                {describeOptions(downloader.options, kindOf(downloader.impl))}
                 <button
                   type="button"
                   onClick={() => setEditing(editing === downloader.id ? null : downloader.id)}
@@ -132,12 +145,34 @@ export function Downloaders() {
               {editing === downloader.id && (
                 <ClientOptionsForm
                   downloader={downloader}
+                  kind={kindOf(downloader.impl)}
                   onDone={() => {
                     setEditing(null);
                     void invalidate();
                   }}
                 />
               )}
+              {(() => {
+                const companion = missingIndexer(kindOf(downloader.impl), downloader.base_url, indexers.data ?? [], indexerKinds.data ?? []);
+                const key = `downloader:${downloader.id}`;
+                return companion && indexers.data && !dismissed.includes(key) && (
+                  <span className="flex flex-wrap items-center gap-2 rounded-md border border-border-subtle p-2 text-xs text-ink-muted">
+                    Nothing searches {companion.name} for it yet.
+                    <button
+                      type="button"
+                      disabled={addCompanion.isPending}
+                      onClick={() => addCompanion.mutate(downloader.id)}
+                      className="rounded-md border border-border-subtle px-2 py-0.5 text-ink hover:border-accent disabled:opacity-50"
+                    >
+                      Add the {companion.name} indexer
+                    </button>
+                    <button type="button" onClick={() => setDismissed([...dismissed, key])} className="hover:text-ink">
+                      Not now
+                    </button>
+                    {addCompanion.isError && <span className="text-danger">It could not be added.</span>}
+                  </span>
+                );
+              })()}
               {(() => {
                 const result = testResults[downloader.id];
                 return result && (
@@ -159,7 +194,8 @@ export function Downloaders() {
         <p className="text-xs text-danger">That change was refused.</p>
       )}
 
-      <AddDownloader onAdded={invalidate} />
+      {kinds.isError && <p className="text-xs text-danger">The kinds of download client could not be read.</p>}
+      {kinds.data && kinds.data.length > 0 && <AddDownloader kinds={kinds.data} onAdded={invalidate} />}
     </div>
   );
 }
@@ -167,29 +203,22 @@ export function Downloaders() {
 type DownloaderOptions = components["schemas"]["DownloaderOptions"];
 type StallCleanup = components["schemas"]["StallCleanup"];
 
-/** Lidarr's add dialog: a name already filled in, "Test" before "Add", and SABnzbd's own download
- *  folder offered as a download folder, at the path Solarr sees it if that differs. */
-type ClientKind = "sabnzbd" | "qbittorrent";
-
-const KINDS: Record<ClientKind, { label: string; protocol: "usenet" | "torrent"; placeholder: string; secret: string; keepCompleted: boolean }> = {
-  sabnzbd: { label: "SABnzbd", protocol: "usenet", placeholder: "http://sabnzbd:8080", secret: "API key", keepCompleted: false },
-  // A torrent keeps seeding after import: removing it is a choice, never the default.
-  qbittorrent: {
-    label: "qBittorrent", protocol: "torrent", placeholder: "http://qbittorrent:8080",
-    secret: "Password", keepCompleted: true,
-  },
-};
-
-function AddDownloader({ onAdded }: { onAdded: () => void }) {
-  const [kind, setKind] = useState<ClientKind>("sabnzbd");
-  const spec = KINDS[kind];
-  const [name, setName] = useState("SABnzbd");
+/** Lidarr's add dialog: every kind the server offers, a name already filled in, "Test" before "Add", and the client's
+ *  own download folder offered as a download folder, at the path Solarr sees it if that differs. */
+function AddDownloader({ kinds, onAdded }: { kinds: DownloaderKind[]; onAdded: () => void }) {
+  const [impl, setImpl] = useState(kinds[0]?.impl ?? "");
+  const kind = kinds.find((one) => one.impl === impl) ?? kinds[0];
+  // Unset follows the kind: its label as the name, and whether it keeps what was imported.
+  const [name, setName] = useState<string | null>(null);
+  const shownName = name ?? kind?.label ?? "";
   const [baseUrl, setBaseUrl] = useState("");
   const [credentials, setCredentials] = useState("");
   const [username, setUsername] = useState("");
-  const secret = kind === "qbittorrent" ? joinCredentials(username, credentials) : credentials;
+  const secret = kindSecret(kind, username, credentials);
+  const [fields, setFields] = useState<FieldValues>({});
   const [category, setCategory] = useState("");
-  const [removeCompleted, setRemoveCompleted] = useState(true);
+  const [removeChoice, setRemoveChoice] = useState<boolean | null>(null);
+  const removeCompleted = removeChoice ?? !kind?.keeps_completed;
   const [maxQueued, setMaxQueued] = useState(DEFAULT_MAX_QUEUED);
   const [sendUser, setSendUser] = useState(true);
   const [sendRSS, setSendRSS] = useState(true);
@@ -197,10 +226,19 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   const [seedMinutes, setSeedMinutes] = useState("");
   const [addFolder, setAddFolder] = useState(true);
   const [localFolder, setLocalFolder] = useState("");
+  const [addSearcher, setAddSearcher] = useState(false);
+  const indexerKinds = useIndexerKinds();
+  const searcher = indexerKinds.data?.find((one) => one.id === kind?.companion_indexer);
+  const missing = missingFields(kind, fields);
+  const reachable = kind !== undefined && (!kind.has_address || baseUrl.trim() !== "") && missing.length === 0;
+  const address = kind?.has_address ? baseUrl : "";
 
   const test = useMutation({
     mutationFn: () => ok(api.POST("/downloaders/test", {
-      body: { impl: kind, base_url: baseUrl, credentials: secret || undefined, options: { category: category || undefined } },
+      body: {
+        impl, base_url: address, credentials: secret || undefined,
+        options: { category: category || undefined, ...fieldOptions(kind, fields) },
+      },
     })),
     onSuccess: (result) => setLocalFolder(result.download_folder ?? ""),
   });
@@ -208,8 +246,9 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
 
   const create = useMutation({
     mutationFn: async () => {
+      if (!kind) return;
       // A folder the client names differently from Solarr is Lidarr's remote path mapping.
-      const mapped = reported !== "" && localFolder !== "" && localFolder !== reported;
+      const mapped = kind.has_address && reported !== "" && localFolder !== "" && localFolder !== reported;
       const options: DownloaderOptions = {
         category: category || undefined,
         remove_completed: removeCompleted,
@@ -220,11 +259,12 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
         remote_path: mapped ? reported : undefined,
         local_path: mapped ? localFolder : undefined,
+        ...fieldOptions(kind, fields),
       };
       // The folder first: a folder Solarr cannot see would leave a client that can never be imported from.
       let folderId: number | undefined;
       if (addFolder && localFolder) {
-        const added = await api.POST("/downloadfolders", { body: { path: localFolder, label: name, watch: false } });
+        const added = await api.POST("/downloadfolders", { body: { path: localFolder, label: shownName, watch: false } });
         if (added.error) {
           throw new Error(
             `Solarr cannot see the download folder: ${(added.error as { detail?: string }).detail ?? ""}. Mount it into Solarr's container (read-only is enough) or change where Solarr sees it. Nothing was added.`,
@@ -232,18 +272,24 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         }
         folderId = added.data?.id;
       }
-      const { error } = await api.POST("/downloaders", {
-        body: { name, impl: kind, base_url: baseUrl, protocol: spec.protocol, credentials: secret || undefined, enabled: true, options },
+      const { data, error } = await api.POST("/downloaders", {
+        body: { name: shownName, impl, base_url: address, protocol: kind.protocol, credentials: secret || undefined, enabled: true, options },
       });
       if (error) {
         if (folderId !== undefined) await api.DELETE("/downloadfolders/{id}", { params: { path: { id: folderId } } });
         throw error;
+      }
+      if (searcher && addSearcher && data) {
+        const companion = await api.POST("/downloaders/{id}/companion", { params: { path: { id: data.id } } });
+        if (companion.error) throw new Error(`The client was added; the ${searcher.name} indexer was not.`);
       }
     },
     onSuccess: () => {
       setBaseUrl("");
       setCredentials("");
       setUsername("");
+      setFields({});
+      setAddSearcher(false);
       test.reset();
       onAdded();
     },
@@ -261,60 +307,77 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         <h2 className="text-sm font-medium">Add</h2>
         <select
           aria-label="Download client"
-          value={kind}
+          value={impl}
           onChange={(event) => {
-            const next = event.target.value as ClientKind;
-            setKind(next);
-            setName(KINDS[next].label);
-            setRemoveCompleted(!KINDS[next].keepCompleted);
+            setImpl(event.target.value);
+            setName(null);
+            setRemoveChoice(null);
+            setFields({});
             test.reset();
           }}
           className={inputStyle}
         >
-          {(Object.keys(KINDS) as ClientKind[]).map((one) => (
-            <option key={one} value={one}>{KINDS[one].label}</option>
+          {(["usenet", "torrent", "ddl"] as const).map((protocol) => (
+            <optgroup key={protocol} label={PROTOCOL_LABELS[protocol]}>
+              {kinds.filter((one) => one.protocol === protocol).map((one) => (
+                <option key={one.impl} value={one.impl}>{one.label}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
       </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
           Name
-          <input className={inputStyle} value={name} autoComplete="off" onChange={(event) => setName(event.target.value)} />
+          <input className={inputStyle} value={shownName} autoComplete="off" onChange={(event) => setName(event.target.value)} />
         </label>
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-ink-muted">
-          Address
-          <input
-            className={inputStyle}
-            value={baseUrl}
-            placeholder={spec.placeholder}
-            autoComplete="off"
-            onChange={(event) => setBaseUrl(event.target.value)}
-          />
-        </label>
-        {kind === "qbittorrent" && (
+        {kind?.has_address && (
+          <label className="flex min-w-48 flex-1 flex-col gap-1 text-xs text-ink-muted">
+            Address
+            <input
+              className={inputStyle}
+              value={baseUrl}
+              placeholder={kind.address_placeholder}
+              autoComplete="off"
+              onChange={(event) => setBaseUrl(event.target.value)}
+            />
+          </label>
+        )}
+        {kind?.user_name && (
           <label className="flex min-w-32 flex-col gap-1 text-xs text-ink-muted">
             User name
             <input className={inputStyle} value={username} autoComplete="off" placeholder="empty if it lets this host in" onChange={(event) => setUsername(event.target.value)} />
           </label>
         )}
-        <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
-          {spec.secret}
-          <input className={inputStyle} type="password" value={credentials} autoComplete="off" onChange={(event) => setCredentials(event.target.value)} />
-        </label>
+        {kind?.secret_label && (
+          <label className="flex min-w-40 flex-col gap-1 text-xs text-ink-muted">
+            {kind.secret_label}
+            <input className={inputStyle} type="password" value={credentials} autoComplete="off" onChange={(event) => setCredentials(event.target.value)} />
+          </label>
+        )}
       </div>
+      <KindFields kind={kind} values={fields} onChange={setFields} />
       <OptionFields
+        categories={kind?.categories ?? false}
         category={category}
         onCategory={setCategory}
         removeCompleted={removeCompleted}
-        onRemoveCompleted={setRemoveCompleted}
+        onRemoveCompleted={setRemoveChoice}
         maxQueued={maxQueued}
         onMaxQueued={setMaxQueued}
         sendUser={sendUser}
         onSendUser={setSendUser}
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
-        seed={kind === "qbittorrent" ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
+        seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
       />
+      {searcher && (
+        <label className="flex items-center gap-2 text-xs text-ink-muted">
+          <input type="checkbox" checked={addSearcher} onChange={(event) => setAddSearcher(event.target.checked)} />
+          Also search {searcher.name} through it: add its indexer at this address, with the same key
+        </label>
+      )}
+      {missing.length > 0 && <p className="text-xs text-ink-muted">Still needed: {missing.join(", ")}.</p>}
       {test.data && (
         <p className={`text-xs ${test.data.ok ? "text-ok" : "text-danger"}`}>{test.data.message}</p>
       )}
@@ -336,7 +399,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
       <div className="flex gap-2">
         <button
           type="button"
-          disabled={!baseUrl.trim() || test.isPending}
+          disabled={!reachable || test.isPending}
           onClick={() => test.mutate()}
           className="rounded-md border border-border-subtle px-3 py-1.5 text-sm text-ink-muted hover:text-ink disabled:opacity-50"
         >
@@ -345,7 +408,7 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
         <Button
           variant="primary"
           type="submit"
-          disabled={!name.trim() || !baseUrl.trim() || create.isPending}
+          disabled={!shownName.trim() || !reachable || create.isPending}
         >
           {create.isPending ? "Adding…" : "Add"}
         </Button>
@@ -357,10 +420,50 @@ function AddDownloader({ onAdded }: { onAdded: () => void }) {
   );
 }
 
+const PROTOCOL_LABELS = { usenet: "Usenet", torrent: "Torrent", ddl: "Direct download" } as const;
+
+/** Seed limits need a client that reports how much a torrent has shared and for how long. */
+function seeds(kind: DownloaderKind | undefined): boolean {
+  return kind !== undefined && kind.protocol === "torrent" && kind.keeps_completed && kind.has_address;
+}
+
+/** A kind's own settings beyond the shared ones: an RPC path, a blackhole's folders. */
+function KindFields({ kind, values, onChange }: { kind: DownloaderKind | undefined; values: FieldValues; onChange: (values: FieldValues) => void }) {
+  if (!kind || kind.fields.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-end gap-3 text-xs">
+      {kind.fields.map((field) =>
+        field.kind === "bool" ? (
+          <label key={field.key} className="flex items-center gap-2 pb-2 text-ink-muted" title={field.help}>
+            <input
+              type="checkbox"
+              checked={values[field.key] === true}
+              onChange={(event) => onChange({ ...values, [field.key]: event.target.checked })}
+            />
+            {field.label}
+          </label>
+        ) : (
+          <label key={field.key} className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted" title={field.help}>
+            {field.label}
+            <input
+              className={inputStyle}
+              value={typeof values[field.key] === "string" ? (values[field.key] as string) : ""}
+              placeholder={field.placeholder}
+              autoComplete="off"
+              onChange={(event) => onChange({ ...values, [field.key]: event.target.value })}
+            />
+          </label>
+        ),
+      )}
+    </div>
+  );
+}
+
 // ADR-57's default: once sent, the client decides the order, so Solarr sends only a few at a time.
 const DEFAULT_MAX_QUEUED = 10;
 
 function OptionFields({
+  categories,
   category,
   onCategory,
   removeCompleted,
@@ -373,6 +476,8 @@ function OptionFields({
   onSendRSS,
   seed,
 }: {
+  /** The kind files downloads under a category; one that cannot has no category to set. */
+  categories: boolean;
   category: string;
   onCategory: (value: string) => void;
   removeCompleted: boolean;
@@ -388,13 +493,15 @@ function OptionFields({
 }) {
   return (
     <div className="flex flex-wrap items-end gap-3 text-xs">
-      <label
-        className="flex min-w-32 flex-col gap-1 text-ink-muted"
-        title="Empty sends each library's downloads under solarr-music, solarr-tv and so on. Never use a category Lidarr, Sonarr or Radarr download into: they would import Solarr's downloads."
-      >
-        Category
-        <input className={inputStyle} value={category} placeholder="solarr-music" onChange={(event) => onCategory(event.target.value)} />
-      </label>
+      {categories && (
+        <label
+          className="flex min-w-32 flex-col gap-1 text-ink-muted"
+          title="Empty sends each library's downloads under solarr-music, solarr-tv and so on. Never use a category Lidarr, Sonarr or Radarr download into: they would import Solarr's downloads."
+        >
+          Category
+          <input className={inputStyle} value={category} placeholder="solarr-music" onChange={(event) => onCategory(event.target.value)} />
+        </label>
+      )}
       <label className="flex items-center gap-2 pb-2 text-ink-muted">
         <input type="checkbox" checked={removeCompleted} onChange={(event) => onRemoveCompleted(event.target.checked)} />
         Remove completed downloads once imported
@@ -444,7 +551,7 @@ function OptionFields({
 }
 
 /** An existing client's options, as Lidarr's client dialog edits them. */
-function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onDone: () => void }) {
+function ClientOptionsForm({ downloader, kind, onDone }: { downloader: Downloader; kind: DownloaderKind | undefined; onDone: () => void }) {
   const current = downloader.options ?? {};
   const [category, setCategory] = useState(current.category ?? "");
   const [removeCompleted, setRemoveCompleted] = useState(current.remove_completed ?? true);
@@ -456,14 +563,15 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   const [seedRatio, setSeedRatio] = useState(current.seed_ratio ? String(current.seed_ratio) : "");
   const [seedMinutes, setSeedMinutes] = useState(current.seed_minutes ? String(current.seed_minutes) : "");
   const [stall, setStall] = useState<StallCleanup>(current.stall_cleanup ?? { enabled: false });
-  const torrent = downloader.impl === "qbittorrent";
+  const [fields, setFields] = useState<FieldValues>(fieldValues(current));
   // The stored secret is never shown, so a new one is typed in full or left alone.
   const [signInUser, setSignInUser] = useState("");
   const [signInSecret, setSignInSecret] = useState("");
-  const newSecret = torrent ? (signInSecret === "" && signInUser === "" ? "" : joinCredentials(signInUser, signInSecret)) : signInSecret;
+  const newSecret = signInSecret === "" && signInUser === "" ? "" : kindSecret(kind, signInUser, signInSecret);
+  const hasAddress = kind?.has_address ?? true;
   // The folder this client's finished downloads are in, as Solarr sees it, becomes a download folder (a client added
   // before the folder was a step of adding it has none).
-  const folderPath = localPath || remotePath;
+  const folderPath = hasAddress ? localPath || remotePath : (current.watch_folder ?? "");
   const folders = useDownloadFolders();
   const queryClient = useQueryClient();
   const hasFolder = folderPath !== "" && (folders.data ?? []).some((folder) => folder.path.replace(/\/$/, "") === folderPath.replace(/\/$/, ""));
@@ -495,6 +603,7 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
             seed_minutes: Number(seedMinutes) > 0 ? Math.round(Number(seedMinutes)) : undefined,
             remote_path: remotePath || undefined, local_path: localPath || undefined,
             stall_cleanup: stall,
+            ...fieldOptions(kind, fields),
           },
         },
       }));
@@ -503,7 +612,9 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   });
   return (
     <div className="flex flex-col gap-2 border-t border-border-subtle pt-2">
+      <KindFields kind={kind} values={fields} onChange={setFields} />
       <OptionFields
+        categories={kind?.categories ?? true}
         category={category}
         onCategory={setCategory}
         removeCompleted={removeCompleted}
@@ -514,38 +625,42 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
         onSendUser={setSendUser}
         sendRSS={sendRSS}
         onSendRSS={setSendRSS}
-        seed={torrent ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
+        seed={seeds(kind) ? { ratio: seedRatio, onRatio: setSeedRatio, minutes: seedMinutes, onMinutes: setSeedMinutes } : undefined}
       />
       <StallFields stall={stall} onChange={setStall} />
-      <div className="flex flex-wrap items-end gap-3 text-xs">
-        {torrent && (
+      {kind?.secret_label && (
+        <div className="flex flex-wrap items-end gap-3 text-xs">
+          {kind.user_name && (
+            <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
+              New user name
+              <input className={inputStyle} value={signInUser} autoComplete="off" onChange={(event) => setSignInUser(event.target.value)} />
+            </label>
+          )}
           <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
-            New user name
-            <input className={inputStyle} value={signInUser} autoComplete="off" onChange={(event) => setSignInUser(event.target.value)} />
+            {newLabel(kind.secret_label)}
+            <input
+              className={inputStyle}
+              type="password"
+              value={signInSecret}
+              autoComplete="off"
+              placeholder={downloader.credentials.has_value ? "leave empty to keep the one set" : ""}
+              onChange={(event) => setSignInSecret(event.target.value)}
+            />
           </label>
-        )}
-        <label className="flex min-w-40 flex-col gap-1 text-ink-muted">
-          {torrent ? "New password" : "New API key"}
-          <input
-            className={inputStyle}
-            type="password"
-            value={signInSecret}
-            autoComplete="off"
-            placeholder={downloader.credentials.has_value ? "leave empty to keep the one set" : ""}
-            onChange={(event) => setSignInSecret(event.target.value)}
-          />
-        </label>
-      </div>
-      <div className="flex flex-wrap items-end gap-3 text-xs">
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
-          The client says its downloads are in
-          <input className={inputStyle} value={remotePath} placeholder="/downloads" onChange={(event) => setRemotePath(event.target.value)} />
-        </label>
-        <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
-          Solarr sees that folder at
-          <input className={inputStyle} value={localPath} placeholder="/data/downloads" onChange={(event) => setLocalPath(event.target.value)} />
-        </label>
-      </div>
+        </div>
+      )}
+      {hasAddress && (
+        <div className="flex flex-wrap items-end gap-3 text-xs">
+          <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
+            The client says its downloads are in
+            <input className={inputStyle} value={remotePath} placeholder="/downloads" onChange={(event) => setRemotePath(event.target.value)} />
+          </label>
+          <label className="flex min-w-48 flex-1 flex-col gap-1 text-ink-muted">
+            Solarr sees that folder at
+            <input className={inputStyle} value={localPath} placeholder="/data/downloads" onChange={(event) => setLocalPath(event.target.value)} />
+          </label>
+        </div>
+      )}
       <button
         type="button"
         disabled={save.isPending}
@@ -579,8 +694,9 @@ function ClientOptionsForm({ downloader, onDone }: { downloader: Downloader; onD
   );
 }
 
-function describeOptions(options: DownloaderOptions | undefined): string {
-  const parts = [`category ${options?.category || "music"}`];
+function describeOptions(options: DownloaderOptions | undefined, kind: DownloaderKind | undefined): string {
+  const parts = kind?.categories === false ? [] : [`category ${options?.category || "music"}`];
+  if (options?.watch_folder) parts.push(`watches ${options.watch_folder}`);
   parts.push(options?.remove_completed === false ? "keeps completed downloads" : "removes completed downloads");
   if (options?.remote_path && options.local_path) parts.push(`${options.remote_path} is ${options.local_path} here`);
   parts.push(`${options?.max_queued ?? DEFAULT_MAX_QUEUED} at once`);

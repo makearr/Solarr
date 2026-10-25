@@ -2654,6 +2654,74 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /indexers/schema:
+    get:
+      operationId: listIndexerKinds
+      tags: [settings]
+      summary: Every indexer Solarr can add, as Prowlarr's add list shows them.
+      description: >-
+        Prowlarr's Newznab and Torznab presets, the API-based indexers it implements natively (public and
+        private trackers) and Soulseek through slskd. Every entry is optional; an indexer is only what the
+        user adds.
+      responses:
+        "200":
+          description: The catalog, in the add list's order.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/IndexerKind" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /indexers/test:
+    post:
+      operationId: testIndexerConfig
+      tags: [settings]
+      summary: Test an indexer before it is added. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [impl, base_url]
+              properties:
+                impl: { type: string, minLength: 1 }
+                base_url: { type: string, minLength: 1 }
+                api_key: { type: string }
+      responses:
+        "200":
+          description: What the indexer answered; ok false says why.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ConnectionTestResult" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /indexers/{id}/companion:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: addIndexerCompanion
+      tags: [settings]
+      summary: >-
+        Add the download client an indexer's releases need (slskd for Soulseek), at the indexer's address and
+        with its key. Administrator only; optional, the user is only offered it.
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Downloader" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /indexers/prowlarr:
     post:
       operationId: listProwlarrIndexers
@@ -2816,6 +2884,47 @@ paths:
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
+
+  /downloaders/schema:
+    get:
+      operationId: listDownloaderKinds
+      tags: [settings]
+      summary: Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
+      description: >-
+        What the add dialog offers: each kind's protocol, what it signs in with, and the settings it needs beyond
+        the shared ones. Every kind is optional; a client is only what the user adds.
+      responses:
+        "200":
+          description: Every kind, in the order the settings screen lists them.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DownloaderKind" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /downloaders/{id}/companion:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: addDownloaderCompanion
+      tags: [settings]
+      summary: >-
+        Add the indexer that searches for a download client's releases (Soulseek for slskd), at the client's
+        address and with its key. Administrator only; optional, the user is only offered it.
+      responses:
+        "201":
+          description: Added.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Indexer" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
 
   /downloaders/test:
     post:
@@ -9113,7 +9222,10 @@ components:
         name: { type: string }
         impl:
           type: string
-          description: '"newznab" or "torznab" (ADR-43).'
+          description: The implementation, one of /indexers/schema's impl values ("newznab", "torznab", "redacted", ...).
+        definition:
+          type: string
+          description: The /indexers/schema entry it was added from ("nzbgeek"); absent for one added before the catalog.
         base_url: { type: string }
         enabled: { type: boolean }
         priority: { type: integer, format: int64 }
@@ -9143,6 +9255,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         impl: { type: string, minLength: 1 }
+        definition: { type: string, description: "The /indexers/schema entry it is added from; on update, absent keeps the stored one." }
         base_url: { type: string, minLength: 1 }
         api_key:
           type: string
@@ -9161,6 +9274,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         impl: { type: string, minLength: 1 }
+        definition: { type: string, description: "The /indexers/schema entry it is added from; on update, absent keeps the stored one." }
         base_url: { type: string, minLength: 1 }
         enabled: { type: boolean, default: true }
         priority: { type: integer, format: int64, minimum: 1, maximum: 50, default: 25 }
@@ -9208,6 +9322,61 @@ components:
           type: string
           description: Where a download client puts finished downloads, as it reports it.
 
+    IndexerKind:
+      type: object
+      description: One entry of the indexer catalog, as Prowlarr's add list describes it.
+      required: [id, name, description, impl, protocol, privacy, language, base_urls, media_types, secret_optional]
+      properties:
+        id: { type: string, description: 'The entry''s own stable name: "nzbgeek", "thepiratebay".' }
+        name: { type: string }
+        description: { type: string }
+        impl: { type: string }
+        protocol: { type: string, enum: [usenet, torrent, ddl] }
+        privacy: { type: string, enum: [public, semi-private, private] }
+        language: { type: string }
+        base_urls:
+          type: array
+          items: { type: string }
+          description: The addresses it answers at, the default first; empty for a generic entry, which asks for one.
+        media_types:
+          type: array
+          items: { type: string, enum: [music, tv, movies, anime, books] }
+        user_label: { type: string, description: 'Its credentials'' first part ("User name", "API user"), stored as "user:secret"; absent for none.' }
+        secret_label: { type: string, description: What its secret is called; absent for an indexer that needs none. }
+        secret_optional: { type: boolean }
+        companion_downloader: { type: string, description: The download client impl its releases need, offered when it is added. }
+
+    DownloaderKind:
+      type: object
+      description: One kind of download client, as Sonarr's download client schema describes it.
+      required: [impl, label, protocol, has_address, user_name, keeps_completed, categories, fields]
+      properties:
+        impl: { type: string, description: 'The *Arr implementation name, lower case: "sabnzbd", "transmission", ...' }
+        label: { type: string }
+        protocol: { type: string, enum: [usenet, torrent, ddl] }
+        has_address: { type: boolean, description: False for a blackhole, which is two folders rather than an address. }
+        address_placeholder: { type: string }
+        user_name: { type: boolean, description: It signs in with a user name besides its secret; credentials are then "user:password". }
+        secret_label: { type: string, description: What its secret is called; absent for a kind that takes none. }
+        keeps_completed: { type: boolean, description: An imported download stays by default (a torrent seeds). }
+        categories: { type: boolean, description: It files downloads under a category or label. }
+        companion_indexer: { type: string, description: The /indexers/schema entry that searches for its releases, offered when it is added. }
+        fields:
+          type: array
+          description: The settings it needs beyond the shared ones, each stored under options by its key.
+          items: { $ref: "#/components/schemas/DownloaderField" }
+
+    DownloaderField:
+      type: object
+      required: [key, kind, label, required]
+      properties:
+        key: { type: string, enum: [url_base, drop_folder, watch_folder, save_magnet_files] }
+        kind: { type: string, enum: [text, path, bool] }
+        label: { type: string }
+        help: { type: string }
+        placeholder: { type: string }
+        required: { type: boolean }
+
     Downloader:
       type: object
       required: [id, name, impl, base_url, enabled, protocol, credentials, created_at, updated_at]
@@ -9216,8 +9385,8 @@ components:
         name: { type: string }
         impl:
           type: string
-          description: '"sabnzbd" today (ADR-46).'
-        base_url: { type: string }
+          description: One of /downloaders/schema's kinds (ADR-46).
+        base_url: { type: string, description: Empty for a blackhole. }
         enabled: { type: boolean }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         credentials: { $ref: "#/components/schemas/SecretMask" }
@@ -9281,13 +9450,25 @@ components:
           description: "Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit."
         stall_cleanup:
           $ref: "#/components/schemas/StallCleanup"
+        url_base:
+          type: string
+          description: The path of the client's API below its address (Transmission, Vuze, rTorrent, aria2); empty is its default.
+        drop_folder:
+          type: string
+          description: A blackhole's folder Solarr writes each .torrent or .nzb into, as Solarr sees it.
+        watch_folder:
+          type: string
+          description: A blackhole's folder the finished downloads appear in, as Solarr sees it.
+        save_magnet_files:
+          type: boolean
+          description: A torrent blackhole writes a magnet link to a .magnet file; off, such a release is refused.
 
     TestDownloaderRequest:
       type: object
       required: [impl, base_url]
       properties:
         impl: { type: string, minLength: 1 }
-        base_url: { type: string, minLength: 1 }
+        base_url: { type: string, description: Empty for a blackhole. }
         credentials: { type: string }
         options: { $ref: "#/components/schemas/DownloaderOptions" }
 
@@ -9297,7 +9478,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         impl: { type: string, minLength: 1 }
-        base_url: { type: string, minLength: 1 }
+        base_url: { type: string, description: Empty for a blackhole. }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         credentials: { type: string }
         enabled: { type: boolean, default: true }
@@ -9309,7 +9490,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         impl: { type: string, minLength: 1 }
-        base_url: { type: string, minLength: 1 }
+        base_url: { type: string, description: Empty for a blackhole. }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         enabled: { type: boolean, default: true }
         options: { $ref: "#/components/schemas/DownloaderOptions" }

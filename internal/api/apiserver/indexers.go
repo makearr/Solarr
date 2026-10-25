@@ -56,10 +56,14 @@ func (s *Server) AddIndexer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.validIndexerKind(w, body.Impl) {
+		return
+	}
 	created, err := s.auth.Settings.CreateIndexer(r.Context(), settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
+		Definition: derefOr(body.Definition, ""),
 	}, secrets.Secret(derefOr(body.ApiKey, "")), s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -92,10 +96,21 @@ func (s *Server) UpdateIndexer(w http.ResponseWriter, r *http.Request, id int64)
 		return
 	}
 
+	if !s.validIndexerKind(w, body.Impl) {
+		return
+	}
+	// No definition in the request keeps the stored one: editing an indexer must not forget where it came from.
+	definition := derefOr(body.Definition, "")
+	if body.Definition == nil {
+		if existing, err := s.auth.Settings.GetIndexer(r.Context(), id); err == nil {
+			definition = existing.Definition()
+		}
+	}
 	updated, err := s.auth.Settings.UpdateIndexer(r.Context(), id, settings.IndexerRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
 		Enabled: derefOr(body.Enabled, true), Priority: derefOr(body.Priority, 25),
 		EgressProxyURL: derefOr(body.EgressProxyUrl, ""), MusicCategories: derefOr(body.MusicCategories, nil),
+		Definition: definition,
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeIndexerError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -175,6 +190,8 @@ func (s *Server) routeTestIndexer(w http.ResponseWriter, r *http.Request) {
 // this never counts as an acquisition search of its own.
 type IndexerTester interface {
 	TestIndexer(ctx context.Context, id int64) (ConnectionTestResult, error)
+	// TestIndexerConfig tests an indexer that is not saved yet.
+	TestIndexerConfig(ctx context.Context, impl, baseURL, apiKey string) (ConnectionTestResult, error)
 }
 
 // ConnectionTestResult is one indexer or downloader connection test's own
@@ -232,7 +249,7 @@ func indexerView(indexer settings.Indexer) gen.Indexer {
 	view := gen.Indexer{
 		Id: indexer.ID, Name: indexer.Name, Impl: indexer.Impl, BaseUrl: indexer.BaseURL,
 		Enabled: indexer.Enabled, Priority: indexer.Priority,
-		ApiKey:    gen.SecretMask{HasValue: indexer.HasAPIKey},
+		ApiKey: gen.SecretMask{HasValue: indexer.HasAPIKey}, Definition: strPtr(indexer.Definition()),
 		CreatedAt: unixTime(indexer.CreatedAt), UpdatedAt: unixTime(indexer.UpdatedAt),
 	}
 	if indexer.CategoriesJSON != "" {
