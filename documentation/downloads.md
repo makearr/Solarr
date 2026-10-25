@@ -1,5 +1,47 @@
 # Downloads: what is sent, and what waits
 
+## Download clients
+
+Every kind of client Lidarr and Sonarr offer is offered here, and none is configured until the person adds one
+(Connections -> Download clients). `GET /downloaders/schema` lists the kinds, as Sonarr's `/downloadclient/schema`
+does: each kind's protocol, what it signs in with, and the settings it needs beyond the shared ones. The add dialog
+is drawn from it, and a client is refused on write when it lacks what its kind needs (an address, a blackhole's
+folders) or names a kind Solarr cannot drive.
+
+| Kind (`impl`) | Protocol | Signs in with | Its own settings | Category |
+|---|---|---|---|---|
+| SABnzbd (`sabnzbd`) | usenet | API key | | category |
+| NZBGet (`nzbget`) | usenet | user name, password | | category |
+| Usenet Blackhole (`usenetblackhole`) | usenet | | NZB folder, watch folder | |
+| qBittorrent (`qbittorrent`) | torrent | user name, password | | category, created on first send |
+| Transmission (`transmission`) | torrent | user name, password | URL base (`/transmission/`) | a folder below its download folder |
+| Vuze (`vuze`) | torrent | user name, password | URL base (`/transmission/`) | as Transmission, through its Web Remote |
+| Deluge (`deluge`) | torrent | web UI password | | Label plugin label, created on first send |
+| rTorrent (`rtorrent`) | torrent | user name, password (HTTP) | URL path (`RPC2`) | label (`custom1`) |
+| µTorrent (`utorrent`) | torrent | user name, password | | label |
+| Flood (`flood`) | torrent | user name, password | | tag |
+| aria2 (`aria2`) | torrent | RPC secret | RPC path (`/rpc`) | none |
+| Torrent Blackhole (`torrentblackhole`) | torrent | | torrent folder, watch folder, save magnet links | |
+| slskd (`slskd`) | ddl | API key | | |
+
+**One base for every kind** (`internal/acquiring/download`, Sonarr's `DownloadClientBase` and its
+`TorrentClientBase`/`UsenetClientBase`). A kind declares a `Definition` and implements only what differs:
+`TorrentClient` (`AddTorrentFile`, `AddMagnet`, ...), `UsenetClient` (`AddNZB`, ...) or `DirectClient`
+(`AddDirect`, ...), each with `Probe` for its connection test. `NewTorrent`, `NewUsenet` and `NewDirect` supply the
+rest: the info hash every torrent is tracked by and the magnet-or-file choice, refusing what is plainly not an NZB,
+reading a direct release, queue totals, never asking a client to pause nothing. The registry
+(`cmd/solarr/adapters/downloadclients.go`) lists the kinds; searching, polling and the connection test build every
+client through it.
+
+What a kind cannot do: aria2 and rTorrent never delete a removed torrent's files themselves (rTorrent's are deleted
+when ruTorrent's erasedata plugin is installed); NZBGet keeps the files of a job it finished; a blackhole and slskd
+cannot pause, and a blackhole forgets a download only by deleting it. A blackhole download counts as finished once its
+files have not changed for a minute, and its watch folder becomes a download folder when it is added.
+
+**slskd** takes a direct release: JSON naming the peer and the files of one of its folders
+(`{"source": "user", "files": [{"path": "@@music\\Artist\\Album\\01.flac", "size": 123}]}`). No indexer answers
+one yet, so an slskd client receives nothing until a Soulseek search source exists.
+
 ## Missing albums are searched on their own
 
 Two scheduled tasks (Settings -> Scheduler) do what Lidarr leaves to a person pressing *Search all*:

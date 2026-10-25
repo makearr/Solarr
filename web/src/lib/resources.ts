@@ -31,6 +31,10 @@ export const useRootFolders = () => useQuery({ queryKey: ["rootfolders"], queryF
 export const useDownloadFolders = () =>
   useQuery({ queryKey: ["downloadfolders"], queryFn: () => ok(api.GET("/downloadfolders")) });
 
+/** Every kind of download client Solarr can drive, as the add dialog offers them; fixed for the life of the server. */
+export const useDownloaderKinds = () =>
+  useQuery({ queryKey: ["downloader-kinds"], queryFn: () => ok(api.GET("/downloaders/schema")), staleTime: Infinity });
+
 export const useQualityProfiles = () =>
   useQuery({ queryKey: ["qualityProfiles"], queryFn: () => ok(api.GET("/qualityprofiles")) });
 

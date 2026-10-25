@@ -1,5 +1,5 @@
-// Package download is the seam every download client sits behind (ADR-46): SABnzbd today,
-// qBittorrent (D2) and a DDL client later. Solarr implements no download client of its own; it
+// Package download is the seam every download client sits behind (ADR-46), and the base every client kind extends
+// (definition.go, torrent.go, usenet.go). Solarr implements no download client of its own; it
 // sends, watches and cleans up, by client reference and never by path (section 10.9).
 package download
 
@@ -68,6 +68,8 @@ type Download struct {
 	// Ratio and SeedingSeconds are what a torrent has shared and for how long; zero for a client that does not seed.
 	Ratio          float64
 	SeedingSeconds int64
+	// SpeedBytesPerSec is how fast it is downloading now; zero where the client does not say.
+	SpeedBytesPerSec int64
 }
 
 // AddRequest is one release sent to a client: the file Solarr fetched from the indexer, named.

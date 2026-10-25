@@ -8,11 +8,10 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
-	"github.com/makearr/Solarr/internal/acquiring/qbittorrent"
-	"github.com/makearr/Solarr/internal/acquiring/sabnzbd"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -35,7 +34,9 @@ type ConnectionTester struct {
 	Cache      *settings.Cache
 	Indexer    IndexerClientFactory
 	Downloader DownloaderHTTPFactory
-	Clock      clock.Clock
+	// FS is where a blackhole's folders are looked for.
+	FS    fsx.FS
+	Clock clock.Clock
 	// SharedCategories answers the categories connected *Arrs send under on a client, with each *Arr's name; nil
 	// skips the check.
 	SharedCategories func(ctx context.Context, baseURL string) map[string]string
@@ -76,8 +77,7 @@ func (c ConnectionTester) TestIndexer(ctx context.Context, id int64) (apiserver.
 	}, nil
 }
 
-// TestDownloader fetches the client's own reported version -- SABnzbd's own
-// connection-test role for Version(), never a queue or dispatch action.
+// TestDownloader runs the client's own probe: its version, and what else it can say without changing anything.
 func (c ConnectionTester) TestDownloader(ctx context.Context, id int64) (apiserver.ConnectionTestResult, error) {
 	found, err := c.Cache.GetDownloader(ctx, id)
 	if err != nil {
@@ -98,62 +98,46 @@ func (c ConnectionTester) TestDownloaderConfig(
 	return c.testDownloader(ctx, impl, c.Downloader(0, baseURL), baseURL, credentials, options), nil
 }
 
+// testDownloader probes any kind the same way, and checks the categories downloads are sent under: a client that
+// does not create a missing one would file them under its default.
 func (c ConnectionTester) testDownloader(
 	ctx context.Context, impl string, client *httpx.Client, baseURL, credentials string, options settings.DownloaderOptions,
 ) apiserver.ConnectionTestResult {
-	switch impl {
-	case ImplSABnzbd:
-		return c.warnShared(ctx, baseURL, options, c.testSABnzbd(ctx, sabnzbd.NewClient(client, baseURL, credentials), options))
-	case ImplQBittorrent:
-		return c.warnShared(ctx, baseURL, options, c.testQBittorrent(ctx, qbittorrent.NewClient(client, baseURL, credentials), options))
-	}
-	return apiserver.ConnectionTestResult{Message: fmt.Sprintf("%q is not a download client Solarr knows", impl), TestedAt: c.Clock.Now()}
-}
-
-// testQBittorrent proves the address and the login (the version call needs it), and that the categories downloads are
-// sent under exist, since qBittorrent files an unknown one under no category at all.
-func (c ConnectionTester) testQBittorrent(ctx context.Context, client qbittorrent.Client, options settings.DownloaderOptions) apiserver.ConnectionTestResult {
 	at := c.Clock.Now()
-	version, err := client.Version(ctx)
+	definition, known := DownloadClientDefinition(impl)
+	if !known {
+		return apiserver.ConnectionTestResult{Message: fmt.Sprintf("%q is not a download client Solarr knows", impl), TestedAt: at}
+	}
+	driver, _ := NewDownloadClient(impl, DownloadClientDeps{HTTP: client, FS: c.FS, Clock: c.Clock},
+		DownloadConnection(baseURL, credentials, options))
+	probe, err := driver.Probe(ctx)
 	if err != nil {
 		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}
 	}
-	message := fmt.Sprintf("Connected. qBittorrent %s.", version)
-	if categories, err := client.Categories(ctx); err == nil {
+	message := fmt.Sprintf("Connected. %s.", probe.Version)
+	if probe.DownloadFolder != "" {
+		message += fmt.Sprintf(" Finished downloads go to %s.", probe.DownloadFolder)
+	}
+	if definition.Categories && probe.Categories != nil {
 		for _, category := range c.sendCategories(options) {
-			if !slices.Contains(categories, category) {
-				message += fmt.Sprintf(" qBittorrent has no %q category yet: it is created when the first torrent is sent.", category)
+			if slices.ContainsFunc(probe.Categories, func(have string) bool { return strings.EqualFold(have, category) }) {
+				continue
+			}
+			if probe.CreatesCategories {
+				message += fmt.Sprintf(" %s has no %q category yet: it is created when the first download is sent.", definition.Label, category)
+			} else {
+				message += fmt.Sprintf(" %s has no %q category yet: add it there, or downloads land in its default.", definition.Label, category)
 			}
 		}
 	}
-	folder, _ := client.SavePath(ctx)
-	if folder != "" {
-		message += fmt.Sprintf(" Finished downloads go to %s.", folder)
+	for _, note := range probe.Notes {
+		message += " " + note
 	}
-	return apiserver.ConnectionTestResult{OK: true, Message: message, TestedAt: at, DownloadFolder: folder}
-}
-
-// testSABnzbd proves the address (version), the key (the download folder needs it) and that the
-// categories downloads are sent under exist; a missing one would land everything in SABnzbd's "*".
-func (c ConnectionTester) testSABnzbd(ctx context.Context, client sabnzbd.Client, options settings.DownloaderOptions) apiserver.ConnectionTestResult {
-	at := c.Clock.Now()
-	version, err := client.Version(ctx)
-	if err != nil {
-		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}
+	result := apiserver.ConnectionTestResult{OK: true, Message: message, TestedAt: at, DownloadFolder: probe.DownloadFolder}
+	if !definition.Categories || !definition.HasAddress() {
+		return result
 	}
-	folder, err := client.CompleteFolder(ctx)
-	if err != nil {
-		return apiserver.ConnectionTestResult{Message: httpx.Explain(err), TestedAt: at}
-	}
-	message := fmt.Sprintf("Connected. Version %s. Finished downloads go to %s.", version, folder)
-	if categories, err := client.Categories(ctx); err == nil {
-		for _, category := range c.sendCategories(options) {
-			if !slices.Contains(categories, category) {
-				message += fmt.Sprintf(" SABnzbd has no %q category yet: add it there, or downloads land in its default.", category)
-			}
-		}
-	}
-	return apiserver.ConnectionTestResult{OK: true, Message: message, TestedAt: at, DownloadFolder: folder}
+	return c.warnShared(ctx, baseURL, options, result)
 }
 
 // warnShared fails a connected client whose send category a connected *Arr also uses: that *Arr would import

@@ -1799,6 +1799,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/downloaders/schema": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
+         * @description What the add dialog offers: each kind's protocol, what it signs in with, and the settings it needs beyond the shared ones. Every kind is optional; a client is only what the user adds.
+         */
+        get: operations["listDownloaderKinds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/downloaders/test": {
         parameters: {
             query?: never;
@@ -6100,12 +6120,44 @@ export interface components {
             /** @description Where a download client puts finished downloads, as it reports it. */
             download_folder?: string;
         };
+        /** @description One kind of download client, as Sonarr's download client schema describes it. */
+        DownloaderKind: {
+            /** @description The *Arr implementation name, lower case: "sabnzbd", "transmission", ... */
+            impl: string;
+            label: string;
+            /** @enum {string} */
+            protocol: "usenet" | "torrent" | "ddl";
+            /** @description False for a blackhole */
+            has_address: boolean;
+            address_placeholder?: string;
+            /** @description It signs in with a user name besides its secret; credentials are then "user:password". */
+            user_name: boolean;
+            /** @description What its secret is called; absent for a kind that takes none. */
+            secret_label?: string;
+            /** @description An imported download stays by default (a torrent seeds). */
+            keeps_completed: boolean;
+            /** @description It files downloads under a category or label. */
+            categories: boolean;
+            /** @description The settings it needs beyond the shared ones, each stored under options by its key. */
+            fields: components["schemas"]["DownloaderField"][];
+        };
+        DownloaderField: {
+            /** @enum {string} */
+            key: "url_base" | "drop_folder" | "watch_folder" | "save_magnet_files";
+            /** @enum {string} */
+            kind: "text" | "path" | "bool";
+            label: string;
+            help?: string;
+            placeholder?: string;
+            required: boolean;
+        };
         Downloader: {
             /** Format: int64 */
             id: number;
             name: string;
-            /** @description "sabnzbd" today (ADR-46). */
+            /** @description One of /downloaders/schema's kinds (ADR-46). */
             impl: string;
+            /** @description Empty for a blackhole. */
             base_url: string;
             enabled: boolean;
             /** @enum {string} */
@@ -6153,9 +6205,18 @@ export interface components {
             /** @description Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit. */
             seed_minutes?: number;
             stall_cleanup?: components["schemas"]["StallCleanup"];
+            /** @description The path of the client's API below its address (Transmission, Vuze, rTorrent, aria2); empty is its default. */
+            url_base?: string;
+            /** @description A blackhole's folder Solarr writes each .torrent or .nzb into, as Solarr sees it. */
+            drop_folder?: string;
+            /** @description A blackhole's folder the finished downloads appear in, as Solarr sees it. */
+            watch_folder?: string;
+            /** @description A torrent blackhole writes a magnet link to a .magnet file; off, such a release is refused. */
+            save_magnet_files?: boolean;
         };
         TestDownloaderRequest: {
             impl: string;
+            /** @description Empty for a blackhole. */
             base_url: string;
             credentials?: string;
             options?: components["schemas"]["DownloaderOptions"];
@@ -6163,6 +6224,7 @@ export interface components {
         AddDownloaderRequest: {
             name: string;
             impl: string;
+            /** @description Empty for a blackhole. */
             base_url: string;
             /** @enum {string} */
             protocol: "usenet" | "torrent" | "ddl";
@@ -6174,6 +6236,7 @@ export interface components {
         UpdateDownloaderRequest: {
             name: string;
             impl: string;
+            /** @description Empty for a blackhole. */
             base_url: string;
             /** @enum {string} */
             protocol: "usenet" | "torrent" | "ddl";
@@ -11204,6 +11267,27 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    listDownloaderKinds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every kind, in the order the settings screen lists them. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloaderKind"][];
+                };
+            };
+            401: components["responses"]["Problem"];
         };
     };
     testDownloaderConfig: {

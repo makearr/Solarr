@@ -132,10 +132,15 @@ func (a Prowlarr) InstanceDownloadClients(ctx context.Context, instanceID int64)
 		rows[i] = apiserver.ArrDownloadClientRow{
 			Name: client.Name, Impl: impl, Protocol: client.Protocol, BaseURL: client.BaseURL(), Category: client.Category,
 			Username: client.Username,
-			Enabled:  client.Enabled, Supported: impl == ImplSABnzbd || impl == ImplQBittorrent, AlreadyAdded: here[client.BaseURL()],
+			Enabled:  client.Enabled, Supported: supported(impl), AlreadyAdded: here[client.BaseURL()],
 		}
 	}
 	return rows, nil
+}
+
+func supported(impl string) bool {
+	_, known := DownloadClientDefinition(impl)
+	return known
 }
 
 // downloadClients reads an instance's download clients through its own app's API version.

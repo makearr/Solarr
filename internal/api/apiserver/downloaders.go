@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -51,7 +54,7 @@ func (s *Server) AddDownloader(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !s.validOptions(w, body.Options) {
+	if !s.validOptions(w, body.Options) || !s.validKind(w, body.Impl, body.BaseUrl, string(body.Protocol), body.Options) {
 		return
 	}
 	created, err := s.auth.Settings.CreateDownloader(r.Context(), settings.DownloaderRequest{
@@ -101,6 +104,11 @@ func (s *Server) UpdateDownloader(w http.ResponseWriter, r *http.Request, id int
 			return
 		}
 		settingsJSON = existing.SettingsJSON
+	}
+	var stored settings.DownloaderOptions
+	_ = json.Unmarshal([]byte(settingsJSON), &stored)
+	if !s.validKind(w, body.Impl, body.BaseUrl, string(body.Protocol), storedOptionsView(stored)) {
+		return
 	}
 	updated, err := s.auth.Settings.UpdateDownloader(r.Context(), id, settings.DownloaderRequest{
 		Name: body.Name, Impl: body.Impl, BaseURL: body.BaseUrl,
@@ -211,9 +219,11 @@ func (s *Server) TestDownloaderConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body gen.TestDownloaderConfigJSONRequestBody
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil ||
-		body.Impl == "" || body.BaseUrl == "" {
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.Impl == "" {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected impl and base_url")
+		return
+	}
+	if !s.validKind(w, body.Impl, body.BaseUrl, "", body.Options) {
 		return
 	}
 	var options settings.DownloaderOptions
@@ -242,6 +252,8 @@ func optionsJSON(options *gen.DownloaderOptions) string {
 		RemotePath: derefOr(options.RemotePath, ""), LocalPath: derefOr(options.LocalPath, ""),
 		MaxQueued: options.MaxQueued, AlwaysSendUserGrabs: options.AlwaysSendUserGrabs,
 		AlwaysSendRSSGrabs: options.AlwaysSendRssGrabs, SeedRatio: positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
+		URLBase: strings.TrimSpace(derefOr(options.UrlBase, "")), DropFolder: strings.TrimSpace(derefOr(options.DropFolder, "")),
+		WatchFolder: strings.TrimSpace(derefOr(options.WatchFolder, "")), SaveMagnetFiles: derefOr(options.SaveMagnetFiles, false),
 	}
 	if cleanup := options.StallCleanup; cleanup != nil {
 		stored.StallCleanup = &settings.StallCleanup{
@@ -292,6 +304,8 @@ func downloaderOptionsView(options settings.DownloaderOptions) *gen.DownloaderOp
 		AlwaysSendRssGrabs: options.AlwaysSendRSSGrabs,
 		SeedRatio:          positiveFloat(options.SeedRatio), SeedMinutes: positiveInt(options.SeedMinutes),
 		StallCleanup: stallCleanupView(options.StallRules()),
+		UrlBase:      strPtr(options.URLBase), DropFolder: strPtr(options.DropFolder), WatchFolder: strPtr(options.WatchFolder),
+		SaveMagnetFiles: boolPtrIf(options.SaveMagnetFiles),
 	}
 }
 
@@ -340,4 +354,104 @@ func validStallCleanup(cleanup gen.StallCleanup) bool {
 	within := func(value *int, low, high int) bool { return value == nil || (*value >= low && *value <= high) }
 	return within(cleanup.Strikes, 1, 50) && within(cleanup.CheckMinutes, 1, 1440) &&
 		within(cleanup.NoProgressHours, 1, 168) && within(cleanup.IgnoreAboveGb, 0, 100000)
+}
+
+// DownloaderKind is one kind of download client the user may add (Sonarr's download client schema).
+type DownloaderKind struct {
+	Impl, Label, Protocol, AddressPlaceholder, SecretLabel string
+	UserName, KeepsCompleted, Categories                   bool
+	Fields                                                 []DownloaderField
+}
+
+// HasAddress is a kind reached over the network rather than through folders.
+func (k DownloaderKind) HasAddress() bool { return k.AddressPlaceholder != "" }
+
+// DownloaderField is one setting a kind needs beyond the shared ones; Key names its options field.
+type DownloaderField struct {
+	Key, Kind, Label, Help, Placeholder string
+	Required                            bool
+}
+
+// DownloaderKinds answers every kind Solarr can drive, in the order the settings screen lists them.
+type DownloaderKinds interface {
+	DownloaderKinds() []DownloaderKind
+}
+
+// ListDownloaderKinds answers every kind of download client the user may add.
+func (s *Server) ListDownloaderKinds(w http.ResponseWriter, r *http.Request) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	views := []gen.DownloaderKind{}
+	if s.downloaderKinds != nil {
+		for _, kind := range s.downloaderKinds.DownloaderKinds() {
+			views = append(views, downloaderKindView(kind))
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+func downloaderKindView(kind DownloaderKind) gen.DownloaderKind {
+	fields := make([]gen.DownloaderField, len(kind.Fields))
+	for i, field := range kind.Fields {
+		fields[i] = gen.DownloaderField{
+			Key: gen.DownloaderFieldKey(field.Key), Kind: gen.DownloaderFieldKind(field.Kind), Label: field.Label,
+			Help: strPtr(field.Help), Placeholder: strPtr(field.Placeholder), Required: field.Required,
+		}
+	}
+	return gen.DownloaderKind{
+		Impl: kind.Impl, Label: kind.Label, Protocol: gen.DownloaderKindProtocol(kind.Protocol), HasAddress: kind.HasAddress(),
+		AddressPlaceholder: strPtr(kind.AddressPlaceholder), UserName: kind.UserName, SecretLabel: strPtr(kind.SecretLabel),
+		KeepsCompleted: kind.KeepsCompleted, Categories: kind.Categories, Fields: fields,
+	}
+}
+
+// validKind refuses a client of a kind Solarr cannot drive, or without what its kind needs: an address, or a
+// blackhole's folders. protocol "" is not checked (a test names none). Without the kinds only the address is checked.
+func (s *Server) validKind(w http.ResponseWriter, impl, baseURL, protocol string, options *gen.DownloaderOptions) bool {
+	refuse := func(detail string) bool {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", detail)
+		return false
+	}
+	if s.downloaderKinds == nil {
+		if strings.TrimSpace(baseURL) == "" {
+			return refuse("base_url must not be empty")
+		}
+		return true
+	}
+	kinds := s.downloaderKinds.DownloaderKinds()
+	found := slices.IndexFunc(kinds, func(kind DownloaderKind) bool { return kind.Impl == impl })
+	if found < 0 {
+		return refuse(fmt.Sprintf("%q is not a download client Solarr can drive; /downloaders/schema lists them", impl))
+	}
+	kind := kinds[found]
+	if protocol != "" && protocol != kind.Protocol {
+		return refuse(fmt.Sprintf("%s downloads over %s, not %s", kind.Label, kind.Protocol, protocol))
+	}
+	if kind.HasAddress() && strings.TrimSpace(baseURL) == "" {
+		return refuse(fmt.Sprintf("%s needs its address in base_url", kind.Label))
+	}
+	var stored settings.DownloaderOptions
+	_ = json.Unmarshal([]byte(optionsJSON(options)), &stored)
+	for _, field := range kind.Fields {
+		missing := (field.Key == "drop_folder" && stored.DropFolder == "") || (field.Key == "watch_folder" && stored.WatchFolder == "")
+		if field.Required && missing {
+			return refuse(fmt.Sprintf("%s needs options.%s: %s", kind.Label, field.Key, strings.ToLower(field.Label)))
+		}
+	}
+	return true
+}
+
+// storedOptionsView is stored options in the request's shape, for checking them as a request's would be.
+func storedOptionsView(options settings.DownloaderOptions) *gen.DownloaderOptions {
+	return &gen.DownloaderOptions{DropFolder: strPtr(options.DropFolder), WatchFolder: strPtr(options.WatchFolder)}
+}
+
+// boolPtrIf is true as a pointer, and false as absent.
+func boolPtrIf(value bool) *bool {
+	if !value {
+		return nil
+	}
+	return &value
 }

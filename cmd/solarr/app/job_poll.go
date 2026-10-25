@@ -65,7 +65,9 @@ func (p *process) pollClients(ctx context.Context) (map[int64]poll.Client, error
 		if err != nil {
 			return nil, err
 		}
-		client, known := adapters.NewDownloadClient(downloader.Impl, factory(downloader.ID, downloader.BaseURL), downloader.BaseURL, credentials.Reveal())
+		client, known := adapters.NewDownloadClient(downloader.Impl,
+			adapters.DownloadClientDeps{HTTP: factory(downloader.ID, downloader.BaseURL), FS: p.fsys, Clock: clock.NewSystem()},
+			adapters.DownloadConnection(downloader.BaseURL, credentials.Reveal(), downloader.Options()))
 		if !known {
 			continue
 		}

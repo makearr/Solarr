@@ -47,6 +47,8 @@ type DownloaderRequest struct {
 	SettingsJSON string
 }
 
+// validateDownloader checks what every client row needs; whether a kind needs an address (a blackhole has none) is
+// the API's check, which knows the kinds.
 func validateDownloader(request DownloaderRequest) config.Problems {
 	var problems config.Problems
 	if strings.TrimSpace(request.Name) == "" {
@@ -54,9 +56,6 @@ func validateDownloader(request DownloaderRequest) config.Problems {
 	}
 	if strings.TrimSpace(request.Impl) == "" {
 		problems = append(problems, config.Problem{Path: "impl", Expectation: "not empty"})
-	}
-	if strings.TrimSpace(request.BaseURL) == "" {
-		problems = append(problems, config.Problem{Path: "base_url", Expectation: "not empty"})
 	}
 	switch request.Protocol {
 	case "usenet", "torrent", "ddl":

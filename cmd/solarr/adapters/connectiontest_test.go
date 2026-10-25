@@ -74,10 +74,10 @@ func TestConnectionTester_FailsACategoryAConnectedArrAlsoUses(t *testing.T) {
 		want     apiserver.ConnectionTestResult
 	}{
 		{"music", apiserver.ConnectionTestResult{
-			Message: `Connected. Version 4.3.0. Finished downloads go to /downloads. Home Lidarr also downloads into the "music"` +
+			Message: `Connected. SABnzbd 4.3.0. Finished downloads go to /downloads. Home Lidarr also downloads into the "music"` +
 				` category on this client and would import what Solarr sends there: give Solarr a category of its own.`,
 		}},
-		{"", apiserver.ConnectionTestResult{OK: true, Message: "Connected. Version 4.3.0. Finished downloads go to /downloads."}},
+		{"", apiserver.ConnectionTestResult{OK: true, Message: "Connected. SABnzbd 4.3.0. Finished downloads go to /downloads."}},
 	}
 	for _, test := range tests {
 		got, err := tester.TestDownloaderConfig(t.Context(), adapters.ImplSABnzbd, "http://sab:8080", "key",

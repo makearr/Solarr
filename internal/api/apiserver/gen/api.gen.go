@@ -164,6 +164,28 @@ const (
 	DownloaderProtocolUsenet  DownloaderProtocol = "usenet"
 )
 
+// Defines values for DownloaderFieldKey.
+const (
+	DownloaderFieldKeyDropFolder      DownloaderFieldKey = "drop_folder"
+	DownloaderFieldKeySaveMagnetFiles DownloaderFieldKey = "save_magnet_files"
+	DownloaderFieldKeyUrlBase         DownloaderFieldKey = "url_base"
+	DownloaderFieldKeyWatchFolder     DownloaderFieldKey = "watch_folder"
+)
+
+// Defines values for DownloaderFieldKind.
+const (
+	DownloaderFieldKindBool DownloaderFieldKind = "bool"
+	DownloaderFieldKindPath DownloaderFieldKind = "path"
+	DownloaderFieldKindText DownloaderFieldKind = "text"
+)
+
+// Defines values for DownloaderKindProtocol.
+const (
+	DownloaderKindProtocolDdl     DownloaderKindProtocol = "ddl"
+	DownloaderKindProtocolTorrent DownloaderKindProtocol = "torrent"
+	DownloaderKindProtocolUsenet  DownloaderKindProtocol = "usenet"
+)
+
 // Defines values for EventTopic.
 const (
 	EventTopicAcquisition  EventTopic = "acquisition"
@@ -1019,6 +1041,7 @@ type AddCandidate struct {
 
 // AddDownloaderRequest defines model for AddDownloaderRequest.
 type AddDownloaderRequest struct {
+	// BaseUrl Empty for a blackhole.
 	BaseUrl     string  `json:"base_url"`
 	Credentials *string `json:"credentials,omitempty"`
 	Enabled     *bool   `json:"enabled,omitempty"`
@@ -1811,6 +1834,7 @@ type DownloadFolderEntry struct {
 
 // Downloader defines model for Downloader.
 type Downloader struct {
+	// BaseUrl Empty for a blackhole.
 	BaseUrl   string    `json:"base_url"`
 	CreatedAt time.Time `json:"created_at"`
 
@@ -1819,7 +1843,7 @@ type Downloader struct {
 	Enabled     bool       `json:"enabled"`
 	Id          int64      `json:"id"`
 
-	// Impl "sabnzbd" today (ADR-46).
+	// Impl One of /downloaders/schema's kinds (ADR-46).
 	Impl string `json:"impl"`
 	Name string `json:"name"`
 
@@ -1832,6 +1856,53 @@ type Downloader struct {
 // DownloaderProtocol defines model for Downloader.Protocol.
 type DownloaderProtocol string
 
+// DownloaderField defines model for DownloaderField.
+type DownloaderField struct {
+	Help        *string             `json:"help,omitempty"`
+	Key         DownloaderFieldKey  `json:"key"`
+	Kind        DownloaderFieldKind `json:"kind"`
+	Label       string              `json:"label"`
+	Placeholder *string             `json:"placeholder,omitempty"`
+	Required    bool                `json:"required"`
+}
+
+// DownloaderFieldKey defines model for DownloaderField.Key.
+type DownloaderFieldKey string
+
+// DownloaderFieldKind defines model for DownloaderField.Kind.
+type DownloaderFieldKind string
+
+// DownloaderKind One kind of download client, as Sonarr's download client schema describes it.
+type DownloaderKind struct {
+	AddressPlaceholder *string `json:"address_placeholder,omitempty"`
+
+	// Categories It files downloads under a category or label.
+	Categories bool `json:"categories"`
+
+	// Fields The settings it needs beyond the shared ones, each stored under options by its key.
+	Fields []DownloaderField `json:"fields"`
+
+	// HasAddress False for a blackhole
+	HasAddress bool `json:"has_address"`
+
+	// Impl The *Arr implementation name, lower case: "sabnzbd", "transmission", ...
+	Impl string `json:"impl"`
+
+	// KeepsCompleted An imported download stays by default (a torrent seeds).
+	KeepsCompleted bool                   `json:"keeps_completed"`
+	Label          string                 `json:"label"`
+	Protocol       DownloaderKindProtocol `json:"protocol"`
+
+	// SecretLabel What its secret is called; absent for a kind that takes none.
+	SecretLabel *string `json:"secret_label,omitempty"`
+
+	// UserName It signs in with a user name besides its secret; credentials are then "user:password".
+	UserName bool `json:"user_name"`
+}
+
+// DownloaderKindProtocol defines model for DownloaderKind.Protocol.
+type DownloaderKindProtocol string
+
 // DownloaderOptions Lidarr's download client options.
 type DownloaderOptions struct {
 	// AlwaysSendRssGrabs An RSS grab goes to this client even when it is full. Absent means yes.
@@ -1842,6 +1913,9 @@ type DownloaderOptions struct {
 
 	// Category The client category downloads are sent under; empty means "music" for music.
 	Category *string `json:"category,omitempty"`
+
+	// DropFolder A blackhole's folder Solarr writes each .torrent or .nzb into, as Solarr sees it.
+	DropFolder *string `json:"drop_folder,omitempty"`
 
 	// LocalPath Where Solarr sees that same folder.
 	LocalPath *string `json:"local_path,omitempty"`
@@ -1855,6 +1929,9 @@ type DownloaderOptions struct {
 	// RemoveCompleted Remove a download from the client once imported. Absent means yes.
 	RemoveCompleted *bool `json:"remove_completed,omitempty"`
 
+	// SaveMagnetFiles A torrent blackhole writes a magnet link to a .magnet file; off, such a release is refused.
+	SaveMagnetFiles *bool `json:"save_magnet_files,omitempty"`
+
 	// SeedMinutes Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit.
 	SeedMinutes *int `json:"seed_minutes,omitempty"`
 
@@ -1863,6 +1940,12 @@ type DownloaderOptions struct {
 
 	// StallCleanup Stalled-download cleanup, off unless enabled: every check_minutes a running download of Solarr's own is compared with the last check; one that has not moved gets a strike, and after strikes in a row, or no_progress_hours without moving, it is removed from the client with its files, blocklisted and searched again. Queued and paused downloads never get strikes. Absent numbers take their defaults.
 	StallCleanup *StallCleanup `json:"stall_cleanup,omitempty"`
+
+	// UrlBase The path of the client's API below its address (Transmission, Vuze, rTorrent, aria2); empty is its default.
+	UrlBase *string `json:"url_base,omitempty"`
+
+	// WatchFolder A blackhole's folder the finished downloads appear in, as Solarr sees it.
+	WatchFolder *string `json:"watch_folder,omitempty"`
 }
 
 // DrainMove defines model for DrainMove.
@@ -4508,6 +4591,7 @@ type Tagging struct {
 
 // TestDownloaderRequest defines model for TestDownloaderRequest.
 type TestDownloaderRequest struct {
+	// BaseUrl Empty for a blackhole.
 	BaseUrl     string  `json:"base_url"`
 	Credentials *string `json:"credentials,omitempty"`
 	Impl        string  `json:"impl"`
@@ -4595,6 +4679,7 @@ type UpdateArrInstanceRequest struct {
 
 // UpdateDownloaderRequest defines model for UpdateDownloaderRequest.
 type UpdateDownloaderRequest struct {
+	// BaseUrl Empty for a blackhole.
 	BaseUrl string `json:"base_url"`
 	Enabled *bool  `json:"enabled,omitempty"`
 	Impl    string `json:"impl"`
@@ -6505,6 +6590,9 @@ type ServerInterface interface {
 	// Connect a new download client. Administrator only.
 	// (POST /downloaders)
 	AddDownloader(w http.ResponseWriter, r *http.Request)
+	// Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
+	// (GET /downloaders/schema)
+	ListDownloaderKinds(w http.ResponseWriter, r *http.Request)
 	// Test a download client before it is added, and read its download folder. Administrator only.
 	// (POST /downloaders/test)
 	TestDownloaderConfig(w http.ResponseWriter, r *http.Request)
@@ -7558,6 +7646,12 @@ func (_ Unimplemented) ListDownloaders(w http.ResponseWriter, r *http.Request) {
 // Connect a new download client. Administrator only.
 // (POST /downloaders)
 func (_ Unimplemented) AddDownloader(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
+// (GET /downloaders/schema)
+func (_ Unimplemented) ListDownloaderKinds(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11044,6 +11138,28 @@ func (siw *ServerInterfaceWrapper) AddDownloader(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddDownloader(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDownloaderKinds operation middleware
+func (siw *ServerInterfaceWrapper) ListDownloaderKinds(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDownloaderKinds(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18510,6 +18626,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/downloaders", wrapper.AddDownloader)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/downloaders/schema", wrapper.ListDownloaderKinds)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/downloaders/test", wrapper.TestDownloaderConfig)

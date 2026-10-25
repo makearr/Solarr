@@ -61,6 +61,8 @@ type StatusError struct {
 	Status     int
 	Class      ResponseClass
 	RetryAfter time.Duration
+	// Header is the response's own: some APIs answer a handshake in a refusal (Transmission's 409 session id).
+	Header http.Header
 }
 
 func (e *StatusError) Error() string {

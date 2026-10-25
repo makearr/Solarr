@@ -2817,6 +2817,24 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /downloaders/schema:
+    get:
+      operationId: listDownloaderKinds
+      tags: [settings]
+      summary: Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
+      description: >-
+        What the add dialog offers: each kind's protocol, what it signs in with, and the settings it needs beyond
+        the shared ones. Every kind is optional; a client is only what the user adds.
+      responses:
+        "200":
+          description: Every kind, in the order the settings screen lists them.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DownloaderKind" }
+        "401": { $ref: "#/components/responses/Problem" }
+
   /downloaders/test:
     post:
       operationId: testDownloaderConfig
@@ -9208,6 +9226,36 @@ components:
           type: string
           description: Where a download client puts finished downloads, as it reports it.
 
+    DownloaderKind:
+      type: object
+      description: One kind of download client, as Sonarr's download client schema describes it.
+      required: [impl, label, protocol, has_address, user_name, keeps_completed, categories, fields]
+      properties:
+        impl: { type: string, description: 'The *Arr implementation name, lower case: "sabnzbd", "transmission", ...' }
+        label: { type: string }
+        protocol: { type: string, enum: [usenet, torrent, ddl] }
+        has_address: { type: boolean, description: False for a blackhole, which is two folders rather than an address. }
+        address_placeholder: { type: string }
+        user_name: { type: boolean, description: It signs in with a user name besides its secret; credentials are then "user:password". }
+        secret_label: { type: string, description: What its secret is called; absent for a kind that takes none. }
+        keeps_completed: { type: boolean, description: An imported download stays by default (a torrent seeds). }
+        categories: { type: boolean, description: It files downloads under a category or label. }
+        fields:
+          type: array
+          description: The settings it needs beyond the shared ones, each stored under options by its key.
+          items: { $ref: "#/components/schemas/DownloaderField" }
+
+    DownloaderField:
+      type: object
+      required: [key, kind, label, required]
+      properties:
+        key: { type: string, enum: [url_base, drop_folder, watch_folder, save_magnet_files] }
+        kind: { type: string, enum: [text, path, bool] }
+        label: { type: string }
+        help: { type: string }
+        placeholder: { type: string }
+        required: { type: boolean }
+
     Downloader:
       type: object
       required: [id, name, impl, base_url, enabled, protocol, credentials, created_at, updated_at]
@@ -9216,8 +9264,8 @@ components:
         name: { type: string }
         impl:
           type: string
-          description: '"sabnzbd" today (ADR-46).'
-        base_url: { type: string }
+          description: One of /downloaders/schema's kinds (ADR-46).
+        base_url: { type: string, description: Empty for a blackhole. }
         enabled: { type: boolean }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         credentials: { $ref: "#/components/schemas/SecretMask" }
@@ -9281,13 +9329,25 @@ components:
           description: "Torrent clients: minutes an imported torrent seeds before removal. 0 or absent is no time limit."
         stall_cleanup:
           $ref: "#/components/schemas/StallCleanup"
+        url_base:
+          type: string
+          description: The path of the client's API below its address (Transmission, Vuze, rTorrent, aria2); empty is its default.
+        drop_folder:
+          type: string
+          description: A blackhole's folder Solarr writes each .torrent or .nzb into, as Solarr sees it.
+        watch_folder:
+          type: string
+          description: A blackhole's folder the finished downloads appear in, as Solarr sees it.
+        save_magnet_files:
+          type: boolean
+          description: A torrent blackhole writes a magnet link to a .magnet file; off, such a release is refused.
 
     TestDownloaderRequest:
       type: object
       required: [impl, base_url]
       properties:
         impl: { type: string, minLength: 1 }
-        base_url: { type: string, minLength: 1 }
+        base_url: { type: string, description: Empty for a blackhole. }
         credentials: { type: string }
         options: { $ref: "#/components/schemas/DownloaderOptions" }
 
@@ -9297,7 +9357,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         impl: { type: string, minLength: 1 }
-        base_url: { type: string, minLength: 1 }
+        base_url: { type: string, description: Empty for a blackhole. }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         credentials: { type: string }
         enabled: { type: boolean, default: true }
@@ -9309,7 +9369,7 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         impl: { type: string, minLength: 1 }
-        base_url: { type: string, minLength: 1 }
+        base_url: { type: string, description: Empty for a blackhole. }
         protocol: { type: string, enum: [usenet, torrent, ddl] }
         enabled: { type: boolean, default: true }
         options: { $ref: "#/components/schemas/DownloaderOptions" }

@@ -2,6 +2,7 @@ package sabnzbd
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/download"
@@ -11,14 +12,39 @@ import (
 // finished since the last poll on any real setup.
 const historyLimit = 200
 
-// Downloader is SABnzbd behind download.Client.
+// Definition is SABnzbd as the settings screen offers it.
+func Definition() download.Definition {
+	return download.Definition{
+		Impl: "sabnzbd", Label: "SABnzbd", Protocol: download.ProtocolUsenet,
+		AddressPlaceholder: "http://sabnzbd:8080", SecretLabel: "API key", Categories: true,
+	}
+}
+
+// Downloader is SABnzbd's part of download.UsenetClient; download.NewUsenet supplies the rest.
 type Downloader struct{ Client Client }
 
-var _ download.Client = Downloader{}
+var _ download.UsenetClient = Downloader{}
 
-// Add sends one NZB by URL.
-func (d Downloader) Add(ctx context.Context, request download.AddRequest) (string, error) {
+// AddNZB uploads one NZB.
+func (d Downloader) AddNZB(ctx context.Context, request download.AddRequest) (string, error) {
 	return d.Client.AddFile(ctx, AddFileRequest{Name: request.Name, NZB: request.File, Category: request.Category})
+}
+
+// Probe proves the address (version) and the key (the download folder needs it).
+func (d Downloader) Probe(ctx context.Context) (download.Probe, error) {
+	version, err := d.Client.Version(ctx)
+	if err != nil {
+		return download.Probe{}, err
+	}
+	folder, err := d.Client.CompleteFolder(ctx)
+	if err != nil {
+		return download.Probe{}, err
+	}
+	probe := download.Probe{Version: fmt.Sprintf("SABnzbd %s", version), DownloadFolder: folder}
+	if categories, err := d.Client.Categories(ctx); err == nil {
+		probe.Categories = categories
+	}
+	return probe, nil
 }
 
 // Downloads answers the queue and the recent history in category.

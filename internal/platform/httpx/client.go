@@ -218,6 +218,7 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 		Status:     response.StatusCode,
 		Class:      class,
 		RetryAfter: retryAfter,
+		Header:     response.Header,
 	}
 }
 
