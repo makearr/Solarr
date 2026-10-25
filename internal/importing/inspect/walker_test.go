@@ -236,3 +236,34 @@ func TestWalker_OnlySeesTheFilesItIsGiven(t *testing.T) {
 		t.Errorf("units = %+v, want one album of the two files given", units)
 	}
 }
+
+// A download is untrusted: a symlink in it is never imported, so it cannot bring the file it points at into a library.
+func TestWalker_AndListFilesNeverImportASymlink(t *testing.T) {
+	tr := newTree(t, "Katupoken/KI Pecezinu/01 Sesoge.flac")
+	if err := tr.fsys.MkdirAll("/config", 0o755); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if file, err := tr.fsys.Create("/config/settings.db"); err != nil {
+		t.Fatalf("Create: %v", err)
+	} else {
+		_, _ = file.Write(make([]byte, 300*1024))
+		_ = file.Close()
+	}
+	for _, link := range []string{"Katupoken/KI Pecezinu/02 Vagelo.flac", "Katupoken/KI Pecezinu/album.nfo"} {
+		if err := tr.fsys.Symlink("/config/settings.db", root+"/"+link); err != nil {
+			t.Fatalf("Symlink: %v", err)
+		}
+	}
+
+	units, _ := walkAll(t, tr, inspect.WalkOptions{})
+	if len(units) != 1 || len(units[0].Media) != 1 || len(units[0].Other) != 0 {
+		t.Errorf("units = %+v, want one album of the one real file", units)
+	}
+	files, err := inspect.ListFiles(t.Context(), tr.fsys, root, 0)
+	if err != nil {
+		t.Fatalf("ListFiles: %v", err)
+	}
+	if len(files) != 1 || files[0].RelPath != "Katupoken/KI Pecezinu/01 Sesoge.flac" {
+		t.Errorf("ListFiles = %+v, want only the real file", files)
+	}
+}

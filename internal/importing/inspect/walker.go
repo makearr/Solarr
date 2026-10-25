@@ -180,12 +180,16 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		if w.opts.Only != nil && !w.opts.Only[childRelative] {
 			continue
 		}
-		info, err := w.fsys.Stat(path.Join(absolute, entry.Name))
+		// Never a symlink, as in walkDir: what it points at is not the download's to import.
+		info, err := w.fsys.Lstat(path.Join(absolute, entry.Name))
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				continue
 			}
 			return clusterFiles{}, fmt.Errorf("inspect: stat %q: %w", path.Join(absolute, entry.Name), err)
+		}
+		if info.Mode&fs.ModeSymlink != 0 {
+			continue
 		}
 		file := File{
 			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,

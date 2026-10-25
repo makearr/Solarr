@@ -3,6 +3,7 @@ package inspect
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"path"
 	"slices"
 	"strings"
@@ -55,9 +56,14 @@ func walkDir(ctx context.Context, fsys fsx.FS, root, relative string, sizeFloor 
 			}
 			continue
 		}
-		info, err := fsys.Stat(path.Join(absolute, entry.Name))
+		// Lstat, and a link skipped: a download is untrusted, and one carrying a symlink must not bring the file it
+		// points at (a database, a key) into the library (ADR-11: import never follows a symlink).
+		info, err := fsys.Lstat(path.Join(absolute, entry.Name))
 		if err != nil {
 			return fmt.Errorf("stat %q: %w", path.Join(absolute, entry.Name), err)
+		}
+		if info.Mode&fs.ModeSymlink != 0 {
+			continue
 		}
 		*files = append(*files, File{
 			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,
