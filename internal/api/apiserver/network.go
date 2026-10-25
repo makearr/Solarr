@@ -53,12 +53,19 @@ func (s *Server) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
 	view := s.networkSettingsView()
 	// A proxy's password is configuration only an administrator may read.
 	if access.Role() != settings.RoleAdmin && view.ProxyUrl != nil {
-		if parsed, err := url.Parse(*view.ProxyUrl); err == nil {
-			redacted := parsed.Redacted()
-			view.ProxyUrl = &redacted
-		}
+		view.ProxyUrl = redactedProxyURL(*view.ProxyUrl)
 	}
 	writeJSON(w, s.logger, http.StatusOK, view)
+}
+
+// redactedProxyURL hides a proxy URL's password; one that does not parse is withheld, since it cannot be redacted.
+func redactedProxyURL(raw string) *string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return nil
+	}
+	redacted := parsed.Redacted()
+	return &redacted
 }
 
 // UpdateNetworkSettings changes the port, egress proxy or IP allowlist.

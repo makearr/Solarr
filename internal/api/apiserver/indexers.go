@@ -20,7 +20,8 @@ import (
 // ListIndexers answers every configured indexer connection. api_key is
 // always masked -- settings.Indexer never carries the raw value at all.
 func (s *Server) ListIndexers(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -33,6 +34,10 @@ func (s *Server) ListIndexers(w http.ResponseWriter, r *http.Request) {
 	views := make([]gen.Indexer, len(indexers))
 	for index, indexer := range indexers {
 		views[index] = indexerView(indexer)
+		// A proxy's password is configuration only an administrator may read, as on the Network screen.
+		if access.Role() != settings.RoleAdmin && views[index].EgressProxyUrl != nil {
+			views[index].EgressProxyUrl = redactedProxyURL(*views[index].EgressProxyUrl)
+		}
 	}
 	writeJSON(w, s.logger, http.StatusOK, views)
 }

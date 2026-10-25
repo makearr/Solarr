@@ -94,6 +94,10 @@ func TestResolve(t *testing.T) {
 
 // The branch taken whenever an operator passes --user.
 func TestApply_LeavesAnUnprivilegedProcessAlone(t *testing.T) {
+	if syscall.Geteuid() == 0 {
+		// As root Apply takes the other branch and really drops the test process's privileges.
+		t.Skip("needs an unprivileged process")
+	}
 	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
 	if err := fsys.MkdirAll("/config", 0o755); err != nil {
 		t.Fatalf("MkdirAll: %v", err)

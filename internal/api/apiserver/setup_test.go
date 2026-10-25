@@ -556,3 +556,69 @@ func TestImportSettings_AOneKeySettingsBlockKeepsSignIn(t *testing.T) {
 		t.Errorf("auth %v confidence %v, want sign-in kept and 0.85", snapshot.AuthRequired(), snapshot.ImportAutoCommitConfidence())
 	}
 }
+
+// Two claims racing for a fresh install: exactly one becomes the administrator.
+func TestCreateFirstAdministrator_ConcurrentClaimsCreateOneAccount(t *testing.T) {
+	fixture := newSetupFixture(t, nil)
+
+	const claims = 8
+	codes := make(chan int, claims)
+	for index := range claims {
+		go func() {
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/setup/admin",
+				strings.NewReader(`{"username":"claimant`+string(rune('a'+index))+`","password":"correct horse battery"}`))
+			request.Header.Set("Content-Type", "application/json")
+			recorder := httptest.NewRecorder()
+			fixture.server.Handler().ServeHTTP(recorder, request)
+			codes <- recorder.Code
+		}()
+	}
+	created := 0
+	for range claims {
+		switch code := <-codes; code {
+		case http.StatusCreated:
+			created++
+		case http.StatusConflict:
+		default:
+			t.Errorf("a claim answered %d, want 201 or 409", code)
+		}
+	}
+	if created != 1 {
+		t.Errorf("%d claims succeeded, want 1", created)
+	}
+	if users := fixture.cache.Snapshot().Users(); len(users) != 1 {
+		t.Errorf("%d accounts exist, want 1", len(users))
+	}
+}
+
+// A browser on another site cannot act on the instance, even one that asks for no credential.
+func TestCrossOriginWritesAreRefused(t *testing.T) {
+	fixture := newSetupFixture(t, nil)
+
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/setup/admin",
+		strings.NewReader(`{"username":"attacker","password":"correct horse battery"}`))
+	request.Header.Set("Content-Type", "text/plain")
+	request.Header.Set("Sec-Fetch-Site", "cross-site")
+	request.Header.Set("Origin", "https://evil.example")
+	recorder := httptest.NewRecorder()
+	fixture.server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusForbidden {
+		t.Errorf("cross-site claim: status = %d, want 403", recorder.Code)
+	}
+	if users := fixture.cache.Snapshot().Users(); len(users) != 0 {
+		t.Errorf("%d accounts exist after a cross-site claim, want 0", len(users))
+	}
+
+	request = httptest.NewRequest(http.MethodPost, "/api/v1/setup/admin",
+		strings.NewReader(`{"username":"avs","password":"correct horse battery"}`))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("Sec-Fetch-Site", "same-origin")
+	recorder = httptest.NewRecorder()
+	fixture.server.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusCreated {
+		t.Errorf("same-origin claim: status = %d, want 201 (%s)", recorder.Code, recorder.Body)
+	}
+	if got := recorder.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+}

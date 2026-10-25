@@ -193,8 +193,9 @@ func (s *Subprocess) probeOne(ctx context.Context, path string) Probe {
 	bounded, cancel := context.WithTimeout(ctx, perFileTimeout)
 	defer cancel()
 
+	// A downloaded file is untrusted: a playlist-shaped one must not make the probe fetch a URL or open another file.
 	output, err := s.runner.Run(bounded, ffprobeBinary,
-		"-v", "error", "-print_format", "json", "-show_format", "-show_streams", path)
+		"-v", "error", "-protocol_whitelist", "file", "-print_format", "json", "-show_format", "-show_streams", path)
 	if err != nil {
 		return Probe{Path: path, Err: err}
 	}
@@ -363,7 +364,7 @@ func (s *Subprocess) EmbeddedPicture(ctx context.Context, path string) ([]byte, 
 	defer cancel()
 
 	output, err := s.runner.Run(bounded, ffmpegBinary,
-		"-v", "error", "-i", path, "-an", "-map", "0:v:0?", "-c:v", "copy", "-frames:v", "1",
+		"-v", "error", "-protocol_whitelist", "file", "-i", path, "-an", "-map", "0:v:0?", "-c:v", "copy", "-frames:v", "1",
 		"-f", "image2pipe", "pipe:1")
 	if err != nil {
 		// The optional map leaves no output stream at all for a file with no picture.

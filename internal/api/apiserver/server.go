@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -363,6 +364,10 @@ type Server struct {
 	// ready gates /ready independently of the checks themselves, so the answer
 	// is false while starting and false again the moment shutdown begins.
 	ready atomic.Bool
+
+	// claim serialises the unauthenticated first-run writes, so a request that found no account yet cannot act on
+	// that once another request has created one.
+	claim sync.Mutex
 }
 
 // New builds a server. It does not listen until Start.
@@ -471,7 +476,7 @@ func New(config Config) (*Server, error) {
 	}
 
 	router := chi.NewRouter()
-	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist)
+	router.Use(server.recoverPanic, server.logRequest, server.ipAllowlist, server.securityHeaders, server.crossOrigin)
 	// chi's defaults answer in plain text; section 13.1 says every error is problem+json with a
 	// stable slug, and "every" includes the ones a client reaches by mistake.
 	router.NotFound(server.handleNotFound)
@@ -857,6 +862,28 @@ func (s *Server) recoverPanic(next http.Handler) http.Handler {
 		}()
 		next.ServeHTTP(w, r)
 	})
+}
+
+// securityHeaders are the response headers every answer carries. No frame policy: an instance embedded in a
+// dashboard's frame is an ordinary deployment.
+func (s *Server) securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Referrer-Policy", "same-origin")
+		next.ServeHTTP(w, r)
+	})
+}
+
+// crossOrigin refuses a state-changing request a browser sent from another origin, so a page elsewhere cannot act
+// through a visitor's session, or on an instance that asks for no login at all. A client that is not a browser sends
+// neither Sec-Fetch-Site nor Origin and is not affected.
+func (s *Server) crossOrigin(next http.Handler) http.Handler {
+	protection := http.NewCrossOriginProtection()
+	protection.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		writeProblem(w, s.logger, http.StatusForbidden, TypeForbidden,
+			"Forbidden", "a request from another site was refused")
+	}))
+	return protection.Handler(next)
 }
 
 // logRequest records one line per request at debug, so an ordinary run is not

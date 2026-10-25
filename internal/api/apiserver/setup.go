@@ -70,10 +70,18 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	created, err := s.auth.Settings.CreateUser(r.Context(), s.auth.Clock,
+	s.claim.Lock()
+	defer s.claim.Unlock()
+	// Checked again in the transaction that writes the account: a concurrent second claim loses there, rather than
+	// becoming a second administrator nobody asked for.
+	created, err := s.auth.Settings.CreateFirstUser(r.Context(), s.auth.Clock,
 		username, hashed, settings.RoleAdmin)
+	if errors.Is(err, settings.ErrAlreadyClaimed) {
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict,
+			"Setup is closed", "an account already exists; sign in instead")
+		return
+	}
 	if err != nil {
-		// A concurrent second claim loses the race here.
 		writeError(w, s.logger, err)
 		return
 	}

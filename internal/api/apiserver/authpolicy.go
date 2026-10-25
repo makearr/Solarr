@@ -26,6 +26,10 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 	// Identified here rather than by middleware: the route is open so that the
 	// first-run wizard, where there is nobody to be an administrator, can reach
 	// it. Once an account exists the check is the same one everywhere else.
+	// Held to the end: an unclaimed instance's answer must not change under this request, or a request that found
+	// no account could switch authentication off, or set the password, of one created meanwhile.
+	s.claim.Lock()
+	defer s.claim.Unlock()
 	claimed := len(s.auth.Settings.Snapshot().Users()) > 0
 	if claimed {
 		user, err := s.identify(r)
@@ -91,7 +95,7 @@ func (s *Server) SetAuthPolicy(w http.ResponseWriter, r *http.Request) {
 	// name. Passwordless, which settings.db already models for an account that
 	// does not authenticate by password.
 	if !*request.AuthRequired && !claimed {
-		created, err := s.auth.Settings.CreateUser(r.Context(), s.auth.Clock,
+		created, err := s.auth.Settings.CreateFirstUser(r.Context(), s.auth.Clock,
 			OpenAccessUsername, "", settings.RoleAdmin)
 		if err != nil {
 			writeError(w, s.logger, err)

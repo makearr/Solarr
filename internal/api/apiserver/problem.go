@@ -86,6 +86,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		errors.Is(err, jobs.ErrNoFullMode):
 		writeProblem(w, logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 
+	case errors.Is(err, settings.ErrAlreadyClaimed):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Setup is closed", err.Error())
+
 	case errors.Is(err, settings.ErrInUse):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Still in use", err.Error())
 

@@ -198,3 +198,37 @@ func TestDeleteIndexer_MissingAnswers404(t *testing.T) {
 		t.Errorf("status = %d, want 404", recorder.Code)
 	}
 }
+
+// A proxy's password is configuration only an administrator may read; the indexer list is open to everyone signed in.
+func TestListIndexers_RedactsTheProxyPasswordForANonAdministrator(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	fixture.createUser(t, "viewer", settings.RoleReadonly)
+	if _, err := fixture.cache.CreateIndexer(t.Context(), settings.IndexerRequest{
+		Name: "NZBgeek", Impl: "newznab", BaseURL: "https://api.nzbgeek.info", Enabled: true,
+		EgressProxyURL: "socks5://user:hunter2@proxy.example:1080",
+	}, "", fixture.clock.Now().Unix()); err != nil {
+		t.Fatalf("CreateIndexer: %v", err)
+	}
+
+	proxyOf := func(username string) string {
+		t.Helper()
+		recorder := fixture.do(authedGet(t, fixture.signIn(t, username), "/api/v1/indexers"))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s: status = %d, body = %s", username, recorder.Code, recorder.Body)
+		}
+		var listed []struct {
+			EgressProxyURL string `json:"egress_proxy_url"`
+		}
+		if err := json.Unmarshal(recorder.Body.Bytes(), &listed); err != nil || len(listed) != 1 {
+			t.Fatalf("%s: decode %s: %v", username, recorder.Body, err)
+		}
+		return listed[0].EgressProxyURL
+	}
+	if got := proxyOf("viewer"); bytes.Contains([]byte(got), []byte("hunter2")) || got == "" {
+		t.Errorf("viewer sees proxy %q, want it without the password", got)
+	}
+	if got := proxyOf("admin"); got != "socks5://user:hunter2@proxy.example:1080" {
+		t.Errorf("admin sees proxy %q, want it whole", got)
+	}
+}

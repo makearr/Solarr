@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -109,6 +110,21 @@ func validateLimits(limits UserLimits) config.Problems {
 // CreateAccount adds an account with its limits and library grants. An administrator manages
 // every library whatever Access says, so the interface can never hide one from it.
 func (c *Cache) CreateAccount(ctx context.Context, cl clock.Clock, account NewAccount) (User, error) {
+	return c.createAccount(ctx, cl, account, false)
+}
+
+// ErrAlreadyClaimed reports a first account asked for once an account already exists.
+var ErrAlreadyClaimed = errors.New("settings: an account already exists")
+
+// CreateFirstUser creates an account only while none exists, checked in the same transaction that writes it, so two
+// concurrent claims of a fresh install cannot both succeed.
+func (c *Cache) CreateFirstUser(ctx context.Context, cl clock.Clock, username, passwordHash string, role Role) (User, error) {
+	return c.createAccount(ctx, cl, NewAccount{
+		Username: username, PasswordHash: passwordHash, Role: role, Limits: c.DefaultLimits(role),
+	}, true)
+}
+
+func (c *Cache) createAccount(ctx context.Context, cl clock.Clock, account NewAccount, first bool) (User, error) {
 	problems := validateLimits(account.Limits)
 	snapshot := c.Snapshot()
 	grants := make(map[int64]Permission, len(account.Access))
@@ -139,6 +155,15 @@ func (c *Cache) CreateAccount(ctx context.Context, cl clock.Clock, account NewAc
 
 	var created settingsdb.AppUser
 	err := c.write(ctx, func(ctx context.Context, queries *settingsdb.Queries) error {
+		if first {
+			existing, err := queries.ListUsers(ctx)
+			if err != nil {
+				return err
+			}
+			if len(existing) > 0 {
+				return ErrAlreadyClaimed
+			}
+		}
 		row, err := queries.CreateUser(ctx, settingsdb.CreateUserParams{
 			Username:             account.Username,
 			PasswordHash:         sql.NullString{String: account.PasswordHash, Valid: account.PasswordHash != ""},
