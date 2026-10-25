@@ -142,6 +142,17 @@ func (c Client) RemoveTransfer(ctx context.Context, username, id string) error {
 	return c.call(ctx, http.MethodDelete, "/transfers/downloads/"+url.PathEscape(username)+"/"+url.PathEscape(id)+"?remove=true", nil, nil)
 }
 
+// DeleteFile deletes one file below the downloads directory, named relative to it; one already gone is not an error.
+func (c Client) DeleteFile(ctx context.Context, relative string) error {
+	encoded := base64.URLEncoding.EncodeToString([]byte(relative))
+	err := c.call(ctx, http.MethodDelete, "/files/downloads/files/"+encoded, nil, nil)
+	var status *httpx.StatusError
+	if errors.As(err, &status) && status.Status == http.StatusNotFound {
+		return nil
+	}
+	return err
+}
+
 // DeleteDirectory deletes one folder below the downloads directory, named relative to it; one already gone is not an
 // error.
 func (c Client) DeleteDirectory(ctx context.Context, relative string) error {

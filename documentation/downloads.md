@@ -14,7 +14,7 @@ came from (`definition`), so the list marks it as already added.
 | Prowlarr's Newznab presets | abNZB, altHUB, DOGnzb, DrunkenSlug, GingaDADDY, Miatrix, Newz-Complex, NinjaCentral, Nzb.su, NZBCat, NZBFinder, NZBgeek, NZBNDX, NzbPlanet, NZBStars, OZnzb, SimplyNZBs, SpotNZB, Tabula Rasa, Usenet Crawler | API key |
 | Public torrent | AnimeTosho (usenet and torrent feeds), The Pirate Bay (apibay), Nyaa, YTS, Knaben, Internet Archive, SubsPlease | nothing |
 | Private torrent | Redacted, Orpheus (Gazelle, music), FileList, HDBits, PassThePopcorn, BeyondHD, BroadcasTheNet | API key, or user name and passkey |
-| Soulseek | slskd's search | slskd API key |
+| Soulseek | slskd's search: music, films, TV, anime and books | slskd API key |
 
 Each is Prowlarr's native implementation of the site's own API, on `indexer.Base`
 (`internal/acquiring/indexer/base.go`): bounded requests, fetching a result's file with the indexer's headers,
@@ -23,9 +23,14 @@ Newznab categories and kept to the ones a search asks for, so a movie tracker an
 Prowlarr's scraped sites (its Cardigann definitions) are not ported: ADR-43 keeps Solarr to documented APIs; add them
 through Prowlarr or Jackett as Torznab. A private site's test makes its cheapest signed-in call, so it proves the key.
 
-**Soulseek** searches through slskd (`internal/acquiring/indexer/soulseek`): a search is started, awaited for 12 seconds
-and read, and each peer's folder holding audio becomes one release, named "Artist - Album [FLAC]" from its folders.
-Its link carries the folder's files as a direct release, which slskd as a download client fetches. Searching needs
+**Soulseek** searches through slskd (`internal/acquiring/indexer/soulseek`) for every media type: a search is started,
+awaited for 12 seconds and read. A peer's folder holding audio is one release, named "Artist - Album [FLAC]" from its
+folders (an .m4b one is an audiobook). Video and books are releases too: a folder of them named for what was searched
+(a season, a film with its extras) is one release, and any other film, episode or book is one of its own with the
+files that share its name (its subtitles). A name with an episode or season in it is filed as TV; other video as both
+films and TV, since an anime episode's name often looks like a film's. Soulseek has no feed of what is new, so RSS
+sync asks it nothing. A release's link carries its files as a direct release, which slskd as a download client fetches;
+slskd follows a whole folder by the folder, and one file by its name. Searching needs
 slskd as an indexer and downloading needs it as a download client; each offers the other, at the same address with
 the same key, and neither is added unless the person asks: a tick when adding either, or the offer on its row
 (`POST /indexers/{id}/companion`, `POST /downloaders/{id}/companion`), which "Not now" hides.

@@ -70,6 +70,9 @@ type Download struct {
 	SeedingSeconds int64
 	// SpeedBytesPerSec is how fast it is downloading now; zero where the client does not say.
 	SpeedBytesPerSec int64
+	// Part is an entry for one file of a download the client also reports whole, so a release of that file alone
+	// can be followed; queue totals leave it out.
+	Part bool
 }
 
 // AddRequest is one release sent to a client: the file Solarr fetched from the indexer, named.

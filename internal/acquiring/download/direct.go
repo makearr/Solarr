@@ -13,6 +13,9 @@ type DirectRelease struct {
 	// Source is the peer: a Soulseek user name.
 	Source string       `json:"source"`
 	Files  []DirectFile `json:"files"`
+	// WholeFolder is a release of everything in its folder (an album, a season); otherwise it is the first file and
+	// what belongs with it (a film and its subtitles), from a folder that holds other things too.
+	WholeFolder bool `json:"whole_folder,omitempty"`
 }
 
 // DirectFile is one file of a direct release, by the peer's own path.

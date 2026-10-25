@@ -71,6 +71,9 @@ func (b torrentBase) QueueStatus(ctx context.Context) (QueueStatus, error) {
 func queueTotals(downloads []Download) QueueStatus {
 	var status QueueStatus
 	for _, one := range downloads {
+		if one.Part {
+			continue
+		}
 		status.SpeedBytesPerSec += one.SpeedBytesPerSec
 		if one.SizeLeftBytes > 0 && one.State != StateFailed && one.State != StateCompleted {
 			status.Items++

@@ -25,7 +25,7 @@ func driver(t *testing.T, server *clienttest.Server) download.Driver {
 	return download.NewDirect(slskd.Downloader{Client: slskd.NewClient(httpClient(t, server), "http://slskd:5030", "key")})
 }
 
-const release = `{"source":"peer one","files":[{"path":"@@music\\Heka\\Zanuvode\\01.flac","size":10},{"path":"@@music\\Heka\\Zanuvode\\02.flac","size":20}]}`
+const release = `{"source":"peer one","whole_folder":true,"files":[{"path":"@@music\\Heka\\Zanuvode\\01.flac","size":10},{"path":"@@music\\Heka\\Zanuvode\\02.flac","size":20}]}`
 
 func TestDownloader_AddAsksThePeerForTheFolder(t *testing.T) {
 	server := &clienttest.Server{Routes: map[string]clienttest.Route{"POST /api/v0/transfers/downloads/peer one": {Status: http.StatusCreated}}}
@@ -41,26 +41,80 @@ func TestDownloader_AddAsksThePeerForTheFolder(t *testing.T) {
 	}
 }
 
-func TestDownloader_DownloadsIsOnePerFolder(t *testing.T) {
+func TestDownloader_DownloadsIsOnePerFolderWithAPartPerFile(t *testing.T) {
 	server := &clienttest.Server{Routes: map[string]clienttest.Route{
 		"/api/v0/options": {Body: `{"directories":{"downloads":"/app/downloads"}}`},
 		"/api/v0/transfers/downloads": {Body: `[{"username":"peer","directories":[
-		 {"directory":"@@music\\A\\Done","files":[{"id":"1","state":"Completed, Succeeded","size":10},{"id":"2","state":"Completed, Succeeded","size":5}]},
-		 {"directory":"@@music\\A\\Going","files":[{"id":"3","state":"InProgress","size":10,"bytesRemaining":4,"averageSpeed":8},{"id":"4","state":"Queued, Remotely","size":10,"bytesRemaining":10}]},
-		 {"directory":"@@music\\A\\Bad","files":[{"id":"5","state":"Completed, Rejected","size":10,"bytesRemaining":10,"exception":"File not shared."}]}]}]`},
+		 {"directory":"@@music\\A\\Done","files":[{"id":"1","filename":"@@music\\A\\Done\\01.flac","state":"Completed, Succeeded","size":10},
+		  {"id":"2","filename":"@@music\\A\\Done\\02.flac","state":"Completed, Succeeded","size":5}]},
+		 {"directory":"@@video\\Films","files":[{"id":"3","filename":"@@video\\Films\\Film.2001.mkv","state":"Completed, Succeeded","size":100},
+		  {"id":"4","filename":"@@video\\Films\\Film.2001.en.srt","state":"InProgress","size":2,"bytesRemaining":1,"averageSpeed":8},
+		  {"id":"5","filename":"@@video\\Films\\Other.mkv","state":"Completed, Succeeded","size":50}]},
+		 {"directory":"@@music\\A\\Bad","files":[{"id":"6","filename":"@@music\\A\\Bad\\x.flac","state":"Completed, Rejected","size":10,"bytesRemaining":10,"exception":"File not shared."}]}]}]`},
 	}}
 	got, err := driver(t, server).Downloads(t.Context(), "")
 	if err != nil {
 		t.Fatalf("Downloads: %v", err)
 	}
+	var wholes []download.Download
+	parts := map[string]download.Download{}
+	for _, one := range got {
+		if one.Part {
+			parts[one.ClientRef] = one
+		} else {
+			wholes = append(wholes, one)
+		}
+	}
 	want := []download.Download{
 		{ClientRef: `peer|@@music\A\Done`, Name: "Done", State: download.StateCompleted, SizeBytes: 15, Path: "/app/downloads/Done"},
-		{ClientRef: `peer|@@music\A\Going`, Name: "Going", State: download.StateDownloading, SizeBytes: 20, SizeLeftBytes: 14, SpeedBytesPerSec: 8},
+		{ClientRef: `peer|@@video\Films`, Name: "Films", State: download.StateDownloading, SizeBytes: 152, SizeLeftBytes: 1, SpeedBytesPerSec: 8},
 		{ClientRef: `peer|@@music\A\Bad`, Name: "Bad", State: download.StateFailed, SizeBytes: 10, SizeLeftBytes: 10,
 			Error: "slskd reports Completed, Rejected: File not shared."},
 	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("Downloads =\n%+v\nwant\n%+v", got, want)
+	if !reflect.DeepEqual(wholes, want) {
+		t.Errorf("folders =\n%+v\nwant\n%+v", wholes, want)
+	}
+	// The film waits for its subtitles; the other film in the folder is done on its own.
+	film, other := parts[`peer|@@video\Films|Film.2001.mkv`], parts[`peer|@@video\Films|Other.mkv`]
+	if film.State != download.StateDownloading || film.SizeBytes != 102 || other.State != download.StateCompleted ||
+		other.Path != "/app/downloads/Films/Other.mkv" {
+		t.Errorf("parts: film %+v, other %+v", film, other)
+	}
+	status, err := driver(t, server).QueueStatus(t.Context())
+	if err != nil || status.Items != 1 || status.SizeLeftBytes != 1 {
+		t.Errorf("QueueStatus = %+v, %v; want the folder counted once, its parts not", status, err)
+	}
+}
+
+// A release of one file is followed, and removed, by that file and what shares its name.
+func TestDownloader_AFileReleaseIsItsOwnDownload(t *testing.T) {
+	server := &clienttest.Server{Routes: map[string]clienttest.Route{
+		"POST /api/v0/transfers/downloads/peer": {Status: http.StatusCreated},
+		"/api/v0/transfers/downloads": {Body: `[{"username":"peer","directories":[{"directory":"@@video\\Films","files":[
+		 {"id":"3","filename":"@@video\\Films\\Film.2001.mkv"},{"id":"4","filename":"@@video\\Films\\Film.2001.en.srt"},
+		 {"id":"5","filename":"@@video\\Films\\Other.mkv"}]}]}]`},
+		"DELETE /api/v0/transfers/downloads/peer/3": {}, "DELETE /api/v0/transfers/downloads/peer/4": {},
+		"DELETE /api/v0/files/downloads/files/RmlsbXMvRmlsbS4yMDAxLm1rdg==":     {},
+		"DELETE /api/v0/files/downloads/files/RmlsbXMvRmlsbS4yMDAxLmVuLnNydA==": {},
+	}}
+	release := `{"source":"peer","files":[{"path":"@@video\\Films\\Film.2001.mkv","size":100},{"path":"@@video\\Films\\Film.2001.en.srt","size":2}]}`
+	ref, err := driver(t, server).Add(t.Context(), download.AddRequest{File: []byte(release)})
+	if err != nil || ref != `peer|@@video\Films|Film.2001.mkv` {
+		t.Fatalf("Add = %q, %v", ref, err)
+	}
+	if err := driver(t, server).Remove(t.Context(), ref, true); err != nil {
+		t.Fatalf("Remove: %v", err)
+	}
+	var deleted []string
+	for _, seen := range server.Seen {
+		if seen.Method == http.MethodDelete {
+			deleted = append(deleted, seen.Path)
+		}
+	}
+	want := []string{"/api/v0/transfers/downloads/peer/3", "/api/v0/transfers/downloads/peer/4",
+		"/api/v0/files/downloads/files/RmlsbXMvRmlsbS4yMDAxLm1rdg==", "/api/v0/files/downloads/files/RmlsbXMvRmlsbS4yMDAxLmVuLnNydA=="}
+	if !reflect.DeepEqual(deleted, want) {
+		t.Errorf("deleted = %v, want %v (the other film untouched)", deleted, want)
 	}
 }
 

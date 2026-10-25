@@ -65,16 +65,75 @@ func TestSearch_IsOneReleasePerPeerFolderWithAudio(t *testing.T) {
 	}
 }
 
-func TestSearch_AnswersNothingForAFeedOrAnotherMediaType(t *testing.T) {
+func TestSearch_AnswersNothingForAFeed(t *testing.T) {
 	server := &clienttest.Server{}
 	searcher := soulseek.New(httpClient(t, server), clock.NewFakeAtEpoch(), "http://slskd:5030", "key")
-	for _, request := range []indexer.SearchRequest{{}, {Query: "Show S01", Categories: []int{5000}}} {
-		if got, err := searcher.Search(t.Context(), request); err != nil || got != nil {
-			t.Errorf("%+v = %+v, %v", request, got, err)
-		}
+	if got, err := searcher.Search(t.Context(), indexer.SearchRequest{Categories: []int{5000}}); err != nil || got != nil || len(server.Seen) != 0 {
+		t.Errorf("a feed = %+v, %v, after %d requests", got, err, len(server.Seen))
 	}
-	if len(server.Seen) != 0 {
-		t.Errorf("slskd was asked %d times", len(server.Seen))
+}
+
+const videoResponses = `[{"username":"peer","files":[
+ {"filename":"@@v\\Films\\Heka.Zanuvode.2001.1080p.BluRay.x264.mkv","size":800},
+ {"filename":"@@v\\Films\\Heka.Zanuvode.2001.1080p.BluRay.x264.en.srt","size":1},
+ {"filename":"@@v\\Films\\Other.Film.1999.mkv","size":700},
+ {"filename":"@@v\\Heka Show S01 1080p\\Heka.Show.S01E01.mkv","size":100},
+ {"filename":"@@v\\Heka Show S01 1080p\\Heka.Show.S01E02.mkv","size":100},
+ {"filename":"@@v\\Unsorted\\Heka Show S02E05 720p.mp4","size":50},
+ {"filename":"@@b\\Books\\Heka - Zanuvode.epub","size":2},
+ {"filename":"@@b\\Books\\notes.txt","size":1}]}]`
+
+// Soulseek answers every media type: a season folder named for the search is one release, a film in a folder of
+// films is one with its subtitles, and a book is filed as a book.
+func TestReleases_AreEveryMediaType(t *testing.T) {
+	var responses []json.RawMessage
+	_ = json.Unmarshal([]byte(videoResponses), &responses)
+	server := &clienttest.Server{}
+	server.Answer = func(request clienttest.Request) (clienttest.Route, bool) {
+		if strings.HasSuffix(request.Path, "/responses") {
+			return clienttest.Route{Body: videoResponses}, true
+		}
+		return clienttest.Route{Body: `{"id":"x","isComplete":true}`}, true
+	}
+	searcher := soulseek.New(httpClient(t, server), clock.NewFakeAtEpoch(), "http://slskd:5030", "key")
+	search := func(query string, categories ...int) map[string][]int {
+		got, err := searcher.Search(t.Context(), indexer.SearchRequest{Query: query, Categories: categories})
+		if err != nil {
+			t.Fatalf("Search %q: %v", query, err)
+		}
+		titles := map[string][]int{}
+		for _, item := range got {
+			titles[item.Title] = item.Categories
+		}
+		return titles
+	}
+
+	tv := search("Heka Show S01", 5000)
+	if _, found := tv["Heka Show S01 1080p"]; !found || len(tv) != 4 {
+		t.Errorf("a TV search = %v; want the season folder whole, the loose episode and both films (they could be anime)", tv)
+	}
+	if categories := tv["Heka Show S02E05 720p"]; len(categories) != 1 || categories[0] != 5000 {
+		t.Errorf("the episode's categories = %v, want TV alone", categories)
+	}
+	movies := search("Heka Zanuvode 2001", 2000)
+	if _, found := movies["Heka.Zanuvode.2001.1080p.BluRay.x264"]; !found || len(movies) != 2 {
+		t.Errorf("a film search = %v; want the two films, no episodes", movies)
+	}
+	books := search("Heka Zanuvode", 7000)
+	if categories, found := books["Heka - Zanuvode"]; !found || len(books) != 1 || categories[0] != 7000 {
+		t.Errorf("a book search = %v", books)
+	}
+
+	got, _ := searcher.Search(t.Context(), indexer.SearchRequest{Query: "Heka Zanuvode 2001", Categories: []int{2000}})
+	for _, item := range got {
+		if item.Title != "Heka.Zanuvode.2001.1080p.BluRay.x264" {
+			continue
+		}
+		file, _ := searcher.Fetch(t.Context(), item.Link)
+		release, err := download.ParseDirectRelease(file)
+		if err != nil || release.WholeFolder || len(release.Files) != 2 {
+			t.Errorf("the film's release = %+v, %v; want it and its subtitles, not the whole folder", release, err)
+		}
 	}
 }
 
