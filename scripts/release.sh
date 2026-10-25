@@ -31,6 +31,8 @@ title="${new_version}"
 range=""; [ -n "$prev_tag" ] && range="${prev_tag}..HEAD"
 subjects=$(git log $range --no-merges --pretty=format:'- %s' 2>/dev/null || true)
 [ -z "$subjects" ] && subjects="- No source changes since ${prev_tag:-the initial commit}"
+# Hand-written notes replace the commit list, for a release whose range is too long to read.
+[ -n "${RELEASE_NOTES:-}" ] && { subjects=$(cat "$RELEASE_NOTES") || die "cannot read $RELEASE_NOTES"; }
 
 entry="## ${new_version} — $(date -u +%Y-%m-%d)
 

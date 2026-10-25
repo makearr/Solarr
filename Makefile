@@ -195,7 +195,7 @@ web-dev:    ## Vite dev server on :5173, proxying the API
 version:    ## Print the current version (and milestone, if named)
 	@echo "$(VERSION)$(if $(MILESTONE), -- $(MILESTONE),)"
 
-image:      ## Release (user's word only): secrets scan, multi-arch, push ghcr + Docker Hub, bump, changelog, tag, release
+image:      ## Release (user's word only): secrets scan, multi-arch, ghcr + Docker Hub, changelog, tag. [RELEASE_NOTES=file]
 	@test -f Dockerfile || { echo "no Dockerfile yet"; exit 1; }
 	@test -n "$(HAS_BUILDX)" || { \
 	  echo "docker buildx is not installed, and a release must be multi-arch."; \
@@ -220,7 +220,7 @@ image:      ## Release (user's word only): secrets scan, multi-arch, push ghcr +
 	docker buildx build --builder $(BUILDER) --push --platform $(PLATFORMS) $(RELEASE_ARGS) \
 	  -t $(IMAGE):$(NEXT_VERSION) -t $(IMAGE):latest \
 	  -t $(HUB_IMAGE):$(NEXT_VERSION) -t $(HUB_IMAGE):latest .
-	@NEXT_VERSION=$(NEXT_VERSION) MILESTONE="$(MILESTONE)" ./scripts/release.sh
+	@NEXT_VERSION=$(NEXT_VERSION) MILESTONE="$(MILESTONE)" RELEASE_NOTES="$(RELEASE_NOTES)" ./scripts/release.sh
 
 scan-image: ## Scan a local image for private keys: make scan-image [REF=ghcr.io/makearr/solarr:dev]
 	@./scripts/scan-image-secrets.sh $(or $(REF),$(IMAGE):dev)
