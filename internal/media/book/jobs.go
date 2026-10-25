@@ -2,8 +2,6 @@ package book
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 	"slices"
 	"time"
@@ -12,9 +10,9 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/picturesweep"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/platform/clock"
-	"github.com/makearr/Solarr/internal/platform/parallel"
 )
 
 const (
@@ -23,8 +21,7 @@ const (
 	activeRefresh  = 7 * 24 * time.Hour
 	settledRefresh = 90 * 24 * time.Hour
 	// refreshPerRun bounds one sweep so a large library is spread over the day's runs.
-	refreshPerRun  = 60
-	refreshWorkers = 4
+	refreshPerRun = 60
 )
 
 // RefreshJobType is the registered type of the format's refresh sweep.
@@ -40,54 +37,23 @@ func (f Format) EnqueueRefresh(ctx context.Context, queue *jobs.Queue) (jobs.Enq
 	return queue.Enqueue(ctx, jobs.Request{Type: f.RefreshJobType(), ActionKey: string(f.RefreshJobType()), Priority: jobs.PriorityLow, Payload: []byte("{}")})
 }
 
-// RefreshJob re-reads the books that are due, so new covers, descriptions and series places reach the library.
-type RefreshJob struct {
-	Reader  library.SeriesReader
-	Service Service
-	Clock   clock.Clock
-	Logger  *slog.Logger
-}
-
-// Run refreshes the due books, refreshWorkers at a time; one failing never stops the rest.
-func (j RefreshJob) Run(ctx context.Context, _ jobs.Job) error {
-	format := j.Service.Format
-	logger := j.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	due, err := j.Reader.DueForRefreshOf(ctx, format.MediaType, string(StatusPublished), j.Clock.Now(), activeRefresh, settledRefresh, refreshPerRun)
-	if err != nil {
-		return fmt.Errorf("book: refresh sweep: %w", err)
-	}
-	j.Service.WarmWikidata(ctx, due)
-	outcomes := parallel.Do(ctx, len(due), refreshWorkers, func(ctx context.Context, index int) error {
-		if err := ctx.Err(); err != nil {
+// NewRefreshJob is the shared refresh sweep over the format's books that are due, so new covers, descriptions and
+// series places reach the library.
+func (f Format) NewRefreshJob(reader library.SeriesReader, service Service, clock clock.Clock, logger *slog.Logger) works.RefreshJob {
+	return works.RefreshJob{
+		Name: f.MediaType, JobType: f.RefreshJobType(), NoSource: ErrNoSource, Clock: clock, Logger: logger,
+		Due: func(ctx context.Context) ([]library.RefreshCandidate, error) {
+			return reader.DueForRefreshOf(ctx, f.MediaType, string(StatusPublished), clock.Now(), activeRefresh, settledRefresh, refreshPerRun)
+		},
+		Warm: service.WarmWikidata,
+		Refresh: func(ctx context.Context, candidate library.RefreshCandidate) error {
+			_, err := service.Refresh(ctx, candidate.CategoryID, candidate.WorkID)
 			return err
-		}
-		_, err := j.Service.Refresh(ctx, due[index].CategoryID, due[index].WorkID)
-		if err != nil {
-			_ = j.Service.Series.MarkRefreshAttempt(ctx, j.Clock.Now(), due[index].WorkID)
-		}
-		return err
-	})
-	if err := ctx.Err(); err != nil {
-		return jobs.Retryablef("book.refresh.context", string(format.RefreshJobType()), err)
+		},
+		MarkAttempt: func(ctx context.Context, workID int64) error {
+			return service.Series.MarkRefreshAttempt(ctx, clock.Now(), workID)
+		},
 	}
-	refreshed, failed := 0, 0
-	for index, err := range outcomes {
-		switch {
-		case err == nil:
-			refreshed++
-		case errors.Is(err, ErrNoSource):
-			failed++
-			logger.WarnContext(ctx, "book refresh: no provider answered", slog.Int64("work_id", due[index].WorkID))
-		default:
-			failed++
-			logger.WarnContext(ctx, "book refresh failed", slog.Int64("work_id", due[index].WorkID), slog.Any("error", err))
-		}
-	}
-	logger.Info("book refresh sweep finished", slog.String("media_type", format.MediaType), slog.Int("refreshed", refreshed), slog.Int("failed", failed))
-	return nil
 }
 
 // ArtworkJobType is the registered type of the sweep that keeps a library's covers and author photos at hand.

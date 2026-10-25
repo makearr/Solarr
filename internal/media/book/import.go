@@ -26,12 +26,6 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
-// Item states the cutoff check and the search move a book between.
-const (
-	ItemStateUpgradable = "UPGRADABLE"
-	ItemStateComplete   = "COMPLETE"
-)
-
 // GuessFloor is the least confidence a held folder's guessed book is placed at by "Commit anyway".
 const GuessFloor = 0.75
 

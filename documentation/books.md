@@ -3,8 +3,10 @@
 Two media types, `book` and `audiobook`, over one module, `internal/media/book`, as Readarr ran one code base for
 both. What differs is a `Format` (`format.go`): the media type and its words, the files a library holds, whether a book
 is one file or a folder of chapters, the Newznab categories, the default provider order and the size floor. Everything
-else is shared, and both types reuse the general parts every work without parts uses: `library.Series` for storage
-(movies do the same), `judge` for search, `placer` for import, `renamejob` for renames, `picturesweep` for covers.
+else is shared. Search, grab, RSS, the cutoff check, adding, placing files from Review and the refresh sweep are the
+central implementation in `internal/media/works`, which TV and movies use too; the book module supplies only its
+specialisation of each (`bookSpec`, `catalogSource`, the feed's matcher, its files for the cutoff). Storage is
+`library.Series`, import `placer`, renames `renamejob`, covers `picturesweep`, as for movies.
 
 | | Books | Audiobooks |
 |---|---|---|

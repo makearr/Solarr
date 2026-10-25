@@ -7,6 +7,7 @@ import (
 	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/naming"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
 	"github.com/makearr/Solarr/internal/scanning/scan"
@@ -31,8 +32,8 @@ type Module struct {
 	Feed
 	// CutoffJob is the format's part of the cutoff check.
 	CutoffJob
-	// Searching is the format's part of a search a person asks for.
-	Searching
+	// Searching is the format's part of a search a person asks for (Format.NewSearching).
+	works.Searching
 	// Files places a library file nothing identified; nil leaves such files to wait.
 	Files media.PlacingFiles
 	// Service applies a monitor option to a book a library holds.

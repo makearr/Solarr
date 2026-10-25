@@ -11,13 +11,14 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 // feedMovieCategory is Newznab's Movies, for an indexer with no categories set.
 const feedMovieCategory = 2000
 
-// Feed is the movie module's part of the RSS sync: a feed's releases are matched to the library's movies by the title
-// and year they name and offered to the ones that are wanted. Every field but Logger is required.
+// Feed is the movie module's part of the RSS sync, the shared one with movies matched by the title and year a
+// release names. Every field but Logger is required.
 type Feed struct {
 	Grab     Grab
 	Reader   library.SeriesReader
@@ -27,51 +28,51 @@ type Feed struct {
 	Logger    *slog.Logger
 }
 
+func (f Feed) shared() works.Feed {
+	return works.Feed{
+		Grab: f.Grab, Indexers: f.Indexers, Name: MediaType, Logger: f.Logger,
+		Request: indexer.SearchRequest{Function: "movie", Categories: []int{feedMovieCategory}},
+		Matcher: func(ctx context.Context) (works.Matcher, error) {
+			held, err := f.heldByTitle(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return func(raw indexer.RawItem, _ time.Time) []int64 {
+				info, ok := parsemovie.Parse(raw.Title)
+				if !ok || info.Year == 0 {
+					return nil
+				}
+				return namedMovies(held, info)
+			}, nil
+		},
+		Wanted: f.wanted,
+	}
+}
+
 // FeedIndexers implements rss.Feed.
-func (f Feed) FeedIndexers(ctx context.Context) ([]judge.Conn, error) { return f.Indexers(ctx) }
+func (f Feed) FeedIndexers(ctx context.Context) ([]judge.Conn, error) {
+	return f.shared().FeedIndexers(ctx)
+}
 
 // FeedRequest implements rss.Feed.
-func (Feed) FeedRequest() indexer.SearchRequest {
-	return indexer.SearchRequest{Function: "movie", Categories: []int{feedMovieCategory}}
-}
+func (f Feed) FeedRequest() indexer.SearchRequest { return f.shared().FeedRequest() }
 
 // OfferFeed implements rss.Feed.
 func (f Feed) OfferFeed(ctx context.Context, conn judge.Conn, raws []indexer.RawItem, at time.Time) rss.Tally {
-	var tally rss.Tally
-	if len(raws) == 0 {
-		return tally
-	}
-	held, err := f.heldByTitle(ctx)
+	return f.shared().OfferFeed(ctx, conn, raws, at)
+}
+
+// wanted is the movies' wanted items, as the shared feed offers them releases.
+func (f Feed) wanted(ctx context.Context, workIDs []int64, at time.Time) ([]works.WantedItem, error) {
+	items, err := f.Reader.WantedItemsOf(ctx, workIDs, at)
 	if err != nil {
-		f.logger().Warn("rss sync: movie titles", "error", err)
-		return tally
+		return nil, err
 	}
-	byWork := map[int64][]indexer.RawItem{}
-	var order []int64
-	for _, raw := range raws {
-		info, ok := parsemovie.Parse(raw.Title)
-		if !ok || info.Year == 0 {
-			continue
-		}
-		for _, workID := range namedMovies(held, info) {
-			if _, seen := byWork[workID]; !seen {
-				order = append(order, workID)
-			}
-			byWork[workID] = append(byWork[workID], raw)
-		}
+	out := make([]works.WantedItem, len(items))
+	for index, item := range items {
+		out[index] = works.WantedItem{ID: item.ID, WorkID: item.WorkID}
 	}
-	if len(order) == 0 {
-		return tally
-	}
-	items, err := f.Reader.WantedItemsOf(ctx, order, at)
-	if err != nil {
-		f.logger().Warn("rss sync: wanted movies", "error", err)
-		return tally
-	}
-	for _, item := range items {
-		f.offer(ctx, conn, item.ID, byWork[item.WorkID], at, &tally)
-	}
-	return tally
+	return out, nil
 }
 
 // heldTitle is one name a held movie answers to, with its year.
@@ -112,33 +113,4 @@ func namedMovies(held map[string][]heldTitle, info parsemovie.Info) []int64 {
 		}
 	}
 	return works
-}
-
-func (f Feed) offer(ctx context.Context, conn judge.Conn, itemID int64, raws []indexer.RawItem, at time.Time, tally *rss.Tally) {
-	result, err := f.Grab.JudgeFeedAndSend(ctx, itemID, conn, raws, at)
-	switch {
-	case result.AlreadyInFlight:
-		return
-	case err != nil:
-		f.logger().Warn("rss sync: judging failed", "item_id", itemID, "error", err)
-		return
-	}
-	if len(result.Search.Decisions) == 0 {
-		return
-	}
-	tally.Judged++
-	if result.Sent != nil {
-		tally.Sent++
-		f.logger().Info("rss sync: release sent", "item_id", itemID, "release", result.Sent.CandidateTitle)
-	}
-	if result.Held {
-		tally.Held++
-	}
-}
-
-func (f Feed) logger() *slog.Logger {
-	if f.Logger == nil {
-		return slog.Default()
-	}
-	return f.Logger
 }

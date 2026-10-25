@@ -2,8 +2,6 @@ package book
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"path"
 	"slices"
 	"time"
@@ -14,20 +12,18 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
-	"github.com/makearr/Solarr/internal/identify/model"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
-	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // ErrNotSearchable reports an item the book search does not handle: not the one wanted item of a book.
-var ErrNotSearchable = errors.New("book: search: only a book's own item is searched")
+var ErrNotSearchable = works.ErrNotSearchable
 
-// upgradeMinFileAge keeps a file that has just arrived from being replaced at once.
-const upgradeMinFileAge = 24 * time.Hour
-
-// Search is the book candidate pipeline over one wanted item at a time.
+// Search is the book specialisation of the shared candidate pipeline (works.Search): what a book wants, Readarr's
+// queries by author and title, and whether a release is the book in the format's files.
 type Search struct {
 	Format     Format
 	Desired    library.Desired
@@ -45,6 +41,28 @@ type Search struct {
 	IndexerDeadline time.Duration
 }
 
+func (s Search) shared() works.Search[wanted] {
+	return works.Search[wanted]{
+		Name: s.Format.MediaType, Spec: bookSpec{s}, Desired: s.Desired, Candidates: s.Candidates, Settings: s.Settings, Clock: s.Clock,
+		Blocklist: s.Blocklist, Sightings: s.Sightings, ReleaseFilters: s.ReleaseFilters, IndexerDeadline: s.IndexerDeadline,
+	}
+}
+
+// SearchItem searches one book's item.
+func (s Search) SearchItem(ctx context.Context, itemID int64, conns []judge.Conn, at time.Time) (judge.Result, error) {
+	return s.shared().SearchItem(ctx, itemID, conns, at)
+}
+
+// SearchPart implements works.Searcher; a book has no parts, so it is SearchItem.
+func (s Search) SearchPart(ctx context.Context, itemID int64, _ int, conns []judge.Conn, at time.Time) (judge.Result, error) {
+	return s.shared().SearchItem(ctx, itemID, conns, at)
+}
+
+// JudgeFeed judges releases a feed listed against one wanted book, exactly as a search's would be.
+func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, raws []indexer.RawItem, at time.Time) (judge.Result, error) {
+	return s.shared().JudgeFeed(ctx, itemID, conn, raws, at)
+}
+
 // wanted is what a search needs to know of a book it looks for.
 type wanted struct {
 	title   string
@@ -54,66 +72,54 @@ type wanted struct {
 	owned *score.Facts
 }
 
-func (s Search) wantedFor(ctx context.Context, itemID int64) (library.WantedItemDetail, wanted, error) {
-	item, err := s.Desired.Get(ctx, itemID)
-	if err != nil {
-		return library.WantedItemDetail{}, wanted{}, err
+// bookSpec is works.Spec for books and audiobooks.
+type bookSpec struct{ search Search }
+
+// Wanted implements works.Spec: a book wants its files until it has them, then an ebook a format that beats one below
+// its cutoff. An audiobook is never upgraded: its chapters are one set, replaced only by hand.
+func (b bookSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int, now time.Time) (wanted, bool, error) {
+	if err := works.WholeItem(item); err != nil {
+		return wanted{}, false, err
 	}
-	if item.SatisfactionKind != "SET" || item.MediaRef != "" || item.EditionID.Valid {
-		return library.WantedItemDetail{}, wanted{}, ErrNotSearchable
-	}
+	s := b.search
 	basics, err := s.Reader.Basics(ctx, item.WorkID)
 	if err != nil {
-		return library.WantedItemDetail{}, wanted{}, err
+		return wanted{}, false, err
 	}
-	facts, err := NamingFacts(ctx, s.Reader, s.Format, item.CategoryID, item.WorkID, s.Clock.Now())
+	facts, err := NamingFacts(ctx, s.Reader, s.Format, item.CategoryID, item.WorkID, now)
 	if err != nil {
-		return library.WantedItemDetail{}, wanted{}, err
+		return wanted{}, false, err
 	}
 	w := wanted{title: basics.Title, aliases: basics.Aliases}
 	if facts.Author != "" && facts.Author != "Unknown Author" {
 		w.authors = []string{facts.Author}
 	}
-	detail := library.WantedItemDetail{ItemID: item.ID, WorkID: item.WorkID, CategoryID: item.CategoryID, ProfileID: item.ProfileID, State: item.State, Present: item.PresentCount}
-	if item.PresentCount > 0 {
-		owned, err := s.belowCutoff(ctx, item.ID, item.CategoryID)
-		if err != nil {
-			return detail, w, err
-		}
-		w.owned = owned
+	if item.PresentCount == 0 {
+		return w, true, nil
 	}
-	return detail, w, nil
-}
-
-// belowCutoff is the facts of the file a book has that misses its library's cutoff, once it has settled; nil when it
-// needs no upgrade. An audiobook is never upgraded: its chapters are one set, replaced only by hand.
-func (s Search) belowCutoff(ctx context.Context, itemID, categoryID int64) (*score.Facts, error) {
 	if s.Settings == nil || s.Format.ByFolder {
-		return nil, nil
+		return w, false, nil
 	}
-	snapshot := s.Settings.Snapshot()
-	category, found := snapshot.Category(categoryID)
-	if !found || !category.QualityUpgrades {
-		return nil, nil
-	}
-	files, err := fileFacts(ctx, s.Format, s.Reader, s.Physical, itemID)
+	files, err := fileFacts(ctx, s.Format, s.Reader, s.Physical, item.ID)
 	if err != nil {
-		return nil, err
+		return w, false, err
 	}
-	tooNew := s.Clock.Now().Add(-upgradeMinFileAge).Unix()
-	for _, file := range files {
-		if file.addedAt > tooNew {
-			continue
-		}
-		if judged, ok := quality.Judge(snapshot, category, file.facts); ok && !judged.MeetsCutoff {
-			return &file.facts, nil
-		}
+	if owned, below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, now.Add(-works.UpgradeMinFileAge).Unix())[""]; below {
+		w.owned = &owned.Facts
 	}
-	return nil, nil
+	return w, w.owned != nil, nil
 }
 
-// queries builds the tiers of one book's search: Newznab's book search by author and title, then the text releases use.
-func (w wanted) queries() [][]judge.Query {
+// Owned implements works.Spec.
+func (bookSpec) Owned(w wanted) map[int]score.Facts {
+	if w.owned == nil {
+		return nil
+	}
+	return map[int]score.Facts{0: *w.owned}
+}
+
+// Queries implements works.Spec: Newznab's book search by author and title, then the text releases use.
+func (bookSpec) Queries(w wanted) [][]judge.Query {
 	var tiers [][]judge.Query
 	title := releasefacts.CleanQuery(w.title)
 	if title == "" {
@@ -137,127 +143,23 @@ func (w wanted) queries() [][]judge.Query {
 	return append(tiers, bare)
 }
 
-// SearchItem searches one book's item: tiers widen until one finds a release of the book, and every release that is
-// one is judged and recorded (a REJECT or DEFER is a finding, not silence).
-func (s Search) SearchItem(ctx context.Context, itemID int64, conns []judge.Conn, at time.Time) (judge.Result, error) {
-	detail, w, err := s.wantedFor(ctx, itemID)
-	if err != nil {
-		return judge.Result{}, err
+// Read implements works.Spec: a release is the book when it names one of its titles and one of its authors, as
+// Readarr's search criteria do, and claims a file of the format.
+func (b bookSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Time) (works.Release, bool) {
+	info, _ := parsebook.Parse(raw.Title)
+	if !w.isTheBook(raw.Title) || !b.search.Format.Claims(info) {
+		return works.Release{}, false
 	}
-	if err := s.Desired.RecordSearched(ctx, itemID, at.Unix()); err != nil {
-		return judge.Result{}, fmt.Errorf("book: search item %d: %w", itemID, err)
-	}
-	if detail.Present > 0 && w.owned == nil {
-		return judge.Result{}, nil
-	}
-	yardstick, err := s.yardstick(ctx, detail, w)
-	if err != nil {
-		return judge.Result{}, fmt.Errorf("book: search item %d: %w", itemID, err)
-	}
-	result, err := s.pipeline().Search(ctx, itemID, conns, w.queries(), yardstick.evaluate, at)
-	if err != nil {
-		return result, fmt.Errorf("book: search item %d: %w", itemID, err)
-	}
-	return result, nil
+	return works.Release{Facts: ReleaseFacts(b.search.Format, info, raw, conn.Impl), ReleaseGroup: info.ReleaseGroup, Revised: info.Version > 1}, true
 }
 
-// JudgeFeed judges releases a feed listed against one wanted book, exactly as a search's would be.
-func (s Search) JudgeFeed(ctx context.Context, itemID int64, conn judge.Conn, raws []indexer.RawItem, at time.Time) (judge.Result, error) {
-	detail, w, err := s.wantedFor(ctx, itemID)
-	if err != nil || (detail.Present > 0 && w.owned == nil) {
-		return judge.Result{}, err
-	}
-	measure, err := s.yardstick(ctx, detail, w)
-	if err != nil {
-		return judge.Result{}, err
-	}
-	return s.pipeline().Feed(ctx, itemID, conn, raws, measure.evaluate, at)
-}
-
-func (s Search) pipeline() judge.Pipeline {
-	return judge.Pipeline{Candidates: s.Candidates, Desired: s.Desired, Sightings: s.Sightings, Blocklist: s.Blocklist, Deadline: s.IndexerDeadline}
-}
-
-// yardstick judges a release against the book and the library's rules.
-type yardstick struct {
-	format         Format
-	wanted         wanted
-	rules          []judge.RankedProfile
-	languagePolicy *score.LanguagePolicy
-	preferPropers  bool
-	delay          judge.ProtocolDelay
-	incumbent      *model.Decision
-	filters        []judge.ReleaseFilter
-}
-
-func (s Search) yardstick(ctx context.Context, detail library.WantedItemDetail, w wanted) (yardstick, error) {
-	snapshot := s.Settings.Snapshot()
-	rules, err := judge.LibraryProfiles(ctx, s.Desired, snapshot, detail.ItemID, detail.CategoryID, detail.ProfileID)
-	if err != nil {
-		return yardstick{}, err
-	}
-	built := yardstick{format: s.Format, wanted: w, rules: rules, languagePolicy: judge.LanguagePolicyFor(snapshot, detail.CategoryID), preferPropers: true}
-	if w.owned != nil {
-		owned := judge.EvaluateInOrder(rules, *w.owned, built.languagePolicy)
-		built.incumbent = &owned
-	}
-	if category, found := snapshot.Category(detail.CategoryID); found {
-		built.preferPropers = category.FileManagement.PropersRepacks != settings.PropersDoNotPrefer
-		built.delay = judge.ProtocolDelay{Preferred: category.PreferredProtocol, Window: time.Duration(category.ProtocolDelayMinutes) * time.Minute, Now: s.Clock.Now()}
-	}
-	if s.ReleaseFilters != nil {
-		stored, err := s.ReleaseFilters.List(ctx, detail.WorkID)
-		if err != nil {
-			return yardstick{}, err
-		}
-		for _, filter := range stored {
-			built.filters = append(built.filters, judge.ReleaseFilter{Prefix: filter.Prefix, Kind: filter.Kind, Value: filter.Value, IsRegex: filter.IsRegex, Score: int(filter.Score)})
-		}
-	}
-	return built, nil
-}
-
-func (y yardstick) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.Find {
-	var finds []judge.Find
-	for _, raw := range raws {
-		info, _ := parsebook.Parse(raw.Title)
-		if !y.isTheBook(raw.Title) || !y.format.Claims(info) {
-			continue
-		}
-		facts := ReleaseFacts(y.format, info, raw, conn.Impl)
-		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, facts, y.languagePolicy), info.Version > 1, y.preferPropers)
-		decision = judge.ApplyFilters(decision, y.filters, raw.Title, info.ReleaseGroup, "")
-		y.requireUpgrade(&decision, facts)
-		finds = append(finds, judge.Find{Conn: conn, Raw: raw, ParseConfidence: 1, MatchConfidence: 1, Decision: decision})
-	}
-	y.delay.Apply(finds)
-	return finds
-}
-
-// isTheBook says a release names this book: one of its titles and one of its authors, as Readarr's search criteria do.
-func (y yardstick) isTheBook(name string) bool {
-	for _, title := range append([]string{y.wanted.title}, y.wanted.aliases...) {
-		if parsebook.Names(name, title, y.wanted.authors) {
+func (w wanted) isTheBook(name string) bool {
+	for _, title := range append([]string{w.title}, w.aliases...) {
+		if parsebook.Names(name, title, w.authors) {
 			return true
 		}
 	}
 	return false
-}
-
-// requireUpgrade rejects an accepted release that does not beat the book's file by quality (Invariant 72: a tie keeps
-// what is owned).
-func (y yardstick) requireUpgrade(decision *model.Decision, facts score.Facts) {
-	if decision.Outcome != model.OutcomeAccept || y.incumbent == nil {
-		return
-	}
-	facts.File.ReleaseGroup, facts.File.ProperRepack = "", false
-	likeForLike := judge.EvaluateInOrder(y.rules, facts, y.languagePolicy)
-	if winner, _ := model.Compare(likeForLike.Quality, y.incumbent.Quality); winner >= 0 {
-		decision.Outcome = model.OutcomeReject
-		decision.Rejections = append(decision.Rejections, model.Rejection{
-			Rule: "upgrade", Field: "quality", Wanted: "better than the file you have", Got: "not better",
-		})
-	}
 }
 
 // audioCodecOf is the codec an audiobook's container or extension carries.
@@ -286,24 +188,16 @@ func ReleaseFacts(format Format, info parsebook.Info, raw indexer.RawItem, impl 
 	return facts
 }
 
-// heldFile is one file of a book with what is known of it.
-type heldFile struct {
-	mediaObjectID int64
-	addedAt       int64
-	measured      bool
-	facts         score.Facts
-}
-
 // fileFacts are a book's files as a profile judges them: an ebook by its extension, which is all there is to measure;
 // an audiobook by what the probe measured, its extension where ffprobe says nothing.
-func fileFacts(ctx context.Context, format Format, reader library.SeriesReader, physical library.Physical, itemID int64) ([]heldFile, error) {
+func fileFacts(ctx context.Context, format Format, reader library.SeriesReader, physical library.Physical, itemID int64) ([]works.File, error) {
 	files, err := reader.ItemFiles(ctx, itemID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]heldFile, 0, len(files))
+	out := make([]works.File, 0, len(files))
 	for _, file := range files {
-		held := heldFile{mediaObjectID: file.File.MediaObjectID, addedAt: file.AddedAt}
+		held := works.File{MediaObjectID: file.File.MediaObjectID, AddedAt: file.AddedAt, Monitored: file.Monitored}
 		paths, err := physical.PathsForObject(ctx, file.File.MediaObjectID)
 		if err != nil {
 			return nil, err
@@ -312,13 +206,13 @@ func fileFacts(ctx context.Context, format Format, reader library.SeriesReader, 
 		if len(paths) > 0 {
 			extension = path.Ext(paths[0].RelPath)
 		}
-		held.facts = score.Facts{File: score.FileFacts{Extension: extension, Container: file.File.Container}}
+		held.Facts = score.Facts{File: score.FileFacts{Extension: extension, Container: file.File.Container}}
 		if format.ByFolder {
-			held.facts.File.AudioCodec, held.facts.File.AudioBitrate = file.File.AudioCodec, file.File.AudioBitrate
-			held.facts.File.Lossless = file.File.AudioCodec == "flac" || file.File.AudioCodec == "alac"
-			held.measured = file.File.AudioCodec != ""
+			held.Facts.File.AudioCodec, held.Facts.File.AudioBitrate = file.File.AudioCodec, file.File.AudioBitrate
+			held.Facts.File.Lossless = file.File.AudioCodec == "flac" || file.File.AudioCodec == "alac"
+			held.Measured = file.File.AudioCodec != ""
 		} else {
-			held.measured = extension != ""
+			held.Measured = extension != ""
 		}
 		out = append(out, held)
 	}

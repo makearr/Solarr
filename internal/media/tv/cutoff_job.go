@@ -2,23 +2,20 @@ package tv
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"log/slog"
 
 	"github.com/makearr/Solarr/internal/acquiring/cutoff"
-	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/acquiring/releasefacts"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/identify/score"
+	"github.com/makearr/Solarr/internal/media/works"
 )
 
 // Item states the check moves a season between.
 const (
-	ItemStateUpgradable = "UPGRADABLE"
-	ItemStateComplete   = "COMPLETE"
+	ItemStateUpgradable = works.StateUpgradable
+	ItemStateComplete   = works.StateComplete
 )
 
 // CutoffJob settles an episode a download brought a second file for (the strictly better file stays, a tie keeps the
@@ -33,172 +30,25 @@ type CutoffJob struct {
 	Logger  *slog.Logger
 }
 
+func (j CutoffJob) shared() works.Cutoff {
+	return works.Cutoff{
+		Desired: j.Desired, Recycle: j.Recycle, Page: j.Desired.TVCutoffPage,
+		Files: func(ctx context.Context, itemID int64) ([]works.File, error) {
+			return seasonFiles(ctx, j.Series, itemID)
+		},
+	}
+}
+
 // CutoffPage implements cutoff.Check: a page of monitored seasons, or every season of the one series workID names.
 func (j CutoffJob) CutoffPage(ctx context.Context, workID, afterID, limit int64) ([]library.CutoffItem, error) {
-	if workID == 0 {
-		return j.Desired.TVCutoffPage(ctx, afterID, limit)
-	}
-	var ofWork []library.CutoffItem
-	for {
-		page, err := j.Desired.TVCutoffPage(ctx, afterID, limit)
-		if err != nil {
-			return nil, err
-		}
-		for _, item := range page {
-			afterID = item.ID
-			if item.WorkID == workID {
-				ofWork = append(ofWork, item)
-			}
-		}
-		if int64(len(page)) < limit {
-			return ofWork, nil
-		}
-	}
+	return j.shared().CutoffPage(ctx, workID, afterID, limit)
 }
 
-// CheckCutoff implements cutoff.Check: a second file in a season is settled whatever its state; a season with gaps is
-// not marked.
+// CheckCutoff implements cutoff.Check: a second file of an episode is settled whatever the season's state, a file
+// holding several episodes only once it lost every one; a season with gaps is not marked, and one with an episode
+// below the cutoff is UPGRADABLE.
 func (j CutoffJob) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (cutoff.Outcome, error) {
-	settled, err := j.settle(ctx, snapshot, item)
-	if err != nil {
-		return cutoff.Outcome{}, err
-	}
-	if item.State == "PARTIAL" {
-		return cutoff.Outcome{Replaced: settled}, nil
-	}
-	state, decided, err := j.stateFor(ctx, snapshot, item)
-	if err != nil {
-		return cutoff.Outcome{}, err
-	}
-	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided}, nil
-}
-
-// settle keeps, per episode a download brought a second file for, the strictly better measured file and recycles the
-// rest; answers how many were recycled.
-func (j CutoffJob) settle(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (int, error) {
-	if j.Recycle == nil {
-		return 0, nil
-	}
-	files, err := j.Series.SeasonFiles(ctx, item.ID)
-	if err != nil {
-		return 0, err
-	}
-	byEpisode := map[string][]library.SeasonFile{}
-	covers := map[int64]int{}
-	for _, file := range files {
-		byEpisode[file.Ref] = append(byEpisode[file.Ref], file)
-		covers[file.File.MediaObjectID]++
-	}
-	var contested bool
-	for _, episode := range byEpisode {
-		contested = contested || len(episode) > 1
-	}
-	if !contested {
-		return 0, nil
-	}
-	downloaded, err := j.Desired.DownloadedFiles(ctx, item.WorkID)
-	if err != nil {
-		return 0, err
-	}
-	rules, err := judge.LibraryProfiles(ctx, j.Desired, snapshot, item.ID, item.CategoryID, item.ProfileID)
-	if errors.Is(err, judge.ErrNoQualityProfile) {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
-	// A multi-episode file goes only once it lost every episode it holds: beaten on one, it is still another's only file.
-	lost := map[int64]int{}
-	var losers []library.SeasonFile
-	for _, episode := range byEpisode {
-		if len(episode) < 2 || !anyBrought(episode, downloaded) || !allMeasured(episode) {
-			continue
-		}
-		keeper := episode[0]
-		for _, file := range episode {
-			if !downloaded[file.File.MediaObjectID] {
-				keeper = file
-				break
-			}
-		}
-		for _, file := range episode {
-			if judge.StrictlyBetter(judge.EvaluateInOrder(rules, FileFacts(file.File), language), judge.EvaluateInOrder(rules, FileFacts(keeper.File), language)) {
-				keeper = file
-			}
-		}
-		for _, file := range episode {
-			if file.File.MediaObjectID == keeper.File.MediaObjectID {
-				continue
-			}
-			lost[file.File.MediaObjectID]++
-			if lost[file.File.MediaObjectID] == covers[file.File.MediaObjectID] {
-				losers = append(losers, file)
-			}
-		}
-	}
-	recycled := 0
-	for _, file := range losers {
-		if err := j.Recycle(ctx, file.File.MediaObjectID, item.CategoryID, !downloaded[file.File.MediaObjectID]); err != nil {
-			return recycled, err
-		}
-		recycled++
-	}
-	return recycled, nil
-}
-
-func anyBrought(files []library.SeasonFile, downloaded map[int64]bool) bool {
-	for _, file := range files {
-		if downloaded[file.File.MediaObjectID] {
-			return true
-		}
-	}
-	return false
-}
-
-func allMeasured(files []library.SeasonFile) bool {
-	for _, file := range files {
-		if !file.Measured {
-			return false
-		}
-	}
-	return true
-}
-
-// stateFor judges every episode file of one season; decided is false while any is unmeasured or there is none.
-func (j CutoffJob) stateFor(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (string, bool, error) {
-	category, found := snapshot.Category(item.CategoryID)
-	if !found {
-		return "", false, nil
-	}
-	if !category.QualityUpgrades {
-		return ItemStateComplete, true, nil
-	}
-	files, err := j.Series.SeasonFiles(ctx, item.ID)
-	if err != nil {
-		return "", false, fmt.Errorf("tv: cutoff check item %d: %w", item.ID, err)
-	}
-	if len(files) == 0 {
-		return "", false, nil
-	}
-	for _, file := range files {
-		if !file.Measured {
-			return "", false, nil
-		}
-	}
-	for _, file := range files {
-		if !file.Monitored {
-			continue
-		}
-		judgement, judged := quality.Judge(snapshot, category, FileFacts(file.File))
-		if !judged {
-			return ItemStateComplete, true, nil
-		}
-		if !judgement.MeetsCutoff {
-			return ItemStateUpgradable, true, nil
-		}
-	}
-	return ItemStateComplete, true, nil
+	return j.shared().CheckCutoff(ctx, snapshot, item)
 }
 
 // FileFacts is what the probe measured of an episode's file, as the facts a profile or a target judges.

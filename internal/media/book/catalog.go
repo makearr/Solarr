@@ -9,10 +9,11 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
-// Catalog is the book module's add and refresh over the service: media.Adding, with what a library's add dialog needs.
+// Catalog is the book module's add and refresh: the shared works.Catalog over the format's providers.
 type Catalog struct {
 	Service          Service
 	Categories       Categories
@@ -23,74 +24,70 @@ type Catalog struct {
 
 var _ media.Adding = Catalog{}
 
-// LookupWorks implements media.Adding: the sources' books for a title, "Title by Author" or "Author - Title" narrowing
-// it to a writer, each marked when the library already holds it.
+func (c Catalog) shared() works.Catalog {
+	return works.Catalog{Source: catalogSource{c.Service}, Categories: c.Categories, DefaultProfileID: c.DefaultProfileID, AllowAgain: c.AllowAgain}
+}
+
+// LookupWorks implements media.Adding.
 func (c Catalog) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
+	return c.shared().LookupWorks(ctx, lookup)
+}
+
+// AddWork implements media.Adding: the book with Readarr's Monitor choice.
+func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	return c.shared().AddWork(ctx, request)
+}
+
+// catalogSource is works.Source for a book format.
+type catalogSource struct{ service Service }
+
+// Lookup implements works.Source: the sources' books for a title, "Title by Author" or "Author - Title" narrowing it
+// to a writer.
+func (s catalogSource) Lookup(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
 	query := strings.TrimSpace(lookup.Query)
-	if len([]rune(query)) < 2 {
-		return nil, media.ErrQueryTooShort
-	}
 	title, author := query, ""
 	if info, ok := parsebook.Parse(query); ok && info.Author != "" && (strings.Contains(query, " by ") || strings.Contains(query, " - ")) {
 		title, author = info.Title, info.Author
 	}
-	found, err := c.Service.Search(ctx, lookup.CategoryID, title, author, lookup.Limit)
+	found, err := s.service.Search(ctx, lookup.CategoryID, title, author, lookup.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}
-	kind := c.Service.Format.MediaType
+	format := s.service.Format
 	candidates := make([]media.AddCandidate, 0, len(found))
 	for _, book := range found {
-		provider, externalID := c.Service.Format.CandidateID(book.IDs)
+		provider, externalID := format.CandidateID(book.IDs)
 		if externalID == "" {
 			continue
 		}
-		candidate := media.AddCandidate{
-			Kind: kind, Provider: provider, ExternalID: externalID, Title: book.Title, Subtitle: book.Author,
+		candidates = append(candidates, media.AddCandidate{
+			Kind: format.MediaType, Provider: provider, ExternalID: externalID, Title: book.Title, Subtitle: book.Author,
 			Overview: book.Overview, PosterURL: book.Cover, Year: int64(book.Year), Traits: book.Traits,
-		}
-		if id, held := c.Service.WorkByIDs(ctx, book.IDs); held {
-			candidate.LibraryID = id
-		}
-		candidates = append(candidates, candidate)
+		})
 	}
 	return candidates, nil
 }
 
-// AddWork implements media.Adding: the book with Readarr's Monitor choice. It starts no search; the caller searches
-// the book when asked to.
-func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	category, ok := c.Categories.Category(request.CategoryID)
+// Held implements works.Source.
+func (s catalogSource) Held(ctx context.Context, provider, externalID string) (int64, bool) {
+	ids, ok := s.service.Format.NamedIDs(provider, externalID)
 	if !ok {
-		return media.AddResult{}, fmt.Errorf("%w: no such library", media.ErrInvalidAdd)
+		return 0, false
 	}
-	format := c.Service.Format
+	return s.service.WorkByIDs(ctx, ids)
+}
+
+// Monitor implements works.Source: Readarr's three choices.
+func (catalogSource) Monitor() (string, string, func(string) bool) {
+	return string(MonitorBook), string(MonitorNone), func(option string) bool { return MonitorOption(option).Valid() }
+}
+
+// Add implements works.Source.
+func (s catalogSource) Add(ctx context.Context, request works.Add) (media.AddResult, error) {
+	format := s.service.Format
 	ids, ok := format.NamedIDs(request.Provider, request.ExternalID)
 	if !ok {
 		return media.AddResult{}, fmt.Errorf("%w: %s %q is not a book id", media.ErrInvalidAdd, request.Provider, request.ExternalID)
-	}
-	monitor := MonitorBook
-	if request.Option != "" {
-		monitor = MonitorOption(request.Option)
-	}
-	if !request.Monitored {
-		monitor = MonitorNone
-	}
-	if !monitor.Valid() {
-		return media.AddResult{}, fmt.Errorf("%w: %q is not a monitor choice", media.ErrInvalidAdd, request.Option)
-	}
-	profile := c.Categories.ProfileFor(category, c.DefaultProfileID)
-	if request.ProfileID != nil {
-		profile = *request.ProfileID
-	}
-	if c.AllowAgain != nil {
-		if err := c.AllowAgain(ctx, request.Provider, request.ExternalID); err != nil {
-			return media.AddResult{}, err
-		}
-	}
-	var addedBy *int64
-	if request.UserID != 0 {
-		addedBy = &request.UserID
 	}
 	var fallback *Book
 	if request.Fallback != nil {
@@ -102,8 +99,9 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 		}
 		fallback = &Book{IDs: known, Title: request.Fallback.Title, Year: request.Fallback.Year}
 	}
-	result, err := c.Service.Add(ctx, AddRequest{
-		IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, AddedBy: addedBy, Fallback: fallback,
+	result, err := s.service.Add(ctx, AddRequest{
+		IDs: ids, CategoryID: request.CategoryID, ProfileID: request.ProfileID, Monitor: MonitorOption(request.Option),
+		AddedBy: request.AddedBy, Fallback: fallback,
 	})
 	if errors.Is(err, ErrNoSource) {
 		return media.AddResult{}, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
@@ -123,54 +121,18 @@ func (c Catalog) Refresh(ctx context.Context, categoryID, workID int64) error {
 	return err
 }
 
-// Files is the book module's media.PlacingFiles: a queued file, or a whole folder of chapters, becomes the book a person
-// names.
-type Files struct {
-	Resolver     Resolver
-	Unidentified library.Unidentified
-	Clock        clock.Clock
-	// AllowAgain lifts the exclusion of a book a person names on purpose; nil lifts nothing.
-	AllowAgain func(ctx context.Context, provider, externalID string) error
-}
-
-var _ media.PlacingFiles = Files{}
-
-// PlaceFile implements media.PlacingFiles; with wholeFolder every other queued file beside it joins the same book.
-func (f Files) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
-	ids, ok := f.Resolver.Service.Format.NamedIDs(placement.Provider, placement.ExternalID)
-	if !ok {
-		return 0, 0, fmt.Errorf("%w: %s %q is not a book id", media.ErrInvalidAdd, placement.Provider, placement.ExternalID)
+// NewFiles is the format's media.PlacingFiles, the shared one with the book a person names; an audiobook's queued
+// chapters go with the one named.
+func NewFiles(resolver Resolver, unidentified library.Unidentified, clock clock.Clock, allowAgain func(ctx context.Context, provider, externalID string) error) works.Files {
+	format := resolver.Service.Format
+	return works.Files{
+		Series: resolver.Service.Series, Unidentified: unidentified, Clock: clock, AllowAgain: allowAgain, WholeFolder: format.ByFolder,
+		Resolve: func(ctx context.Context, categoryID int64, placement media.Placement) (int64, error) {
+			ids, ok := format.NamedIDs(placement.Provider, placement.ExternalID)
+			if !ok {
+				return 0, fmt.Errorf("%w: %s %q is not a book id", media.ErrInvalidAdd, placement.Provider, placement.ExternalID)
+			}
+			return resolver.ByIDs(ctx, categoryID, ids), nil
+		},
 	}
-	if f.AllowAgain != nil {
-		if err := f.AllowAgain(ctx, placement.Provider, placement.ExternalID); err != nil {
-			return 0, 0, err
-		}
-	}
-	workID := f.Resolver.ByIDs(ctx, categoryID, ids)
-	if workID <= 0 {
-		return 0, 0, fmt.Errorf("%w: that book could not be added", media.ErrInvalidAdd)
-	}
-	entry, err := f.Unidentified.Get(ctx, mediaObjectID)
-	if err != nil {
-		return 0, 0, err
-	}
-	files := []int64{mediaObjectID}
-	if wholeFolder || f.Resolver.Service.Format.ByFolder {
-		if files, err = f.Unidentified.InFolder(ctx, entry.RootFolderID, entry.RelPath); err != nil {
-			return 0, 0, err
-		}
-	}
-	now := f.Clock.Now()
-	if _, err := f.Resolver.Service.Series.AttachWholeFiles(ctx, now, workID, entry.RootFolderID, files); err != nil {
-		return workID, 0, err
-	}
-	for _, id := range files {
-		if err := f.Unidentified.RecordManual(ctx, id, workID, now.Unix()); err != nil {
-			return workID, 0, err
-		}
-	}
-	if err := f.Unidentified.Clear(ctx, files); err != nil {
-		return workID, 0, err
-	}
-	return workID, int64(len(files)), nil
 }

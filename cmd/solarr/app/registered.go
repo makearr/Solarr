@@ -440,7 +440,7 @@ func (p *process) movieModule() movie.Module {
 			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache,
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
-		Searching: movie.Searching{Acquire: p.movieGrab(), Conns: p.movieIndexerConns, Clock: clock.NewSystem()},
+		Searching: movie.NewSearching(p.movieGrab(), p.movieIndexerConns, clock.NewSystem()),
 		Pictures:  adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
 		Service:   p.movieService(),
 		// A movie is read again at once, as Radarr's Refresh: it is one work and a couple of requests.
@@ -546,9 +546,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 	return book.Module{
 		Format: format,
 		Registrations: []media.JobRegistration{
-			{Definition: format.RefreshDefinition(), Handler: book.RefreshJob{
-				Reader: library.NewSeriesReader(p.library), Service: service, Clock: clock.NewSystem(), Logger: p.logger,
-			}},
+			{Definition: format.RefreshDefinition(), Handler: format.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
 			{Definition: format.ArtworkDefinition(), Handler: format.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
 		},
 		Sweep: scan.Sweep{
@@ -565,10 +563,8 @@ func (p *process) bookModule(format book.Format) book.Module {
 		},
 		Adder:    catalog,
 		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
-		Files: book.Files{
-			Resolver: resolver, Unidentified: library.NewUnidentified(p.library), Clock: clock.NewSystem(), AllowAgain: catalog.AllowAgain,
-		},
-		Rename: &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		Files:    book.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
+		Rename:   &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			found, err := conns(ctx)
 			if err != nil {
@@ -589,13 +585,13 @@ func (p *process) bookModule(format book.Format) book.Module {
 			return plan.OutcomeSearched, nil
 		},
 		Feed: book.Feed{
-			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
+			Format: format, Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(format.MediaType),
 		},
 		CutoffJob: book.CutoffJob{
 			Format: format, Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
 			Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
-		Searching: book.Searching{Acquire: grab, Conns: conns, Clock: clock.NewSystem()},
+		Searching: format.NewSearching(grab, conns, clock.NewSystem()),
 		Service:   service,
 		// A book is read again at once, as Readarr's Refresh: it is one work and a few requests.
 		Refresh: func(ctx context.Context, workID int64) (bool, error) {

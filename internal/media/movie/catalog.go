@@ -11,16 +11,14 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
 // Catalog is the movie module's add and refresh over the service: media.Adding, with what a library's add dialog needs.
 type Catalog struct {
-	Service    Service
-	Categories interface {
-		Category(id int64) (settings.Category, bool)
-		ProfileFor(category settings.Category, fallback int64) int64
-	}
+	Service          Service
+	Categories       works.Categories
 	DefaultProfileID int64
 	FranchiseStore   library.Franchises
 	// AllowAgain lifts the exclusion of a movie a person removed and now adds on purpose; nil lifts nothing.
@@ -29,44 +27,59 @@ type Catalog struct {
 
 var _ media.Adding = Catalog{}
 
-// LookupWorks implements media.Adding: the sources' films for a name, "Title (2001)" narrowing it to a year, each marked
-// when the library already holds it.
+func (c Catalog) shared() works.Catalog {
+	return works.Catalog{Source: catalogSource{c}, Categories: c.Categories, DefaultProfileID: c.DefaultProfileID, AllowAgain: c.AllowAgain}
+}
+
+// LookupWorks implements media.Adding.
 func (c Catalog) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
-	if len([]rune(lookup.Query)) < 2 {
-		return nil, media.ErrQueryTooShort
-	}
+	return c.shared().LookupWorks(ctx, lookup)
+}
+
+// AddWork implements media.Adding: the film with Radarr's Monitor choice and minimum availability.
+func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	return c.shared().AddWork(ctx, request)
+}
+
+// catalogSource is works.Source for movies.
+type catalogSource struct{ catalog Catalog }
+
+// Lookup implements works.Source: the sources' films for a name, "Title (2001)" narrowing it to a year.
+func (s catalogSource) Lookup(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
 	term, year := lookup.Query, 0
 	if info, ok := parsemovie.Parse(lookup.Query); ok && info.Year != 0 {
 		term, year = info.Title, info.Year
 	}
-	found, err := c.Service.Search(ctx, term, year, lookup.Limit)
+	found, err := s.catalog.Service.Search(ctx, term, year, lookup.Limit)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
 	}
 	candidates := make([]media.AddCandidate, len(found))
 	for i, film := range found {
-		candidate := media.AddCandidate{
+		candidates[i] = media.AddCandidate{
 			Kind: "movie", Provider: ProviderTMDB, ExternalID: strconv.FormatInt(film.TMDBID, 10), Title: film.Title,
 			Overview: film.Overview, PosterURL: film.Poster, Year: int64(film.Year), Traits: film.Traits,
 		}
 		if film.TMDBID == 0 {
-			candidate.Provider, candidate.ExternalID = ProviderIMDb, film.IMDbID
+			candidates[i].Provider, candidates[i].ExternalID = ProviderIMDb, film.IMDbID
 		}
-		if id, held, err := c.Service.Series.WorkByProviderID(ctx, MediaType, candidate.Provider, candidate.ExternalID); err == nil && held {
-			candidate.LibraryID = id
-		}
-		candidates[i] = candidate
 	}
 	return candidates, nil
 }
 
-// AddWork implements media.Adding: the film with Radarr's Monitor choice. It starts no search; the caller searches the
-// movie when asked to.
-func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
-	category, ok := c.Categories.Category(request.CategoryID)
-	if !ok {
-		return media.AddResult{}, fmt.Errorf("%w: no such library", media.ErrInvalidAdd)
-	}
+// Held implements works.Source.
+func (s catalogSource) Held(ctx context.Context, provider, externalID string) (int64, bool) {
+	id, held, err := s.catalog.Service.Series.WorkByProviderID(ctx, MediaType, provider, externalID)
+	return id, err == nil && held
+}
+
+// Monitor implements works.Source: Radarr's three choices.
+func (catalogSource) Monitor() (string, string, func(string) bool) {
+	return string(MonitorMovieOnly), string(MonitorNone), func(option string) bool { return MonitorOption(option).Valid() }
+}
+
+// Add implements works.Source.
+func (s catalogSource) Add(ctx context.Context, request works.Add) (media.AddResult, error) {
 	var ids IDs
 	switch request.Provider {
 	case ProviderTMDB:
@@ -80,29 +93,6 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 	default:
 		return media.AddResult{}, fmt.Errorf("%w: only a TMDB or IMDb id can be added", media.ErrInvalidAdd)
 	}
-	monitor := MonitorMovieOnly
-	if request.Option != "" {
-		monitor = MonitorOption(request.Option)
-	}
-	if !request.Monitored {
-		monitor = MonitorNone
-	}
-	if !monitor.Valid() {
-		return media.AddResult{}, fmt.Errorf("%w: %q is not a monitor choice", media.ErrInvalidAdd, request.Option)
-	}
-	profile := c.Categories.ProfileFor(category, c.DefaultProfileID)
-	if request.ProfileID != nil {
-		profile = *request.ProfileID
-	}
-	if c.AllowAgain != nil {
-		if err := c.AllowAgain(ctx, request.Provider, request.ExternalID); err != nil {
-			return media.AddResult{}, err
-		}
-	}
-	var addedBy *int64
-	if request.UserID != 0 {
-		addedBy = &request.UserID
-	}
 	availability := Availability(request.Choices[FieldMinimumAvailability])
 	if availability != "" && !availability.Valid() {
 		return media.AddResult{}, fmt.Errorf("%w: %q is not a minimum availability", media.ErrInvalidAdd, availability)
@@ -115,9 +105,9 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 		}
 		fallback = &Movie{IDs: known, Title: request.Fallback.Title, Year: request.Fallback.Year}
 	}
-	result, err := c.Service.Add(ctx, AddRequest{
-		IDs: ids, CategoryID: request.CategoryID, ProfileID: profile, Monitor: monitor, Availability: availability, AddedBy: addedBy,
-		Fallback: fallback,
+	result, err := s.catalog.Service.Add(ctx, AddRequest{
+		IDs: ids, CategoryID: request.CategoryID, ProfileID: request.ProfileID, Monitor: MonitorOption(request.Option),
+		Availability: availability, AddedBy: request.AddedBy, Fallback: fallback,
 	})
 	if errors.Is(err, ErrNoSource) {
 		return media.AddResult{}, fmt.Errorf("%w: %w", media.ErrSourceUnavailable, err)
