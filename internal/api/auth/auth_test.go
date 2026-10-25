@@ -257,3 +257,28 @@ func TestLoginLimiter_MakesAnAddressWaitAfterFiveFailures(t *testing.T) {
 		t.Errorf("a minute later wait = %v, want 0", wait)
 	}
 }
+
+// Attempts sent together count before any of them has failed, so a burst cannot outrun the limit.
+func TestLoginLimiter_CountsAttemptsStillBeingChecked(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	limiter := auth.NewLoginLimiter(fake)
+	address := netip.MustParseAddr("192.0.2.7")
+	for index := range auth.LoginAttempts {
+		if wait := limiter.Begin(address); wait != 0 {
+			t.Fatalf("attempt %d: wait = %v, want 0", index+1, wait)
+		}
+	}
+	if wait := limiter.Begin(address); wait == 0 {
+		t.Fatal("a sixth attempt begun alongside five unfinished ones was admitted")
+	}
+	limiter.End(address, false)
+	if wait := limiter.Begin(address); wait != 0 {
+		t.Errorf("after one attempt succeeded wait = %v, want 0", wait)
+	}
+	for range auth.LoginAttempts {
+		limiter.End(address, true)
+	}
+	if wait := limiter.Begin(address); wait != auth.LoginWindow {
+		t.Errorf("after five failures wait = %v, want %v", wait, auth.LoginWindow)
+	}
+}

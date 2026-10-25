@@ -19,22 +19,59 @@ type LoginLimiter struct {
 	clock    clock.Clock
 	mu       sync.Mutex
 	failures map[netip.Addr][]time.Time
+	// pending counts attempts begun and not yet ended: they may all fail, so they count against the limit too.
+	pending map[netip.Addr]int
 }
 
 // NewLoginLimiter starts with no failures recorded.
 func NewLoginLimiter(cl clock.Clock) *LoginLimiter {
-	return &LoginLimiter{clock: cl, failures: map[netip.Addr][]time.Time{}}
+	return &LoginLimiter{clock: cl, failures: map[netip.Addr][]time.Time{}, pending: map[netip.Addr]int{}}
 }
+
+// pendingRetry is the wait answered while the address's other attempts are still being checked.
+const pendingRetry = time.Second
 
 // Wait answers how long the address must wait before it may try again; zero means it may try now.
 func (l *LoginLimiter) Wait(address netip.Addr) time.Duration {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.waitLocked(address)
+}
+
+func (l *LoginLimiter) waitLocked(address netip.Addr) time.Duration {
 	recent := l.recentLocked(address)
-	if len(recent) < LoginAttempts {
-		return 0
+	if len(recent) >= LoginAttempts {
+		return recent[0].Add(LoginWindow).Sub(l.clock.Now())
 	}
-	return recent[0].Add(LoginWindow).Sub(l.clock.Now())
+	if len(recent)+l.pending[address] >= LoginAttempts {
+		return pendingRetry
+	}
+	return 0
+}
+
+// Begin admits one attempt from the address, or answers how long it must wait. An admitted attempt must be ended
+// with End: checking a password takes long enough that attempts sent together would otherwise all be admitted
+// before the first failure is recorded.
+func (l *LoginLimiter) Begin(address netip.Addr) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if wait := l.waitLocked(address); wait > 0 {
+		return wait
+	}
+	l.pending[address]++
+	return 0
+}
+
+// End closes an attempt Begin admitted, recording it as a failure when it failed.
+func (l *LoginLimiter) End(address netip.Addr, failed bool) {
+	l.mu.Lock()
+	if l.pending[address]--; l.pending[address] <= 0 {
+		delete(l.pending, address)
+	}
+	l.mu.Unlock()
+	if failed {
+		l.Failed(address)
+	}
 }
 
 // Failed records one failed sign-in from the address.

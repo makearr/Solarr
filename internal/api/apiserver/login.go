@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -45,15 +46,15 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	address := s.resolvedClientAddress(r)
-	if wait := s.logins.Wait(address); wait > 0 {
+	if wait := s.logins.Begin(address); wait > 0 {
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Round(time.Second).Seconds())+1))
 		writeProblem(w, s.logger, http.StatusTooManyRequests, TypeTooManyRequests, "Too many attempts",
 			fmt.Sprintf("too many failed sign-ins from this address; try again in %s", wait.Round(time.Second)))
 		return
 	}
 	user, err := s.verifyPassword(r, strings.TrimSpace(request.Username), request.Password)
+	s.logins.End(address, err != nil)
 	if err != nil {
-		s.logins.Failed(address)
 		s.logger.Info("failed login", slog.String("username", request.Username), slog.String("address", address.String()))
 		writeProblem(w, s.logger, http.StatusUnauthorized, TypeUnauthorized,
 			"Unauthorized", "the username or password is incorrect")
@@ -76,6 +77,15 @@ func (s *Server) Login(w http.ResponseWriter, r *http.Request) {
 const maxLoginBody = 4 << 10
 
 func (s *Server) verifyPassword(r *http.Request, username, password string) (settings.User, error) {
+	// Each check holds argon2id's memory for its duration: bounded, so a burst of sign-ins from many addresses
+	// queues rather than exhausting memory before anyone is authenticated.
+	select {
+	case passwordChecks <- struct{}{}:
+		defer func() { <-passwordChecks }()
+	case <-r.Context().Done():
+		return settings.User{}, r.Context().Err()
+	}
+
 	user, found := s.auth.Settings.Snapshot().UserByUsername(username)
 	if !found {
 		// Still hash something, so a missing user and a wrong password take
@@ -94,6 +104,9 @@ func (s *Server) verifyPassword(r *http.Request, username, password string) (set
 	}
 	return user, nil
 }
+
+// passwordChecks bounds the password checks running at once to the processors there are to run them.
+var passwordChecks = make(chan struct{}, max(2, runtime.GOMAXPROCS(0)))
 
 // decoyHash is a genuine argon2id hash of a random value, so verifying against it costs the
 // same as verifying a real password.
