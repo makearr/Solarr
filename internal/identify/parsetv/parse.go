@@ -3,8 +3,10 @@ package parsetv
 import (
 	"errors"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
@@ -178,6 +180,54 @@ func groupEnd(m *regexp2.Match, name string) int {
 
 // Parse reads a release or file name; ok is false when nothing in it is recognisable as an episode.
 func Parse(title string, now time.Time) (Info, bool) {
+	// The answer depends on the title and the day only (a daily episode may not be dated after tomorrow).
+	key := parseKey{title: title, day: now.Format(time.DateOnly)}
+	parsed.Lock()
+	cached, found := parsed.results[key]
+	parsed.Unlock()
+	if found {
+		return cached.info.clone(), cached.ok
+	}
+	info, ok := parse(title, now)
+	parsed.Lock()
+	if len(parsed.results) >= maxParsed {
+		clear(parsed.results)
+	}
+	parsed.results[key] = parsedResult{info: info.clone(), ok: ok}
+	parsed.Unlock()
+	return info, ok
+}
+
+// parsed remembers recent answers: an RSS feed lists mostly the releases it listed last time, several indexers list the
+// same release, and a release is parsed again for each season it is judged against. Parsing is a few hundred regular
+// expressions, and costs a third of a millisecond a name.
+var parsed = struct {
+	sync.Mutex
+	results map[parseKey]parsedResult
+}{results: map[parseKey]parsedResult{}}
+
+// maxParsed bounds the cache; one past it starts it over.
+const maxParsed = 8192
+
+type parseKey struct{ title, day string }
+
+type parsedResult struct {
+	info Info
+	ok   bool
+}
+
+// clone copies the slices, so a caller changing what it was given cannot change what the next caller is.
+func (info Info) clone() Info {
+	info.AllTitles = slices.Clone(info.AllTitles)
+	info.Seasons = slices.Clone(info.Seasons)
+	info.EpisodeNumbers = slices.Clone(info.EpisodeNumbers)
+	info.AbsoluteNumbers = slices.Clone(info.AbsoluteNumbers)
+	info.SpecialAbsolutes = slices.Clone(info.SpecialAbsolutes)
+	info.Claims.Languages = slices.Clone(info.Claims.Languages)
+	return info
+}
+
+func parse(title string, now time.Time) (Info, bool) {
 	if !validBeforeParsing(title) {
 		return Info{}, false
 	}

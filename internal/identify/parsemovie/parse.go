@@ -5,8 +5,10 @@ package parsemovie
 import (
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/identify/parsetv"
 )
@@ -70,6 +72,45 @@ var (
 
 // Parse reads a movie release name or a file name (with or without its extension).
 func Parse(name string) (Info, bool) {
+	parsed.Lock()
+	cached, found := parsed.results[name]
+	parsed.Unlock()
+	if found {
+		return cached.info.clone(), cached.ok
+	}
+	info, ok := parse(name)
+	parsed.Lock()
+	if len(parsed.results) >= maxParsed {
+		clear(parsed.results)
+	}
+	parsed.results[name] = parsedResult{info: info.clone(), ok: ok}
+	parsed.Unlock()
+	return info, ok
+}
+
+// parsed remembers recent answers, as parsetv.Parse does: a feed lists mostly what it listed last time, and reading the
+// claims is most of a hundred regular expressions.
+var parsed = struct {
+	sync.Mutex
+	results map[string]parsedResult
+}{results: map[string]parsedResult{}}
+
+// maxParsed bounds the cache; one past it starts it over.
+const maxParsed = 8192
+
+type parsedResult struct {
+	info Info
+	ok   bool
+}
+
+// clone copies the slices, so a caller changing what it was given cannot change what the next caller is.
+func (info Info) clone() Info {
+	info.AllTitles = slices.Clone(info.AllTitles)
+	info.Claims.Languages = slices.Clone(info.Claims.Languages)
+	return info
+}
+
+func parse(name string) (Info, bool) {
 	info := Info{ReleaseTitle: name}
 	work := strings.TrimSpace(name)
 	if extensions[strings.ToLower(path.Ext(work))] {
