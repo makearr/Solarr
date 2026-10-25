@@ -68,11 +68,10 @@ type RemoveAndBlockRequest struct {
 // its own step ran, so a caller can report exactly what was done rather than
 // assuming every requested step succeeded identically.
 type RemoveAndBlockResult struct {
-	RecycledPaths      []Entry
-	CrossDeviceDeletes int
-	Block              *BlockedContent
-	Blocklisted        *BlocklistEntry
-	ReopenedItems      []int64
+	RecycledPaths []Entry
+	Block         *BlockedContent
+	Blocklisted   *BlocklistEntry
+	ReopenedItems []int64
 }
 
 // RemoveAndBlock composes recycle bin, blocked_content, blocklisted_release
@@ -104,8 +103,7 @@ func NewRemoveAndBlock(
 // media_object cleanup would otherwise cascade it away first -- Reopen then
 // explicitly detaches each one regardless, which is a harmless no-op for
 // whatever the cascade already removed and the only path for whatever it
-// did not (Recycle bin not requested, or a cross-device delete leaving the
-// object in place).
+// did not (Recycle bin not requested).
 func (r RemoveAndBlock) Do(ctx context.Context, req RemoveAndBlockRequest) (RemoveAndBlockResult, error) {
 	var result RemoveAndBlockResult
 
@@ -177,13 +175,6 @@ func (r RemoveAndBlock) doRecycle(ctx context.Context, req RemoveAndBlockRequest
 			Reason: req.RecycleReason, Retain: req.RecycleRetain, RemoveEmptyFolders: req.RemoveEmptyFolders,
 		})
 		if err != nil {
-			if errors.Is(err, ErrCrossDevice) {
-				// The file is already gone (deleted directly, per Recycle bin's
-				// own doc comment) -- there is nothing to restore for this copy,
-				// but the other copies and the rest of this action still proceed.
-				result.CrossDeviceDeletes++
-				continue
-			}
 			// A copy a scan already found gone has nothing to recycle; stopping here would leave the block half done.
 			if errors.Is(err, fs.ErrNotExist) {
 				continue

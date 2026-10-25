@@ -190,13 +190,10 @@ func (r ImportRevert) recycleObject(ctx context.Context, file UnitFile, recyclin
 		Reason: ReasonFailedImport, Retain: recycling.Retain, RemoveEmptyFolders: recycling.RemoveEmptyFolders,
 	})
 	if err != nil {
-		// A file deleted by hand since is as gone as one deleted across devices: its rows still go, or the revert never finishes.
-		if !errors.Is(err, ErrCrossDevice) && !errors.Is(err, fs.ErrNotExist) {
+		// A file deleted by hand since still has its rows go, or the revert never finishes.
+		if !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("recycle bin %q: %w", target.RelPath, err)
 		}
-		// Already gone (deleted directly, Recycle bin's own doc comment) -- nothing to
-		// restore for this copy, but the row (and, below, maybe the object) is still
-		// cleaned up.
 	} else {
 		result.RecycledPaths = append(result.RecycledPaths, entry)
 	}
@@ -221,7 +218,7 @@ func (r ImportRevert) recycleExtra(ctx context.Context, extra UnitExtra, recycli
 	switch {
 	case err == nil:
 		result.RecycledPaths = append(result.RecycledPaths, entry)
-	case errors.Is(err, ErrCrossDevice), errors.Is(err, fs.ErrNotExist):
+	case errors.Is(err, fs.ErrNotExist):
 	default:
 		return fmt.Errorf("recycle bin extra %q: %w", extra.RelPath, err)
 	}

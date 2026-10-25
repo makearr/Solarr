@@ -11,7 +11,7 @@ services:
       PUID: 1000
       PGID: 1000
       # Air dates and log timestamps are timezone-dependent.
-      TZ: Europe/Fefobo
+      TZ: Europe/Berlin
 
     ports:
       - "5454:5454"

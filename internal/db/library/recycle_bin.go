@@ -12,6 +12,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
+	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
@@ -28,14 +29,6 @@ const (
 	ReasonUserDelete    Reason = "user_delete"
 	ReasonFailedImport  Reason = "failed_import"
 )
-
-// ErrCrossDevice reports that the source and its recycle bin directory turned
-// out to be on different filesystems. Recycle bin never falls back to a copy
-// here (unlike ADR-11's import linking) -- section 10.8 is explicit that this
-// case deletes the file directly and says so, rather than silently copying
-// it, because a cross-filesystem recycle bin move stops being a cheap rename
-// and starts being real, unbounded I/O on the path meant to be safe and fast.
-var ErrCrossDevice = errors.New("recycle bin: source and recycle bin directory are on different filesystems; deleted directly instead")
 
 // ErrAlreadyRestored reports that a recycle bin entry was already restored
 // (or does not exist), so a second restore is refused rather than silently
@@ -109,9 +102,7 @@ func NewRecycleBin(opened *store.Store, fsys fsx.FS, cl clock.Clock) RecycleBin 
 	return RecycleBin{store: opened, fsys: fsys, clock: cl}
 }
 
-// Put moves one file into the recycle bin and records it. On ErrCrossDevice the
-// file is already gone (deleted directly, per this type's own doc comment)
-// -- the caller must not retry or treat it as still present.
+// Put moves one file into the recycle bin and records it.
 func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 	info, err := q.fsys.Lstat(req.OriginalPath)
 	if err != nil {
@@ -123,15 +114,7 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 		return Entry{}, err
 	}
 
-	if err := q.fsys.Rename(req.OriginalPath, recycledPath); err != nil {
-		if errors.Is(err, syscall.EXDEV) {
-			if rmErr := q.fsys.Remove(req.OriginalPath); rmErr != nil {
-				return Entry{}, fmt.Errorf(
-					"recycle bin: %q is on a different filesystem and could not be deleted either: %w",
-					req.OriginalPath, rmErr)
-			}
-			return Entry{}, fmt.Errorf("%w: %s", ErrCrossDevice, req.OriginalPath)
-		}
+	if err := relocate(q.fsys, req.OriginalPath, recycledPath, info.Size); err != nil {
 		return Entry{}, fmt.Errorf("recycle bin: move %q to %q: %w", req.OriginalPath, recycledPath, err)
 	}
 
@@ -160,6 +143,24 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 			"recycle bin: moved %q to %q but failed to record it: %w", req.OriginalPath, recycledPath, err)
 	}
 	return recycleBinEntryFromRow(row), nil
+}
+
+// relocate renames, and across filesystems copies, verifies and only then unlinks: nothing is deleted directly
+// (user, 2026-10-24, replacing section 10.8's direct delete).
+func relocate(fsys fsx.FS, from, to string, sizeBytes int64) error {
+	err := fsys.Rename(from, to)
+	if err == nil || !errors.Is(err, syscall.EXDEV) {
+		return err
+	}
+	if _, err := mover.PlaceOne(fsys, from, to, sizeBytes, []mover.PlaceMethod{mover.PlaceCopy}); err != nil {
+		return err
+	}
+	if err := fsys.Remove(from); err != nil {
+		// Two copies would leave the bin claiming a file that is still in place.
+		_ = fsys.Remove(to)
+		return fmt.Errorf("remove %q after a verified copy: %w", from, err)
+	}
+	return nil
 }
 
 // removeEmptyFolders removes folder and its emptied parents, never rootPath itself. Removing a

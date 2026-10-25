@@ -3988,9 +3988,6 @@ type RemoveAndBlockResult struct {
 	// BlocklistId Present when `blocklist` was requested.
 	BlocklistId *int64 `json:"blocklist_id,omitempty"`
 
-	// CrossDeviceDeletes Copies that turned out to be on a different filesystem than their own recycle bin directory -- deleted directly instead of recycled (section 10.8), unrestorable.
-	CrossDeviceDeletes int `json:"cross_device_deletes"`
-
 	// RecycledPaths The recycle bin path each copy landed at, one per copy actually moved.
 	RecycledPaths []string `json:"recycled_paths"`
 

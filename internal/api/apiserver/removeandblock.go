@@ -40,11 +40,10 @@ type RemoveAndBlockInput struct {
 
 // RemoveAndBlockOutput is what actually happened.
 type RemoveAndBlockOutput struct {
-	RecycledPaths      []string
-	CrossDeviceDeletes int
-	BlockID            *int64
-	BlocklistID        *int64
-	ReopenedItems      []int64
+	RecycledPaths []string
+	BlockID       *int64
+	BlocklistID   *int64
+	ReopenedItems []int64
 }
 
 // ErrNoSuchFile reports a media_object id that does not exist -- distinct
@@ -118,8 +117,7 @@ func removeAndBlockInputFromBody(body gen.RemoveAndBlockRequest) RemoveAndBlockI
 
 func removeAndBlockResultView(result RemoveAndBlockOutput) gen.RemoveAndBlockResult {
 	view := gen.RemoveAndBlockResult{
-		RecycledPaths: result.RecycledPaths, CrossDeviceDeletes: result.CrossDeviceDeletes,
-		ReopenedItems: result.ReopenedItems,
+		RecycledPaths: result.RecycledPaths, ReopenedItems: result.ReopenedItems,
 	}
 	if view.RecycledPaths == nil {
 		view.RecycledPaths = []string{}

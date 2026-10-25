@@ -88,9 +88,7 @@ func (a RemoveAndBlock) RemoveAndBlockFile(
 		return apiserver.RemoveAndBlockOutput{}, err
 	}
 
-	output := apiserver.RemoveAndBlockOutput{
-		CrossDeviceDeletes: result.CrossDeviceDeletes, ReopenedItems: result.ReopenedItems,
-	}
+	output := apiserver.RemoveAndBlockOutput{ReopenedItems: result.ReopenedItems}
 	for _, entry := range result.RecycledPaths {
 		output.RecycledPaths = append(output.RecycledPaths, entry.RecycledPath)
 	}

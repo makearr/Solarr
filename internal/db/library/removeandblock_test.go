@@ -2,7 +2,6 @@ package library_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -83,9 +82,6 @@ func TestRemoveAndBlock_FullActionOnARealDesiredItem(t *testing.T) {
 	if len(result.RecycledPaths) != 1 {
 		t.Fatalf("RecycledPaths = %+v, want 1 entry", result.RecycledPaths)
 	}
-	if result.CrossDeviceDeletes != 0 {
-		t.Errorf("CrossDeviceDeletes = %d, want 0", result.CrossDeviceDeletes)
-	}
 	if _, err := fsys.Stat("/media/root/Artist/Album/track.flac"); err == nil {
 		t.Error("original file still exists after Do")
 	}
@@ -158,7 +154,7 @@ func TestRemoveAndBlock_RecyclesEveryHardlinkedCopy(t *testing.T) {
 	}
 }
 
-func TestRemoveAndBlock_CrossDeviceCopyStillLetsOthersProceed(t *testing.T) {
+func TestRemoveAndBlock_CrossDeviceCopiesAreRecycled(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
@@ -177,9 +173,6 @@ func TestRemoveAndBlock_CrossDeviceCopyStillLetsOthersProceed(t *testing.T) {
 		rootPathLookup(map[int64]string{1: "/media/root-a", 2: "/media/root-b"}),
 	)
 
-	// Only root-b's recycle bin directory creation will hit the disabled
-	// rename -- root-a's Put must still succeed, proving one cross-device
-	// copy does not abort the rest of the action.
 	fsys.SetRenameSupported(false)
 
 	result, err := action.Do(t.Context(), library.RemoveAndBlockRequest{
@@ -189,14 +182,16 @@ func TestRemoveAndBlock_CrossDeviceCopyStillLetsOthersProceed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Do: %v", err)
 	}
-	if len(result.RecycledPaths) != 0 {
-		t.Errorf("RecycledPaths = %+v, want none -- rename is disabled entirely", result.RecycledPaths)
+	if len(result.RecycledPaths) != 2 {
+		t.Errorf("RecycledPaths = %+v, want both copies recycled by copy and verify", result.RecycledPaths)
 	}
-	if result.CrossDeviceDeletes != 2 {
-		t.Errorf("CrossDeviceDeletes = %d, want 2", result.CrossDeviceDeletes)
+	for _, entry := range result.RecycledPaths {
+		if _, err := fsys.Stat(entry.RecycledPath); err != nil {
+			t.Errorf("recycled copy %q missing: %v", entry.RecycledPath, err)
+		}
 	}
 	if _, err := fsys.Stat("/media/root-a/track.flac"); err == nil {
-		t.Error("root-a copy still exists -- a cross-device Put must still delete it directly")
+		t.Error("root-a copy still exists")
 	}
 	if _, err := fsys.Stat("/media/root-b/track-copy.flac"); err == nil {
 		t.Error("root-b copy still exists")
@@ -296,8 +291,5 @@ func TestRemoveAndBlock_MissingRootPathIsAnError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("Do succeeded, want it refused: no known path for root folder 999")
-	}
-	if errors.Is(err, library.ErrCrossDevice) {
-		t.Errorf("error = %v, want a root-lookup failure, not ErrCrossDevice", err)
 	}
 }

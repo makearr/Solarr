@@ -46,7 +46,7 @@ func (q RecycleBin) Restore(ctx context.Context, id int64) (Entry, error) {
 	if err := q.fsys.MkdirAll(filepath.Dir(entry.OriginalPath), 0o755); err != nil {
 		return Entry{}, fmt.Errorf("recycle bin: recreate the folder of %q: %w", entry.OriginalPath, err)
 	}
-	if err := q.fsys.Rename(entry.RecycledPath, entry.OriginalPath); err != nil {
+	if err := relocate(q.fsys, entry.RecycledPath, entry.OriginalPath, entry.SizeBytes); err != nil {
 		return Entry{}, fmt.Errorf(
 			"recycle bin: restore %q to %q: %w", entry.RecycledPath, entry.OriginalPath, err)
 	}

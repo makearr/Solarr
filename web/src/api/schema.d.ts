@@ -4357,7 +4357,7 @@ export interface components {
             server_time?: string;
             /**
              * @description The server's configured zone, from TZ. `UTC` when unset.
-             * @example Europe/Fefobo
+             * @example Europe/Berlin
              */
             timezone?: string;
         };
@@ -7047,8 +7047,6 @@ export interface components {
         RemoveAndBlockResult: {
             /** @description The recycle bin path each copy landed at, one per copy actually moved. */
             recycled_paths: string[];
-            /** @description Copies that turned out to be on a different filesystem than their own recycle bin directory -- deleted directly instead of recycled (section 10.8), unrestorable. */
-            cross_device_deletes: number;
             /**
              * Format: int64
              * @description Present when `block` was requested.

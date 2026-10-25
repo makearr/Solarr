@@ -34,7 +34,8 @@ Rules worth knowing:
   (`scan.MassVanish`, `adapters.VanishedFiles`).
 
 - **The recycling bin is recycle bin** (section 10.8): there is no bin path. Removed files go to
-  `<root>/recycleBin/<date>/` on the same filesystem. A file in two libraries is kept as long as
+  `<root>/recycle-bin/<date>/`, renamed there, or across filesystems copied, verified and only then
+  unlinked; a restore does the same in reverse. A file in two libraries is kept as long as
   either wants and its folders removed only when both say so.
 - **The root folder itself is never touched**: no mode, no group, never deleted. Host
   permissions are reported, never corrected (section 20.2); `chmod Folder` must leave the owner

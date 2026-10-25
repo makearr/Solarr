@@ -2,6 +2,7 @@ package library_test
 
 import (
 	"errors"
+	"io"
 	"path/filepath"
 	"testing"
 	"time"
@@ -74,7 +75,7 @@ func TestRecycleBinPut_MovesFileAndRecordsIt(t *testing.T) {
 	}
 }
 
-func TestRecycleBinPut_CrossDeviceDeletesDirectlyInstead(t *testing.T) {
+func TestRecycleBin_CrossDeviceCopiesVerifiesAndUnlinks(t *testing.T) {
 	opened, _ := newLibrary(t)
 	fake := clock.NewFakeAtEpoch()
 	fsys := fsx.NewMem(fake)
@@ -83,17 +84,43 @@ func TestRecycleBinPut_CrossDeviceDeletesDirectlyInstead(t *testing.T) {
 
 	putTestFile(t, fsys, "/media/root/track.flac", []byte("audio bytes"))
 
-	_, err := q.Put(t.Context(), library.PutRequest{
+	entry, err := q.Put(t.Context(), library.PutRequest{
 		RootPath: "/media/root", OriginalPath: "/media/root/track.flac",
 		Reason: library.ReasonJunk, Retain: 168 * time.Hour,
 	})
-	if !errors.Is(err, library.ErrCrossDevice) {
-		t.Fatalf("Put error = %v, want ErrCrossDevice", err)
+	if err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	if _, statErr := fsys.Stat("/media/root/track.flac"); statErr == nil {
+		t.Error("original file still exists after a cross-device Put")
+	}
+	if got := readTestFile(t, fsys, entry.RecycledPath); got != "audio bytes" {
+		t.Errorf("recycled content = %q, want %q", got, "audio bytes")
 	}
 
-	if _, statErr := fsys.Stat("/media/root/track.flac"); statErr == nil {
-		t.Error("original file still exists -- cross-device Put must delete it directly")
+	if _, err := q.Restore(t.Context(), entry.ID); err != nil {
+		t.Fatalf("Restore: %v", err)
 	}
+	if got := readTestFile(t, fsys, "/media/root/track.flac"); got != "audio bytes" {
+		t.Errorf("restored content = %q, want %q", got, "audio bytes")
+	}
+	if _, statErr := fsys.Stat(entry.RecycledPath); statErr == nil {
+		t.Error("recycle bin copy still exists after a cross-device Restore")
+	}
+}
+
+func readTestFile(t *testing.T, fsys *fsx.Mem, path string) string {
+	t.Helper()
+	file, err := fsys.Open(path)
+	if err != nil {
+		t.Fatalf("Open(%q): %v", path, err)
+	}
+	defer func() { _ = file.Close() }()
+	content, err := io.ReadAll(file)
+	if err != nil {
+		t.Fatalf("Read(%q): %v", path, err)
+	}
+	return string(content)
 }
 
 func TestRecycleBinRestore_PutsFileBackAndMarksRow(t *testing.T) {

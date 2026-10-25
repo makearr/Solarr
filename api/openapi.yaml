@@ -7084,7 +7084,7 @@ components:
             on a remote host the two routinely differ.
         timezone:
           type: string
-          example: "Europe/Fefobo"
+          example: "Europe/Berlin"
           description: The server's configured zone, from TZ. `UTC` when unset.
 
     LegalText:
@@ -10356,18 +10356,12 @@ components:
     RemoveAndBlockResult:
       type: object
       description: What the action actually did -- each field only set when its own step ran.
-      required: [recycled_paths, cross_device_deletes, reopened_items]
+      required: [recycled_paths, reopened_items]
       properties:
         recycled_paths:
           type: array
           items: { type: string }
           description: The recycle bin path each copy landed at, one per copy actually moved.
-        cross_device_deletes:
-          type: integer
-          description: >-
-            Copies that turned out to be on a different filesystem than
-            their own recycle bin directory -- deleted directly instead of
-            recycled (section 10.8), unrestorable.
         block_id:
           type: integer
           format: int64
