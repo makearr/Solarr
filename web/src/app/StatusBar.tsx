@@ -30,13 +30,13 @@ export function StatusBar() {
     staleTime: Infinity,
   });
 
-  // The address the outside world sees this host connect from, which is what
-  // says whether traffic is leaving past a VPN. Rechecked on the server's own
-  // interval, so this only has to read the cached answer.
+  // The address this host connects out from, which says whether traffic leaves past a VPN. Asking is what
+  // turns the server's check on; it asks its echo service at most once per its own interval.
   const egress = useQuery({
     queryKey: ["egress"],
     queryFn: () => ok(api.GET("/system/egress")),
     staleTime: 5 * 60_000,
+    refetchInterval: 30 * 60_000,
     retry: false,
     enabled: showing("ip"),
   });

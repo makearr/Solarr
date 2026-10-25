@@ -184,9 +184,9 @@ workers:
   import: 1
 
 network:
-  # Off by default: the only call to a host you did not configure. It asks a
-  # third party what address this host connects from, which tells you whether
-  # traffic is leaving past a VPN.
+  # Asks a third party what address this host connects from, which tells you
+  # whether traffic is leaving past a VPN. Off: checked only while the status
+  # bar shows the address (Settings, Web UI). On: checked on the interval.
   public_ip_check:
     enabled: false
     endpoint: https://api.ipify.org

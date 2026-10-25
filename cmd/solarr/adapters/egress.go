@@ -1,6 +1,8 @@
 package adapters
 
 import (
+	"context"
+
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/platform/egress"
 )
@@ -11,8 +13,8 @@ type Egress struct {
 	Prober *egress.Prober
 }
 
-func (e Egress) Status() apiserver.EgressStatus {
-	status := e.Prober.Status()
+func (e Egress) Status(ctx context.Context) apiserver.EgressStatus {
+	status := e.Prober.Demand(ctx)
 	return apiserver.EgressStatus{
 		Enabled:   status.Enabled,
 		PublicIP:  status.PublicIP,

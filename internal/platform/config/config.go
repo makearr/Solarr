@@ -36,8 +36,8 @@ type Network struct {
 	PublicIPCheck PublicIPCheck `yaml:"public_ip_check"`
 }
 
-// PublicIPCheck asks a third party what address this host connects from. Off by
-// default: it is the only call to a host the operator did not configure.
+// PublicIPCheck asks a third party what address this host connects from. Enabled runs it on the interval;
+// otherwise it runs only while a status bar shows the address, at most once per interval.
 type PublicIPCheck struct {
 	Enabled  bool     `yaml:"enabled"`
 	Endpoint string   `yaml:"endpoint"`

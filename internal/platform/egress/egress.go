@@ -1,6 +1,5 @@
-// Package egress reports the address this host appears to connect from. It is
-// the only outbound call Solarr makes without being asked, which is why it
-// is switchable off and names the service that answered.
+// Package egress reports the address this host appears to connect from: on an interval when
+// configured, else only while the status bar shows it (Demand), and always naming the service asked.
 package egress
 
 import (
@@ -43,6 +42,7 @@ type Prober struct {
 	interval time.Duration
 	enabled  bool
 
+	asking sync.Mutex
 	mu     sync.RWMutex
 	status Status
 }
@@ -102,6 +102,20 @@ func (p *Prober) Run(ctx context.Context) {
 			p.checkOnce(ctx)
 		}
 	}
+}
+
+// Demand checks now when the last answer is older than the interval, then reports the result. It is
+// how the status bar's address element turns the check on without the periodic run.
+func (p *Prober) Demand(ctx context.Context) Status {
+	if p.client == nil || p.endpoint == "" {
+		return p.Status()
+	}
+	p.asking.Lock()
+	defer p.asking.Unlock()
+	if checked := p.Status().CheckedAt; checked.IsZero() || p.clock.Since(checked) >= p.interval {
+		p.checkOnce(ctx)
+	}
+	return p.Status()
 }
 
 func (p *Prober) checkOnce(ctx context.Context) {

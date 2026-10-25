@@ -301,8 +301,9 @@ Solarr is **privacy-first and localhost-first**.
 - **No telemetry, no analytics, no crash reporting, no accounts, no update check.**
 - It contacts **only what you configure**: the metadata providers enabled for your libraries, your
   indexers, your download clients and, if you use the import, your \*Arr instances.
-- The one optional extra, a check of your public IP (to see whether traffic leaves past a VPN), is **off
-  by default** (`network.public_ip_check` in `config.yml`).
+- The one optional extra, a check of your public IP (to see whether traffic leaves past a VPN), runs
+  **only while you show the address in the status bar** (hidden by default; *Settings → Web UI*), or on
+  a schedule if you turn on `network.public_ip_check` in `config.yml`.
 - Secrets (API keys, passwords) are **encrypted at rest** and never returned by the API.
 - Every outbound request goes through one HTTP client with a destination guard, and can be routed
   through a proxy.

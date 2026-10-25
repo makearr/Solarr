@@ -1,6 +1,7 @@
 package apiserver
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -18,10 +19,10 @@ type EgressStatus struct {
 	Err       string
 }
 
-// EgressReporter supplies that status. Optional: without one the endpoint
-// reports a disabled check rather than failing.
+// EgressReporter supplies that status, checking first when the last answer is stale: asking is what turns the
+// check on (the status bar's address element). Optional: without one the endpoint reports a disabled check.
 type EgressReporter interface {
-	Status() EgressStatus
+	Status(ctx context.Context) EgressStatus
 }
 
 // GetEgress reports the address this host appears to connect from. Authenticated:
@@ -37,7 +38,7 @@ func (s *Server) GetEgress(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := s.egress.Status()
+	status := s.egress.Status(r.Context())
 	view := gen.Egress{Enabled: &status.Enabled}
 	if status.PublicIP != "" {
 		view.PublicIp = &status.PublicIP

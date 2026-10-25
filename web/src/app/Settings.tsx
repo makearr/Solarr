@@ -128,7 +128,7 @@ function FooterItems() {
     setItems(next);
   };
   return (
-    <Card title="Status bar" help="Which items the bar along the bottom shows, left to right. IP address and time start off, so screenshots give neither away.">
+    <Card title="Status bar" help="Which items the bar along the bottom shows, left to right. IP address and time start off, so screenshots give neither away. Showing the IP address asks an outside service which address this host connects from.">
       <ul className="flex max-w-md flex-col">
         {items.map((entry, at) => (
           <li key={entry.item} className="flex items-center gap-2 border-b border-border-subtle py-1 text-sm last:border-0">

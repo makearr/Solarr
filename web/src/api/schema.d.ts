@@ -110,7 +110,7 @@ export interface paths {
         };
         /**
          * The address this host appears to come from.
-         * @description What the outside world sees when Solarr connects out, which is the number that matters for whether traffic is leaving past a VPN. Resolved by asking a configurable echo service through httpx, cached, and absent rather than guessed when the check is disabled or has not succeeded. Per-indexer proxies (ADR-47) can egress differently; this is the app's own path out.
+         * @description What the outside world sees when Solarr connects out, which is the number that matters for whether traffic is leaving past a VPN. Resolved by asking a configurable echo service through httpx, cached, and absent rather than guessed when the check has not succeeded. Asking checks first when the last answer is older than the interval, so the check runs while the status bar shows the address even when not enabled. Per-indexer proxies (ADR-47) can egress differently; this is the app's own path out.
          */
         get: operations["getEgress"];
         put?: never;
