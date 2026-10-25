@@ -184,11 +184,11 @@ workers:
   import: 1
 
 network:
-  # The only outbound call Solarr makes on its own. It asks a third party
-  # what address this host connects from, which is what tells you whether
-  # traffic is leaving past a VPN. Set enabled: false and nothing is contacted.
+  # Off by default: the only call to a host you did not configure. It asks a
+  # third party what address this host connects from, which tells you whether
+  # traffic is leaving past a VPN.
   public_ip_check:
-    enabled: true
+    enabled: false
     endpoint: https://api.ipify.org
     interval: 6h
 

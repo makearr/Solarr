@@ -87,8 +87,8 @@ does not make the container report itself unhealthy.
 
 ## Network egress and the IP allowlist
 
-`network.proxy`/`network.proxy_bypass` (a global HTTP or SOCKS5 proxy for outbound metadata and
-update-check traffic) and `network.allow_cidrs` (an IP allowlist) are both `settings.db` policy,
+`network.proxy`/`network.proxy_bypass` (a global HTTP or SOCKS5 proxy for outbound
+metadata traffic; Solarr has no update check) and `network.allow_cidrs` (an IP allowlist) are both `settings.db` policy,
 edited from the Network screen, and apply live with no restart. The allowlist can only ever
 **deny** — it never authenticates and never grants (Invariant 89) — and a change that would lock
 out the address making it is refused outright. `/api/v1/health` is always exempt, so a container

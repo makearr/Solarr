@@ -36,9 +36,8 @@ type Network struct {
 	PublicIPCheck PublicIPCheck `yaml:"public_ip_check"`
 }
 
-// PublicIPCheck asks a third party what address this host connects from. It is
-// the only unprompted outbound call Solarr makes, so it is switchable off
-// and names the service it asks.
+// PublicIPCheck asks a third party what address this host connects from. Off by
+// default: it is the only call to a host the operator did not configure.
 type PublicIPCheck struct {
 	Enabled  bool     `yaml:"enabled"`
 	Endpoint string   `yaml:"endpoint"`
@@ -196,7 +195,7 @@ func Default() Config {
 		Workers: Workers{Search: 4, Acquire: 2, Metadata: 4, Import: 1},
 		Logging: Logging{Level: LevelInfo, Format: FormatJSON},
 		Network: Network{PublicIPCheck: PublicIPCheck{
-			Enabled:  true,
+			Enabled:  false,
 			Endpoint: DefaultPublicIPEndpoint,
 			Interval: Duration(6 * time.Hour),
 		}},
