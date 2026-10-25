@@ -5,7 +5,7 @@ go 1.27.0
 require (
 	github.com/bodgit/sevenzip v1.6.5
 	github.com/dlclark/regexp2 v1.12.0
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/goccy/go-yaml v1.19.2
 	github.com/mayahiro/go-webp v0.3.0
 	github.com/ncruces/go-sqlite3 v0.35.4
