@@ -111,6 +111,11 @@ type SizeFloor interface {
 	MediaSizeFloorBytes() int64
 }
 
+// BookFiles is an Importer whose walk counts ebook files as media: a book library's.
+type BookFiles interface {
+	TakesBookFiles() bool
+}
+
 // HeldCommitter is an Importer whose held units a person commits by hand: as resolved, or as a work named.
 type HeldCommitter interface {
 	CommitHeld(ctx context.Context, request HeldRequest) (library.Placement, error)

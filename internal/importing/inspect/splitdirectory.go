@@ -36,7 +36,7 @@ import (
 // of its own -- a caller that cannot be sure both hold should use Run
 // instead. dir's files must be unchanged since the original walk, or the
 // split this reproduces will not match it.
-func SplitDirectory(fsys fsx.FS, dir string, tags TagReader, floorBytes int64) ([]Unit, error) {
+func SplitDirectory(fsys fsx.FS, dir string, tags TagReader, floorBytes int64, books bool) ([]Unit, error) {
 	if floorBytes <= 0 {
 		floorBytes = DefaultMediaSizeFloorBytes
 	}
@@ -61,7 +61,7 @@ func SplitDirectory(fsys fsx.FS, dir string, tags TagReader, floorBytes int64) (
 		}
 		file := File{
 			RelPath: entry.Name, SizeBytes: info.Size, ModTime: info.ModTime,
-			Class: Classify(entry.Name, info.Size, floorBytes),
+			Class: classify(entry.Name, info.Size, floorBytes, books),
 		}
 		if file.Class == ClassMedia {
 			media = append(media, file)

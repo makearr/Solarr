@@ -109,7 +109,11 @@ func (m ManualCommitter) placeHeld(
 	if sized, ok := importer.(importbatch.SizeFloor); ok {
 		floor = sized.MediaSizeFloorBytes()
 	}
-	reconstructed, err := m.reconstructUnit(ctx, path.Join(session.SourcePath, unit.RelPath), unit, floor)
+	books := false
+	if takes, ok := importer.(importbatch.BookFiles); ok {
+		books = takes.TakesBookFiles()
+	}
+	reconstructed, err := m.reconstructUnit(ctx, path.Join(session.SourcePath, unit.RelPath), unit, floor, books)
 	if err != nil {
 		return library.Placement{}, err
 	}
@@ -294,7 +298,7 @@ func topCandidate(unit library.Unit) (model.Identification, error) {
 // way: a file-count mismatch means the source changed since inspection,
 // refused rather than placing a different set of files than IDENTIFY
 // actually ranked.
-func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit library.Unit, floorBytes int64) (inspect.Unit, error) {
+func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit library.Unit, floorBytes int64, books bool) (inspect.Unit, error) {
 	siblings, err := m.sessions.ListUnits(ctx, unit.SessionID)
 	if err != nil {
 		return inspect.Unit{}, fmt.Errorf("importjob: list units for session %d: %w", unit.SessionID, err)
@@ -308,7 +312,7 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 
 	var reconstructed inspect.Unit
 	if len(sharing) <= 1 {
-		found, err := inspect.Run(ctx, m.fsys, root, inspect.Options{MediaSizeFloorBytes: floorBytes})
+		found, err := inspect.Run(ctx, m.fsys, root, inspect.Options{MediaSizeFloorBytes: floorBytes, Books: books})
 		if errors.Is(err, fs.ErrNotExist) {
 			return inspect.Unit{}, fmt.Errorf("importjob: unit %d: its folder is gone: %w", unit.ID, ErrUnitChanged)
 		}
@@ -321,7 +325,7 @@ func (m ManualCommitter) reconstructUnit(ctx context.Context, root string, unit 
 		}
 		reconstructed = found.Units[0]
 	} else {
-		units, err := inspect.SplitDirectory(m.fsys, root, nil, floorBytes)
+		units, err := inspect.SplitDirectory(m.fsys, root, nil, floorBytes, books)
 		if err != nil {
 			return inspect.Unit{}, fmt.Errorf("importjob: re-split directory for unit %d: %w", unit.ID, err)
 		}

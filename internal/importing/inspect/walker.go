@@ -27,6 +27,8 @@ type WalkOptions struct {
 	Tags                TagReader
 	SegmentPlausible    SegmentPlausibility
 	MediaSizeFloorBytes int64
+	// Books counts ebook files as media, for a book library's import.
+	Books bool
 	// Only, when set, is the files (relative to the root) the walk may see; everything else is as if absent.
 	Only map[string]bool
 }
@@ -193,7 +195,7 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		}
 		file := File{
 			RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime,
-			Class: Classify(childRelative, info.Size, w.opts.MediaSizeFloorBytes),
+			Class: classify(childRelative, info.Size, w.opts.MediaSizeFloorBytes, w.opts.Books),
 		}
 		if file.Class == ClassMedia {
 			ownMedia = append(ownMedia, file)
