@@ -121,7 +121,8 @@ func (m ManualCommitter) placeHeld(
 		reconstructed.Other[index].RelPath = path.Join(unit.RelPath, reconstructed.Other[index].RelPath)
 	}
 	request := importbatch.HeldRequest{
-		SessionID: session.ID, CategoryID: *session.CategoryID, SourcePath: session.SourcePath, Unit: reconstructed, As: named,
+		SessionID: session.ID, CategoryID: *session.CategoryID, AcquisitionID: session.AcquisitionID,
+		SourcePath: session.SourcePath, Unit: reconstructed, As: named,
 	}
 	if top, err := topCandidate(unit); err == nil {
 		request.Top = &top
@@ -129,9 +130,12 @@ func (m ManualCommitter) placeHeld(
 	if named == nil && unit.WorkID == nil && request.Top == nil {
 		return library.Placement{}, fmt.Errorf("importjob: unit %d: %w", unit.ID, ErrNoCandidate)
 	}
-	if unit.WorkID != nil {
+	switch {
+	case unit.WorkID != nil:
 		request.WorkID = *unit.WorkID
-	} else if named == nil && request.Top.ExternalID != nil {
+	case named == nil && request.Top.Strategy == importbatch.StrategyResolved && request.Top.WorkID != nil:
+		request.WorkID = *request.Top.WorkID
+	case named == nil && request.Top.ExternalID != nil:
 		// Commit anyway means the best guess for every type: here the top-ranked candidate's own id.
 		request.As = &importbatch.Named{Provider: request.Top.ExternalID.Provider, ExternalID: request.Top.ExternalID.ExternalID}
 		request.Guess = max(request.Top.Confidence, minimumGuess)
@@ -140,10 +144,15 @@ func (m ManualCommitter) placeHeld(
 	if err != nil {
 		return library.Placement{}, fmt.Errorf("importjob: commit unit %d: %w", unit.ID, err)
 	}
-	if unit.Decision == library.UnitQueue {
+	// A held unit records the override; a retried one drops why its library could not take it.
+	if unit.Decision == library.UnitQueue || unit.Reason != "" {
+		reason := "manual override"
+		if unit.Decision == library.UnitCommit {
+			reason = ""
+		}
 		if err := m.sessions.SetUnitDecisions(ctx, session.ID, []library.UnitDecision{{
 			UnitID: unit.ID, Decision: library.UnitCommit, Confidence: 1, WorkID: &placement.WorkID,
-			CandidatesJSON: unit.CandidatesJSON, Reason: "manual override",
+			CandidatesJSON: unit.CandidatesJSON, Reason: reason,
 		}}); err != nil {
 			return library.Placement{}, fmt.Errorf("importjob: record decision override for unit %d: %w", unit.ID, err)
 		}
@@ -180,11 +189,32 @@ func (m ManualCommitter) PlaceUnplaced(ctx context.Context, sessionID int64) (pl
 		}
 		if _, err := m.placeHeld(ctx, session, unit, nil); err != nil {
 			errs = append(errs, err)
+			if closeErr := m.closeUnplaceable(ctx, session.ID, unit, err); closeErr != nil {
+				errs = append(errs, closeErr)
+			}
 			continue
 		}
 		placed++
 	}
 	return placed, errs
+}
+
+// closeUnplaceable ends a unit no later try can place, so its download is failed rather than kept for ever: nothing
+// in it is new any more, or its files are gone. A library that still cannot take it leaves it waiting.
+func (m ManualCommitter) closeUnplaceable(ctx context.Context, sessionID int64, unit library.Unit, placeErr error) error {
+	decision := library.UnitDecision{UnitID: unit.ID, CandidatesJSON: unit.CandidatesJSON, Reason: placeErr.Error()}
+	switch {
+	case errors.Is(placeErr, importbatch.ErrNothingToPlace):
+		decision.Decision, decision.Reason = library.UnitSkip, importbatch.ReasonNothingNew
+	case errors.Is(placeErr, ErrUnitChanged):
+		decision.Decision = library.UnitFailed
+	default:
+		return nil
+	}
+	if err := m.sessions.SetUnitDecisions(ctx, sessionID, []library.UnitDecision{decision}); err != nil {
+		return fmt.Errorf("importjob: close unit %d: %w", unit.ID, err)
+	}
+	return nil
 }
 
 // CommitAllHeld force-commits the units a preview run held for review (revision.md 7.9's "commit all / selected"):

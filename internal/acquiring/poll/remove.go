@@ -23,7 +23,7 @@ func (j *Job) Remove(ctx context.Context, acquisitionID int64, blocklist bool) e
 	}
 	switch {
 	case acquisition.State == StateQueued, acquisition.State == StateDownloading, acquisition.State == StateCompleted:
-	case acquisition.State == StateImporting && acquisition.LastError == WaitingForReview:
+	case Held(acquisition):
 	default:
 		return ErrNotRemovable
 	}

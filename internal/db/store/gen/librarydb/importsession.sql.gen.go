@@ -690,6 +690,46 @@ func (q *Queries) ListImportUnitsPage(ctx context.Context, arg ListImportUnitsPa
 	return items, nil
 }
 
+const listSessionsWithUnplacedCommits = `-- name: ListSessionsWithUnplacedCommits :many
+SELECT DISTINCT u.session_id
+FROM import_unit u
+JOIN import_session s ON s.id = u.session_id
+WHERE u.decision = 'COMMIT' AND u.work_id IS NULL AND u.session_id > ?1
+  AND s.category_id IS NOT NULL AND s.state IN ('DONE', 'FAILED')
+ORDER BY u.session_id
+LIMIT ?2
+`
+
+type ListSessionsWithUnplacedCommitsParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+// The sessions holding a unit their library could not take yet, for the import retry: only those that finished
+// and have a library to place into; a reverted or cancelled session places nothing again.
+func (q *Queries) ListSessionsWithUnplacedCommits(ctx context.Context, arg ListSessionsWithUnplacedCommitsParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listSessionsWithUnplacedCommits, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var session_id int64
+		if err := rows.Scan(&session_id); err != nil {
+			return nil, err
+		}
+		items = append(items, session_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUnplacedCommitUnits = `-- name: ListUnplacedCommitUnits :many
 SELECT id, session_id, rel_path, shape, file_count, bytes, confidence, decision,
        work_id, edition_id, evidence_json, candidates_json, reason, work_created,

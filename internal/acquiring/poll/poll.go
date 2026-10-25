@@ -513,7 +513,7 @@ func (j *Job) checkPath(ctx context.Context, localPath string) string {
 	return ""
 }
 
-// followImport moves a download on once its import finishes: imported, waiting for a person, or failed.
+// followImport moves a download on once its import finishes: imported, waiting for a person or for room, or failed.
 func (j *Job) followImport(ctx context.Context, client Client, acquisition library.Acquisition) error {
 	session, err := j.config.Sessions.LatestForAcquisition(ctx, acquisition.ID)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -529,12 +529,14 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 	if err != nil {
 		return err
 	}
-	// Placed, not merely decided: a committed unit with no root to go to brought nothing in.
-	placed, waiting := 0, 0
+	// Placed, not merely decided: a committed unit with no work is one its library could not take (no root, no room).
+	placed, waiting, noRoom := 0, 0, 0
 	for _, unit := range units {
 		switch {
-		case unit.WorkID != nil:
+		case unit.Decision == library.UnitCommit && unit.WorkID != nil:
 			placed++
+		case unit.Decision == library.UnitCommit:
+			noRoom++
 		case unit.Decision == library.UnitQueue:
 			waiting++
 		}
@@ -545,6 +547,9 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		return err
 	}
 	switch {
+	case noRoom > 0:
+		// A library-side failure is never the release's: kept, not blocklisted, until the import retry places it.
+		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForRoom, now)
 	case placed > 0 && stall.ImportingFinished:
 		return j.finishedImported(ctx, client, acquisition)
 	case placed > 0:
@@ -599,6 +604,14 @@ func (j *Job) finishedImported(ctx context.Context, client Client, acquisition l
 
 // WaitingForReview is the note of a download whose import is held for a person: nothing is moving, so it may be removed.
 const WaitingForReview = "waiting for you to identify it on the Import page"
+
+// WaitingForRoom is the note of a download its library could not take; the import retry places it once a root can.
+const WaitingForRoom = "no root folder of its library can take it; imported once one can (Import page)"
+
+// Held reports a download whose import waits, for a person or for room: nothing is moving, so it may be removed.
+func Held(acquisition library.Acquisition) bool {
+	return acquisition.State == StateImporting && (acquisition.LastError == WaitingForReview || acquisition.LastError == WaitingForRoom)
+}
 
 // cleanUp removes an imported download from the client, files included, when the client is set
 // to (answered 2026-09-24); the import has already verified the library copy (Invariant 18).

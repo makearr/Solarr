@@ -43,6 +43,12 @@ func (noAcquisition) Get(context.Context, int64) (library.Acquisition, error) {
 
 func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity) {
 	t.Helper()
+	return newImporterWithRoom(t, 1<<40)
+}
+
+// newImporterWithRoom is newImporter over a root with free bytes left.
+func newImporterWithRoom(t *testing.T, free int64) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity) {
+	t.Helper()
 	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, nil)
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
@@ -64,14 +70,14 @@ func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspe
 		_ = file.Close()
 		return inspect.File{RelPath: rel, SizeBytes: int64(len(content)), Class: inspect.ClassMedia}
 	}
-	free := int64(1 << 40)
+	total := int64(1 << 40)
 	identity := library.NewIdentity(opened)
 	reader := library.NewSeriesReader(opened)
 	return movie.NewImporter(movie.ImporterConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader, Identity: identity,
 		Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
 		Placer: placer.New(placer.Config{
-			FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+			FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &total}},
 			Affinity: memoryAffinity{}, Identity: identity, Clock: fake,
 		}),
 		Resolver:   movie.Resolver{Service: service, Reader: reader, DefaultProfileID: 1, Categories: categories{}},
@@ -105,8 +111,30 @@ func TestImportPlacesTheBiggestFileUnderTheMovieFolderAndLeavesTheSample(t *test
 	again, err := importer.ImportBatch(t.Context(), batch.Request{
 		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{6},
 	})
-	if err != nil || again.Placements[0] != nil || again.Decisions[0].Decision == library.UnitCommit {
-		t.Errorf("a second import of a film already held places nothing: %+v, %v", again.Decisions[0], err)
+	if d := again.Decisions[0]; err != nil || again.Placements[0] != nil || d.Decision != library.UnitSkip || d.Reason != batch.ReasonNothingNew || d.WorkID != nil {
+		t.Errorf("a second import of a film already held places nothing and is skipped: %+v, %v", d, err)
+	}
+}
+
+// A full root is the library's failure, not the release's: decided, placed nowhere, the film kept for the retry.
+func TestImportOfAFilmNoRootCanTakeWaitsForRoom(t *testing.T) {
+	importer, _, write, _ := newImporterWithRoom(t, 0)
+	unit := inspect.Unit{Directory: "The.Example.Film.1999.1080p.BluRay.x264-GRP", Media: []inspect.File{
+		write("The.Example.Film.1999.1080p.BluRay.x264-GRP/The.Example.Film.1999.1080p.BluRay.x264-GRP.mkv"),
+	}}
+	result, err := importer.ImportBatch(t.Context(), batch.Request{
+		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{5},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := result.Decisions[0]
+	if d.Decision != library.UnitCommit || d.WorkID != nil || result.Placements[0] != nil {
+		t.Fatalf("decision = %+v, want COMMIT and unplaced", d)
+	}
+	if candidates, err := library.UnitCandidates(d.CandidatesJSON); err != nil || len(candidates) != 1 ||
+		candidates[0].Strategy != batch.StrategyResolved || candidates[0].WorkID == nil {
+		t.Errorf("candidates = %+v, %v; want the resolved film", candidates, err)
 	}
 }
 

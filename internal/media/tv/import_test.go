@@ -76,15 +76,32 @@ func TestImportPlacesAFolderOfEpisodesUnderTheSeriesAndCoversThem(t *testing.T) 
 		write("Example.Show.S01.1080p.WEB-DL.DDP5.1.H.264-GRP/sample.mkv"),
 	}}
 
-	free := int64(1 << 40)
 	reader := library.NewSeriesReader(opened)
-	importer := tv.NewImporter(tv.ImporterConfig{
-		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
-		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
-		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
-		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
-		Categories: categories{}, Clock: fake,
+	importerWith := func(free int64) tv.Importer {
+		total := int64(1 << 40)
+		return tv.NewImporter(tv.ImporterConfig{
+			FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &total}},
+			Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+			Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+			Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+			Categories: categories{}, Clock: fake,
+		})
+	}
+	importer := importerWith(1 << 40)
+
+	// A full root is the library's failure: decided, not placed, the series kept for the retry.
+	full, err := importerWith(0).ImportBatch(t.Context(), batch.Request{
+		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{76},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := full.Decisions[0]; d.Decision != library.UnitCommit || d.WorkID != nil || full.Placements[0] != nil {
+		t.Fatalf("no room: decision = %+v, want COMMIT and unplaced", d)
+	} else if candidates, err := library.UnitCandidates(d.CandidatesJSON); err != nil || len(candidates) != 1 ||
+		candidates[0].Strategy != batch.StrategyResolved || candidates[0].WorkID == nil {
+		t.Fatalf("no room: candidates = %+v, %v; want the resolved series", candidates, err)
+	}
 
 	result, err := importer.ImportBatch(t.Context(), batch.Request{
 		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{77},
@@ -116,8 +133,8 @@ func TestImportPlacesAFolderOfEpisodesUnderTheSeriesAndCoversThem(t *testing.T) 
 	again, err := importer.ImportBatch(t.Context(), batch.Request{
 		SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{78},
 	})
-	if err != nil || again.Placements[0] != nil || again.Decisions[0].Decision == library.UnitCommit {
-		t.Errorf("a second import of the same episodes places nothing: %+v, %v", again.Decisions[0], err)
+	if d := again.Decisions[0]; err != nil || again.Placements[0] != nil || d.Decision != library.UnitSkip || d.Reason != batch.ReasonNothingNew || d.WorkID != nil {
+		t.Errorf("a second import of the same episodes places nothing and is skipped: %+v, %v", d, err)
 	}
 
 	// A download grabbed for a season below its cutoff brings a second file per episode instead.
@@ -134,6 +151,7 @@ func TestImportPlacesAFolderOfEpisodesUnderTheSeriesAndCoversThem(t *testing.T) 
 	if err := library.NewDesired(opened).SetAlbumState(t.Context(), season1, tv.ItemStateUpgradable, 2); err != nil {
 		t.Fatal(err)
 	}
+	free := int64(1 << 40)
 	upgrading := tv.NewImporter(tv.ImporterConfig{
 		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
 		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,

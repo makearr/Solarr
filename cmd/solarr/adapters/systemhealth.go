@@ -116,7 +116,7 @@ func (a SystemHealth) mediaChecks(snapshot *settings.Snapshot) []apiserver.Healt
 	return checks
 }
 
-// waitingForReview counts the downloads whose import is held until someone identifies them on the Import page.
+// waitingForReview counts the downloads whose import is held: until someone identifies them, or until a root has room.
 func (a SystemHealth) waitingForReview(ctx context.Context) []apiserver.HealthCheck {
 	if a.Acquisitions == nil {
 		return nil
@@ -125,21 +125,36 @@ func (a SystemHealth) waitingForReview(ctx context.Context) []apiserver.HealthCh
 	if err != nil {
 		return nil
 	}
-	waiting := 0
+	waiting, noRoom := 0, 0
 	for _, acquisition := range active {
-		if acquisition.State == poll.StateImporting && acquisition.LastError == poll.WaitingForReview {
+		if acquisition.State != poll.StateImporting {
+			continue
+		}
+		switch acquisition.LastError {
+		case poll.WaitingForReview:
 			waiting++
+		case poll.WaitingForRoom:
+			noRoom++
 		}
 	}
-	if waiting == 0 {
-		return nil
+	var checks []apiserver.HealthCheck
+	if waiting > 0 {
+		checks = append(checks, apiserver.HealthCheck{
+			ID: "downloads_waiting_for_review", Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("%d downloaded %s waiting for you to identify %s on the Import page.",
+				waiting, plural(waiting, "album is", "albums are"), plural(waiting, "it", "them")),
+			Link: "/storage/import",
+		})
 	}
-	return []apiserver.HealthCheck{{
-		ID: "downloads_waiting_for_review", Severity: apiserver.HealthWarning,
-		Message: fmt.Sprintf("%d downloaded %s waiting for you to identify %s on the Import page.",
-			waiting, plural(waiting, "album is", "albums are"), plural(waiting, "it", "them")),
-		Link: "/storage/import",
-	}}
+	if noRoom > 0 {
+		checks = append(checks, apiserver.HealthCheck{
+			ID: "downloads_waiting_for_room", Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("%d %s waiting because no root folder of %s library can take %s: add one, free space or bring it online; %s imported then.",
+				noRoom, plural(noRoom, "download is", "downloads are"), plural(noRoom, "its", "their"), plural(noRoom, "it", "them"), plural(noRoom, "it is", "they are")),
+			Link: "/storage/folders",
+		})
+	}
+	return checks
 }
 
 // vanishedHeld names each root whose last full scan found too many files gone to mark them missing on its own.

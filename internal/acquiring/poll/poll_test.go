@@ -334,8 +334,8 @@ func TestPoll_TheFingerprintWaitsForTheClientsName(t *testing.T) {
 	}
 }
 
-// importing starts an import session for the acquisition and finishes it with units decided as given.
-func (e *env) finishImport(t *testing.T, acquisition library.Acquisition, placed bool, decision string) {
+// finishImport starts an import session for the acquisition and finishes it with its one unit decided as given.
+func (e *env) finishImport(t *testing.T, acquisition library.Acquisition, placed bool, decision string) (sessionID, unitID int64) {
 	t.Helper()
 	sessionID, err := e.sessions.Create(t.Context(), library.NewSession{
 		SourcePath: "/downloads/complete/Heka-Zanuvode", Origin: library.ImportOriginAcquisition,
@@ -352,18 +352,25 @@ func (e *env) finishImport(t *testing.T, acquisition library.Acquisition, placed
 		t.Fatal(err)
 	}
 	if placed {
-		work, err := library.NewDesired(e.store).Get(t.Context(), *acquisition.DesiredItemID)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := e.sessions.RecordPlacement(t.Context(), units[0], library.Placement{WorkID: work.WorkID}); err != nil {
-			t.Fatal(err)
-		}
+		e.placeLater(t, acquisition, units[0])
 	}
 	if err := e.sessions.Finish(t.Context(), sessionID, library.ImportDone, 3, ""); err != nil {
 		t.Fatal(err)
 	}
 	if err := e.acquisitions.SetState(t.Context(), acquisition.ID, poll.StateImporting, "", 3); err != nil {
+		t.Fatal(err)
+	}
+	return sessionID, units[0]
+}
+
+// placeLater records the unit placed into the album the acquisition was grabbed for, as an import or its retry does.
+func (e *env) placeLater(t *testing.T, acquisition library.Acquisition, unitID int64) {
+	t.Helper()
+	item, err := library.NewDesired(e.store).Get(t.Context(), *acquisition.DesiredItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.sessions.RecordPlacement(t.Context(), unitID, library.Placement{WorkID: item.WorkID}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -432,14 +439,57 @@ func TestPoll_AnImportWaitingForAPersonWaits(t *testing.T) {
 	}
 }
 
-// Committed but never placed (no root had room) is not imported: it fails and is searched again.
-func TestPoll_AnImportThatPlacedNothingFails(t *testing.T) {
+// Committed but never placed (no root had room) is the library's failure, not the release's: the download is kept,
+// not blocklisted, until the import retry places it (user, 2026-10-24).
+func TestPoll_AnImportItsLibraryCouldNotTakeIsKeptUntilPlaced(t *testing.T) {
 	e := newEnv(t)
 	sent := e.send(t, "nzo-1")
-	e.finishImport(t, sent, false, library.UnitCommit)
+	_, unitID := e.finishImport(t, sent, false, library.UnitCommit)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.LastError != poll.WaitingForRoom || !poll.Held(got) {
+		t.Errorf("= %s %q, want IMPORTING waiting for room", got.State, got.LastError)
+	}
+	if len(e.client.removed) != 0 || len(e.searched) != 0 || len(e.history) != 0 {
+		t.Errorf("removed %v, searched %v, history %q; want the download kept as it is", e.client.removed, e.searched, e.history)
+	}
+	indexerID := int64(3)
+	if blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix()); err != nil || blocked {
+		t.Errorf("blocklisted = %v, %v; want the release left alone", blocked, err)
+	}
+
+	e.placeLater(t, sent, unitID)
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateCleaned || !slices.Equal(e.client.removed, []string{"nzo-1+files"}) {
+		t.Errorf("after the retry placed it: %s, removed %v; want CLEANED", got.State, e.client.removed)
+	}
+}
+
+// A release whose every unit was skipped (nothing new, blocked content) brought nothing usable: failed and searched again.
+func TestPoll_AnImportThatBroughtNothingUsableFails(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	e.finishImport(t, sent, false, library.UnitSkip)
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateFailed || len(e.searched) != 1 {
 		t.Errorf("= %s, searched %v; want FAILED and searched again", got.State, e.searched)
+	}
+}
+
+// A unit held for a person with the work it resolved to (a rule refused it) is not an import: the download waits.
+func TestPoll_AUnitHeldWithItsWorkIsNotImported(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	sessionID, unitID := e.finishImport(t, sent, false, library.UnitQueue)
+	item, err := library.NewDesired(e.store).Get(t.Context(), *sent.DesiredItemID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.sessions.SetUnitDecisions(t.Context(), sessionID, []library.UnitDecision{{UnitID: unitID, Decision: library.UnitQueue, WorkID: &item.WorkID}}); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.LastError != poll.WaitingForReview || len(e.client.removed) != 0 {
+		t.Errorf("= %s %q, removed %v; want IMPORTING waiting for review, nothing removed", got.State, got.LastError, e.client.removed)
 	}
 }
 
@@ -618,7 +668,7 @@ func TestPoll_AStalledDownloadBringsInWhatFinished(t *testing.T) {
 	}
 }
 
-// Finished files nothing could place leave the stalled download to fail as one with nothing finished does.
+// Finished files that brought nothing usable leave the stalled download to fail as one with nothing finished does.
 func TestPoll_AStalledDownloadWhoseFinishedFilesPlaceNothingFails(t *testing.T) {
 	e := newEnv(t)
 	e.stall = poll.StallRules{Enabled: true, Strikes: 1, Check: 15 * time.Minute, NoProgress: 24 * time.Hour}
@@ -630,7 +680,7 @@ func TestPoll_AStalledDownloadWhoseFinishedFilesPlaceNothingFails(t *testing.T) 
 	e.clock.Advance(15 * time.Minute)
 	e.downloading("nzo-1", 500)
 	e.run(t)
-	e.finishImport(t, e.state(t, sent.ID), false, library.UnitCommit)
+	e.finishImport(t, e.state(t, sent.ID), false, library.UnitSkip)
 	e.run(t)
 	if got := e.state(t, sent.ID); got.State != poll.StateFailed {
 		t.Errorf("= %s %q, want FAILED", got.State, got.LastError)

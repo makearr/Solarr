@@ -141,13 +141,15 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		var refused *rejectedError
 		switch {
 		case errors.Is(err, errNothingToPlace):
-			decision.WorkID = &workID
+			decision.Decision, decision.Reason = library.UnitSkip, batch.ReasonNothingNew
 			result.Decisions[index] = decision
 		case errors.As(err, &refused):
 			// Held for a person with the rule that refused it, as Sonarr leaves such a file in the download folder.
 			decision.WorkID = &workID
 			decision.Reason = refused.Error()
 			result.Decisions[index] = decision
+		case errors.Is(err, placer.ErrNoRoot):
+			result.Decisions[index] = batch.WaitForRoot(decision, workID, err)
 		case err != nil:
 			i.logger.Warn("tv import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
 			decision.Decision, decision.Reason = library.UnitFailed, err.Error()
@@ -197,9 +199,14 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	if workID <= 0 {
 		return library.Placement{}, batch.ErrUnresolved
 	}
+	var upgrade bool
+	if request.AcquisitionID != nil {
+		seeded, upgradable := i.seedSeries(ctx, *request.AcquisitionID)
+		upgrade = upgradable && workID == seeded
+	}
 	placed, err := i.placeUnit(ctx, batch.Request{
 		SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath,
-	}, request.Unit, workID, false)
+	}, request.Unit, workID, upgrade)
 	if errors.Is(err, errNothingToPlace) {
 		return library.Placement{}, batch.ErrNothingToPlace
 	}

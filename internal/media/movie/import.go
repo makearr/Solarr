@@ -128,13 +128,16 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 		var refused *rejectedError
 		switch {
 		case errors.Is(err, errNothingToPlace):
+			decision.Decision, decision.Reason, decision.WorkID = library.UnitSkip, batch.ReasonNothingNew, nil
 			result.Decisions[index] = decision
 		case errors.As(err, &refused):
 			decision.Reason = refused.Error()
 			result.Decisions[index] = decision
+		case errors.Is(err, placer.ErrNoRoot):
+			result.Decisions[index] = batch.WaitForRoot(decision, workID, err)
 		case err != nil:
 			i.logger.Warn("movie import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
-			decision.Decision, decision.Reason = library.UnitFailed, err.Error()
+			decision.Decision, decision.Reason, decision.WorkID = library.UnitFailed, err.Error(), nil
 			result.Decisions[index] = decision
 		default:
 			decision.Decision, decision.Reason, decision.Confidence = library.UnitCommit, "", 1
@@ -198,7 +201,12 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	if workID <= 0 {
 		return library.Placement{}, batch.ErrUnresolved
 	}
-	placed, err := i.placeUnit(ctx, batch.Request{SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath}, request.Unit, workID, false)
+	var upgrade bool
+	if request.AcquisitionID != nil {
+		seeded, upgradable := i.seededMovie(ctx, *request.AcquisitionID)
+		upgrade = upgradable && workID == seeded
+	}
+	placed, err := i.placeUnit(ctx, batch.Request{SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath}, request.Unit, workID, upgrade)
 	if errors.Is(err, errNothingToPlace) {
 		return library.Placement{}, batch.ErrNothingToPlace
 	}

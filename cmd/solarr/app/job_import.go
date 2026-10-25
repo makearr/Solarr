@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/quality"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/importjob"
@@ -52,7 +53,20 @@ func (p *process) registerImportJob(registry *jobs.Registry, executor *jobs.Exec
 		Logger: p.logger,
 	})
 	executor.Handle(importjob.JobType, job)
+	if err := registry.Register(importjob.RetryDefinition); err != nil {
+		return err
+	}
+	executor.Handle(importjob.RetryJobType, importjob.NewRetryJob(library.NewImportSessions(p.library), p.manualCommitter(), p.logger))
 	return nil
+}
+
+// importRetryTask is the registered sweep that places what a library could not take when it was imported.
+func (p *process) importRetryTask() jobs.Task {
+	return jobs.Task{
+		Key: importjob.RetryScheduleKey, Name: "Retry imports a library could not take", DefaultCadence: importRetryScheduleCron,
+		Tier: string(settings.TierNormal), Category: jobs.CategoryDownloads, Startup: jobs.StartupOn,
+		Enqueue: func(ctx context.Context) (jobs.EnqueueResult, error) { return importjob.EnqueueRetry(ctx, p.queue) },
+	}
 }
 
 // acquisitionReleaseGroups are the release groups of the album a download was grabbed for.

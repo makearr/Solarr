@@ -155,6 +155,17 @@ FROM import_unit
 WHERE session_id = ? AND decision = 'COMMIT' AND work_id IS NULL
 ORDER BY id;
 
+-- The sessions holding a unit their library could not take yet, for the import retry: only those that finished
+-- and have a library to place into; a reverted or cancelled session places nothing again.
+-- name: ListSessionsWithUnplacedCommits :many
+SELECT DISTINCT u.session_id
+FROM import_unit u
+JOIN import_session s ON s.id = u.session_id
+WHERE u.decision = 'COMMIT' AND u.work_id IS NULL AND u.session_id > sqlc.arg(after_id)
+  AND s.category_id IS NOT NULL AND s.state IN ('DONE', 'FAILED')
+ORDER BY u.session_id
+LIMIT sqlc.arg(page_size);
+
 -- The IMPORTING phase's own write, once placement.Resolve, the move and
 -- ResolveWorksDetailed have all succeeded for one unit -- work_id becoming
 -- non-null is what "actually placed" means from here on.

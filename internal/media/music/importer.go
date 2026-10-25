@@ -121,9 +121,15 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			decisions[index] = library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitSkip, Reason: err.Error()}
 			continue
 		}
+		if errors.Is(err, ErrNoPlacement) {
+			// Decided but unplaced: the download is kept and the import retry places it once a root can take it.
+			decisions[index].Reason = err.Error()
+			continue
+		}
 		if err != nil {
 			i.logger.Warn("import commit: could not place unit", slog.Int64("unit_id", request.UnitIDs[index]),
 				slog.String("path", request.Units[index].Directory), slog.Any("error", err))
+			decisions[index].Decision, decisions[index].Reason = library.UnitFailed, err.Error()
 			continue
 		}
 		placements[index] = i.placement(request.UnitIDs[index], placed)

@@ -365,7 +365,7 @@ func (c Committer) CommitMatchedUnit(
 	}
 	destRoot, ok := c.roots.RootFolder(root.RootFolderID)
 	if !ok {
-		return Placed{}, fmt.Errorf("music: commit unit %q: root folder %d has no known path", unit.Directory, root.RootFolderID)
+		return Placed{}, fmt.Errorf("%w: unit %q: root folder %d has no known path", ErrNoPlacement, unit.Directory, root.RootFolderID)
 	}
 
 	now := c.clock.Now()

@@ -128,6 +128,10 @@ func (p Placer) CheckBlocked(ctx context.Context, sourceRoot string, files []Fil
 	return hashes, nil
 }
 
+// ErrNoRoot is a library that cannot take the work now: no root folder, none with room, or none online. The import
+// keeps the download for a later try instead of failing the release (user, 2026-10-24).
+var ErrNoRoot = errors.New("placer: no root folder can take it")
+
 // ChooseRoot keeps a work where it already is: the root of a file it has, else its recorded affinity, else the
 // placement strategy's choice. Files first, so a work moved to another root receives its next file there too.
 func (p Placer) ChooseRoot(ctx context.Context, categoryID, workID int64, affinityKey string, bytes int64) (settings.RootFolder, error) {
@@ -155,11 +159,11 @@ func (p Placer) ChooseRoot(ctx context.Context, categoryID, workID int64, affini
 		return settings.RootFolder{}, fmt.Errorf("resolve placement: %w", err)
 	}
 	if decision.Outcome != placement.OutcomePlaced {
-		return settings.RootFolder{}, fmt.Errorf("no root folder can take it: %s", decision.Reason)
+		return settings.RootFolder{}, fmt.Errorf("%w: %s", ErrNoRoot, decision.Reason)
 	}
 	destRoot, ok := p.config.Roots.RootFolder(root.RootFolderID)
 	if !ok {
-		return settings.RootFolder{}, fmt.Errorf("root folder %d has no known path", root.RootFolderID)
+		return settings.RootFolder{}, fmt.Errorf("%w: root folder %d has no known path", ErrNoRoot, root.RootFolderID)
 	}
 	if affinityKey == "" {
 		return destRoot, nil

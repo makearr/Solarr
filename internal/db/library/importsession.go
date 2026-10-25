@@ -659,6 +659,17 @@ func (s ImportSessions) ListUnplacedCommitUnits(ctx context.Context, sessionID i
 	return units, nil
 }
 
+// SessionsWithUnplacedCommits pages the finished sessions holding a unit their library could not take yet, by id.
+func (s ImportSessions) SessionsWithUnplacedCommits(ctx context.Context, afterID, limit int64) ([]int64, error) {
+	ids, err := librarydb.New(s.store.Read()).ListSessionsWithUnplacedCommits(ctx, librarydb.ListSessionsWithUnplacedCommitsParams{
+		AfterID: afterID, PageSize: limit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: list sessions with unplaced units: %w", err)
+	}
+	return ids, nil
+}
+
 func sessionFromRow(row librarydb.ImportSession) Session {
 	return Session{
 		ID: row.ID, SourcePath: row.SourcePath, Origin: row.Origin,

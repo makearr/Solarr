@@ -99,3 +99,17 @@ folder of its own qualifies (a multi-file torrent). qBittorrent keeps unfinished
 "Keep incomplete torrents in" is set (`download_path`): that folder must be visible to Solarr through the client's
 path mapping and lie in a download folder, or the failure says why the finished files stayed behind. SABnzbd is not
 asked: a usenet job fails on missing articles rather than stalling, and its finished parts are often RAR volumes.
+
+## What a finished import decides (`poll.followImport`)
+
+A unit counts as placed only when it was committed **and** has a work (`import_unit.work_id`); the download is then
+imported and, if the client says so, removed. A unit its library could not take (no root folder, none with room, or
+none online: `placer.ErrNoRoot`, `music.ErrNoPlacement`) stays committed but unplaced. The download is kept, never
+blocklisted or removed, with the note "no root folder of its library can take it", and a health warning links to
+Folders. The registered **Retry imports a library could not take** task (twice an hour, `importjob.RetryJob`) places
+those units with `ManualCommitter.PlaceUnplaced` once a root can, and the next poll imports the download. A TV or movie
+unit keeps the work it resolved to in its candidates (`batch.WaitForRoot`), so the retry does not identify it again.
+A unit held for a person (a rule refused it) waits on the Import page. A release that brought nothing usable (every
+unit skipped, for example **nothing new or better** than the library holds, `batch.ReasonNothingNew`, or failed) is
+failed: blocklisted, removed and searched again. If a retry finds a unit's files gone or nothing new any more, the unit
+is closed, so its download fails instead of waiting forever (user, 2026-10-24).

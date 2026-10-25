@@ -4,6 +4,7 @@ package batch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -13,6 +14,25 @@ import (
 
 // ReasonPreview is why a unit a preview run would otherwise have placed waits for a person.
 const ReasonPreview = "held for review"
+
+// ReasonNothingNew skips a unit that adds nothing its work lacks; the download brought nothing usable, so it fails and is
+// blocklisted (user, 2026-10-24), as Sonarr's "not an upgrade" release.
+const ReasonNothingNew = "nothing in it is missing from the library or better than what it holds"
+
+// StrategyResolved is the candidate a unit was resolved to before its library could not take it.
+const StrategyResolved = "resolved"
+
+// WaitForRoot is a unit resolved to workID that its library could not take: decided but not placed, so the download is
+// kept and the import retry places it once a root can. The work rides in the candidates; a work id means placed.
+func WaitForRoot(decision library.UnitDecision, workID int64, err error) library.UnitDecision {
+	decision.Decision, decision.Confidence, decision.Reason, decision.WorkID = library.UnitCommit, 1, err.Error(), nil
+	// The whole form, not library.CandidatesJSON's compact one, which has no work id.
+	resolved, _ := json.Marshal([]model.Identification{{
+		Strategy: StrategyResolved, WorkID: &workID, Precedence: model.PrecedenceAsserted, Confidence: 1,
+	}})
+	decision.CandidatesJSON = string(resolved)
+	return decision
+}
 
 // VideoSizeFloorBytes keeps a sample or a stub out of a video import: smaller than any real episode or film.
 const VideoSizeFloorBytes = 30 << 20
@@ -63,8 +83,10 @@ type Named struct{ Provider, ExternalID string }
 type HeldRequest struct {
 	SessionID  int64
 	CategoryID int64
-	SourcePath string
-	Unit       inspect.Unit
+	// AcquisitionID is the download the unit came in, nil for a folder a person pointed at.
+	AcquisitionID *int64
+	SourcePath    string
+	Unit          inspect.Unit
 	// WorkID is what the import resolved the unit to, 0 when it found nothing.
 	WorkID int64
 	// As is the work a person named instead; nil places the unit as resolved.
