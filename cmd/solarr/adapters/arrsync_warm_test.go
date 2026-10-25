@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -38,7 +39,7 @@ func TestRadarrImportWarmsWikidataWithEveryTMDBIDBeforeTheWalk(t *testing.T) {
 		warmed = append(warmed, ids...)
 		return nil
 	}}
-	movies, err := sync.radarrSource(1, arrimport.NewRadarrClient(client, "http://radarr.local", "key")).list(t.Context())
+	movies, err := sync.radarrSource(1, arrimport.NewRadarrClient(client, "http://radarr.local", "key"), apiserver.ArrSyncOptions{}).list(t.Context())
 	if err != nil || len(movies) != 3 {
 		t.Fatalf("list = %d movies, %v", len(movies), err)
 	}

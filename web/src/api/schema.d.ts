@@ -1599,6 +1599,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What an import with these options would do, read only (ADR-52's preview). Administrator only.
+         * @description Reads the instance live and changes nothing. Per root folder of the *Arr: where it is here, the library it belongs to, and how many of the items the options choose are new, already in Solarr (by their MusicBrainz, TheTVDB or TMDB id) or have no id. Per quality profile in use: how many items, and the Solarr profile proposed for it (the one of the same name, else the library's). Per library the import fills: the Media Management settings of the *Arr that differ from the library's File Management. Lidarr is previewed by artist; their albums are read during the import itself.
+         */
+        post: operations["previewArrImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}/indexers": {
         parameters: {
             query?: never;
@@ -5866,6 +5888,94 @@ export interface components {
             path_rewrites?: {
                 from: string;
                 to: string;
+            }[];
+            /** @description The Solarr quality profile each *Arr profile's items take; profile_id null is the library's own. An *Arr profile not listed keeps the old rule: the Solarr profile of the same name, else the library's. */
+            profile_map?: {
+                /** Format: int64 */
+                arr_profile_id: number;
+                /** Format: int64 */
+                profile_id?: number | null;
+            }[];
+            /** @description The libraries that take the *Arr's Media Management into their File Management before the import. */
+            settings_into?: number[];
+            /**
+             * Format: int64
+             * @description The library the *Arr's root folders unknown here will be added to; the preview counts them for it and proposes its settings. The import itself places by the folders as they are by then.
+             */
+            new_folders_library_id?: number;
+        };
+        ArrImportPreview: {
+            /**
+             * @description What the counts count.
+             * @enum {string}
+             */
+            item_kind: "artists" | "series" | "movies";
+            roots: components["schemas"]["ArrPreviewRoot"][];
+            profiles: components["schemas"]["ArrPreviewProfile"][];
+            settings: components["schemas"]["ArrPreviewSettings"][];
+        };
+        ArrPreviewRoot: {
+            /** @description The root folder as the *Arr names it. */
+            path: string;
+            /** @description The same after the path rewrites. */
+            local_path: string;
+            /**
+             * Format: int64
+             * @description The root folder here it falls under; null for none.
+             */
+            root_folder_id?: number | null;
+            /**
+             * Format: int64
+             * @description The library its items go to; null for none.
+             */
+            library_id?: number | null;
+            /**
+             * Format: int64
+             * @description Items under it the options choose.
+             */
+            chosen: number;
+            /**
+             * Format: int64
+             * @description Of those
+             */
+            new: number;
+            /**
+             * Format: int64
+             * @description Of those
+             */
+            in_library: number;
+            /**
+             * Format: int64
+             * @description Of those
+             */
+            without_id: number;
+        };
+        ArrPreviewProfile: {
+            /** Format: int64 */
+            arr_profile_id: number;
+            name: string;
+            /**
+             * Format: int64
+             * @description Chosen items on it.
+             */
+            items: number;
+            /**
+             * Format: int64
+             * @description The Solarr profile of the same name; null is the library's.
+             */
+            proposed_profile_id?: number | null;
+        };
+        ArrPreviewSettings: {
+            /** Format: int64 */
+            library_id: number;
+            /** @description Only the settings that differ. */
+            changes: {
+                key: string;
+                label: string;
+                /** @description The library's value */
+                current: string;
+                /** @description The *Arr's value */
+                proposed: string;
             }[];
         };
         ArrDownloadClient: {
@@ -10712,6 +10822,39 @@ export interface operations {
             404: components["responses"]["Problem"];
             /** @description Either this app is not yet wired for a real sync (connect/preview/park only), or this instance already has a sync running. */
             409: components["responses"]["Problem"];
+        };
+    };
+    previewArrImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ArrSyncOptions"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ArrImportPreview"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+            /** @description The instance could not be read. */
+            502: components["responses"]["Problem"];
         };
     };
     listArrInstanceIndexers: {

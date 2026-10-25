@@ -50,6 +50,13 @@ const (
 	ArrImportItemKindParked ArrImportItemKind = "parked"
 )
 
+// Defines values for ArrImportPreviewItemKind.
+const (
+	ArrImportPreviewItemKindArtists ArrImportPreviewItemKind = "artists"
+	ArrImportPreviewItemKindMovies  ArrImportPreviewItemKind = "movies"
+	ArrImportPreviewItemKindSeries  ArrImportPreviewItemKind = "series"
+)
+
 // Defines values for ArrImportRunState.
 const (
 	ArrImportRunStateDONE     ArrImportRunState = "DONE"
@@ -1129,6 +1136,18 @@ type ArrImportItem struct {
 // ArrImportItemKind defines model for ArrImportItem.Kind.
 type ArrImportItemKind string
 
+// ArrImportPreview defines model for ArrImportPreview.
+type ArrImportPreview struct {
+	// ItemKind What the counts count.
+	ItemKind ArrImportPreviewItemKind `json:"item_kind"`
+	Profiles []ArrPreviewProfile      `json:"profiles"`
+	Roots    []ArrPreviewRoot         `json:"roots"`
+	Settings []ArrPreviewSettings     `json:"settings"`
+}
+
+// ArrImportPreviewItemKind What the counts count.
+type ArrImportPreviewItemKind string
+
 // ArrImportRevertResult defines model for ArrImportRevertResult.
 type ArrImportRevertResult struct {
 	Errors               []string `json:"errors"`
@@ -1184,6 +1203,60 @@ type ArrInstance struct {
 	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
+// ArrPreviewProfile defines model for ArrPreviewProfile.
+type ArrPreviewProfile struct {
+	ArrProfileId int64 `json:"arr_profile_id"`
+
+	// Items Chosen items on it.
+	Items int64  `json:"items"`
+	Name  string `json:"name"`
+
+	// ProposedProfileId The Solarr profile of the same name; null is the library's.
+	ProposedProfileId *int64 `json:"proposed_profile_id"`
+}
+
+// ArrPreviewRoot defines model for ArrPreviewRoot.
+type ArrPreviewRoot struct {
+	// Chosen Items under it the options choose.
+	Chosen int64 `json:"chosen"`
+
+	// InLibrary Of those
+	InLibrary int64 `json:"in_library"`
+
+	// LibraryId The library its items go to; null for none.
+	LibraryId *int64 `json:"library_id"`
+
+	// LocalPath The same after the path rewrites.
+	LocalPath string `json:"local_path"`
+
+	// New Of those
+	New int64 `json:"new"`
+
+	// Path The root folder as the *Arr names it.
+	Path string `json:"path"`
+
+	// RootFolderId The root folder here it falls under; null for none.
+	RootFolderId *int64 `json:"root_folder_id"`
+
+	// WithoutId Of those
+	WithoutId int64 `json:"without_id"`
+}
+
+// ArrPreviewSettings defines model for ArrPreviewSettings.
+type ArrPreviewSettings struct {
+	// Changes Only the settings that differ.
+	Changes []struct {
+		// Current The library's value
+		Current string `json:"current"`
+		Key     string `json:"key"`
+		Label   string `json:"label"`
+
+		// Proposed The *Arr's value
+		Proposed string `json:"proposed"`
+	} `json:"changes"`
+	LibraryId int64 `json:"library_id"`
+}
+
 // ArrRootFolder defines model for ArrRootFolder.
 type ArrRootFolder struct {
 	// Path As the *Arr instance's own container sees it.
@@ -1198,11 +1271,23 @@ type ArrSyncOptions struct {
 	// Monitored Monitored artists and albums.
 	Monitored *bool `json:"monitored,omitempty"`
 
+	// NewFoldersLibraryId The library the *Arr's root folders unknown here will be added to; the preview counts them for it and proposes its settings. The import itself places by the folders as they are by then.
+	NewFoldersLibraryId *int64 `json:"new_folders_library_id,omitempty"`
+
 	// PathRewrites How the *Arr's paths read here, e.g. /media/music as /mnt/media/music; the first matching prefix applies. Used to find each artist's library by its root folder.
 	PathRewrites *[]struct {
 		From string `json:"from"`
 		To   string `json:"to"`
 	} `json:"path_rewrites,omitempty"`
+
+	// ProfileMap The Solarr quality profile each *Arr profile's items take; profile_id null is the library's own. An *Arr profile not listed keeps the old rule: the Solarr profile of the same name, else the library's.
+	ProfileMap *[]struct {
+		ArrProfileId int64  `json:"arr_profile_id"`
+		ProfileId    *int64 `json:"profile_id"`
+	} `json:"profile_map,omitempty"`
+
+	// SettingsInto The libraries that take the *Arr's Media Management into their File Management before the import.
+	SettingsInto *[]int64 `json:"settings_into,omitempty"`
 
 	// Unmonitored Unmonitored ones too; they arrive unmonitored, an artist without following them.
 	Unmonitored *bool `json:"unmonitored,omitempty"`
@@ -5890,6 +5975,9 @@ type SetArrInstanceKeyJSONRequestBody SetArrInstanceKeyJSONBody
 // UseArrInstanceIndexersJSONRequestBody defines body for UseArrInstanceIndexers for application/json ContentType.
 type UseArrInstanceIndexersJSONRequestBody UseArrInstanceIndexersJSONBody
 
+// PreviewArrImportJSONRequestBody defines body for PreviewArrImport for application/json ContentType.
+type PreviewArrImportJSONRequestBody = ArrSyncOptions
+
 // SyncArrInstanceJSONRequestBody defines body for SyncArrInstance for application/json ContentType.
 type SyncArrInstanceJSONRequestBody = ArrSyncOptions
 
@@ -6249,6 +6337,9 @@ type ServerInterface interface {
 	// Use the named Prowlarr indexers here, through Prowlarr and with the connection's own key, which never leaves the server. Administrator only.
 	// (POST /arr/instances/{id}/indexers)
 	UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64)
+	// What an import with these options would do, read only (ADR-52's preview). Administrator only.
+	// (POST /arr/instances/{id}/preview)
+	PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64)
 	// The instance's own configured root folders, read live. Administrator only.
 	// (GET /arr/instances/{id}/rootfolders)
 	ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request, id int64)
@@ -7131,6 +7222,12 @@ func (_ Unimplemented) ListArrInstanceIndexers(w http.ResponseWriter, r *http.Re
 // Use the named Prowlarr indexers here, through Prowlarr and with the connection's own key, which never leaves the server. Administrator only.
 // (POST /arr/instances/{id}/indexers)
 func (_ Unimplemented) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// What an import with these options would do, read only (ADR-52's preview). Administrator only.
+// (POST /arr/instances/{id}/preview)
+func (_ Unimplemented) PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9116,6 +9213,39 @@ func (siw *ServerInterfaceWrapper) UseArrInstanceIndexers(w http.ResponseWriter,
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.UseArrInstanceIndexers(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PreviewArrImport operation middleware
+func (siw *ServerInterfaceWrapper) PreviewArrImport(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewArrImport(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18212,6 +18342,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/indexers", wrapper.UseArrInstanceIndexers)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/preview", wrapper.PreviewArrImport)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/arr/instances/{id}/rootfolders", wrapper.ListArrInstanceRootFolders)

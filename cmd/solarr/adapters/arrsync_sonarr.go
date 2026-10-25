@@ -5,12 +5,15 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
-	"strings"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
 	"github.com/makearr/Solarr/internal/media/tv"
 )
+
+// tvProviderTVDB is the id a Sonarr series is matched by.
+const tvProviderTVDB = tv.ProviderTVDB
 
 // TVAdder is the TV service's add, which a Sonarr import maps each series through.
 type TVAdder interface {
@@ -23,7 +26,7 @@ type TVAdder interface {
 // sonarrSource walks Sonarr's series, four at once: each is added by its TVDB id. A series Solarr already holds is
 // matched and left as it is; one it creates takes Sonarr's monitored flags, series and season. Series are counted in
 // the Artists columns, the run's first-kind tally.
-func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient) arrSource[arrimport.SonarrSeries] {
+func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient, options apiserver.ArrSyncOptions) arrSource[arrimport.SonarrSeries] {
 	var profileNames map[int64]string
 	return arrSource[arrimport.SonarrSeries]{
 		connect: func(ctx context.Context) error {
@@ -52,7 +55,7 @@ func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient) arr
 		},
 		workers: 4,
 		sync: func(ctx context.Context, categoryID int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
-			created, err := a.syncSeries(ctx, importID, categoryID, series, client, profileNames)
+			created, err := a.syncSeries(ctx, importID, categoryID, series, client, profileNames, options.ProfileMap)
 			switch {
 			case err != nil:
 				return library.ArrImportCounts{}, err
@@ -80,7 +83,7 @@ func sonarrProfileNames(ctx context.Context, client arrimport.SonarrClient) map[
 
 func (a ArrSync) syncSeries(
 	ctx context.Context, importID, categoryID int64, series arrimport.SonarrSeries, client arrimport.SonarrClient,
-	profileNames map[int64]string,
+	profileNames map[int64]string, profileMap map[int64]*int64,
 ) (bool, error) {
 	if series.TVDBID == 0 {
 		return false, errors.New("no TVDB id")
@@ -102,7 +105,7 @@ func (a ArrSync) syncSeries(
 		if err := a.carryOverMonitoring(ctx, categoryID, result.WorkID, series, client); err != nil {
 			return false, err
 		}
-		a.carryOverProfile(ctx, categoryID, result.WorkID, series, profileNames)
+		a.carryOverProfile(ctx, categoryID, result.WorkID, series, profileNames, profileMap)
 		if kind := tv.SeriesType(series.SeriesType); kind == tv.SeriesAnime || kind == tv.SeriesDaily {
 			if err := a.TV.SetSeriesType(ctx, result.WorkID, kind); err != nil {
 				return false, fmt.Errorf("series type: %w", err)
@@ -148,19 +151,19 @@ func (a ArrSync) carryOverMonitoring(ctx context.Context, categoryID, workID int
 	return nil
 }
 
-// carryOverProfile gives a created series the Solarr TV profile that has its Sonarr profile's name, when one does.
-func (a ArrSync) carryOverProfile(ctx context.Context, categoryID, workID int64, series arrimport.SonarrSeries, profileNames map[int64]string) {
-	name := profileNames[series.QualityProfileID]
-	if name == "" {
+// carryOverProfile gives a created series the Solarr profile the import's mapping names for its Sonarr profile, nil
+// keeping the library's; unmapped, the TV profile of the same name, when one has it.
+func (a ArrSync) carryOverProfile(
+	ctx context.Context, categoryID, workID int64, series arrimport.SonarrSeries, profileNames map[int64]string, profileMap map[int64]*int64,
+) {
+	id, mapped := profileMap[series.QualityProfileID]
+	if !mapped {
+		id = sameNameProfile(a.Cache.Snapshot().QualityProfiles(), tv.MediaType, profileNames[series.QualityProfileID])
+	}
+	if id == nil {
 		return
 	}
-	for _, profile := range a.Cache.Snapshot().QualityProfiles() {
-		if profile.MediaType == tv.MediaType && strings.EqualFold(profile.Name, name) {
-			id := profile.ID
-			if err := a.TV.SetProfile(ctx, categoryID, workID, &id); err != nil && a.Logger != nil {
-				a.Logger.Warn("sonarr import: quality profile not carried over", "series", series.Title, "error", err)
-			}
-			return
-		}
+	if err := a.TV.SetProfile(ctx, categoryID, workID, id); err != nil && a.Logger != nil {
+		a.Logger.Warn("sonarr import: quality profile not carried over", "series", series.Title, "error", err)
 	}
 }

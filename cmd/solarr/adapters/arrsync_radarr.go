@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
@@ -13,10 +14,13 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
+// movieProviderTMDB is the id a Radarr movie is matched by.
+const movieProviderTMDB = tmdb.KeyMovie
+
 // radarrSource walks Radarr's movies, four at once: each is added by its TMDB id. A movie Solarr already holds is
 // matched and left as it is; one it creates takes Radarr's monitored flag, minimum availability and profile. Movies are
 // counted in the Artists columns, the run's first-kind tally.
-func (a ArrSync) radarrSource(importID int64, client arrimport.RadarrClient) arrSource[arrimport.RadarrMovie] {
+func (a ArrSync) radarrSource(importID int64, client arrimport.RadarrClient, options apiserver.ArrSyncOptions) arrSource[arrimport.RadarrMovie] {
 	var profileNames map[int64]string
 	return arrSource[arrimport.RadarrMovie]{
 		connect: func(ctx context.Context) error {
@@ -45,7 +49,7 @@ func (a ArrSync) radarrSource(importID int64, client arrimport.RadarrClient) arr
 		},
 		workers: 4,
 		sync: func(ctx context.Context, categoryID int64, radarr arrimport.RadarrMovie) (library.ArrImportCounts, error) {
-			created, err := a.syncMovie(ctx, importID, categoryID, radarr, profileNames)
+			created, err := a.syncMovie(ctx, importID, categoryID, radarr, profileNames, options.ProfileMap)
 			switch {
 			case err != nil:
 				return library.ArrImportCounts{}, err
@@ -85,7 +89,9 @@ func radarrAvailability(value string) string {
 	return ""
 }
 
-func (a ArrSync) syncMovie(ctx context.Context, importID, categoryID int64, radarr arrimport.RadarrMovie, profileNames map[int64]string) (bool, error) {
+func (a ArrSync) syncMovie(
+	ctx context.Context, importID, categoryID int64, radarr arrimport.RadarrMovie, profileNames map[int64]string, profileMap map[int64]*int64,
+) (bool, error) {
 	provider, externalID := tmdb.KeyMovie, strconv.FormatInt(radarr.TMDBID, 10)
 	switch {
 	case radarr.TMDBID != 0:
@@ -95,7 +101,7 @@ func (a ArrSync) syncMovie(ctx context.Context, importID, categoryID int64, rada
 		return false, errors.New("no TMDB or IMDb id")
 	}
 	category, _ := a.Cache.Snapshot().Category(categoryID)
-	profile := a.movieProfile(category, radarr, profileNames)
+	profile := a.movieProfile(category, radarr, profileNames, profileMap)
 	// Radarr's own record stands in when no metadata source knows the film (shorts, TV specials: 48 of 3,964 live).
 	fallback := &media.Fallback{Title: radarr.Title, Year: radarr.Year, ExternalIDs: map[string]string{}}
 	if radarr.IMDbID != "" {
@@ -122,15 +128,15 @@ func (a ArrSync) syncMovie(ctx context.Context, importID, categoryID int64, rada
 	return result.Created, nil
 }
 
-// movieProfile is the Solarr movie profile that has the movie's Radarr profile's name (shipped ones lead with "Movie "),
-// else the library's own.
-func (a ArrSync) movieProfile(category settings.Category, radarr arrimport.RadarrMovie, profileNames map[int64]string) int64 {
-	if name := profileNames[radarr.QualityProfileID]; name != "" {
-		for _, profile := range a.Cache.Snapshot().QualityProfiles() {
-			if profile.MediaType == category.MediaType && strings.EqualFold(strings.TrimPrefix(profile.Name, "Movie "), name) {
-				return profile.ID
-			}
-		}
+// movieProfile is the Solarr profile the import's mapping names for the movie's Radarr profile, nil the library's;
+// unmapped, the movie profile of the same name (shipped ones lead with "Movie "), else the library's own.
+func (a ArrSync) movieProfile(category settings.Category, radarr arrimport.RadarrMovie, profileNames map[int64]string, profileMap map[int64]*int64) int64 {
+	id, mapped := profileMap[radarr.QualityProfileID]
+	if !mapped {
+		id = sameNameProfile(a.Cache.Snapshot().QualityProfiles(), category.MediaType, profileNames[radarr.QualityProfileID])
+	}
+	if id != nil {
+		return *id
 	}
 	return a.Categories.ProfileFor(category, a.DefaultProfileID)
 }

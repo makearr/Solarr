@@ -72,3 +72,12 @@ func (c RadarrClient) QualityProfiles(ctx context.Context) ([]SonarrQualityProfi
 func (c RadarrClient) DownloadClients(ctx context.Context) ([]DownloadClient, error) {
 	return c.inner.downloadClients(ctx, "/api/v3/downloadclient")
 }
+
+// MediaManagement answers the instance's Media Management settings.
+func (c RadarrClient) MediaManagement(ctx context.Context) (MediaManagement, error) {
+	var settings MediaManagement
+	if err := c.inner.get(ctx, "/api/v3/config/mediamanagement", &settings); err != nil {
+		return MediaManagement{}, err
+	}
+	return settings, nil
+}

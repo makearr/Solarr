@@ -308,3 +308,32 @@ func (c LidarrClient) get(ctx context.Context, path string, into any) error {
 	}
 	return nil
 }
+
+// MediaManagement is GET config/mediamanagement trimmed to what a library's File Management can take; Lidarr, Sonarr
+// and Radarr share the shape, each with its own word for the file date and its own unmonitor flag.
+type MediaManagement struct {
+	DownloadPropersAndRepacks string `json:"downloadPropersAndRepacks"`
+	RescanAfterRefresh        string `json:"rescanAfterRefresh"`
+	FileDate                  string `json:"fileDate"`
+	DeleteEmptyFolders        bool   `json:"deleteEmptyFolders"`
+	ImportExtraFiles          bool   `json:"importExtraFiles"`
+	ExtraFileExtensions       string `json:"extraFileExtensions"`
+	RecycleBinCleanupDays     int64  `json:"recycleBinCleanupDays"`
+	SetPermissionsLinux       bool   `json:"setPermissionsLinux"`
+	ChmodFolder               string `json:"chmodFolder"`
+	ChownGroup                string `json:"chownGroup"`
+	CreateEmptyArtistFolders  bool   `json:"createEmptyArtistFolders"`
+	EpisodeTitleRequired      string `json:"episodeTitleRequired"`
+	UnmonitorTracks           bool   `json:"autoUnmonitorPreviouslyDownloadedTracks"`
+	UnmonitorEpisodes         bool   `json:"autoUnmonitorPreviouslyDownloadedEpisodes"`
+	UnmonitorMovies           bool   `json:"autoUnmonitorPreviouslyDownloadedMovies"`
+}
+
+// MediaManagement answers the instance's Media Management settings.
+func (c LidarrClient) MediaManagement(ctx context.Context) (MediaManagement, error) {
+	var settings MediaManagement
+	if err := c.get(ctx, "/api/v1/config/mediamanagement", &settings); err != nil {
+		return MediaManagement{}, err
+	}
+	return settings, nil
+}

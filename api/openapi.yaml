@@ -2463,6 +2463,43 @@ paths:
             (connect/preview/park only), or this instance already has a sync
             running.
 
+  /arr/instances/{id}/preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: previewArrImport
+      tags: [settings]
+      summary: What an import with these options would do, read only (ADR-52's preview). Administrator only.
+      description: >-
+        Reads the instance live and changes nothing. Per root folder of the *Arr: where it is here, the library it
+        belongs to, and how many of the items the options choose are new, already in Solarr (by their MusicBrainz,
+        TheTVDB or TMDB id) or have no id. Per quality profile in use: how many items, and the Solarr profile proposed
+        for it (the one of the same name, else the library's). Per library the import fills: the Media Management
+        settings of the *Arr that differ from the library's File Management. Lidarr is previewed by artist; their
+        albums are read during the import itself.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ArrSyncOptions" }
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ArrImportPreview" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+        "502":
+          $ref: "#/components/responses/Problem"
+          description: The instance could not be read.
+
   /arr/instances/{id}/indexers:
     parameters:
       - name: id
@@ -8957,6 +8994,81 @@ components:
             properties:
               from: { type: string }
               to: { type: string }
+        profile_map:
+          type: array
+          description: >-
+            The Solarr quality profile each *Arr profile's items take; profile_id null is the library's own. An *Arr
+            profile not listed keeps the old rule: the Solarr profile of the same name, else the library's.
+          items:
+            type: object
+            required: [arr_profile_id]
+            properties:
+              arr_profile_id: { type: integer, format: int64 }
+              profile_id: { type: integer, format: int64, nullable: true }
+        settings_into:
+          type: array
+          description: The libraries that take the *Arr's Media Management into their File Management before the import.
+          items: { type: integer, format: int64 }
+        new_folders_library_id:
+          type: integer
+          format: int64
+          description: >-
+            The library the *Arr's root folders unknown here will be added to; the preview counts them for it and
+            proposes its settings. The import itself places by the folders as they are by then.
+
+    ArrImportPreview:
+      type: object
+      required: [item_kind, roots, profiles, settings]
+      properties:
+        item_kind: { type: string, enum: [artists, series, movies], description: What the counts count. }
+        roots:
+          type: array
+          items: { $ref: "#/components/schemas/ArrPreviewRoot" }
+        profiles:
+          type: array
+          items: { $ref: "#/components/schemas/ArrPreviewProfile" }
+        settings:
+          type: array
+          items: { $ref: "#/components/schemas/ArrPreviewSettings" }
+
+    ArrPreviewRoot:
+      type: object
+      required: [path, local_path, chosen, new, in_library, without_id]
+      properties:
+        path: { type: string, description: The root folder as the *Arr names it. }
+        local_path: { type: string, description: The same after the path rewrites. }
+        root_folder_id: { type: integer, format: int64, nullable: true, description: The root folder here it falls under; null for none. }
+        library_id: { type: integer, format: int64, nullable: true, description: The library its items go to; null for none. }
+        chosen: { type: integer, format: int64, description: Items under it the options choose. }
+        new: { type: integer, format: int64, description: Of those, not in Solarr yet. }
+        in_library: { type: integer, format: int64, description: Of those, already in Solarr; matched and left as they are. }
+        without_id: { type: integer, format: int64, description: Of those, without the id an import matches by; skipped. }
+
+    ArrPreviewProfile:
+      type: object
+      required: [arr_profile_id, name, items]
+      properties:
+        arr_profile_id: { type: integer, format: int64 }
+        name: { type: string }
+        items: { type: integer, format: int64, description: Chosen items on it. }
+        proposed_profile_id: { type: integer, format: int64, nullable: true, description: The Solarr profile of the same name; null is the library's. }
+
+    ArrPreviewSettings:
+      type: object
+      required: [library_id, changes]
+      properties:
+        library_id: { type: integer, format: int64 }
+        changes:
+          type: array
+          description: Only the settings that differ.
+          items:
+            type: object
+            required: [key, label, current, proposed]
+            properties:
+              key: { type: string }
+              label: { type: string }
+              current: { type: string, description: The library's value, in words. }
+              proposed: { type: string, description: The *Arr's value, in words. }
 
     ArrDownloadClient:
       type: object

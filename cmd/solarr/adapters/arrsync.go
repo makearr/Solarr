@@ -19,6 +19,9 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
 
+// musicProviderArtist is the id a Lidarr artist is matched by.
+const musicProviderArtist = music.ProviderArtist
+
 // LidarrClientFactory builds a REST client for one instance's own base URL
 // and decrypted API key -- injected so this package never builds an
 // httpx.Client itself (cmd/solarr/app/providers.go's own job, the same
@@ -58,6 +61,8 @@ type ArrSync struct {
 	// WarmFilms and WarmSeries read in bulk what Wikidata says of the films (TMDB ids) and series (TheTVDB ids) an
 	// import is about to add, so each add finds it kept instead of one serial query apiece. Nil warms nothing.
 	WarmFilms, WarmSeries func(ctx context.Context, ids []string) error
+	// Registry answers each media type's defaults a preview compares against; nil compares against none.
+	Registry *media.Registry
 	// Progress holds the live figure of running imports; nil keeps none.
 	Progress *ArrProgress
 	Logger   *slog.Logger
@@ -162,11 +167,12 @@ func (a ArrSync) runAndFinish(
 	}}
 	var counts library.ArrImportCounts
 	var syncErr error
+	settingsErr := a.takeSettings(ctx, instance.App, client, options.SettingsInto)
 	switch instance.App {
 	case settings.ArrAppSonarr:
-		counts, syncErr = walkArr(ctx, walk, a.sonarrSource(importID, client.Sonarr()))
+		counts, syncErr = walkArr(ctx, walk, a.sonarrSource(importID, client.Sonarr(), options))
 	case settings.ArrAppRadarr:
-		counts, syncErr = walkArr(ctx, walk, a.radarrSource(importID, client.Radarr()))
+		counts, syncErr = walkArr(ctx, walk, a.radarrSource(importID, client.Radarr(), options))
 	default:
 		counts, syncErr = walkArr(ctx, walk, a.lidarrSource(importID, client, options))
 	}
@@ -176,6 +182,9 @@ func (a ArrSync) runAndFinish(
 	errMsg := ""
 	if syncErr != nil {
 		errMsg = syncErr.Error()
+	}
+	if settingsErr != nil {
+		errMsg = strings.TrimPrefix(errMsg+"; settings: "+settingsErr.Error(), "; ")
 	}
 	// A connection or artist-listing failure leaves every count at zero --
 	// the run never got started, FAILED rather than a DONE with nothing to
@@ -200,6 +209,40 @@ func (a ArrSync) runAndFinish(
 		a.Logger.Warn("arr import: recording instance sync result failed",
 			slog.Int64("instance_id", instanceID), slog.Any("error", err))
 	}
+}
+
+// takeSettings gives each library named the *Arr's Media Management as its File Management, before the walk places
+// anything there; a library that cannot take it keeps its own and the run says so.
+func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient, libraries []int64) error {
+	if len(libraries) == 0 {
+		return nil
+	}
+	var from arrimport.MediaManagement
+	var err error
+	switch app {
+	case settings.ArrAppSonarr:
+		from, err = client.Sonarr().MediaManagement(ctx)
+	case settings.ArrAppRadarr:
+		from, err = client.Radarr().MediaManagement(ctx)
+	default:
+		from, err = client.MediaManagement(ctx)
+	}
+	if err != nil {
+		return fmt.Errorf("read media management: %w", err)
+	}
+	var failures []error
+	for _, id := range libraries {
+		category, found := a.Cache.Snapshot().Category(id)
+		if !found {
+			failures = append(failures, fmt.Errorf("library %d not found", id))
+			continue
+		}
+		next, _ := arrFileManagement(category.FileManagement, from, app, a.extraFileDefaults(category.MediaType))
+		if err := a.Cache.SetCategoryFileManagement(ctx, id, next); err != nil {
+			failures = append(failures, fmt.Errorf("%s: %w", category.Name, err))
+		}
+	}
+	return errors.Join(failures...)
 }
 
 // arrAppSupported is every app an import is mapped for.
@@ -344,7 +387,7 @@ func (a ArrSync) lidarrSource(importID int64, client arrimport.LidarrClient, opt
 				if !wanted || !albumWanted(album, options.Albums) {
 					continue
 				}
-				workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album)
+				workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album, options.ProfileMap[artist.QualityProfileID])
 				switch {
 				case err != nil:
 					failures = append(failures, fmt.Sprintf("%s: %v", album.Title, err))
@@ -415,7 +458,9 @@ func (a ArrSync) syncArtist(
 // as its primary artist (AddCredit's own role="artist" ord=0 case) -- an
 // already-matched work is left exactly as whatever created it already
 // credited, never overwritten.
-func (a ArrSync) syncAlbum(ctx context.Context, importID, categoryID, personID int64, album arrimport.LidarrAlbum) (workCreated bool, err error) {
+func (a ArrSync) syncAlbum(
+	ctx context.Context, importID, categoryID, personID int64, album arrimport.LidarrAlbum, mapped *int64,
+) (workCreated bool, err error) {
 	if album.ForeignAlbumID == "" {
 		return false, errors.New("no MusicBrainz release-group id")
 	}
@@ -441,6 +486,9 @@ func (a ArrSync) syncAlbum(ctx context.Context, importID, categoryID, personID i
 	profileID := a.DefaultProfileID
 	if category, ok := a.Cache.Snapshot().Category(categoryID); ok && category.QualityProfileID != nil {
 		profileID = *category.QualityProfileID
+	}
+	if mapped != nil {
+		profileID = *mapped
 	}
 	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
 		WorkID: resolution.WorkID, CategoryID: categoryID, ProfileID: profileID, Monitored: album.Monitored,

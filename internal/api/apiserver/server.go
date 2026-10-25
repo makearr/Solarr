@@ -616,6 +616,7 @@ func New(config Config) (*Server, error) {
 			secured.Delete("/arr/instances/{id}", server.routeDeleteArrInstance)
 			secured.Post("/arr/instances/{id}/apikey", server.routeSetArrInstanceKey)
 			secured.Post("/arr/instances/{id}/sync", server.routeSyncArrInstance)
+			secured.Post("/arr/instances/{id}/preview", server.routePreviewArrImport)
 			secured.Get("/arr/instances/{id}/rootfolders", server.routeListArrInstanceRootFolders)
 			secured.Get("/arr/instances/{id}/indexers", server.routeListArrInstanceIndexers)
 			secured.Post("/arr/instances/{id}/indexers", server.routeUseArrInstanceIndexers)

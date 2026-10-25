@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 
@@ -7,8 +7,11 @@ import type { components } from "@/api/schema";
 import { useLibraries } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
 
+import { ArrImportPreviewPanel, type ProfileChoice } from "./ArrImportPreview";
+
 type ArrInstance = components["schemas"]["ArrInstance"];
 type ArrImportRun = components["schemas"]["ArrImportRun"];
+type Preview = components["schemas"]["ArrImportPreview"];
 type Rewrite = { from: string; to: string };
 
 const input = "rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs";
@@ -43,6 +46,11 @@ export function ArrSyncOptions({
   const [importFolders, setImportFolders] = useState(false);
   const [libraryId, setLibraryId] = useState<number | undefined>(instance.category_id ?? undefined);
   const [notes, setNotes] = useState<string[]>([]);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [profiles, setProfiles] = useState<ProfileChoice>({});
+  const [settingsInto, setSettingsInto] = useState<number[]>([]);
+  // A preview answers the options it was asked with; any change asks again.
+  useEffect(() => setPreview(null), [monitored, unmonitored, albums, rewrites, importFolders, libraryId]);
 
   const libraries = useLibraries();
   const folders = useQuery({
@@ -56,6 +64,22 @@ export function ArrSyncOptions({
     }
     return path;
   };
+
+  const options = () => ({
+    monitored, unmonitored, albums, path_rewrites: rewrites.filter((entry) => entry.from.trim() && entry.to.trim()),
+  });
+  const previewing = useMutation({
+    mutationFn: () =>
+      ok(api.POST("/arr/instances/{id}/preview", {
+        params: { path: { id: instance.id } },
+        body: { ...options(), new_folders_library_id: importFolders ? libraryId : undefined },
+      })),
+    onSuccess: (data) => {
+      setProfiles(Object.fromEntries(data.profiles.map((profile) => [profile.arr_profile_id, profile.proposed_profile_id ?? null])));
+      setSettingsInto(data.settings.filter((library) => library.changes.length > 0).map((library) => library.library_id));
+      setPreview(data);
+    },
+  });
 
   const start = useMutation({
     mutationFn: async () => {
@@ -86,7 +110,11 @@ export function ArrSyncOptions({
       }
       const { data, error } = await api.POST("/arr/instances/{id}/sync", {
         params: { path: { id: instance.id } },
-        body: { monitored, unmonitored, albums, path_rewrites: rewrites.filter((entry) => entry.from.trim() && entry.to.trim()) },
+        body: {
+          ...options(),
+          profile_map: Object.entries(profiles).map(([arr, profile]) => ({ arr_profile_id: Number(arr), profile_id: profile })),
+          settings_into: settingsInto,
+        },
       });
       if (error) throw error;
       if (importFolders) await api.POST("/schedules/{key}/run", { params: { path: { key: "scan" } } });
@@ -162,19 +190,44 @@ export function ArrSyncOptions({
         </label>
         )}
       </div>
+      {preview && (
+        <ArrImportPreviewPanel
+          preview={preview}
+          appName={instance.name}
+          mediaType={words.mediaType}
+          profiles={profiles}
+          onProfiles={setProfiles}
+          settingsInto={settingsInto}
+          onSettingsInto={setSettingsInto}
+        />
+      )}
       <div className="flex items-center gap-2">
-        <button
-          type="button"
-          disabled={(!monitored && !unmonitored) || (importFolders && (libraryId === undefined || folders.isPending)) || start.isPending}
-          onClick={() => start.mutate()}
-          className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
-        >
-          {start.isPending ? "Starting…" : "Start import"}
-        </button>
+        {preview ? (
+          <button
+            type="button"
+            disabled={start.isPending}
+            onClick={() => start.mutate()}
+            className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
+          >
+            {start.isPending ? "Starting…" : "Import"}
+          </button>
+        ) : (
+          <button
+            type="button"
+            disabled={(!monitored && !unmonitored) || (importFolders && (libraryId === undefined || folders.isPending)) || previewing.isPending}
+            onClick={() => previewing.mutate()}
+            className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
+          >
+            {previewing.isPending ? `Reading ${instance.name}…` : "Preview"}
+          </button>
+        )}
         <button type="button" onClick={onCancel} className={button}>
           {cancelLabel}
         </button>
         {start.isError && <span className="text-danger">{(start.error as { detail?: string }).detail ?? "The import could not start."}</span>}
+        {previewing.isError && (
+          <span className="text-danger">{(previewing.error as { detail?: string }).detail ?? `${instance.name} could not be read.`}</span>
+        )}
       </div>
       {notes.map((note) => (
         <p key={note} className="text-warn">{note}</p>

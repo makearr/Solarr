@@ -19,7 +19,9 @@ func (f fakeEpisodes) Episodes(context.Context, int64) ([]arrimport.SonarrEpisod
 }
 
 type recordingTV struct {
-	wanted map[tv.Key]bool
+	wanted  map[tv.Key]bool
+	profile *int64
+	set     bool
 }
 
 func (*recordingTV) Add(context.Context, tv.AddRequest) (tv.AddResult, error) {
@@ -29,7 +31,10 @@ func (r *recordingTV) SetEpisodeMonitoring(_ context.Context, _, _ int64, wanted
 	r.wanted = wanted
 	return nil
 }
-func (*recordingTV) SetProfile(context.Context, int64, int64, *int64) error    { return nil }
+func (r *recordingTV) SetProfile(_ context.Context, _, _ int64, profile *int64) error {
+	r.profile, r.set = profile, true
+	return nil
+}
 func (*recordingTV) SetSeriesType(context.Context, int64, tv.SeriesType) error { return nil }
 
 func TestCarryOverMonitoringGivesTheCreatedSeriesSonarrsEpisodeChoices(t *testing.T) {
@@ -68,5 +73,22 @@ func TestCarryOverMonitoringFallsBackToSeasonFlagsWhenEpisodesCannotBeRead(t *te
 	}
 	if recorder.wanted != nil {
 		t.Errorf("wanted = %v: nothing to carry over, and an unmonitored series has no season flags to apply", recorder.wanted)
+	}
+}
+
+// The preview's mapping decides a created series' profile: a Solarr profile is set, the library's own leaves it alone.
+func TestCarryOverProfileFollowsThePreviewsMapping(t *testing.T) {
+	recorder := &recordingTV{}
+	sync := ArrSync{TV: recorder}
+	series := arrimport.SonarrSeries{Title: "Example", QualityProfileID: 6}
+	chosen := int64(9)
+	sync.carryOverProfile(t.Context(), 3, 11, series, map[int64]string{6: "Any"}, map[int64]*int64{6: &chosen})
+	if !recorder.set || recorder.profile == nil || *recorder.profile != 9 {
+		t.Errorf("mapped to profile 9: set %v, profile %v", recorder.set, recorder.profile)
+	}
+	recorder.set = false
+	sync.carryOverProfile(t.Context(), 3, 11, series, map[int64]string{6: "Any"}, map[int64]*int64{6: nil})
+	if recorder.set {
+		t.Errorf("mapped to the library's own, yet a profile was set: %v", recorder.profile)
 	}
 }

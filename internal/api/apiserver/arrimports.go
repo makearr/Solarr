@@ -22,7 +22,47 @@ type ArrSyncOptions struct {
 	// Albums is "all", "missing" (the *Arr lacks a track) or "complete".
 	Albums       string
 	PathRewrites []PathRewrite
+	// ProfileMap gives each *Arr quality profile's items a Solarr profile, nil for the library's; one not listed
+	// takes the Solarr profile of the same name, else the library's.
+	ProfileMap map[int64]*int64
+	// SettingsInto are the libraries that take the *Arr's Media Management into their File Management first.
+	SettingsInto []int64
+	// NewFoldersLibrary is where the *Arr's root folders unknown here are about to be added, for a preview.
+	NewFoldersLibrary *int64
 }
+
+// ArrImportPreview is what an import would do, read without changing anything (ADR-52's preview step).
+type ArrImportPreview struct {
+	// ItemKind is what the counts count: "artists", "series" or "movies".
+	ItemKind string
+	Roots    []ArrPreviewRoot
+	Profiles []ArrPreviewProfile
+	Settings []ArrPreviewSettings
+}
+
+// ArrPreviewRoot is one *Arr root folder: where it is here, its library, and what of it the options choose.
+type ArrPreviewRoot struct {
+	Path, LocalPath                   string
+	RootFolderID, LibraryID           *int64
+	Chosen, New, InLibrary, WithoutID int64
+}
+
+// ArrPreviewProfile is one *Arr quality profile in use and the Solarr profile proposed for it, nil for the library's.
+type ArrPreviewProfile struct {
+	ArrProfileID      int64
+	Name              string
+	Items             int64
+	ProposedProfileID *int64
+}
+
+// ArrPreviewSettings is one library's File Management settings that the *Arr's Media Management would change.
+type ArrPreviewSettings struct {
+	LibraryID int64
+	Changes   []ArrSettingChange
+}
+
+// ArrSettingChange is one setting, its value here and the *Arr's, in words.
+type ArrSettingChange struct{ Key, Label, Current, Proposed string }
 
 // PathRewrite reads an *Arr's path prefix as another here, e.g. /media/music as /mnt/media/music.
 type PathRewrite struct{ From, To string }
@@ -92,6 +132,8 @@ type ArrImportRevertResult struct {
 // internal/db/library directly.
 type ArrSync interface {
 	Sync(ctx context.Context, instanceID int64, options ArrSyncOptions) (ArrImportRun, error)
+	// Preview reads what Sync would do with options and changes nothing.
+	Preview(ctx context.Context, instanceID int64, options ArrSyncOptions) (ArrImportPreview, error)
 	ListImports(ctx context.Context, instanceID int64) ([]ArrImportRun, error)
 	GetImport(ctx context.Context, id int64) (ArrImportDetail, error)
 	Revert(ctx context.Context, id int64) (ArrImportRevertResult, error)
@@ -121,24 +163,9 @@ func (s *Server) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int6
 		return
 	}
 
-	options := DefaultArrSyncOptions
-	if r.ContentLength != 0 {
-		var body gen.ArrSyncOptions
-		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the sync options could not be read")
-			return
-		}
-		options = ArrSyncOptions{Monitored: derefOr(body.Monitored, true), Unmonitored: derefOr(body.Unmonitored, false), Albums: "all"}
-		if body.Albums != nil {
-			options.Albums = string(*body.Albums)
-		}
-		for _, rewrite := range derefOr(body.PathRewrites, nil) {
-			options.PathRewrites = append(options.PathRewrites, PathRewrite{From: rewrite.From, To: rewrite.To})
-		}
-		if !options.Monitored && !options.Unmonitored {
-			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Nothing to import", "choose monitored items, unmonitored items or both")
-			return
-		}
+	options, ok := s.readArrSyncOptions(w, r)
+	if !ok {
+		return
 	}
 	run, err := s.arrSync.Sync(r.Context(), id, options)
 	switch {
@@ -153,6 +180,107 @@ func (s *Server) SyncArrInstance(w http.ResponseWriter, r *http.Request, id int6
 	default:
 		writeJSON(w, s.logger, http.StatusOK, arrImportRunView(run))
 	}
+}
+
+// readArrSyncOptions reads a sync's or a preview's options; an empty body is the defaults. A failure is answered.
+func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (ArrSyncOptions, bool) {
+	options := DefaultArrSyncOptions
+	if r.ContentLength == 0 {
+		return options, true
+	}
+	var body gen.ArrSyncOptions
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxImportBody)).Decode(&body); err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "the sync options could not be read")
+		return ArrSyncOptions{}, false
+	}
+	options = ArrSyncOptions{Monitored: derefOr(body.Monitored, true), Unmonitored: derefOr(body.Unmonitored, false), Albums: "all"}
+	if body.Albums != nil {
+		options.Albums = string(*body.Albums)
+	}
+	for _, rewrite := range derefOr(body.PathRewrites, nil) {
+		options.PathRewrites = append(options.PathRewrites, PathRewrite{From: rewrite.From, To: rewrite.To})
+	}
+	if body.ProfileMap != nil {
+		options.ProfileMap = make(map[int64]*int64, len(*body.ProfileMap))
+		for _, entry := range *body.ProfileMap {
+			options.ProfileMap[entry.ArrProfileId] = entry.ProfileId
+		}
+	}
+	options.SettingsInto = derefOr(body.SettingsInto, nil)
+	options.NewFoldersLibrary = body.NewFoldersLibraryId
+	if !options.Monitored && !options.Unmonitored {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Nothing to import", "choose monitored items, unmonitored items or both")
+		return ArrSyncOptions{}, false
+	}
+	return options, true
+}
+
+// routePreviewArrImport parses the id path parameter.
+func (s *Server) routePreviewArrImport(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
+		return
+	}
+	s.PreviewArrImport(w, r, id)
+}
+
+// PreviewArrImport answers what an import with the options would do, reading the instance and changing nothing.
+func (s *Server) PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.arrSync == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr import is not available")
+		return
+	}
+	options, ok := s.readArrSyncOptions(w, r)
+	if !ok {
+		return
+	}
+	preview, err := s.arrSync.Preview(r.Context(), id, options)
+	switch {
+	case errors.Is(err, ErrArrAppNotYetSupported):
+		writeProblem(w, s.logger, http.StatusConflict, TypeConflict, "Not yet supported", "this app has no import here yet")
+	case errors.Is(err, settings.ErrNotFound):
+		writeError(w, s.logger, err)
+	case err != nil:
+		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The *Arr could not be read", httpx.Explain(err))
+	default:
+		writeJSON(w, s.logger, http.StatusOK, arrImportPreviewView(preview))
+	}
+}
+
+func arrImportPreviewView(preview ArrImportPreview) gen.ArrImportPreview {
+	view := gen.ArrImportPreview{
+		ItemKind: gen.ArrImportPreviewItemKind(preview.ItemKind),
+		Roots:    make([]gen.ArrPreviewRoot, len(preview.Roots)), Profiles: make([]gen.ArrPreviewProfile, len(preview.Profiles)),
+		Settings: make([]gen.ArrPreviewSettings, len(preview.Settings)),
+	}
+	for i, root := range preview.Roots {
+		view.Roots[i] = gen.ArrPreviewRoot{
+			Path: root.Path, LocalPath: root.LocalPath, RootFolderId: root.RootFolderID, LibraryId: root.LibraryID,
+			Chosen: root.Chosen, New: root.New, InLibrary: root.InLibrary, WithoutId: root.WithoutID,
+		}
+	}
+	for i, profile := range preview.Profiles {
+		view.Profiles[i] = gen.ArrPreviewProfile{
+			ArrProfileId: profile.ArrProfileID, Name: profile.Name, Items: profile.Items, ProposedProfileId: profile.ProposedProfileID,
+		}
+	}
+	for i, library := range preview.Settings {
+		changes := make([]struct {
+			Current  string `json:"current"`
+			Key      string `json:"key"`
+			Label    string `json:"label"`
+			Proposed string `json:"proposed"`
+		}, len(library.Changes))
+		for j, change := range library.Changes {
+			changes[j].Key, changes[j].Label, changes[j].Current, changes[j].Proposed = change.Key, change.Label, change.Current, change.Proposed
+		}
+		view.Settings[i] = gen.ArrPreviewSettings{LibraryId: library.LibraryID, Changes: changes}
+	}
+	return view
 }
 
 // routeListArrInstanceRootFolders parses the id path parameter, mirroring routeSyncArrInstance.

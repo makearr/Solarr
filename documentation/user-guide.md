@@ -31,7 +31,11 @@ of your music (see [container-runtime.md](container-runtime.md)). Open `http://<
 The setup wizard creates the first administrator and your first library: a name ("Music") and
 the root folder it lives in (`/music`). Already running Lidarr, Sonarr or Radarr? Connect each one there in turn:
 its root folders become a library, and you choose what its import brings in (monitored and unmonitored items,
-which albums, how its paths read here). Attaching a root folder scans it: albums whose files carry
+which albums, how its paths read here). **Preview** reads the instance and changes nothing: per root folder where
+it is here, its library, and how many items are new, already in Solarr or without an id; per quality profile of the
+*Arr the Solarr profile its items take (the one of the same name is proposed, else the library's own; choose another
+there); and the *Arr's Media Management settings that differ from the library's, taken over when ticked. **Import**
+then runs with that mapping. Attaching a root folder scans it: albums whose files carry
 MusicBrainz tags are recognised at once, others by their tracklists and names. Covers and artist
 pictures arrive over the following minutes.
 
@@ -198,8 +202,9 @@ recognises them through their Wikidata item (never by name alone): the task **Ma
 the item of TV people who share a name with a music artist, and a refreshed artist records theirs. Their TV page then shows
 **Also in your other libraries** (their albums), with a link to the full profile.
 
-**Import from Sonarr** (Connections → Arr): the series, the monitored state of every episode and the quality profile (by
-name) of each series come over; import before the first scan, because a series already in Solarr is left as it is.
+**Import from Sonarr** (Connections → Arr): the series, the monitored state of every episode and the quality profile of
+each series (as mapped in the preview) come over, and Sonarr's Media Management (Episode Title Required, file date,
+propers, empty folders...) if ticked; import before the first scan, because a series already in Solarr is left as it is.
 
 ## 5. What happens on its own
 

@@ -702,8 +702,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		LibrarySuggester: p.suggester(),
 		ArrSync: adapters.ArrSync{
-			Progress: adapters.NewArrProgress(),
-			Cache:    p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
+			Progress: adapters.NewArrProgress(), Registry: p.media,
+			Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
 			Subscriptions: library.NewSubscriptions(p.library), Desired: library.NewDesired(p.library),
 			Imports: library.NewArrImports(p.library),
 			Reverter: library.NewArrImportRevert(
