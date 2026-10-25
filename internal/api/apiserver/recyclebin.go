@@ -70,8 +70,7 @@ type RecycleBinContents interface {
 
 // ListRecycleBinEntries answers what the recycle bins hold, newest first.
 func (s *Server) ListRecycleBinEntries(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.recycleContents == nil {

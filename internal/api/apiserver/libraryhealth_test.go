@@ -52,7 +52,7 @@ func TestGetLibraryHealth_RequiresAuthentication(t *testing.T) {
 // every other optional Server field already follows).
 func TestGetLibraryHealth_UnavailableWithoutAReader(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/library/health"))

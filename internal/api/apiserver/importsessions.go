@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -348,8 +347,7 @@ func (s *Server) routeListImportUnits(w http.ResponseWriter, r *http.Request) {
 // and exclusion patterns -- a session carries no per-category visibility of
 // its own (category_id is nullable, "decide per unit").
 func (s *Server) ListImportSessions(w http.ResponseWriter, r *http.Request, params gen.ListImportSessionsParams) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.importSessions == nil {
@@ -377,8 +375,7 @@ func (s *Server) ListImportSessions(w http.ResponseWriter, r *http.Request, para
 
 // GetImportSession answers one session by id.
 func (s *Server) GetImportSession(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.importSessions == nil {
@@ -665,8 +662,7 @@ func importRevertResultView(result ImportRevertResult) gen.ImportRevertResult {
 // ListImportUnits returns one page of a session's units, cursor-paginated by
 // id (the same plain ascending cursor /blocked already uses).
 func (s *Server) ListImportUnits(w http.ResponseWriter, r *http.Request, id int64, params gen.ListImportUnitsParams) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.importSessions == nil {

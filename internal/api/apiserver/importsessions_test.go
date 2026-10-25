@@ -159,7 +159,7 @@ func TestListImportSessions_RequiresAuthentication(t *testing.T) {
 
 func TestListImportSessions_ReturnsWhatTheListerFound(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	started := time.Unix(1000, 0).UTC()
@@ -185,7 +185,7 @@ func TestListImportSessions_ReturnsWhatTheListerFound(t *testing.T) {
 
 func TestGetImportSession_AnswersNotFoundForAnUnknownID(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/import/sessions/999"))
@@ -207,7 +207,7 @@ func TestGetImportSession_AnswersBadRequestForANonNumericID(t *testing.T) {
 
 func TestListImportUnits_AnswersNotFoundWhenTheSessionDoesNotExist(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/import/sessions/999/units"))
@@ -218,7 +218,7 @@ func TestListImportUnits_AnswersNotFoundWhenTheSessionDoesNotExist(t *testing.T)
 
 func TestListImportUnits_PassesThroughPaginationAndDecisionFilter(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	fixture.importSessions.sessions = []apiserver.ImportSessionRow{

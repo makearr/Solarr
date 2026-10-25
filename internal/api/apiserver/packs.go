@@ -11,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
-	"github.com/makearr/Solarr/internal/api/authz"
 )
 
 // PackLister answers ADR-50's own detected packs. Defined here and
@@ -69,8 +68,7 @@ func (s *Server) routeListPacks(w http.ResponseWriter, r *http.Request) {
 
 // ListPacks pages through every detected pack, oldest first.
 func (s *Server) ListPacks(w http.ResponseWriter, r *http.Request, params gen.ListPacksParams) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.packs == nil {
@@ -114,8 +112,7 @@ func (s *Server) routeGetPack(w http.ResponseWriter, r *http.Request) {
 
 // GetPack answers one pack and its own members.
 func (s *Server) GetPack(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.packs == nil {

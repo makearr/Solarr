@@ -2,6 +2,7 @@ package apiserver
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -101,9 +102,10 @@ func (s *Server) CreateCrossover(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.logger, http.StatusCreated, event)
 }
 
-// GetCrossover answers one event.
+// GetCrossover answers one event to a caller who can see one of its series; to anyone else it is no such crossover.
 func (s *Server) GetCrossover(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
@@ -111,11 +113,35 @@ func (s *Server) GetCrossover(w http.ResponseWriter, r *http.Request, id int64) 
 		return
 	}
 	event, err := s.crossovers.Get(r.Context(), id)
+	if err == nil {
+		var visible bool
+		if visible, err = s.crossoverVisible(r.Context(), access, event); err == nil && !visible {
+			err = ErrNoCrossover
+		}
+	}
 	if err != nil {
 		s.writeCrossoverError(w, err)
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, event)
+}
+
+// crossoverVisible reports whether the caller can see a work of one of the event's members.
+func (s *Server) crossoverVisible(ctx context.Context, access authz.Access, event gen.Crossover) (bool, error) {
+	rootFolderIDs, categoryIDs := s.visibleAt(access, settings.PermissionRead)
+	for _, member := range event.Members {
+		row, err := s.workDetail.GetWorkDetail(ctx, member.WorkId)
+		if errors.Is(err, sql.ErrNoRows) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		if workDetailVisible(rootFolderIDs, categoryIDs, row) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // UpdateCrossover renames an event and sets its episodes. Administrator only.

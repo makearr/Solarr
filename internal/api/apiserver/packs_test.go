@@ -42,7 +42,7 @@ func TestListPacks_ReturnsCannedRows(t *testing.T) {
 		{ID: 1, Kind: "DISCOGRAPHY", DetectedFrom: "structure_and_name", Confidence: 0.85,
 			Title: "XT+QK", MemberCount: 14, ResolvedCount: 3, CreatedAt: time.Unix(100, 0)},
 	}
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/packs"))
@@ -65,7 +65,7 @@ func TestListPacks_ReturnsCannedRows(t *testing.T) {
 
 func TestListPacks_PassesThroughAfterIDAndLimit(t *testing.T) {
 	fixture := newWorksFixture(t)
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/packs?after_id=42&limit=10"))
@@ -96,7 +96,7 @@ func TestGetPack_ReturnsThePackAndItsItems(t *testing.T) {
 		{Ord: 0, WorkID: &workID, State: "RESOLVED"},
 		{Ord: 1, State: "QUEUED"},
 	}
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/packs/1"))
@@ -124,7 +124,7 @@ func TestGetPack_ReturnsThePackAndItsItems(t *testing.T) {
 func TestGetPack_AnswersNotFoundForAnUnknownID(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.packs.getErr = sql.ErrNoRows
-	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "listener", settings.RoleAdmin)
 	cookies := fixture.signIn(t, "listener")
 
 	recorder := fixture.do(authedGet(t, cookies, "/api/v1/packs/999"))

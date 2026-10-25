@@ -71,6 +71,9 @@ type CategoryOfflineFiles struct {
 // unmatched files, incomplete works, roots near their reserve, and blocked
 // hashes found in the library (ADR-53, Invariant 83).
 func (s *Server) GetLibraryHealth(w http.ResponseWriter, r *http.Request) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
 	access, err := authz.FromContext(r.Context())
 	if err != nil {
 		writeError(w, s.logger, err)

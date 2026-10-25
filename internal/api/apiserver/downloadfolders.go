@@ -186,8 +186,7 @@ func (s *Server) routeListDownloadFolderContents(w http.ResponseWriter, r *http.
 // every call -- no cache, no comparison against what is already imported
 // (stage 5's own job, not built yet).
 func (s *Server) ListDownloadFolderContents(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if s.fsys == nil {

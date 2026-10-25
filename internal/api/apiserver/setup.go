@@ -88,14 +88,38 @@ func (s *Server) CreateFirstAdministrator(w http.ResponseWriter, r *http.Request
 	})
 }
 
-// ListRootFolders returns the configured library roots.
+// ListRootFolders returns the configured library roots: all of them to an administrator, to anyone else only the roots
+// of a library they manage, naming only those libraries (user, 2026-10-24).
 func (s *Server) ListRootFolders(w http.ResponseWriter, r *http.Request) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
 		writeError(w, s.logger, err)
 		return
 	}
+	roots := s.rootFolderViews(r.Context())
+	if access.Role() != settings.RoleAdmin {
+		roots = managedRootFolders(access, roots)
+	}
+	writeJSON(w, s.logger, http.StatusOK, roots)
+}
 
-	writeJSON(w, s.logger, http.StatusOK, s.rootFolderViews(r.Context()))
+// managedRootFolders keeps the roots attached to a library the caller manages, each naming only such libraries.
+func managedRootFolders(access authz.Access, roots []gen.RootFolder) []gen.RootFolder {
+	managed := make([]gen.RootFolder, 0, len(roots))
+	for _, root := range roots {
+		var libraries []gen.RootFolderCategory
+		for _, category := range derefOr(root.Categories, nil) {
+			if access.Permission(category.Id).AtLeast(settings.PermissionManage) {
+				libraries = append(libraries, category)
+			}
+		}
+		if len(libraries) == 0 {
+			continue
+		}
+		root.Categories = &libraries
+		managed = append(managed, root)
+	}
+	return managed
 }
 
 // AddRootFolder accepts a library root, refusing an unusable path and flagging

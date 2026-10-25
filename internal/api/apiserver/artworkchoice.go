@@ -72,8 +72,7 @@ func (s *Server) ChooseWorkArtwork(w http.ResponseWriter, r *http.Request, id in
 
 // GetPersonArtworkOptions lists the pictures providers hold for an artist.
 func (s *Server) GetPersonArtworkOptions(w http.ResponseWriter, r *http.Request, id int64) {
-	if _, err := authz.FromContext(r.Context()); err != nil {
-		writeError(w, s.logger, err)
+	if !s.requireAdministrator(w, r) {
 		return
 	}
 	if !s.artworkChoicesAvailable(w) {

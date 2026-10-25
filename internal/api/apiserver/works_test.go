@@ -53,6 +53,7 @@ func (f *fakeWorksReader) ListWorks(
 // grants) to a Server backed by a fakeWorksReader, so category visibility runs
 // through the real repository layer while the library answer stays a fake.
 type worksFixture struct {
+	crossovers           *fakeCrossovers
 	server               *apiserver.Server
 	running              *jobs.Running
 	jobRegistry          *jobs.Registry
@@ -262,6 +263,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	downloaderTester := &fakeConnectionTester{}
 	candidateSearcher := &fakeCandidateSearcher{}
 	wantedParts := &fakeWantedParts{}
+	crossovers := &fakeCrossovers{}
 	fsys := fsx.NewMem(fake)
 	running, jobRegistry := jobs.NewRunning(fake), jobs.NewRegistry()
 	server, err := apiserver.New(apiserver.Config{
@@ -308,6 +310,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		DownloaderTester:     downloaderTester,
 		CandidateSearcher:    candidateSearcher,
 		WantedParts:          wantedParts,
+		Crossovers:           crossovers,
 		ImagesDir:            testImagesDir,
 		LibrarySize:          librarySize,
 		Navigation:           navigation,
@@ -329,8 +332,8 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	}
 	return worksFixture{
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
-		wantedParts: wantedParts,
-		search:      search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
+		wantedParts: wantedParts, crossovers: crossovers,
+		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, remoteImages: remoteImages, people: people, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
 		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
