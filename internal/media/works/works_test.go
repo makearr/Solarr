@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
@@ -116,6 +117,7 @@ func TestSearching_NarrowsToAPartOnlyForATypeThatReadsParts(t *testing.T) {
 
 func TestRefreshJob_OneFailingNeverStopsTheRestAndIsMarked(t *testing.T) {
 	noSource := errors.New("no source")
+	var mu sync.Mutex
 	var refreshed, marked []int64
 	job := works.RefreshJob{
 		Name: "movie", JobType: jobs.Type("movie.refresh"), NoSource: noSource, Clock: clock.NewFake(time.Unix(1_800_000_000, 0)),
@@ -126,10 +128,17 @@ func TestRefreshJob_OneFailingNeverStopsTheRestAndIsMarked(t *testing.T) {
 			if candidate.WorkID == 2 {
 				return noSource
 			}
+			mu.Lock()
+			defer mu.Unlock()
 			refreshed = append(refreshed, candidate.WorkID)
 			return nil
 		},
-		MarkAttempt: func(_ context.Context, workID int64) error { marked = append(marked, workID); return nil },
+		MarkAttempt: func(_ context.Context, workID int64) error {
+			mu.Lock()
+			defer mu.Unlock()
+			marked = append(marked, workID)
+			return nil
+		},
 	}
 	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatal(err)
