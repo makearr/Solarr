@@ -283,12 +283,6 @@ function ProfileForm({
 function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rules: VideoRules) => void }) {
   const set = (patch: Partial<VideoRules>) => onChange({ ...rules, ...patch });
   const order = Object.keys(RESOLUTIONS);
-  const [typed, setTyped] = useState("");
-  const addGroups = () => {
-    const names = typed.split(",").map((name) => name.trim()).filter((name) => name !== "" && !rules.preferredGroups.includes(name));
-    if (names.length > 0) set({ preferredGroups: [...rules.preferredGroups, ...names] });
-    setTyped("");
-  };
   return (
     <div className="flex flex-col gap-4">
       <RankedList
@@ -376,39 +370,7 @@ function VideoRulesForm({ rules, onChange }: { rules: VideoRules; onChange: (rul
         value={rules.audioLanguages}
         onChange={(audioLanguages) => set({ audioLanguages })}
       />
-      <fieldset className="flex flex-col gap-1.5">
-        <legend className="text-xs font-medium">Preferred release groups</legend>
-        <p className="text-xs text-ink-muted">A release from one of these ranks above an otherwise equal one.</p>
-        <div className="flex flex-wrap items-center gap-1 text-xs">
-          {rules.preferredGroups.map((group) => (
-            <span key={group} className="flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-ink">
-              {group}
-              <button
-                type="button"
-                aria-label={`Remove ${group}`}
-                onClick={() => set({ preferredGroups: rules.preferredGroups.filter((other) => other !== group) })}
-                className="text-ink-muted hover:text-ink"
-              >
-                <X aria-hidden className="size-3" />
-              </button>
-            </span>
-          ))}
-          <input
-            value={typed}
-            placeholder="Group name, Enter to add"
-            aria-label="Add a preferred release group"
-            onChange={(event) => setTyped(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                addGroups();
-              }
-            }}
-            onBlur={addGroups}
-            className={`${input} w-52 text-xs`}
-          />
-        </div>
-      </fieldset>
+      <PreferredGroups value={rules.preferredGroups} onChange={(preferredGroups) => set({ preferredGroups })} />
     </div>
   );
 }
@@ -532,7 +494,53 @@ function AudioRulesForm({ rules, onChange }: { rules: AudioRules; onChange: (rul
           />
         ))}
       </fieldset>
+      <PreferredGroups value={rules.preferredGroups} onChange={(preferredGroups) => set({ preferredGroups })} />
     </div>
+  );
+}
+
+/** Release groups a profile favours, as chips; typing several separated by commas adds them all. */
+function PreferredGroups({ value, onChange }: { value: string[]; onChange: (groups: string[]) => void }) {
+  const [typed, setTyped] = useState("");
+  const addGroups = () => {
+    const names = typed.split(",").map((name) => name.trim()).filter((name) => name !== "" && !value.includes(name));
+    if (names.length > 0) onChange([...value, ...names]);
+    setTyped("");
+  };
+  return (
+    <fieldset className="flex flex-col gap-1.5">
+      <legend className="text-xs font-medium">Preferred release groups</legend>
+      <p className="text-xs text-ink-muted">A release from one of these ranks above an otherwise equal one.</p>
+      <div className="flex flex-wrap items-center gap-1 text-xs">
+        {value.map((group) => (
+          <span key={group} className="flex items-center gap-1 rounded-full border border-border-subtle px-2 py-0.5 text-ink">
+            {group}
+            <button
+              type="button"
+              aria-label={`Remove ${group}`}
+              onClick={() => onChange(value.filter((other) => other !== group))}
+              className="text-ink-muted hover:text-ink"
+            >
+              <X aria-hidden className="size-3" />
+            </button>
+          </span>
+        ))}
+        <input
+          value={typed}
+          placeholder="Group name, Enter to add"
+          aria-label="Add a preferred release group"
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              addGroups();
+            }
+          }}
+          onBlur={addGroups}
+          className={`${input} w-52 text-xs`}
+        />
+      </div>
+    </fieldset>
   );
 }
 

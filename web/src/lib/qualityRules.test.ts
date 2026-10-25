@@ -43,7 +43,7 @@ describe("quality rules", () => {
       buildAudioRules("", "AAC 256", {
         codecs: [["aac"]], extensions: [], containers: [["mp4"]], channels: [], rejectCodecs: [],
         bitrates: [{ codec: "aac", min: "224", ideal: "256", max: "320" }], sampleRate: null, bitDepth: null,
-        languages: { audio: [], lyrics: [], subtitle: [] },
+        languages: { audio: [], lyrics: [], subtitle: [] }, preferredGroups: [],
       }),
     );
     expect(doc.compare).toEqual(["audio_codec", "container", "bitrate_distance", "score"]);
@@ -73,6 +73,21 @@ describe("quality rules", () => {
     ]);
     expect(parseAudioRules(JSON.stringify(doc)).languages.lyrics).toEqual(["de", "en"]);
     rules.languages.lyrics = [];
+    expect(JSON.parse(buildAudioRules(JSON.stringify(doc), "x", rules)).scoring).toEqual(JSON.parse(own).scoring);
+  });
+
+  it("adds a preferred release group to a music profile, beside its own rules, and removes it again", () => {
+    const own = '{"quality_profile":"x","compare":["score"],"scoring":[{"name":"Scene group","score":1,"specs":[{"field":"release_group","matches":"X"}]}]}';
+    const rules = parseAudioRules(own);
+    expect(rules.preferredGroups).toEqual([]);
+    rules.preferredGroups = ["OBZEN"];
+    const doc = JSON.parse(buildAudioRules(own, "x", rules));
+    expect(doc.scoring).toEqual([
+      { name: "Scene group", score: 1, specs: [{ field: "release_group", matches: "X" }] },
+      { name: "Preferred release group: OBZEN", score: 5, specs: [{ field: "release_group", eq: "OBZEN", required: true }] },
+    ]);
+    expect(parseAudioRules(JSON.stringify(doc)).preferredGroups).toEqual(["OBZEN"]);
+    rules.preferredGroups = [];
     expect(JSON.parse(buildAudioRules(JSON.stringify(doc), "x", rules)).scoring).toEqual(JSON.parse(own).scoring);
   });
 });

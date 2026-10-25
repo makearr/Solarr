@@ -31,6 +31,8 @@ export interface AudioRules {
   sampleRate: Range | null;
   bitDepth: Range | null;
   languages: LanguagePreferences;
+  /** Release groups that rank above an otherwise equal release, as in a video profile. */
+  preferredGroups: string[];
 }
 
 type Target = { when?: Record<string, string>; min?: string; ideal: string; max?: string; weights?: unknown };
@@ -81,6 +83,18 @@ const LANGUAGE_FIELDS: readonly [keyof LanguagePreferences, string, string][] = 
 ];
 const LANGUAGE_SCORE = 2;
 
+const GROUP_PREFIX = "Preferred release group: ";
+/** Heard as a tie-breaker between releases of equal quality, as the language preferences are. */
+const GROUP_SCORE = 5;
+
+function parseGroups(doc: Document): string[] {
+  return (doc.scoring ?? []).filter((rule) => rule.name.startsWith(GROUP_PREFIX)).map((rule) => rule.name.slice(GROUP_PREFIX.length));
+}
+
+function groupRules(groups: string[]): ScoringRule[] {
+  return groups.map((group) => ({ name: GROUP_PREFIX + group, score: GROUP_SCORE, specs: [{ field: "release_group", eq: group, required: true }] }));
+}
+
 function parseLanguages(doc: Document): LanguagePreferences {
   const languages: LanguagePreferences = { audio: [], lyrics: [], subtitle: [] };
   for (const [key, , prefix] of LANGUAGE_FIELDS) {
@@ -122,6 +136,7 @@ export function parseAudioRules(json: string): AudioRules {
     sampleRate: range(doc.targets?.sample_rate?.[0]),
     bitDepth: range(doc.targets?.bit_depth?.[0]),
     languages: parseLanguages(doc),
+    preferredGroups: parseGroups(doc),
   };
 }
 
@@ -184,13 +199,14 @@ export function buildAudioRules(json: string, name: string, rules: AudioRules): 
   }
   doc.compare = compare.filter((entry) => entry !== "score").concat("score");
 
-  const ownRule = (rule: ScoringRule) => LANGUAGE_FIELDS.some(([, , prefix]) => rule.name.startsWith(prefix));
+  const ownRule = (rule: ScoringRule) => rule.name.startsWith(GROUP_PREFIX) || LANGUAGE_FIELDS.some(([, , prefix]) => rule.name.startsWith(prefix));
   const scoring = (doc.scoring ?? []).filter((rule) => !ownRule(rule));
   for (const [key, field, prefix] of LANGUAGE_FIELDS) {
     for (const code of rules.languages[key]) {
       scoring.push({ name: prefix + code, score: LANGUAGE_SCORE, specs: [{ field, has: code, required: true }] });
     }
   }
+  scoring.push(...groupRules(rules.preferredGroups));
   if (scoring.length > 0) doc.scoring = scoring;
   else delete doc.scoring;
 
@@ -261,10 +277,6 @@ const VIDEO_TARGETS: readonly [keyof VideoRules, string, string][] = [
 
 const VIDEO_LANGUAGE_FIELDS = LANGUAGE_FIELDS.filter(([key]) => key !== "lyrics");
 
-const GROUP_PREFIX = "Preferred release group: ";
-/** Heard as a tie-breaker between releases of equal quality, as the language preferences are. */
-const GROUP_SCORE = 5;
-
 type VideoDocument = Document & { require?: { resolution?: { min?: string; max?: string }; audio_language?: { any_of?: string[] } } };
 
 export function parseVideoRules(json: string): VideoRules {
@@ -280,7 +292,7 @@ export function parseVideoRules(json: string): VideoRules {
     minResolution: doc.require?.resolution?.min ?? "",
     maxResolution: doc.require?.resolution?.max ?? "",
     audioLanguages: doc.require?.audio_language?.any_of ?? [],
-    preferredGroups: (doc.scoring ?? []).filter((rule) => rule.name.startsWith(GROUP_PREFIX)).map((rule) => rule.name.slice(GROUP_PREFIX.length)),
+    preferredGroups: parseGroups(doc),
     containers: canonicalTiers(doc.tiers?.container ?? []),
     videoBitrate: range(doc.targets?.video_bitrate?.[0], "kbps"),
     audioBitrate: range(doc.targets?.audio_bitrate?.[0], "kbps"),
@@ -344,9 +356,7 @@ export function buildVideoRules(json: string, name: string, rules: VideoRules): 
       scoring.push({ name: prefix + code, score: LANGUAGE_SCORE, specs: [{ field, has: code, required: true }] });
     }
   }
-  for (const group of rules.preferredGroups) {
-    scoring.push({ name: GROUP_PREFIX + group, score: GROUP_SCORE, specs: [{ field: "release_group", eq: group, required: true }] });
-  }
+  scoring.push(...groupRules(rules.preferredGroups));
   if (scoring.length > 0) doc.scoring = scoring;
   else delete doc.scoring;
 
