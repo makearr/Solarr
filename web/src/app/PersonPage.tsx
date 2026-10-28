@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -252,9 +252,7 @@ export function PersonPage() {
         })}
         {sectionIds.length === 0 && <p className="text-sm text-ink-muted">No work in your libraries credits them yet.</p>}
 
-        {profiled.map((categoryId) => (
-          <KnownForSection key={categoryId} personId={person.id} categoryId={categoryId} />
-        ))}
+        {profiled.length > 0 && <KnownForSection personId={person.id} categoryIds={profiled} />}
       </div>
     </div>
   );
@@ -341,10 +339,11 @@ function LibrarySection({ name, type, credits }: { name: string; type?: MediaTyp
 
 function PosterImage({ url, kind, workId, title }: { url?: string; kind: string; workId?: number; title: string }) {
   const Icon = mediaTypeIcon(kind);
+  const [failed, setFailed] = useState(false);
   return (
     <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
-      {url ? (
-        <img src={remoteImage(url, "small")} alt="" loading="lazy" className="size-full object-cover" />
+      {url && !failed ? (
+        <img src={remoteImage(url, "small")} alt="" loading="lazy" onError={() => setFailed(true)} className="size-full object-cover" />
       ) : workId ? (
         <CoverArt workId={workId} title={title} size="small" className="size-full object-cover" />
       ) : (
@@ -377,22 +376,38 @@ export function CreditTile({ credit, label }: { credit: Credit; label: string })
 
 const KIND_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", album: "Albums", book: "Books", audiobook: "Audiobooks" };
 
-/** What the providers know the person for beyond the library, asked once per media type the person appears in. */
-function KnownForSection({ personId, categoryId }: { personId: number; categoryId: number }) {
+/** What the providers know the person for beyond the library, asked once per media type the person appears in and
+ * shown once: the TV and film types both answer TMDB's whole list. */
+function KnownForSection({ personId, categoryIds }: { personId: number; categoryIds: number[] }) {
   const queryClient = useQueryClient();
-  const known = useQuery({
-    queryKey: ["known-for", personId, categoryId],
-    retry: false,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/people/{id}/known-for", { params: { path: { id: personId }, query: { category: categoryId } } });
-      if (error) throw error;
-      // Asking the provider fills in a biography and dates the page did not have yet.
-      void queryClient.invalidateQueries({ queryKey: ["person", personId] });
-      return data;
-    },
+  const answers = useQueries({
+    queries: categoryIds.map((categoryId) => ({
+      queryKey: ["known-for", personId, categoryId],
+      retry: false,
+      queryFn: async () => {
+        const { data, error } = await api.GET("/people/{id}/known-for", { params: { path: { id: personId }, query: { category: categoryId } } });
+        if (error) throw error;
+        // Asking the provider fills in a biography and dates the page did not have yet.
+        void queryClient.invalidateQueries({ queryKey: ["person", personId] });
+        return data;
+      },
+    })),
   });
-  if (!known.data || known.data.length === 0) return null;
-  const kinds = [...new Set(known.data.map((title) => title.kind))];
+  const seen = new Set<string>();
+  const titles: KnownFor[] = [];
+  for (const answer of answers) {
+    for (const title of answer.data ?? []) {
+      const key = `${title.provider}-${title.kind}-${title.external_id}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        titles.push(title);
+      }
+    }
+  }
+  const [adding, setAdding] = useState<KnownFor>();
+  if (titles.length === 0) return null;
+  const kinds = [...new Set(titles.map((title) => title.kind))];
+  const keyOf = (title: KnownFor) => `${title.provider}-${title.kind}-${title.external_id}`;
   return (
     <section className="flex flex-col gap-4">
       <h2 className="text-sm font-semibold">Also known for</h2>
@@ -400,12 +415,25 @@ function KnownForSection({ personId, categoryId }: { personId: number; categoryI
         <div key={kind} className="flex flex-col gap-2">
           <h3 className="text-xs font-medium text-ink-muted">{KIND_LABEL[kind] ?? kind}</h3>
           <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">
-            {known.data
+            {titles
               .filter((title) => title.kind === kind)
               .map((title) => (
-                <KnownForTile key={`${title.provider}-${title.kind}-${title.external_id}`} title={title} />
+                <KnownForTile
+                  key={keyOf(title)}
+                  title={title}
+                  adding={adding !== undefined && keyOf(adding) === keyOf(title)}
+                  onAdd={() => setAdding(adding && keyOf(adding) === keyOf(title) ? undefined : title)}
+                />
               ))}
           </div>
+          {adding?.kind === kind && adding.add_library_id && (
+            <AddToLibrary
+              key={keyOf(adding)}
+              candidate={{ provider: adding.provider, external_id: adding.external_id, title: adding.title, kind: adding.kind }}
+              categoryId={String(adding.add_library_id)}
+              onDone={() => setAdding(undefined)}
+            />
+          )}
         </div>
       ))}
     </section>
@@ -413,8 +441,7 @@ function KnownForSection({ personId, categoryId }: { personId: number; categoryI
 }
 
 /** A title the library lacks is added from here to the library that holds its kind; with none, it links out. */
-function KnownForTile({ title }: { title: KnownFor }) {
-  const [adding, setAdding] = useState(false);
+function KnownForTile({ title, adding, onAdd }: { title: KnownFor; adding: boolean; onAdd: () => void }) {
   const mediaType = title.kind === "album" ? "music" : title.kind;
   const caption = (
     <>
@@ -446,18 +473,11 @@ function KnownForTile({ title }: { title: KnownFor }) {
       <button
         type="button"
         aria-expanded={adding}
-        onClick={() => setAdding(!adding)}
+        onClick={onAdd}
         className="w-fit rounded-md border border-border-subtle px-2 py-0.5 text-xs text-accent hover:border-accent"
       >
         Add to Solarr
       </button>
-      {adding && (
-        <AddToLibrary
-          candidate={{ provider: title.provider, external_id: title.external_id, title: title.title, kind: title.kind }}
-          categoryId={String(title.add_library_id)}
-          onDone={() => setAdding(false)}
-        />
-      )}
     </div>
   );
 }
