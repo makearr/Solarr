@@ -2,6 +2,7 @@
 package apiserver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -53,6 +54,9 @@ func writeProblem(w http.ResponseWriter, logger *slog.Logger, status int, slug, 
 		logger.Warn("could not write problem response", slog.Any("error", err))
 	}
 }
+
+// statusClientClosedRequest is nginx's 499: the client went away before the answer.
+const statusClientClosedRequest = 499
 
 // writeError maps a domain error onto a status (Invariant 37).
 func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
@@ -117,6 +121,11 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 		logger.Error("write path used an unregistered setting key", slog.Any("error", err))
 		writeProblem(w, logger, http.StatusInternalServerError, TypeInternal,
 			"Internal error", "this setting is not available yet")
+
+	case errors.Is(err, context.Canceled):
+		// The client left (a page closed, a restart); nothing failed and nobody reads the answer.
+		logger.Debug("request ended by the client", slog.Any("error", err))
+		w.WriteHeader(statusClientClosedRequest)
 
 	default:
 		logger.Error("unhandled error", slog.Any("error", err))

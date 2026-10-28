@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -197,6 +198,17 @@ func TestProblem_MapsDomainErrorsToStatuses(t *testing.T) {
 				t.Errorf("body status = %d, want %d", problem.Status, testCase.want)
 			}
 		})
+	}
+}
+
+// A request its client abandoned is no failure: no ERROR line, and nginx's 499.
+func TestProblem_ACancelledRequestIsNotLoggedAsAnError(t *testing.T) {
+	var logged strings.Builder
+	recorder := httptest.NewRecorder()
+	apiserver.WriteErrorForTest(recorder, slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelInfo})),
+		fmt.Errorf("library: scan work: %w", context.Canceled))
+	if recorder.Code != 499 || logged.Len() != 0 {
+		t.Errorf("status = %d, logged %q; want 499 and nothing at info or above", recorder.Code, logged.String())
 	}
 }
 
