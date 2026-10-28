@@ -2,8 +2,13 @@ package book
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"github.com/makearr/Solarr/internal/platform/httpx"
+	"log/slog"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
@@ -201,5 +206,18 @@ func TestPickCandidate_TakesTheExactTitleByTheNamedAuthorOnly(t *testing.T) {
 	}
 	if _, ok := pickCandidate(candidates, parsebook.Info{Title: "The Lantern Keeper"}); ok {
 		t.Error("two books of one title and no author named is a person's decision")
+	}
+}
+
+func TestWarn_APausedProviderIsNotAWarningPerBook(t *testing.T) {
+	var logged strings.Builder
+	service := Service{Format: Ebook, Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelInfo}))}
+	service.warn("googlebooks", "isbn", fmt.Errorf("googlebooks: %w", &httpx.OpenError{Provider: "googlebooks"}))
+	if logged.Len() != 0 {
+		t.Errorf("logged %q for a paused provider, want nothing at info or above", logged.String())
+	}
+	service.warn("googlebooks", "isbn", errors.New("googlebooks: status 500"))
+	if !strings.Contains(logged.String(), "book metadata source failed") {
+		t.Errorf("logged %q for a failure, want a warning", logged.String())
 	}
 }

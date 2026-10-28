@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // ErrNoSource means no provider could be asked or none knew the book.
@@ -95,6 +96,11 @@ type Service struct {
 }
 
 func (s Service) warn(source, id string, err error) {
+	if s.Logger != nil && errors.Is(err, httpx.ErrCircuitOpen) {
+		// A paused provider is shown once as its health, not per book it skipped (Google Books' daily quota).
+		s.Logger.Debug("book metadata source paused", slog.String("source", source), slog.String("id", id))
+		return
+	}
 	if s.Logger != nil {
 		s.Logger.Warn("book metadata source failed", slog.String("media_type", s.Format.MediaType), slog.String("source", source),
 			slog.String("id", id), slog.Any("error", err))

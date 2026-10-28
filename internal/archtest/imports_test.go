@@ -390,7 +390,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/renamejob", "internal/moving/sidecar", "internal/platform/clock", "internal/platform/filekind", "internal/platform/fsx", "internal/platform/keyedlock",
 		"internal/platform/mediatool", "internal/platform/parallel", "internal/platform/paginate", "internal/scanning/scan", "internal/db/statistics",
 	},
-	"internal/media/book": {
+	"internal/media/book": {"internal/platform/httpx",
 		"internal/media/works", "internal/db/store/gen/librarydb", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parsebook", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
 		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media",
