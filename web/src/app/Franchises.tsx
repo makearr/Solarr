@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Film, LayoutGrid, List, Trash2 } from "lucide-react";
+import { LayoutGrid, List, Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { invalidateWorkLists } from "@/lib/resources";
@@ -15,6 +15,7 @@ import { EmptyState } from "@/ui/EmptyState";
 import { PageHeader } from "@/ui/PageHeader";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { Dialog } from "@/ui/Dialog";
+import { mediaTypeIcon } from "@/lib/mediaTypeIcon";
 import { useLibrary } from "@/lib/useLibrary";
 import { useMediaType } from "@/lib/useMediaTypes";
 import { AddToLibrary } from "./work/AddWork";
@@ -68,6 +69,7 @@ export function FranchiseIndex() {
   const navigate = useNavigate();
   const [jump, setJump] = useState("");
   const frame = useRef<HTMLDivElement>(null);
+  const TypeIcon = mediaTypeIcon(useLibrary(categoryId)?.media_type ?? "");
   const [creating, setCreating] = useState(false);
   const list = useQuery({
     queryKey: ["franchises", categoryId],
@@ -141,7 +143,7 @@ export function FranchiseIndex() {
                     <img src={remoteImage(franchise.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
                   ) : (
                     <span className="flex size-full items-center justify-center text-ink-muted">
-                      <Film aria-hidden className="size-8" />
+                      <TypeIcon aria-hidden className="size-8" />
                     </span>
                   )}
                 </span>
@@ -192,6 +194,7 @@ function CollectionDetail({
   const queryClient = useQueryClient();
   const library = useLibrary(categoryId);
   const mediaType = useMediaType(library?.media_type);
+  const TypeIcon = mediaTypeIcon(library?.media_type ?? "");
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [name, setName] = useState(summary.name);
@@ -268,7 +271,7 @@ function CollectionDetail({
                   <CoverArt workId={member.work_id} title={member.title} size="small" className="size-full object-cover" />
                 ) : (
                   <span className="flex size-full items-center justify-center text-ink-muted">
-                    <Film aria-hidden className="size-8" />
+                    <TypeIcon aria-hidden className="size-8" />
                   </span>
                 )}
               </span>

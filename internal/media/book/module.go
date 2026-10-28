@@ -44,8 +44,31 @@ type Module struct {
 	Authors *AuthorWorks
 	// Follow adds an author's books to a library that follows them; nil leaves authors unfollowable.
 	Follow *Following
+	// Series lists and adds a series' missing books; nil leaves series collections to the books they hold.
+	Series *SeriesBooks
 	// Rename names a book's files for a rename; nil leaves books without one.
 	Rename *RenameConfig
+}
+
+// MissingFranchiseMembers implements media.Franchising.
+func (m Module) MissingFranchiseMembers(ctx context.Context, categoryID, franchiseID int64) ([]media.FranchiseMember, error) {
+	if m.Series == nil {
+		return nil, media.ErrNotWired
+	}
+	return m.Series.MissingFranchiseMembers(ctx, categoryID, franchiseID)
+}
+
+// FranchiseFacts implements media.Franchising.
+func (m Module) FranchiseFacts(context.Context, []media.FranchiseRef) map[int64]media.FranchiseFact {
+	return nil
+}
+
+// MonitorFranchise implements media.Franchising.
+func (m Module) MonitorFranchise(ctx context.Context, categoryID, franchiseID int64, monitored bool) (int, error) {
+	if m.Series == nil {
+		return 0, media.ErrNotWired
+	}
+	return m.Series.MonitorFranchise(ctx, categoryID, franchiseID, monitored)
 }
 
 // FollowCandidates implements media.Following.

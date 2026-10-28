@@ -76,7 +76,19 @@ Readarr's two slots, Author Folder Format and Standard Book Format, with its tok
 book in one file has no part, so `[ - {PartNumber:00}]` renders nothing for it. The Audiobookshelf preset writes the
 layout Audiobookshelf reads: "Author/1 - Title {Narrator}/01 - Title.m4b".
 
+## Authors and series
+
+**Following an author** (`follow.go`, Readarr's author monitoring) offers the author's books at Open Library, the list the
+author's page shows: those first published from the year of the follow on, or all of them for a back-catalogue follow,
+5 a run (25 for the back catalogue), each added monitored and never past an exclusion. Only the author role is
+followed: Open Library lists books by author.
+
+**A series** is a collection (one per series name). Its missing books (`series.go`) come from Wikidata: the series the
+held books' Open Library works are part of (P648, P179), its books in series order (P1545) with their Open Library work
+ids; a book held under any of its ids, excluded, or with no Open Library work id is not listed. Monitor collection adds
+the missing ones.
+
 ## Not built
 
-Following an author (Readarr's author monitoring), Hardcover, iTunes, OPF or metadata.json files beside a book, the
-series' missing books, and import from Readarr.
+OPF or metadata.json files beside a book, and import from Readarr. A monitored series does not yet add a book published
+after it was monitored (no periodic pass, as for films).

@@ -576,6 +576,9 @@ func (p *process) bookModule(format book.Format) book.Module {
 		Rename:   &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
 		Authors:  &authors,
 		Follow:   &book.Following{Authors: authors, Catalog: catalog},
+		Series: &book.SeriesBooks{
+			Franchises: library.NewFranchises(p.library), Reader: library.NewSeriesReader(p.library), Source: p.wikidataFetcher(), Catalog: catalog,
+		},
 		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			found, err := conns(ctx)
 			if err != nil {
