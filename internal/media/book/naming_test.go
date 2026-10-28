@@ -68,3 +68,9 @@ func TestFormat_IncludesItsFilesButNotSamples(t *testing.T) {
 		t.Error("an audiobook's chapter is its file")
 	}
 }
+
+func TestFormat_ProbesAnAudiobooksFilesButNoEbook(t *testing.T) {
+	if !book.Audiobook.Probes("Author/Title/01.m4b") || book.Ebook.Probes("Author/Title/Title.epub") {
+		t.Errorf("Probes: audiobook %v, ebook %v; want true, false", book.Audiobook.Probes("x.m4b"), book.Ebook.Probes("x.epub"))
+	}
+}

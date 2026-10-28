@@ -61,6 +61,9 @@ var Formats = []Format{Ebook, Audiobook}
 // IsAudio says the format's files are sound.
 func (f Format) IsAudio() bool { return f.ByFolder }
 
+// Probes says ffprobe can read the format's files: an audiobook's, never an ebook.
+func (f Format) Probes(string) bool { return f.IsAudio() }
+
 // Includes says a library file is one of the format's.
 func (f Format) Includes(relPath string) bool {
 	extension := strings.ToLower(strings.TrimPrefix(path.Ext(relPath), "."))

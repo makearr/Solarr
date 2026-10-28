@@ -92,6 +92,8 @@ type Sweep struct {
 	Consumer Consumer
 	// Include decides which files are worth probing. Nil takes everything.
 	Include func(relPath string) bool
+	// Probe picks the included files ffprobe can read (a book library's audio, not its ebooks); nil probes all.
+	Probe func(relPath string) bool
 	// Housekeeping is optional.
 	Housekeeping Housekeeping
 	// OnSwept is optional: told after every sweep of a root, so derived counts catch up at once.
@@ -199,7 +201,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	flow := pipeline{
 		observe: func(ctx context.Context, batch Batch) error {
-			if err := j.observe(ctx, root, sweep.Consumer, payload.CategoryID, batch); err != nil {
+			if err := j.observe(ctx, root, sweep, payload.CategoryID, batch); err != nil {
 				return err
 			}
 			job.Progress.Add(int64(len(batch.Files)))
@@ -274,7 +276,7 @@ func (j *Job) rescanDirectories(
 		if len(batch.Files) == 0 {
 			continue
 		}
-		if err := j.observe(ctx, root, sweep.Consumer, payload.CategoryID, batch); err != nil {
+		if err := j.observe(ctx, root, sweep, payload.CategoryID, batch); err != nil {
 			return err
 		}
 		files += len(batch.Files)
@@ -331,27 +333,34 @@ func (j *Job) markMissing(ctx context.Context, root settings.RootFolder, sweptTh
 	return true
 }
 
-// observe probes one batch in a single mediatool call and hands it to the consumer.
-func (j *Job) observe(ctx context.Context, root settings.RootFolder, consumer Consumer, categoryID int64, batch Batch) error {
-	paths := make([]string, len(batch.Files))
+// observe probes one batch in a single mediatool call and hands it to the consumer; a file the sweep does not probe
+// goes with an empty probe.
+func (j *Job) observe(ctx context.Context, root settings.RootFolder, sweep Sweep, categoryID int64, batch Batch) error {
+	var paths []string
+	var probed []int
 	for index, file := range batch.Files {
-		paths[index] = path.Join(root.Path, file.RelPath)
+		if sweep.Probe == nil || sweep.Probe(file.RelPath) {
+			paths, probed = append(paths, path.Join(root.Path, file.RelPath)), append(probed, index)
+		}
 	}
 
 	probes, err := j.tool.ReadTags(ctx, paths)
 	if err != nil {
 		return fmt.Errorf("scan: probe %s: %w", batch.Directory, err)
 	}
-	if len(probes) != len(batch.Files) {
+	if len(probes) != len(paths) {
 		return fmt.Errorf("scan: probed %d of %d files in %s",
-			len(probes), len(batch.Files), batch.Directory)
+			len(probes), len(paths), batch.Directory)
 	}
 
 	observed := make([]Observed, len(batch.Files))
-	unreadable := 0
 	for index, file := range batch.Files {
-		observed[index] = Observed{File: file, Probe: probes[index]}
-		if probes[index].Err != nil {
+		observed[index] = Observed{File: file}
+	}
+	unreadable := 0
+	for at, index := range probed {
+		observed[index].Probe = probes[at]
+		if probes[at].Err != nil {
 			unreadable++
 		}
 	}
@@ -364,7 +373,7 @@ func (j *Job) observe(ctx context.Context, root settings.RootFolder, consumer Co
 			slog.Int("unreadable", unreadable), slog.Int("of", len(batch.Files)))
 	}
 
-	return consumer.Observe(ctx, root, categoryID, observed)
+	return sweep.Consumer.Observe(ctx, root, categoryID, observed)
 }
 
 // IsAudio reports a path worth probing as music: an Include function rather than a list in the sweep, because a media

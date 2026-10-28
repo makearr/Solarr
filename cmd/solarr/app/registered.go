@@ -562,7 +562,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
 				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
 			}),
-			Include: format.Includes,
+			Include: format.Includes, Probe: format.Probes,
 			Housekeeping: housekeeping.Sweep{
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
 				Grain: module.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,

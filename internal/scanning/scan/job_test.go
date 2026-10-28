@@ -493,6 +493,29 @@ func TestJob_ProbesOnlyWhatIncludeAccepts(t *testing.T) {
 	}
 }
 
+func TestJob_ProbesOnlyWhatProbeAcceptsAndPassesTheRestUnprobed(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac", "a/book.epub")
+	handler := scan.NewJob(scan.Config{
+		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots, Tool: fixture.tool,
+		Sweeps:   scan.Always{Consumer: fixture.recorder, Probe: scan.IsAudio},
+		Physical: library.NewPhysical(fixture.store), Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := fixture.recorder.paths(); !slices.Equal(got, []string{"a/01.flac", "a/book.epub"}) {
+		t.Errorf("consumer saw %v, want both files", got)
+	}
+	if !slices.Equal(fixture.tool.batchSize, []int{1}) {
+		t.Errorf("probed batches = %v, want one of the audio file alone", fixture.tool.batchSize)
+	}
+	for _, observed := range fixture.recorder.seen {
+		if probed := observed.Probe.Path != ""; probed != (observed.File.RelPath == "a/01.flac") {
+			t.Errorf("%s probed = %v", observed.File.RelPath, probed)
+		}
+	}
+}
+
 func TestIsAudio_AcceptsTheContainersStageThreeReads(t *testing.T) {
 	for _, relPath := range []string{"a/01.FLAC", "a/01.mp3", "a/01.m4a", "a/01.Opus"} {
 		if !scan.IsAudio(relPath) {
