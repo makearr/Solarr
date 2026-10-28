@@ -42,17 +42,36 @@ func (a AuthorWorks) KnownFor(ctx context.Context, personID, categoryID int64) (
 	return a.otherBooks(ctx, person.Name, held)
 }
 
-// otherBooks are the author's books Open Library lists that held does not hold, newest first.
-func (a AuthorWorks) otherBooks(ctx context.Context, name string, held map[string]bool) ([]media.KnownFor, error) {
+// writtenBy are the books Open Library lists for the name that name it among their authors, one per title.
+func (a AuthorWorks) writtenBy(ctx context.Context, name string) ([]openlibrary.Doc, error) {
 	docs, err := a.Source.ByAuthor(ctx, name, 100)
 	if err != nil {
 		return nil, err
 	}
 	writer := PersonKey(name)
+	seen := map[string]bool{}
+	var written []openlibrary.Doc
+	for _, doc := range docs {
+		key := foldTitle(doc.Title)
+		if key == "" || seen[key] || !slices.ContainsFunc(doc.AuthorNames, func(name string) bool { return PersonKey(name) == writer }) {
+			continue
+		}
+		seen[key] = true
+		written = append(written, doc)
+	}
+	return written, nil
+}
+
+// otherBooks are the author's books Open Library lists that held does not hold, newest first.
+func (a AuthorWorks) otherBooks(ctx context.Context, name string, held map[string]bool) ([]media.KnownFor, error) {
+	docs, err := a.writtenBy(ctx, name)
+	if err != nil {
+		return nil, err
+	}
 	var others []media.KnownFor
 	for _, doc := range docs {
 		key := foldTitle(doc.Title)
-		if key == "" || held[key] || !slices.ContainsFunc(doc.AuthorNames, func(name string) bool { return PersonKey(name) == writer }) {
+		if held[key] {
 			continue
 		}
 		held[key] = true

@@ -42,9 +42,30 @@ type Module struct {
 	media.Passes
 	// Authors lists an author's other books on their page; nil leaves the page to the library's own.
 	Authors *AuthorWorks
+	// Follow adds an author's books to a library that follows them; nil leaves authors unfollowable.
+	Follow *Following
 	// Rename names a book's files for a rename; nil leaves books without one.
 	Rename *RenameConfig
 }
+
+// FollowCandidates implements media.Following.
+func (m Module) FollowCandidates(ctx context.Context, follow media.Follow) ([]media.FollowCandidate, error) {
+	if m.Follow == nil {
+		return nil, media.ErrNoFollowSource
+	}
+	return m.Follow.FollowCandidates(ctx, follow)
+}
+
+// AddFollowed implements media.Following.
+func (m Module) AddFollowed(ctx context.Context, follow media.Follow, candidate media.FollowCandidate) error {
+	if m.Follow == nil {
+		return media.ErrNoFollowSource
+	}
+	return m.Follow.AddFollowed(ctx, follow, candidate)
+}
+
+// FollowLimit implements media.Following.
+func (m Module) FollowLimit(follow media.Follow) int { return Following{}.FollowLimit(follow) }
 
 // KnownFor implements media.Profiling.
 func (m Module) KnownFor(ctx context.Context, personID, categoryID int64) ([]media.KnownFor, error) {

@@ -544,6 +544,7 @@ func (p *process) enqueueCrossoverPass(ctx context.Context) (jobs.EnqueueResult,
 func (p *process) bookModule(format book.Format) book.Module {
 	service := p.bookService(format)
 	catalog := p.bookCatalog(format)
+	authors := book.AuthorWorks{Format: format, People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: service.OpenLibrary}
 	resolver := book.Resolver{
 		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
 		Locks: &keyedlock.Locks{},
@@ -573,7 +574,8 @@ func (p *process) bookModule(format book.Format) book.Module {
 		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
 		Files:    book.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
 		Rename:   &book.RenameConfig{Format: format, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
-		Authors:  &book.AuthorWorks{Format: format, People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: service.OpenLibrary},
+		Authors:  &authors,
+		Follow:   &book.Following{Authors: authors, Catalog: catalog},
 		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
 			found, err := conns(ctx)
 			if err != nil {
