@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/makearr/Solarr/internal/platform/httpx"
 	"log/slog"
 	"reflect"
 	"slices"
@@ -17,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 type fakeOpenLibrary struct{ asked []string }
