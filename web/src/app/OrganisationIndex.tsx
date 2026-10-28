@@ -80,9 +80,9 @@ export function OrganisationIndex() {
       key: "name", header: type?.organisation.one || "Name", sortable: true, width: "minmax(12rem,2fr)",
       render: (organisation) => (
         <Link {...link(organisation)} className="flex items-center gap-2 hover:underline" onClick={(event) => event.stopPropagation()}>
-          <span className="flex h-7 w-12 shrink-0 items-center justify-center">
+          <span className={`flex h-7 w-12 shrink-0 items-center justify-center rounded ${organisation.logo_url ? "bg-white/90 px-1" : ""}`}>
             {organisation.logo_url ? (
-              <img src={remoteImage(organisation.logo_url, "thumb")} alt="" loading="lazy" className="max-h-7 max-w-12 object-contain" />
+              <img src={remoteImage(organisation.logo_url, "thumb")} alt="" loading="lazy" className="max-h-6 max-w-full object-contain" />
             ) : (
               <Building2 aria-hidden className="size-4 text-ink-muted" />
             )}
@@ -181,7 +181,9 @@ export function OrganisationPage() {
       )}
       <div className="flex items-center gap-4">
         {organisation.logo_url ? (
-          <img src={remoteImage(organisation.logo_url, "thumb")} alt="" className="max-h-14 max-w-40 object-contain" />
+          <span className="flex h-16 items-center rounded-lg bg-white/90 px-3">
+            <img src={remoteImage(organisation.logo_url, "thumb")} alt="" className="max-h-12 max-w-40 object-contain" />
+          </span>
         ) : (
           <Building2 aria-hidden className="size-10 text-ink-muted" />
         )}

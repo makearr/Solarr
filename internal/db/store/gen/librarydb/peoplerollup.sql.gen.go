@@ -145,6 +145,54 @@ func (q *Queries) FillPersonLibrary(ctx context.Context, personIds []int64) erro
 	return err
 }
 
+const listOrganisationsLogoUnasked = `-- name: ListOrganisationsLogoUnasked :many
+SELECT o.id, x.external_id FROM organisation o
+JOIN organisation_external_id x ON x.organisation_id = o.id AND x.provider = ?1
+WHERE o.kind = ?2 AND o.id > ?3 AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo_asked') IS NULL
+ORDER BY o.id LIMIT ?4
+`
+
+type ListOrganisationsLogoUnaskedParams struct {
+	Provider string
+	Kind     string
+	AfterID  int64
+	PageSize int64
+}
+
+type ListOrganisationsLogoUnaskedRow struct {
+	ID         int64
+	ExternalID string
+}
+
+// Organisations of a kind with an id at a provider whose logo was never asked for.
+func (q *Queries) ListOrganisationsLogoUnasked(ctx context.Context, arg ListOrganisationsLogoUnaskedParams) ([]ListOrganisationsLogoUnaskedRow, error) {
+	rows, err := q.db.QueryContext(ctx, listOrganisationsLogoUnasked,
+		arg.Provider,
+		arg.Kind,
+		arg.AfterID,
+		arg.PageSize,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListOrganisationsLogoUnaskedRow{}
+	for rows.Next() {
+		var i ListOrganisationsLogoUnaskedRow
+		if err := rows.Scan(&i.ID, &i.ExternalID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listOrganisationsOfWork = `-- name: ListOrganisationsOfWork :many
 SELECT DISTINCT organisation_id FROM work_organisation WHERE work_id = ? ORDER BY organisation_id
 `
@@ -287,4 +335,19 @@ func (q *Queries) ListWorksToAskOrganisation(ctx context.Context, arg ListWorksT
 		return nil, err
 	}
 	return items, nil
+}
+
+const setOrganisationLogoAsked = `-- name: SetOrganisationLogoAsked :exec
+UPDATE organisation SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.logo_asked', ?1)
+WHERE id = ?2
+`
+
+type SetOrganisationLogoAskedParams struct {
+	AskedAt interface{}
+	ID      int64
+}
+
+func (q *Queries) SetOrganisationLogoAsked(ctx context.Context, arg SetOrganisationLogoAskedParams) error {
+	_, err := q.db.ExecContext(ctx, setOrganisationLogoAsked, arg.AskedAt, arg.ID)
+	return err
 }

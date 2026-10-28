@@ -54,7 +54,7 @@ type imageLock struct {
 
 // DefaultHosts are the CDNs the TV, film, book and album providers' pictures live on.
 var DefaultHosts = []string{
-	"image.tmdb.org", "thetvdb.com", "tvmaze.com", "anilist.co", "fanart.tv", "coverartarchive.org",
+	"image.tmdb.org", "thetvdb.com", "tvmaze.com", "anilist.co", "fanart.tv", "coverartarchive.org", "wikimedia.org",
 	"openlibrary.org", "books.google.com", "googleusercontent.com", "media-amazon.com", "mzstatic.com", "fantlab.ru", "hardcover.app",
 }
 

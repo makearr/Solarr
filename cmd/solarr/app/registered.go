@@ -346,7 +346,10 @@ func (p *process) enqueueServerFiles(ctx context.Context) (jobs.EnqueueResult, e
 // musicJobs are the job types the music module brings.
 func (p *process) musicJobs() []media.JobRegistration {
 	registrations := p.enrichJobs()
-	return append(registrations, p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob())
+	labelLogos := media.JobRegistration{Definition: music.LabelLogosDefinition, Handler: music.LabelLogosJob{
+		Organisations: library.NewOrganisations(p.library), Source: p.wikidataFetcher(), Clock: clock.NewSystem(), Logger: p.logger,
+	}}
+	return append(registrations, p.tagWritebackJob(), p.artworkJob(), p.discographyCoverageJob(), p.searchCategoryJob(), labelLogos)
 }
 
 // tvJobs are the job types the TV module brings besides its own typed ones.

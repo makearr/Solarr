@@ -55,3 +55,14 @@ JOIN work_external_id x ON x.work_id = w.id AND x.provider = sqlc.arg(external_p
 WHERE w.media_type = sqlc.arg(media_type) AND w.id > sqlc.arg(after_id)
   AND NOT EXISTS (SELECT 1 FROM work_field f WHERE f.work_id = w.id AND f.field = sqlc.arg(field) AND f.provider = sqlc.arg(asked_provider))
 ORDER BY w.id LIMIT sqlc.arg(page_size);
+
+-- Organisations of a kind with an id at a provider whose logo was never asked for.
+-- name: ListOrganisationsLogoUnasked :many
+SELECT o.id, x.external_id FROM organisation o
+JOIN organisation_external_id x ON x.organisation_id = o.id AND x.provider = sqlc.arg(provider)
+WHERE o.kind = sqlc.arg(kind) AND o.id > sqlc.arg(after_id) AND json_extract(COALESCE(o.fields_json, '{}'), '$.logo_asked') IS NULL
+ORDER BY o.id LIMIT sqlc.arg(page_size);
+
+-- name: SetOrganisationLogoAsked :exec
+UPDATE organisation SET fields_json = json_set(COALESCE(fields_json, '{}'), '$.logo_asked', sqlc.arg(asked_at))
+WHERE id = sqlc.arg(id);

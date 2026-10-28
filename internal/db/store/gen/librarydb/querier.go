@@ -677,6 +677,8 @@ type Querier interface {
 	// imprints and sub-labels are real in every domain (ADR-32).
 	ListOrganisationSubtree(ctx context.Context, id int64) ([]Organisation, error)
 	ListOrganisationsForWork(ctx context.Context, workID int64) ([]WorkOrganisation, error)
+	// Organisations of a kind with an id at a provider whose logo was never asked for.
+	ListOrganisationsLogoUnasked(ctx context.Context, arg ListOrganisationsLogoUnaskedParams) ([]ListOrganisationsLogoUnaskedRow, error)
 	ListOrganisationsOfWork(ctx context.Context, workID int64) ([]int64, error)
 	ListPackItems(ctx context.Context, packID int64) ([]PackItem, error)
 	// Cursor-paginated by id ascending, the same plain cursor /blocked and
@@ -1121,6 +1123,7 @@ type Querier interface {
 	SetMoveItemState(ctx context.Context, arg SetMoveItemStateParams) error
 	SetMoveJobRunning(ctx context.Context, id int64) error
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
+	SetOrganisationLogoAsked(ctx context.Context, arg SetOrganisationLogoAskedParams) error
 	SetOrganisationMonitored(ctx context.Context, arg SetOrganisationMonitoredParams) error
 	SetPartRef(ctx context.Context, arg SetPartRefParams) error
 	SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error

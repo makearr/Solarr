@@ -25,3 +25,7 @@ func (p *process) enqueueDiscographyCoverage(ctx context.Context) (jobs.EnqueueR
 		Priority: jobs.PriorityLow, Payload: []byte("{}"),
 	})
 }
+
+func (p *process) enqueueLabelLogos(ctx context.Context) (jobs.EnqueueResult, error) {
+	return music.EnqueueLabelLogos(ctx, p.queue)
+}

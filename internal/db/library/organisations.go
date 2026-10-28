@@ -366,6 +366,49 @@ func (o Organisations) FillDetails(ctx context.Context, organisationID int64, de
 	return nil
 }
 
+// LogoToAsk is an organisation whose logo was never asked for, by its id at the provider asked.
+type LogoToAsk struct {
+	OrganisationID int64
+	ExternalID     string
+}
+
+// LogosToAsk pages the organisations of a kind with an id at provider whose logo was never asked for.
+func (o Organisations) LogosToAsk(ctx context.Context, kind, provider string, afterID int64, limit int) ([]LogoToAsk, error) {
+	rows, err := librarydb.New(o.store.Read()).ListOrganisationsLogoUnasked(ctx, librarydb.ListOrganisationsLogoUnaskedParams{
+		Provider: provider, Kind: kind, AfterID: afterID, PageSize: int64(limit),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("library: %s logos to ask: %w", kind, err)
+	}
+	out := make([]LogoToAsk, len(rows))
+	for i, row := range rows {
+		out[i] = LogoToAsk{OrganisationID: row.ID, ExternalID: row.ExternalID}
+	}
+	return out, nil
+}
+
+// AnswerLogos records the logos found, and that each organisation asked was asked, in one write.
+func (o Organisations) AnswerLogos(ctx context.Context, at time.Time, asked []int64, logos map[int64]string) error {
+	err := o.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(tx)
+		for _, id := range asked {
+			if logo := logos[id]; logo != "" {
+				if err := queries.SetOrganisationLogo(ctx, librarydb.SetOrganisationLogoParams{Logo: logo, ID: id}); err != nil {
+					return err
+				}
+			}
+			if err := queries.SetOrganisationLogoAsked(ctx, librarydb.SetOrganisationLogoAskedParams{AskedAt: at.Unix(), ID: id}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("library: answer logos: %w", err)
+	}
+	return nil
+}
+
 // WorkToAsk is a work whose organisation a provider has not been asked for yet, with the ids it is asked by.
 type WorkToAsk struct {
 	WorkID       int64
