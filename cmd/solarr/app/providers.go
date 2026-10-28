@@ -22,7 +22,10 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/fanart"
+	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
+	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/metacache"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
@@ -345,10 +348,13 @@ func (p *process) bookService(format book.Format) book.Service {
 		googleBooks := googlebooks.New(p.providerClient(providerGoogleBooks, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceGoogleBooks))
 		audibleClient := p.providerClient(providerAudible, nil, httpx.ClientConfig{})
 		catalog := audible.New(audibleClient, audibleClient, nil)
+		appleBooks := itunes.New(p.providerClient(providerITunes, nil, httpx.ClientConfig{}))
+		fantLab := fantlab.New(p.providerClient(providerFantLab, nil, httpx.ClientConfig{}))
+		hardcoverClient := hardcover.New(p.providerClient(providerHardcover, nil, httpx.ClientConfig{}), p.providerKey(settings.BookSourceHardcover))
 		p.bookShared = map[string]book.Service{}
 		for _, each := range book.Formats {
 			p.bookShared[each.MediaType] = book.Service{
-				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, Wikidata: p.wikidataFacts(),
+				Format: each, OpenLibrary: openLibrary, GoogleBooks: googleBooks, Audible: catalog, ITunes: appleBooks, FantLab: fantLab, Hardcover: hardcoverClient, Wikidata: p.wikidataFacts(),
 				PriorityFor: func(categoryID int64) []string {
 					snapshot := p.cache.Snapshot()
 					category, found := snapshot.Category(categoryID)

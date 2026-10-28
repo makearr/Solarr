@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -14,7 +15,10 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/audible"
+	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
+	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -45,6 +49,24 @@ type AudibleSource interface {
 	Book(ctx context.Context, asin string) (audible.Book, error)
 }
 
+// ITunesSource is the iTunes client as the service needs it.
+type ITunesSource interface {
+	Search(ctx context.Context, title, author string, limit int) ([]itunes.Audiobook, error)
+	Lookup(ctx context.Context, id int64) (itunes.Audiobook, error)
+}
+
+// FantLabSource is the FantLab client as the service needs it.
+type FantLabSource interface {
+	Search(ctx context.Context, title string, limit int) ([]fantlab.Match, error)
+	Work(ctx context.Context, id int64) (fantlab.Work, error)
+}
+
+// HardcoverSource is the Hardcover client as the service needs it.
+type HardcoverSource interface {
+	Configured() bool
+	Search(ctx context.Context, title, author string, limit int) ([]hardcover.Book, error)
+}
+
 // IDBridge is Wikidata as a fetch asks it: the ids its item records for a book, and what it says of it.
 type IDBridge interface {
 	BookIDs(ctx context.Context, openLibrary string) (wikidata.WorkIDs, bool, error)
@@ -57,6 +79,9 @@ type Service struct {
 	OpenLibrary OpenLibrarySource
 	GoogleBooks GoogleBooksSource
 	Audible     AudibleSource
+	ITunes      ITunesSource
+	FantLab     FantLabSource
+	Hardcover   HardcoverSource
 	Wikidata    IDBridge
 	// PriorityFor is a library's provider order; nil, or an empty answer, takes the format's.
 	PriorityFor func(categoryID int64) []string
@@ -115,7 +140,7 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 			if _, asked := answers[name]; asked {
 				continue
 			}
-			if answer, ok := s.ask(ctx, name, ids); ok {
+			if answer, ok := s.ask(ctx, name, ids, hintFrom(hint, answers, order)); ok {
 				answers[name] = answer
 				ids = Merge(Book{IDs: ids}, Book{IDs: answer.IDs}).IDs
 			}
@@ -148,7 +173,7 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 }
 
 // ask asks one provider by the ids known; one without the id it needs, or that knows nothing, answers none.
-func (s Service) ask(ctx context.Context, name string, ids IDs) (Book, bool) {
+func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint) (Book, bool) {
 	report := func(id string, err error, missing error) bool {
 		if err != nil && !errors.Is(err, missing) {
 			s.warn(name, id, err)
@@ -188,6 +213,107 @@ func (s Service) ask(ctx context.Context, name string, ids IDs) (Book, bool) {
 		if s.Audible != nil && ids.ASIN != "" {
 			found, err := s.Audible.Book(ctx, ids.ASIN)
 			return FromAudible(found), report(ids.ASIN, err, audible.ErrNotFound)
+		}
+	case settings.BookSourceITunes:
+		return s.askITunes(ctx, ids, hint, report)
+	case settings.BookSourceFantLab:
+		return s.askFantLab(ctx, ids, hint, report)
+	case settings.BookSourceHardcover:
+		return s.askHardcover(ctx, ids, hint, report)
+	}
+	return Book{}, false
+}
+
+// hintFrom is the hint, with the title and author the sources asked first supplying what it lacks: a provider that
+// finds a book by its name needs one.
+func hintFrom(hint Hint, answers map[string]Book, order []string) Hint {
+	for _, name := range order {
+		if hint.Title != "" && hint.Author != "" {
+			break
+		}
+		if answer, ok := answers[name]; ok {
+			hint = Hint{Title: cmp.Or(hint.Title, answer.Title), Author: cmp.Or(hint.Author, first(answer.Authors()))}
+		}
+	}
+	return hint
+}
+
+// sameTitle says a provider's title is the hint's: letters and digits alone, one containing the other.
+func sameTitle(found, wanted string) bool {
+	a, b := foldTitle(found), foldTitle(wanted)
+	return a != "" && b != "" && (a == b || strings.HasPrefix(a, b) || strings.HasPrefix(b, a))
+}
+
+// sameAuthor says the found book is by the hinted author, or that no author was hinted.
+func sameAuthor(found []string, wanted string) bool {
+	if wanted == "" {
+		return true
+	}
+	return slices.ContainsFunc(found, func(name string) bool { return PersonKey(name) == PersonKey(wanted) })
+}
+
+func (s Service) askITunes(ctx context.Context, ids IDs, hint Hint, report func(string, error, error) bool) (Book, bool) {
+	if s.ITunes == nil || !s.Format.ByFolder {
+		return Book{}, false
+	}
+	if id, err := strconv.ParseInt(ids.ITunes, 10, 64); err == nil {
+		found, err := s.ITunes.Lookup(ctx, id)
+		return FromITunes(found), report(ids.ITunes, err, itunes.ErrNotFound)
+	}
+	if hint.Title == "" {
+		return Book{}, false
+	}
+	hits, err := s.ITunes.Search(ctx, hint.Title, hint.Author, 5)
+	if !report(hint.Title, err, nil) {
+		return Book{}, false
+	}
+	for _, hit := range hits {
+		if sameTitle(hit.Title(), hint.Title) && sameAuthor([]string{hit.Author}, hint.Author) {
+			return FromITunes(hit), true
+		}
+	}
+	return Book{}, false
+}
+
+func (s Service) askFantLab(ctx context.Context, ids IDs, hint Hint, report func(string, error, error) bool) (Book, bool) {
+	if s.FantLab == nil {
+		return Book{}, false
+	}
+	id, err := strconv.ParseInt(ids.FantLab, 10, 64)
+	if err != nil {
+		if hint.Title == "" {
+			return Book{}, false
+		}
+		hits, err := s.FantLab.Search(ctx, hint.Title, 5)
+		if !report(hint.Title, err, nil) {
+			return Book{}, false
+		}
+		for _, hit := range hits {
+			names := []string{hit.AuthorName, hit.AuthorRus}
+			if (sameTitle(hit.Name, hint.Title) || sameTitle(hit.RussianName, hint.Title)) && sameAuthor(names, hint.Author) {
+				id = hit.WorkID
+				break
+			}
+		}
+	}
+	if id == 0 {
+		return Book{}, false
+	}
+	work, err := s.FantLab.Work(ctx, id)
+	return FromFantLab(work), report(strconv.FormatInt(id, 10), err, fantlab.ErrNotFound)
+}
+
+func (s Service) askHardcover(ctx context.Context, ids IDs, hint Hint, report func(string, error, error) bool) (Book, bool) {
+	if s.Hardcover == nil || !s.Hardcover.Configured() || hint.Title == "" {
+		return Book{}, false
+	}
+	hits, err := s.Hardcover.Search(ctx, hint.Title, hint.Author, 5)
+	if !report(hint.Title, err, nil) {
+		return Book{}, false
+	}
+	for _, hit := range hits {
+		if (ids.Hardcover != "" && hit.ID == ids.Hardcover) || (sameTitle(hit.Title, hint.Title) && sameAuthor(hit.Authors, hint.Author)) {
+			return FromHardcover(hit), true
 		}
 	}
 	return Book{}, false
@@ -373,6 +499,44 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 			found := FromGoogleBooks(volume)
 			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), Year: found.Year,
 				Overview: found.Overview, Cover: volume.Cover(), Traits: media.Traits{Genres: found.Genres, OriginalLanguage: found.Language}})
+		}
+	case settings.BookSourceITunes:
+		if s.ITunes == nil || !s.Format.ByFolder {
+			return nil, nil
+		}
+		items, err := s.ITunes.Search(ctx, title, author, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, item := range items {
+			found := FromITunes(item)
+			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), Year: found.Year,
+				Overview: found.Overview, Cover: item.Cover(), Traits: media.Traits{Genres: found.Genres}})
+		}
+	case settings.BookSourceFantLab:
+		if s.FantLab == nil {
+			return nil, nil
+		}
+		matches, err := s.FantLab.Search(ctx, title, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, match := range matches {
+			candidates = append(candidates, Candidate{IDs: IDs{FantLab: strconv.FormatInt(match.WorkID, 10)}, Title: cmp.Or(match.Name, match.RussianName),
+				Author: cmp.Or(match.AuthorName, match.AuthorRus), Year: match.Year, Cover: match.Cover()})
+		}
+	case settings.BookSourceHardcover:
+		if s.Hardcover == nil || !s.Hardcover.Configured() {
+			return nil, nil
+		}
+		books, err := s.Hardcover.Search(ctx, title, author, limit)
+		if err != nil {
+			return nil, err
+		}
+		for _, hit := range books {
+			found := FromHardcover(hit)
+			candidates = append(candidates, Candidate{IDs: found.IDs, Title: found.Title, Author: first(found.Authors()), Year: found.Year,
+				Overview: found.Overview, Cover: hit.Cover(), Traits: media.Traits{Genres: found.Genres}})
 		}
 	}
 	if limit > 0 && len(candidates) > limit {

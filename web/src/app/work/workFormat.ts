@@ -78,6 +78,12 @@ const LINKS: Record<string, { label: string; url: (id: string) => string }> = {
   "googlebooks:audiobook": { label: "Google Books", url: (id) => `https://books.google.com/books?id=${id}` },
   goodreads: { label: "Goodreads", url: (id) => `https://www.goodreads.com/work/show/${id}` },
   "goodreads:audiobook": { label: "Goodreads", url: (id) => `https://www.goodreads.com/work/show/${id}` },
+  hardcover: { label: "Hardcover", url: (id) => `https://hardcover.app/search?q=${id}` },
+  "hardcover:audiobook": { label: "Hardcover", url: (id) => `https://hardcover.app/search?q=${id}` },
+  itunes: { label: "iTunes", url: (id) => `https://books.apple.com/audiobook/id${id}` },
+  "itunes:audiobook": { label: "iTunes", url: (id) => `https://books.apple.com/audiobook/id${id}` },
+  fantlab: { label: "FantLab", url: (id) => `https://fantlab.ru/work${id}` },
+  "fantlab:audiobook": { label: "FantLab", url: (id) => `https://fantlab.ru/work${id}` },
   audible: { label: "Audible", url: (id) => `https://www.audible.com/pd/${id}` },
 };
 

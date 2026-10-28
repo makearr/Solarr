@@ -9,7 +9,10 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/metadata/audible"
+	"github.com/makearr/Solarr/internal/metadata/fantlab"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
+	"github.com/makearr/Solarr/internal/metadata/hardcover"
+	"github.com/makearr/Solarr/internal/metadata/itunes"
 	"github.com/makearr/Solarr/internal/metadata/openlibrary"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
@@ -20,6 +23,9 @@ const (
 	sourceGoogleBooks = "googlebooks"
 	sourceAudible     = "audible"
 	sourceWikidata    = "wikidata"
+	sourceITunes      = "itunes"
+	sourceFantLab     = "fantlab"
+	sourceHardcover   = "hardcover"
 )
 
 const (
@@ -165,6 +171,68 @@ func FromAudible(in audible.Book) Book {
 	return book
 }
 
+// FromITunes turns an iTunes audiobook into a book: the reading's author, description, genre and cover.
+func FromITunes(in itunes.Audiobook) Book {
+	book := Book{
+		IDs:   IDs{ITunes: strconv.FormatInt(in.CollectionID, 10)},
+		Title: in.Title(), Overview: cleanText(in.Description), Year: in.Year(), Abridged: in.Abridged(), Sources: []string{sourceITunes},
+	}
+	if len(in.ReleaseDate) >= 10 {
+		book.Published = in.ReleaseDate[:10]
+	}
+	if in.Genre != "" {
+		book.Genres = genresOf([]string{in.Genre})
+	}
+	if cover := in.Cover(); cover != "" {
+		book.Images = []Image{{Kind: "poster", URL: cover, Source: sourceITunes}}
+	}
+	if in.Author != "" {
+		book.Credits = []Credit{{Name: in.Author, Role: RoleAuthor}}
+	}
+	return book
+}
+
+// FromFantLab turns a FantLab work into a book. Its title is the original's where it has one, as Russian names match
+// no release; the Russian name is kept as another name.
+func FromFantLab(in fantlab.Work) Book {
+	book := Book{
+		IDs:   IDs{FantLab: strconv.FormatInt(in.ID, 10)},
+		Title: cmp.Or(in.Original, in.Name), Overview: cleanText(in.Description), Year: in.Year, Sources: []string{sourceFantLab},
+	}
+	if in.Original != "" && in.Name != "" {
+		book.Aliases = []string{in.Name}
+	}
+	if score, err := strconv.ParseFloat(in.Rating.Rating, 64); err == nil && score > 0 {
+		book.Ratings = []Rating{{Provider: sourceFantLab, Score: score, Votes: in.Rating.Voters}}
+	}
+	if cover := in.Cover(); cover != "" {
+		book.Images = []Image{{Kind: "poster", URL: cover, Source: sourceFantLab}}
+	}
+	for index, author := range in.Authors {
+		book.Credits = append(book.Credits, Credit{Name: cmp.Or(author.Original, author.Name), Role: RoleAuthor, Order: index})
+	}
+	return book
+}
+
+// FromHardcover turns a Hardcover book into a book.
+func FromHardcover(in hardcover.Book) Book {
+	book := Book{
+		IDs:   IDs{Hardcover: in.ID, ISBN: firstISBN13(in.ISBNs)},
+		Title: in.Title, Subtitle: in.Subtitle, Overview: cleanText(in.Description), Year: in.ReleaseYear, Pages: in.Pages,
+		Genres: genresOf(in.Genres), Sources: []string{sourceHardcover},
+	}
+	if in.Rating > 0 {
+		book.Ratings = []Rating{{Provider: sourceHardcover, Score: in.Rating * 2, Votes: in.RatingsCount}}
+	}
+	if cover := in.Cover(); cover != "" {
+		book.Images = []Image{{Kind: "poster", URL: cover, Source: sourceHardcover}}
+	}
+	for index, name := range in.Authors {
+		book.Credits = append(book.Credits, Credit{Name: name, Role: RoleAuthor, Order: index})
+	}
+	return book
+}
+
 // FromWikidata turns what Wikidata's item says of a book into one: the Wikipedia lead, the first publication, its series
 // and its writers, never a title.
 func FromWikidata(in wikidata.WorkFacts) Book {
@@ -196,6 +264,7 @@ func Merge(first, second Book) Book {
 	merged.IDs = IDs{
 		OpenLibrary: cmp.Or(first.IDs.OpenLibrary, second.IDs.OpenLibrary), GoogleBooks: cmp.Or(first.IDs.GoogleBooks, second.IDs.GoogleBooks),
 		ASIN: cmp.Or(first.IDs.ASIN, second.IDs.ASIN), ISBN: cmp.Or(first.IDs.ISBN, second.IDs.ISBN), Goodreads: cmp.Or(first.IDs.Goodreads, second.IDs.Goodreads),
+		Hardcover: cmp.Or(first.IDs.Hardcover, second.IDs.Hardcover), ITunes: cmp.Or(first.IDs.ITunes, second.IDs.ITunes), FantLab: cmp.Or(first.IDs.FantLab, second.IDs.FantLab),
 	}
 	merged.Title = cmp.Or(first.Title, second.Title)
 	merged.Subtitle = cmp.Or(first.Subtitle, second.Subtitle)

@@ -15,13 +15,15 @@ const (
 	KeyFanartAPIKey  = "metadata.fanart.api_key"
 	// KeyGoogleBooksAPIKey is optional: Google Books answers without one, on a small quota shared by everyone.
 	KeyGoogleBooksAPIKey = "metadata.googlebooks.api_key"
+	// KeyHardcoverAPIKey is the owner's Hardcover API token (hardcover.app/account/api).
+	KeyHardcoverAPIKey = "metadata.hardcover.api_key"
 )
 
 // providerKeySettings maps a provider to the setting its key is sealed under.
 var providerKeySettings = map[string]string{
 	MovieSourceMDBList: KeyMDBListAPIKey, MovieSourceOMDb: KeyOMDbAPIKey, MovieSourceFanart: KeyFanartAPIKey,
-	BookSourceGoogleBooks: KeyGoogleBooksAPIKey,
-	TVSourceTMDB:          KeyTMDBAPIKey, TVSourceTVDB: KeyTVDBAPIKey, SourceTheAudioDB: KeyTheAudioDBAPIKey, SourceAcoustID: KeyAcoustIDAPIKey,
+	BookSourceGoogleBooks: KeyGoogleBooksAPIKey, BookSourceHardcover: KeyHardcoverAPIKey,
+	TVSourceTMDB: KeyTMDBAPIKey, TVSourceTVDB: KeyTVDBAPIKey, SourceTheAudioDB: KeyTheAudioDBAPIKey, SourceAcoustID: KeyAcoustIDAPIKey,
 }
 
 // ProviderKeySetting answers the setting a provider's key is sealed under, false for a provider without one.

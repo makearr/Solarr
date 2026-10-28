@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
+	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -394,7 +394,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/media/works", "internal/db/store/gen/librarydb", "internal/media/picturesweep", "internal/db/library", "internal/db/settings", "internal/identify/model",
 		"internal/identify/parsebook", "internal/identify/quality", "internal/identify/score", "internal/importing/batch",
 		"internal/importing/inspect", "internal/importing/placer", "internal/importing/rules", "internal/jobs", "internal/media",
-		"internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/audible", "internal/metadata/wikidata",
+		"internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/metadata/wikidata",
 		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
 		"internal/acquiring/releasefacts", "internal/acquiring/plan", "internal/acquiring/rss", "internal/moving/mover", "internal/moving/naming",
 		"internal/moving/renamejob", "internal/platform/clock", "internal/platform/fsx", "internal/platform/keyedlock",
@@ -410,6 +410,9 @@ var allowedInternalImports = map[string][]string{
 	// The book providers: Open Library, Google Books, Audible's catalog with Audnexus.
 	"internal/metadata/openlibrary": {"internal/platform/httpx"},
 	"internal/metadata/googlebooks": {"internal/platform/httpx"},
+	"internal/metadata/itunes":      {},
+	"internal/metadata/fantlab":     {},
+	"internal/metadata/hardcover":   {"internal/platform/httpx"},
 	"internal/metadata/audible":     {"internal/platform/httpx"},
 	"internal/identify/parsebook":   {},
 	// Radarr's own keyless movie metadata service, the fallback behind TMDB.

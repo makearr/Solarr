@@ -29,6 +29,9 @@ const (
 	providerFanart         = "fanart"
 	providerOpenLibrary    = "openlibrary"
 	providerGoogleBooks    = "googlebooks"
+	providerHardcover      = "hardcover"
+	providerITunes         = "itunes"
+	providerFantLab        = "fantlab"
 	// providerAudible is Audible's catalog and Audnexus together: Audnexus publishes the pace both are asked at.
 	providerAudible = "audible"
 	// Each indexer and each download client connection has a bucket of its own, named by its id.

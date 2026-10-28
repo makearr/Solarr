@@ -27,13 +27,16 @@ const (
 	BookSourceOpenLibrary = "openlibrary"
 	BookSourceGoogleBooks = "googlebooks"
 	BookSourceAudible     = "audible"
+	BookSourceITunes      = "itunes"
+	BookSourceFantLab     = "fantlab"
+	BookSourceHardcover   = "hardcover"
 )
 
 // DefaultBookSources is Wikidata to steer, Open Library, which names a book, then Google Books to fill what it lacks.
-var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSourceGoogleBooks}
+var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover}
 
 // DefaultAudiobookSources is Wikidata to steer, Audible for the reading (narrators, length, series), then the book providers.
-var DefaultAudiobookSources = []string{SourceWikidata, BookSourceAudible, BookSourceOpenLibrary, BookSourceGoogleBooks}
+var DefaultAudiobookSources = []string{SourceWikidata, BookSourceAudible, BookSourceITunes, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover}
 
 // SourceWikidata is Wikidata in a library's order: the ids its item records steer the other providers to the right entry.
 const SourceWikidata = "wikidata"
@@ -114,6 +117,12 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 60, Published: "1,000 a day without a key; your own free key raises it"},
 	{Key: BookSourceAudible, Label: "Audible (through Audnexus)", MediaTypes: []string{"audiobook"}, Carries: []string{"narrators", "length", "series and position", "publishers", "genres", "covers"},
 		PerMinute: 100, MaxPerMinute: 100, Published: "Audnexus: 100 a minute"},
+	{Key: BookSourceHardcover, Label: "Hardcover", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"descriptions", "ratings", "genres", "page counts", "covers"}, NeedsKey: true,
+		PerMinute: 30, MaxPerMinute: 60, Published: "60 a minute"},
+	{Key: BookSourceITunes, Label: "iTunes", MediaTypes: []string{"audiobook"}, Carries: []string{"audiobook titles and authors", "descriptions", "genres", "large covers"},
+		PerMinute: 20, MaxPerMinute: 20, Published: "about 20 a minute"},
+	{Key: BookSourceFantLab, Label: "FantLab", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"fantasy and science fiction works", "original titles", "descriptions", "ratings", "covers"},
+		PerMinute: 60, Published: "none published"},
 	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"},
 		PerMinute: 120, Published: "none published for the free key"},
 	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},

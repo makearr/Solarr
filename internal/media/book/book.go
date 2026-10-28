@@ -13,6 +13,9 @@ const (
 	ProviderAudible     = "audible"
 	ProviderISBN        = "isbn"
 	ProviderGoodreads   = "goodreads"
+	ProviderHardcover   = "hardcover"
+	ProviderITunes      = "itunes"
+	ProviderFantLab     = "fantlab"
 	ProviderWikidata    = "wikidata"
 	// ProviderSeries keeps a book series on its collection row, by Wikidata's item or the provider's own name for it.
 	ProviderSeries = "book:series"
@@ -43,6 +46,9 @@ type IDs struct {
 	ASIN        string
 	ISBN        string
 	Goodreads   string
+	Hardcover   string
+	ITunes      string
+	FantLab     string
 }
 
 // Empty says no provider id is known.

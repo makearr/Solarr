@@ -148,6 +148,9 @@ func (f Format) idWrites(ids IDs) []library.ExternalIDWrite {
 	add(ProviderGoogleBooks, ids.GoogleBooks)
 	add(ProviderISBN, ids.ISBN)
 	add(ProviderGoodreads, ids.Goodreads)
+	add(ProviderHardcover, ids.Hardcover)
+	add(ProviderITunes, ids.ITunes)
+	add(ProviderFantLab, ids.FantLab)
 	return writes
 }
 
@@ -156,6 +159,7 @@ func (f Format) idsOf(provider map[string]string) IDs {
 	return IDs{
 		OpenLibrary: provider[f.Provider(ProviderOpenLibrary)], ASIN: provider[ProviderAudible], GoogleBooks: provider[f.Provider(ProviderGoogleBooks)],
 		ISBN: provider[f.Provider(ProviderISBN)], Goodreads: provider[f.Provider(ProviderGoodreads)],
+		Hardcover: provider[f.Provider(ProviderHardcover)], ITunes: provider[f.Provider(ProviderITunes)], FantLab: provider[f.Provider(ProviderFantLab)],
 	}
 }
 

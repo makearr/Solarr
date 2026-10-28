@@ -209,6 +209,12 @@ func (f Format) CandidateID(ids IDs) (provider, externalID string) {
 		return f.Provider(ProviderGoogleBooks), ids.GoogleBooks
 	case ids.ISBN != "":
 		return f.Provider(ProviderISBN), ids.ISBN
+	case ids.Hardcover != "":
+		return f.Provider(ProviderHardcover), ids.Hardcover
+	case ids.ITunes != "":
+		return f.Provider(ProviderITunes), ids.ITunes
+	case ids.FantLab != "":
+		return f.Provider(ProviderFantLab), ids.FantLab
 	}
 	return "", ""
 }
@@ -224,6 +230,12 @@ func (f Format) NamedIDs(provider, externalID string) (IDs, bool) {
 		return IDs{OpenLibrary: externalID}, strings.HasPrefix(externalID, "OL") && strings.HasSuffix(externalID, "W")
 	case ProviderGoogleBooks:
 		return IDs{GoogleBooks: externalID}, externalID != ""
+	case ProviderHardcover:
+		return IDs{Hardcover: externalID}, externalID != ""
+	case ProviderITunes:
+		return IDs{ITunes: externalID}, externalID != "" && f.ByFolder
+	case ProviderFantLab:
+		return IDs{FantLab: externalID}, externalID != ""
 	case ProviderISBN:
 		isbn := strings.ReplaceAll(externalID, "-", "")
 		return IDs{ISBN: isbn}, len(isbn) == 13

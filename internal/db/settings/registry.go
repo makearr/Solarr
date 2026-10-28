@@ -441,6 +441,12 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyHardcoverAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "Hardcover token",
+		HelpText: "Your own free API token from hardcover.app/account/api: descriptions, ratings, genres and covers of books.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",

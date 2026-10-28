@@ -46,6 +46,12 @@ and the book's place in it is the `series_position` field.
 An author's page lists their other books from Open Library (`AuthorWorks`, `profile.go`), each added to the library from
 there; covers come from Open Library, Google Books and Audible, whose hosts the picture cache allows.
 
+Three more providers, found by reading what ReadMeABook, Listenarr, Calibre-Web and Audiobookshelf use: iTunes (audiobooks
+only, keyless), FantLab (keyless; the original title becomes the title, the Russian one an alias) and Hardcover (needs the
+owner's token, GraphQL). Each is asked by its own id, else by the title and author another source learned, taking the one
+hit whose title and author agree. A library that saved its own provider order keeps it; the new ones are added in its
+Metadata settings. Not built: Amazon, Douban, Lubimyczytac and Google Scholar (HTML scraping), ComicVine (comics).
+
 ## Files
 
 The scan (`consumer.go`) and import (`import.go`) read a book from its path (`internal/identify/parsebook`):

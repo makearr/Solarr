@@ -43,6 +43,9 @@ const NOTES: Record<string, string> = {
   openlibrary: "The Internet Archive's open catalogue: works, editions, ISBNs, authors and covers. Names a book in book libraries. No key.",
   googlebooks:
     "Descriptions, publishers, page counts and covers. Answers without a key on a small quota everyone shares; your own free key raises it.",
+  hardcover: "The readers' catalogue: descriptions, ratings, genres and covers of books. Needs your own free token.",
+  itunes: "Apple's audiobook catalogue: titles, authors, descriptions and large covers. No key.",
+  fantlab: "The Russian fantasy and science fiction catalogue, as Audiobookshelf offers it: original titles, descriptions, ratings and covers. No key.",
   audible: "Audible's catalogue, read through Audnexus as Audiobookshelf does: narrators, length, series and covers of audiobooks. No key.",
 };
 
@@ -51,6 +54,7 @@ const KEY_SIGNUP: Record<string, { url: string; label: string }> = {
   mdblist: { url: "https://mdblist.com/preferences/", label: "mdblist.com/preferences" },
   omdb: { url: "https://www.omdbapi.com/apikey.aspx", label: "omdbapi.com/apikey.aspx" },
   fanart: { url: "https://fanart.tv/get-an-api-key/", label: "fanart.tv/get-an-api-key" },
+  hardcover: { url: "https://hardcover.app/account/api", label: "hardcover.app/account/api" },
   googlebooks: { url: "https://console.cloud.google.com/apis/library/books.googleapis.com", label: "console.cloud.google.com" },
 };
 
