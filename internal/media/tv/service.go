@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -215,6 +216,7 @@ func (s Service) fetch(ctx context.Context, ids IDs, recentOnly bool, order []st
 		merged.Credits = guardEpisodeCredits(merged.Credits, merged.Episodes)
 	}
 	ApplyPriority(&merged, bySource, order)
+	s.fillTitlesFromTVDB(ctx, &merged, ids.TVDB)
 	// Wikidata's genres are too fine ("crime drama television series") to lead; they only fill where no one has any.
 	if len(merged.Genres) == 0 && haveFacts {
 		merged.Genres = facts.Genres
@@ -889,4 +891,45 @@ func inOrder(sources []Series, bySource map[string]Series, order []string) []Ser
 		}
 	}
 	return out
+}
+
+// untitled matches the names a provider gives an episode it has no title for.
+var untitled = regexp.MustCompile(`(?i)^(?:episode|folge|aflevering|episodio|[eé]pisode)\s*[0-9]+$`)
+
+// fillTitlesFromTVDB gives the episodes no source titled the name TheTVDB holds in the show's own language: Skyhook
+// answers English only, so a German documentary comes back without any.
+func (s Service) fillTitlesFromTVDB(ctx context.Context, series *Series, tvdbID int64) {
+	if s.Orderings == nil || tvdbID == 0 {
+		return
+	}
+	missing := func(title string) bool {
+		return strings.TrimSpace(title) == "" || untitled.MatchString(strings.TrimSpace(title))
+	}
+	if !slices.ContainsFunc(series.Episodes, func(episode Episode) bool { return missing(episode.Title) }) {
+		return
+	}
+	listed, err := s.Orderings.Episodes(ctx, tvdbID, "default")
+	if err != nil {
+		s.warn("tvdb", tvdbID, err)
+		return
+	}
+	byID := map[int64]string{}
+	byKey := map[Key]string{}
+	for _, episode := range listed {
+		if episode.Name == "" || untitled.MatchString(episode.Name) {
+			continue
+		}
+		byID[episode.ID], byKey[Key{episode.SeasonNumber, episode.Number}] = episode.Name, episode.Name
+	}
+	for index := range series.Episodes {
+		have := &series.Episodes[index]
+		if !missing(have.Title) {
+			continue
+		}
+		if name, found := byID[have.IDs[ProviderTVDB]]; found {
+			have.Title = name
+		} else if name, found := byKey[Key{have.Season, have.Number}]; found {
+			have.Title = name
+		}
+	}
 }

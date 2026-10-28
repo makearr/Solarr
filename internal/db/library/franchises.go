@@ -482,6 +482,46 @@ func (f Franchises) MergeFranchises(ctx context.Context, keep int64, others []in
 	return nil
 }
 
+// MergeSameNamed merges the collections of one media type and source that share a name, as a provider that gives one
+// series several ids leaves them; it answers how many collections it removed.
+func (f Franchises) MergeSameNamed(ctx context.Context, mediaType, source string) (int, error) {
+	rows, err := f.store.Read().QueryContext(ctx,
+		`SELECT id, LOWER(name) FROM collection WHERE media_type = ? AND source = ? AND kind = ? ORDER BY id`, mediaType, source, FranchiseKind)
+	if err != nil {
+		return 0, fmt.Errorf("library: list collections to merge: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	groups := map[string][]int64{}
+	var order []string
+	for rows.Next() {
+		var id int64
+		var name string
+		if err := rows.Scan(&id, &name); err != nil {
+			return 0, fmt.Errorf("library: scan collection: %w", err)
+		}
+		if _, seen := groups[name]; !seen {
+			order = append(order, name)
+		}
+		groups[name] = append(groups[name], id)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("library: list collections to merge: %w", err)
+	}
+	_ = rows.Close()
+	removed := 0
+	for _, name := range order {
+		ids := groups[name]
+		if len(ids) < 2 {
+			continue
+		}
+		if err := f.MergeFranchises(ctx, ids[0], ids[1:]); err != nil {
+			return removed, err
+		}
+		removed += len(ids) - 1
+	}
+	return removed, nil
+}
+
 // UnrelatedKind is the relationship between two works a person said do not belong together.
 const UnrelatedKind = "unrelated_series"
 

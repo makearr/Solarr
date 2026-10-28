@@ -40,12 +40,16 @@ normalised), so one writer is one person in every book and audiobook library, wh
 Wikidata leads its overview (the English Wikipedia lead), first publication, language, authors and series; never the
 title. Open Library's subjects become genres after its bookkeeping tags ("Accessible book") are dropped, mapped onto
 the `books` genre tree (`genretree.go`), which both types share. A series is the work's franchise (`book:series`, by
-Wikidata's item or the provider's own key) and the book's place in it is the `series_position` field.
+the series' name, so Audible's several ASINs for one series are one collection; the refresh sweep merges same-named ones)
+and the book's place in it is the `series_position` field.
+
+An author's page lists their other books from Open Library (`AuthorWorks`, `profile.go`), each added to the library from
+there; covers come from Open Library, Google Books and Audible, whose hosts the picture cache allows.
 
 ## Files
 
 The scan (`consumer.go`) and import (`import.go`) read a book from its path (`internal/identify/parsebook`):
-"Author - Title (Year) [EPUB]", "Title by Author", scene names with dots, and, for an audiobook, its folder
+"Author - Title (Year) [EPUB]" (ebook formats: epub, epub3, cbz, azw3, azw, kfx, mobi, pdf, cbr, fb2, djvu, lit, pdb, pml, rtf, txt, html, docx; EPUB and CBZ are the preferred tier, M4B the audiobook one), "Title by Author", scene names with dots, and, for an audiobook, its folder
 ("Author/Title (2015)/01 - Chapter One.mp3"). An ebook is media to a book import only: the walk counts ebook files as
 media when the importer says so (`batch.BookFiles`), so a PDF booklet beside an album stays an extra.
 

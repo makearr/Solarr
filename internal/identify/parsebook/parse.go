@@ -33,7 +33,7 @@ type Info struct {
 }
 
 // EbookFormats are the ebook file formats, Readarr's and Calibre's common ones.
-var EbookFormats = []string{"epub", "azw3", "azw", "kfx", "mobi", "pdf", "fb2", "djvu", "cbz", "txt", "rtf", "lit", "docx"}
+var EbookFormats = []string{"epub", "epub3", "cbz", "azw3", "azw", "kfx", "mobi", "pdf", "cbr", "fb2", "djvu", "lit", "pdb", "pml", "rtf", "txt", "html", "htm", "docx"}
 
 // AudioFormats are the audiobook file formats.
 var AudioFormats = []string{"m4b", "m4a", "mp3", "aac", "flac", "ogg", "opus", "wma", "mp4", "wav"}
@@ -49,9 +49,9 @@ var (
 	numberingPattern = regexp.MustCompile(`(?i)^(?:(?:book|vol(?:ume)?|part|no)\.?\s*)?[0-9]{1,3}(?:\.[0-9])?\s*(?:[-.:)]\s*|\s+)`)
 	separatorPattern = regexp.MustCompile(`\s+-\s+|\s*[–—]\s*`)
 	byPattern        = regexp.MustCompile(`(?i)^(.+?)\s+by\s+(.+)$`)
-	formatWord       = regexp.MustCompile(`(?i)\b(epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|cbz|m4b|m4a|mp3|aac|flac|ogg|opus|wma)\b`)
+	formatWord       = regexp.MustCompile(`(?i)\b(epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|cbz|m4b|m4a|mp3|aac|flac|ogg|opus|wma)\b`)
 	noiseWords       = regexp.MustCompile(`(?i)\b(?:unabridged|abridged|retail|ebook|e-book|audiobook|audio\s?book|proper|repack|rerip|` +
-		`read\s+by\s+.+|narrated\s+by\s+.+|vbr|cbr|cbz|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|m4b|m4a|mp3|aac|flac|ogg|opus|wma|` +
+		`read\s+by\s+.+|narrated\s+by\s+.+|vbr|cbr|cbz|epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|pdb|pml|m4b|m4a|mp3|aac|flac|ogg|opus|wma|` +
 		`[0-9]{2,3}\s?k(?:bps|b/s)?)\b`)
 )
 

@@ -43,6 +43,11 @@ func (f Format) NewRefreshJob(reader library.SeriesReader, service Service, cloc
 	return works.RefreshJob{
 		Name: f.MediaType, JobType: f.RefreshJobType(), NoSource: ErrNoSource, Clock: clock, Logger: logger,
 		Due: func(ctx context.Context) ([]library.RefreshCandidate, error) {
+			if merged, err := service.Franchises.MergeSameNamed(ctx, f.MediaType, ProviderSeries); err != nil {
+				logger.Warn("book series not merged", slog.String("media_type", f.MediaType), slog.Any("error", err))
+			} else if merged > 0 {
+				logger.Info("book series merged", slog.String("media_type", f.MediaType), slog.Int("merged", merged))
+			}
 			return reader.DueForRefreshOf(ctx, f.MediaType, string(StatusPublished), clock.Now(), activeRefresh, settledRefresh, refreshPerRun)
 		},
 		Warm: service.WarmWikidata,

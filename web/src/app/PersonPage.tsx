@@ -375,7 +375,7 @@ export function CreditTile({ credit, label }: { credit: Credit; label: string })
   );
 }
 
-const KIND_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", album: "Albums" };
+const KIND_LABEL: Record<string, string> = { tv: "Series", movie: "Movies", album: "Albums", book: "Books", audiobook: "Audiobooks" };
 
 /** What the providers know the person for beyond the library, asked once per media type the person appears in. */
 function KnownForSection({ personId, categoryId }: { personId: number; categoryId: number }) {
@@ -426,8 +426,9 @@ function KnownForTile({ title }: { title: KnownFor }) {
     </>
   );
   if (!title.add_library_id) {
+    const outbound = title.provider === "openlibrary" ? `https://openlibrary.org/works/${title.external_id}` : `https://www.themoviedb.org/${title.kind}/${title.external_id}`;
     return (
-      <a href={`https://www.themoviedb.org/${title.kind}/${title.external_id}`} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
+      <a href={outbound} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
         {caption}
         <span className="text-xs text-ink-muted">No {mediaTypeName(title.kind)} library to add it to</span>
       </a>

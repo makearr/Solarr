@@ -40,8 +40,18 @@ type Module struct {
 	Service Service
 	// Passes are the type's periodic metadata passes.
 	media.Passes
+	// Authors lists an author's other books on their page; nil leaves the page to the library's own.
+	Authors *AuthorWorks
 	// Rename names a book's files for a rename; nil leaves books without one.
 	Rename *RenameConfig
+}
+
+// KnownFor implements media.Profiling.
+func (m Module) KnownFor(ctx context.Context, personID, categoryID int64) ([]media.KnownFor, error) {
+	if m.Authors == nil {
+		return nil, nil
+	}
+	return m.Authors.KnownFor(ctx, personID, categoryID)
 }
 
 // NameFiles implements media.Renaming.

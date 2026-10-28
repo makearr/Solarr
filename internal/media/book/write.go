@@ -95,10 +95,8 @@ func ToWrite(format Format, book Book, now time.Time) library.SeriesWrite {
 		})
 	}
 	if book.Series != nil && book.Series.Name != "" {
-		write.Franchise = &library.SeriesFranchiseWrite{Provider: ProviderSeries, ExternalID: book.Series.Key, Name: book.Series.Name}
-		if write.Franchise.ExternalID == "" {
-			write.Franchise.ExternalID = PersonKey(book.Series.Name)
-		}
+		// Keyed by name: Audible gives one series several ASINs, which made it several collections.
+		write.Franchise = &library.SeriesFranchiseWrite{Provider: ProviderSeries, ExternalID: PersonKey(book.Series.Name), Name: book.Series.Name}
 	}
 	return write
 }

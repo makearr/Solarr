@@ -104,3 +104,33 @@ func TestApplyNumberingMovesTheEpisodesAndTheirFilesAndKeepsTheOrdering(t *testi
 		t.Errorf("current = %q, want tvdb:dvd", current)
 	}
 }
+
+type germanTitles struct{ fakeOrderings }
+
+func (germanTitles) Episodes(_ context.Context, _ int64, order string) ([]tvdb.Episode, error) {
+	if order != "default" {
+		return nil, errors.New("only the default order is faked")
+	}
+	return []tvdb.Episode{{ID: 2, SeasonNumber: 1, Number: 1, Name: "Die Ursprünge"}, {ID: 3, SeasonNumber: 1, Number: 2, Name: "Episode 2"}}, nil
+}
+
+// Skyhook answers English only, so a show TheTVDB names in German comes back untitled; the German names fill in.
+func TestEpisodesNoSourceTitledTakeTheirNameFromTheTVDB(t *testing.T) {
+	sky := fixtureSkyhook()
+	for index := range sky.Episodes {
+		sky.Episodes[index].Title = ""
+	}
+	service, _ := newService(t, fakeSkyhook{series: sky}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	service.Orderings = germanTitles{}
+	fetched, err := service.Fetch(t.Context(), tv.IDs{TVDB: 1234})
+	if err != nil {
+		t.Fatal(err)
+	}
+	titles := map[tv.Key]string{}
+	for _, episode := range fetched.Episodes {
+		titles[tv.Key{Season: episode.Season, Number: episode.Number}] = episode.Title
+	}
+	if titles[tv.Key{Season: 1, Number: 1}] != "Die Ursprünge" || titles[tv.Key{Season: 1, Number: 2}] != "" {
+		t.Errorf("titles = %v, want S01E01 named and a placeholder name left out", titles)
+	}
+}

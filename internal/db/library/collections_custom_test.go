@@ -62,3 +62,32 @@ func TestACollectionMadeByHandHoldsWorksOfItsLibraryAndNoOtherKindIsEditable(t *
 		t.Errorf("only the provider's collection is left: %+v", listed)
 	}
 }
+
+func TestSameNamedCollectionsOfOneSourceMergeIntoTheFirst(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	franchises := library.NewFranchises(opened)
+	first, err := series.Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	keep, err := franchises.Join(t.Context(), "tv", "book:series", "B01", "Awaken Online", first.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := franchises.Join(t.Context(), "tv", "book:series", "B02", "awaken online", first.WorkID); err != nil {
+		t.Fatal(err)
+	}
+	other, err := franchises.Join(t.Context(), "tv", "book:series", "B03", "Another Series", first.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	removed, err := franchises.MergeSameNamed(t.Context(), "tv", "book:series")
+	if err != nil || removed != 1 {
+		t.Fatalf("MergeSameNamed = %d, %v, want one removed", removed, err)
+	}
+	_, _ = keep, other
+	if again, _ := franchises.MergeSameNamed(t.Context(), "tv", "book:series"); again != 0 {
+		t.Errorf("a second merge removed %d, want none", again)
+	}
+}

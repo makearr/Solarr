@@ -26,6 +26,7 @@ var ErrNoSource = errors.New("book: no metadata source answered")
 // OpenLibrarySource is the Open Library client as the service needs it.
 type OpenLibrarySource interface {
 	Search(ctx context.Context, title, author string, limit int) ([]openlibrary.Doc, error)
+	ByAuthor(ctx context.Context, author string, limit int) ([]openlibrary.Doc, error)
 	Doc(ctx context.Context, workID string) (openlibrary.Doc, error)
 	Work(ctx context.Context, workID string) (openlibrary.Work, error)
 	ByISBN(ctx context.Context, isbn string) (openlibrary.Edition, error)

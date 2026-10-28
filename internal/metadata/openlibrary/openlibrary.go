@@ -192,6 +192,21 @@ func (c Client) Search(ctx context.Context, title, author string, limit int) ([]
 	return found.Docs, nil
 }
 
+// ByAuthor finds the works an author wrote, the most published first.
+func (c Client) ByAuthor(ctx context.Context, author string, limit int) ([]Doc, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 100
+	}
+	query := url.Values{"fields": {searchFields}, "limit": {strconv.Itoa(limit)}, "sort": {"editions"}, "author": {author}}
+	var found struct {
+		Docs []Doc `json:"docs"`
+	}
+	if err := c.get(ctx, "/search.json?"+query.Encode(), &found); err != nil {
+		return nil, err
+	}
+	return found.Docs, nil
+}
+
 // Doc reads what the search index says of one work: its editions' ids, publishers and pages in one request.
 func (c Client) Doc(ctx context.Context, workID string) (Doc, error) {
 	if !workPattern.MatchString(workID) {

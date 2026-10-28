@@ -21,6 +21,15 @@ func (f *fakeOpenLibrary) Search(_ context.Context, title, author string, _ int)
 	return []openlibrary.Doc{{Key: "/works/OL1001W", Title: "The Lantern Keeper", AuthorNames: []string{"Mara Quell"}}}, nil
 }
 
+func (f *fakeOpenLibrary) ByAuthor(_ context.Context, author string, _ int) ([]openlibrary.Doc, error) {
+	f.asked = append(f.asked, "author:"+author)
+	return []openlibrary.Doc{
+		{Key: "/works/OL1001W", Title: "The Lantern Keeper", AuthorNames: []string{"Mara Quell"}, FirstPublishYear: 1987},
+		{Key: "/works/OL1002W", Title: "The Glass Orchard", AuthorNames: []string{"Mara Quell"}, FirstPublishYear: 1991, CoverID: 7},
+		{Key: "/works/OL1003W", Title: "Not Hers", AuthorNames: []string{"Someone Else"}, FirstPublishYear: 2001},
+	}, nil
+}
+
 func (f *fakeOpenLibrary) Doc(_ context.Context, workID string) (openlibrary.Doc, error) {
 	return openlibrary.Doc{Key: "/works/" + workID, Title: "The Lantern Keeper", AuthorNames: []string{"Mara Quell"}, AuthorKeys: []string{"OL2001A"},
 		FirstPublishYear: 1987, Publishers: []string{"Northlight"}, Pages: 312, Languages: []string{"eng"}, ISBN: []string{"0000000000", "9780000000002"}}, nil

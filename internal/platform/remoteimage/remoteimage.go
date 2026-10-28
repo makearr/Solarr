@@ -52,8 +52,11 @@ type imageLock struct {
 	refs int
 }
 
-// DefaultHosts are the CDNs the TV providers' pictures live on.
-var DefaultHosts = []string{"image.tmdb.org", "thetvdb.com", "tvmaze.com", "anilist.co", "fanart.tv"}
+// DefaultHosts are the CDNs the TV, film and book providers' pictures live on.
+var DefaultHosts = []string{
+	"image.tmdb.org", "thetvdb.com", "tvmaze.com", "anilist.co", "fanart.tv",
+	"openlibrary.org", "books.google.com", "googleusercontent.com", "media-amazon.com",
+}
 
 // Key is the cache key an address is stored under; it is stable, so a repeat request finds the file.
 func Key(address string) string {

@@ -154,7 +154,7 @@ func sameClients(read *clientRead, clients map[int64]Client) bool {
 
 func (j *Job) now() time.Time {
 	if j.config.Clock == nil {
-		return time.Now()
+		return time.Now() //nolint:forbidigo // only a job built without a clock reaches this
 	}
 	return j.config.Clock.Now()
 }

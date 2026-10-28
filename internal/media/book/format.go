@@ -38,7 +38,7 @@ const (
 // Ebook is the books media type, Readarr's ebook library.
 var Ebook = Format{
 	MediaType: "book", Label: "Books", One: "Book", Many: "Books",
-	Extensions:     []string{"epub", "azw3", "azw", "kfx", "mobi", "pdf", "fb2", "djvu", "txt", "rtf", "lit", "docx"},
+	Extensions:     []string{"epub", "epub3", "cbz", "azw3", "azw", "kfx", "mobi", "pdf", "cbr", "fb2", "djvu", "lit", "pdb", "pml", "rtf", "txt", "html", "htm", "docx"},
 	FeedCategories: []int{newznabEbook, newznabBooks},
 	Sources:        settings.DefaultBookSources,
 	// An ebook can be a few hundred kilobytes; a placeholder is less.
