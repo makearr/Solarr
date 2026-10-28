@@ -232,8 +232,13 @@ func (p *process) tvModule() tv.Module {
 			Service: p.tvService(), DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
 			Clock: clock.NewSystem(),
 		},
-		Profiling: tv.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared},
+		Profiling: tv.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
 	}
+}
+
+// knownAlbums lists an actor's albums on their person page.
+func (p *process) knownAlbums() music.KnownAlbums {
+	return music.KnownAlbums{Wikidata: p.wikidataFetcher(), Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library)}
 }
 
 // musicHunt searches one album the hunt chose and sends the best release.
@@ -410,7 +415,7 @@ func (p *process) movieModule() movie.Module {
 		},
 		Adder: catalog, Franchise: catalog,
 		Rename:    &movie.RenameConfig{Movies: library.NewSeriesReader(p.library)},
-		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared},
+		Profiling: knownfor.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
 		Files: movie.Files{
 			Resolver: movie.Resolver{
 				Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,

@@ -2836,7 +2836,7 @@ type KnownFor struct {
 	AddLibraryId *int64 `json:"add_library_id,omitempty"`
 	ExternalId   string `json:"external_id"`
 
-	// Kind The provider's word for the work.
+	// Kind The provider's word for the work: tv, movie, book, audiobook, or album (a MusicBrainz release group, added to a music library).
 	Kind      string  `json:"kind"`
 	PosterUrl *string `json:"poster_url,omitempty"`
 	Provider  string  `json:"provider"`

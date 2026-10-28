@@ -9958,7 +9958,7 @@ components:
       properties:
         provider: { type: string }
         external_id: { type: string }
-        kind: { type: string, example: "tv", description: The provider's word for the work. }
+        kind: { type: string, example: "tv", description: "The provider's word for the work: tv, movie, book, audiobook, or album (a MusicBrainz release group, added to a music library)." }
         title: { type: string }
         year: { type: integer, format: int64 }
         poster_url: { type: string }

@@ -6775,7 +6775,7 @@ export interface components {
             provider: string;
             external_id: string;
             /**
-             * @description The provider's word for the work.
+             * @description The provider's word for the work: tv, movie, book, audiobook, or album (a MusicBrainz release group, added to a music library).
              * @example tv
              */
             kind: string;

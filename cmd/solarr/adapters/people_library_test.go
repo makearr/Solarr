@@ -30,3 +30,19 @@ func TestAPersonsKnownForGoesToTheLibraryOfItsKind(t *testing.T) {
 		t.Errorf("an adapter with no categories answers %d, want none and no panic", got)
 	}
 }
+
+func TestAnAlbumOnAPersonsPageGoesToTheMusicLibrary(t *testing.T) {
+	cache := newSweepCache(t)
+	series, err := cache.CreateCategory(t.Context(), "tv", "Series", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	songs, err := cache.CreateCategory(t.Context(), "music", "Music", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	people := adapters.People{Categories: adapters.Categories{Cache: cache}}
+	if got := people.LibraryFor("music", series.ID); got != songs.ID {
+		t.Errorf("LibraryFor(music, series page) = %d, want the music library %d", got, songs.ID)
+	}
+}

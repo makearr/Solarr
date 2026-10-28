@@ -632,8 +632,8 @@ type KnownFor struct {
 	Role string
 	// WorkID is the library's work, 0 when the library does not hold it.
 	WorkID int64
-	// AddTo is the library the work is added to from the person's page, 0 when none holds that kind.
-	AddTo int64
+	// AddType is the media type whose library adds it when that is not Kind: an album goes to a music library.
+	AddType Key
 }
 
 // Profiling is the capability of a media type whose providers know more of a person than its libraries hold.

@@ -415,9 +415,10 @@ function KnownForSection({ personId, categoryId }: { personId: number; categoryI
 /** A title the library lacks is added from here to the library that holds its kind; with none, it links out. */
 function KnownForTile({ title }: { title: KnownFor }) {
   const [adding, setAdding] = useState(false);
+  const mediaType = title.kind === "album" ? "music" : title.kind;
   const caption = (
     <>
-      <PosterImage url={title.poster_url} kind={title.kind} title={title.title} />
+      <PosterImage url={title.poster_url} kind={mediaType} title={title.title} />
       <span className="truncate text-sm font-medium">
         {title.title}
         {title.year ? <span className="font-normal text-ink-muted"> ({title.year})</span> : null}
@@ -426,11 +427,16 @@ function KnownForTile({ title }: { title: KnownFor }) {
     </>
   );
   if (!title.add_library_id) {
-    const outbound = title.provider === "openlibrary" ? `https://openlibrary.org/works/${title.external_id}` : `https://www.themoviedb.org/${title.kind}/${title.external_id}`;
+    const outbound =
+      title.provider === "openlibrary"
+        ? `https://openlibrary.org/works/${title.external_id}`
+        : title.kind === "album"
+          ? `https://musicbrainz.org/release-group/${title.external_id}`
+          : `https://www.themoviedb.org/${title.kind}/${title.external_id}`;
     return (
       <a href={outbound} target="_blank" rel="noreferrer" className="flex flex-col gap-1 focus-visible:outline-2 focus-visible:outline-accent">
         {caption}
-        <span className="text-xs text-ink-muted">No {mediaTypeName(title.kind)} library to add it to</span>
+        <span className="text-xs text-ink-muted">No {mediaTypeName(mediaType)} library to add it to</span>
       </a>
     );
   }
@@ -447,7 +453,7 @@ function KnownForTile({ title }: { title: KnownFor }) {
       </button>
       {adding && (
         <AddToLibrary
-          candidate={{ provider: title.provider, external_id: title.external_id, title: title.title }}
+          candidate={{ provider: title.provider, external_id: title.external_id, title: title.title, kind: title.kind }}
           categoryId={String(title.add_library_id)}
           onDone={() => setAdding(false)}
         />

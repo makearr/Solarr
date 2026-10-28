@@ -28,11 +28,21 @@ type PersonSource interface {
 	Person(ctx context.Context, id int64) (tmdb.Person, error)
 }
 
+// AlbumSource is MusicBrainz as a person's page asks it: an actor who also records is known for albums too.
+type AlbumSource interface {
+	// ArtistFor answers the MusicBrainz artist a Wikidata item is, "" when it is none.
+	ArtistFor(ctx context.Context, qid string) (string, error)
+	// Albums lists the artist's albums the library does not hold, newest first.
+	Albums(ctx context.Context, artistMBID string) ([]media.KnownFor, error)
+}
+
 // Profiling is a media type's part of a person's page: what TMDB knows them for, and what it adds to the person.
 type Profiling struct {
 	People library.People
 	Reader library.SeriesReader
 	Source PersonSource
+	// Albums is optional: nil lists no albums.
+	Albums AlbumSource
 }
 
 // KnownFor implements media.Profiling: TMDB's titles for the person, each marked with the library's series it holds.
@@ -53,7 +63,35 @@ func (p Profiling) KnownFor(ctx context.Context, personID, categoryID int64) ([]
 		return nil, err
 	}
 	p.keep(ctx, personID, remote)
-	return p.knownFor(ctx, personID, categoryID, remote), nil
+	return append(p.knownFor(ctx, personID, categoryID, remote), p.albums(ctx, personID, remote.ExternalIDs.Wikidata)...), nil
+}
+
+// musicBrainzArtistProvider mirrors music.ProviderArtist, which this package cannot import.
+const musicBrainzArtistProvider = "musicbrainz:artist"
+
+// albums are the person's MusicBrainz albums, by the artist id the person holds, else the one Wikidata gives; a
+// failure only leaves them out.
+func (p Profiling) albums(ctx context.Context, personID int64, qid string) []media.KnownFor {
+	if p.Albums == nil {
+		return nil
+	}
+	artist, found, err := p.People.ExternalIDFor(ctx, personID, musicBrainzArtistProvider)
+	if err != nil {
+		return nil
+	}
+	if !found && qid != "" {
+		if artist, err = p.Albums.ArtistFor(ctx, qid); err != nil {
+			return nil
+		}
+	}
+	if artist == "" {
+		return nil
+	}
+	albums, err := p.Albums.Albums(ctx, artist)
+	if err != nil {
+		return nil
+	}
+	return albums[:min(len(albums), maxKnownFor)]
 }
 
 // keep stores what TMDB adds to the person, filling only what is empty; a Wikidata id may merge them with an artist.
