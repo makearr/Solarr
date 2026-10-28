@@ -91,3 +91,62 @@ func TestSameNamedCollectionsOfOneSourceMergeIntoTheFirst(t *testing.T) {
 		t.Errorf("a second merge removed %d, want none", again)
 	}
 }
+
+func TestAProvidersCollectionAPersonDeletedOrTookAWorkOutOfStaysSoOnRefresh(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	franchises := library.NewFranchises(opened)
+	refresh := func(title, tvdb string) int64 {
+		t.Helper()
+		write := sampleSeries()
+		write.Work.CanonicalTitle, write.Work.SortTitle = title, title
+		write.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: tvdb}}
+		write.Franchise = &library.SeriesFranchiseWrite{Provider: "tmdb:collection", ExternalID: "10", Name: "Example Collection"}
+		result, err := series.Upsert(t.Context(), seriesAt, write)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return result.WorkID
+	}
+	collectionOf := func() (int64, []int64) {
+		t.Helper()
+		summaries, err := franchises.Summaries(t.Context(), "tv")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(summaries) == 0 {
+			return 0, nil
+		}
+		members, err := franchises.MembersOf(t.Context(), summaries[0].ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return summaries[0].ID, members
+	}
+	first, second := refresh("First", "1"), refresh("Second", "2")
+	id, members := collectionOf()
+	if len(members) != 2 {
+		t.Fatalf("members = %v, want both works", members)
+	}
+
+	if err := franchises.Dismiss(t.Context(), id, first); err != nil {
+		t.Fatal(err)
+	}
+	refresh("First", "1")
+	refresh("Second", "2")
+	if _, members := collectionOf(); len(members) != 1 || members[0] != second {
+		t.Errorf("after a refresh, members = %v, want only %d: the work taken out stays out", members, second)
+	}
+
+	if err := franchises.DeleteFranchise(t.Context(), id); err != nil {
+		t.Fatal(err)
+	}
+	refresh("First", "1")
+	refresh("Second", "2")
+	if again, members := collectionOf(); again != 0 {
+		t.Errorf("after a refresh, collection %d with %v exists, want the deleted one never made again", again, members)
+	}
+	if joined, err := franchises.Join(t.Context(), "tv", "tmdb:collection", "10", "Example Collection", second); err != nil || joined != 0 {
+		t.Errorf("Join = %d, %v, want 0: the collection was deleted", joined, err)
+	}
+}

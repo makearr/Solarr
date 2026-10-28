@@ -15,6 +15,7 @@ type Querier interface {
 	AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error
 	AddArrImportItem(ctx context.Context, arg AddArrImportItemParams) (ArrImportItem, error)
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
+	AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
 	// The second half of importing a file, and execlastid for the same reason.
@@ -99,6 +100,7 @@ type Querier interface {
 	// ListCalendarEntries answers, counted rather than listed, so a busy year is never truncated.
 	CountCalendarDates(ctx context.Context, arg CountCalendarDatesParams) ([]CountCalendarDatesRow, error)
 	CountCalendarEpisodeDates(ctx context.Context, arg CountCalendarEpisodeDatesParams) ([]CountCalendarEpisodeDatesRow, error)
+	CountCollectionRefusals(ctx context.Context, arg CountCollectionRefusalsParams) (int64, error)
 	// library.db references settings.db by id with no foreign key (ADR-25), so only the
 	// application can find a reference a restore has orphaned. The count is what makes
 	// the report worth reading.

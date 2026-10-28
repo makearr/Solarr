@@ -95,9 +95,14 @@ func (p *UniversePass) Run(ctx context.Context, _ jobs.Job) error {
 		kept[universe.QID] = true
 		var collection int64
 		for _, workID := range universe.Works {
-			if collection, err = p.Franchises.Join(ctx, MediaType, ProviderWikidata, universe.QID, universe.Name, workID); err != nil {
+			joined, err := p.Franchises.Join(ctx, MediaType, ProviderWikidata, universe.QID, universe.Name, workID)
+			if err != nil {
 				return err
 			}
+			collection = max(collection, joined)
+		}
+		if collection == 0 {
+			continue
 		}
 		members, err := p.Franchises.MembersOf(ctx, collection)
 		if err != nil {

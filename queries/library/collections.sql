@@ -497,3 +497,11 @@ SELECT w.id AS work_id, CAST(e.external_id AS TEXT) AS external_id
 FROM work w JOIN work_external_id e ON e.work_id = w.id AND e.provider = sqlc.arg(provider)
 WHERE w.media_type = sqlc.arg(media_type)
 ORDER BY w.id;
+
+-- name: AddCollectionRefusal :exec
+INSERT INTO collection_refusal (provider, external_id, work_id) VALUES (?, ?, ?)
+ON CONFLICT (provider, external_id, work_id) DO NOTHING;
+
+-- name: CountCollectionRefusals :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM collection_refusal
+WHERE provider = ? AND external_id = ? AND (work_id = 0 OR work_id = ?);

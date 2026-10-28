@@ -23,7 +23,7 @@ type Franchises struct{ store *store.Store }
 func NewFranchises(opened *store.Store) Franchises { return Franchises{store: opened} }
 
 // Join puts a work in the franchise a provider names, creating it when new and keeping its name current; a franchise a
-// person monitored stays monitored. It answers the collection's id.
+// person monitored stays monitored. It answers the collection's id, 0 when a person deleted it or took the work out.
 func (f Franchises) Join(ctx context.Context, mediaType, provider, externalID, name string, workID int64) (int64, error) {
 	var id int64
 	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -39,6 +39,11 @@ func (f Franchises) Join(ctx context.Context, mediaType, provider, externalID, n
 func joinFranchiseTx(
 	ctx context.Context, queries *librarydb.Queries, id *int64, now int64, mediaType, provider, externalID, name string, workID int64,
 ) error {
+	*id = 0
+	refused, err := queries.CountCollectionRefusals(ctx, librarydb.CountCollectionRefusalsParams{Provider: provider, ExternalID: externalID, WorkID: workID})
+	if err != nil || refused > 0 {
+		return err
+	}
 	found, err := queries.GetCollectionByExternalID(ctx, librarydb.GetCollectionByExternalIDParams{Provider: provider, ExternalID: externalID})
 	switch {
 	case err == nil:
@@ -555,6 +560,9 @@ func (f Franchises) Dismiss(ctx context.Context, franchiseID, workID int64) erro
 				return err
 			}
 		}
+		if err := refuseCollection(ctx, queries, franchiseID, workID); err != nil {
+			return err
+		}
 		return queries.RemoveCollectionMember(ctx, librarydb.RemoveCollectionMemberParams{CollectionID: franchiseID, WorkID: workID})
 	})
 	if err != nil {
@@ -581,10 +589,30 @@ func (f Franchises) DeleteFranchise(ctx context.Context, franchiseID int64) erro
 				}
 			}
 		}
+		if err := refuseCollection(ctx, queries, franchiseID, 0); err != nil {
+			return err
+		}
 		return queries.DeleteCollection(ctx, franchiseID)
 	})
 	if err != nil {
 		return fmt.Errorf("library: delete franchise %d: %w", franchiseID, err)
+	}
+	return nil
+}
+
+// refuseCollection remembers, under each provider id of the collection, that a person deleted it (workID 0) or took the
+// work out of it, so Join never makes it or puts the work back.
+func refuseCollection(ctx context.Context, queries *librarydb.Queries, collectionID, workID int64) error {
+	externals, err := queries.ListExternalIDsOfCollection(ctx, collectionID)
+	if err != nil {
+		return err
+	}
+	for _, external := range externals {
+		if err := queries.AddCollectionRefusal(ctx, librarydb.AddCollectionRefusalParams{
+			Provider: external.Provider, ExternalID: external.ExternalID, WorkID: workID,
+		}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

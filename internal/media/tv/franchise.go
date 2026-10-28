@@ -258,7 +258,9 @@ func (p FranchisePass) readWikidata(ctx context.Context) (*wikidataKnowledge, er
 			if err != nil {
 				return nil, err
 			}
-			known.listed[id] = append(known.listed[id], workID)
+			if id != 0 {
+				known.listed[id] = append(known.listed[id], workID)
+			}
 		}
 	}
 	return &known, nil

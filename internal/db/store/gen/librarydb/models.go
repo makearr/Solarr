@@ -193,6 +193,12 @@ type CollectionMember struct {
 	Ord          sql.NullInt64
 }
 
+type CollectionRefusal struct {
+	Provider   string
+	ExternalID string
+	WorkID     int64
+}
+
 type Counter struct {
 	Scope     string
 	Metric    string

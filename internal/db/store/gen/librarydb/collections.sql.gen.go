@@ -34,6 +34,22 @@ func (q *Queries) AddCollectionMember(ctx context.Context, arg AddCollectionMemb
 	return err
 }
 
+const addCollectionRefusal = `-- name: AddCollectionRefusal :exec
+INSERT INTO collection_refusal (provider, external_id, work_id) VALUES (?, ?, ?)
+ON CONFLICT (provider, external_id, work_id) DO NOTHING
+`
+
+type AddCollectionRefusalParams struct {
+	Provider   string
+	ExternalID string
+	WorkID     int64
+}
+
+func (q *Queries) AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error {
+	_, err := q.db.ExecContext(ctx, addCollectionRefusal, arg.Provider, arg.ExternalID, arg.WorkID)
+	return err
+}
+
 const collectionCoverage = `-- name: CollectionCoverage :one
 SELECT c.id, c.name, c.complete_at,
        CAST(COUNT(DISTINCT m.work_id) AS INTEGER) AS members,
@@ -66,6 +82,24 @@ func (q *Queries) CollectionCoverage(ctx context.Context, id int64) (CollectionC
 		&i.Held,
 	)
 	return i, err
+}
+
+const countCollectionRefusals = `-- name: CountCollectionRefusals :one
+SELECT CAST(COUNT(*) AS INTEGER) FROM collection_refusal
+WHERE provider = ? AND external_id = ? AND (work_id = 0 OR work_id = ?)
+`
+
+type CountCollectionRefusalsParams struct {
+	Provider   string
+	ExternalID string
+	WorkID     int64
+}
+
+func (q *Queries) CountCollectionRefusals(ctx context.Context, arg CountCollectionRefusalsParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCollectionRefusals, arg.Provider, arg.ExternalID, arg.WorkID)
+	var column_1 int64
+	err := row.Scan(&column_1)
+	return column_1, err
 }
 
 const countGroupOutcomes = `-- name: CountGroupOutcomes :many
