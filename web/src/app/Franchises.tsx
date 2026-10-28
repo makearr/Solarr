@@ -240,11 +240,9 @@ function CollectionDetail({
         {administrator && (
           <span className="ml-auto flex gap-2">
             {custom && <Button onClick={() => setRenaming(true)}>{t("collection.rename")}</Button>}
-            {!custom && (
-              <Button busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
-                {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
-              </Button>
-            )}
+            <Button busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
+              {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
+            </Button>
             <Button variant="icon" aria-label={t("collection.delete")} title={t("collection.delete")} onClick={() => setDeleting(true)}>
               <Trash2 aria-hidden className="size-4" />
             </Button>
@@ -253,6 +251,9 @@ function CollectionDetail({
       </div>
       {monitor.isSuccess && monitor.variables?.id === franchise.id && !custom && (
         <p className="text-xs text-ink-muted">{monitor.data?.added ? t("franchise.added", { count: monitor.data.added }) : franchise.monitored ? "" : t("franchise.noKey")}</p>
+      )}
+      {monitor.isSuccess && monitor.variables?.id === franchise.id && custom && !monitor.variables.monitored && (
+        <p className="text-xs text-ink-muted">{t("collection.monitoredMembers", { count: monitor.data?.added ?? 0 })}</p>
       )}
       {franchise.members.length === 0 && <p className="text-sm text-ink-muted">{t("collection.empty")}</p>}
       <div className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-4">

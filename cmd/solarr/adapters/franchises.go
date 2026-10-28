@@ -21,6 +21,8 @@ type LibraryFranchises struct {
 	Cache    *settings.Cache
 	Registry *media.Registry
 	Store    library.Franchises
+	// MonitorWork monitors a member of a hand-made collection; nil offers no monitoring of one.
+	MonitorWork func(ctx context.Context, workID int64) error
 }
 
 func (a LibraryFranchises) category(categoryID int64) (settings.Category, error) {
@@ -203,7 +205,13 @@ func (a LibraryFranchises) AddMember(ctx context.Context, categoryID, franchiseI
 	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
 		return err
 	}
-	return editable(a.Store.AddMember(ctx, franchiseID, workID))
+	if err := editable(a.Store.AddMember(ctx, franchiseID, workID)); err != nil {
+		return err
+	}
+	if row, err := a.Store.Get(ctx, franchiseID); err == nil && row.Monitored && a.MonitorWork != nil {
+		return a.MonitorWork(ctx, workID)
+	}
+	return nil
 }
 
 // RemoveMember implements apiserver.Franchises: out of a collection made by hand, or out of a provider's or Solarr's with
@@ -225,18 +233,44 @@ func (a LibraryFranchises) Monitor(ctx context.Context, categoryID, franchiseID 
 	if err != nil {
 		return 0, err
 	}
+	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
+		return 0, err
+	}
+	if row, err := a.Store.Get(ctx, franchiseID); err != nil {
+		return 0, err
+	} else if row.Kind == library.CustomKind {
+		return a.monitorCustom(ctx, franchiseID, monitored)
+	}
 	provider, ok := a.capability(category)
 	if !ok {
 		return 0, apiserver.ErrNoFranchise
-	}
-	if err := a.inLibrary(ctx, categoryID, franchiseID); err != nil {
-		return 0, err
 	}
 	added, err := provider.MonitorFranchise(ctx, categoryID, franchiseID, monitored)
 	if errors.Is(err, media.ErrNoFranchise) {
 		return 0, apiserver.ErrNoFranchise
 	}
 	return added, err
+}
+
+// monitorCustom monitors every work of a hand-made collection, any media type, and answers how many; works put in it
+// while it is monitored are monitored too. Unmonitoring leaves the works as they are, as a provider's collection does.
+func (a LibraryFranchises) monitorCustom(ctx context.Context, franchiseID int64, monitored bool) (int, error) {
+	if a.MonitorWork == nil {
+		return 0, apiserver.ErrNoFranchise
+	}
+	if err := a.Store.SetMonitored(ctx, franchiseID, monitored, 0); err != nil || !monitored {
+		return 0, err
+	}
+	members, err := a.Store.MembersOf(ctx, franchiseID)
+	if err != nil {
+		return 0, err
+	}
+	for index, workID := range members {
+		if err := a.MonitorWork(ctx, workID); err != nil {
+			return index, err
+		}
+	}
+	return len(members), nil
 }
 
 // franchiseView maps a collection with the works the library holds, and those it lacks when the provider lists them.

@@ -113,6 +113,7 @@ const catalogue = {
   "franchise.held": "{held} / {total} in your library",
   "franchise.heldUnknown": "{held} in your library",
   "franchise.added": "{count} added",
+  "collection.monitoredMembers": "{count} monitored; works you put in it are monitored too.",
   "franchise.noKey": "Adding the missing films needs a TMDB key under Metadata.",
   "franchise.onDisk": "on disk",
   "franchise.missing": "missing",
