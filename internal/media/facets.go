@@ -59,6 +59,8 @@ type Facet struct {
 	Editable bool
 	// RefreshesWork reads the work again when a person changes it: the type derives other data from it.
 	RefreshesWork bool
+	// Badge marks the work's tile with the logo of its organisation in this role: a series' network.
+	Badge bool
 }
 
 // workColumns are the base columns of a work a facet may read; a facet never adds one.

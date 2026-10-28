@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -75,5 +76,36 @@ func TestSeriesNetworksKeywordsAndLogoAreStored(t *testing.T) {
 	if err := opened.Read().QueryRowContext(t.Context(),
 		`SELECT value FROM work_classification WHERE work_id = ? AND kind = 'keyword'`, result.WorkID).Scan(&keyword); err != nil || keyword != "heist" {
 		t.Errorf("keyword = %q, err = %v", keyword, err)
+	}
+}
+
+func TestAWorksBadgeIsTheLogoOfItsOrganisationInTheBadgeFacetsRole(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	withLogo := sampleSeries()
+	withLogo.MoreNetworks = []library.SeriesNetworkWrite{{Name: "Example Net", Country: "US", Provider: "tmdb", ExternalID: "8", LogoURL: "https://example.test/e.png"}}
+	marked, err := series.Upsert(t.Context(), seriesAt, withLogo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := sampleSeries()
+	plain.Work.CanonicalTitle, plain.Network = "Plain Show", "Logoless Net"
+	plain.IDs = []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "999"}}
+	unmarked, err := series.Upsert(t.Context(), seriesAt, plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	works := library.NewWorks(opened)
+	network := library.WorkFacet{Key: "network", Source: library.FacetOrganisation, Name: "network", Badge: true}
+	got, err := works.Badges(t.Context(), []library.WorkFacet{network}, []int64{marked.WorkID, unmarked.WorkID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := map[int64]library.Badge{marked.WorkID: {Name: "Example Net", Logo: "https://example.test/e.png"}}; !reflect.DeepEqual(got, want) {
+		t.Errorf("badges = %+v, want %+v", got, want)
+	}
+	network.Badge = false
+	if got, _ := works.Badges(t.Context(), []library.WorkFacet{network}, []int64{marked.WorkID}); len(got) != 0 {
+		t.Errorf("badges without a badge facet = %+v, want none", got)
 	}
 }

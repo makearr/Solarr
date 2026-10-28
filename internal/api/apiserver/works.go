@@ -154,6 +154,8 @@ type WorkRow struct {
 	PresentTotal, RequiredTotal, Upgradable int64
 	// PosterURL is the work's poster at its provider, empty for a work with none (an album's cover is its artwork).
 	PosterURL string
+	// BadgeURL is the logo that marks the work's tile (a series' network) and BadgeName whose it is; empty for none.
+	BadgeURL, BadgeName string
 }
 
 // ListWorks returns a page of the library the caller may see (ADR-27). A work
@@ -391,6 +393,7 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.
 		}
 		views[index].Facets = &facets
 		views[index].PosterUrl = strPtr(row.PosterURL)
+		views[index].BadgeUrl, views[index].BadgeName = strPtr(row.BadgeURL), strPtr(row.BadgeName)
 		views[index].Totals = &struct {
 			Present    int64 `json:"present"`
 			Required   int64 `json:"required"`

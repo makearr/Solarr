@@ -5596,6 +5596,10 @@ export interface components {
         Work: {
             /** @description The work's poster at its provider; absent for a work whose picture is its artwork (an album's cover). */
             poster_url?: string;
+            /** @description The logo that marks the work's tile, its organisation in the type's badge role (a series' network); absent for none. */
+            badge_url?: string;
+            /** @description The name of the organisation the badge is the logo of. */
+            badge_name?: string;
             /**
              * Format: int64
              * @description The person the work is listed under (an album's artist), for a type with a lead role.

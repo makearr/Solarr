@@ -33,6 +33,9 @@ export interface IndexEntry {
   imageSrc?: string;
   /** A tall poster rather than a square cover. */
   portrait?: boolean;
+  /** A logo marking the tile, its organisation's: a series' network. */
+  badgeSrc?: string;
+  badgeTitle?: string;
   /** What the counts count: "tracks", "episodes". */
   partsLabel?: string;
   link: LinkProps | null;
@@ -52,12 +55,23 @@ export function workEntry(work: Work, categoryId?: string, info?: MediaTypeInfo)
     // Nothing to ask for when neither the work, its lead nor a provider poster has a picture.
     image: work.no_artwork && !work.poster_url ? null : { subject: "works", id: work.id },
     imageSrc: work.poster_url ? remoteImage(work.poster_url, "small") : undefined,
+    badgeSrc: work.badge_url ? remoteImage(work.badge_url, "thumb") : undefined,
+    badgeTitle: work.badge_name,
     portrait: info?.work_image === "poster",
     partsLabel: info?.part.many.toLowerCase() || undefined,
     link: categoryId
       ? { to: "/library/$categoryId/works/$workId", params: { categoryId, workId: String(work.id) } }
       : { to: "/works/$id", params: { id: String(work.id) } },
   };
+}
+
+/** An organisation's logo on a light chip, as a corner badge: the logos are drawn for a white ground. */
+function LogoBadge({ src, title }: { src: string; title?: string }) {
+  return (
+    <span title={title} className="flex h-6 max-w-16 items-center rounded-md bg-white/90 px-1.5 shadow-sm">
+      <img src={src} alt={title ?? ""} loading="lazy" className="max-h-4 max-w-full object-contain" />
+    </span>
+  );
 }
 
 export const POSTER_WIDTHS = { small: 128, medium: 168, large: 224 } as const;
@@ -104,7 +118,7 @@ export function IndexPoster({ entry, options }: { entry: IndexEntry; options: Po
         link={entry.link}
         imageSrc={entry.imageSrc}
         portrait={entry.portrait}
-        badge={entry.artistCover ? <ArtistCoverMark /> : undefined}
+        badge={entry.artistCover ? <ArtistCoverMark /> : entry.badgeSrc ? <LogoBadge src={entry.badgeSrc} title={entry.badgeTitle} /> : undefined}
         topLeft={options.showMonitored ? <MonitorToggle actions={actions} /> : undefined}
         hoverActions={actionable(entry) ? <ActionButtons actions={actions} showNote={false} /> : undefined}
         showTitle={options.showTitle}

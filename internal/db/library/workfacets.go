@@ -35,6 +35,8 @@ type WorkFacet struct {
 	Choices []string
 	// Sortable lets the list order by it.
 	Sortable bool
+	// Badge is an organisation facet whose logo marks the work's tile.
+	Badge bool
 }
 
 // FacetFields adds the filterable facets to a list's own custom-filter fields; a facet wins over a base field of
@@ -217,6 +219,30 @@ func (w Works) FacetValues(ctx context.Context, facets []WorkFacet, workIDs []in
 		}
 	}
 	return values, nil
+}
+
+// Badge is the organisation whose logo marks a work's tile.
+type Badge struct{ Name, Logo string }
+
+// Badges answer each work's organisation in the first badge facet's role, for the works whose organisation has a logo.
+func (w Works) Badges(ctx context.Context, facets []WorkFacet, workIDs []int64) (map[int64]Badge, error) {
+	badges := map[int64]Badge{}
+	at := slices.IndexFunc(facets, func(facet WorkFacet) bool { return facet.Badge && facet.Source == FacetOrganisation })
+	if at < 0 || len(workIDs) == 0 {
+		return badges, nil
+	}
+	ids, idArgs := idList(workIDs)
+	query := "SELECT wo.work_id, o.name, CAST(COALESCE(json_extract(o.fields_json, '$.logo'), '') AS TEXT) FROM work_organisation wo" +
+		" JOIN organisation o ON o.id = wo.organisation_id WHERE wo.work_id IN (" + ids + ") AND wo.role = ? ORDER BY wo.work_id, o.name"
+	err := eachTriple(ctx, w.store.Read(), query, append(idArgs, facets[at].Name), func(id int64, name, logo string) {
+		if _, have := badges[id]; !have && logo != "" {
+			badges[id] = Badge{Name: name, Logo: logo}
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	return badges, nil
 }
 
 func idList(ids []int64) (string, []any) {

@@ -175,9 +175,14 @@ func (a Works) fillTypeFields(ctx context.Context, views []apiserver.WorkRow) er
 		if err != nil {
 			return err
 		}
+		badges, err := a.Works.Badges(ctx, a.Facets(mediaType), ids)
+		if err != nil {
+			return err
+		}
 		for i := range views {
 			if views[i].MediaType == mediaType {
-				views[i].Facets = values[views[i].ID]
+				badge := badges[views[i].ID]
+				views[i].Facets, views[i].BadgeURL, views[i].BadgeName = values[views[i].ID], badge.Logo, badge.Name
 			}
 		}
 	}

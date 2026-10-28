@@ -45,3 +45,9 @@ func TestSeasonCountsMatch(t *testing.T) {
 		}
 	}
 }
+
+func TestSkyhooksClearLogoIsTheSeriesLogo(t *testing.T) {
+	if got := imageKind("clearlogo"); got != "logo" {
+		t.Errorf("imageKind(clearlogo) = %q, want logo: the series header shows the logo kind", got)
+	}
+}

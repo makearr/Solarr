@@ -31,7 +31,7 @@ var facets = []media.Facet{
 	},
 	{
 		Key: "network", Label: "Network", Entity: model.LevelEntityWork, Kind: media.FacetText,
-		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Sortable: true, Filterable: true,
+		Source: media.FacetSource{Kind: media.SourceOrganisation, Name: "network"}, Column: true, Sortable: true, Filterable: true, Badge: true,
 	},
 	{
 		Key: "genre", Label: "Genre", Entity: model.LevelEntityWork, Kind: media.FacetList,

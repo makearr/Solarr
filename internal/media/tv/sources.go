@@ -427,7 +427,7 @@ func imageKind(coverType string) string {
 		return "banner"
 	case "fanart":
 		return "fanart"
-	case "logo":
+	case "logo", "clearlogo":
 		return "logo"
 	case "clearart":
 		return "clearart"

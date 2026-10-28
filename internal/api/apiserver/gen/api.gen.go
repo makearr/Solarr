@@ -4868,6 +4868,12 @@ type Work struct {
 	// ArtistCover No cover of its own: its artwork is the primary artist's image, and a poster marks it. Absent means false.
 	ArtistCover *bool `json:"artist_cover,omitempty"`
 
+	// BadgeName The name of the organisation the badge is the logo of.
+	BadgeName *string `json:"badge_name,omitempty"`
+
+	// BadgeUrl The logo that marks the work's tile, its organisation in the type's badge role (a series' network); absent for none.
+	BadgeUrl *string `json:"badge_url,omitempty"`
+
 	// Facets The media type's own fields of this work, by facet key (GET /mediatypes declares them).
 	Facets *map[string][]string `json:"facets,omitempty"`
 	Id     int64                `json:"id"`
