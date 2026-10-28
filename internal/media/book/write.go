@@ -64,9 +64,10 @@ func ToWrite(format Format, book Book, now time.Time) library.SeriesWrite {
 		IDs:              format.idWrites(book.IDs),
 		Aliases:          book.Aliases,
 		AliasSource:      "book-merge",
-		Genres:           book.Genres,
+		Genres:           subjectGenres(book.Genres),
 		GenreSource:      source,
 		GenreTree:        GenreTree.Key,
+		KnownGenresOnly:  true,
 		Network:          book.Publisher,
 		OrganisationKind: "publisher",
 		// A book carries no certification Solarr can read: the rating limit leaves it alone.

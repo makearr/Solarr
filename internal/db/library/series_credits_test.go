@@ -3,6 +3,7 @@ package library_test
 import (
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -126,5 +127,32 @@ func TestASeriesIsInTheCategoryThatWantsItAndNoOther(t *testing.T) {
 	}
 	if err := reader.InCategory(t.Context(), 2, result.WorkID); !errors.Is(err, library.ErrSeriesNotFound) {
 		t.Errorf("InCategory(another library) = %v, want ErrSeriesNotFound", err)
+	}
+}
+
+func TestAWriteOfKnownGenresOnlyMakesNoTagOfAKeyword(t *testing.T) {
+	opened, _ := newLibrary(t)
+	series := library.NewSeries(opened)
+	first := sampleSeries()
+	first.Genres, first.GenreTree = []string{"Fantasy"}, "books"
+	if _, err := series.Upsert(t.Context(), seriesAt, first); err != nil {
+		t.Fatal(err)
+	}
+	second := sampleSeries()
+	second.Work.CanonicalTitle, second.IDs = "Another", []library.ExternalIDWrite{{Provider: "tvdb", ExternalID: "777"}}
+	second.Genres, second.GenreTree, second.KnownGenresOnly = []string{"Fantasy", "Rats", "Translations into Dutch"}, "books", true
+	if _, err := series.Upsert(t.Context(), seriesAt, second); err != nil {
+		t.Fatal(err)
+	}
+	tree, err := library.NewPeople(opened).TagTree(t.Context(), "books")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, node := range tree {
+		names = append(names, node.Name+":"+strconv.FormatInt(node.Works, 10))
+	}
+	if want := []string{"Fantasy:2"}; !reflect.DeepEqual(names, want) {
+		t.Errorf("tags = %v, want %v: both works are Fantasy, and no keyword became a tag", names, want)
 	}
 }

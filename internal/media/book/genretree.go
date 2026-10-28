@@ -1,6 +1,11 @@
 package book
 
-import "github.com/makearr/Solarr/internal/media"
+import (
+	"slices"
+	"strings"
+
+	"github.com/makearr/Solarr/internal/media"
+)
 
 // GenreTree is the genres of books and audiobooks alike, Open Library's subjects, Google's categories and Audible's
 // genres merged; both types share its tags.
@@ -44,4 +49,19 @@ var GenreTree = media.GenreTree{
 			{Name: "Sport", Aliases: []string{"Sports", "Sports & Outdoors"}},
 		}},
 	},
+}
+
+// subjectGenres are the genres to look up for a book's subjects: each as given and, for "Fantasy fiction, English",
+// the part before the comma; Open Library's subjects are free keywords, so only what the tree knows becomes a tag.
+func subjectGenres(subjects []string) []string {
+	var genres []string
+	for _, subject := range subjects {
+		head, _, _ := strings.Cut(subject, ",")
+		for _, name := range []string{strings.TrimSpace(subject), strings.TrimSpace(head)} {
+			if name != "" && !slices.Contains(genres, name) {
+				genres = append(genres, name)
+			}
+		}
+	}
+	return genres
 }

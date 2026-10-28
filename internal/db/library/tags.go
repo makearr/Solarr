@@ -218,9 +218,9 @@ func createTag(ctx context.Context, queries *librarydb.Queries, name, genreTree,
 	return tag.ID, nil
 }
 
-// resolveGenre is the genre tree's tags a provider genre names: by alias, then by name, else a new tag placed under
-// the tag its name ends with.
-func resolveGenre(ctx context.Context, queries *librarydb.Queries, genreTree, name, source string) ([]int64, error) {
+// resolveGenre is the genre tree's tags a provider genre names: by alias, then by name, else (unless knownOnly) a new
+// tag placed under the tag its name ends with.
+func resolveGenre(ctx context.Context, queries *librarydb.Queries, genreTree, name, source string, knownOnly bool) ([]int64, error) {
 	ids, err := queries.ListTagsByAlias(ctx, librarydb.ListTagsByAliasParams{Alias: slugify(name), GenreTree: genreTree})
 	if err != nil || len(ids) > 0 {
 		return ids, err
@@ -232,6 +232,9 @@ func resolveGenre(ctx context.Context, queries *librarydb.Queries, genreTree, na
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, err
+	}
+	if knownOnly {
+		return nil, nil
 	}
 	parentID := int64(0)
 	if genreTree != "" {
@@ -258,15 +261,16 @@ func titleWords(name string) string {
 	return string(runes)
 }
 
-// assignGenres makes genres the work's provider tags of the genre tree, as source; a person's own stay (ADR-33).
-func assignGenres(ctx context.Context, queries *librarydb.Queries, workID int64, genreTree, source string, genres []string) error {
+// assignGenres makes genres the work's provider tags of the genre tree, as source; a person's own stay (ADR-33). With
+// knownOnly a genre the tree does not hold is dropped.
+func assignGenres(ctx context.Context, queries *librarydb.Queries, workID int64, genreTree, source string, genres []string, knownOnly bool) error {
 	if err := queries.ClearWorkProviderTagsOfGenreTree(ctx, librarydb.ClearWorkProviderTagsOfGenreTreeParams{
 		WorkID: workID, GenreTree: genreTree,
 	}); err != nil {
 		return fmt.Errorf("clear genres: %w", err)
 	}
 	for _, genre := range genres {
-		ids, err := resolveGenre(ctx, queries, genreTree, genre, source)
+		ids, err := resolveGenre(ctx, queries, genreTree, genre, source, knownOnly)
 		if err != nil {
 			return fmt.Errorf("genre %q: %w", genre, err)
 		}
@@ -304,7 +308,7 @@ func (p People) ConvertClassificationGenres(ctx context.Context, genreTreeOf fun
 				}
 				genreTree := genreTreeOf(rows[start].MediaType)
 				if genreTree != "" {
-					if err := assignGenres(ctx, queries, rows[start].WorkID, genreTree, rows[start].Source, genres); err != nil {
+					if err := assignGenres(ctx, queries, rows[start].WorkID, genreTree, rows[start].Source, genres, false); err != nil {
 						return err
 					}
 				}

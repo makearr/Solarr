@@ -80,9 +80,11 @@ type SeriesWrite struct {
 	Genres      []string
 	GenreSource string
 	// GenreTree is the tag tree the genres are mapped onto, the media type's.
-	GenreTree      string
-	Network        string
-	NetworkCountry string
+	GenreTree string
+	// KnownGenresOnly drops a genre the tree does not hold rather than making it a tag: a provider of free keywords.
+	KnownGenresOnly bool
+	Network         string
+	NetworkCountry  string
 	// OrganisationKind is what Network and MoreNetworks are: a TV "network" (the default), a movie "studio".
 	OrganisationKind string
 	Dates            []SeriesDateWrite
@@ -320,7 +322,7 @@ func writeSeriesMetadata(ctx context.Context, queries *librarydb.Queries, at tim
 		}
 	}
 	if len(write.Genres) > 0 && write.GenreTree != "" {
-		if err := assignGenres(ctx, queries, workID, write.GenreTree, write.GenreSource, write.Genres); err != nil {
+		if err := assignGenres(ctx, queries, workID, write.GenreTree, write.GenreSource, write.Genres, write.KnownGenresOnly); err != nil {
 			return fmt.Errorf("library: genres: %w", err)
 		}
 	}

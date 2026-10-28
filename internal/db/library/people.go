@@ -247,7 +247,7 @@ func (p People) AssignGenresFrom(ctx context.Context, workID int64, genreTree, s
 		names[i] = genre.Name
 	}
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return assignGenres(ctx, librarydb.New(tx), workID, genreTree, source, names)
+		return assignGenres(ctx, librarydb.New(tx), workID, genreTree, source, names, false)
 	})
 	if err != nil {
 		return fmt.Errorf("library: assign genres to work %d: %w", workID, err)
