@@ -25,3 +25,23 @@ func TestAFolderNamedWithoutAnArticlePrefersTheSeriesTitledSo(t *testing.T) {
 		t.Errorf("matches = %+v, want only Tzul Suxc: Jzari Suxc", got)
 	}
 }
+
+func TestSeasonCountsMatch(t *testing.T) {
+	listed := map[int]int{1: 10, 2: 12}
+	cases := []struct {
+		name   string
+		folder map[int]int
+		want   bool
+	}{
+		{"every season equal", map[int]int{1: 10, 2: 12}, true},
+		{"one season short", map[int]int{1: 10, 2: 11}, false},
+		{"a season the series lacks", map[int]int{1: 10, 3: 1}, false},
+		{"only the first season", map[int]int{1: 10}, true},
+		{"no numbered season", map[int]int{}, false},
+	}
+	for _, c := range cases {
+		if got := seasonCountsMatch(c.folder, listed); got != c.want {
+			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
+		}
+	}
+}

@@ -328,16 +328,20 @@ func scanMonitor(policy string) MonitorOption {
 	}
 }
 
-// pick chooses the candidate a folder is: the one with its title (and year), or, when several have it or none does, the
-// one whose episodes the folder's files fit. Anything less clear is a person's decision.
+// pick chooses the candidate a folder is: the one with its title (and year), or the one whose episodes the folder's files
+// fit; namesakes the episodes leave tied go by exact season episode counts. Anything less clear is a person's decision.
 func (c Resolver) pick(ctx context.Context, candidates []Candidate, guess FolderGuess, relPaths []string) (Candidate, bool) {
 	matches := titleMatches(candidates, guess)
 	if len(matches) == 1 {
 		return matches[0], true
 	}
-	if len(matches) == 0 {
-		matches = nearTitles(candidates, guess)
+	if len(matches) > 1 {
+		if picked, ok := c.byEpisodes(ctx, matches, relPaths, c.Clock.Now()); ok {
+			return picked, true
+		}
+		return c.bySeasonCounts(ctx, matches, relPaths, c.Clock.Now())
 	}
+	matches = nearTitles(candidates, guess)
 	if len(matches) == 0 && countNumbered(relPaths, c.Clock.Now()) >= episodesToTrustTheNumbers {
 		// A folder named in another language still has its episode numbers: the top hits are judged by those alone.
 		matches = candidates[:min(len(candidates), maxEpisodeJudged)]
@@ -528,6 +532,65 @@ func (c Resolver) byEpisodes(ctx context.Context, candidates []Candidate, relPat
 		return Candidate{}, false
 	}
 	return candidates[bestAt], true
+}
+
+// bySeasonCounts picks the namesake whose every season has exactly as many episodes as the folder's files; none or
+// several fitting is a person's decision.
+func (c Resolver) bySeasonCounts(ctx context.Context, candidates []Candidate, relPaths []string, now time.Time) (Candidate, bool) {
+	if c.Service.Skyhook == nil {
+		return Candidate{}, false
+	}
+	held := map[int]map[int]bool{}
+	for _, relPath := range relPaths {
+		info, ok := parsetv.ParsePath(relPath, now)
+		if !ok || info.Special || info.SeasonNumber == 0 {
+			continue
+		}
+		for _, number := range info.EpisodeNumbers {
+			if held[info.SeasonNumber] == nil {
+				held[info.SeasonNumber] = map[int]bool{}
+			}
+			held[info.SeasonNumber][number] = true
+		}
+	}
+	counts := make(map[int]int, len(held))
+	for season, numbers := range held {
+		counts[season] = len(numbers)
+	}
+	var fitting []Candidate
+	for _, candidate := range candidates {
+		if candidate.TVDBID == 0 {
+			continue
+		}
+		show, err := c.Service.Skyhook.Series(ctx, candidate.TVDBID)
+		if err != nil {
+			continue
+		}
+		listed := map[int]int{}
+		for _, episode := range show.Episodes {
+			listed[episode.SeasonNumber]++
+		}
+		if seasonCountsMatch(counts, listed) {
+			fitting = append(fitting, candidate)
+		}
+	}
+	if len(fitting) != 1 {
+		return Candidate{}, false
+	}
+	return fitting[0], true
+}
+
+// seasonCountsMatch is true when the folder has at least one numbered season and each has the listed episode count.
+func seasonCountsMatch(folder, listed map[int]int) bool {
+	if len(folder) == 0 {
+		return false
+	}
+	for season, count := range folder {
+		if listed[season] != count {
+			return false
+		}
+	}
+	return true
 }
 
 func identifications(candidates []Candidate) []model.Identification {

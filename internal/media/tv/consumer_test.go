@@ -350,6 +350,28 @@ func TestScanLeavesATwiceListedTitleToAPersonWhenTheEpisodesDoNotDecide(t *testi
 	}
 }
 
+func TestScanSettlesNamesakesTheEpisodesTieByEachSeasonsEpisodeCount(t *testing.T) {
+	var files []string
+	for number := 1; number <= 10; number++ {
+		files = append(files, fmt.Sprintf("Example Show/Season 1/Example Show - S01E%02d.mkv", number))
+	}
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show", "2001-01-01", 12), showWith(2, "Example Show", "2004-01-01", 10)}}, files...)
+	if len(list) != 1 || list[0].Counts.Total != 10 || list[0].Counts.Present != 10 {
+		t.Fatalf("list = %+v, want the 10-episode series, whose season the folder holds whole", list)
+	}
+}
+
+func TestScanLeavesNamesakesToAPersonWhenBothSeasonCountsFit(t *testing.T) {
+	var files []string
+	for number := 1; number <= 10; number++ {
+		files = append(files, fmt.Sprintf("Example Show/Season 1/Example Show - S01E%02d.mkv", number))
+	}
+	list := scanOne(t, namedSkyhook{shows: []skyhook.Series{showWith(1, "Example Show", "2001-01-01", 10), showWith(2, "Example Show", "2004-01-01", 10)}}, files...)
+	if len(list) != 0 {
+		t.Fatalf("list = %+v, want nothing added: both series hold ten episodes", list)
+	}
+}
+
 func TestRetryPlacesFilesWaitingForReviewOnceTheProvidersKnowTheSeries(t *testing.T) {
 	on := false
 	consumer, opened, fsys := newConsumer(t, switchSkyhook{on: &on, series: fixtureSkyhook()})

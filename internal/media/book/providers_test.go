@@ -35,7 +35,9 @@ type fakeITunes struct{}
 func (fakeITunes) Search(context.Context, string, string, int) ([]itunes.Audiobook, error) {
 	return []itunes.Audiobook{{CollectionID: 5, Name: "The Lantern Keeper (Unabridged)", Author: "Mara Quell"}}, nil
 }
-func (fakeITunes) Lookup(context.Context, int64) (itunes.Audiobook, error) { return itunes.Audiobook{}, itunes.ErrNotFound }
+func (fakeITunes) Lookup(context.Context, int64) (itunes.Audiobook, error) {
+	return itunes.Audiobook{}, itunes.ErrNotFound
+}
 
 func TestFetchFor_ITunesIsAskedByTheTitleAndAuthorAnotherSourceLearned(t *testing.T) {
 	service := Service{Format: Audiobook, Audible: fakeAudible{}, ITunes: fakeITunes{}, PriorityFor: func(int64) []string { return []string{"audible", "itunes"} }}
