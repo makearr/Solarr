@@ -285,7 +285,7 @@ func parseSeriesRef(ref string) (season, episode int) {
 
 // InCategory reports whether the series is a TV series held by the category.
 func (r SeriesReader) InCategory(ctx context.Context, categoryID, workID int64) error {
-	_, err := librarydb.New(r.store.Read()).GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: workID, CategoryID: categoryID})
+	_, err := librarydb.New(r.store.Read()).GetSeriesInCategory(ctx, librarydb.GetSeriesInCategoryParams{ID: workID, CategoryID: categoryID, MediaType: "tv"})
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrSeriesNotFound
 	}

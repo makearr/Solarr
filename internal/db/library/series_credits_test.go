@@ -1,6 +1,7 @@
 package library_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
@@ -107,5 +108,23 @@ func TestAWorksBadgeIsTheLogoOfItsOrganisationInTheBadgeFacetsRole(t *testing.T)
 	network.Badge = false
 	if got, _ := works.Badges(t.Context(), []library.WorkFacet{network}, []int64{marked.WorkID}); len(got) != 0 {
 		t.Errorf("badges without a badge facet = %+v, want none", got)
+	}
+}
+
+func TestASeriesIsInTheCategoryThatWantsItAndNoOther(t *testing.T) {
+	opened, _ := newLibrary(t)
+	result, err := library.NewSeries(opened).Upsert(t.Context(), seriesAt, sampleSeries())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := library.NewDesired(opened).EnsureSeasonItem(t.Context(), library.SeasonRequest{WorkID: result.WorkID, MediaRef: "s01", SortKey: "s01", CategoryID: 1, ProfileID: 1, Monitored: true}); err != nil {
+		t.Fatal(err)
+	}
+	reader := library.NewSeriesReader(opened)
+	if err := reader.InCategory(t.Context(), 1, result.WorkID); err != nil {
+		t.Errorf("InCategory(its library) = %v, want nil", err)
+	}
+	if err := reader.InCategory(t.Context(), 2, result.WorkID); !errors.Is(err, library.ErrSeriesNotFound) {
+		t.Errorf("InCategory(another library) = %v, want ErrSeriesNotFound", err)
 	}
 }
