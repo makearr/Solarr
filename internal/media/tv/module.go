@@ -20,6 +20,8 @@ import (
 type Module struct {
 	// TMDBConfigured says the owner has stored a TMDB key; nil leaves the missing-key check out.
 	TMDBConfigured func() bool
+	// SourcesPaused names the TV providers whose circuit is open right now; nil leaves the source checks out.
+	SourcesPaused func() []string
 	// Registrations are job types TV brings besides the ones named below, with their handlers.
 	Registrations []media.JobRegistration
 	Sweep         scan.Sweep
@@ -111,14 +113,27 @@ func (m Module) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]medi
 
 // HealthChecks implements media.Healthy: TMDB, the one TV provider that needs the owner's own key, is not set up.
 func (m Module) HealthChecks(libraries int) []media.HealthCheck {
-	if libraries == 0 || m.TMDBConfigured == nil || m.TMDBConfigured() {
+	if libraries == 0 {
 		return nil
 	}
-	return []media.HealthCheck{{
-		ID: "tv_no_tmdb_key", Severity: media.HealthWarning,
-		Message: "TV works without a TMDB key, but cast, crew, guest stars, networks and artwork come from TMDB: add your free key under Metadata.",
-		Link:    "/settings/metadata",
-	}}
+	var checks []media.HealthCheck
+	if m.TMDBConfigured != nil && !m.TMDBConfigured() {
+		checks = append(checks, media.HealthCheck{
+			ID: "tv_no_tmdb_key", Severity: media.HealthWarning,
+			Message: "TV works without a TMDB key, but cast, crew, guest stars, networks and artwork come from TMDB: add your free key under Metadata.",
+			Link:    "/settings/metadata",
+		})
+	}
+	if m.SourcesPaused != nil {
+		for _, source := range m.SourcesPaused() {
+			checks = append(checks, media.HealthCheck{
+				ID: "tv_source_down_" + strings.ToLower(source), Severity: media.HealthWarning,
+				Message: source + " is not answering, so TV lookups fall through to the next source in the library's order until it recovers.",
+				Link:    "/settings/metadata",
+			})
+		}
+	}
+	return checks
 }
 
 // FiltersReleases implements media.ReleaseFiltering: the TV judge applies a series' release filters.

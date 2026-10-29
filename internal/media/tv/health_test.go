@@ -21,3 +21,14 @@ func TestHealthChecksAsksForTheKeyOnlyWhereATVLibraryLacksIt(t *testing.T) {
 		t.Errorf("not wired: %+v, want none", checks)
 	}
 }
+
+func TestHealthChecksNamesEachPausedSource(t *testing.T) {
+	module := tv.Module{SourcesPaused: func() []string { return []string{"Skyhook", "TVmaze"} }}
+	checks := module.HealthChecks(1)
+	if len(checks) != 2 || checks[0].ID != "tv_source_down_skyhook" || checks[1].ID != "tv_source_down_tvmaze" {
+		t.Errorf("checks = %+v, want one warning per paused source", checks)
+	}
+	if checks := module.HealthChecks(0); len(checks) != 0 {
+		t.Errorf("no TV library: %+v, want none", checks)
+	}
+}

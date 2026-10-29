@@ -133,3 +133,17 @@ func (p *process) providerClient(provider string, guard *httpx.Guard, config htt
 	}
 	return httpx.NewClient(clock.NewSystem(), guard, shared.limiter, shared.breaker, config)
 }
+
+// tvSourcesPaused names the TV providers whose circuit is not closed, in the order lookups try them.
+func (p *process) tvSourcesPaused() []string {
+	names := map[string]string{
+		providerSkyhook: "Skyhook", providerTVmaze: "TVmaze", providerTMDB: "TMDB", providerTVDB: "TheTVDB", providerAniList: "AniList",
+	}
+	var paused []string
+	for _, provider := range []string{providerSkyhook, providerTVmaze, providerTMDB, providerTVDB, providerAniList} {
+		if p.outbound().breaker.State(provider).State != httpx.BreakerClosed {
+			paused = append(paused, names[provider])
+		}
+	}
+	return paused
+}
