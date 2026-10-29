@@ -60,7 +60,7 @@ func (c *slowClient) Downloads(context.Context, string) ([]download.Download, er
 // Pages polling together share one round of client reads, and the clients are asked at once, not one after another.
 func TestQueue_SharesOneReadOfTheClientsAndAsksThemTogether(t *testing.T) {
 	e := newEnv(t)
-	first, second := &slowClient{delay: 200 * time.Millisecond}, &slowClient{delay: 200 * time.Millisecond}
+	first, second := &slowClient{delay: 500 * time.Millisecond}, &slowClient{delay: 500 * time.Millisecond}
 	job := poll.NewJob(poll.Config{
 		Acquisitions: e.acquisitions, Clock: e.clock,
 		Clients: func(context.Context) (map[int64]poll.Client, error) {
@@ -78,7 +78,7 @@ func TestQueue_SharesOneReadOfTheClientsAndAsksThemTogether(t *testing.T) {
 		})
 	}
 	wg.Wait()
-	if elapsed := time.Since(started); elapsed >= 390*time.Millisecond {
+	if elapsed := time.Since(started); elapsed >= 900*time.Millisecond {
 		t.Errorf("five reads of two clients took %v; the clients were asked one after another", elapsed)
 	}
 	if first.asked.Load() != 1 || second.asked.Load() != 1 {
