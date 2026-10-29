@@ -165,7 +165,7 @@ sqlc-check: ## Fail if generated SQL code is stale
 	@test -f sqlc.yaml || { echo "sqlc-check: no sqlc.yaml yet, skipping"; exit 0; }; \
 	 docker run --rm -u $(UID):$(GID) $(MOUNT) $(SQLC_IMAGE) diff
 
-api:        ## Regenerate Go server + TS client from api/openapi.yaml
+api: cache-init  ## Regenerate Go server + TS client from api/openapi.yaml
 	@test -f api/openapi.yaml || { echo "api: no spec yet, skipping"; exit 0; }
 	@mkdir -p internal/api/apiserver/gen web/src/api
 	$(RUN_GO) go run $(OAPI_CODEGEN) -config api/oapi-codegen.yaml api/openapi.yaml
