@@ -43,6 +43,42 @@ call another host. A link to any other host is refused when the list is saved.
   every one of them under the one series, so a second season's entry finds the series too. AniList films and music
   videos are foreign. An entry Skyhook does not list is unresolved, not an error.
 
+## Settings
+
+`settings.db` `import_list` holds a list's configuration only: its library, type, settings by field key as JSON
+(`options`, migration 0057), cadence, monitoring (`monitor`, and the media type's `monitor_option`, empty for the type's
+default), quality profile (empty for the library's) and exclusions. Exclusions are titles or `provider:id` (such as
+`tmdb:1399` or `anilist:21`), separated by commas or lines; a matching entry is left out. What a list did lives in
+`library.db` (migration 0099): `import_list_entry` and `import_list_state`, keyed by the list's id without a foreign
+key, as every settings id is.
+
+## The sync
+
+The task `import_lists` ("Add what import lists name", ADR-59) enqueues `importlist.sync` hourly; the sweep runs each
+enabled list whose `cadence_hours` have passed since its last run. One list's run (`action_key`
+`importlist.sync:<id>`) is the same job scoped by its payload, so a sweep and a run of the same list never queue twice.
+
+A pass reads the list and judges each entry, in order, once per provider id:
+
+| Verdict | When | Kept |
+|---|---|---|
+| `handled` | the list added it, found it held or found it foreign before | — |
+| `filtered` | the list's exclusions name its title or an id | no, checked again each run |
+| `excluded` | a person removed the work and asked not to see it again (`work_exclusion`, this media type only) | no, so **Allow again** lets it in |
+| `held` | the library has the work, by any of the entry's ids or the one it resolved to | `held` |
+| `foreign` | the media type says it is not its own (a film on a TV list) | `foreign` |
+| `unresolved` | no source names the work | `unresolved`, looked up again after a week |
+| `unchecked` | past the bound on lookups by name: 30 a preview, 100 a run | no |
+| `add` | none of these | `added`, once it was added |
+
+A run adds at most 50 works, each through the media type's own `AddWork` with the list's monitoring and profile, in the
+library the list belongs to; the rest wait for the next run. Kept entries are never added again by that list, even
+after the person deletes the work: a dismissed work stays dismissed. An outage of the list's source or of the type's
+add stops the run, keeping what it did; an entry the type refuses to add is kept as unresolved. The run records when it
+ran, how many works it added and why it stopped (`needs_key`, `list_not_found`, `source_unavailable`, `not_supported`,
+`failed`), which the Import lists screen shows. A run starts no search; the works it adds are hunted like any other
+monitored work.
+
 ## Not yet
 
 Trakt (watchlist, user lists, trending) and IMDb lists are the next sources: each is one more `media.ListType`, a

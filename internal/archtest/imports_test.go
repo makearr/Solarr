@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
+	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -367,7 +367,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/parallel": {},
 	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
 	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
-	"internal/service/importlist": {"internal/media", "internal/metadata/anilist", "internal/metadata/tmdb", "internal/platform/config"},
+	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
 	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
 	"internal/moving/sidecar":     {"internal/db/settings", "internal/platform/fsx"},
 	"internal/importing/placer":   {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},

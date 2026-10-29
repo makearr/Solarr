@@ -357,6 +357,25 @@ type ImportDecision struct {
 	OverriddenAt      sql.NullInt64
 }
 
+type ImportListEntry struct {
+	ListID     int64
+	Provider   string
+	ExternalID string
+	Outcome    string
+	WorkID     int64
+	Title      string
+	SeenAt     int64
+}
+
+type ImportListState struct {
+	ListID           int64
+	PreviewedOptions string
+	PreviewedAt      int64
+	RunAt            int64
+	RunAdded         int64
+	RunFailure       string
+}
+
 type ImportSession struct {
 	ID             int64
 	SourcePath     string

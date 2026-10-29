@@ -117,10 +117,11 @@ application instead.
 The columns that do this: `work.added_by`, `library_path.root_folder_id`,
 `desired_item.category_id`, `desired_item.profile_id`, `desired_item.added_by`,
 `candidate.indexer_id`, `recycleBin.root_folder_id`, `subscription.category_id`,
-`subscription.profile_id`, `subscription.user_id`.
+`subscription.profile_id`, `subscription.user_id`, `import_list_entry.list_id`, `import_list_state.list_id`.
 
 Deleting a referenced row is **refused, not cascaded** (Invariant 41). The references are
-counted first and reported.
+counted first and reported. The one exception is an import list's own record of what it did: deleting the list forgets
+it (`library.ImportLists.Forget`), as it describes nothing but that list.
 
 ## Connections and page cache
 

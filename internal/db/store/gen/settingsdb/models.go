@@ -186,6 +186,8 @@ type ImportList struct {
 	QualityProfileID sql.NullInt64
 	Exclusions       string
 	Enabled          int64
+	Options          string
+	MonitorOption    string
 }
 
 type Indexer struct {

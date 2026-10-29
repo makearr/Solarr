@@ -12,8 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 )
 
-// ImportList is one per-library *Arr-shaped import list (ADR-38, todo 4.16).
-// Scaffolding only: nothing yet syncs against it (stage 12).
+// ImportList is one per-library import list (ADR-38), synced by internal/service/importlist.
 type ImportList struct {
 	ID               int64
 	CategoryID       int64
@@ -25,6 +24,9 @@ type ImportList struct {
 	QualityProfileID *int64
 	Exclusions       string
 	Enabled          bool
+	// Options are the list type's own settings as stored JSON; MonitorOption is the media type's, empty its default.
+	Options       string
+	MonitorOption string
 }
 
 // ImportListRequest is what CreateImportList/UpdateImportList accept --
@@ -39,6 +41,8 @@ type ImportListRequest struct {
 	QualityProfileID *int64
 	Exclusions       string
 	Enabled          bool
+	Options          string
+	MonitorOption    string
 }
 
 func validateImportList(request ImportListRequest) config.Problems {
@@ -57,11 +61,7 @@ func validateImportList(request ImportListRequest) config.Problems {
 	return problems
 }
 
-// ImportLists reads a category's own import lists. Deliberately bypasses the
-// snapshot (unlike exclusion_pattern/quality_profile): nothing else in this
-// process reads an import list yet -- the sync job that would (stage 12)
-// does not exist -- so there is no reader to keep consistent, and a plain
-// query is simpler than extending buildSnapshot for one.
+// ImportLists reads a category's own import lists, bypassing the snapshot: only the sync reads them, once a run.
 func (c *Cache) ImportLists(ctx context.Context, categoryID int64) ([]ImportList, error) {
 	rows, err := c.queries.ListImportListsForCategory(ctx, categoryID)
 	if err != nil {
@@ -91,7 +91,7 @@ func (c *Cache) CreateImportList(ctx context.Context, categoryID int64, request 
 			CategoryID: categoryID, Name: request.Name, Type: request.Type, Url: request.URL,
 			CadenceHours: request.CadenceHours, Monitor: boolToInt(request.Monitor),
 			QualityProfileID: nullInt64(request.QualityProfileID), Exclusions: request.Exclusions,
-			Enabled: boolToInt(request.Enabled),
+			Enabled: boolToInt(request.Enabled), Options: request.Options, MonitorOption: request.MonitorOption,
 		})
 		return err
 	})
@@ -120,7 +120,7 @@ func (c *Cache) UpdateImportList(ctx context.Context, id int64, request ImportLi
 			Name: request.Name, Type: request.Type, Url: request.URL,
 			CadenceHours: request.CadenceHours, Monitor: boolToInt(request.Monitor),
 			QualityProfileID: nullInt64(request.QualityProfileID), Exclusions: request.Exclusions,
-			Enabled: boolToInt(request.Enabled), ID: id,
+			Enabled: boolToInt(request.Enabled), Options: request.Options, MonitorOption: request.MonitorOption, ID: id,
 		})
 	})
 	if err != nil {
@@ -151,8 +151,33 @@ func convertImportList(row settingsdb.ImportList) ImportList {
 		ID: row.ID, CategoryID: row.CategoryID, Name: row.Name, Type: row.Type, URL: row.Url,
 		CadenceHours: row.CadenceHours, Monitor: row.Monitor != 0,
 		QualityProfileID: int64Ptr(row.QualityProfileID), Exclusions: row.Exclusions,
-		Enabled: row.Enabled != 0,
+		Enabled: row.Enabled != 0, Options: row.Options, MonitorOption: row.MonitorOption,
 	}
+}
+
+// ImportList reads one import list.
+func (c *Cache) ImportList(ctx context.Context, id int64) (ImportList, error) {
+	row, err := c.queries.GetImportList(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ImportList{}, fmt.Errorf("%w: import list %d", ErrNotFound, id)
+	}
+	if err != nil {
+		return ImportList{}, fmt.Errorf("settings: read import list %d: %w", id, err)
+	}
+	return convertImportList(row), nil
+}
+
+// EnabledImportLists reads every enabled import list, of every category.
+func (c *Cache) EnabledImportLists(ctx context.Context) ([]ImportList, error) {
+	rows, err := c.queries.ListEnabledImportLists(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("settings: list enabled import lists: %w", err)
+	}
+	lists := make([]ImportList, len(rows))
+	for index, row := range rows {
+		lists[index] = convertImportList(row)
+	}
+	return lists, nil
 }
 
 func nullInt64(value *int64) sql.NullInt64 {
