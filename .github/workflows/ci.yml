@@ -50,7 +50,7 @@ jobs:
         run: go vet ./...
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         with:
           version: latest
           # The prebuilt binary lags the Go version in go.mod; build it with the runner's toolchain.
