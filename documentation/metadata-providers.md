@@ -106,7 +106,7 @@ documentation states is from memory and should be checked before relying on it.
 | TheTVDB (movies) | English overview, genres, runtime, posters, backgrounds, banners, clear logos, remote ids | yes | Solarr's own key; found by IMDb id, else TMDB's |
 | OMDb | IMDb, Rotten Tomatoes and Metacritic ratings, the full English plot | yes | a free key, 1,000 requests a day |
 | fanart.tv | clear logos, clear art, disc art, banners, backgrounds (best liked, English first) | yes | a free personal key |
-| Trakt, Letterboxd, IMDb lists | lists to import from, not metadata | no | import lists |
+| Trakt, Letterboxd, IMDb lists | lists to import from, not metadata | no | import lists, not built yet; AniList and TMDB lists are ([import-lists.md](import-lists.md)) |
 
 ## Books and audiobooks
 

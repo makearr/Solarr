@@ -2,6 +2,7 @@ package settings_test
 
 import (
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -159,5 +160,47 @@ func TestImportLists_ScopedPerCategory(t *testing.T) {
 	}
 	if len(lists) != 0 {
 		t.Errorf("ImportLists (tv) = %+v, want none: the list belongs to music", lists)
+	}
+}
+
+func TestEnabledImportLists_AreTheEnabledOnesOfEveryLibraryWithTheirSettings(t *testing.T) {
+	cache, _ := newCache(t)
+	tv, err := cache.CreateCategory(t.Context(), "tv", "Television", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	anime, err := cache.CreateCategory(t.Context(), "tv", "Anime", 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := func(categoryID int64, name string, enabled bool) settings.ImportList {
+		t.Helper()
+		created, err := cache.CreateImportList(t.Context(), categoryID, settings.ImportListRequest{
+			Name: name, Type: "anilist_season", CadenceHours: 24, Enabled: enabled, Options: `{"season":"next"}`, MonitorOption: "future",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return created
+	}
+	first := create(anime.ID, "Next season", true)
+	create(tv.ID, "Off", false)
+	second := create(tv.ID, "Also on", true)
+
+	enabled, err := cache.EnabledImportLists(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(enabled, []settings.ImportList{first, second}) {
+		t.Errorf("enabled = %+v, want %+v", enabled, []settings.ImportList{first, second})
+	}
+	if first.Options != `{"season":"next"}` || first.MonitorOption != "future" {
+		t.Errorf("created = %+v: options and monitor option round-trip", first)
+	}
+	if got, err := cache.ImportList(t.Context(), second.ID); err != nil || !reflect.DeepEqual(got, second) {
+		t.Errorf("ImportList = %+v, err = %v", got, err)
+	}
+	if _, err := cache.ImportList(t.Context(), 999); !errors.Is(err, settings.ErrNotFound) {
+		t.Errorf("missing: err = %v", err)
 	}
 }

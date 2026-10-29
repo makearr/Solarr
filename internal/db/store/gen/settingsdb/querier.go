@@ -112,6 +112,7 @@ type Querier interface {
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
 	// What a scheduler actually runs -- off until previewed (ADR-38).
 	ListEnabledDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
+	ListEnabledImportLists(ctx context.Context) ([]ImportList, error)
 	ListExclusionPatterns(ctx context.Context) ([]ExclusionPattern, error)
 	ListImportListsForCategory(ctx context.Context, categoryID int64) ([]ImportList, error)
 	ListIndexers(ctx context.Context) ([]Indexer, error)

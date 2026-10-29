@@ -3172,11 +3172,68 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** A library's own *Arr-shaped import lists (ADR-38). Scaffolding only -- the sync job that admits anything from one is stage 12. */
+        /** A library's own import lists (ADR-38), each with its last preview and run. documentation/import-lists.md. */
         get: operations["listImportLists"];
         put?: never;
-        /** Add an import list to a library. Administrator only. */
+        /** Add an import list to a library. Administrator only. A new list is disabled: it is enabled once previewed (409 when enabled is asked for). */
         post: operations["createImportList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/libraries/{id}/import-list-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /** The import list types a library takes, with the settings each asks for, and the monitor options of its media type. */
+        get: operations["listImportListTypes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import-lists/{id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** What the list would add now, entry by entry; nothing is added (ADR-38). Administrator only. Enabling the list needs a preview of its current type and settings. */
+        post: operations["previewImportList"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/import-lists/{id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run an enabled list now, whether due or not. Administrator only. */
+        post: operations["runImportList"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7894,36 +7951,99 @@ export interface components {
             /** @description Empty on the last page. */
             next_cursor?: string;
         };
-        /** @description A per-library *Arr-shaped import list (ADR-38, todo 4.16). Scaffolding only -- nothing syncs against it yet (stage 12). */
+        /** @description A library's import list (ADR-38), with its last preview and run. */
         ImportList: {
             /** Format: int64 */
             id: number;
             /** Format: int64 */
             category_id: number;
             name: string;
-            /** @description Free-form for now -- no music-specific list type is baked in ahead of a real provider integration to name one against. */
+            /** @description One of the library's import list types. */
             type: string;
+            /** @description The type's settings by field key. */
+            options: {
+                [key: string]: string;
+            };
             url?: string;
             cadence_hours: number;
             monitor: boolean;
+            /** @description The media type's monitor option; empty is its default. */
+            monitor_option: string;
             /** Format: int64 */
             quality_profile_id?: number;
-            /** @description Free text; nothing reads this yet, since there is no sync job to enforce it. */
+            /** @description Titles or provider:id, separated by commas or lines; a matching entry is left out. */
             exclusions: string;
             enabled: boolean;
+            /** @description The current type and settings were previewed */
+            previewed: boolean;
+            /** Format: date-time */
+            last_run_at?: string;
+            last_run_added: number;
+            /**
+             * @description Why the last run stopped; empty when it finished, or never ran.
+             * @enum {string}
+             */
+            last_run_failure: "" | "needs_key" | "list_not_found" | "source_unavailable" | "not_supported" | "failed";
         };
         ImportListWrite: {
             name: string;
             type: string;
+            options?: {
+                [key: string]: string;
+            };
             url?: string;
             cadence_hours: number;
             /** @default true */
             monitor: boolean;
+            monitor_option?: string;
             /** Format: int64 */
             quality_profile_id?: number;
             exclusions?: string;
-            /** @default true */
+            /** @default false */
             enabled: boolean;
+        };
+        ImportListTypes: {
+            types: components["schemas"]["ImportListType"][];
+            monitor_options: components["schemas"]["MediaChoice"][];
+        };
+        ImportListType: {
+            type: string;
+            label: string;
+            help: string;
+            fields: components["schemas"]["ImportListField"][];
+        };
+        ImportListField: {
+            key: string;
+            label: string;
+            help: string;
+            /** @enum {string} */
+            kind: "text" | "choice" | "choices" | "year";
+            required: boolean;
+            default: string;
+            choices: components["schemas"]["MediaChoice"][];
+        };
+        ImportListPreview: {
+            entries: components["schemas"]["ImportListPreviewEntry"][];
+        };
+        ImportListPreviewEntry: {
+            title: string;
+            year?: number;
+            poster_url?: string;
+            provider: string;
+            external_id: string;
+            /**
+             * @description What enabling would do: add it, or leave it (handled before, held, excluded, filtered by the list, not this type's, unknown, past the preview's bound on lookups).
+             * @enum {string}
+             */
+            verdict: "add" | "handled" | "held" | "excluded" | "filtered" | "foreign" | "unresolved" | "unchecked";
+            /** @description The id the work is added by */
+            match_provider?: string;
+            match_external_id?: string;
+            /**
+             * Format: int64
+             * @description The library's work
+             */
+            work_id?: number;
         };
         /** @description A hard requirement, evaluated before any comparison (ADR-40 stage 1). */
         GateResult: {
@@ -13755,6 +13875,86 @@ export interface operations {
             403: components["responses"]["Problem"];
             /** @description The library does not exist. */
             404: components["responses"]["Problem"];
+            /** @description Enabling was asked for; a list is previewed first. */
+            409: components["responses"]["Problem"];
+        };
+    };
+    listImportListTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The list types. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportListTypes"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    previewImportList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportListPreview"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The library cannot take this list. */
+            409: components["responses"]["Problem"];
+            /** @description The list could not be read; the detail says why. */
+            502: components["responses"]["Problem"];
+        };
+    };
+    runImportList: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            /** @description The list is disabled. */
+            409: components["responses"]["Problem"];
         };
     };
     deleteImportList: {
@@ -13808,6 +14008,8 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+            /** @description Enabling was asked for, and the list's type and settings were not previewed. */
+            409: components["responses"]["Problem"];
         };
     };
     listCategories: {

@@ -28,6 +28,7 @@ named file, linked from the code by path.
 | [tv-internals.md](tv-internals.md) | Stage 8 as built: the TV parser, providers, series storage and naming |
 | [tv-providers-benchmark.md](tv-providers-benchmark.md) | Measured speed and richness of the TV metadata providers, and the default order it set |
 | [books.md](books.md) | Books and audiobooks: two media types over one module, their providers, files, search and naming |
+| [import-lists.md](import-lists.md) | A library's import lists: the sources, how an entry becomes a work, preview, the sync |
 | [metadata-providers.md](metadata-providers.md) | What each metadata provider carries, which library it serves, what the upstream projects use, and how collections are found |
 | [media-tools.md](media-tools.md) | ADR-30's ffprobe, fpcalc and tagging helper: what Alpine has, what it costs |
 | [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, the ADR-5 driver switch |

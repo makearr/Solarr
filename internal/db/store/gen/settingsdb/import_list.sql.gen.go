@@ -13,12 +13,12 @@ import (
 const createImportList = `-- name: CreateImportList :one
 
 INSERT INTO import_list (category_id, name, type, url, cadence_hours, monitor,
-                          quality_profile_id, exclusions, enabled)
+                          quality_profile_id, exclusions, enabled, options, monitor_option)
 VALUES (?1, ?2, ?3, ?4,
         ?5, ?6, ?7,
-        ?8, ?9)
+        ?8, ?9, ?10, ?11)
 RETURNING id, category_id, name, type, url, cadence_hours, monitor,
-          quality_profile_id, exclusions, enabled
+          quality_profile_id, exclusions, enabled, options, monitor_option
 `
 
 type CreateImportListParams struct {
@@ -31,6 +31,8 @@ type CreateImportListParams struct {
 	QualityProfileID sql.NullInt64
 	Exclusions       string
 	Enabled          int64
+	Options          string
+	MonitorOption    string
 }
 
 // Per-library import lists (migration 0009, todo 4.16, ADR-38). Column
@@ -46,6 +48,8 @@ func (q *Queries) CreateImportList(ctx context.Context, arg CreateImportListPara
 		arg.QualityProfileID,
 		arg.Exclusions,
 		arg.Enabled,
+		arg.Options,
+		arg.MonitorOption,
 	)
 	var i ImportList
 	err := row.Scan(
@@ -59,6 +63,8 @@ func (q *Queries) CreateImportList(ctx context.Context, arg CreateImportListPara
 		&i.QualityProfileID,
 		&i.Exclusions,
 		&i.Enabled,
+		&i.Options,
+		&i.MonitorOption,
 	)
 	return i, err
 }
@@ -74,7 +80,7 @@ func (q *Queries) DeleteImportList(ctx context.Context, id int64) error {
 
 const getImportList = `-- name: GetImportList :one
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled
+       quality_profile_id, exclusions, enabled, options, monitor_option
 FROM import_list WHERE id = ?
 `
 
@@ -92,13 +98,57 @@ func (q *Queries) GetImportList(ctx context.Context, id int64) (ImportList, erro
 		&i.QualityProfileID,
 		&i.Exclusions,
 		&i.Enabled,
+		&i.Options,
+		&i.MonitorOption,
 	)
 	return i, err
 }
 
+const listEnabledImportLists = `-- name: ListEnabledImportLists :many
+SELECT id, category_id, name, type, url, cadence_hours, monitor,
+       quality_profile_id, exclusions, enabled, options, monitor_option
+FROM import_list WHERE enabled = 1 ORDER BY id
+`
+
+func (q *Queries) ListEnabledImportLists(ctx context.Context) ([]ImportList, error) {
+	rows, err := q.db.QueryContext(ctx, listEnabledImportLists)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ImportList{}
+	for rows.Next() {
+		var i ImportList
+		if err := rows.Scan(
+			&i.ID,
+			&i.CategoryID,
+			&i.Name,
+			&i.Type,
+			&i.Url,
+			&i.CadenceHours,
+			&i.Monitor,
+			&i.QualityProfileID,
+			&i.Exclusions,
+			&i.Enabled,
+			&i.Options,
+			&i.MonitorOption,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listImportListsForCategory = `-- name: ListImportListsForCategory :many
 SELECT id, category_id, name, type, url, cadence_hours, monitor,
-       quality_profile_id, exclusions, enabled
+       quality_profile_id, exclusions, enabled, options, monitor_option
 FROM import_list WHERE category_id = ? ORDER BY name
 `
 
@@ -122,6 +172,8 @@ func (q *Queries) ListImportListsForCategory(ctx context.Context, categoryID int
 			&i.QualityProfileID,
 			&i.Exclusions,
 			&i.Enabled,
+			&i.Options,
+			&i.MonitorOption,
 		); err != nil {
 			return nil, err
 		}
@@ -138,7 +190,8 @@ func (q *Queries) ListImportListsForCategory(ctx context.Context, categoryID int
 
 const updateImportList = `-- name: UpdateImportList :exec
 UPDATE import_list SET name = ?, type = ?, url = ?, cadence_hours = ?, monitor = ?,
-                        quality_profile_id = ?, exclusions = ?, enabled = ?
+                        quality_profile_id = ?, exclusions = ?, enabled = ?,
+                        options = ?, monitor_option = ?
 WHERE id = ?
 `
 
@@ -151,6 +204,8 @@ type UpdateImportListParams struct {
 	QualityProfileID sql.NullInt64
 	Exclusions       string
 	Enabled          int64
+	Options          string
+	MonitorOption    string
 	ID               int64
 }
 
@@ -164,6 +219,8 @@ func (q *Queries) UpdateImportList(ctx context.Context, arg UpdateImportListPara
 		arg.QualityProfileID,
 		arg.Exclusions,
 		arg.Enabled,
+		arg.Options,
+		arg.MonitorOption,
 		arg.ID,
 	)
 	return err

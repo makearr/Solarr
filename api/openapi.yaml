@@ -5069,8 +5069,8 @@ paths:
       operationId: listImportLists
       tags: [library]
       summary: >-
-        A library's own *Arr-shaped import lists (ADR-38). Scaffolding only
-        -- the sync job that admits anything from one is stage 12.
+        A library's own import lists (ADR-38), each with its last preview and
+        run. documentation/import-lists.md.
       responses:
         "200":
           description: The import lists.
@@ -5086,7 +5086,9 @@ paths:
     post:
       operationId: createImportList
       tags: [settings]
-      summary: Add an import list to a library. Administrator only.
+      summary: >-
+        Add an import list to a library. Administrator only. A new list is
+        disabled: it is enabled once previewed (409 when enabled is asked for).
       requestBody:
         required: true
         content:
@@ -5104,6 +5106,78 @@ paths:
         "404":
           $ref: "#/components/responses/Problem"
           description: The library does not exist.
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: Enabling was asked for; a list is previewed first.
+
+  /libraries/{id}/import-list-types:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: listImportListTypes
+      tags: [library]
+      summary: >-
+        The import list types a library takes, with the settings each asks
+        for, and the monitor options of its media type.
+      responses:
+        "200":
+          description: The list types.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportListTypes" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /import-lists/{id}/preview:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: previewImportList
+      tags: [settings]
+      summary: >-
+        What the list would add now, entry by entry; nothing is added
+        (ADR-38). Administrator only. Enabling the list needs a preview of
+        its current type and settings.
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportListPreview" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The library cannot take this list.
+        "502":
+          $ref: "#/components/responses/Problem"
+          description: The list could not be read; the detail says why.
+
+  /import-lists/{id}/run:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: runImportList
+      tags: [settings]
+      summary: Run an enabled list now, whether due or not. Administrator only.
+      responses:
+        "202": { description: Queued, or already queued. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: The list is disabled.
 
   /import-lists/{id}:
     parameters:
@@ -5130,6 +5204,9 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+        "409":
+          $ref: "#/components/responses/Problem"
+          description: Enabling was asked for, and the list's type and settings were not previewed.
     delete:
       operationId: deleteImportList
       tags: [settings]
@@ -11470,27 +11547,33 @@ components:
 
     ImportList:
       type: object
-      description: >-
-        A per-library *Arr-shaped import list (ADR-38, todo 4.16).
-        Scaffolding only -- nothing syncs against it yet (stage 12).
-      required: [id, category_id, name, type, cadence_hours, monitor, exclusions, enabled]
+      description: A library's import list (ADR-38), with its last preview and run.
+      required: [id, category_id, name, type, options, cadence_hours, monitor, monitor_option, exclusions, enabled, previewed, last_run_added, last_run_failure]
       properties:
         id: { type: integer, format: int64 }
         category_id: { type: integer, format: int64 }
         name: { type: string }
-        type:
-          type: string
-          description: >-
-            Free-form for now -- no music-specific list type is baked in
-            ahead of a real provider integration to name one against.
+        type: { type: string, description: One of the library's import list types. }
+        options:
+          type: object
+          additionalProperties: { type: string }
+          description: The type's settings by field key.
         url: { type: string }
         cadence_hours: { type: integer }
         monitor: { type: boolean }
+        monitor_option: { type: string, description: The media type's monitor option; empty is its default. }
         quality_profile_id: { type: integer, format: int64 }
         exclusions:
           type: string
-          description: Free text; nothing reads this yet, since there is no sync job to enforce it.
+          description: Titles or provider:id, separated by commas or lines; a matching entry is left out.
         enabled: { type: boolean }
+        previewed: { type: boolean, description: The current type and settings were previewed, so the list may be enabled. }
+        last_run_at: { type: string, format: date-time }
+        last_run_added: { type: integer }
+        last_run_failure:
+          type: string
+          enum: ["", needs_key, list_not_found, source_unavailable, not_supported, failed]
+          description: Why the last run stopped; empty when it finished, or never ran.
 
     ImportListWrite:
       type: object
@@ -11498,12 +11581,80 @@ components:
       properties:
         name: { type: string, minLength: 1 }
         type: { type: string, minLength: 1 }
+        options:
+          type: object
+          additionalProperties: { type: string }
         url: { type: string }
         cadence_hours: { type: integer, minimum: 1 }
         monitor: { type: boolean, default: true }
+        monitor_option: { type: string }
         quality_profile_id: { type: integer, format: int64 }
         exclusions: { type: string }
-        enabled: { type: boolean, default: true }
+        enabled: { type: boolean, default: false }
+
+    ImportListTypes:
+      type: object
+      required: [types, monitor_options]
+      properties:
+        types:
+          type: array
+          items: { $ref: "#/components/schemas/ImportListType" }
+        monitor_options:
+          type: array
+          items: { $ref: "#/components/schemas/MediaChoice" }
+
+    ImportListType:
+      type: object
+      required: [type, label, help, fields]
+      properties:
+        type: { type: string }
+        label: { type: string }
+        help: { type: string }
+        fields:
+          type: array
+          items: { $ref: "#/components/schemas/ImportListField" }
+
+    ImportListField:
+      type: object
+      required: [key, label, help, kind, required, default, choices]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        help: { type: string }
+        kind: { type: string, enum: [text, choice, choices, year] }
+        required: { type: boolean }
+        default: { type: string }
+        choices:
+          type: array
+          items: { $ref: "#/components/schemas/MediaChoice" }
+
+    ImportListPreview:
+      type: object
+      required: [entries]
+      properties:
+        entries:
+          type: array
+          items: { $ref: "#/components/schemas/ImportListPreviewEntry" }
+
+    ImportListPreviewEntry:
+      type: object
+      required: [title, provider, external_id, verdict]
+      properties:
+        title: { type: string }
+        year: { type: integer }
+        poster_url: { type: string }
+        provider: { type: string }
+        external_id: { type: string }
+        verdict:
+          type: string
+          enum: [add, handled, held, excluded, filtered, foreign, unresolved, unchecked]
+          description: >-
+            What enabling would do: add it, or leave it (handled before, held,
+            excluded, filtered by the list, not this type's, unknown, past the
+            preview's bound on lookups).
+        match_provider: { type: string, description: The id the work is added by, when it was looked up. }
+        match_external_id: { type: string }
+        work_id: { type: integer, format: int64, description: The library's work, when held. }
 
     GateResult:
       type: object

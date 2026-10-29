@@ -246,6 +246,8 @@ type Querier interface {
 	DeleteEditionCredits(ctx context.Context, editionID int64) error
 	// A DEFER is not a failure: the candidate stays cached until it expires (section 10.1).
 	DeleteExpiredCandidates(ctx context.Context, expiresAt int64) error
+	DeleteImportListEntries(ctx context.Context, listID int64) error
+	DeleteImportListState(ctx context.Context, listID int64) error
 	DeleteImportUnitExtras(ctx context.Context, unitID int64) error
 	// Units a pass recorded but could not finish, so a resumed walk inspects them again.
 	DeleteImportUnits(ctx context.Context, arg DeleteImportUnitsParams) error
@@ -386,6 +388,7 @@ type Querier interface {
 	GetHuntEntry(ctx context.Context, desiredItemID int64) (HuntQueue, error)
 	// The composite priority a held release goes out in (ADR-36).
 	GetHuntPriority(ctx context.Context, desiredItemID int64) (int64, error)
+	GetImportListState(ctx context.Context, listID int64) (ImportListState, error)
 	GetImportSession(ctx context.Context, id int64) (ImportSession, error)
 	GetImportUnit(ctx context.Context, id int64) (ImportUnit, error)
 	// The library an item is in and the youngest age its work's certification admits, -1 when none is understood.
@@ -622,6 +625,8 @@ type Querier interface {
 	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)
 	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
 	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
+	// Import list entries and state (migration 0099, ADR-38). Column lists follow table order.
+	ListImportListEntries(ctx context.Context, listID int64) ([]ImportListEntry, error)
 	// Small, operator-facing list -- session counts never approach library scale
 	// (Invariant 22 is about files, not import runs), so this is a plain list
 	// rather than cursor-paginated, newest first per idx_import_session_state.
@@ -1001,6 +1006,9 @@ type Querier interface {
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
 	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
+	RecordImportListEntry(ctx context.Context, arg RecordImportListEntryParams) error
+	RecordImportListPreview(ctx context.Context, arg RecordImportListPreviewParams) error
+	RecordImportListRun(ctx context.Context, arg RecordImportListRunParams) error
 	RecordItemDownloadFailed(ctx context.Context, desiredItemID int64) error
 	// Every search records when it ran, whoever started it (Wanted's "last searched"). The planner's
 	// own upsert sets priority and class and never touches these two columns.

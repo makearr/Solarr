@@ -19,7 +19,8 @@ var ErrNotFound = errors.New("anilist: not found")
 const (
 	endpoint         = "https://graphql.anilist.co"
 	maxResponseBytes = 4 << 20
-	query            = `query($id:Int){Media(id:$id,type:ANIME){id title{romaji english native} synonyms format episodes status seasonYear bannerImage coverImage{extraLarge} genres idMal}}`
+	mediaFields      = `id title{romaji english native} synonyms format episodes status seasonYear bannerImage coverImage{extraLarge} genres idMal`
+	query            = `query($id:Int){Media(id:$id,type:ANIME){` + mediaFields + `}}`
 )
 
 // Doer is the one method of httpx.Client this package needs.
@@ -75,15 +76,24 @@ func (m Media) Titles() []string {
 	return names
 }
 
-// post asks one GraphQL question and answers the raw reply.
+// post asks one GraphQL question about one entry and answers the raw reply.
 func (c Client) post(ctx context.Context, question string, id int64) ([]byte, error) {
-	body, err := json.Marshal(map[string]any{"query": question, "variables": map[string]any{"id": id}})
-	if err != nil {
+	raw, err := c.ask(ctx, question, map[string]any{"id": id})
+	if err != nil && !errors.Is(err, ErrNotFound) {
 		return nil, fmt.Errorf("anilist: %d: %w", id, err)
+	}
+	return raw, err
+}
+
+// ask sends one GraphQL question with its variables and answers the raw reply.
+func (c Client) ask(ctx context.Context, question string, variables map[string]any) ([]byte, error) {
+	body, err := json.Marshal(map[string]any{"query": question, "variables": variables})
+	if err != nil {
+		return nil, err
 	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, c.url, bytes.NewReader(body))
 	if err != nil {
-		return nil, fmt.Errorf("anilist: %d: %w", id, err)
+		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json")
@@ -93,12 +103,12 @@ func (c Client) post(ctx context.Context, question string, id int64) ([]byte, er
 		if errors.As(err, &refused) && refused.Status == http.StatusNotFound {
 			return nil, ErrNotFound
 		}
-		return nil, fmt.Errorf("anilist: %d: %w", id, err)
+		return nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
 	raw, err := httpx.ReadLimited(response.Body, maxResponseBytes)
 	if err != nil {
-		return nil, fmt.Errorf("anilist: %d: read: %w", id, err)
+		return nil, fmt.Errorf("read: %w", err)
 	}
 	return raw, nil
 }

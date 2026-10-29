@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow",
+	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -41,7 +41,7 @@ var allowedInternalImports = map[string][]string{
 	},
 	"cmd/solarr/adapters": {"internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
-		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
+		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
 		"internal/acquiring/utorrent", "internal/acquiring/flood", "internal/acquiring/rtorrent", "internal/acquiring/transmission",
 		"internal/acquiring/slskd", "internal/acquiring/blackhole",
@@ -366,10 +366,12 @@ var allowedInternalImports = map[string][]string{
 	// Bounded fan-out with panic recovery; no dependencies.
 	"internal/platform/parallel": {},
 	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
-	"internal/media":             {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
-	"internal/moving/sidecar":    {"internal/db/settings", "internal/platform/fsx"},
-	"internal/importing/placer":  {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
-	"internal/media/knownfor":    {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
+	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
+	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
+	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
+	"internal/moving/sidecar":     {"internal/db/settings", "internal/platform/fsx"},
+	"internal/importing/placer":   {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
+	"internal/media/knownfor":     {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
 	// File Management a sweep applies alike for every type that wants whole works or their parts.
 	"internal/media/housekeeping": {"internal/db/library", "internal/db/settings", "internal/media", "internal/platform/fsx", "internal/scanning/scan"},
 	// The picture cache sweep video types share: posters, organisation logos, billed-first photos.

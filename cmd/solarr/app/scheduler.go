@@ -19,6 +19,7 @@ const (
 	scanScheduleCron               = "0 */6 * * *"   // every 6 hours
 	refreshWorksScheduleCron       = "20 * * * *"    // every hour; a running series is due twice a day, 40 a run
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
+	importListScheduleCron         = "35 * * * *"    // hourly; each list runs once its own cadence has passed
 	picturesScheduleCron           = "10 * * * *"    // hourly; 1,500 series pictures a run until the library's are all kept
 	tagWritebackScheduleCron       = "45 * * * *"    // every hour, paced to 2000 files a run
 	discographyScheduleCron        = "0 4 * * 1"     // Mondays at 04:00; the provider caches, so only new artists cost requests
@@ -102,6 +103,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "subscription_expand", Name: "Add the works of followed people", DefaultCadence: subscriptionExpandScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueFollowSweep,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "import_lists", Name: "Add what import lists name", DefaultCadence: importListScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueImportListSync,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "tag_writeback", Name: "Write tags into files", DefaultCadence: tagWritebackScheduleCron,

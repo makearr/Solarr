@@ -491,6 +491,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerFollowJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerImportListJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerImportJob(registry, executor); err != nil {
 		return err
 	}
@@ -703,6 +706,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Adding:     adapters.MediaTypes{Registry: p.media}.AddingOf, AddKinds: adapters.MediaTypes{Registry: p.media}.AddKinds,
 			AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 			Suggest:  p.suggester().ForCandidate,
+		},
+		ImportLists: adapters.ImportLists{
+			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,
 		},
 		LibrarySuggester: p.suggester(),
 		ArrSync: adapters.ArrSync{
