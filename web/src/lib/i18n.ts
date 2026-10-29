@@ -22,6 +22,7 @@ const catalogue = {
   "work.notFound": "This {work} could not be found.",
   "level.notFound": "This library has no such list.",
   "work.loading": "Loading…",
+  "work.readBy": "read by {narrators}",
   "work.partsOnDisk": "{present} of {required} {parts} on disk",
   "work.partsPresent": "{present} {parts} on disk",
   "work.outBasis": "Known from: {basis}. Counted as missing {hours} hours after.",

@@ -928,3 +928,35 @@ func TestListWorks_NoArtworkWhenNeitherTheWorkNorItsLeadHasAPicture(t *testing.T
 		t.Errorf("no artwork = %v, want %v", got, want)
 	}
 }
+
+func TestListWorks_NarratorsAreTheNarratorCreditsInOrder(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	people := library.NewPeople(opened)
+
+	book := createWork(t, opened, "audiobook", "Pipo Tales")
+	plain := createWork(t, opened, "audiobook", "Silent Pages")
+	for index, name := range []string{"Heka Bokaru", "Pipo Lower"} {
+		personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+			Provider: "audible:person", ExternalID: name, Person: library.PersonIdentity{Name: name},
+		})
+		if err != nil {
+			t.Fatalf("ResolvePerson: %v", err)
+		}
+		if err := people.AddCredit(t.Context(), book.ID, personID, "narrator", index); err != nil {
+			t.Fatalf("AddCredit: %v", err)
+		}
+	}
+
+	page, err := works.List(t.Context(), library.WorkFilter{}, library.WorkCursor{}, 100)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	got := map[int64]string{}
+	for _, row := range page {
+		got[row.ID] = row.Narrators
+	}
+	if got[book.ID] != "Heka Bokaru, Pipo Lower" || got[plain.ID] != "" {
+		t.Errorf("Narrators = %q / %q, want %q / empty", got[book.ID], got[plain.ID], "Heka Bokaru, Pipo Lower")
+	}
+}

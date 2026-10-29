@@ -116,8 +116,10 @@ type WorkRow struct {
 	// ArtistSortName is that artist's sort name, empty with none; the artist
 	// order's next-page cursor carries it.
 	ArtistSortName string
-	AddedAt        time.Time
-	UpdatedAt      time.Time
+	// Narrators are an audiobook's readers, comma-joined; empty for any other work.
+	Narrators string
+	AddedAt   time.Time
+	UpdatedAt time.Time
 	// WantedState is the state of the desired_item ListWorks joined against
 	// when the row has a monitored one -- nil when it has none.
 	WantedState *string

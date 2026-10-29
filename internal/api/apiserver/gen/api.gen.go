@@ -2987,6 +2987,9 @@ type LibraryLevelItem struct {
 	Id          int64 `json:"id"`
 	Monitored   *bool `json:"monitored,omitempty"`
 
+	// Narrators An audiobook's readers, comma-joined; absent on any other work.
+	Narrators *string `json:"narrators,omitempty"`
+
 	// Overview The album's description, cut to a paragraph, for the Overview view. Albums only.
 	Overview *string `json:"overview,omitempty"`
 

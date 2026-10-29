@@ -29,6 +29,10 @@ const workArtistColumn = `lead_person.name AS artist`
 const workArtistJoin = `
 LEFT JOIN person lead_person ON lead_person.id = work.lead_person_id`
 
+// narratorsColumn lists a work's narrators in credit order, empty for anything but an audiobook.
+const narratorsColumn = `CAST(COALESCE((SELECT GROUP_CONCAT(name, ', ') FROM (SELECT DISTINCT pe.name AS name FROM credit cr
+      JOIN person pe ON pe.id = cr.person_id WHERE cr.work_id = work.id AND cr.role = 'narrator' ORDER BY cr.ord, pe.id)), '') AS TEXT) AS narrators`
+
 // workStateColumn is the work's album-level state: its monitored SET item first, a track's own
 // SINGLE only when there is no SET -- the oldest item was once taken, so a track wanted before
 // its album made a complete album read MISSING. A scalar subquery keeps one row per work.
@@ -183,6 +187,8 @@ type WorkListRow struct {
 	PresentTotal  int64
 	RequiredTotal int64
 	Upgradable    int64
+	// Narrators are the audiobook readers, comma-joined in credit order; empty for any other work.
+	Narrators string
 }
 
 // Works reads the library list surface.
@@ -298,6 +304,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		",\n       CAST(COALESCE((SELECT SUM(mo.size_bytes) FROM work_file wf JOIN media_object mo ON mo.id = wf.media_object_id" +
 		" WHERE wf.work_id = work.id), 0) AS INTEGER) AS size_bytes" +
 		",\n       " + setTotalsColumns + ", work.lead_person_id" +
+		",\n       " + narratorsColumn +
 		"\nFROM work" + join +
 		predicates.Where() + "\nORDER BY " + orderBy + "\nLIMIT ?"
 	return query, predicates.Args(pageSize)
@@ -495,7 +502,7 @@ func (w Works) List(ctx context.Context, filter WorkFilter, after WorkCursor, pa
 			&work.PresentCount, &work.RequiredCount, &work.AvailableFrom, &work.Downloading,
 			&work.OnDisk, &work.ArtistSortName, &work.LastSearchedAt, &work.Unverified, &work.ArrivedAt, &work.ArtistCover, &work.NoArtwork,
 			&work.Monitored, &work.Description, &work.SortNumber, &work.SortText, &work.SizeBytes,
-			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable, &work.LeadPersonID); err != nil {
+			&work.PresentTotal, &work.RequiredTotal, &work.Upgradable, &work.LeadPersonID, &work.Narrators); err != nil {
 			return nil, fmt.Errorf("library: scan work: %w", err)
 		}
 		works = append(works, work)

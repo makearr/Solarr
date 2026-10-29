@@ -11413,6 +11413,9 @@ components:
         subtitle:
           type: string
           description: A secondary line -- an artist credit, an album title, whatever the level has.
+        narrators:
+          type: string
+          description: An audiobook's readers, comma-joined; absent on any other work.
         year: { type: integer }
         monitored: { type: boolean }
         work_id:

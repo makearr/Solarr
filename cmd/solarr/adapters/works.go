@@ -109,8 +109,8 @@ func (a Works) ListWorks(
 	for index, row := range rows {
 		view := apiserver.WorkRow{
 			ID: row.ID, MediaType: row.MediaType, Title: row.CanonicalTitle, SortTitle: row.SortTitle,
-			ArtistSortName: row.ArtistSortName,
-			AddedAt:        time.Unix(row.AddedAt, 0), UpdatedAt: time.Unix(row.UpdatedAt, 0),
+			ArtistSortName: row.ArtistSortName, Narrators: row.Narrators,
+			AddedAt: time.Unix(row.AddedAt, 0), UpdatedAt: time.Unix(row.UpdatedAt, 0),
 		}
 		if row.Year.Valid {
 			view.Year = &row.Year.Int64

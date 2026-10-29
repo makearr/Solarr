@@ -6,6 +6,7 @@ import { ArrowDown, ArrowUp, Check, Columns3 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
+import { t } from "@/lib/i18n";
 import { usePreference } from "@/lib/usePreference";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useGridMetrics } from "@/list/useGridMetrics";
@@ -109,11 +110,18 @@ function imageSourceFor(level: string | undefined, item: LevelItem): { subject: 
 /** Where a row navigates: Artists to the person page, Tracks to their own
  *  album (there is no track-detail page -- a track is a work_part shown
  *  inside its work, WorkDetail's own Parts section). */
+/** A tile's second line: the author, then an audiobook's narrators. */
+function captionOf(item: LevelItem): string | undefined {
+  if (!item.narrators) return item.subtitle;
+  const readBy = t("work.readBy", { narrators: item.narrators });
+  return item.subtitle ? `${item.subtitle} · ${readBy}` : readBy;
+}
+
 /** A level row as the index views show it. */
 function entryOf(level: string | undefined, item: LevelItem): IndexEntry {
   return {
     id: item.id, kind: level === "artists" ? "artists" : level === "albums" ? "works" : "tracks",
-    title: item.title, subtitle: item.subtitle, year: item.year, status: item.status,
+    title: item.title, subtitle: captionOf(item), year: item.year, status: item.status,
     presentCount: item.present_count, requiredCount: item.required_count, monitored: item.monitored,
     overview: item.overview, sizeBytes: item.size_bytes, artistCover: item.artist_cover,
     image: imageSourceFor(level, item), link: linkFor(level, item),

@@ -7853,6 +7853,8 @@ export interface components {
             title: string;
             /** @description A secondary line -- an artist credit, an album title, whatever the level has. */
             subtitle?: string;
+            /** @description An audiobook's readers, comma-joined; absent on any other work. */
+            narrators?: string;
             year?: number;
             monitored?: boolean;
             /**
