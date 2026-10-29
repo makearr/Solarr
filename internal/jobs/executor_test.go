@@ -232,20 +232,21 @@ func TestExecute_StopsWhenTheLeaseIsLost(t *testing.T) {
 	go executor.Execute(context.Background(), claimed)
 	<-started
 
-	// Expire the lease and let the reaper take it, then let the renewal tick
-	// discover the loss.
-	fake.Advance(time.Minute)
-	if _, err := queue.ReclaimExpired(context.Background()); err != nil {
-		t.Fatalf("ReclaimExpired: %v", err)
-	}
-
-	fake.BlockUntilWaiters(1)
-	fake.Advance(10 * time.Second) // one renewal interval
-
-	select {
-	case <-stopped:
-	case <-time.After(2 * time.Second):
-		t.Fatal("the handler was not cancelled after its lease was reclaimed")
+	// Expire the lease, reap it, and tick renewals until one discovers the loss; the
+	// renewal timer may or may not be registered yet, so no single Advance is awaited.
+	deadline := time.After(5 * time.Second)
+	for {
+		fake.Advance(time.Minute)
+		if _, err := queue.ReclaimExpired(context.Background()); err != nil {
+			t.Fatalf("ReclaimExpired: %v", err)
+		}
+		select {
+		case <-stopped:
+			return
+		case <-deadline:
+			t.Fatal("the handler was not cancelled after its lease was reclaimed")
+		case <-time.After(5 * time.Millisecond):
+		}
 	}
 }
 
