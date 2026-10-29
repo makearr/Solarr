@@ -181,6 +181,10 @@ func (s *Server) libraryLevels(category settings.Category, values map[string]int
 			Entity: gen.LibraryLevelEntity(level.Entity),
 			Count:  countFor(values, level.Entity),
 		}
+		if level.Role != "" {
+			role := level.Role
+			views[index].Role, views[index].Count = &role, nil
+		}
 	}
 	return views
 }

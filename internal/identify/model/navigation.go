@@ -33,6 +33,8 @@ type Level struct {
 	Label       string
 	Entity      LevelEntity
 	DefaultSort string
+	// Role opens a person level on one credit role, as Narrators beside Authors; empty opens it on the type's lead role.
+	Role string
 }
 
 // NavigationLevels is an ADR-23 extension point, alongside SetCoverage and

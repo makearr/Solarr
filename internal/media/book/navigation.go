@@ -1,6 +1,7 @@
 package book
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -13,6 +14,7 @@ const (
 	LevelBooks      = "books"
 	LevelAuthors    = "authors"
 	LevelSeries     = "series"
+	LevelNarrators  = "narrators"
 	LevelPublishers = "publishers"
 )
 
@@ -25,7 +27,8 @@ func (f Format) Levels() []model.Level {
 		{Key: LevelPublishers, Label: "Publishers", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 	}
 	if f.ByFolder {
-		levels[1].Label = "Authors and narrators"
+		narrators := model.Level{Key: LevelNarrators, Label: "Narrators", Entity: model.LevelEntityPerson, DefaultSort: "name", Role: RoleNarrator}
+		levels = slices.Insert(levels, 2, narrators)
 	}
 	return levels
 }

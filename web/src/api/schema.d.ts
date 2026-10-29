@@ -7843,6 +7843,8 @@ export interface components {
             entity: "work" | "work_part" | "person" | "organisation" | "collection" | "franchise";
             /** @example title */
             default_sort: string;
+            /** @description A person level opens on this credit role (Narrators beside Authors); absent opens on the lead role. */
+            role?: string;
             /** @description From the counter table (section 21.12), never a live COUNT. Absent when this entity has no counter yet. */
             count?: number;
         };

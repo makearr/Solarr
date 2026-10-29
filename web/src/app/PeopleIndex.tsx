@@ -55,15 +55,16 @@ function statusOf(person: Person): AlbumStatus | undefined {
 /** People of one library, or of every library the viewer may read: the same wall of faces, list and overview for
  *  every media type, its role chips from the type's own roles. */
 export function PeopleIndex() {
-  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  const { categoryId, level } = useParams({ strict: false }) as { categoryId?: string; level?: string };
   const library = useLibrary(categoryId);
+  const levelRole = library?.levels.find((entry) => entry.key === level)?.role;
   const types = useMediaTypes();
   const type = types.find((entry) => entry.key === library?.media_type);
   const roles = rolesOf(types, categoryId ? library?.media_type : undefined);
   // A library opens on its lead role (Artists, Cast); the list of every library on everyone.
   // A poster library (movies, series) opens on its cast; an album one on its artists.
   const castFirst = type?.work_image === "poster" ? roles.find((role) => role.character) : undefined;
-  const lead = categoryId ? (castFirst ?? roles.find((role) => role.lead) ?? roles[0]) : undefined;
+  const lead = categoryId ? (roles.find((role) => role.key === levelRole) ?? castFirst ?? roles.find((role) => role.lead) ?? roles[0]) : undefined;
   const view = useRouteView(FILTER_KEYS);
   const chosen = view.query.filters.role || (lead ? lead.key : EVERYONE);
   // The coverage bar is the lead role's, as Lidarr's artists carry one; a wall of cast carries none.

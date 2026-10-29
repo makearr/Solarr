@@ -2975,6 +2975,9 @@ type LibraryLevel struct {
 	// Key Stable identifier used in the URL and in GET /libraries/{id}/{level}.
 	Key   string `json:"key"`
 	Label string `json:"label"`
+
+	// Role A person level opens on this credit role (Narrators beside Authors); absent opens on the lead role.
+	Role *string `json:"role,omitempty"`
 }
 
 // LibraryLevelEntity defines model for LibraryLevel.Entity.

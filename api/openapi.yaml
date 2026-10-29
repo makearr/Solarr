@@ -11395,6 +11395,9 @@ components:
         default_sort:
           type: string
           example: "title"
+        role:
+          type: string
+          description: A person level opens on this credit role (Narrators beside Authors); absent opens on the lead role.
         count:
           type: integer
           description: >-

@@ -24,7 +24,7 @@ the writing's Open Library id beside it. A work id names the writing, which a bo
 provider id belongs to one work, so an audiobook keeps the writing's ids under keys of its own (`openlibrary:audiobook`,
 `isbn:audiobook`), as TMDB's films do with `tmdb:movie` (`Format.Provider`). Exclusions are kept by the same keys.
 
-Authors and narrators are people kept by their name (`book:person`, `PersonKey`: lower case, dots and spacing
+Authors and narrators (each its own level, Narrators opening the people list on that role) are people kept by their name (`book:person`, `PersonKey`: lower case, dots and spacing
 normalised), so one writer is one person in every book and audiobook library, whichever provider named them.
 
 ## Fetching
