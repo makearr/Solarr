@@ -1383,6 +1383,15 @@
       {
         "column": true,
         "entity": "work",
+        "filterable": true,
+        "key": "narrator",
+        "kind": "text",
+        "label": "Narrator",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
         "filterable": false,
         "key": "runtime",
         "kind": "duration",
