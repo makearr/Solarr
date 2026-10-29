@@ -42,13 +42,13 @@ const benchUnits = 3_000
 // to catch a regression in *our* code (an accidental N+1 write, a lost
 // batch), not to model real import throughput, which is dominated by ffprobe
 // and disk I/O this benchmark deliberately does not include.
-// Measured at ~1.9ms/unit on 2026-09-10 (see notes.md); this leaves headroom
-// for CI noise while still catching a real regression -- reverting
+// Measured at ~1.9ms/unit locally and ~3.3ms on the shared CI runner; the limit
+// leaves headroom for that runner while still catching a real regression -- reverting
 // SetUnitDecisions to one transaction per unit, for instance, adds back the
 // per-unit GetImportUnit read this benchmark's own single-unit-per-cluster
 // tree exercises (a cluster with several units, the case that also drops the
 // per-unit RecomputeImportSessionCounts call, is not this tree's shape).
-const perUnitTarget = 3 * time.Millisecond
+const perUnitTarget = 5 * time.Millisecond
 
 // zeroCostTool answers ReadTags instantly from an in-memory table, isolating
 // the job's own overhead from the real ffprobe subprocess cost

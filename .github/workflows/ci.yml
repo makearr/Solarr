@@ -53,6 +53,8 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
+          # The prebuilt binary lags the Go version in go.mod; build it with the runner's toolchain.
+          install-mode: goinstall
 
       - name: Test
         run: go test -race -count=1 ./...
