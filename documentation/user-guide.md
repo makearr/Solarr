@@ -206,6 +206,17 @@ the item of TV people who share a name with a music artist, and a refreshed arti
 each series (as mapped in the preview) come over, and Sonarr's Media Management (Episode Title Required, file date,
 propers, empty folders...) if ticked; import before the first scan, because a series already in Solarr is left as it is.
 
+### Import lists
+
+A TV library's **Settings → Import lists** adds series from lists, as Sonarr's Import Lists do: an AniList season (the
+current one, the next one, or a named one), an AniList user's list (by status), a public TMDB list, or TMDB's trending
+or popular shows. TMDB's need your TMDB key under Settings → Metadata; AniList needs none. **Add list** asks for the
+list's own settings, how often it syncs, whether and how what it adds is monitored, the quality profile, and titles or
+ids to leave out. Saving opens the **preview**: every entry of the list and what enabling would do with it (added,
+already in the library, removed by you, left out, not a series, not found). Nothing is added until you **Enable this
+list**; it then runs at once and again on its schedule, and **Run now** runs it whenever you like. A series a list
+added is never added again by it, even after you remove it. Changing a list's settings asks for a new preview.
+
 ## 5. What happens on its own
 
 Three scheduled tasks (Settings → Scheduler) find what is missing without you pressing anything:

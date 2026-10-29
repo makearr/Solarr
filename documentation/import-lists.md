@@ -95,6 +95,16 @@ its list answers 502 with what to do (add the TMDB key, check the list exists), 
 `GET /libraries/{id}/import-list-types` lists the types the library's media type takes, with each type's settings as
 fields, and the type's monitor options. Deleting a list forgets its entries and state; the works it added stay.
 
+## The screen
+
+A library's Settings, Import lists (`web/src/app/ImportLists.tsx`, its dialogs in `ImportListDialogs.tsx`, the pure
+rules in `web/src/lib/importLists.ts`): one row per list with its type, settings, cadence, whether it is enabled and
+its last run (or why it failed); Preview, Enable or Disable, Run now, Edit and Remove. The add and edit dialog draws the
+type's fields from `import-list-types` (text, one choice, several choices, a year), so a new source needs no screen
+change. Saving a new list, or new settings, saves it disabled and opens the preview; the preview lists every entry
+(virtualised) with its verdict and counts by verdict, and offers **Enable this list**, which enables it and queues its
+first run. Editing only the cadence, monitoring, profile or exclusions keeps an enabled list enabled.
+
 ## Not yet
 
 Trakt (watchlist, user lists, trending) and IMDb lists are the next sources: each is one more `media.ListType`, a
