@@ -215,6 +215,8 @@ type Config struct {
 	CacheManager CacheManager
 	// WorkAdder looks works up and adds them (ADR-56). Optional: nil answers 503.
 	WorkAdder WorkAdder
+	// ImportLists previews, checks and runs import lists (ADR-38). Optional: nil leaves them unchecked, never previewed.
+	ImportLists ImportListSync
 
 	// SystemHealth supplies the health checks that need more than the settings
 	// snapshot. Optional: nil means only the settings-derived checks are run.
@@ -341,6 +343,7 @@ type Server struct {
 	scheduler               Scheduler
 	cacheManager            CacheManager
 	workAdder               WorkAdder
+	importLists             ImportListSync
 	arrSync                 ArrSync
 	libraryHealth           LibraryHealth
 	systemHealth            SystemHealthSource
@@ -463,6 +466,7 @@ func New(config Config) (*Server, error) {
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
 		workAdder:               config.WorkAdder,
+		importLists:             config.ImportLists,
 		arrSync:                 config.ArrSync,
 		libraryHealth:           config.LibraryHealth,
 		systemHealth:            config.SystemHealth,
@@ -669,7 +673,10 @@ func New(config Config) (*Server, error) {
 			secured.Put("/libraries/{id}/last-level", server.routeSetLibraryLastLevel)
 			secured.Get("/libraries/{id}/import-lists", server.routeListImportLists)
 			secured.Post("/libraries/{id}/import-lists", server.routeCreateImportList)
+			secured.Get("/libraries/{id}/import-list-types", server.routeListImportListTypes)
 			secured.Patch("/import-lists/{id}", server.routeUpdateImportList)
+			secured.Post("/import-lists/{id}/preview", server.routePreviewImportList)
+			secured.Post("/import-lists/{id}/run", server.routeRunImportList)
 			secured.Delete("/import-lists/{id}", server.routeDeleteImportList)
 			secured.Get("/libraries/{id}/{level}", server.routeListLibraryLevel)
 			secured.Get("/categories", server.ListCategories)

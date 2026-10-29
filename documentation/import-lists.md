@@ -79,6 +79,22 @@ ran, how many works it added and why it stopped (`needs_key`, `list_not_found`, 
 `failed`), which the Import lists screen shows. A run starts no search; the works it adds are hunted like any other
 monitored work.
 
+## Preview before enable
+
+ADR-38 has every external list previewed before it adds anything. A list is created disabled (`POST
+/libraries/{id}/import-lists` with `enabled: true` answers 409). `POST /import-lists/{id}/preview` runs the same pass a
+sync runs, with the lookup bound of a preview, and answers every entry with its verdict (and, when it was looked up,
+the id it would be added by); it adds nothing and keeps no entry. It records one thing: the list's type and settings as
+previewed (`import_list_state.previewed_options`, compared after the settings are put in one canonical form).
+
+`PATCH /import-lists/{id}` with `enabled: true` is refused (409) unless the type and settings it saves are the ones
+last previewed. Changing a list's cadence, monitoring, profile or exclusions keeps it enabled; changing its type or
+settings needs another preview, so the screen saves such an edit disabled and asks for the preview again. `POST
+/import-lists/{id}/run` queues an enabled list's own run at once (409 for a disabled one). A preview that cannot read
+its list answers 502 with what to do (add the TMDB key, check the list exists), and one the library cannot take 409.
+`GET /libraries/{id}/import-list-types` lists the types the library's media type takes, with each type's settings as
+fields, and the type's monitor options. Deleting a list forgets its entries and state; the works it added stay.
+
 ## Not yet
 
 Trakt (watchlist, user lists, trending) and IMDb lists are the next sources: each is one more `media.ListType`, a

@@ -707,6 +707,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 			Suggest:  p.suggester().ForCandidate,
 		},
+		ImportLists: adapters.ImportLists{
+			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,
+		},
 		LibrarySuggester: p.suggester(),
 		ArrSync: adapters.ArrSync{
 			Progress: adapters.NewArrProgress(), Registry: p.media,

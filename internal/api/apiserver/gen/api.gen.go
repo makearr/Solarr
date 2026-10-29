@@ -306,6 +306,36 @@ const (
 	ImportInspectRequestOriginWatched     ImportInspectRequestOrigin = "watched"
 )
 
+// Defines values for ImportListLastRunFailure.
+const (
+	ImportListLastRunFailureEmpty             ImportListLastRunFailure = ""
+	ImportListLastRunFailureFailed            ImportListLastRunFailure = "failed"
+	ImportListLastRunFailureListNotFound      ImportListLastRunFailure = "list_not_found"
+	ImportListLastRunFailureNeedsKey          ImportListLastRunFailure = "needs_key"
+	ImportListLastRunFailureNotSupported      ImportListLastRunFailure = "not_supported"
+	ImportListLastRunFailureSourceUnavailable ImportListLastRunFailure = "source_unavailable"
+)
+
+// Defines values for ImportListFieldKind.
+const (
+	ImportListFieldKindChoice  ImportListFieldKind = "choice"
+	ImportListFieldKindChoices ImportListFieldKind = "choices"
+	ImportListFieldKindText    ImportListFieldKind = "text"
+	ImportListFieldKindYear    ImportListFieldKind = "year"
+)
+
+// Defines values for ImportListPreviewEntryVerdict.
+const (
+	ImportListPreviewEntryVerdictAdd        ImportListPreviewEntryVerdict = "add"
+	ImportListPreviewEntryVerdictExcluded   ImportListPreviewEntryVerdict = "excluded"
+	ImportListPreviewEntryVerdictFiltered   ImportListPreviewEntryVerdict = "filtered"
+	ImportListPreviewEntryVerdictForeign    ImportListPreviewEntryVerdict = "foreign"
+	ImportListPreviewEntryVerdictHandled    ImportListPreviewEntryVerdict = "handled"
+	ImportListPreviewEntryVerdictHeld       ImportListPreviewEntryVerdict = "held"
+	ImportListPreviewEntryVerdictUnchecked  ImportListPreviewEntryVerdict = "unchecked"
+	ImportListPreviewEntryVerdictUnresolved ImportListPreviewEntryVerdict = "unresolved"
+)
+
 // Defines values for ImportSessionOrigin.
 const (
 	ImportSessionOriginAcquisition ImportSessionOrigin = "acquisition"
@@ -2550,34 +2580,108 @@ type ImportInspectResult struct {
 	Enqueued bool `json:"enqueued"`
 }
 
-// ImportList A per-library *Arr-shaped import list (ADR-38, todo 4.16). Scaffolding only -- nothing syncs against it yet (stage 12).
+// ImportList A library's import list (ADR-38), with its last preview and run.
 type ImportList struct {
 	CadenceHours int   `json:"cadence_hours"`
 	CategoryId   int64 `json:"category_id"`
 	Enabled      bool  `json:"enabled"`
 
-	// Exclusions Free text; nothing reads this yet, since there is no sync job to enforce it.
-	Exclusions       string `json:"exclusions"`
-	Id               int64  `json:"id"`
-	Monitor          bool   `json:"monitor"`
-	Name             string `json:"name"`
+	// Exclusions Titles or provider:id, separated by commas or lines; a matching entry is left out.
+	Exclusions   string     `json:"exclusions"`
+	Id           int64      `json:"id"`
+	LastRunAdded int        `json:"last_run_added"`
+	LastRunAt    *time.Time `json:"last_run_at,omitempty"`
+
+	// LastRunFailure Why the last run stopped; empty when it finished, or never ran.
+	LastRunFailure ImportListLastRunFailure `json:"last_run_failure"`
+	Monitor        bool                     `json:"monitor"`
+
+	// MonitorOption The media type's monitor option; empty is its default.
+	MonitorOption string `json:"monitor_option"`
+	Name          string `json:"name"`
+
+	// Options The type's settings by field key.
+	Options map[string]string `json:"options"`
+
+	// Previewed The current type and settings were previewed
+	Previewed        bool   `json:"previewed"`
 	QualityProfileId *int64 `json:"quality_profile_id,omitempty"`
 
-	// Type Free-form for now -- no music-specific list type is baked in ahead of a real provider integration to name one against.
+	// Type One of the library's import list types.
 	Type string  `json:"type"`
 	Url  *string `json:"url,omitempty"`
 }
 
+// ImportListLastRunFailure Why the last run stopped; empty when it finished, or never ran.
+type ImportListLastRunFailure string
+
+// ImportListField defines model for ImportListField.
+type ImportListField struct {
+	Choices  []MediaChoice       `json:"choices"`
+	Default  string              `json:"default"`
+	Help     string              `json:"help"`
+	Key      string              `json:"key"`
+	Kind     ImportListFieldKind `json:"kind"`
+	Label    string              `json:"label"`
+	Required bool                `json:"required"`
+}
+
+// ImportListFieldKind defines model for ImportListField.Kind.
+type ImportListFieldKind string
+
+// ImportListPreview defines model for ImportListPreview.
+type ImportListPreview struct {
+	Entries []ImportListPreviewEntry `json:"entries"`
+}
+
+// ImportListPreviewEntry defines model for ImportListPreviewEntry.
+type ImportListPreviewEntry struct {
+	ExternalId      string  `json:"external_id"`
+	MatchExternalId *string `json:"match_external_id,omitempty"`
+
+	// MatchProvider The id the work is added by
+	MatchProvider *string `json:"match_provider,omitempty"`
+	PosterUrl     *string `json:"poster_url,omitempty"`
+	Provider      string  `json:"provider"`
+	Title         string  `json:"title"`
+
+	// Verdict What enabling would do: add it, or leave it (handled before, held, excluded, filtered by the list, not this type's, unknown, past the preview's bound on lookups).
+	Verdict ImportListPreviewEntryVerdict `json:"verdict"`
+
+	// WorkId The library's work
+	WorkId *int64 `json:"work_id,omitempty"`
+	Year   *int   `json:"year,omitempty"`
+}
+
+// ImportListPreviewEntryVerdict What enabling would do: add it, or leave it (handled before, held, excluded, filtered by the list, not this type's, unknown, past the preview's bound on lookups).
+type ImportListPreviewEntryVerdict string
+
+// ImportListType defines model for ImportListType.
+type ImportListType struct {
+	Fields []ImportListField `json:"fields"`
+	Help   string            `json:"help"`
+	Label  string            `json:"label"`
+	Type   string            `json:"type"`
+}
+
+// ImportListTypes defines model for ImportListTypes.
+type ImportListTypes struct {
+	MonitorOptions []MediaChoice    `json:"monitor_options"`
+	Types          []ImportListType `json:"types"`
+}
+
 // ImportListWrite defines model for ImportListWrite.
 type ImportListWrite struct {
-	CadenceHours     int     `json:"cadence_hours"`
-	Enabled          *bool   `json:"enabled,omitempty"`
-	Exclusions       *string `json:"exclusions,omitempty"`
-	Monitor          *bool   `json:"monitor,omitempty"`
-	Name             string  `json:"name"`
-	QualityProfileId *int64  `json:"quality_profile_id,omitempty"`
-	Type             string  `json:"type"`
-	Url              *string `json:"url,omitempty"`
+	CadenceHours     int                `json:"cadence_hours"`
+	Enabled          *bool              `json:"enabled,omitempty"`
+	Exclusions       *string            `json:"exclusions,omitempty"`
+	Monitor          *bool              `json:"monitor,omitempty"`
+	MonitorOption    *string            `json:"monitor_option,omitempty"`
+	Name             string             `json:"name"`
+	Options          *map[string]string `json:"options,omitempty"`
+	QualityProfileId *int64             `json:"quality_profile_id,omitempty"`
+	Type             string             `json:"type"`
+	Url              *string            `json:"url,omitempty"`
 }
 
 // ImportPlacementResult POST .../category's own outcome: every unit the session had already decided COMMIT but not yet placed, placed best-effort.
@@ -6775,6 +6879,12 @@ type ServerInterface interface {
 	// Replace an import list's fields. Administrator only.
 	// (PATCH /import-lists/{id})
 	UpdateImportList(w http.ResponseWriter, r *http.Request, id int64)
+	// What the list would add now, entry by entry; nothing is added (ADR-38). Administrator only. Enabling the list needs a preview of its current type and settings.
+	// (POST /import-lists/{id}/preview)
+	PreviewImportList(w http.ResponseWriter, r *http.Request, id int64)
+	// Run an enabled list now, whether due or not. Administrator only.
+	// (POST /import-lists/{id}/run)
+	RunImportList(w http.ResponseWriter, r *http.Request, id int64)
 	// Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
 	// (POST /import/inspect)
 	InspectImport(w http.ResponseWriter, r *http.Request)
@@ -6859,10 +6969,13 @@ type ServerInterface interface {
 	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 	// (GET /libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
-	// A library's own *Arr-shaped import lists (ADR-38). Scaffolding only -- the sync job that admits anything from one is stage 12.
+	// The import list types a library takes, with the settings each asks for, and the monitor options of its media type.
+	// (GET /libraries/{id}/import-list-types)
+	ListImportListTypes(w http.ResponseWriter, r *http.Request, id int64)
+	// A library's own import lists (ADR-38), each with its last preview and run. documentation/import-lists.md.
 	// (GET /libraries/{id}/import-lists)
 	ListImportLists(w http.ResponseWriter, r *http.Request, id int64)
-	// Add an import list to a library. Administrator only.
+	// Add an import list to a library. Administrator only. A new list is disabled: it is enabled once previewed (409 when enabled is asked for).
 	// (POST /libraries/{id}/import-lists)
 	CreateImportList(w http.ResponseWriter, r *http.Request, id int64)
 	// Remember the level last visited in this library (ADR-54).
@@ -7939,6 +8052,18 @@ func (_ Unimplemented) UpdateImportList(w http.ResponseWriter, r *http.Request, 
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// What the list would add now, entry by entry; nothing is added (ADR-38). Administrator only. Enabling the list needs a preview of its current type and settings.
+// (POST /import-lists/{id}/preview)
+func (_ Unimplemented) PreviewImportList(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Run an enabled list now, whether due or not. Administrator only.
+// (POST /import-lists/{id}/run)
+func (_ Unimplemented) RunImportList(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // Point at any path and enqueue ADR-48's own inspection pipeline. Administrator only.
 // (POST /import/inspect)
 func (_ Unimplemented) InspectImport(w http.ResponseWriter, r *http.Request) {
@@ -8107,13 +8232,19 @@ func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// A library's own *Arr-shaped import lists (ADR-38). Scaffolding only -- the sync job that admits anything from one is stage 12.
+// The import list types a library takes, with the settings each asks for, and the monitor options of its media type.
+// (GET /libraries/{id}/import-list-types)
+func (_ Unimplemented) ListImportListTypes(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// A library's own import lists (ADR-38), each with its last preview and run. documentation/import-lists.md.
 // (GET /libraries/{id}/import-lists)
 func (_ Unimplemented) ListImportLists(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
-// Add an import list to a library. Administrator only.
+// Add an import list to a library. Administrator only. A new list is disabled: it is enabled once previewed (409 when enabled is asked for).
 // (POST /libraries/{id}/import-lists)
 func (_ Unimplemented) CreateImportList(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
@@ -12377,6 +12508,72 @@ func (siw *ServerInterfaceWrapper) UpdateImportList(w http.ResponseWriter, r *ht
 	handler.ServeHTTP(w, r)
 }
 
+// PreviewImportList operation middleware
+func (siw *ServerInterfaceWrapper) PreviewImportList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PreviewImportList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RunImportList operation middleware
+func (siw *ServerInterfaceWrapper) RunImportList(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RunImportList(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // InspectImport operation middleware
 func (siw *ServerInterfaceWrapper) InspectImport(w http.ResponseWriter, r *http.Request) {
 
@@ -13235,6 +13432,39 @@ func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListLibraries(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListImportListTypes operation middleware
+func (siw *ServerInterfaceWrapper) ListImportListTypes(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListImportListTypes(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18959,6 +19189,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/import-lists/{id}", wrapper.UpdateImportList)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import-lists/{id}/preview", wrapper.PreviewImportList)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/import-lists/{id}/run", wrapper.RunImportList)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/import/inspect", wrapper.InspectImport)
 	})
 	r.Group(func(r chi.Router) {
@@ -19041,6 +19277,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/libraries/{id}/import-list-types", wrapper.ListImportListTypes)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries/{id}/import-lists", wrapper.ListImportLists)
