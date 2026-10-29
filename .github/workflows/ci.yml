@@ -57,7 +57,8 @@ jobs:
           install-mode: goinstall
 
       - name: Test
-        run: go test -race -count=1 ./...
+        # Several packages take 5-10 minutes under -race; the 10m default kills them.
+        run: go test -race -count=1 -timeout 40m ./...
 
       # ADR-31: generated code is committed. Stale output fails the build.
       - name: sqlc up to date

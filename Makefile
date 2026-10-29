@@ -123,7 +123,7 @@ test: cache-init  ## Unit tests
 
 race: cache-init  ## Tests with the race detector (needs CGO)
 	docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) $(CACHE) -e GOCACHE=/.cache/go-build -e HOME=/tmp \
-	  $(GO_IMAGE) go test -race -count=1 ./...
+	  $(GO_IMAGE) go test -race -count=1 -timeout 40m ./...
 
 # -p 1: packages run one at a time, or a latency figure measures the other packages.
 bench: cache-init  ## Benchmarks and ADR-28 targets. Scale with BENCH_FILES=500000
