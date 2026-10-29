@@ -366,10 +366,12 @@ var allowedInternalImports = map[string][]string{
 	// Bounded fan-out with panic recovery; no dependencies.
 	"internal/platform/parallel": {},
 	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
-	"internal/media":             {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
-	"internal/moving/sidecar":    {"internal/db/settings", "internal/platform/fsx"},
-	"internal/importing/placer":  {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
-	"internal/media/knownfor":    {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
+	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
+	"internal/service/importlist": {"internal/media", "internal/metadata/anilist", "internal/metadata/tmdb", "internal/platform/config"},
+	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
+	"internal/moving/sidecar":     {"internal/db/settings", "internal/platform/fsx"},
+	"internal/importing/placer":   {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},
+	"internal/media/knownfor":     {"internal/db/library", "internal/media", "internal/metadata/tmdb"},
 	// File Management a sweep applies alike for every type that wants whole works or their parts.
 	"internal/media/housekeeping": {"internal/db/library", "internal/db/settings", "internal/media", "internal/platform/fsx", "internal/scanning/scan"},
 	// The picture cache sweep video types share: posters, organisation logos, billed-first photos.

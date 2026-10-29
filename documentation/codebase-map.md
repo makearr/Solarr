@@ -34,6 +34,7 @@ internal/
 │               hdbits  passthepopcorn  beyondhd  broadcasthenet  soulseek
 │               clients: sabnzbd  nzbget  qbittorrent  transmission (+ Vuze)  deluge  rtorrent  utorrent  flood  aria2
 │               slskd  blackhole (Torrent and Usenet)
+├── service/    follow (ADR-32)  importlist (ADR-38, documentation/import-lists.md): every type alike
 ├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)
 │               +  shared by types: works  knownfor  picturesweep  housekeeping
 └── archtest/   layering, access and Invariant-90 checks, as tests

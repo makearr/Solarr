@@ -55,6 +55,8 @@ type Module struct {
 	media.Passes
 	// Searching is TV's part of a search a person asks for.
 	Searching
+	// Lists is TV's part of an import list.
+	Lists Lists
 	// Franchise is TV's part of a series' collections; nil leaves them to hand.
 	Franchise media.Franchising
 	// FranchisePass finds the franchises series belong to; nil leaves the job unregistered.
@@ -138,6 +140,14 @@ func (m Module) HealthChecks(libraries int) []media.HealthCheck {
 
 // FiltersReleases implements media.ReleaseFiltering: the TV judge applies a series' release filters.
 func (Module) FiltersReleases() {}
+
+// ImportListTypes implements media.ListResolving.
+func (m Module) ImportListTypes() []media.ListType { return m.Lists.ImportListTypes() }
+
+// ResolveListEntry implements media.ListResolving.
+func (m Module) ResolveListEntry(ctx context.Context, entry media.ListEntry) (media.ListMatch, error) {
+	return m.Lists.ResolveListEntry(ctx, entry)
+}
 
 // AddWork implements media.Adding.
 func (m Module) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {

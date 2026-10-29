@@ -233,6 +233,7 @@ func (p *process) tvModule() tv.Module {
 			Clock: clock.NewSystem(),
 		},
 		Profiling: tv.Profiling{People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared, Albums: p.knownAlbums()},
+		Lists:     tv.Lists{Service: p.tvService()},
 	}
 }
 
