@@ -272,12 +272,15 @@ func (s *Snapshot) MetadataSourcesFor(category Category) []string {
 	return slices.DeleteFunc(slices.Clone(order), func(key string) bool { return !s.ProviderEnabled(key) })
 }
 
-// MusicSourceOrder is the order music lookups are asked in, the first music library's: lookups are made once for every
-// library, so one order rules them.
-func (s *Snapshot) MusicSourceOrder() []string {
-	library := Category{MediaType: "music"}
-	if index := slices.IndexFunc(s.Categories(), func(category Category) bool { return category.MediaType == "music" }); index >= 0 {
-		library = s.Categories()[index]
+// MusicSourceOrder is the order a music library's lookups are asked in; a lookup made for no music library (categoryID 0,
+// or another type's) takes the first music library's.
+func (s *Snapshot) MusicSourceOrder(categoryID int64) []string {
+	library, found := s.Category(categoryID)
+	if !found || library.MediaType != "music" {
+		library = Category{MediaType: "music"}
+		if index := slices.IndexFunc(s.Categories(), func(category Category) bool { return category.MediaType == "music" }); index >= 0 {
+			library = s.Categories()[index]
+		}
 	}
 	order := s.MetadataSourcesFor(library)
 	// Direct MusicBrainz, while switched on, answers after the library's own order (ADR-29).

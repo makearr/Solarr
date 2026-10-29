@@ -116,11 +116,10 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	})
 }
 
-// liveMetadataSourceOrder answers the configured order on every lookup rather
-// than at construction: the jobs hold one Provider for the life of the
-// process, so a captured order would stay stale until a restart.
-func (p *process) liveMetadataSourceOrder() []string {
-	return p.cache.Snapshot().MusicSourceOrder()
+// liveMetadataSourceOrder answers the library's configured order on every lookup rather than at construction: the jobs
+// hold one Provider for the life of the process, so a captured order would stay stale until a restart.
+func (p *process) liveMetadataSourceOrder(library int64) []string {
+	return p.cache.Snapshot().MusicSourceOrder(library)
 }
 
 // musicBrainzSources builds every source config.yml enables. Which of them are

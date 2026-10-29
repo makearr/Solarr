@@ -46,6 +46,15 @@ func refreshWorkMembers(ctx context.Context, queries *librarydb.Queries, workID 
 	return members.refresh(ctx, queries)
 }
 
+// LibrariesOf answers the libraries holding any of a person's works, by id.
+func (p People) LibrariesOf(ctx context.Context, personID int64) ([]int64, error) {
+	categoryIDs, err := librarydb.New(p.store.Read()).ListPersonLibraryCategories(ctx, personID)
+	if err != nil {
+		return nil, fmt.Errorf("library: libraries of person %d: %w", personID, err)
+	}
+	return categoryIDs, nil
+}
+
 // refreshPeople recomputes person_library for the given people from their credits and their works' libraries.
 func refreshPeople(ctx context.Context, queries *librarydb.Queries, personIDs []int64) error {
 	for chunk := range slices.Chunk(unique(personIDs), rollupChunk) {

@@ -108,6 +108,7 @@ type EnrichJob struct {
 	biography       Biographer
 	artworks        library.Artworks
 	realigner       Realigner
+	libraries       Libraries
 	desired         *library.Desired
 	onRefined       func(context.Context)
 	artistArt       ArtistArt
@@ -164,6 +165,8 @@ type EnrichJobConfig struct {
 	// Realigner is optional: without one, refined albums wait for the next
 	// scan that happens to revisit their directory.
 	Realigner Realigner
+	// Libraries is optional: without it every lookup takes the default provider order.
+	Libraries Libraries
 	// Desired is optional: with it, a refined album's files are aligned to its new tracklist at once
 	// from what scan and import claimed for them.
 	Desired *library.Desired
@@ -192,7 +195,7 @@ func NewEnrichJob(config EnrichJobConfig) *EnrichJob {
 		identity: config.Identity, people: config.People, organisations: config.Organisations, provider: config.Provider,
 		biography: config.Biography, wikidataEnabled: config.WikidataEnabled,
 		backfillPerRun: config.PeopleBackfillPerRun, checkpointEvery: config.CheckpointBatches,
-		artworks: config.Artworks, realigner: config.Realigner, desired: config.Desired, onRefined: config.OnRefined,
+		artworks: config.Artworks, realigner: config.Realigner, libraries: config.Libraries, desired: config.Desired, onRefined: config.OnRefined,
 		artistArt: config.ArtistArt,
 		tags:      config.Tags, roots: config.Roots, http: config.HTTP,
 		fs: config.FS, imagesDir: config.ImagesDir, clock: config.Clock, logger: logger,
@@ -257,11 +260,12 @@ func (j *EnrichJob) Run(ctx context.Context, job jobs.Job) error {
 				afterEditionID = edition.EditionID
 				total++
 				job.Progress.Add(1)
-				err := j.enrichOne(ctx, edition, answers[index], artists)
+				workCtx := musicbrainz.ForLibrary(ctx, albums[index].library)
+				err := j.enrichOne(workCtx, edition, answers[index], artists)
 				if err == nil {
 					j.followMergedIDs(ctx, edition, albums[index], answers[index])
 				}
-				if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(ctx, edition, albums[index], artists) {
+				if errors.Is(err, musicbrainz.ErrNotFound) && j.replaceRetiredRelease(workCtx, edition, albums[index], artists) {
 					err = nil
 				}
 				if err == nil {
@@ -345,7 +349,7 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 		batch = batch[:min(len(batch), editionlessBudget-enriched-failed-retired)]
 		albums := make([]albumKey, len(batch))
 		for index, work := range batch {
-			albums[index] = albumKey{releaseGroup: work.ReleaseGroupMBID}
+			albums[index] = albumKey{releaseGroup: work.ReleaseGroupMBID, library: j.workLibrary(ctx, work.WorkID)}
 		}
 		answers := j.lookupAlbums(ctx, albums)
 		for index, work := range batch {
@@ -371,11 +375,12 @@ func (j *EnrichJob) enrichEditionless(ctx context.Context, artists artistMemo) (
 					slog.Int64("work_id", work.WorkID), slog.Any("error", err))
 				continue
 			}
+			workCtx := musicbrainz.ForLibrary(ctx, albums[index].library)
 			j.retitle(ctx, work.WorkID, rg)
-			j.enrichCreditsAndGenres(ctx, work.WorkID, rg, artists)
+			j.enrichCreditsAndGenres(workCtx, work.WorkID, rg, artists)
 			j.enrichDescription(ctx, work.WorkID, answers[index])
 			enriched++
-			if j.chooseEdition(ctx, work, rg, artists) {
+			if j.chooseEdition(workCtx, work, rg, artists) {
 				withEdition = append(withEdition, work.WorkID)
 				j.alignClaimed(ctx, work.WorkID)
 			}
@@ -570,6 +575,7 @@ const (
 // without it the same lowest-id people come back every run and the rest are
 // never reached. A transient failure records nothing and is retried.
 func (j *EnrichJob) backfillOne(ctx context.Context, candidate library.PersonArtworkCandidate) backfillOutcome {
+	ctx = j.forPerson(ctx, candidate.PersonID)
 	artist, err := j.provider.Artist(ctx, musicbrainz.PriorityEnrich, candidate.ArtistMBID)
 	if err != nil {
 		j.logger.WarnContext(ctx, "artist backfill lookup failed",
@@ -675,9 +681,10 @@ func (j *EnrichJob) returnRetiredToReview(ctx context.Context, workID int64, rel
 		slog.Int("files", returned.Files), slog.Bool("work_deleted", returned.WorkDeleted))
 }
 
-// albumKey is one album lookup; err set means there is nothing to look up.
+// albumKey is one album lookup, in its library's provider order (0: the caller's); err set means there is nothing to look up.
 type albumKey struct {
 	releaseGroup, release string
+	library               int64
 	err                   error
 }
 
@@ -701,7 +708,7 @@ func (j *EnrichJob) placeholderAlbum(ctx context.Context, edition library.Placeh
 		// newEditionLink links the release group in the same transaction; a missing one is not ours to guess.
 		return albumKey{err: fmt.Errorf("work %d has no %s external id", edition.WorkID, ProviderReleaseGroup)}
 	}
-	return albumKey{releaseGroup: releaseGroupMBID, release: edition.ExternalID}
+	return albumKey{releaseGroup: releaseGroupMBID, release: edition.ExternalID, library: j.workLibrary(ctx, edition.WorkID)}
 }
 
 // lookupAlbums asks the provider for every album at once, enrichLookupWorkers at a time; the
@@ -712,6 +719,9 @@ func (j *EnrichJob) lookupAlbums(ctx context.Context, albums []albumKey) []album
 		album := albums[index]
 		if album.err != nil {
 			return album.err
+		}
+		if album.library != 0 {
+			ctx = musicbrainz.ForLibrary(ctx, album.library)
 		}
 		rg, release, err := j.provider.Album(ctx, musicbrainz.PriorityEnrich, album.releaseGroup, album.release)
 		if err != nil {

@@ -105,8 +105,9 @@ func (a UnidentifiedResolver) ResolveUnidentified(
 
 // PlaceFile implements media.PlacingFiles for music; an album has no groups, so the placement's are not read.
 func (a MusicFiles) PlaceFile(
-	ctx context.Context, _, mediaObjectID int64, placement media.Placement, wholeFolder bool,
+	ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool,
 ) (workID, resolved int64, err error) {
+	ctx = musicbrainz.ForLibrary(ctx, categoryID)
 	provider, externalID := placement.Provider, placement.ExternalID
 	ids := []int64{mediaObjectID}
 	if wholeFolder {

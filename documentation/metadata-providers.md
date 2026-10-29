@@ -5,9 +5,25 @@ library asks its providers in its own order (the library's Settings, Metadata): 
 supplies it, each later one only fills what the earlier ones left empty, and a provider left out is not asked. A
 library starts with the providers that suit its type and kind, Wikidata first (anime then asks AniList). Settings,
 Metadata is one overview: every provider, the libraries it serves, its key, and a switch that takes it out of every
-library's order. Music is looked up once for every music library, in the first music library's order, with direct
-MusicBrainz after it while MusicBrainz is switched on; any of BrainzMash, Lidarr's service and MusicBrainz may be switched
-off, but not the last of them.
+library's order. Music too is looked up in each library's own order, with direct MusicBrainz after it while
+MusicBrainz is switched on; any of BrainzMash, Lidarr's service and MusicBrainz may be switched off, but not the last of
+them.
+
+**Which music library a lookup is for.** A lookup carries its library on its context (`musicbrainz.ForLibrary`); the
+provider reads that library's order per lookup (`Snapshot.MusicSourceOrder`). A scan, an import, a file placed by hand,
+the Add search and a follow carry the library they run in; the discography coverage job asks per library. Enrichment,
+refresh and the label backfill work per album or artist, so they ask `music.Libraries`: an album's first music library
+that wants it, else the first holding its files; an artist's first music library holding their works
+(`person_library`). An album held by two music libraries is one work with one set of metadata, so it follows the first.
+A lookup with no library (an actor's albums on a person page, the artist picture picker, an import deciding its library
+per unit) takes the first music library's order, as every lookup did before.
+
+**The cache is keyed by order.** Every MusicBrainz cache entry's kind carries the order it was asked in, the source names
+in order (`musicbrainz:release-group@brainzmash>musicbrainz-proxy>musicbrainz`), so an answer one order got, a fallback
+included, is never served to an order that ranks the sources otherwise, and reordering a library asks again. An entry
+from before orders were tagged (the bare kind) is served only when the source that gave it is the first able to answer
+in the asking order: that answer is the one the order asks for, whatever ranks after it. Those entries age out under
+`refresh_after` and the cache budget like any other.
 
 **Pace.** Each provider shows what it publishes it can take and the pace Solarr asks it at (`settings.MetadataProviders`,
 the one declaration: `PerMinute`, `MaxPerMinute`, `Published`). A person may set their own, a second or a minute, up to the

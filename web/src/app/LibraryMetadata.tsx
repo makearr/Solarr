@@ -109,8 +109,8 @@ export function LibraryMetadata() {
         {mediaType?.cover_sources && <CoverOrder />}
         <p className="text-xs text-ink-muted">
           A library starts with the providers that suit its kind, Wikidata first: the ids its item records steer the others to the right
-          entry. Providers are switched on and off, and their keys given, under Settings, Metadata. Music is looked up once for every
-          music library, in the first music library&apos;s order.
+          entry. Providers are switched on and off, and their keys given, under Settings, Metadata. Each library is looked up in its own
+          order; an album or artist two music libraries hold follows the first one&apos;s.
         </p>
       </div>
     </div>

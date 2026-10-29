@@ -727,6 +727,8 @@ type Querier interface {
 	// What subscription.expand needs to go from a subscribed person back to the
 	// provider id their discography is browsed by.
 	ListPersonExternalIDs(ctx context.Context, personID int64) ([]PersonExternalID, error)
+	// The libraries holding a person's works, any role, by id.
+	ListPersonLibraryCategories(ctx context.Context, personID int64) ([]int64, error)
 	ListPlaceholderEditions(ctx context.Context, arg ListPlaceholderEditionsParams) ([]Edition, error)
 	// The planner's facts for one page of items (section 9.1): the dirty set, or with dirty_only 0
 	// the paced sweep. Absent hunt columns read as zero.

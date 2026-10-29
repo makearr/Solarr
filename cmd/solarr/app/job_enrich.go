@@ -36,7 +36,10 @@ func (p *process) enrichJobs() []media.JobRegistration {
 		ArtistArt: p.theAudioDBArtist(p.theAudioDB()),
 		Artworks:  library.NewArtworks(p.library),
 		Realigner: realigner{p: p},
-		Desired:   &desired,
+		Libraries: adapters.EntityLibraries{
+			MediaType: string(music.MediaType), Works: library.NewWorks(p.library), People: library.NewPeople(p.library), Cache: p.cache,
+		},
+		Desired: &desired,
 		// Covers follow at once rather than at the six-hourly sweep (found 2026-09-28).
 		OnRefined: func(ctx context.Context) {
 			_, _ = p.enqueueCategoryCounts(ctx)

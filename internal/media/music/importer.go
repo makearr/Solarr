@@ -12,6 +12,7 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
+	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/parallel"
 )
@@ -70,6 +71,8 @@ const identifyParallelism = 8
 
 // ImportBatch implements batch.Importer.
 func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
+	// The import is looked up in its library's provider order; one deciding per unit has none yet and takes the default.
+	ctx = musicbrainz.ForLibrary(ctx, request.CategoryID)
 	var relPaths []string
 	for _, unit := range request.Units {
 		for _, f := range unit.Media {
@@ -154,6 +157,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 // CommitHeld implements batch.HeldCommitter: the album a person named, or the unit's own top candidate. A unit
 // already added as an unverified album has its files moved onto the album instead of placed a second time.
 func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (library.Placement, error) {
+	ctx = musicbrainz.ForLibrary(ctx, request.CategoryID)
 	best, ok := chosenIdentification(request)
 	if !ok {
 		return library.Placement{}, batch.ErrUnresolved

@@ -88,7 +88,7 @@ func (f Following) FollowCandidates(ctx context.Context, follow media.Follow) ([
 	if f.Discography == nil || f.Desired == nil {
 		return nil, ErrFollowNotWired
 	}
-	groups, since, err := f.releaseGroupsOf(ctx, follow)
+	groups, since, err := f.releaseGroupsOf(musicbrainz.ForLibrary(ctx, follow.CategoryID), follow)
 	if err != nil {
 		return nil, err
 	}

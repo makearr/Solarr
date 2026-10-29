@@ -156,6 +156,8 @@ func NewConsumer(config ConsumerConfig) Consumer {
 func (c Consumer) Observe(
 	ctx context.Context, root settings.RootFolder, categoryID int64, batch []scan.Observed,
 ) error {
+	// Every lookup the scan makes follows the library's own provider order.
+	ctx = musicbrainz.ForLibrary(ctx, categoryID)
 	readable := make([]scan.Observed, 0, len(batch))
 	for _, observed := range batch {
 		if observed.Probe.Err == nil {

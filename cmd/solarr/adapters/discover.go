@@ -40,6 +40,7 @@ func (a Discover) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]me
 	if len([]rune(lookup.Query)) < 2 {
 		return nil, apiserver.ErrQueryTooShort
 	}
+	ctx = musicbrainz.ForLibrary(ctx, lookup.CategoryID)
 	if lookup.Kind == "artist" {
 		return a.searchArtists(ctx, lookup.Query, lookup.Limit)
 	}
@@ -131,6 +132,7 @@ func (a Discover) AddWork(ctx context.Context, request media.AddRequest) (media.
 	if !ok {
 		return media.AddResult{}, apiserver.ErrDiscoverUnsupportedMediaType
 	}
+	ctx = musicbrainz.ForLibrary(ctx, category.ID)
 	userID, externalID, monitored, search := request.UserID, request.ExternalID, request.Monitored, request.Search
 	if request.Provider == music.ProviderArtist {
 		return a.addArtist(ctx, category, userID, externalID, monitored, search)
