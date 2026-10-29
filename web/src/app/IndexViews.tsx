@@ -6,6 +6,7 @@ import { Check, LayoutGrid, Rows3, Settings2, StretchHorizontal } from "lucide-r
 import { albumStatusFill, albumStatusLabel, type AlbumStatus } from "@/lib/albumStatus";
 import type { components } from "@/api/schema";
 import type { useLibraryList } from "@/list/useLibraryList";
+import { t } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 
@@ -49,7 +50,7 @@ type Work = components["schemas"]["Work"];
 export function workEntry(work: Work, categoryId?: string, info?: MediaTypeInfo): IndexEntry {
   return {
     id: work.id, kind: "works", title: work.title,
-    subtitle: [work.artist, work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
+    subtitle: [work.artist, work.narrators && t("work.readBy", { narrators: work.narrators }), work.year, work.unverified ? "unverified" : null].filter(Boolean).join(" · "),
     year: work.year, status: work.status, presentCount: work.present_count, requiredCount: work.required_count,
     monitored: work.monitored, overview: work.overview, sizeBytes: work.size_bytes, artistCover: work.artist_cover,
     // Nothing to ask for when neither the work, its lead nor a provider poster has a picture.

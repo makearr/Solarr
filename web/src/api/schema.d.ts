@@ -5600,6 +5600,8 @@ export interface components {
             badge_url?: string;
             /** @description The name of the organisation the badge is the logo of. */
             badge_name?: string;
+            /** @description An audiobook's readers, comma-joined; absent on any other work. */
+            narrators?: string;
             /**
              * Format: int64
              * @description The person the work is listed under (an album's artist), for a type with a lead role.
@@ -7855,8 +7857,6 @@ export interface components {
             title: string;
             /** @description A secondary line -- an artist credit, an album title, whatever the level has. */
             subtitle?: string;
-            /** @description An audiobook's readers, comma-joined; absent on any other work. */
-            narrators?: string;
             year?: number;
             monitored?: boolean;
             /**

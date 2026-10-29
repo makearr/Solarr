@@ -536,9 +536,6 @@ func (s *Server) listLibraryLevelWorks(
 			overview := overviewOf(row.Description)
 			views[index].Overview = &overview
 		}
-		if row.Narrators != "" {
-			views[index].Narrators = &row.Narrators
-		}
 	}
 	writeLibraryLevelPage(w, s.logger, views, next)
 }

@@ -369,6 +369,9 @@ func buildWorkPage(rows []WorkRow, limit int, sort WorkSort, now time.Time) gen.
 			Year: yearOf(row.Year), Artist: row.Artist, AddedAt: row.AddedAt, UpdatedAt: row.UpdatedAt,
 			WantedState: wantedStateOf(row.WantedState), LastSearchedAt: row.LastSearchedAt,
 		}
+		if row.Narrators != "" {
+			views[index].Narrators = &row.Narrators
+		}
 		if row.Unverified {
 			views[index].Unverified = &row.Unverified
 		}
