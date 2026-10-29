@@ -759,7 +759,7 @@ func TestProvider_SearchArtistsAnswersNothingWhenNoSourceCanSearch(t *testing.T)
 func newOrderedProvider(t *testing.T, order *[]string, sources ...musicbrainz.Source) musicbrainz.Provider {
 	t.Helper()
 	return musicbrainz.New(musicbrainz.Config{
-		Sources: sources, LiveOrder: func() []string { return *order },
+		Sources: sources, LiveOrder: func(int64) []string { return *order },
 		Cache: newTestCache(t), Clock: clock.NewFakeAtEpoch(),
 		Logger: slog.New(slog.DiscardHandler),
 	})

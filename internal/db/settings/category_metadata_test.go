@@ -74,13 +74,13 @@ func TestAProviderSwitchedOffIsAskedByNoLibrary(t *testing.T) {
 // Direct MusicBrainz can be switched off (user, 2026-10-23), and then is no fallback; the last music source on stays on.
 func TestMusicBrainzCanBeSwitchedOffButNotTheLastMusicSource(t *testing.T) {
 	cache, fake := newCache(t)
-	if got := cache.Snapshot().MusicSourceOrder(); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
 		t.Fatalf("starting order = %v", got)
 	}
 	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", false); err != nil {
 		t.Fatalf("switching MusicBrainz off: %v", err)
 	}
-	if got := cache.Snapshot().MusicSourceOrder(); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy"}) {
 		t.Errorf("order with MusicBrainz off = %v, want it gone, fallback too", got)
 	}
 	if err := cache.SetProviderEnabled(t.Context(), fake, "brainzmash", false); err != nil {
@@ -92,8 +92,45 @@ func TestMusicBrainzCanBeSwitchedOffButNotTheLastMusicSource(t *testing.T) {
 	if err := cache.SetProviderEnabled(t.Context(), fake, "musicbrainz", true); err != nil {
 		t.Fatalf("switching MusicBrainz on: %v", err)
 	}
-	if got := cache.Snapshot().MusicSourceOrder(); !slices.Equal(got, []string{"musicbrainz-proxy", "musicbrainz"}) {
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"musicbrainz-proxy", "musicbrainz"}) {
 		t.Errorf("order with MusicBrainz back = %v", got)
+	}
+}
+
+// Each music library is looked up in its own order; a lookup for no music library takes the first one's.
+func TestEachMusicLibraryIsLookedUpInItsOwnOrder(t *testing.T) {
+	cache, _ := newCache(t)
+	first, err := cache.CreateCategory(t.Context(), "music", "Music", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := cache.CreateCategory(t.Context(), "music", "Classical", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	movies, err := cache.CreateCategory(t.Context(), "movie", "Movies", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetCategoryMetadataSources(t.Context(), second.ID, []string{"musicbrainz-proxy", "brainzmash"}); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	shipped := []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}
+	for _, check := range []struct {
+		name     string
+		category int64
+		want     []string
+	}{
+		{"no library", 0, shipped},
+		{"the first music library", first.ID, shipped},
+		{"the second music library", second.ID, []string{"musicbrainz-proxy", "brainzmash", "musicbrainz"}},
+		{"a movie library", movies.ID, shipped},
+		{"an unknown library", 999, shipped},
+	} {
+		if got := snapshot.MusicSourceOrder(check.category); !slices.Equal(got, check.want) {
+			t.Errorf("%s: order = %v, want %v", check.name, got, check.want)
+		}
 	}
 }
 

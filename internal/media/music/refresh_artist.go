@@ -100,12 +100,13 @@ func (j *EnrichJob) refreshAlbums(ctx, fresh context.Context, workIDs []int64, m
 		if err != nil || !ok {
 			continue
 		}
-		rg, _, err := j.provider.Album(fresh, musicbrainz.PriorityRefresh, releaseGroupMBID, "")
+		library := j.workLibrary(ctx, workID)
+		rg, _, err := j.provider.Album(musicbrainz.ForLibrary(fresh, library), musicbrainz.PriorityRefresh, releaseGroupMBID, "")
 		if err != nil {
 			j.logger.WarnContext(ctx, "refresh: album not refreshed", slog.Int64("work_id", workID), slog.Any("error", err))
 			continue
 		}
-		j.enrichCreditsAndGenres(ctx, workID, rg, artists)
+		j.enrichCreditsAndGenres(musicbrainz.ForLibrary(ctx, library), workID, rg, artists)
 		refreshed = append(refreshed, workID)
 		answers = append(answers, albumAnswer{rg: rg})
 	}
@@ -179,7 +180,7 @@ func (j *EnrichJob) RefreshArtist(ctx context.Context, personID int64, manual bo
 	if !found {
 		return fmt.Errorf("music: refresh artist %d: no %s id to refresh from", personID, ProviderArtist)
 	}
-	fresh := musicbrainz.WithFresh(ctx)
+	fresh := musicbrainz.WithFresh(j.forPerson(ctx, personID))
 
 	j.refreshDetails(fresh, personID, artistMBID)
 	// The new discography lands in the cache; the next subscription expansion reads it from there.

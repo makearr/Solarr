@@ -30,6 +30,10 @@ GROUP BY o.organisation_id, d.category_id, rollup_role;
 -- name: ListPeopleOfWork :many
 SELECT DISTINCT person_id FROM credit WHERE work_id = ? ORDER BY person_id;
 
+-- The libraries holding a person's works, any role, by id.
+-- name: ListPersonLibraryCategories :many
+SELECT category_id FROM person_library WHERE person_id = ? AND role = '' ORDER BY category_id;
+
 -- name: ListOrganisationsOfWork :many
 SELECT DISTINCT organisation_id FROM work_organisation WHERE work_id = ? ORDER BY organisation_id;
 

@@ -81,7 +81,7 @@ func (j *DiscographyCoverageJob) Run(ctx context.Context, job jobs.Job) error {
 				job.Progress.Add(1)
 				continue
 			}
-			groups, err := j.config.Provider.ArtistReleaseGroups(ctx, musicbrainz.PriorityBackfill, artist.ArtistMBID)
+			groups, err := j.config.Provider.ArtistReleaseGroups(musicbrainz.ForLibrary(ctx, categoryID), musicbrainz.PriorityBackfill, artist.ArtistMBID)
 			job.Progress.Add(1)
 			if err != nil {
 				failed++

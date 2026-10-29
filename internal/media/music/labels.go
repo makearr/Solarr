@@ -82,11 +82,12 @@ func (j *EnrichJob) backfillLabels(ctx context.Context, budget int) {
 				continue
 			}
 			asked++
-			_, release, err := j.provider.Album(ctx, musicbrainz.PriorityBackfill, work.ExternalID, work.EditionLabel)
+			workCtx := musicbrainz.ForLibrary(ctx, j.workLibrary(ctx, work.WorkID))
+			_, release, err := j.provider.Album(workCtx, musicbrainz.PriorityBackfill, work.ExternalID, work.EditionLabel)
 			if err != nil {
 				continue
 			}
-			j.linkLabel(ctx, work.WorkID, release)
+			j.linkLabel(workCtx, work.WorkID, release)
 			if labelOf(release) != nil {
 				linked++
 			}

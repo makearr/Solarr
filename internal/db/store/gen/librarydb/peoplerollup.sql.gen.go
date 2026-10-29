@@ -247,6 +247,34 @@ func (q *Queries) ListPeopleOfWork(ctx context.Context, workID int64) ([]int64, 
 	return items, nil
 }
 
+const listPersonLibraryCategories = `-- name: ListPersonLibraryCategories :many
+SELECT category_id FROM person_library WHERE person_id = ? AND role = '' ORDER BY category_id
+`
+
+// The libraries holding a person's works, any role, by id.
+func (q *Queries) ListPersonLibraryCategories(ctx context.Context, personID int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listPersonLibraryCategories, personID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var category_id int64
+		if err := rows.Scan(&category_id); err != nil {
+			return nil, err
+		}
+		items = append(items, category_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkOrganisationIDsInRole = `-- name: ListWorkOrganisationIDsInRole :many
 SELECT organisation_id FROM work_organisation WHERE work_id = ? AND role = ? ORDER BY organisation_id
 `
