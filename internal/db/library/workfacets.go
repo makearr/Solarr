@@ -17,6 +17,7 @@ const (
 	FacetColumn         = "column"
 	FacetField          = "field"
 	FacetOrganisation   = "organisation"
+	FacetCredit         = "credit"
 	FacetClassification = "classification"
 	FacetGenreTree      = "genre_tree"
 )
@@ -73,6 +74,9 @@ func facetCondition(condition listfilter.Condition, facet WorkFacet) (string, []
 	case FacetOrganisation:
 		return existsValue(condition, "FROM work_organisation fo JOIN organisation fon ON fon.id = fo.organisation_id"+
 			" WHERE fo.work_id = work.id AND fo.role = ?", "fon.name", facet.Name)
+	case FacetCredit:
+		return existsValue(condition, "FROM credit fcr JOIN person fcp ON fcp.id = fcr.person_id"+
+			" WHERE fcr.work_id = work.id AND fcr.role = ?", "fcp.name", facet.Name)
 	case FacetClassification:
 		return existsValue(condition, "FROM work_classification fc WHERE fc.work_id = work.id AND fc.kind = ?", "fc.value", facet.Name)
 	case FacetGenreTree:
@@ -97,6 +101,9 @@ func facetSortColumn(facet WorkFacet) string {
 	case FacetOrganisation:
 		return "COALESCE((SELECT MIN(son.name) FROM work_organisation so JOIN organisation son ON son.id = so.organisation_id" +
 			" WHERE so.work_id = work.id AND so.role = " + name + "), '') COLLATE NOCASE"
+	case FacetCredit:
+		return "COALESCE((SELECT MIN(scp.name) FROM credit scr JOIN person scp ON scp.id = scr.person_id" +
+			" WHERE scr.work_id = work.id AND scr.role = " + name + "), '') COLLATE NOCASE"
 	case FacetClassification:
 		return "COALESCE((SELECT MIN(sc.value) FROM work_classification sc WHERE sc.work_id = work.id AND sc.kind = " + name + "), '') COLLATE NOCASE"
 	case FacetGenreTree:
@@ -192,6 +199,8 @@ func (w Works) FacetValues(ctx context.Context, facets []WorkFacet, workIDs []in
 	for source, query := range map[string]string{
 		FacetOrganisation: "SELECT wo.work_id, wo.role, o.name FROM work_organisation wo JOIN organisation o ON o.id = wo.organisation_id" +
 			" WHERE wo.work_id IN (%s) AND wo.role IN (%s) ORDER BY wo.work_id, o.name",
+		FacetCredit: "SELECT DISTINCT cr.work_id, cr.role, p.name FROM credit cr JOIN person p ON p.id = cr.person_id" +
+			" WHERE cr.work_id IN (%s) AND cr.role IN (%s) ORDER BY cr.work_id, p.name",
 		FacetClassification: "SELECT work_id, kind, value FROM work_classification WHERE work_id IN (%s) AND kind IN (%s) ORDER BY work_id, value",
 		FacetGenreTree: "SELECT DISTINCT ta.subject_id, t.genre_tree, t.name FROM tag_assignment ta JOIN tag t ON t.id = ta.tag_id" +
 			" WHERE ta.subject_type = 'work' AND ta.subject_id IN (%s) AND t.genre_tree IN (%s) ORDER BY ta.subject_id, t.name",

@@ -960,3 +960,42 @@ func TestListWorks_NarratorsAreTheNarratorCreditsInOrder(t *testing.T) {
 		t.Errorf("Narrators = %q / %q, want %q / empty", got[book.ID], got[plain.ID], "Heka Bokaru, Pipo Lower")
 	}
 }
+
+func TestListWorks_CreditFacetFiltersAndReadsNarrators(t *testing.T) {
+	opened, _ := newLibrary(t)
+	works := library.NewWorks(opened)
+	people := library.NewPeople(opened)
+	facets := []library.WorkFacet{{Key: "narrator", Source: library.FacetCredit, Name: "narrator", Kind: listfilter.Text}}
+
+	book := createWork(t, opened, "audiobook", "Pipo Tales")
+	other := createWork(t, opened, "audiobook", "Silent Pages")
+	for work, name := range map[int64]string{book.ID: "Heka Bokaru", other.ID: "Pipo Lower"} {
+		personID, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
+			Provider: "audible:person", ExternalID: name, Person: library.PersonIdentity{Name: name},
+		})
+		if err != nil {
+			t.Fatalf("ResolvePerson: %v", err)
+		}
+		if err := people.AddCredit(t.Context(), work, personID, "narrator", 0); err != nil {
+			t.Fatalf("AddCredit: %v", err)
+		}
+	}
+	conditions, err := listfilter.Parse(`[{"field":"narrator","op":"is","value":"heka bokaru"}]`, library.FacetFields(library.WorkFields, facets))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := works.List(t.Context(), library.WorkFilter{Where: conditions, Facets: facets}, library.WorkCursor{}, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].ID != book.ID {
+		t.Fatalf("rows = %+v, want only the book narrated by Heka Bokaru", rows)
+	}
+	values, err := works.FacetValues(t.Context(), facets, []int64{book.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"Heka Bokaru"}; !reflect.DeepEqual(values[book.ID]["narrator"], want) {
+		t.Errorf("narrator values = %v, want %v", values[book.ID]["narrator"], want)
+	}
+}

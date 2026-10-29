@@ -65,6 +65,10 @@ func (f Format) facets() []media.Facet {
 		},
 	}
 	if f.ByFolder {
+		facets = append(facets, media.Facet{
+			Key: "narrator", Label: "Narrator", Entity: model.LevelEntityWork, Kind: media.FacetText,
+			Source: media.FacetSource{Kind: media.SourceCredit, Name: RoleNarrator}, Column: true, Sortable: true, Filterable: true,
+		})
 		return append(facets, media.Facet{
 			Key: "runtime", Label: "Length", Entity: model.LevelEntityWork, Kind: media.FacetDuration,
 			Source: media.FacetSource{Kind: media.SourceColumn, Name: "runtime_ms"}, Column: true, Sortable: true,

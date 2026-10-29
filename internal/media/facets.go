@@ -30,6 +30,8 @@ const (
 	SourceField SourceKind = "field"
 	// SourceOrganisation is the work's organisation in one role.
 	SourceOrganisation SourceKind = "organisation"
+	// SourceCredit is the work's people credited in one role.
+	SourceCredit SourceKind = "credit"
 	// SourceClassification is the work's work_classification values of one kind.
 	SourceClassification SourceKind = "classification"
 	// SourceGenreTree is the work's tags of one genre tree, whoever assigned them.
@@ -74,7 +76,7 @@ func checkFacet(facet Facet) error {
 		if facet.Entity != model.LevelEntityWork || !slices.Contains(workColumns, facet.Source.Name) {
 			return fmt.Errorf("facet %s reads column %s, which a %s does not have", facet.Key, facet.Source.Name, facet.Entity)
 		}
-	case SourceField, SourceOrganisation, SourceClassification, SourceGenreTree:
+	case SourceField, SourceOrganisation, SourceCredit, SourceClassification, SourceGenreTree:
 		if facet.Source.Name == "" {
 			return fmt.Errorf("facet %s names no %s", facet.Key, facet.Source.Kind)
 		}
