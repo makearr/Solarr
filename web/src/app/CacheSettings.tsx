@@ -6,6 +6,8 @@ import { api, ok } from "@/api/client";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 
+import { Button } from "@/ui/Button";
+
 import { Card, Field, SaveBar } from "./SettingsCard";
 
 type CacheReport = components["schemas"]["CacheReport"];
@@ -185,6 +187,11 @@ function DatabaseMemoryCard() {
           >
             Set defaults
           </button>
+          <div className="mb-5">
+            <Button variant="primary" type="submit" disabled={save.isPending || !dirty}>
+              {save.isPending ? "Saving…" : "Save"}
+            </Button>
+          </div>
         </div>
         {data.restart_required && (
           <p className="text-xs text-warn">
@@ -218,7 +225,6 @@ function DatabaseMemoryCard() {
         </ul>
         <p className="text-xs text-ink-muted">Hit ratios count since Solarr started.</p>
       </Card>
-      <SaveBar dirty={dirty} busy={save.isPending} onSave={submit} />
     </form>
   );
 }
