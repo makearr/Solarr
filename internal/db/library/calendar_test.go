@@ -172,3 +172,23 @@ func TestCalendar_DatesCountTheSameReleases(t *testing.T) {
 		t.Errorf("dates = %+v, want %+v", dates, want)
 	}
 }
+
+// A film, a book or a scene stores its day as "release", not music's "street": the calendar lists it all the same.
+func TestCalendar_ListsWhatTheOtherTypesCallTheirReleaseDay(t *testing.T) {
+	opened, queries := newLibrary(t)
+	scene := createWork(t, opened, "adult", "A Wanted Scene")
+	if err := queries.SetWorkDate(t.Context(), librarydb.SetWorkDateParams{WorkID: scene.ID, Kind: "release", Date: "2026-10-25", Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
+	createDesired(t, opened, scene.ID, "SET", 1)
+
+	calendar := library.NewCalendar(opened)
+	entries, err := calendar.Entries(t.Context(), "2026-10-01", "2026-10-31", []int64{1}, 50)
+	if err != nil || len(entries) != 1 || entries[0].WorkID != scene.ID || entries[0].ReleaseDate != "2026-10-25" {
+		t.Fatalf("entries = %+v, %v; want the scene on its day", entries, err)
+	}
+	dates, err := calendar.Dates(t.Context(), "2026-10-01", "2026-10-31", []int64{1})
+	if err != nil || len(dates) != 1 || dates[0].Date != "2026-10-25" || dates[0].Releases != 1 {
+		t.Errorf("dates = %+v, %v", dates, err)
+	}
+}

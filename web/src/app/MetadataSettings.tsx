@@ -13,7 +13,7 @@ import { Card, Toggle } from "./SettingsCard";
 type Settings = components["schemas"]["MetadataSettings"];
 type Provider = components["schemas"]["MetadataProviderInfo"];
 
-const LIBRARY_LABEL: Record<string, string> = { music: "Music", tv: "Series", movie: "Movies", book: "Books", audiobook: "Audiobooks" };
+const LIBRARY_LABEL: Record<string, string> = { music: "Music", tv: "Series", movie: "Movies", book: "Books", audiobook: "Audiobooks", adult: "Adult" };
 
 /** What a provider is beyond what it carries. BrainzMash's is a privacy disclosure: a third party sees the searches. */
 const NOTES: Record<string, string> = {

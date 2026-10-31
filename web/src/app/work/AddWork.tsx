@@ -105,7 +105,8 @@ export function AddWork() {
           className="w-full rounded-md border border-border-subtle bg-surface py-2 pl-9 pr-3 text-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
         />
       </label>
-      {query.trim().length === 0 && info.roles.some((role) => role.lead) && <IncompleteDiscographies categoryId={Number(categoryId)} />}
+      {/* Discographies compare albums with an artist's: only music has them. */}
+      {query.trim().length === 0 && info.key === "music" && <IncompleteDiscographies categoryId={Number(categoryId)} />}
       {query.trim().length > 0 && debounced.length < MINIMUM_QUERY_LENGTH && <p className="text-sm text-ink-muted">Keep typing: at least two characters.</p>}
       {searchable && results.isFetching && !results.data && <p className="text-sm text-ink-muted">Searching…</p>}
       {searchable && results.isError && (

@@ -360,7 +360,7 @@ SELECT w.id, w.canonical_title, w.sort_title, w.subtype,
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
 LEFT JOIN person pa ON pa.id = w.lead_person_id
-WHERE wd.kind = sqlc.arg(kind)
+WHERE wd.kind IN (sqlc.arg(kind), 'release')
   AND wd.date >= sqlc.arg(from_date) AND wd.date <= sqlc.arg(to_date)
   AND (
     EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
@@ -383,7 +383,7 @@ FROM (
   SELECT MIN(wd.date) AS release_date
   FROM work_date wd
   JOIN work w ON w.id = wd.work_id
-  WHERE wd.kind = sqlc.arg(kind)
+  WHERE wd.kind IN (sqlc.arg(kind), 'release')
     AND wd.date >= sqlc.arg(from_date) AND wd.date <= sqlc.arg(to_date)
     AND (
       EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1

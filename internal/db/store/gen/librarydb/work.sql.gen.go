@@ -138,7 +138,7 @@ FROM (
   SELECT MIN(wd.date) AS release_date
   FROM work_date wd
   JOIN work w ON w.id = wd.work_id
-  WHERE wd.kind = ?1
+  WHERE wd.kind IN (?1, 'release')
     AND wd.date >= ?2 AND wd.date <= ?3
     AND (
       EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
@@ -1189,7 +1189,7 @@ SELECT w.id, w.canonical_title, w.sort_title, w.subtype,
 FROM work_date wd
 JOIN work w ON w.id = wd.work_id
 LEFT JOIN person pa ON pa.id = w.lead_person_id
-WHERE wd.kind = ?1
+WHERE wd.kind IN (?1, 'release')
   AND wd.date >= ?2 AND wd.date <= ?3
   AND (
     EXISTS (SELECT 1 FROM desired_item di WHERE di.work_id = w.id AND di.monitored = 1
