@@ -709,7 +709,7 @@ func recomputeAlbumTx(ctx context.Context, queries *librarydb.Queries, itemID, w
 		return fmt.Errorf("get item: %w", err)
 	}
 	return queries.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
-		State: albumState(item.RequiredCount, item.PresentCount), PresentCount: item.PresentCount, ID: itemID,
+		State: recountedState(item.State, item.RequiredCount, item.PresentCount), PresentCount: item.PresentCount, ID: itemID,
 	})
 }
 
@@ -943,6 +943,16 @@ func (d Desired) UpgradableItems(ctx context.Context, categoryID, afterID, pageS
 		}
 	}
 	return items, nil
+}
+
+// recountedState is the state after a recount: a COMPLETE count leaves an UPGRADABLE item as it is, because only the
+// cutoff check judges quality, and a rescan resetting it would make the upgrade it is downloading unwanted at import.
+func recountedState(previous string, required sql.NullInt64, present int64) string {
+	state := albumState(required, present)
+	if previous == "UPGRADABLE" && state == "COMPLETE" {
+		return previous
+	}
+	return state
 }
 
 // albumState derives MISSING/PARTIAL/COMPLETE from present against required.

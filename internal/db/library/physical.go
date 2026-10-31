@@ -649,7 +649,7 @@ func recomputeWorkItemsTx(ctx context.Context, queries *librarydb.Queries, workI
 			return err
 		}
 		if err := queries.SetDesiredItemState(ctx, librarydb.SetDesiredItemStateParams{
-			State: albumState(fresh.RequiredCount, fresh.PresentCount), PresentCount: fresh.PresentCount, ID: item.ID,
+			State: recountedState(fresh.State, fresh.RequiredCount, fresh.PresentCount), PresentCount: fresh.PresentCount, ID: item.ID,
 		}); err != nil {
 			return err
 		}
