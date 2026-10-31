@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/platform/hitcount", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
+	"cmd/solarr/app": {"internal/platform/hitcount", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/stashbox", "internal/metadata/whisparr", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -416,6 +416,8 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/itunes":      {},
 	"internal/metadata/fantlab":     {},
 	"internal/metadata/hardcover":   {"internal/platform/httpx"},
+	"internal/metadata/stashbox":    {"internal/platform/httpx"},
+	"internal/metadata/whisparr":    {"internal/platform/httpx"},
 	"internal/metadata/audible":     {"internal/platform/httpx"},
 	"internal/identify/parsebook":   {},
 	// Radarr's own keyless movie metadata service, the fallback behind TMDB.

@@ -447,6 +447,24 @@ func NewDefaultRegistry() *Registry {
 		Default:  "",
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyStashDBAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "StashDB key",
+		HelpText: "Your own API key from your StashDB account (stashdb.org): adult scenes, performers, studios and tags.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyThePornDBAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "ThePornDB key",
+		HelpText: "Your own API key from your ThePornDB account (theporndb.net): adult scenes, performers and sites.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyFansDBAPIKey, Kind: KindString, Tier: TierNormal,
+		Name:     "FansDB key",
+		HelpText: "Your own API key from your FansDB account (fansdb.cc): fan-platform scenes and creators.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyTMDBAPIKey, Kind: KindString, Tier: TierNormal,
 		Name:     "TMDB key",
 		HelpText: "Your own TMDB read access token or API key (themoviedb.org, free). Adds cast, crew, guest stars, artwork and alternative orderings to TV.",

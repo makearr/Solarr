@@ -128,6 +128,21 @@ Hardcover. Solarr asks the keyless ones in each library's order, Wikidata first.
 series, which Open Library does not keep. It never names the title: its title is the original language's, kept as an
 alias. An audiobook's ISBN is its own reading's, so Wikidata's ISBN fills only a book's.
 
+## Adult
+
+Whisparr (v3) asks its own metadata server, which is ThePornDB behind a cache; Stash identifies scenes against
+stash-box servers by name and by file fingerprint. Solarr asks both kinds in a library's order, Wikidata first.
+StashDB, FansDB and ThePornDB speak the stash-box GraphQL schema, so `internal/metadata/stashbox` is one client with an
+endpoint; each takes the owner's own key, sealed in `settings.db` and never shipped.
+
+| Provider | Carries | Built | Notes |
+|---|---|---|---|
+| Wikidata | performers' birth dates, countries, photos and biographies, studio and network ids | in the order, not yet read for adult | first by default |
+| Whisparr's server (`api.whisparr.com/v3`) | scenes with credits, sites with their scenes, genres, images | client built | no key; routes `scene/search`, `site/search`, `site/{id}` |
+| StashDB | scenes, performers (measurements, aliases, career, links), studios and networks, tags, fingerprints (oshash, phash, md5) | client built | a key; `searchScene`, `findScene`, `searchPerformer`, `findPerformer`, `findScenesBySceneFingerprints` |
+| ThePornDB (`theporndb.net/graphql`) | the same schema; its `queryScenes` wants `page`, `sort` and `direction` as strings, so Solarr uses `searchScene` | client built | a key |
+| FansDB | creators and fan-platform scenes | client built | a key; its server can fail a search with a database error, which is surfaced and not retried |
+
 ## Other media types (planned)
 
 Comics: ComicVine, Metron; games: IGDB, ScreenScraper. None is built; a media type is only as viable as its source

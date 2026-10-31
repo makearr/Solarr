@@ -47,6 +47,10 @@ const NOTES: Record<string, string> = {
   itunes: "Apple's audiobook catalogue: titles, authors, descriptions and large covers. No key.",
   fantlab: "The Russian fantasy and science fiction catalogue, as Audiobookshelf offers it: original titles, descriptions, ratings and covers. No key.",
   audible: "Audible's catalogue, read through Audnexus as Audiobookshelf does: narrators, length, series and covers of audiobooks. No key.",
+  whisparr: "Whisparr's own metadata server, backed by ThePornDB: scenes with their performers, sites and genres. No key.",
+  stashdb: "The community database Stash and Whisparr identify scenes with: scenes, performers, studios, tags and fingerprints. Needs your own key.",
+  theporndb: "Scenes, performers, sites and movies, with fingerprints. Needs your own key.",
+  fansdb: "StashDB's sister database for fan-platform creators and their scenes. Needs your own key.",
 };
 
 /** Where the owner gets the key of a provider that takes one through the generic key endpoint. */
@@ -55,6 +59,9 @@ const KEY_SIGNUP: Record<string, { url: string; label: string }> = {
   omdb: { url: "https://www.omdbapi.com/apikey.aspx", label: "omdbapi.com/apikey.aspx" },
   fanart: { url: "https://fanart.tv/get-an-api-key/", label: "fanart.tv/get-an-api-key" },
   hardcover: { url: "https://hardcover.app/account/api", label: "hardcover.app/account/api" },
+  stashdb: { url: "https://stashdb.org/users/me", label: "stashdb.org (your account)" },
+  theporndb: { url: "https://theporndb.net/user/api-tokens", label: "theporndb.net/user/api-tokens" },
+  fansdb: { url: "https://fansdb.cc/users/me", label: "fansdb.cc (your account)" },
   googlebooks: { url: "https://console.cloud.google.com/apis/library/books.googleapis.com", label: "console.cloud.google.com" },
 };
 

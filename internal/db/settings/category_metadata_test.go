@@ -162,3 +162,27 @@ func TestProviderPaceIsAPersonsUpToTheProvidersLimit(t *testing.T) {
 		t.Errorf("musicbrainz = %d, want its own 30 kept", pace)
 	}
 }
+
+func TestAnAdultLibraryAsksWikidataWhisparrAndTheStashBoxServersInThatOrder(t *testing.T) {
+	cache, _ := newCache(t)
+	adult, err := cache.CreateCategory(t.Context(), "adult", "Adult", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	created, _ := snapshot.Category(adult.ID)
+	if want := []string{"wikidata", "whisparr", "stashdb", "theporndb", "fansdb"}; !slices.Equal(snapshot.MetadataSourcesFor(created), want) {
+		t.Errorf("a new adult library starts with %v, want %v", snapshot.MetadataSourcesFor(created), want)
+	}
+	if err := cache.SetCategoryMetadataSources(t.Context(), adult.ID, []string{"fansdb", "stashdb"}); err != nil {
+		t.Errorf("a stash-box server alone is a valid order: %v", err)
+	}
+	if err := cache.SetCategoryMetadataSources(t.Context(), adult.ID, []string{"tmdb"}); err == nil {
+		t.Error("a film provider is no source for an adult library")
+	}
+	for _, key := range []string{"stashdb", "theporndb", "fansdb"} {
+		if _, has := settings.ProviderKeySetting(key); !has {
+			t.Errorf("%s takes an owner's key", key)
+		}
+	}
+}

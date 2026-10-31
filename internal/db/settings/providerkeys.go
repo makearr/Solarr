@@ -17,12 +17,17 @@ const (
 	KeyGoogleBooksAPIKey = "metadata.googlebooks.api_key"
 	// KeyHardcoverAPIKey is the owner's Hardcover API token (hardcover.app/account/api).
 	KeyHardcoverAPIKey = "metadata.hardcover.api_key"
+	// The owner's keys for the stash-box servers, from the account page of each.
+	KeyStashDBAPIKey   = "metadata.stashdb.api_key"
+	KeyThePornDBAPIKey = "metadata.theporndb.api_key"
+	KeyFansDBAPIKey    = "metadata.fansdb.api_key"
 )
 
 // providerKeySettings maps a provider to the setting its key is sealed under.
 var providerKeySettings = map[string]string{
 	MovieSourceMDBList: KeyMDBListAPIKey, MovieSourceOMDb: KeyOMDbAPIKey, MovieSourceFanart: KeyFanartAPIKey,
 	BookSourceGoogleBooks: KeyGoogleBooksAPIKey, BookSourceHardcover: KeyHardcoverAPIKey,
+	AdultSourceStashDB: KeyStashDBAPIKey, AdultSourceThePornDB: KeyThePornDBAPIKey, AdultSourceFansDB: KeyFansDBAPIKey,
 	TVSourceTMDB: KeyTMDBAPIKey, TVSourceTVDB: KeyTVDBAPIKey, SourceTheAudioDB: KeyTheAudioDBAPIKey, SourceAcoustID: KeyAcoustIDAPIKey,
 }
 

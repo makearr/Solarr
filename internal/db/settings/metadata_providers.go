@@ -38,6 +38,17 @@ var DefaultBookSources = []string{SourceWikidata, BookSourceOpenLibrary, BookSou
 // DefaultAudiobookSources is Wikidata to steer, Audible for the reading (narrators, length, series), then the book providers.
 var DefaultAudiobookSources = []string{SourceWikidata, BookSourceAudible, BookSourceITunes, BookSourceOpenLibrary, BookSourceGoogleBooks, BookSourceHardcover}
 
+// The adult providers: Whisparr's server, backed by ThePornDB, and three stash-box servers.
+const (
+	AdultSourceWhisparr  = "whisparr"
+	AdultSourceStashDB   = "stashdb"
+	AdultSourceThePornDB = "theporndb"
+	AdultSourceFansDB    = "fansdb"
+)
+
+// DefaultAdultSources is Wikidata to steer, Whisparr's keyless server, then the stash-box servers StashDB, ThePornDB and FansDB.
+var DefaultAdultSources = []string{SourceWikidata, AdultSourceWhisparr, AdultSourceStashDB, AdultSourceThePornDB, AdultSourceFansDB}
+
 // SourceWikidata is Wikidata in a library's order: the ids its item records steer the other providers to the right entry.
 const SourceWikidata = "wikidata"
 
@@ -85,7 +96,7 @@ const KeyMetadataProviderPaces = "metadata.provider_paces"
 
 // MetadataProviders are the providers a library's order is made of.
 var MetadataProviders = []MetadataProvider{
-	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
+	{Key: SourceWikidata, Label: "Wikidata", MediaTypes: []string{"tv", "movie", "book", "audiobook", "adult"}, AlsoFor: []string{"music"}, Carries: []string{"the ids every other provider knows a work by", "franchises and spin-offs", "artist photos and biographies", "people across libraries"},
 		PerMinute: 60, Published: "one request at a time; no rate published"},
 	{Key: SourceBrainzMash, Label: "BrainzMash", MediaTypes: []string{"music"}, Carries: []string{"artists", "albums", "tracklists", "credits", "genres", "links"},
 		PerMinute: 600, Published: "none published (its DroppedNeedle pool documents 10 a second)"},
@@ -123,6 +134,14 @@ var MetadataProviders = []MetadataProvider{
 		PerMinute: 20, MaxPerMinute: 20, Published: "about 20 a minute"},
 	{Key: BookSourceFantLab, Label: "FantLab", MediaTypes: []string{"book", "audiobook"}, Carries: []string{"fantasy and science fiction works", "original titles", "descriptions", "ratings", "covers"},
 		PerMinute: 60, Published: "none published"},
+	{Key: AdultSourceWhisparr, Label: "Whisparr's metadata server", MediaTypes: []string{"adult"}, Carries: []string{"scenes", "performer credits", "sites and studios", "genres", "images"},
+		PerMinute: 240, Published: "none published; shared by every Whisparr"},
+	{Key: AdultSourceStashDB, Label: "StashDB", MediaTypes: []string{"adult"}, Carries: []string{"scenes", "performers", "studios and networks", "tags", "fingerprints", "images"}, NeedsKey: true,
+		PerMinute: 120, Published: "none published; a community server, asked gently"},
+	{Key: AdultSourceThePornDB, Label: "ThePornDB", MediaTypes: []string{"adult"}, Carries: []string{"scenes", "performers", "sites", "movies", "tags", "fingerprints", "images"}, NeedsKey: true,
+		PerMinute: 120, Published: "none published"},
+	{Key: AdultSourceFansDB, Label: "FansDB", MediaTypes: []string{"adult"}, Carries: []string{"fan-platform scenes", "creators", "tags", "fingerprints", "images"}, NeedsKey: true,
+		PerMinute: 120, Published: "none published; a community server, asked gently"},
 	{Key: SourceTheAudioDB, Label: "TheAudioDB", AlsoFor: []string{"music"}, Carries: []string{"artist photos and biographies", "album covers"},
 		PerMinute: 120, Published: "none published for the free key"},
 	{Key: SourceCoverArtArchive, Label: "Cover Art Archive", AlsoFor: []string{"music"}, Carries: []string{"album covers"},
@@ -256,6 +275,8 @@ func DefaultMetadataSources(mediaType, kind string) []string {
 		return slices.Clone(DefaultBookSources)
 	case "audiobook":
 		return slices.Clone(DefaultAudiobookSources)
+	case "adult":
+		return slices.Clone(DefaultAdultSources)
 	case "music":
 		return slices.Clone(DefaultMetadataSourceOrder)
 	}
