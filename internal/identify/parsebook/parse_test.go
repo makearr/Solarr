@@ -2,6 +2,7 @@ package parsebook_test
 
 import (
 	"reflect"
+	"slices"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/identify/parsebook"
@@ -12,6 +13,13 @@ func TestParsePath_AFolderBelowAnAuthorIsATitleWithItsSubtitle(t *testing.T) {
 	want := parsebook.Info{Author: "Mara Quell", Title: "The Lantern Keeper", Titles: []string{"The Lantern Keeper", "The Lantern Keeper - A Novel", "A Novel"}, Formats: []string{"mp3"}}
 	if !ok || !reflect.DeepEqual(got, want) {
 		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
+func TestParse_ATitleThatStartsWithANumberKeepsItAsAReading(t *testing.T) {
+	got, ok := parsebook.Parse("Mara Quell - 9 from the Lantern Worlds.epub")
+	if !ok || got.Title != "from the Lantern Worlds" || !slices.Contains(got.Titles, "9 from the Lantern Worlds") {
+		t.Errorf("got %+v", got)
 	}
 }
 

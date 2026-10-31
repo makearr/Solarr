@@ -219,7 +219,7 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 			unreadable = append(unreadable, candidate)
 		}
 	}
-	if len(unreadable) == 1 && len(named) == 1 {
+	if len(unreadable) > 0 && len(unreadable) == len(named) {
 		return unreadable[0], true
 	}
 	return Candidate{}, false

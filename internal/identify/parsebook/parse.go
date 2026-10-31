@@ -137,7 +137,7 @@ func (info *Info) split(clean string) {
 		}
 	default:
 		info.Author = parts[0]
-		info.Title = stripNumbering(parts[len(parts)-1])
+		info.Title = parts[len(parts)-1]
 		if len(parts) > 2 {
 			info.Titles = append(info.Titles, strings.Join(parts[1:], " - "))
 			// "Title - A Novel" is a title with a subtitle as often as "Series - Title", unless the first part is numbered.
@@ -149,8 +149,13 @@ func (info *Info) split(clean string) {
 			info.Title, info.Author = strings.TrimSpace(found[1]), strings.TrimSpace(found[2])
 		}
 	}
+	unnumbered := info.Title
 	info.Title = stripNumbering(info.Title)
 	info.Titles = append([]string{info.Title}, info.Titles...)
+	if unnumbered != info.Title {
+		// "9 from the Nine Worlds" starts like a numbered file but is the title.
+		info.Titles = append(info.Titles, unnumbered)
+	}
 	if before, _, found := strings.Cut(info.Title, ":"); found && strings.TrimSpace(before) != "" {
 		info.Titles = append(info.Titles, strings.TrimSpace(before))
 	}
