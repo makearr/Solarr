@@ -103,7 +103,11 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		if err != nil {
 			return fmt.Errorf("tv: %w", err)
 		}
-		files[i] = library.PhysicalFile{RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes, QuickHash: hash, FirstSeenAt: now}
+		oshash, err := library.OSHash(c.config.FS, path.Join(root.Path, observed.File.RelPath), observed.File.SizeBytes)
+		if err != nil {
+			return fmt.Errorf("tv: %w", err)
+		}
+		files[i] = library.PhysicalFile{RelPath: observed.File.RelPath, SizeBytes: observed.File.SizeBytes, QuickHash: hash, OSHash: oshash, FirstSeenAt: now}
 	}
 	registered, err := c.config.Physical.RegisterBatch(ctx, root.ID, files)
 	if err != nil {

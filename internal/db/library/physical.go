@@ -18,7 +18,7 @@ import (
 
 // quickHashSampleBytes is how much of a file's head and tail the quick hash reads --
 // section 10.4's "stat verify" layer, cheap enough to run on every newly seen path,
-// unlike the exact oshash a background job computes later (ADR-35).
+// unlike the full-file content hash.
 const quickHashSampleBytes = 65536
 
 // QuickHash is media_object.quick_hash: size plus a head and tail sample. It is not a
@@ -56,9 +56,11 @@ func QuickHash(fsys fsx.FS, absolutePath string, size int64) (string, error) {
 // Register never reads bytes itself, since a file read cannot happen while holding
 // the write transaction it runs in (Invariant 2).
 type PhysicalFile struct {
-	RelPath     string
-	SizeBytes   int64
-	QuickHash   string
+	RelPath   string
+	SizeBytes int64
+	QuickHash string
+	// OSHash is empty for anything but video.
+	OSHash      string
 	FirstSeenAt time.Time
 }
 
@@ -158,7 +160,7 @@ func findOrCreateObject(ctx context.Context, queries *librarydb.Queries, file Ph
 	}
 
 	created, err := queries.CreateMediaObject(ctx, librarydb.CreateMediaObjectParams{
-		SizeBytes: file.SizeBytes, QuickHash: file.QuickHash,
+		SizeBytes: file.SizeBytes, QuickHash: file.QuickHash, Oshash: sql.NullString{String: file.OSHash, Valid: file.OSHash != ""},
 		FirstSeenAt: file.FirstSeenAt.Unix(), Kind: sql.NullString{String: string(filekind.Of(file.RelPath)), Valid: true},
 	})
 	if err != nil {
