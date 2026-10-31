@@ -200,12 +200,16 @@ func (c Cutoff) stateFor(ctx context.Context, snapshot *settings.Snapshot, item 
 	if !found {
 		return "", false, cutoff.Tally{}, nil
 	}
-	if !category.QualityUpgrades || c.NeverUpgrades {
+	if c.NeverUpgrades {
 		return StateComplete, true, cutoff.Tally{}, nil
 	}
 	files, err := c.Files(ctx, item.ID)
 	if err != nil {
 		return "", false, cutoff.Tally{}, fmt.Errorf("cutoff check item %d: %w", item.ID, err)
+	}
+	if !category.QualityUpgrades {
+		// Counted for the statistics page; the item stays complete because the library never upgrades.
+		return StateComplete, true, c.tally(snapshot, category, files), nil
 	}
 	if len(files) == 0 || !allMeasured(files) {
 		return "", false, cutoff.Tally{}, nil
@@ -239,6 +243,26 @@ func (c Cutoff) stateFor(ctx context.Context, snapshot *settings.Snapshot, item 
 		return StateUpgradable, true, tally, nil
 	}
 	return StateComplete, true, tally, nil
+}
+
+// tally counts the monitored files the profile can judge and those that miss the cutoff.
+func (c Cutoff) tally(snapshot *settings.Snapshot, category settings.Category, files []File) cutoff.Tally {
+	var tally cutoff.Tally
+	if c.Versions {
+		return tally
+	}
+	for _, file := range files {
+		if !file.Monitored || !file.Measured {
+			continue
+		}
+		if judgement, judged := quality.Judge(snapshot, category, file.Facts); judged {
+			tally.Judged++
+			if !judgement.MeetsCutoff {
+				tally.BelowCutoff++
+			}
+		}
+	}
+	return tally
 }
 
 // BelowCutoff are the item's files that miss the library's cutoff, by part, the first of each: what an upgrade
