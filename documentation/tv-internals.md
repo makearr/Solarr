@@ -164,7 +164,7 @@ the named resolution/codec/HDR the best tier of their dimension and puts them fi
 
 ## Upgrades
 
-A monitored season whose episodes are all present is judged by `tv.cutoff_check` (nightly and after every import of that series) against the library's target or cutoff, using what the probe measured: any monitored episode file below it makes the season UPGRADABLE, the state the planner already hunts as an upgrade (24 h minimum file age, three imports a week by default, from the profile's `upgrade` block). A season that still has gaps stays PARTIAL and hunts its gaps first.
+A monitored season whose episodes are all present is judged by `tv.cutoff_check` (nightly and after every import of that series) against the library's target or cutoff, using what the probe measured: any monitored episode file below it makes the season UPGRADABLE, the state the planner already hunts as an upgrade (24 h minimum file age for automatic searches; a person's own search or grab ignores it, three imports a week by default, from the profile's `upgrade` block). A season that still has gaps stays PARTIAL and hunts its gaps first.
 
 The search of an UPGRADABLE season wants only the episodes below the cutoff and rejects a release that does not beat the file it replaces on the quality tiers (a tie keeps the owned file). Source, release group and repack are left out of that comparison: a release name states them and a measured file does not, so they would make every release look better. The importer places an upgrade next to the owned file (suffix ` [upgrade]` when both are named alike) and the cutoff check, once both files are measured, keeps the better one and moves the other to the recycle bin (reason `replaced`, or `rejected_worse` for a download that was no better).
 
