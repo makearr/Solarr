@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
+	"github.com/makearr/Solarr/internal/metadata/stashbox"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/service/importlist"
@@ -233,5 +235,50 @@ func TestOptionsEncodeAlikeForEqualSettings(t *testing.T) {
 	}
 	if empty, err := importlist.DecodeOptions(""); err != nil || len(empty) != 0 {
 		t.Errorf("empty decoded %+v, err = %v", empty, err)
+	}
+}
+
+type fakeStash struct {
+	scenes     []stashbox.Scene
+	configured bool
+	asked      []string
+}
+
+func (f *fakeStash) Configured() bool { return f.configured }
+
+func (f *fakeStash) FavouriteScenes(_ context.Context, favourite string, page, perPage int) ([]stashbox.Scene, error) {
+	f.asked = append(f.asked, favourite+":"+strconv.Itoa(page))
+	start := (page - 1) * perPage
+	if start >= len(f.scenes) {
+		return nil, nil
+	}
+	return f.scenes[start:min(start+perPage, len(f.scenes))], nil
+}
+
+func TestStashFavouritesReadsTheNewestScenesOfTheFavouriteKindAndStopsAtTheCount(t *testing.T) {
+	scenes := make([]stashbox.Scene, 120)
+	for i := range scenes {
+		scenes[i] = stashbox.Scene{ID: "s" + strconv.Itoa(i), Title: "Scene " + strconv.Itoa(i), ReleaseDate: "2026-01-02"}
+	}
+	server := &fakeStash{scenes: scenes, configured: true}
+	catalogue := importlist.NewCatalogue(&fakeAniList{}, &fakeTMDB{}, fall2026).WithStash(map[string]importlist.StashServer{"stashdb": server})
+	kind, _ := catalogue.Kind(media.ListStashFavourites)
+	entries, err := kind.Source.Entries(t.Context(), importlist.Options{"favourites": "STUDIO", "newest": "100"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 100 || entries[0].Key() != (media.ProviderID{Provider: "stashdb", ExternalID: "s0"}) || entries[0].Year != 2026 || entries[0].Form != "scene" {
+		t.Errorf("entries = %d, first = %+v", len(entries), entries[0])
+	}
+	if want := []string{"STUDIO:1", "STUDIO:2"}; !reflect.DeepEqual(server.asked, want) {
+		t.Errorf("asked %v, want %v", server.asked, want)
+	}
+}
+
+func TestStashFavouritesWithoutAKeyIsAnErrorNotAnEmptyList(t *testing.T) {
+	catalogue := importlist.NewCatalogue(&fakeAniList{}, &fakeTMDB{}, fall2026).WithStash(map[string]importlist.StashServer{"stashdb": &fakeStash{}})
+	kind, _ := catalogue.Kind(media.ListStashFavourites)
+	if _, err := kind.Source.Entries(t.Context(), importlist.Options{}); !errors.Is(err, importlist.ErrNeedsStashKey) {
+		t.Errorf("err = %v, want ErrNeedsStashKey", err)
 	}
 }

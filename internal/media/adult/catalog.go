@@ -20,6 +20,8 @@ type Catalog struct {
 	DefaultProfileID int64
 	// AllowAgain lifts the exclusion of a scene a person removed and now adds on purpose; nil lifts nothing.
 	AllowAgain func(ctx context.Context, provider, externalID string) error
+	// Performers adds a performer a person looked up; nil leaves the add dialog without performers.
+	Performers *PerformerAdds
 }
 
 var _ media.Adding = Catalog{}
@@ -30,11 +32,27 @@ func (c Catalog) shared() works.Catalog {
 
 // LookupWorks implements media.Adding.
 func (c Catalog) LookupWorks(ctx context.Context, lookup media.AddLookup) ([]media.AddCandidate, error) {
+	if lookup.Kind == KindPerformer {
+		if c.Performers == nil {
+			return nil, media.ErrNotWired
+		}
+		return c.Performers.Lookup(ctx, c.Service, lookup)
+	}
 	return c.shared().LookupWorks(ctx, lookup)
 }
 
 // AddWork implements media.Adding: the scene with Whisparr's Monitor choice.
 func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.AddResult, error) {
+	if request.Kind == KindPerformer {
+		if c.Performers == nil {
+			return media.AddResult{}, media.ErrNotWired
+		}
+		category, ok := c.Categories.Category(request.CategoryID)
+		if !ok {
+			return media.AddResult{}, fmt.Errorf("%w: no such library", media.ErrInvalidAdd)
+		}
+		return c.Performers.Add(ctx, c.Service, category.ID, request)
+	}
 	return c.shared().AddWork(ctx, request)
 }
 

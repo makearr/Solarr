@@ -18,7 +18,7 @@ func (p *process) importListService() importlist.Service {
 	return importlist.Service{
 		Lists: p.cache, Records: library.NewImportLists(p.library), Exclusions: library.NewExclusions(p.library),
 		Works: library.NewSeries(p.library), Libraries: adapters.Categories{Cache: p.cache}, Media: p.media,
-		Catalogue: importlist.NewCatalogue(p.anilistShared, p.tmdbShared, func() importlist.Season { return importlist.SeasonOf(wall.Now()) }),
+		Catalogue: importlist.NewCatalogue(p.anilistShared, p.tmdbShared, func() importlist.Season { return importlist.SeasonOf(wall.Now()) }).WithStash(p.stashServers()),
 		Clock:     wall, Logger: p.logger,
 		AfterAdd: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
 	}

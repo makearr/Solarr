@@ -368,7 +368,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/platform/parallel": {},
 	"internal/service/follow":    {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/platform/clock"},
 	// Import lists (ADR-38): AniList and TMDB lists read, previewed and synced through each media type's add.
-	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
+	"internal/service/importlist": {"internal/db/library", "internal/db/settings", "internal/jobs", "internal/media", "internal/metadata/anilist", "internal/metadata/stashbox", "internal/metadata/tmdb", "internal/platform/clock", "internal/platform/config"},
 	"internal/media":              {"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/judge", "internal/acquiring/rss", "internal/moving/renamejob", "internal/acquiring/plan", "internal/db/settings", "internal/identify/model", "internal/jobs", "internal/moving/naming", "internal/scanning/scan"},
 	"internal/moving/sidecar":     {"internal/db/settings", "internal/platform/fsx"},
 	"internal/importing/placer":   {"internal/importing/inspect", "internal/db/library", "internal/db/settings", "internal/moving/mover", "internal/moving/placement", "internal/platform/clock", "internal/platform/fsx"},

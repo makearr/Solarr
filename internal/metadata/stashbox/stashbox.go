@@ -309,3 +309,26 @@ func (c Client) ScenesOf(ctx context.Context, filter SceneFilter, page, perPage 
 	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
 	return found.Query.Scenes, err
 }
+
+// Favourites are the account's own favourites a scene list is narrowed to.
+const (
+	FavouritePerformers = "PERFORMER"
+	FavouriteStudios    = "STUDIO"
+	FavouriteEither     = "ALL"
+)
+
+// FavouriteScenes lists the newest scenes of the key's account's favourite performers, studios or either, on the page
+// asked for (from 1). ThePornDB takes no such filter and answers ErrUnsupported.
+func (c Client) FavouriteScenes(ctx context.Context, favourite string, page, perPage int) ([]Scene, error) {
+	if c.endpoint == ThePornDBEndpoint {
+		return nil, ErrUnsupported
+	}
+	input := map[string]any{"favorites": favourite, "sort": "DATE", "direction": "DESC", "page": max(page, 1), "per_page": max(perPage, 1)}
+	var found struct {
+		Query struct {
+			Scenes []Scene `json:"scenes"`
+		} `json:"queryScenes"`
+	}
+	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
+	return found.Query.Scenes, err
+}

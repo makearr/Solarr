@@ -31,6 +31,7 @@ type Server interface {
 	FindScene(ctx context.Context, id string) (stashbox.Scene, error)
 	ScenesByFingerprint(ctx context.Context, files [][]stashbox.Fingerprint) ([][]stashbox.Scene, error)
 	FindPerformer(ctx context.Context, id string) (stashbox.Performer, error)
+	SearchPerformers(ctx context.Context, term string, limit int) ([]stashbox.Performer, error)
 	ScenesOf(ctx context.Context, filter stashbox.SceneFilter, page, perPage int) ([]stashbox.Scene, error)
 }
 
@@ -458,4 +459,44 @@ func (s Service) WorkByIDs(ctx context.Context, ids IDs) (int64, bool) {
 		}
 	}
 	return 0, false
+}
+
+// PerformerHit is a performer a search found, with the server that knows them.
+type PerformerHit struct {
+	Server    string
+	Performer stashbox.Performer
+}
+
+// SearchPerformers finds performers by name or alias at the first server of the library's order that has any.
+func (s Service) SearchPerformers(ctx context.Context, categoryID int64, term string, limit int) ([]PerformerHit, error) {
+	term = strings.TrimSpace(term)
+	if term == "" {
+		return nil, nil
+	}
+	var failure error
+	for _, name := range s.order(categoryID) {
+		server, ok := s.Servers[name]
+		if !ok || server == nil || !server.Configured() {
+			continue
+		}
+		found, err := server.SearchPerformers(ctx, term, limit)
+		if err != nil {
+			failure = err
+			s.warn(name, term, err)
+			continue
+		}
+		hits := make([]PerformerHit, 0, len(found))
+		for _, performer := range found {
+			if performer.MergedIntoID == "" {
+				hits = append(hits, PerformerHit{Server: name, Performer: performer})
+			}
+		}
+		if len(hits) > 0 {
+			return hits, nil
+		}
+	}
+	if failure != nil {
+		return nil, fmt.Errorf("adult: search performers %q: %w", term, failure)
+	}
+	return nil, nil
 }

@@ -56,6 +56,10 @@ func (*fakeServer) FindPerformer(context.Context, string) (stashbox.Performer, e
 	return stashbox.Performer{}, stashbox.ErrNotFound
 }
 
+func (f *fakeServer) SearchPerformers(context.Context, string, int) ([]stashbox.Performer, error) {
+	return nil, nil
+}
+
 func (f *fakeServer) ScenesOf(_ context.Context, filter stashbox.SceneFilter, _, _ int) ([]stashbox.Scene, error) {
 	f.asked = append(f.asked, "of:"+filter.PerformerID+filter.StudioID)
 	return f.scenes, nil
@@ -330,5 +334,70 @@ func TestThePerformersSweepFillsThePageAndTakesTheBiographyFromTheLinkedWikidata
 	}
 	if !reflect.DeepEqual(people.refreshed, []int64{7}) {
 		t.Errorf("refreshed = %v", people.refreshed)
+	}
+}
+
+type fakePeopleStore struct {
+	resolved    []library.PersonLink
+	subscribed  []library.SubscriptionRequest
+	backfilled  []library.PersonIdentity
+	extrasKept  []library.PersonExtras
+	heldPersons map[string]int64
+}
+
+func (f *fakePeopleStore) FindByExternalID(_ context.Context, provider, id string) (int64, bool, error) {
+	person, held := f.heldPersons[provider+"|"+id]
+	return person, held, nil
+}
+
+func (f *fakePeopleStore) ResolvePerson(_ context.Context, _ time.Time, link library.PersonLink) (int64, error) {
+	f.resolved = append(f.resolved, link)
+	return 42, nil
+}
+
+func (f *fakePeopleStore) BackfillDetails(_ context.Context, _ int64, identity library.PersonIdentity) error {
+	f.backfilled = append(f.backfilled, identity)
+	return nil
+}
+
+func (f *fakePeopleStore) SetExtras(_ context.Context, _ int64, extras library.PersonExtras) error {
+	f.extrasKept = append(f.extrasKept, extras)
+	return nil
+}
+
+func (f *fakePeopleStore) Subscribe(_ context.Context, _ time.Time, _, _ int64, request library.SubscriptionRequest) (int64, error) {
+	f.subscribed = append(f.subscribed, request)
+	return 7, nil
+}
+
+type searchingServer struct{ performerServer }
+
+func (searchingServer) SearchPerformers(context.Context, string, int) ([]stashbox.Performer, error) {
+	return []stashbox.Performer{{ID: "p-1", Name: "Ada Vale", Country: "CZ", BirthDate: "1990-04-03", SceneCount: 12}, {ID: "p-2", Name: "Ada Old", MergedIntoID: "p-1"}}, nil
+}
+
+func TestAddingAPerformerMakesThePersonWithTheirDetailsAndFollowsThemWhenMonitored(t *testing.T) {
+	people := &fakePeopleStore{heldPersons: map[string]int64{"stashdb:performer|p-1": 9}}
+	service := Service{Servers: map[string]Server{ProviderStashDB: searchingServer{performerServer{&fakeServer{}}}}, Sources: []string{ProviderStashDB}}
+	adds := PerformerAdds{People: people, Now: func() time.Time { return time.Unix(100, 0) }}
+	found, err := adds.Lookup(t.Context(), service, media.AddLookup{CategoryID: 1, Kind: KindPerformer, Query: "ada", Limit: 5})
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found = %+v, %v; want the one performer a merged duplicate does not add", found, err)
+	}
+	if got := found[0]; got.Provider != "stashdb:performer" || got.Title != "Ada Vale" || got.Subtitle != "CZ - 12 scenes" || got.Year != 1990 || got.LibraryID != 9 {
+		t.Errorf("candidate = %+v", got)
+	}
+	result, err := adds.Add(t.Context(), service, 1, media.AddRequest{Kind: KindPerformer, Provider: "stashdb:performer", ExternalID: "p-1", Monitored: true, UserID: 3})
+	if err != nil || result.PersonID != 42 || result.Kind != KindPerformer {
+		t.Fatalf("result = %+v, %v", result, err)
+	}
+	if len(people.resolved) != 1 || people.resolved[0].Provider != "stashdb:performer" || people.resolved[0].ExternalID != "p-1" || len(people.extrasKept) != 1 {
+		t.Errorf("resolved = %+v, extras = %+v", people.resolved, people.extrasKept)
+	}
+	if len(people.subscribed) != 1 || !people.subscribed[0].MonitorBackCatalogue || people.subscribed[0].CategoryID != 1 || people.subscribed[0].Roles[0] != RolePerformer {
+		t.Errorf("subscribed = %+v", people.subscribed)
+	}
+	if _, err := adds.Add(t.Context(), service, 1, media.AddRequest{Kind: KindPerformer, Provider: "tmdb", ExternalID: "1"}); !errors.Is(err, media.ErrInvalidAdd) {
+		t.Errorf("a provider that is no performer's: err = %v", err)
 	}
 }

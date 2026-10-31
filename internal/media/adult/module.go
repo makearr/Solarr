@@ -171,7 +171,7 @@ func (Module) Descriptor() media.Descriptor {
 			{Key: string(MonitorNone), Label: "None"},
 		},
 		WorkImage: media.ImagePoster,
-		AddKinds:  []media.Choice{{Key: MediaType, Label: "Scenes"}},
+		AddKinds:  []media.Choice{{Key: MediaType, Label: "Scenes"}, {Key: KindPerformer, Label: "Performers"}},
 		Kinds:     kinds(),
 		// A held import file is committed by hand, and a removed scene's file is left out by the scan.
 		CommitsHeldImports:    true,
@@ -203,3 +203,16 @@ func (m Module) AddFollowed(ctx context.Context, follow media.Follow, candidate 
 
 // FollowLimit implements media.Following.
 func (m Module) FollowLimit(follow media.Follow) int { return Following{}.FollowLimit(follow) }
+
+// ImportListTypes implements media.ListResolving: the scenes of a stash-box account's favourites.
+func (Module) ImportListTypes() []media.ListType { return []media.ListType{media.ListStashFavourites} }
+
+// ResolveListEntry implements media.ListResolving: an entry is a scene its server names, added by that server's id.
+func (Module) ResolveListEntry(_ context.Context, entry media.ListEntry) (media.ListMatch, error) {
+	for _, id := range entry.IDs {
+		if _, named := NamedIDs(id.Provider, id.ExternalID); named {
+			return media.ListMatch{ProviderID: id, Found: true}, nil
+		}
+	}
+	return media.ListMatch{}, nil
+}

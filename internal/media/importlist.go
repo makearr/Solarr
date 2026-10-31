@@ -12,6 +12,8 @@ const (
 	ListTMDBList      ListType = "tmdb_list"
 	ListTMDBTrending  ListType = "tmdb_trending_tv"
 	ListTMDBPopular   ListType = "tmdb_popular_tv"
+	// ListStashFavourites is the newest scenes of an account's favourites at a stash-box server (adult libraries).
+	ListStashFavourites ListType = "stashbox_favourites"
 )
 
 // ProviderID is one id a provider gives an entry.

@@ -41,10 +41,22 @@ eyes, height, measurements, breasts, career, tattoos, piercings), links and a pi
 `library.PersonExtras` in `person.fields_json` without knowing what they mean (ADR-23). A biography comes from Wikidata's
 Wikipedia lead when a server links the performer to an item.
 
+## Adding
+
+The add dialog takes **Scenes** (looked up by title, "[Studio] Title" narrowing it to a studio) and **Performers**. Adding a
+performer searches the servers in the library's order, makes the person with everything the server says of them and, when
+monitored, follows them back to their first scene (Whisparr's "Add performer"). Studios are followed from a studio's own page.
+
 ## Following
 
 Following a performer or a studio (Whisparr's monitored performers and studios) adds the scenes a server lists for them: those
 out since the follow was made (two weeks earlier), or the whole back catalogue, five at a time. Added scenes are monitored.
+
+## Import list
+
+*Stash-box favourites* adds the newest scenes of the performers and studios you favourited at StashDB or FansDB (the account
+your API key belongs to), as Whisparr's StashDB list does. It reads the newest 50 to 500 scenes each time and skips what is
+held. [import-lists.md](import-lists.md).
 
 ## Acquisition
 

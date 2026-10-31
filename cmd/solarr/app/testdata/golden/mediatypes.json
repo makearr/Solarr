@@ -1091,6 +1091,10 @@
       {
         "key": "adult",
         "label": "Scenes"
+      },
+      {
+        "key": "performer",
+        "label": "Performers"
       }
     ],
     "commit_guess_floor": 0.75,

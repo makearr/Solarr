@@ -46,6 +46,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/config"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 	"github.com/makearr/Solarr/internal/platform/remoteimage"
+	"github.com/makearr/Solarr/internal/service/importlist"
 )
 
 // liveProxyPolicy is ADR-58's egress proxy, read live so every client shares
@@ -542,9 +543,21 @@ func (p *process) adultService() adult.Service {
 // adultCatalog is the adult screens' data source.
 func (p *process) adultCatalog() adult.Catalog {
 	return adult.Catalog{
-		Service: p.adultService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		Performers: &adult.PerformerAdds{People: library.NewPeople(p.library), Now: func() time.Time { return clock.NewSystem().Now() }},
+		Service:    p.adultService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
 		AllowAgain: func(ctx context.Context, provider, externalID string) error {
 			return adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)}.Allow(ctx, adult.MediaType, provider, externalID)
 		},
 	}
+}
+
+// stashServers are the stash-box clients an import list reads favourites from, by provider name.
+func (p *process) stashServers() map[string]importlist.StashServer {
+	servers := map[string]importlist.StashServer{}
+	for name, server := range p.adultService().Servers {
+		if listed, ok := server.(importlist.StashServer); ok {
+			servers[name] = listed
+		}
+	}
+	return servers
 }

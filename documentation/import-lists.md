@@ -26,6 +26,7 @@ turns an entry into the id it adds works by. A type without the capability offer
 | `tmdb_list` | A public TMDB list (v3 `/list/{id}`) | the list's number or its themoviedb.org link | 25 pages |
 | `tmdb_trending_tv` | TMDB's trending shows | today or this week | 5 pages of 20 |
 | `tmdb_popular_tv` | TMDB's popular shows | none | 5 pages of 20 |
+| `stashbox_favourites` | Adult libraries: the newest scenes of the performers and studios the key's account favourited at StashDB or FansDB | server, favourite (performers, studios, either), how many of the newest | 50, 100, 200 or 500 scenes |
 
 AniList needs no key. TMDB's lists use the owner's TMDB key (Settings, Metadata); without one a TMDB list fails with
 "needs the TMDB key", it is never silently empty. Both go through each provider's own `httpx` bucket, the same as their
