@@ -33,7 +33,7 @@ func (a ArrSync) radarrSource(importID int64, client arrimport.RadarrClient, opt
 		list: func(ctx context.Context) ([]arrimport.RadarrMovie, error) {
 			profileNames = radarrProfileNames(ctx, client)
 			movies, err := client.Movies(ctx)
-			if err == nil && a.WarmFilms != nil {
+			if err == nil && a.WarmFilms != nil && !options.MonitoringOnly {
 				ids := make([]string, 0, len(movies))
 				for _, movie := range movies {
 					if movie.TMDBID != 0 {

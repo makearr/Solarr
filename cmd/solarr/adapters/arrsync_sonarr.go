@@ -39,7 +39,7 @@ func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient, opt
 		list: func(ctx context.Context) ([]arrimport.SonarrSeries, error) {
 			profileNames = sonarrProfileNames(ctx, client)
 			series, err := client.Series(ctx)
-			if err == nil && a.WarmSeries != nil {
+			if err == nil && a.WarmSeries != nil && !options.MonitoringOnly {
 				ids := make([]string, 0, len(series))
 				for _, one := range series {
 					if one.TVDBID != 0 {
