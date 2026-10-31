@@ -3428,6 +3428,28 @@ export interface paths {
         patch: operations["updateCategory"];
         trace?: never;
     };
+    "/categories/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Merge a library into another of its media type. Administrator only.
+         * @description What the library holds (wanted items, requests, collections, import sessions, moves, follows) becomes the target's, its root folders are attached to the target, its access grants are dropped, and it is removed. A wanted item the target already has for the same work is dropped, not doubled. Files stay where they are.
+         */
+        post: operations["mergeCategory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/metadata-sources": {
         parameters: {
             query?: never;
@@ -14510,6 +14532,46 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    mergeCategory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    into_category_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Merged. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int64
+                         * @description Wanted items that moved.
+                         */
+                        moved: number;
+                    };
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     getLibraryMetadataSources: {

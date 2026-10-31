@@ -186,3 +186,42 @@ func TestAnAdultLibraryAsksWikidataWhisparrAndTheStashBoxServersInThatOrder(t *t
 		}
 	}
 }
+
+// Merging a library attaches its root folders to the target, drops its access grants and removes it; another media type
+// is refused and changes nothing.
+func TestMergeCategory_MovesTheFoldersAndRemovesTheLibrary(t *testing.T) {
+	cache, _ := newCache(t)
+	ctx := t.Context()
+	target, err := cache.CreateCategory(ctx, "audiobook", "Audiobooks", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := cache.CreateCategory(ctx, "audiobook", "Audible", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := cache.CreateCategory(ctx, "movie", "Movies", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := cache.CreateRootFolder(ctx, "/audible", "Audible")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.AttachRootFolder(ctx, settings.CategoryRoot{CategoryID: source.ID, RootFolderID: root.ID, Weight: 1, AcceptsNew: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.MergeCategory(ctx, source.ID, other.ID); err == nil {
+		t.Error("a library was merged into another media type's")
+	}
+	if err := cache.MergeCategory(ctx, source.ID, target.ID); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	if _, found := snapshot.Category(source.ID); found {
+		t.Error("the merged library still exists")
+	}
+	if roots := snapshot.CategoriesForRootFolder(root.ID); len(roots) != 1 || roots[0] != target.ID {
+		t.Errorf("the folder is attached to %v, want only the target", roots)
+	}
+}

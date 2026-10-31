@@ -1545,3 +1545,62 @@ func (c *Cache) SetCategoryMonitorReleaseTypes(ctx context.Context, id int64, ty
 			settingsdb.SetCategoryMonitorReleaseTypesParams{MonitorReleaseTypes: string(encoded), ID: id})
 	})
 }
+
+// CheckMergeCategory says whether library from can be merged into library into: both exist, of one media type, and
+// nothing but its folders and access grants still names from. It changes nothing.
+func (c *Cache) CheckMergeCategory(ctx context.Context, from, into int64) error {
+	snapshot := c.Snapshot()
+	source, found := snapshot.Category(from)
+	if !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, from)
+	}
+	target, found := snapshot.Category(into)
+	if !found {
+		return fmt.Errorf("%w: category %d", ErrNotFound, into)
+	}
+	if from == into || source.MediaType != target.MediaType {
+		return config.Problems{{Path: "into_category_id", Value: strconv.FormatInt(into, 10), Expectation: "another library of the same media type"}}
+	}
+	jobs, err := c.queries.CountDiscoveryJobsUsingCategory(ctx, sql.NullInt64{Int64: from, Valid: true})
+	if err != nil {
+		return fmt.Errorf("settings: count discovery jobs for category %d: %w", from, err)
+	}
+	var references []Reference
+	if jobs > 0 {
+		references = append(references, Reference{Kind: "discovery jobs", Count: jobs})
+	}
+	if members := len(snapshot.LibraryCategories(from)) - 1; members > 0 && snapshot.LibraryOf(from) == from {
+		references = append(references, Reference{Kind: "further media types of the library", Count: int64(members)})
+	}
+	if len(references) > 0 {
+		return &InUseError{Entity: "category", ID: from, References: references}
+	}
+	return nil
+}
+
+// MergeCategory is the settings half of merging library from into library into, after what the library holds has moved:
+// its root folders go to into, its access grants are dropped, and the library is removed.
+func (c *Cache) MergeCategory(ctx context.Context, from, into int64) error {
+	if err := c.CheckMergeCategory(ctx, from, into); err != nil {
+		return err
+	}
+	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
+		for _, statement := range []string{
+			"UPDATE OR IGNORE category_root_folder SET category_id = ?2 WHERE category_id = ?1",
+			"DELETE FROM category_root_folder WHERE category_id = ?1",
+			"DELETE FROM user_category_access WHERE category_id = ?1",
+		} {
+			if _, err := tx.ExecContext(ctx, statement, from, into); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("settings: merge category %d into %d: %w", from, into, err)
+	}
+	if err := c.Reload(context.WithoutCancel(ctx)); err != nil {
+		return err
+	}
+	return c.DeleteCategory(ctx, from)
+}

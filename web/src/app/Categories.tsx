@@ -57,6 +57,16 @@ export function Categories() {
     },
   });
 
+  const merge = useMutation({
+    mutationFn: async ({ id, into }: { id: number; into: number }) => {
+      await ok(api.POST("/categories/{id}/merge", { params: { path: { id } }, body: { into_category_id: into } }));
+    },
+    onSuccess: () => {
+      void invalidate();
+      invalidateWorkLists(queryClient);
+    },
+  });
+
   const [searchMessages, setSearchMessages] = useState<Record<number, string>>({});
   const search = useMutation({
     mutationFn: async (id: number) => {
@@ -99,7 +109,9 @@ export function Categories() {
                 heldTypes={categories.data.filter((other) => other.id === category.id || other.library_id === category.id).map((other) => other.media_type)}
                 onEdit={() => setEditingId(category.id)}
                 onRemove={() => remove.mutate(category.id)}
-                busy={remove.isPending}
+                mergeTargets={(categories.data ?? []).filter((other) => other.id !== category.id && other.media_type === category.media_type && other.library_id == null)}
+                onMerge={(into) => merge.mutate({ id: category.id, into })}
+                busy={remove.isPending || merge.isPending}
                 onSearch={() => search.mutate(category.id)}
                 searchPending={search.isPending && search.variables === category.id}
                 searchMessage={searchMessages[category.id]}
@@ -169,6 +181,8 @@ function Row({
   heldTypes,
   onEdit,
   onRemove,
+  mergeTargets,
+  onMerge,
   busy,
   onSearch,
   searchPending,
@@ -178,6 +192,8 @@ function Row({
   heldTypes: readonly string[];
   onEdit: () => void;
   onRemove: () => void;
+  mergeTargets: readonly Category[];
+  onMerge: (into: number) => void;
   busy: boolean;
   onSearch: () => void;
   searchPending: boolean;
@@ -214,6 +230,28 @@ function Row({
         </>
       )}
       {!further && <AddLibraryType libraryId={category.id} held={heldTypes} />}
+      {!further && mergeTargets.length > 0 && (
+        <select
+          aria-label={`Merge ${category.name} into another library`}
+          value=""
+          disabled={busy}
+          onChange={(event) => {
+            const into = Number(event.target.value);
+            const target = mergeTargets.find((other) => other.id === into);
+            if (target && window.confirm(`Merge ${category.name} into ${target.name}?\n\nIts works, folders and follows become ${target.name}'s and ${category.name} is removed. Files stay where they are.`)) {
+              onMerge(into);
+            }
+          }}
+          className="rounded-md border border-border-subtle bg-canvas px-1 py-1 text-xs text-ink-muted"
+        >
+          <option value="">Merge into…</option>
+          {mergeTargets.map((other) => (
+            <option key={other.id} value={other.id}>
+              {other.name}
+            </option>
+          ))}
+        </select>
+      )}
       <button
         type="button"
         onClick={onEdit}

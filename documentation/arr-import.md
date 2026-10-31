@@ -40,3 +40,10 @@ connection or in the setup assistant). It is the one thing Solarr writes to an *
 `internal/importing/arrimport` (the clients, including `SetMonitored`), `cmd/solarr/adapters/arr*.go` (the walk, the sources, the
 monitoring pass, `arrpush.go`), `internal/api/apiserver/arrimports.go` and `api/openapi.yaml` (`ArrSyncOptions.mode`,
 `indexers`, `download_clients`; `push_monitoring` on a connection; `POST /arr/instances/{id}/push`).
+
+## Merging two libraries
+
+Two libraries of one media type can be merged (Settings, Libraries, *Merge into…*; `POST /categories/{id}/merge`): the wanted
+items, requests, collections, import sessions, moves and follows of the first become the second's, its root folders are
+attached to the second, its access grants are dropped and it is removed. A work both held is wanted once. Files stay where
+they are; each library's rollups are recomputed.

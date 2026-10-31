@@ -530,3 +530,52 @@ func categoryOf(categories []settings.Category, id int64, fallback settings.Cate
 	}
 	return fallback
 }
+
+// CategoryMerger moves what the library holds for one category to another and answers how many wanted items moved.
+type CategoryMerger interface {
+	Merge(ctx context.Context, from, into int64) (int64, error)
+}
+
+// routeMergeCategory parses the id path parameter and the library to merge into.
+func (s *Server) routeMergeCategory(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a category id must be a number")
+		return
+	}
+	s.MergeCategory(w, r, id)
+}
+
+// MergeCategory merges library id into another of its media type: its works, requests and follows become the target's, its
+// folders are attached to the target, and it is removed. Administrator only.
+func (s *Server) MergeCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body struct {
+		Into int64 `json:"into_category_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body); err != nil || body.Into == 0 {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "into_category_id names the library to merge into")
+		return
+	}
+	into := body.Into
+	if s.categoryMerger == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "merging libraries is not available")
+		return
+	}
+	if err := s.auth.Settings.CheckMergeCategory(r.Context(), id, into); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	moved, err := s.categoryMerger.Merge(r.Context(), id, into)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if err := s.auth.Settings.MergeCategory(r.Context(), id, into); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, map[string]int64{"moved": moved})
+}

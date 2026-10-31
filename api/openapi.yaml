@@ -5523,6 +5523,45 @@ paths:
           $ref: "#/components/responses/Problem"
           description: Still referenced; the detail names what by.
 
+  /categories/{id}/merge:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: mergeCategory
+      tags: [settings]
+      summary: Merge a library into another of its media type. Administrator only.
+      description: >-
+        What the library holds (wanted items, requests, collections, import sessions, moves, follows) becomes the target's, its
+        root folders are attached to the target, its access grants are dropped, and it is removed. A wanted item the target
+        already has for the same work is dropped, not doubled. Files stay where they are.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [into_category_id]
+              properties:
+                into_category_id: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: Merged.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [moved]
+                properties:
+                  moved: { type: integer, format: int64, description: Wanted items that moved. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/metadata-sources:
     parameters:
       - name: id

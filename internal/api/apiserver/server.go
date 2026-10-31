@@ -240,6 +240,8 @@ type Config struct {
 	// Calendar answers releases in a date window.
 	Calendar CalendarReader
 	ArrSync  ArrSync
+	// CategoryMerger moves what the library holds for one category to another; nil leaves merging unavailable.
+	CategoryMerger CategoryMerger
 	// LibraryHealth answers todo 4.8's own aggregate report (unprobed files,
 	// unmatched files, incomplete works, roots near reserve, blocked hashes
 	// found in the library). Optional: without it, the endpoint answers 503.
@@ -348,6 +350,7 @@ type Server struct {
 	workAdder               WorkAdder
 	importLists             ImportListSync
 	arrSync                 ArrSync
+	categoryMerger          CategoryMerger
 	libraryHealth           LibraryHealth
 	systemHealth            SystemHealthSource
 	blocklist               Blocklist
@@ -472,6 +475,7 @@ func New(config Config) (*Server, error) {
 		workAdder:               config.WorkAdder,
 		importLists:             config.ImportLists,
 		arrSync:                 config.ArrSync,
+		categoryMerger:          config.CategoryMerger,
 		libraryHealth:           config.LibraryHealth,
 		systemHealth:            config.SystemHealth,
 		blocklist:               config.Blocklist,
@@ -700,6 +704,7 @@ func New(config Config) (*Server, error) {
 			secured.Put("/categories/{id}/rules", server.routeSetLibraryRules)
 			secured.Get("/categories/{id}/check", server.routeCheckLibrary)
 			secured.Delete("/categories/{id}", server.routeDeleteCategory)
+			secured.Post("/categories/{id}/merge", server.routeMergeCategory)
 			secured.Post("/categories/{id}/rootfolders", server.routeAttachRootFolderToCategory)
 			secured.Delete("/categories/{id}/rootfolders/{rootFolderId}", server.routeDetachRootFolderFromCategory)
 			secured.Get("/people", server.routeListPeople)

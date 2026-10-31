@@ -5449,6 +5449,11 @@ type ResolveCategoryDuplicatesJSONBody struct {
 // ResolveCategoryDuplicatesJSONBodyDropAction defines parameters for ResolveCategoryDuplicates.
 type ResolveCategoryDuplicatesJSONBodyDropAction string
 
+// MergeCategoryJSONBody defines parameters for MergeCategory.
+type MergeCategoryJSONBody struct {
+	IntoCategoryId int64 `json:"into_category_id"`
+}
+
 // SetLibraryMetadataSourcesJSONBody defines parameters for SetLibraryMetadataSources.
 type SetLibraryMetadataSourcesJSONBody struct {
 	Sources []string `json:"sources"`
@@ -6383,6 +6388,9 @@ type ResolveCategoryDuplicatesJSONRequestBody ResolveCategoryDuplicatesJSONBody
 // SetLibraryFileManagementJSONRequestBody defines body for SetLibraryFileManagement for application/json ContentType.
 type SetLibraryFileManagementJSONRequestBody = FileManagement
 
+// MergeCategoryJSONRequestBody defines body for MergeCategory for application/json ContentType.
+type MergeCategoryJSONRequestBody MergeCategoryJSONBody
+
 // SetLibraryMetadataSourcesJSONRequestBody defines body for SetLibraryMetadataSources for application/json ContentType.
 type SetLibraryMetadataSourcesJSONRequestBody SetLibraryMetadataSourcesJSONBody
 
@@ -6817,6 +6825,9 @@ type ServerInterface interface {
 	// Link the identical copies of one library (manage access).
 	// (POST /categories/{id}/links)
 	LinkCategoryCopies(w http.ResponseWriter, r *http.Request, id int64)
+	// Merge a library into another of its media type. Administrator only.
+	// (POST /categories/{id}/merge)
+	MergeCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// The metadata providers a library asks, in order, and the ones its media type could use. Administrator only.
 	// (GET /categories/{id}/metadata-sources)
 	GetLibraryMetadataSources(w http.ResponseWriter, r *http.Request, id int64)
@@ -7828,6 +7839,12 @@ func (_ Unimplemented) GetCategoryLinks(w http.ResponseWriter, r *http.Request, 
 // Link the identical copies of one library (manage access).
 // (POST /categories/{id}/links)
 func (_ Unimplemented) LinkCategoryCopies(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Merge a library into another of its media type. Administrator only.
+// (POST /categories/{id}/merge)
+func (_ Unimplemented) MergeCategory(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -10681,6 +10698,39 @@ func (siw *ServerInterfaceWrapper) LinkCategoryCopies(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.LinkCategoryCopies(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MergeCategory operation middleware
+func (siw *ServerInterfaceWrapper) MergeCategory(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergeCategory(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -19229,6 +19279,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/links", wrapper.LinkCategoryCopies)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/categories/{id}/merge", wrapper.MergeCategory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/metadata-sources", wrapper.GetLibraryMetadataSources)
