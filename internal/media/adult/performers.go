@@ -158,13 +158,12 @@ func (p Performers) biography(ctx context.Context, personID int64, qid string) e
 	return p.People.SetBiography(ctx, personID, text)
 }
 
-// wikidataID is the item a server links a performer to: "https://www.wikidata.org/wiki/Q123" is Q123.
+// wikidataID is the item a server links a performer to: "https://www.wikidata.org/wiki/Q123" is Q123. A link is known by
+// its address, since ThePornDB types none.
 func wikidataID(links []stashbox.Link) string {
 	for _, link := range links {
-		if strings.EqualFold(link.Type, "WIKIDATA") {
-			if _, id, found := strings.Cut(link.URL, "/wiki/"); found && strings.HasPrefix(id, "Q") {
-				return id
-			}
+		if _, id, found := strings.Cut(link.URL, "wikidata.org/wiki/"); found && strings.HasPrefix(id, "Q") {
+			return strings.TrimRight(id, "/")
 		}
 	}
 	return ""

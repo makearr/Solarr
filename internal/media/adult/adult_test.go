@@ -270,7 +270,7 @@ type performerServer struct{ *fakeServer }
 func (performerServer) FindPerformer(_ context.Context, id string) (stashbox.Performer, error) {
 	return stashbox.Performer{
 		ID: id, Name: "Ada Vale", Gender: "FEMALE", Height: 170,
-		URLs: []stashbox.Link{{URL: "https://www.wikidata.org/wiki/Q42", Type: "WIKIDATA"}},
+		URLs: []stashbox.Link{{URL: "https://www.wikidata.org/wiki/Q42"}},
 	}, nil
 }
 
