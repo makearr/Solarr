@@ -47,6 +47,7 @@ var (
 	versionPattern   = regexp.MustCompile(`(?i)\b(?:proper|repack|rerip)\b|\bv([2-9])\b`)
 	groupPattern     = regexp.MustCompile(`-([A-Za-z0-9]{2,15})$`)
 	numberingPattern = regexp.MustCompile(`(?i)^(?:(?:book|vol(?:ume)?|part|no)\.?\s*)?[0-9]{1,3}(?:\.[0-9])?\s*(?:[-.:)]\s*|\s+)`)
+	trailingNumber   = regexp.MustCompile(`\s[0-9]{1,3}$`)
 	separatorPattern = regexp.MustCompile(`\s+-\s+|\s*[–—]\s*`)
 	byPattern        = regexp.MustCompile(`(?i)^(.+?)\s+by\s+(.+)$`)
 	formatWord       = regexp.MustCompile(`(?i)\b(epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|cbz|m4b|m4a|mp3|aac|flac|ogg|opus|wma)\b`)
@@ -139,6 +140,10 @@ func (info *Info) split(clean string) {
 		info.Title = stripNumbering(parts[len(parts)-1])
 		if len(parts) > 2 {
 			info.Titles = append(info.Titles, strings.Join(parts[1:], " - "))
+			// "Title - A Novel" is a title with a subtitle as often as "Series - Title", unless the first part is numbered.
+			if !trailingNumber.MatchString(parts[1]) {
+				info.Titles = append(info.Titles, parts[1])
+			}
 		}
 		if found := byPattern.FindStringSubmatch(clean); found != nil && len(parts) == 2 && strings.Contains(parts[1], " by ") {
 			info.Title, info.Author = strings.TrimSpace(found[1]), strings.TrimSpace(found[2])

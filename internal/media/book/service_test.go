@@ -209,6 +209,18 @@ func TestPickCandidate_TakesTheExactTitleByTheNamedAuthorOnly(t *testing.T) {
 	}
 }
 
+func TestPickCandidate_AnEditionSuffixAndAnAuthorInAnotherScriptDoNotHideTheBook(t *testing.T) {
+	candidates := []Candidate{{IDs: IDs{OpenLibrary: "OL7W"}, Title: "The Lantern Keeper (Lantern Series Book 2)", Author: "马拉"}}
+	pick, ok := pickCandidate(candidates, parsebook.Info{Title: "The Lantern Keeper", Author: "Mara Quell"})
+	if !ok || pick.IDs.OpenLibrary != "OL7W" {
+		t.Errorf("pick = %+v, %v", pick, ok)
+	}
+	candidates[0].Author = "Tobin Reyes"
+	if _, ok := pickCandidate(candidates, parsebook.Info{Title: "The Lantern Keeper", Author: "Mara Quell"}); ok {
+		t.Error("a readable other author is not the named one")
+	}
+}
+
 func TestWarn_APausedProviderIsNotAWarningPerBook(t *testing.T) {
 	var logged strings.Builder
 	service := Service{Format: Ebook, Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelInfo}))}

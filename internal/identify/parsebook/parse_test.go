@@ -21,6 +21,8 @@ func TestParse_ReadsTheShapesReleasesUse(t *testing.T) {
 			BitrateKbps: 64, Unabridged: true, ReleaseGroup: "GROUP"}},
 		{"Mara Quell - The Lantern Cycle 02 - Ember Roads.epub", parsebook.Info{
 			Author: "Mara Quell", Title: "Ember Roads", Titles: []string{"Ember Roads", "The Lantern Cycle 02 - Ember Roads"}, Formats: []string{"epub"}}},
+		{"Mara Quell - The Lantern Keeper - A Novel.epub", parsebook.Info{
+			Author: "Mara Quell", Title: "A Novel", Titles: []string{"A Novel", "The Lantern Keeper - A Novel", "The Lantern Keeper"}, Formats: []string{"epub"}}},
 		{"Mara Quell - Night Ferries: A Novel - 9780000000002 [PDF]", parsebook.Info{
 			Author: "Mara Quell", Title: "Night Ferries: A Novel", Titles: []string{"Night Ferries: A Novel", "Night Ferries"},
 			Formats: []string{"pdf"}, ISBN: "9780000000002"}},

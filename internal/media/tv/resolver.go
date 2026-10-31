@@ -269,6 +269,7 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 	want := parsetv.CleanTitle(guess.Title)
 	seen := map[int64]int64{}
 	qualified := map[int64]bool{}
+	unqualified := map[int64]bool{}
 	for _, title := range titles {
 		// An alias names another series as well ("Tzul Suxc: Jzari Suxc" is TVmaze's for The Clone Wars of 2008, which is not the 2003 series).
 		if !title.Canonical {
@@ -277,6 +278,15 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 		if parsetv.CleanTitle(title.Title) == want || parsetv.CleanTitle(trailingBrackets.ReplaceAllString(title.Title, "")) == want {
 			seen[title.WorkID] = title.Year
 			qualified[title.WorkID] = qualified[title.WorkID] || (guess.Year > 0 && strings.Contains(title.Title, "("+strconv.Itoa(guess.Year)+")"))
+			unqualified[title.WorkID] = unqualified[title.WorkID] || parsetv.CleanTitle(title.Title) == want && !yearQualifier.MatchString(title.Title)
+		}
+	}
+	if guess.Year == 0 {
+		// A yearless folder is not shown to be the namesake the library holds ("Title (2024)"): the original may be unheld.
+		for id := range seen {
+			if !unqualified[id] {
+				delete(seen, id)
+			}
 		}
 	}
 	if guess.Year > 0 {
@@ -295,6 +305,8 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 	}
 	return 0, false
 }
+
+var yearQualifier = regexp.MustCompile(`\s*\(\d{4}\)\s*$`)
 
 func (c Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 	if c.Service.IsExcluded(ctx, ids) {

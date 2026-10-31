@@ -3,8 +3,10 @@ package book
 import (
 	"context"
 	"log/slog"
+	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -156,7 +158,7 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 		if rank >= rankedWell {
 			break
 		}
-		if wanted[parsebook.CleanTitle(candidate.Title)] {
+		if wanted[parsebook.CleanTitle(candidate.Title)] || wanted[parsebook.CleanTitle(trailingEdition.ReplaceAllString(candidate.Title, ""))] {
 			named = append(named, candidate)
 		}
 	}
@@ -171,7 +173,24 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 			return candidate, true
 		}
 	}
+	// A name in another script (Liu Cixin, 刘慈欣) cannot be compared with the folder's, so the title alone speaks.
+	var unreadable []Candidate
+	for _, candidate := range named {
+		if candidate.Author != "" && !hasLatinLetter(candidate.Author) {
+			unreadable = append(unreadable, candidate)
+		}
+	}
+	if len(unreadable) == 1 && len(named) == 1 {
+		return unreadable[0], true
+	}
 	return Candidate{}, false
+}
+
+// trailingEdition is a provider's "(Korean Edition)" or "(The Three-Body Problem Series Book 2)" after a title.
+var trailingEdition = regexp.MustCompile(`\s*\([^)]*\)\s*$`)
+
+func hasLatinLetter(name string) bool {
+	return strings.ContainsFunc(name, func(r rune) bool { return unicode.Is(unicode.Latin, r) })
 }
 
 // identifications are the hits a person picks from in Review, the provider's own ranking kept.
