@@ -9,6 +9,7 @@ import json
 import sys
 
 import mutagen
+from mutagen.easyid3 import EasyID3
 from mutagen.easymp4 import EasyMP4Tags
 from mutagen.flac import FLAC, Picture
 from mutagen.id3 import APIC
@@ -22,6 +23,11 @@ for key, name in (
     ("musicbrainz_releasegroupid", "MusicBrainz Release Group Id"),
     ("musicbrainz_releasetrackid", "MusicBrainz Release Track Id"),
 ):
+    EasyMP4Tags.RegisterFreeformKey(key, name)
+
+# Navidrome's multi-artist keys, which neither easy interface knows: ID3 keeps them as TXXX frames, MP4 as freeform atoms.
+for key, name in (("artists", "ARTISTS"), ("albumartists", "ALBUMARTISTS")):
+    EasyID3.RegisterTXXXKey(key, name)
     EasyMP4Tags.RegisterFreeformKey(key, name)
 
 FRONT_COVER = 3
