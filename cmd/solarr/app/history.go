@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -22,6 +23,9 @@ func (p *process) recordDownloadHistory(
 ) {
 	data, workID := p.describeAcquisition(ctx, acquisition)
 	data.Detail = detail
+	if kind == download.HistoryGrabbed && data.Upgrade && detail == "" {
+		data.Detail = "upgrade"
+	}
 
 	_, err := statistics.NewHistory(p.statistics).Append(ctx, historyEntry(clock.NewSystem().Now().Unix(), string(kind), workID, data))
 	if err != nil {
@@ -108,6 +112,7 @@ func (p *process) describeAcquisition(ctx context.Context, acquisition library.A
 	if acquisition.DesiredItemID != nil {
 		if item, err := library.NewDesired(p.library).Get(ctx, *acquisition.DesiredItemID); err == nil {
 			workID, data.CategoryID = item.WorkID, item.CategoryID
+			data.Upgrade = replacesFiles(item.RequiredCount, item.PresentCount)
 			if work, err := library.NewWorks(p.library).Detail(ctx, workID); err == nil {
 				data.Album = work.Work.CanonicalTitle
 				key := media.Key(work.Work.MediaType)
@@ -119,6 +124,11 @@ func (p *process) describeAcquisition(ctx context.Context, acquisition library.A
 		}
 	}
 	return data, workID
+}
+
+// replacesFiles is true when an item already holds all it requires, so a download for it can only upgrade.
+func replacesFiles(required sql.NullInt64, present int64) bool {
+	return required.Valid && required.Int64 > 0 && present >= required.Int64
 }
 
 // leadName is who a work is listed under, for a media type that has a lead role (an album's artist); empty otherwise.

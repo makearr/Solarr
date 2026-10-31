@@ -47,6 +47,8 @@ type HistoryData struct {
 	Indexer       string `json:"indexer,omitempty"`
 	Client        string `json:"client,omitempty"`
 	Detail        string `json:"detail,omitempty"`
+	// Upgrade is true when the item already held everything it requires, so the download replaces files.
+	Upgrade bool `json:"upgrade,omitempty"`
 }
 
 // ErrRefused is a client declining a release it was sent: SABnzbd answers status false, often
