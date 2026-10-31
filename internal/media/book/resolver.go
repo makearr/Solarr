@@ -162,6 +162,19 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 			named = append(named, candidate)
 		}
 	}
+	if len(named) == 0 && info.Author != "" {
+		// Only a lone hit by the named author whose title continues as a subtitle ("Title: Subtitle") is the book.
+		for rank, candidate := range candidates {
+			if rank < rankedWell && wanted[parsebook.CleanTitle(subtitleHead.Split(candidate.Title, 2)[0])] &&
+				(parsebook.NamesAuthor(" "+parsebook.CleanTitle(info.Author)+" ", candidate.Author) || PersonKey(candidate.Author) == PersonKey(info.Author)) {
+				named = append(named, candidate)
+			}
+		}
+		if len(named) == 1 {
+			return named[0], true
+		}
+		named = nil
+	}
 	if info.Author == "" {
 		if len(named) == 1 {
 			return named[0], true
@@ -187,6 +200,8 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 }
 
 // trailingEdition is a provider's "(Korean Edition)" or "(The Three-Body Problem Series Book 2)" after a title.
+var subtitleHead = regexp.MustCompile(`:\s|\s\(|\s-\s`)
+
 var trailingEdition = regexp.MustCompile(`\s*\([^)]*\)\s*$`)
 
 func hasLatinLetter(name string) bool {

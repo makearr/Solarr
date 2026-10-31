@@ -221,6 +221,23 @@ func TestPickCandidate_AnEditionSuffixAndAnAuthorInAnotherScriptDoNotHideTheBook
 	}
 }
 
+func TestPickCandidate_ASubtitleAfterTheNamedTitleIsTheBookOnlyByTheNamedAuthorAndAlone(t *testing.T) {
+	candidates := []Candidate{{IDs: IDs{OpenLibrary: "OL8W"}, Title: "Ember Roads: Detox Your Mind for Clearer Thinking", Author: "Mara Quell"}}
+	info := parsebook.Info{Title: "Detox Your Mind", Titles: []string{"Detox Your Mind", "Ember Roads"}, Author: "Mara Quell"}
+	if pick, ok := pickCandidate(candidates, info); !ok || pick.IDs.OpenLibrary != "OL8W" {
+		t.Errorf("pick = %+v, %v", pick, ok)
+	}
+	candidates = append(candidates, Candidate{IDs: IDs{OpenLibrary: "OL9W"}, Title: "Ember Roads: The Second Volume", Author: "Mara Quell"})
+	if _, ok := pickCandidate(candidates, info); ok {
+		t.Error("two subtitled hits are a person's decision")
+	}
+	candidates = candidates[:1]
+	candidates[0].Author = "Tobin Reyes"
+	if _, ok := pickCandidate(candidates, info); ok {
+		t.Error("another author's book is not the named one")
+	}
+}
+
 func TestWarn_APausedProviderIsNotAWarningPerBook(t *testing.T) {
 	var logged strings.Builder
 	service := Service{Format: Ebook, Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelInfo}))}

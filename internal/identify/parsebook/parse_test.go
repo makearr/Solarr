@@ -7,6 +7,14 @@ import (
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 )
 
+func TestParsePath_AFolderBelowAnAuthorIsATitleWithItsSubtitle(t *testing.T) {
+	got, ok := parsebook.ParsePath("Mara Quell/The Lantern Keeper - A Novel/01.mp3", true)
+	want := parsebook.Info{Author: "Mara Quell", Title: "The Lantern Keeper", Titles: []string{"The Lantern Keeper", "The Lantern Keeper - A Novel", "A Novel"}, Formats: []string{"mp3"}}
+	if !ok || !reflect.DeepEqual(got, want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+}
+
 func TestParse_ReadsTheShapesReleasesUse(t *testing.T) {
 	cases := []struct {
 		name string

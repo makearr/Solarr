@@ -176,6 +176,14 @@ func ParsePath(relPath string, byFolder bool) (Info, bool) {
 	if !ok {
 		return info, false
 	}
+	if byFolder && info.Author != "" && folder != "." {
+		// "Author/Title - Subtitle": the folder above names the author, so the first part is a reading of the title.
+		if parent, found := Parse(path.Base(folder)); found && CleanTitle(parent.Title) != CleanTitle(info.Author) {
+			first := info.Author
+			info.Titles = append([]string{first, first + " - " + info.Title}, info.Titles...)
+			info.Title, info.Author = first, parent.Title
+		}
+	}
 	if info.Author == "" && folder != "." {
 		author := path.Base(folder)
 		// "Author/Series/Title": a folder above a numbered book names the series, the one above that the author.
