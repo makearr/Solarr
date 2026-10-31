@@ -68,7 +68,7 @@ type Job struct {
 	clock    clock.Clock
 	logger   *slog.Logger
 	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
-	resumeAt [3]atomic.Int64
+	resumeAt [4]atomic.Int64
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -140,6 +140,9 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 			}
 		}
 	}
+	if err := j.backfillOshash(ctx, started); err != nil {
+		return err
+	}
 	j.logger.Info("probe sweep finished", slog.Int("processed", total), slog.Int("failed", failed))
 
 	// Best-effort: a coverage recompute failing is not a reason to fail a
@@ -151,6 +154,60 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		j.logger.Info("probe coverage reconciled", slog.Int("corrections", len(corrections)))
 	}
 	return nil
+}
+
+// oshashPass indexes resumeAt for the hash backfill, after the three probe lists.
+const oshashPass = 3
+
+// backfillOshash hashes the video files scanned before the hash was written at scan time (ADR-35); a file that
+// cannot be read stays unhashed and is asked again next run.
+func (j *Job) backfillOshash(ctx context.Context, started time.Time) error {
+	if j.fs == nil {
+		return nil
+	}
+	afterID := j.resumeAt[oshashPass].Swap(0)
+	hashed := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return jobs.Retryablef("probe.context", string(JobType), err)
+		}
+		batch, err := j.physical.ListVideoWithoutOshash(ctx, afterID, batchSize)
+		if err != nil {
+			return fmt.Errorf("probe: %w", err)
+		}
+		for _, file := range batch {
+			if err := j.hashFile(ctx, file); err != nil {
+				j.logger.WarnContext(ctx, "oshash failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+			} else {
+				hashed++
+			}
+		}
+		if len(batch) < batchSize {
+			return nil
+		}
+		afterID = batch[len(batch)-1].MediaObjectID
+		if j.clock.Now().Sub(started) >= yieldAfter {
+			j.resumeAt[oshashPass].Store(afterID)
+			return fmt.Errorf("probe: %d hashes in %s: %w", hashed, yieldAfter, jobs.ErrYield)
+		}
+	}
+}
+
+func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {
+	root, found := j.roots.RootFolder(file.RootFolderID)
+	if !found {
+		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
+	}
+	absolute := path.Join(root.Path, file.RelPath)
+	info, err := j.fs.Stat(absolute)
+	if err != nil {
+		return err
+	}
+	oshash, err := library.OSHash(j.fs, absolute, info.Size)
+	if err != nil || oshash == "" {
+		return err
+	}
+	return j.physical.SetOshash(ctx, file.MediaObjectID, oshash)
 }
 
 // probeBatch reads a whole batch at once (the tool runs its files side by side up to its own limit) and records what

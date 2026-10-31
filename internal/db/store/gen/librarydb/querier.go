@@ -829,6 +829,8 @@ type Querier interface {
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
+	// Video files scanned before oshash was written at scan time; under 64 KiB the hash is undefined, so those never list.
+	ListVideoWithoutOshash(ctx context.Context, arg ListVideoWithoutOshashParams) ([]ListVideoWithoutOshashRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
@@ -1135,6 +1137,7 @@ type Querier interface {
 	SetOrganisationLogo(ctx context.Context, arg SetOrganisationLogoParams) error
 	SetOrganisationLogoAsked(ctx context.Context, arg SetOrganisationLogoAskedParams) error
 	SetOrganisationMonitored(ctx context.Context, arg SetOrganisationMonitoredParams) error
+	SetOshash(ctx context.Context, arg SetOshashParams) error
 	SetPartRef(ctx context.Context, arg SetPartRefParams) error
 	SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error
 	// A provider's picture of a person is kept in fields_json and never replaces one already there.

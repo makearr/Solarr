@@ -1099,6 +1099,56 @@ func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) 
 	return items, nil
 }
 
+const listVideoWithoutOshash = `-- name: ListVideoWithoutOshash :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.oshash IS NULL AND o.kind = 'video' AND o.size_bytes >= 65536 AND o.id > ?1
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListVideoWithoutOshashParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListVideoWithoutOshashRow struct {
+	ID           int64
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Video files scanned before oshash was written at scan time; under 64 KiB the hash is undefined, so those never list.
+func (q *Queries) ListVideoWithoutOshash(ctx context.Context, arg ListVideoWithoutOshashParams) ([]ListVideoWithoutOshashRow, error) {
+	rows, err := q.db.QueryContext(ctx, listVideoWithoutOshash, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVideoWithoutOshashRow{}
+	for rows.Next() {
+		var i ListVideoWithoutOshashRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.RootFolderID,
+			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkIDsOfObject = `-- name: ListWorkIDsOfObject :many
 SELECT DISTINCT di.work_id FROM desired_item_file f JOIN desired_item di ON di.id = f.desired_item_id
 WHERE f.media_object_id = ? ORDER BY di.work_id
@@ -1409,6 +1459,20 @@ func (q *Queries) SetMediaProbe(ctx context.Context, arg SetMediaProbeParams) er
 		arg.ProbedAt,
 		arg.Json,
 	)
+	return err
+}
+
+const setOshash = `-- name: SetOshash :exec
+UPDATE media_object SET oshash = ? WHERE id = ?
+`
+
+type SetOshashParams struct {
+	Oshash sql.NullString
+	ID     int64
+}
+
+func (q *Queries) SetOshash(ctx context.Context, arg SetOshashParams) error {
+	_, err := q.db.ExecContext(ctx, setOshash, arg.Oshash, arg.ID)
 	return err
 }
 

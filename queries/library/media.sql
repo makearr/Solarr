@@ -144,6 +144,18 @@ WHERE mp.probe_version < sqlc.arg(below_version) AND o.measured_attributes_id IS
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
+-- Video files scanned before oshash was written at scan time; under 64 KiB the hash is undefined, so those never list.
+-- name: ListVideoWithoutOshash :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.oshash IS NULL AND o.kind = 'video' AND o.size_bytes >= 65536 AND o.id > sqlc.arg(after_id)
+ORDER BY o.id
+LIMIT sqlc.arg(page_size);
+
+-- name: SetOshash :exec
+UPDATE media_object SET oshash = ? WHERE id = ?;
+
 -- Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
 -- answers for the denominator (library.CategoryCounters' own precedent) --
 -- "probed" is the numerator a coverage counter reconciles against it.

@@ -230,6 +230,30 @@ func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize in
 	return files, nil
 }
 
+// ListVideoWithoutOshash pages through the video files scanned before the hash was written at scan time, oldest id first.
+func (p Physical) ListVideoWithoutOshash(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutOshash(ctx, librarydb.ListVideoWithoutOshashParams{AfterID: afterID, PageSize: pageSize})
+	if err != nil {
+		return nil, fmt.Errorf("library: list video without oshash: %w", err)
+	}
+	files := make([]UnmeasuredFile, len(rows))
+	for index, row := range rows {
+		files[index] = UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return files, nil
+}
+
+// SetOshash records the hash of a file scanned before it was computed.
+func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash string) error {
+	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetOshash(ctx, librarydb.SetOshashParams{Oshash: sql.NullString{String: oshash, Valid: oshash != ""}, ID: mediaObjectID})
+	})
+	if err != nil {
+		return fmt.Errorf("library: set oshash %d: %w", mediaObjectID, err)
+	}
+	return nil
+}
+
 // The probe versions: what a probe read of a file, kept beside it in media_probe so a stale one is found by number.
 const (
 	// ProbeVersionLyrics read the lyrics language too.

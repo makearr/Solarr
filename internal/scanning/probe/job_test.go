@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/scanning/probe"
 	"github.com/makearr/Solarr/migrations"
@@ -257,5 +258,57 @@ func TestJob_RunReadsAgainAFileMeasuredBeforeLyricsLanguages(t *testing.T) {
 	attrs, err := librarydb.New(opened.Read()).GetAttributes(t.Context(), object.MeasuredAttributesID.Int64)
 	if err != nil || attrs.LyricsLanguages.String != `["de"]` {
 		t.Errorf("lyrics languages = %q, %v; want [\"de\"]", attrs.LyricsLanguages.String, err)
+	}
+}
+
+func TestJob_RunHashesVideoScannedBeforeTheHashExisted(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	content := make([]byte, 70000)
+	for index := range content {
+		content[index] = byte(index % 251)
+	}
+	for _, name := range []string{"big.mkv", "small.mkv"} {
+		data := content
+		if name == "small.mkv" {
+			data = content[:100]
+		}
+		if err := os.WriteFile(filepath.Join(root, name), data, 0o644); err != nil {
+			t.Fatalf("write fixture file: %v", err)
+		}
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "big.mkv", SizeBytes: 70000, QuickHash: "big", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "small.mkv", SizeBytes: 100, QuickHash: "small", FirstSeenAt: time.Unix(0, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	job := probe.NewJob(probe.Config{
+		Physical: physical,
+		Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots:    fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool:     &fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}},
+		FS:       fsx.NewOS(),
+		Clock:    clock.NewFakeAtEpoch(),
+		Logger:   slog.New(slog.DiscardHandler),
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	want, err := library.OSHash(fsx.NewOS(), filepath.Join(root, "big.mkv"), 70000)
+	if err != nil || want == "" {
+		t.Fatalf("OSHash = %q, %v", want, err)
+	}
+	for index, wantHash := range []string{want, ""} {
+		object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[index].MediaObjectID)
+		if err != nil {
+			t.Fatalf("GetMediaObject: %v", err)
+		}
+		if object.Oshash.String != wantHash {
+			t.Errorf("file %d oshash = %q, want %q", index, object.Oshash.String, wantHash)
+		}
 	}
 }
