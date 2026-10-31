@@ -137,11 +137,11 @@ endpoint; each takes the owner's own key, sealed in `settings.db` and never ship
 
 | Provider | Carries | Built | Notes |
 |---|---|---|---|
-| Wikidata | performers' birth dates, countries, photos and biographies, studio and network ids | in the order, not yet read for adult | first by default |
-| Whisparr's server (`api.whisparr.com/v3`) | scenes with credits, sites with their scenes, genres, images | client built | no key; routes `scene/search`, `site/search`, `site/{id}` |
-| StashDB | scenes, performers (measurements, aliases, career, links), studios and networks, tags, fingerprints (oshash, phash, md5) | client built | a key; `searchScene`, `findScene`, `searchPerformer`, `findPerformer`, `findScenesBySceneFingerprints` |
-| ThePornDB (`theporndb.net/graphql`) | the same schema; its `queryScenes` wants `page`, `sort` and `direction` as strings, so Solarr uses `searchScene` | client built | a key |
-| FansDB | creators and fan-platform scenes | client built | a key; its server can fail a search with a database error, which is surfaced and not retried |
+| Wikidata | a performer's biography (the Wikipedia lead), reached through the item a stash-box server links them to | biographies only | first by default; holds no scenes |
+| Whisparr's server (`api.whisparr.com/v3`) | scenes with credits, sites with their scenes, genres, images | yes | no key; routes `scene/search`, `site/search`, `site/{id}` |
+| StashDB | scenes, performers (measurements, aliases, career, links), studios and networks, tags, fingerprints (oshash, phash, md5) | yes | a key; `searchScene`, `findScene`, `searchPerformer`, `findPerformer`, `findScenesBySceneFingerprints` |
+| ThePornDB (`theporndb.net/graphql`) | the same schema; its `queryScenes` wants `page`, `sort` and `direction` as strings, so Solarr uses `searchScene`; its scene filter is not supported, so a follow uses the others | yes | a key |
+| FansDB | creators and fan-platform scenes | yes | a key; its server can fail a search with a database error, which is surfaced and not retried |
 
 ## Other media types (planned)
 

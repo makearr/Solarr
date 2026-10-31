@@ -23,8 +23,8 @@ internal/
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
-│               skyhook  tvmaze  tmdb  tvdb  openlibrary  googlebooks  audible
-├── identify/   model  parse  parsetv  parsebook  match  score  priority
+│               skyhook  tvmaze  tmdb  tvdb  openlibrary  googlebooks  audible  stashbox  whisparr
+├── identify/   model  parse  parsetv  parsebook  parseadult  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  arrimport
 ├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar
@@ -35,7 +35,7 @@ internal/
 │               clients: sabnzbd  nzbget  qbittorrent  transmission (+ Vuze)  deluge  rtorrent  utorrent  flood  aria2
 │               slskd  blackhole (Torrent and Usenet)
 ├── service/    follow (ADR-32)  importlist (ADR-38, documentation/import-lists.md): every type alike
-├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)
+├── media/      the media-type registry  +  music  tv  movie  book (books and audiobooks)  adult
 │               +  shared by types: works  knownfor  picturesweep  housekeeping
 └── archtest/   layering, access and Invariant-90 checks, as tests
 ```

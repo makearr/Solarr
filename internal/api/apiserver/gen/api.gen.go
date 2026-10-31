@@ -3964,7 +3964,10 @@ type PersonDetail struct {
 	Credits        []WorkCredit `json:"credits"`
 	Died           *string      `json:"died,omitempty"`
 	Disambiguation *string      `json:"disambiguation,omitempty"`
-	Gender         *string      `json:"gender,omitempty"`
+
+	// Facts The media type's own labelled facts of the person (a performer's height, hair, career), in its order.
+	Facts  *[]PersonFact `json:"facts,omitempty"`
+	Gender *string       `json:"gender,omitempty"`
 
 	// Genres Every genre tagged on any of their works; a person carries none of their own (ADR-32).
 	Genres []string `json:"genres"`
@@ -3975,13 +3978,19 @@ type PersonDetail struct {
 
 	// ImageUrl A provider's photo, when one is known.
 	ImageUrl *string `json:"image_url,omitempty"`
-	Kind     *string `json:"kind,omitempty"`
+
+	// Images Further pictures of the person, beside image_url.
+	Images *[]string `json:"images,omitempty"`
+	Kind   *string   `json:"kind,omitempty"`
 
 	// Libraries Only libraries the caller may read; nothing reveals another.
 	Libraries []PersonLibrary `json:"libraries"`
-	Monitored bool            `json:"monitored"`
-	Name      string          `json:"name"`
-	SortName  string          `json:"sort_name"`
+
+	// Links Addresses of the person at the providers and elsewhere.
+	Links     *[]PersonWebLink `json:"links,omitempty"`
+	Monitored bool             `json:"monitored"`
+	Name      string           `json:"name"`
+	SortName  string           `json:"sort_name"`
 }
 
 // PersonEntry defines model for PersonEntry.
@@ -4024,6 +4033,12 @@ type PersonEntry struct {
 	Works int64 `json:"works"`
 }
 
+// PersonFact defines model for PersonFact.
+type PersonFact struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
 // PersonLibrary A person's place in one library the caller may read.
 type PersonLibrary struct {
 	CategoryId int64  `json:"category_id"`
@@ -4037,6 +4052,12 @@ type PersonPage struct {
 
 	// NextCursor Empty on the last page, which is how a client knows to stop without one more request that returns nothing.
 	NextCursor *string `json:"next_cursor,omitempty"`
+}
+
+// PersonWebLink defines model for PersonWebLink.
+type PersonWebLink struct {
+	Label string `json:"label"`
+	Url   string `json:"url"`
 }
 
 // PersonWork One work in a person's discography, plus the artist page's own "available / missing / requested" signal (Lidarr-like discography).

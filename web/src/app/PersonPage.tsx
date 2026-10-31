@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -180,16 +180,27 @@ export function PersonPage() {
             </div>
             {facts.length > 0 && <p className="text-sm text-ink-muted">{facts.join(" · ")}</p>}
             {person.aliases.length > 0 && <p className="text-xs text-ink-muted">Also known as {person.aliases.join(", ")}</p>}
-            {person.genres.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 pt-1">
-                {person.genres.map((genre) => (
-                  <span key={genre} className="rounded-full border border-border-subtle px-2 py-0.5 text-xs text-ink-muted">
-                    {genre}
-                  </span>
+            {person.genres.length > 0 && <GenreChips genres={person.genres} />}
+            {person.facts && person.facts.length > 0 && (
+              <dl className="grid max-w-xl grid-cols-[max-content_1fr] gap-x-5 gap-y-1 pt-2 text-sm" aria-label="Details">
+                {person.facts.map((fact) => (
+                  <Fragment key={fact.label}>
+                    <dt className="text-ink-muted">{fact.label}</dt>
+                    <dd>{fact.value}</dd>
+                  </Fragment>
+                ))}
+              </dl>
+            )}
+            {person.biography && <p className="max-w-3xl whitespace-pre-line pt-1 text-sm leading-relaxed text-ink-muted">{person.biography}</p>}
+            {person.links && person.links.length > 0 && (
+              <div className="flex flex-wrap gap-3 pt-1 text-xs">
+                {person.links.map((link) => (
+                  <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                    {link.label}
+                  </a>
                 ))}
               </div>
             )}
-            {person.biography && <p className="max-w-3xl whitespace-pre-line pt-1 text-sm leading-relaxed text-ink-muted">{person.biography}</p>}
             {links.length > 0 && (
               <div className="flex gap-3 pt-1 text-xs">
                 {links.map(([provider, external]) => (
@@ -201,6 +212,14 @@ export function PersonPage() {
             )}
           </div>
         </header>
+
+        {person.images && person.images.length > 1 && (
+          <section aria-label="Pictures" className="flex gap-2 overflow-x-auto pb-1">
+            {person.images.map((url) => (
+              <img key={url} src={remoteImage(url, "small")} alt="" loading="lazy" className="h-48 w-32 shrink-0 rounded-md border border-border-subtle object-cover" />
+            ))}
+          </section>
+        )}
 
         {leads && (
           <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
@@ -259,6 +278,27 @@ export function PersonPage() {
 }
 
 /** One of the artist verbs on a person; the page is read again when it succeeds. */
+/** A person's genres; a performer's tags run to dozens, so the first few show and the rest wait behind a button. */
+const VISIBLE_GENRES = 12;
+function GenreChips({ genres }: { genres: readonly string[] }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? genres : genres.slice(0, VISIBLE_GENRES);
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+      {shown.map((genre) => (
+        <span key={genre} className="rounded-full border border-border-subtle px-2 py-0.5 text-xs text-ink-muted">
+          {genre}
+        </span>
+      ))}
+      {genres.length > VISIBLE_GENRES && (
+        <button type="button" onClick={() => setAll(!all)} className="text-xs text-accent hover:underline">
+          {all ? "Show fewer" : `Show all ${genres.length}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function usePersonAction(id: number, path: "/people/{id}/search" | "/people/{id}/refresh" | "/people/{id}/monitor-all") {
   const queryClient = useQueryClient();
   return useMutation({

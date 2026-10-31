@@ -27,6 +27,7 @@ named file, linked from the code by path.
 | [music-identification.md](music-identification.md) | How a music file is identified: the passes, album matching, what was measured |
 | [tv-internals.md](tv-internals.md) | Stage 8 as built: the TV parser, providers, series storage and naming |
 | [tv-providers-benchmark.md](tv-providers-benchmark.md) | Measured speed and richness of the TV metadata providers, and the default order it set |
+| [adult.md](adult.md) | The adult type: scenes and films, performers and studios, the stash-box and Whisparr providers, identification by oshash and name |
 | [books.md](books.md) | Books and audiobooks: two media types over one module, their providers, files, search and naming |
 | [import-lists.md](import-lists.md) | A library's import lists: the sources, how an entry becomes a work, preview, the sync |
 | [metadata-providers.md](metadata-providers.md) | What each metadata provider carries, which library it serves, what the upstream projects use, and how collections are found |

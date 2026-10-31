@@ -28,6 +28,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -132,6 +133,9 @@ type process struct {
 	// bookOnce builds the book providers once, books and audiobooks sharing their buckets; bookShared by media type.
 	bookOnce   sync.Once
 	bookShared map[string]book.Service
+	// adultOnce builds the adult providers once; adultShared is the one service over them.
+	adultOnce   sync.Once
+	adultShared adult.Service
 	// wikidataOnce builds the one cache of what Wikidata says of works, shared by TV and movies.
 	wikidataOnce   sync.Once
 	wikidataShared *wikidata.Cached

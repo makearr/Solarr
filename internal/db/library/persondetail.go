@@ -24,9 +24,11 @@ type PersonProfile struct {
 	Died           string
 	ImageURL       string
 	Biography      string
-	Monitored      bool
-	AddedAt        int64
-	Aliases        []string
+	// Extras are the media type's own facts, links and further pictures of the person.
+	Extras    PersonExtras
+	Monitored bool
+	AddedAt   int64
+	Aliases   []string
 	// IDs maps provider to the person's id there.
 	IDs map[string]string
 	// Genres are tagged on any of their works; a person carries none of their own (ADR-32).
@@ -76,6 +78,7 @@ func (p People) Get(ctx context.Context, id int64, visible []int64) (PersonProfi
 		Kind: person.Kind.String, Gender: person.Gender.String, Country: person.Country.String,
 		Born: person.Born.String, Died: person.Died.String, Monitored: person.Monitored == 1, AddedAt: person.AddedAt,
 		ImageURL: imageFromFields(person.FieldsJson), Biography: biographyFromFields(person.FieldsJson),
+		Extras: extrasFromFields(person.FieldsJson),
 	}
 	if profile.Aliases, err = queries.ListAliasesForPerson(ctx, id); err != nil {
 		return PersonProfile{}, fmt.Errorf("library: person %d aliases: %w", id, err)

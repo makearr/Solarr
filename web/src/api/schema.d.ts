@@ -6977,6 +6977,12 @@ export interface components {
             biography?: string;
             /** @description A provider's photo, when one is known. */
             image_url?: string;
+            /** @description The media type's own labelled facts of the person (a performer's height, hair, career), in its order. */
+            facts?: components["schemas"]["PersonFact"][];
+            /** @description Addresses of the person at the providers and elsewhere. */
+            links?: components["schemas"]["PersonWebLink"][];
+            /** @description Further pictures of the person, beside image_url. */
+            images?: string[];
             aliases: string[];
             /** @description Every genre tagged on any of their works; a person carries none of their own (ADR-32). */
             genres: string[];
@@ -6987,6 +6993,14 @@ export interface components {
             /** @description Only libraries the caller may read; nothing reveals another. */
             libraries: components["schemas"]["PersonLibrary"][];
             credits: components["schemas"]["WorkCredit"][];
+        };
+        PersonFact: {
+            label: string;
+            value: string;
+        };
+        PersonWebLink: {
+            label: string;
+            url: string;
         };
         /** @description One provider's id for a work, edition or part. */
         ExternalID: {

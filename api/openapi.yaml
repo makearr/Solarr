@@ -10173,6 +10173,18 @@ components:
               type: string
               description: From the providers, when one has it (ADR-8).
             image_url: { type: string, description: "A provider's photo, when one is known." }
+            facts:
+              type: array
+              description: The media type's own labelled facts of the person (a performer's height, hair, career), in its order.
+              items: { $ref: "#/components/schemas/PersonFact" }
+            links:
+              type: array
+              description: Addresses of the person at the providers and elsewhere.
+              items: { $ref: "#/components/schemas/PersonWebLink" }
+            images:
+              type: array
+              items: { type: string }
+              description: Further pictures of the person, beside image_url.
             aliases:
               type: array
               items: { type: string }
@@ -10191,6 +10203,20 @@ components:
             credits:
               type: array
               items: { $ref: "#/components/schemas/WorkCredit" }
+
+    PersonFact:
+      type: object
+      required: [label, value]
+      properties:
+        label: { type: string }
+        value: { type: string }
+
+    PersonWebLink:
+      type: object
+      required: [label, url]
+      properties:
+        label: { type: string }
+        url: { type: string }
 
     ExternalID:
       type: object

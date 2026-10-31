@@ -1089,6 +1089,211 @@
   {
     "add_kinds": [
       {
+        "key": "adult",
+        "label": "Scenes"
+      }
+    ],
+    "commit_guess_floor": 0.75,
+    "commits_held_imports": true,
+    "cover_sources": false,
+    "duplicates_by_name": false,
+    "facets": [
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "year",
+        "kind": "number",
+        "label": "Year",
+        "sortable": true
+      },
+      {
+        "choices": [
+          {
+            "key": "announced",
+            "label": "Announced"
+          },
+          {
+            "key": "released",
+            "label": "Released"
+          }
+        ],
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "status",
+        "kind": "enum",
+        "label": "Status",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "release_date",
+        "kind": "text",
+        "label": "Release date",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "studio",
+        "kind": "text",
+        "label": "Studio",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": true,
+        "key": "performer",
+        "kind": "text",
+        "label": "Performers",
+        "sortable": false
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "genre",
+        "kind": "list",
+        "label": "Tags",
+        "sortable": true
+      },
+      {
+        "column": true,
+        "entity": "work",
+        "filterable": false,
+        "key": "runtime",
+        "kind": "duration",
+        "label": "Length",
+        "sortable": true
+      },
+      {
+        "column": false,
+        "entity": "work",
+        "filterable": true,
+        "key": "code",
+        "kind": "text",
+        "label": "Code",
+        "sortable": false
+      }
+    ],
+    "file_settings": [
+      {
+        "help": "Delete a studio or scene folder left empty when its files are deleted.",
+        "key": "delete_empty_folders",
+        "label": "Delete Empty Folders"
+      },
+      {
+        "help": "A scene whose file is deleted from disk is unmonitored instead of being fetched again.",
+        "key": "unmonitor_deleted",
+        "label": "Unmonitor Deleted Scenes"
+      },
+      {
+        "help": "Bring files found beside the scene along with it, such as its poster, subtitles or nfo.",
+        "key": "import_extra_files",
+        "label": "Import Extra Files"
+      },
+      {
+        "help": "Comma separated, such as srt,nfo,jpg.",
+        "key": "extra_file_extensions",
+        "label": "Extra File Extensions"
+      }
+    ],
+    "follow_options": [],
+    "genre_tree": {
+      "key": "adult",
+      "label": "Tags"
+    },
+    "group": {
+      "many": "",
+      "one": ""
+    },
+    "key": "adult",
+    "kinds": [
+      {
+        "help": "Single scenes, filed by studio.",
+        "key": "scenes",
+        "label": "Scenes"
+      },
+      {
+        "help": "Whole films, filed by studio.",
+        "key": "movies",
+        "label": "Movies"
+      }
+    ],
+    "label": "Adult",
+    "lead_people": {
+      "many": "Performers",
+      "one": "Performer"
+    },
+    "monitor_options": [
+      {
+        "key": "scene_only",
+        "label": "Scene only"
+      },
+      {
+        "key": "none",
+        "label": "None"
+      }
+    ],
+    "organisation": {
+      "many": "Studios",
+      "one": "Studio"
+    },
+    "part": {
+      "many": "",
+      "one": ""
+    },
+    "ratings": false,
+    "release_filters": true,
+    "roles": [
+      {
+        "character": false,
+        "followable": true,
+        "key": "performer",
+        "label": "Performer",
+        "lead": true,
+        "part_scoped": false
+      },
+      {
+        "character": false,
+        "followable": true,
+        "key": "director",
+        "label": "Director",
+        "lead": false,
+        "part_scoped": false
+      }
+    ],
+    "scan_monitor": {
+      "label": "Monitor scenes found by a scan",
+      "options": [
+        {
+          "key": "existing",
+          "label": "Monitored"
+        },
+        {
+          "key": "none",
+          "label": "Not monitored"
+        }
+      ],
+      "setting": "tv_monitor"
+    },
+    "search_terms": [],
+    "searches_library": false,
+    "wanted_grain": "work",
+    "work": {
+      "many": "Scenes",
+      "one": "Scene"
+    },
+    "work_image": "poster"
+  },
+  {
+    "add_kinds": [
+      {
         "key": "book",
         "label": "Books"
       }

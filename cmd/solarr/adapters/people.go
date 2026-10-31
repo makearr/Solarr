@@ -139,6 +139,17 @@ func (a People) GetPersonDetail(ctx context.Context, id int64, visible []int64) 
 	setString(&view.Died, profile.Died)
 	setString(&view.ImageUrl, profile.ImageURL)
 	setString(&view.Biography, profile.Biography)
+	if extras := profile.Extras; len(extras.Facts)+len(extras.Links)+len(extras.Images) > 0 {
+		facts := make([]gen.PersonFact, len(extras.Facts))
+		for i, fact := range extras.Facts {
+			facts[i] = gen.PersonFact{Label: fact.Label, Value: fact.Value}
+		}
+		links := make([]gen.PersonWebLink, len(extras.Links))
+		for i, link := range extras.Links {
+			links[i] = gen.PersonWebLink{Label: link.Label, Url: link.URL}
+		}
+		view.Facts, view.Links, view.Images = &facts, &links, &extras.Images
+	}
 	ids := make([]int64, len(credits))
 	for i, credit := range credits {
 		ids[i] = credit.ID

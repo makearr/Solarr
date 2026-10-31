@@ -79,6 +79,7 @@ const (
 	MediaMovies = "movies"
 	MediaAnime  = "anime"
 	MediaBooks  = "books"
+	MediaAdult  = "adult"
 )
 
 // Definition is one entry of the indexer catalog, as Prowlarr's add list shows it.

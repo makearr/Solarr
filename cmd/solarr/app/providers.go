@@ -8,6 +8,10 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/makearr/Solarr/internal/media/adult"
+	"github.com/makearr/Solarr/internal/metadata/stashbox"
+	"github.com/makearr/Solarr/internal/metadata/whisparr"
+
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -503,4 +507,44 @@ func (p *process) unidentifiedTV() adapters.UnidentifiedTV {
 func (p *process) aniListClient() anilist.Client {
 	p.tvService()
 	return p.anilistShared
+}
+
+// adultService is the process's one adult service: Whisparr's server and the three stash-box servers, each on a bucket of
+// its own, in each library's order.
+func (p *process) adultService() adult.Service {
+	p.adultOnce.Do(func() {
+		server := func(provider, endpoint string) adult.Server {
+			return stashbox.New(p.providerClient(provider, nil, httpx.ClientConfig{}), endpoint, p.providerKey(provider))
+		}
+		p.adultShared = adult.Service{
+			Whisparr: whisparr.New(p.providerClient(providerWhisparr, nil, httpx.ClientConfig{})),
+			Servers: map[string]adult.Server{
+				adult.ProviderStashDB:   server(providerStashDB, stashbox.StashDBEndpoint),
+				adult.ProviderThePornDB: server(providerThePornDB, stashbox.ThePornDBEndpoint),
+				adult.ProviderFansDB:    server(providerFansDB, stashbox.FansDBEndpoint),
+			},
+			Sources: settings.DefaultAdultSources,
+			PriorityFor: func(categoryID int64) []string {
+				snapshot := p.cache.Snapshot()
+				category, found := snapshot.Category(categoryID)
+				if !found {
+					return nil
+				}
+				return snapshot.MetadataSourcesFor(category)
+			},
+			Series: library.NewSeries(p.library), Reader: library.NewSeriesReader(p.library), Desired: library.NewDesired(p.library),
+			Exclusions: library.NewExclusions(p.library), Clock: clock.NewSystem(), Logger: p.logger,
+		}
+	})
+	return p.adultShared
+}
+
+// adultCatalog is the adult screens' data source.
+func (p *process) adultCatalog() adult.Catalog {
+	return adult.Catalog{
+		Service: p.adultService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
+		AllowAgain: func(ctx context.Context, provider, externalID string) error {
+			return adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)}.Allow(ctx, adult.MediaType, provider, externalID)
+		},
+	}
 }

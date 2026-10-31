@@ -277,3 +277,35 @@ func (c Client) FindPerformer(ctx context.Context, id string) (Performer, error)
 	}
 	return *found.Performer, nil
 }
+
+// ErrUnsupported means the server does not answer that query: ThePornDB takes the scene filter as plain strings.
+var ErrUnsupported = errors.New("stashbox: query not supported by this server")
+
+// SceneFilter narrows ScenesOf to a performer's or a studio's scenes.
+type SceneFilter struct {
+	PerformerID, StudioID string
+}
+
+// ScenesOf lists the scenes of a performer or studio, newest first, the page asked for (from 1). ThePornDB's filter is
+// shaped otherwise and answers ErrUnsupported.
+func (c Client) ScenesOf(ctx context.Context, filter SceneFilter, page, perPage int) ([]Scene, error) {
+	if c.endpoint == ThePornDBEndpoint {
+		return nil, ErrUnsupported
+	}
+	input := map[string]any{"sort": "DATE", "direction": "DESC", "page": max(page, 1), "per_page": max(perPage, 1)}
+	switch {
+	case filter.PerformerID != "":
+		input["performers"] = map[string]any{"value": []string{filter.PerformerID}, "modifier": "INCLUDES"}
+	case filter.StudioID != "":
+		input["studios"] = map[string]any{"value": []string{filter.StudioID}, "modifier": "INCLUDES"}
+	default:
+		return nil, nil
+	}
+	var found struct {
+		Query struct {
+			Scenes []Scene `json:"scenes"`
+		} `json:"queryScenes"`
+	}
+	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
+	return found.Query.Scenes, err
+}

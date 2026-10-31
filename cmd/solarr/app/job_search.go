@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -73,6 +74,11 @@ func (p *process) bookIndexerConns(format book.Format) func(ctx context.Context)
 	return func(ctx context.Context) ([]judge.Conn, error) {
 		return p.searchConns(ctx, categories, "book", "book-search")
 	}
+}
+
+// adultIndexerConns is indexerConns for the adult type: the same connections, searched in Newznab's XXX categories by text.
+func (p *process) adultIndexerConns(ctx context.Context) ([]judge.Conn, error) {
+	return p.searchConns(ctx, func(settings.Indexer) []int { return slices.Clone(adult.FeedCategories) }, "search", "search")
 }
 
 // searchConns resolves every enabled indexer fresh, as indexerConns does, searched in categories with the parameters

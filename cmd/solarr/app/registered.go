@@ -7,6 +7,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/makearr/Solarr/internal/media/adult"
+
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/dispatch"
 	"github.com/makearr/Solarr/internal/acquiring/plan"
@@ -32,7 +34,7 @@ import (
 // registerMedia builds the one list of media types in the binary, each wired to what it needs from the process.
 // A new type is one more module here; nothing else in this package names a type's scan.
 func (p *process) registerMedia() error {
-	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule()}
+	modules := []media.Module{p.musicModule(), p.tvModule(), p.movieModule(), p.adultModule()}
 	for _, format := range book.Formats {
 		modules = append(modules, p.bookModule(format))
 	}
@@ -643,6 +645,114 @@ func (p *process) bookGrab(format book.Format) book.Grab {
 		},
 		Automatic: dispatch.Automatic{
 			Dispatch: p.dispatchFor(format.MediaType), Name: format.MediaType,
+			FreeSpace: func(categoryID int64) (int64, bool) { return p.cache.Snapshot().AcquisitionHeadroom(categoryID) },
+		},
+	}
+}
+
+// adultModule wires the adult type's sweep: its consumer, the video files it reads, the add and refresh over the
+// providers and the jobs that keep its metadata and pictures current.
+func (p *process) adultModule() adult.Module {
+	service := p.adultService()
+	catalog := p.adultCatalog()
+	grab := p.adultGrab()
+	conns := p.adultIndexerConns
+	resolver := adult.Resolver{
+		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		Locks: &keyedlock.Locks{},
+	}
+	return adult.Module{
+		Registrations: []media.JobRegistration{
+			{Definition: adult.RefreshDefinition(), Handler: adult.NewRefreshJob(library.NewSeriesReader(p.library), service, clock.NewSystem(), p.logger)},
+			{Definition: adult.ArtworkDefinition(), Handler: adult.NewArtworkJob(library.NewSeriesReader(p.library), p.remoteImages(), p.logger)},
+			{Definition: adult.PerformersDefinition(), Handler: adult.Performers{Service: service, People: library.NewPeople(p.library), Wikidata: p.wikidataFetcher(), Clock: clock.NewSystem(), Logger: p.logger}},
+		},
+		Sweep: scan.Sweep{
+			Consumer: adult.NewConsumer(adult.ConsumerConfig{
+				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
+				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+			}),
+			Include: adult.IsScene,
+			Housekeeping: housekeeping.Sweep{
+				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
+				Grain: adult.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,
+			},
+			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },
+		},
+		Adder:    catalog,
+		Pictures: adapters.ProviderPictures{Reader: library.NewSeriesReader(p.library), Series: library.NewSeries(p.library), Clock: clock.NewSystem()},
+		Files:    adult.NewFiles(resolver, library.NewUnidentified(p.library), clock.NewSystem(), catalog.AllowAgain),
+		Rename:   &adult.RenameConfig{Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem()},
+		Follow: &adult.Following{
+			Service: service, Catalog: catalog, People: library.NewPeople(p.library), Studios: library.NewSubscriptions(p.library),
+			Now: func() time.Time { return clock.NewSystem().Now() },
+		},
+		Service: service,
+		Hunt: func(ctx context.Context, itemID int64) (plan.Outcome, error) {
+			found, err := conns(ctx)
+			if err != nil {
+				return plan.OutcomeSearched, err
+			}
+			result, err := grab.SearchAndSend(ctx, itemID, found, dispatch.GrabAutomatic, clock.NewSystem().Now())
+			switch {
+			case errors.Is(err, adult.ErrNotSearchable):
+				return plan.OutcomeNotWanted, nil
+			case err != nil:
+				return plan.OutcomeSearched, err
+			case result.AlreadyInFlight:
+				return plan.OutcomeInFlight, nil
+			}
+			if result.Sent != nil || result.Held {
+				p.logger.Info("hunt: release chosen", slog.Int64("item_id", itemID), slog.Bool("held", result.Held))
+			}
+			return plan.OutcomeSearched, nil
+		},
+		Feed: adult.Feed{
+			Grab: grab, Reader: library.NewSeriesReader(p.library), Indexers: conns, Logger: p.logger, Libraries: p.libraryIDsOf(adult.MediaType),
+		},
+		CutoffJob: adult.CutoffJob{
+			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Settings: p.cache, Recycle: p.recycleSuperseded, Logger: p.logger,
+		},
+		Searching: adult.NewSearching(grab, conns, clock.NewSystem()),
+		// A scene is read again at once, as Whisparr's Refresh: it is one work and a few requests.
+		Refresh: func(ctx context.Context, workID int64) (bool, error) {
+			_, libraries, err := library.NewWorks(p.library).Places(ctx, workID)
+			if err != nil {
+				return false, err
+			}
+			if len(libraries) == 0 {
+				return false, fmt.Errorf("%s %d is in no library", adult.MediaType, workID)
+			}
+			return false, catalog.Refresh(ctx, libraries[0], workID)
+		},
+		Passes: media.Passes{
+			WorksPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := adult.EnqueueRefresh(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PeoplePass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := adult.EnqueuePerformers(ctx, p.queue)
+				return result.Duplicate, err
+			},
+			PicturesPass: func(ctx context.Context, _ bool) (bool, error) {
+				result, err := adult.EnqueueArtwork(ctx, p.queue)
+				return result.Duplicate, err
+			},
+		},
+	}
+}
+
+// adultGrab builds the adult type's automatic search over the real stores.
+func (p *process) adultGrab() adult.Grab {
+	blocklist, sightings, filters := library.NewBlocklistStore(p.library), library.NewSightings(p.library), library.NewReleaseFilters(p.library)
+	return adult.Grab{
+		Search: adult.Search{
+			Desired: library.NewDesired(p.library), Reader: library.NewSeriesReader(p.library), Physical: library.NewPhysical(p.library),
+			Candidates: statistics.NewCandidates(p.statistics), Settings: p.cache, Clock: clock.NewSystem(), Blocklist: &blocklist,
+			Sightings: &sightings, ReleaseFilters: &filters,
+		},
+		Automatic: dispatch.Automatic{
+			Dispatch: p.dispatchFor(adult.MediaType), Name: adult.MediaType,
 			FreeSpace: func(categoryID int64) (int64, bool) { return p.cache.Snapshot().AcquisitionHeadroom(categoryID) },
 		},
 	}

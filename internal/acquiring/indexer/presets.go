@@ -1,7 +1,7 @@
 package indexer
 
 // usenetMedia is what a general usenet indexer carries.
-var usenetMedia = []string{MediaMusic, MediaTV, MediaMovies, MediaAnime, MediaBooks}
+var usenetMedia = []string{MediaMusic, MediaTV, MediaMovies, MediaAnime, MediaBooks, MediaAdult}
 
 func newznabPreset(id, name, baseURL string) Definition {
 	return Definition{

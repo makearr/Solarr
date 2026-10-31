@@ -132,3 +132,12 @@ func (c Client) FindSite(ctx context.Context, id int) (Site, error) {
 	}
 	return site, nil
 }
+
+// Year is the year of the scene's release date, 0 when it has none.
+func (s Scene) Year() int {
+	if len(s.ReleaseDate) < 4 {
+		return 0
+	}
+	year, _ := strconv.Atoi(s.ReleaseDate[:4])
+	return year
+}
