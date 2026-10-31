@@ -238,6 +238,13 @@ func TestPickCandidate_ASubtitleAfterTheNamedTitleIsTheBookOnlyByTheNamedAuthorA
 	}
 }
 
+func TestOtherReadings_AreTheTitlesNotYetSearchedAtMostTwo(t *testing.T) {
+	info := parsebook.Info{Title: "A Novel", Titles: []string{"A Novel", "Ember Roads - A Novel", "Ember Roads", "Ember Roads", "Third"}}
+	if got, want := otherReadings(info), []string{"Ember Roads - A Novel", "Ember Roads"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("readings %v, want %v", got, want)
+	}
+}
+
 func TestWarn_APausedProviderIsNotAWarningPerBook(t *testing.T) {
 	var logged strings.Builder
 	service := Service{Format: Ebook, Logger: slog.New(slog.NewTextHandler(&logged, &slog.HandlerOptions{Level: slog.LevelInfo}))}

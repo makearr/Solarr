@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode"
@@ -74,12 +75,37 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsebook.
 		// A folder above a book is often its series, not its author.
 		candidates, _ = r.Service.Search(ctx, categoryID, info.Title, "", searchLimit)
 	}
-	if pick, ok := pickCandidate(candidates, info); ok {
+	pick, ok := pickCandidate(candidates, info)
+	for _, reading := range otherReadings(info) {
+		if ok {
+			break
+		}
+		// The name's best reading may be only its subtitle ("A Novel"): each other reading is searched on its own.
+		found, err := r.Service.Search(ctx, categoryID, reading, info.Author, searchLimit)
+		if err == nil {
+			pick, ok = pickCandidate(found, info)
+		}
+	}
+	if ok {
 		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Author: pick.Author}); id != 0 {
 			return id, nil
 		}
 	}
 	return 0, r.identifications(candidates)
+}
+
+// maxOtherReadings bounds the extra searches one unplaced name costs.
+const maxOtherReadings = 2
+
+// otherReadings are the name's titles other than the one already searched, in the order read.
+func otherReadings(info parsebook.Info) []string {
+	var others []string
+	for _, title := range info.Titles {
+		if title != info.Title && !slices.Contains(others, title) {
+			others = append(others, title)
+		}
+	}
+	return others[:min(len(others), maxOtherReadings)]
 }
 
 func (r Resolver) warn(message, title string, err error) {
