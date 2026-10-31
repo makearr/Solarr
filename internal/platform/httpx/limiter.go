@@ -113,6 +113,22 @@ func (l *Limiter) Acquire(ctx context.Context, provider string) (release func(),
 	}, nil
 }
 
+// maxBlockingPause is the longest a request waits out a provider's pause; a longer one (a spent quota's Retry-After)
+// fails the request instead, so a scan is not held for hours by an enrichment source.
+const maxBlockingPause = 2 * time.Minute
+
+// PausedError reports a provider asked to be left alone until a time too far off to wait for.
+type PausedError struct {
+	Provider string
+	Until    time.Time
+}
+
+func (e *PausedError) Error() string {
+	return fmt.Sprintf("httpx: %s paused until %s", e.Provider, e.Until.Format(time.RFC3339))
+}
+
+func (e *PausedError) Unwrap() error { return ErrCircuitOpen }
+
 // laneRecheck is how soon a waiter passed over for a more urgent one looks again.
 const laneRecheck = 25 * time.Millisecond
 
@@ -140,6 +156,9 @@ func (l *Limiter) tryTake(provider string, priority Priority) (time.Duration, er
 		return 0, fmt.Errorf("%w: %s used %d of %d", ErrDailyCapReached, provider, budget.dailyUsed, budget.limits.DailyCap)
 	}
 	if budget.pausedUntil.After(now) {
+		if pause := budget.pausedUntil.Sub(now); pause > maxBlockingPause {
+			return 0, &PausedError{Provider: provider, Until: budget.pausedUntil}
+		}
 		return budget.pausedUntil.Sub(now), nil
 	}
 	interval := budget.limits.MinInterval

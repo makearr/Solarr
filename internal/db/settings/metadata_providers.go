@@ -117,7 +117,7 @@ var MetadataProviders = []MetadataProvider{
 	{Key: MovieSourceRadarr, Label: "Radarr's metadata service", MediaTypes: []string{"movie"}, Carries: []string{"overview", "release dates", "certification", "ratings", "collections", "ids"},
 		PerMinute: 240, Published: "none published; shared by every Radarr"},
 	{Key: MovieSourceMDBList, Label: "MDBList", MediaTypes: []string{"movie"}, Carries: []string{"ratings of IMDb, TMDB, Trakt, Letterboxd, Rotten Tomatoes and Metacritic"}, NeedsKey: true,
-		PerMinute: 200, MaxPerMinute: 200, Published: "1,000 every five minutes"},
+		PerMinute: 200, MaxPerMinute: 200, Published: "1,000 a day on a free key"},
 	{Key: MovieSourceOMDb, Label: "OMDb", MediaTypes: []string{"movie"}, Carries: []string{"IMDb, Rotten Tomatoes and Metacritic ratings", "English plots"}, NeedsKey: true,
 		PerMinute: 60, Published: "1,000 a day on a free key"},
 	{Key: MovieSourceFanart, Label: "fanart.tv", MediaTypes: []string{"movie"}, Carries: []string{"clear logos", "clear art", "disc art", "banners", "backgrounds"}, NeedsKey: true,

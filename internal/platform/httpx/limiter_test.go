@@ -285,6 +285,21 @@ func TestLimiter_RetryAfterIsHonouredOverComputedBackoff(t *testing.T) {
 	}
 }
 
+func TestLimiter_APauseTooLongToWaitForIsReportedNotWaitedOut(t *testing.T) {
+	limiter, fake := newLimiter(httpx.Config{
+		Defaults: httpx.Limits{RequestsPerMinute: 60},
+	})
+	limiter.Observe("quota", httpx.Outcome{Success: false, RetryAfter: 3 * time.Hour})
+
+	var paused *httpx.PausedError
+	if _, err := limiter.Acquire(t.Context(), "quota"); !errors.As(err, &paused) || !errors.Is(err, httpx.ErrCircuitOpen) {
+		t.Fatalf("Acquire in a 3 hour pause = %v, want a PausedError", err)
+	}
+	if want := fake.Now().Add(3 * time.Hour); !paused.Until.Equal(want) {
+		t.Errorf("Until = %v, want %v", paused.Until, want)
+	}
+}
+
 func TestLimiter_RecoveryIsAdditiveNotASnapBack(t *testing.T) {
 	limiter, _ := newLimiter(httpx.Config{
 		Defaults: httpx.Limits{RequestsPerMinute: 60},

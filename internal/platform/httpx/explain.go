@@ -33,7 +33,10 @@ func explanation(err error) string {
 	var certificate *tls.CertificateVerificationError
 	var record tls.RecordHeaderError
 	var open *OpenError
+	var paused *PausedError
 	switch {
+	case errors.As(err, &paused):
+		return "This service asked Solarr to stop for now (its quota is spent); calls resume by themselves after " + paused.Until.Format("15:04") + "."
 	case errors.As(err, &status):
 		return statusExplanation(status.Status)
 	case errors.As(err, &blocked):
