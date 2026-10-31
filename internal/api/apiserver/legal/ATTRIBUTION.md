@@ -140,13 +140,13 @@ When code is incorporated, record it as:
   - Whisparr `src/NzbDrone.Core/MetadataSource/SkyHook/SkyHookProxy.cs`, `src/NzbDrone.Common/Cloud/WhisparrCloudRequestBuilder.cs`:
     the address and the `scene/search`, `site/search` and `site/{id}` routes of Whisparr's metadata server, found by asking it.
   - stash-box's GraphQL schema (`searchScene`, `findScene`, `searchPerformer`, `findPerformer`,
-    `findScenesBySceneFingerprints`, `queryScenes`), as StashDB, FansDB and ThePornDB answer it.
+    `findScenesBySceneFingerprints`, `queryScenes`), as StashDB, FansDB and ThePornDB answer it; ThePornDB's `/movies` REST routes.
 - Taken, rewritten in Go rather than copied: the scene and performer field names the servers return; Whisparr's studio-folder
   and scene-file naming slots and its `{Studio}`/`{Release Date}`/`{Performer Names}`-style tokens; Stash's `[Studio] Title
   (date)` file layout and its oshash fingerprint lookup.
 - Changed: the three stash-box servers are one client with an endpoint, and Whisparr's single metadata service is one provider
   among them in each library's order. Performers are people with facts, not a separate entity.
-- Files: `internal/media/adult/`, `internal/identify/parseadult/`, `internal/metadata/stashbox/`, `internal/metadata/whisparr/` (new).
+- Files: `internal/media/adult/`, `internal/identify/parseadult/`, `internal/metadata/stashbox/`, `internal/metadata/theporndb/`, `internal/metadata/whisparr/` (new).
 
 ```
 ### TV parser — from Sonarr (GPL-3.0)

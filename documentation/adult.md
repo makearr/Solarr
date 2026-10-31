@@ -11,6 +11,10 @@ FansDB. Each answers by the ids known, else by the scene's name; the first suppl
 missing (ADR-8). Credits are one source's: a performer has a different id at each server, so mixing two lists would credit
 them twice. Details of each provider: [metadata-providers.md](metadata-providers.md) (Adult).
 
+Films come from ThePornDB's REST API (`internal/metadata/theporndb`, `/movies`, the same key): the stash-box servers and
+Whisparr's server hold scenes only, so a Movies library finds its films only there. They are stored as scenes with the
+film's site as studio.
+
 The three stash-box servers are one client, `internal/metadata/stashbox`. Their keys are the owner's own, sealed in
 `settings.db`, never shipped. ThePornDB answers `searchScene` as the others do but not the `queryScenes` filter, so
 following a performer or studio uses StashDB and FansDB.

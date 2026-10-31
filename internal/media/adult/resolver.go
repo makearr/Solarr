@@ -131,9 +131,9 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 // know the day, the same day. Two such hits are told apart by the day, and two on one day are one scene listed twice.
 func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, bool) {
 	var named []Candidate
-	for rank, candidate := range candidates {
-		if rank >= rankedWell {
-			break
+	for _, candidate := range candidates {
+		if candidate.Rank >= rankedWell {
+			continue
 		}
 		if info.Date != "" && candidate.Date != "" && info.Date != candidate.Date {
 			continue

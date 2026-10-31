@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
+	"github.com/makearr/Solarr/internal/metadata/theporndb"
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
 )
 
@@ -177,4 +178,46 @@ func unionNames(first, second []string, limit int) []string {
 		}
 	}
 	return out
+}
+
+// FromMovie turns one of ThePornDB's films into a scene: the studio is its site and the network that site's.
+func FromMovie(in theporndb.Movie) Scene {
+	scene := Scene{
+		IDs: IDs{ThePornDB: in.ID}, Title: strings.TrimSpace(in.Title), Overview: strings.TrimSpace(in.Description), Date: validDay(in.Date),
+		DurationSec: in.Duration, Sources: []string{ProviderThePornDB},
+	}
+	scene.Year = yearOf(scene.Date)
+	if in.URL != "" {
+		scene.URLs = []string{in.URL}
+	}
+	if site := in.Site; site != nil {
+		scene.Studio, scene.StudioID, scene.StudioProvider, scene.StudioLogo = site.Name, site.UUID, studioProvider(ProviderThePornDB), site.Logo
+		if site.Network != nil {
+			scene.Network, scene.NetworkID = site.Network.Name, site.Network.UUID
+		}
+	}
+	for _, tag := range in.Tags {
+		if name := strings.TrimSpace(tag.Name); name != "" && len(scene.Tags) < maxTags {
+			scene.Tags = append(scene.Tags, name)
+		}
+	}
+	for _, url := range []string{in.Image, in.BackImage, in.Poster} {
+		if url != "" && len(scene.Images) < maxImages {
+			scene.Images = append(scene.Images, Image{Kind: "poster", URL: url, Source: ProviderThePornDB})
+		}
+	}
+	for index, performer := range in.Performers {
+		id, name, image, gender := performer.Canonical()
+		if name = strings.TrimSpace(name); name != "" {
+			scene.Credits = append(scene.Credits, Credit{Provider: performerProvider(ProviderThePornDB), ExternalID: id, Name: name,
+				Gender: strings.ToUpper(strings.ReplaceAll(gender, " ", "_")), Image: image, Role: RolePerformer, Order: index})
+		}
+	}
+	for _, director := range in.Directors {
+		if name := strings.TrimSpace(director.Name); name != "" {
+			scene.Director = cmp.Or(scene.Director, name)
+			scene.Credits = append(scene.Credits, Credit{Provider: ProviderPerformerName, ExternalID: NameKey(name), Name: name, Role: RoleDirector, Order: len(scene.Credits)})
+		}
+	}
+	return scene
 }

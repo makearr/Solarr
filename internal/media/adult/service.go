@@ -13,6 +13,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
+	"github.com/makearr/Solarr/internal/metadata/theporndb"
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -40,9 +41,18 @@ type WhisparrSource interface {
 	SearchScenes(ctx context.Context, term string) ([]whisparr.Scene, error)
 }
 
+// MovieSource is ThePornDB's REST API as the service needs it: the films the other servers do not hold.
+type MovieSource interface {
+	Configured() bool
+	SearchMovies(ctx context.Context, term string, limit int) ([]theporndb.Movie, error)
+	Movie(ctx context.Context, id string) (theporndb.Movie, error)
+}
+
 // Service reads scenes from the providers and keeps them in the library. Any source may be nil.
 type Service struct {
 	Whisparr WhisparrSource
+	// Movies adds ThePornDB's films to what its entry in a library's order answers; nil leaves films to the scenes' servers.
+	Movies MovieSource
 	// Servers are the stash-box servers by provider name (ProviderStashDB, ProviderThePornDB, ProviderFansDB).
 	Servers map[string]Server
 	// Sources are the providers a library asks, in its order, unless it chose its own.
@@ -140,6 +150,16 @@ func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint) (Scen
 	if name == sourceWhisparr {
 		return s.askWhisparr(ctx, ids, hint)
 	}
+	if scene, ok := s.askServer(ctx, name, ids, hint); ok {
+		return scene, true
+	}
+	if name == ProviderThePornDB {
+		return s.askMovie(ctx, ids, hint)
+	}
+	return Scene{}, false
+}
+
+func (s Service) askServer(ctx context.Context, name string, ids IDs, hint Hint) (Scene, bool) {
 	server, ok := s.Servers[name]
 	if !ok || server == nil || !server.Configured() {
 		return Scene{}, false
@@ -165,6 +185,39 @@ func (s Service) ask(ctx context.Context, name string, ids IDs, hint Hint) (Scen
 		}
 		for _, candidate := range found {
 			if scene := FromStashBox(name, candidate); sameScene(scene, hint) {
+				return scene, true
+			}
+		}
+	}
+	return Scene{}, false
+}
+
+// askMovie asks ThePornDB's films, by the id a scene lookup did not know or by the name.
+func (s Service) askMovie(ctx context.Context, ids IDs, hint Hint) (Scene, bool) {
+	if s.Movies == nil || !s.Movies.Configured() {
+		return Scene{}, false
+	}
+	if ids.ThePornDB != "" {
+		found, err := s.Movies.Movie(ctx, ids.ThePornDB)
+		if err != nil {
+			if !errors.Is(err, theporndb.ErrNotFound) {
+				s.warn(ProviderThePornDB, ids.ThePornDB, err)
+			}
+			return Scene{}, false
+		}
+		return FromMovie(found), true
+	}
+	if hint.Title == "" {
+		return Scene{}, false
+	}
+	for _, term := range searchTerms(hint) {
+		found, err := s.Movies.SearchMovies(ctx, term, searchLimit)
+		if err != nil {
+			s.warn(ProviderThePornDB, term, err)
+			return Scene{}, false
+		}
+		for _, candidate := range found {
+			if scene := FromMovie(candidate); sameScene(scene, hint) {
 				return scene, true
 			}
 		}
@@ -238,6 +291,8 @@ type Candidate struct {
 	Overview   string
 	Cover      string
 	Traits     media.Traits
+	// Rank is the candidate's place in its own provider's answer, from 0.
+	Rank int
 }
 
 // Query is what a search is for: the words and, when known, the studio and day.
@@ -245,8 +300,9 @@ type Query struct {
 	Title, Studio, Date string
 }
 
-// Search finds scenes by their words in the first provider of the library's order that has any. An empty answer is
-// not an error.
+// Search finds scenes by their words at every provider of the library's order, each in its own ranking and at most limit of
+// them, one scene found at
+// several providers once with the ids of all. A provider that fails is skipped; only all failing is an error.
 func (s Service) Search(ctx context.Context, categoryID int64, query Query, limit int) ([]Candidate, error) {
 	title := strings.TrimSpace(query.Title)
 	if title == "" {
@@ -256,6 +312,8 @@ func (s Service) Search(ctx context.Context, categoryID int64, query Query, limi
 		limit = searchLimit
 	}
 	var failure error
+	asked := 0
+	var found []Candidate
 	for _, name := range s.order(categoryID) {
 		scenes, err := s.searchOne(ctx, name, strings.TrimSpace(strings.Join([]string{query.Studio, title}, " ")), limit)
 		if err == nil && len(scenes) == 0 && query.Studio != "" {
@@ -266,14 +324,28 @@ func (s Service) Search(ctx context.Context, categoryID int64, query Query, limi
 			s.warn(name, title, err)
 			continue
 		}
-		if len(scenes) > 0 {
-			return candidatesOf(scenes, limit), nil
-		}
+		asked++
+		found = mergeCandidates(found, candidatesOf(scenes, limit))
 	}
-	if failure != nil {
+	if asked == 0 && failure != nil {
 		return nil, fmt.Errorf("adult: search %q: %w", title, failure)
 	}
-	return nil, nil
+	return found, nil
+}
+
+// mergeCandidates appends what one provider found: a scene already listed, of the same title and day, only adds its ids.
+func mergeCandidates(listed, more []Candidate) []Candidate {
+	for _, candidate := range more {
+		at := slices.IndexFunc(listed, func(seen Candidate) bool {
+			return seen.Date != "" && seen.Date == candidate.Date && NameKey(seen.Title) == NameKey(candidate.Title)
+		})
+		if at >= 0 {
+			listed[at].IDs = mergeIDs(listed[at].IDs, candidate.IDs)
+			continue
+		}
+		listed = append(listed, candidate)
+	}
+	return listed
 }
 
 func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([]Scene, error) {
@@ -297,6 +369,13 @@ func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([
 	for _, scene := range found {
 		scenes = append(scenes, FromStashBox(name, scene))
 	}
+	if name == ProviderThePornDB && s.Movies != nil && s.Movies.Configured() {
+		films, filmErr := s.Movies.SearchMovies(ctx, term, limit)
+		for _, film := range films {
+			scenes = append(scenes, FromMovie(film))
+		}
+		err = errors.Join(err, filmErr)
+	}
 	return scenes, err
 }
 
@@ -305,8 +384,8 @@ func candidatesOf(scenes []Scene, limit int) []Candidate {
 		scenes = scenes[:limit]
 	}
 	out := make([]Candidate, 0, len(scenes))
-	for _, scene := range scenes {
-		candidate := Candidate{IDs: scene.IDs, Title: scene.Title, Studio: scene.Studio, Date: scene.Date, Year: scene.Year,
+	for rank, scene := range scenes {
+		candidate := Candidate{Rank: rank, IDs: scene.IDs, Title: scene.Title, Studio: scene.Studio, Date: scene.Date, Year: scene.Year,
 			Performers: scene.Performers(), Overview: scene.Overview, Traits: media.Traits{Genres: scene.Tags}}
 		if len(scene.Images) > 0 {
 			candidate.Cover = scene.Images[0].URL

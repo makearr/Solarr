@@ -14,6 +14,7 @@ import (
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
+	"github.com/makearr/Solarr/internal/metadata/theporndb"
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -399,5 +400,76 @@ func TestAddingAPerformerMakesThePersonWithTheirDetailsAndFollowsThemWhenMonitor
 	}
 	if _, err := adds.Add(t.Context(), service, 1, media.AddRequest{Kind: KindPerformer, Provider: "tmdb", ExternalID: "1"}); !errors.Is(err, media.ErrInvalidAdd) {
 		t.Errorf("a provider that is no performer's: err = %v", err)
+	}
+}
+
+type fakeMovies struct{ films []theporndb.Movie }
+
+func (fakeMovies) Configured() bool { return true }
+
+func (f fakeMovies) SearchMovies(context.Context, string, int) ([]theporndb.Movie, error) {
+	return f.films, nil
+}
+
+func (f fakeMovies) Movie(_ context.Context, id string) (theporndb.Movie, error) {
+	for _, film := range f.films {
+		if film.ID == id {
+			return film, nil
+		}
+	}
+	return theporndb.Movie{}, theporndb.ErrNotFound
+}
+
+func TestAFilmThePornDBHoldsIsFoundByNameAndThenByItsId(t *testing.T) {
+	film := theporndb.Movie{ID: "m-1", Title: "Big Film Vol. 3", Date: "2017-03-13", Duration: 7980,
+		Site: &theporndb.Site{UUID: "s-1", Name: "Night Label", Network: &struct {
+			UUID string `json:"uuid"`
+			Name string `json:"name"`
+		}{UUID: "n-1", Name: "Night Network"}},
+		Performers: []theporndb.Performer{{ID: "site-p", Name: "Ada V.", Parent: &struct {
+			ID    string          `json:"id"`
+			Name  string          `json:"name"`
+			Image string          `json:"image"`
+			Extra theporndb.Extra `json:"extra"`
+		}{ID: "p-1", Name: "Ada Vale"}}}}
+	service := Service{
+		Servers: map[string]Server{ProviderThePornDB: &fakeServer{}}, Movies: fakeMovies{films: []theporndb.Movie{film}},
+		Sources: []string{ProviderThePornDB},
+	}
+	scene, err := service.FetchFor(t.Context(), 0, IDs{}, Hint{Title: "Big Film Vol 3", Studio: "Night Label"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scene.IDs.ThePornDB != "m-1" || scene.Studio != "Night Label" || scene.Network != "Night Network" || scene.DurationSec != 7980 || scene.Year != 2017 {
+		t.Errorf("scene = %+v", scene)
+	}
+	if scene.Credits[0].ExternalID != "p-1" || scene.Credits[0].Name != "Ada Vale" {
+		t.Errorf("credits = %+v, want the canonical performer", scene.Credits)
+	}
+	again, err := service.FetchFor(t.Context(), 0, IDs{ThePornDB: "m-1"}, Hint{})
+	if err != nil || again.Title != "Big Film Vol. 3" {
+		t.Errorf("by id: %+v, %v", again, err)
+	}
+	found, err := service.Search(t.Context(), 0, Query{Title: "big film"}, 5)
+	if err != nil || len(found) != 1 || found[0].IDs.ThePornDB != "m-1" {
+		t.Errorf("search = %+v, %v", found, err)
+	}
+}
+
+func TestSearchAsksEveryProviderSoAFilmOnlyThePornDBHoldsIsStillFound(t *testing.T) {
+	unrelated := stashScene()
+	unrelated.Title = "Something Else Entirely"
+	film := theporndb.Movie{ID: "m-9", Title: "Big Film Vol. 3", Date: "2017-03-13"}
+	service := Service{
+		Servers: map[string]Server{ProviderStashDB: &fakeServer{scenes: []stashbox.Scene{unrelated}}, ProviderThePornDB: &fakeServer{}},
+		Movies:  fakeMovies{films: []theporndb.Movie{film}}, Sources: []string{ProviderStashDB, ProviderThePornDB},
+	}
+	found, err := service.Search(t.Context(), 0, Query{Title: "big film vol 3"}, 10)
+	if err != nil || len(found) != 2 {
+		t.Fatalf("found = %+v, %v; want StashDB's unrelated hit and the film", found, err)
+	}
+	pick, ok := pickCandidate(found, parseadult.Info{Title: "Big Film Vol. 3", Year: 2017})
+	if !ok || pick.IDs.ThePornDB != "m-9" {
+		t.Errorf("pick = %+v, %v; want the film", pick, ok)
 	}
 }

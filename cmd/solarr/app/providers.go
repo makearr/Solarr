@@ -10,6 +10,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/metadata/stashbox"
+	"github.com/makearr/Solarr/internal/metadata/theporndb"
 	"github.com/makearr/Solarr/internal/metadata/whisparr"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
@@ -519,6 +520,7 @@ func (p *process) adultService() adult.Service {
 		}
 		p.adultShared = adult.Service{
 			Whisparr: whisparr.New(p.providerClient(providerWhisparr, nil, httpx.ClientConfig{})),
+			Movies:   theporndb.New(p.providerClient(providerThePornDB, nil, httpx.ClientConfig{}), p.providerKey(settings.AdultSourceThePornDB)),
 			Servers: map[string]adult.Server{
 				adult.ProviderStashDB:   server(providerStashDB, stashbox.StashDBEndpoint),
 				adult.ProviderThePornDB: server(providerThePornDB, stashbox.ThePornDBEndpoint),
