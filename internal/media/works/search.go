@@ -23,6 +23,21 @@ var ErrNotSearchable = errors.New("works: search: the item is not one the media 
 // UpgradeMinFileAge keeps a file that has just arrived from being replaced at once.
 const UpgradeMinFileAge = 24 * time.Hour
 
+type searchAskedFor struct{}
+
+// AskedFor marks a search a person started: it lists upgrades for files of any age, as the 24 h wait is for automatic ones.
+func AskedFor(ctx context.Context) context.Context {
+	return context.WithValue(ctx, searchAskedFor{}, true)
+}
+
+// UpgradeNewest is the newest file added time (Unix seconds) an upgrade search may replace.
+func UpgradeNewest(ctx context.Context, now time.Time) int64 {
+	if asked, _ := ctx.Value(searchAskedFor{}).(bool); asked {
+		return now.Unix()
+	}
+	return now.Add(-UpgradeMinFileAge).Unix()
+}
+
 // Spec is a media type's part of a search: what an item wants (W is the type's own account of it), the queries that
 // look for it, and what a release is to it. The judging, the library's rules and the upgrade rule are the same for all.
 type Spec[W any] interface {
@@ -182,6 +197,9 @@ func (y yardstick[W]) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.
 		}
 		decision := judge.WithRevision(judge.EvaluateInOrder(y.rules, release.Facts, y.languagePolicy), release.Revised, y.preferPropers)
 		decision = judge.ApplyFilters(decision, y.filters, raw.Title, release.ReleaseGroup, y.mediaRef)
+		if release.Parts == nil {
+			requirePlausibleSize(&decision, release.Facts)
+		}
 		y.requireUpgrade(&decision, release)
 		find := judge.Find{Conn: conn, Raw: raw, ParseConfidence: 1, MatchConfidence: 1, Decision: decision}
 		if release.Share > 0 {

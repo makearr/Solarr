@@ -143,7 +143,7 @@ func (s Search) addUpgrades(ctx context.Context, item librarydb.DesiredItem, onl
 	if err != nil {
 		return err
 	}
-	below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, s.Clock.Now().Add(-works.UpgradeMinFileAge).Unix())
+	below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, works.UpgradeNewest(ctx, s.Clock.Now()))
 	for _, episode := range detail.Episodes {
 		if file, isBelow := below[strconv.Itoa(episode.Number)]; isBelow && episode.Season == w.season && episode.Monitored {
 			w.missing[episode.Number] = episode

@@ -113,7 +113,7 @@ export function Calendar() {
       </div>
       <p className="flex flex-wrap items-center gap-x-3 text-xs text-ink-muted">
         <span>
-          Releases by artists you follow, and albums you have asked for, in the libraries you can see. Dates come from
+          What you follow or have asked for (albums, episodes, films, books) in the libraries you can see. Dates come from
           the metadata provider and are sometimes only a month or a year.
         </span>
         <span className="flex items-center gap-2">

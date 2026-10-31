@@ -104,7 +104,7 @@ func (b bookSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int,
 	if err != nil {
 		return w, false, err
 	}
-	if owned, below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, now.Add(-works.UpgradeMinFileAge).Unix())[""]; below {
+	if owned, below := works.BelowCutoff(s.Settings.Snapshot(), item.CategoryID, files, works.UpgradeNewest(ctx, now))[""]; below {
 		w.owned = &owned.Facts
 	}
 	return w, w.owned != nil, nil

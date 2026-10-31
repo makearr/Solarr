@@ -28,7 +28,7 @@ func (s Searching) SearchWanted(ctx context.Context, search media.WantedSearch) 
 	if err != nil {
 		return judge.Result{}, err
 	}
-	return s.Acquire.Search.SearchPart(ctx, search.ItemID, part, conns, s.Clock.Now())
+	return s.Acquire.Search.SearchPart(AskedFor(ctx), search.ItemID, part, conns, s.Clock.Now())
 }
 
 // GrabWanted implements media.Searching.
@@ -37,7 +37,7 @@ func (s Searching) GrabWanted(ctx context.Context, search media.WantedSearch) (j
 	if err != nil {
 		return judge.Result{}, dispatch.Best{}, err
 	}
-	result, err := s.Acquire.SearchPartAndSend(ctx, search.ItemID, part, conns, dispatch.GrabUser, s.Clock.Now())
+	result, err := s.Acquire.SearchPartAndSend(AskedFor(ctx), search.ItemID, part, conns, dispatch.GrabUser, s.Clock.Now())
 	return result.Search, result.Best, err
 }
 

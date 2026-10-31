@@ -2,6 +2,7 @@ package works
 
 import (
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -40,5 +41,15 @@ func TestAWholeWorkIsUpgradedOnlyByABetterFile(t *testing.T) {
 	none.requireUpgrade(&filling, Release{})
 	if filling.Outcome != model.OutcomeAccept {
 		t.Errorf("a search filling a gap rejects nothing for quality: %+v", filling)
+	}
+}
+
+func TestUpgradeNewest_AskedForSearchIgnoresTheWait(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	if got, want := UpgradeNewest(t.Context(), now), now.Add(-UpgradeMinFileAge).Unix(); got != want {
+		t.Errorf("automatic search newest = %d, want %d", got, want)
+	}
+	if got, want := UpgradeNewest(AskedFor(t.Context()), now), now.Unix(); got != want {
+		t.Errorf("asked-for search newest = %d, want %d", got, want)
 	}
 }

@@ -3,6 +3,7 @@ package movie
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -112,7 +113,7 @@ func (m movieSpec) Wanted(ctx context.Context, item librarydb.DesiredItem, _ int
 	if err != nil {
 		return w, false, err
 	}
-	if owned, below := works.BelowCutoff(m.search.Settings.Snapshot(), item.CategoryID, files, now.Add(-works.UpgradeMinFileAge).Unix())[""]; below {
+	if owned, below := works.BelowCutoff(m.search.Settings.Snapshot(), item.CategoryID, files, works.UpgradeNewest(ctx, now))[""]; below {
 		w.owned = &owned.Facts
 	}
 	return w, w.owned != nil, nil
@@ -132,7 +133,7 @@ func (movieSpec) Queries(w wanted) [][]judge.Query { return w.queries() }
 // Read implements works.Spec: a release is the movie when it names one of its titles in its year, give or take one.
 func (movieSpec) Read(w wanted, raw indexer.RawItem, conn judge.Conn, _ time.Time) (works.Release, bool) {
 	info, ok := parsemovie.Parse(raw.Title)
-	if !ok || !w.isTheMovie(info) {
+	if !ok || isExtra(raw.Title) || !w.isTheMovie(info) {
 		return works.Release{}, false
 	}
 	facts := releasefacts.FromRelease(info.Claims, info.ReleaseGroup, raw, conn.Impl)
@@ -212,3 +213,8 @@ func (w wanted) isTheMovie(info parsemovie.Info) bool {
 	}
 	return named && yearsAgree(w.year, info.Year)
 }
+
+// extraMarker names a release of bonus material, which carries the film's title but is not the film.
+var extraMarker = regexp.MustCompile(`(?i)\[extras?\b|[._ -]extras[._ -]|featurettes?|behind[._ -]the[._ -]scenes|deleted[._ -]scenes`)
+
+func isExtra(title string) bool { return extraMarker.MatchString(title) }
