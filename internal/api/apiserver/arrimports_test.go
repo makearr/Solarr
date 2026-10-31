@@ -74,6 +74,10 @@ func (f *fakeArrSync) Revert(_ context.Context, id int64) (apiserver.ArrImportRe
 	return f.revert, nil
 }
 
+func (f *fakeArrSync) PushMonitoring(context.Context, int64) (apiserver.ArrPushResult, error) {
+	return apiserver.ArrPushResult{}, f.err
+}
+
 func (f *fakeArrSync) RootFolders(_ context.Context, instanceID int64) ([]string, error) {
 	f.lastRootFoldersInstanceID = instanceID
 	if f.err != nil {

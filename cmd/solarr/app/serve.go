@@ -498,6 +498,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerFollowJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerArrPushJob(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerImportListJob(registry, executor); err != nil {
 		return err
 	}
@@ -720,25 +723,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Service: p.importListService(), Forgetter: library.NewImportLists(p.library), Queue: p.queue,
 		},
 		LibrarySuggester: p.suggester(),
-		ArrSync: adapters.ArrSync{
-			Progress: adapters.NewArrProgress(), Registry: p.media,
-			Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
-			Subscriptions: library.NewSubscriptions(p.library), Desired: library.NewDesired(p.library),
-			Imports: library.NewArrImports(p.library),
-			Reverter: library.NewArrImportRevert(
-				library.NewArrImports(p.library), library.NewIdentity(p.library),
-				library.NewPeople(p.library), library.NewSubscriptions(p.library),
-			),
-			DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
-			TV: p.tvService(), Movies: p.movieCatalog(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
-			WarmFilms: func(ctx context.Context, ids []string) error {
-				return p.wikidataFacts().Warm(ctx, wikidata.FactFilm, ids)
-			},
-			WarmSeries: func(ctx context.Context, ids []string) error {
-				return p.wikidataFacts().Warm(ctx, wikidata.FactSeries, ids)
-			},
-		},
-		Prowlarr: adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
+		ArrSync:          p.arrSync(),
+		Prowlarr:         adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{
 			Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
 		},
@@ -977,5 +963,29 @@ func (p *process) vanishedFiles() adapters.VanishedFiles {
 	return adapters.VanishedFiles{
 		Scans: library.NewScans(p.library), Physical: library.NewPhysical(p.library),
 		Sweeps: adapters.MediaSweeps{Registry: p.media, Cache: p.cache}, Cache: p.cache, Logger: p.logger,
+	}
+}
+
+// arrSync is the *Arr import over the real stores: the API's import and preview, and the job that sends monitoring back.
+func (p *process) arrSync() adapters.ArrSync {
+	return adapters.ArrSync{
+		Progress: adapters.NewArrProgress(), Registry: p.media,
+		Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
+		Subscriptions: library.NewSubscriptions(p.library), Desired: library.NewDesired(p.library),
+		Imports: library.NewArrImports(p.library),
+		Reverter: library.NewArrImportRevert(
+			library.NewArrImports(p.library), library.NewIdentity(p.library),
+			library.NewPeople(p.library), library.NewSubscriptions(p.library),
+		),
+		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
+		TV: p.tvService(), Movies: p.movieCatalog(), Adult: p.adultCatalog(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
+		Series: library.NewSeries(p.library), Organisations: library.NewOrganisations(p.library),
+		Setup: adapters.ArrSetup{Cache: p.cache, Clock: clock.NewSystem()}, Links: library.NewArrLinks(p.library),
+		WarmFilms: func(ctx context.Context, ids []string) error {
+			return p.wikidataFacts().Warm(ctx, wikidata.FactFilm, ids)
+		},
+		WarmSeries: func(ctx context.Context, ids []string) error {
+			return p.wikidataFacts().Warm(ctx, wikidata.FactSeries, ids)
+		},
 	}
 }

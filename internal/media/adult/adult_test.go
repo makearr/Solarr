@@ -61,6 +61,10 @@ func (f *fakeServer) SearchPerformers(context.Context, string, int) ([]stashbox.
 	return nil, nil
 }
 
+func (f *fakeServer) FindStudio(context.Context, string) (stashbox.Studio, error) {
+	return stashbox.Studio{}, stashbox.ErrNotFound
+}
+
 func (f *fakeServer) ScenesOf(_ context.Context, filter stashbox.SceneFilter, _, _ int) ([]stashbox.Scene, error) {
 	f.asked = append(f.asked, "of:"+filter.PerformerID+filter.StudioID)
 	return f.scenes, nil

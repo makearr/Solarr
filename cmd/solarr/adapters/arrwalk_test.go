@@ -83,3 +83,45 @@ func TestWalkArr_SyncsWhatTheOptionsWantAndKeepsGoing(t *testing.T) {
 		t.Errorf("unreachable *Arr: %+v, %v; want nothing and the connect error", counts, err)
 	}
 }
+
+// A monitoring-only walk takes every item whatever its flag, needs no library for its root folder, and never syncs.
+func TestWalkArr_MonitoringOnlyTakesEveryItemAndAddsNothing(t *testing.T) {
+	items := []walked{{"Alpha", "/nowhere/Alpha", true}, {"Bravo", "/nowhere/Bravo", false}}
+	var mu sync.Mutex
+	var monitored []string
+	source := arrSource[walked]{
+		connect: func(context.Context) error { return nil },
+		list:    func(context.Context) ([]walked, error) { return items, nil },
+		describe: func(item walked) arrItem {
+			return arrItem{Name: item.name, RootFolder: item.root, Monitored: item.monitored}
+		},
+		workers: 1,
+		sync: func(context.Context, int64, walked) (library.ArrImportCounts, error) {
+			t.Error("a monitoring-only run added something")
+			return library.ArrImportCounts{}, nil
+		},
+		monitor: func(_ context.Context, _ int64, item walked) (library.ArrImportCounts, error) {
+			mu.Lock()
+			monitored = append(monitored, item.name)
+			mu.Unlock()
+			if item.name == "Bravo" {
+				return skipped, nil
+			}
+			return library.ArrImportCounts{ArtistsMatched: 1}, nil
+		},
+	}
+	walk := arrWalk{importID: 1, progress: NewArrProgress(), options: apiserver.ArrSyncOptions{MonitoringOnly: true},
+		place: func(string) (int64, bool) { return 0, false }}
+	counts, err := walkArr(t.Context(), walk, source)
+	if err != nil || counts != (library.ArrImportCounts{ArtistsMatched: 1, ItemsParked: 1}) {
+		t.Errorf("counts = %+v, err = %v; want one matched and one skipped", counts, err)
+	}
+	slices.Sort(monitored)
+	if !slices.Equal(monitored, []string{"Alpha", "Bravo"}) {
+		t.Errorf("monitored %v, want both, whatever their flag", monitored)
+	}
+	source.monitor = nil
+	if _, err := walkArr(t.Context(), walk, source); err == nil {
+		t.Error("an app without a monitoring-only import was walked")
+	}
+}

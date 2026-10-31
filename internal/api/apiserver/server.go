@@ -640,6 +640,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/arr/instances/{id}/apikey", server.routeSetArrInstanceKey)
 			secured.Post("/arr/instances/{id}/sync", server.routeSyncArrInstance)
 			secured.Post("/arr/instances/{id}/preview", server.routePreviewArrImport)
+			secured.Post("/arr/instances/{id}/push", server.routePushArrMonitoring)
 			secured.Get("/arr/instances/{id}/rootfolders", server.routeListArrInstanceRootFolders)
 			secured.Get("/arr/instances/{id}/indexers", server.routeListArrInstanceIndexers)
 			secured.Post("/arr/instances/{id}/indexers", server.routeUseArrInstanceIndexers)

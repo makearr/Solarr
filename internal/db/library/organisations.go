@@ -434,3 +434,28 @@ func (o Organisations) WorksToAsk(
 	}
 	return out, nil
 }
+
+// Resolve finds the organisation by its provider id, else by kind and name, and creates it when new.
+func (o Organisations) Resolve(ctx context.Context, link OrganisationLink) (organisationID int64, created bool, err error) {
+	err = o.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		organisationID, created, err = resolveOrganisation(ctx, librarydb.New(tx), link)
+		return err
+	})
+	if err != nil {
+		return 0, false, fmt.Errorf("library: resolve organisation %q: %w", link.Name, err)
+	}
+	return organisationID, created, nil
+}
+
+// FindByExternalID answers the organisation a provider names by id, false when the library holds none.
+func (o Organisations) FindByExternalID(ctx context.Context, provider, externalID string) (int64, bool, error) {
+	found, err := librarydb.New(o.store.Read()).GetOrganisationByExternalID(ctx, librarydb.GetOrganisationByExternalIDParams{Provider: provider, ExternalID: externalID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("library: organisation %s:%s: %w", provider, externalID, err)
+	}
+	return found.ID, true, nil
+}

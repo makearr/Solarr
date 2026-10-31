@@ -81,3 +81,13 @@ func (c RadarrClient) MediaManagement(ctx context.Context) (MediaManagement, err
 	}
 	return settings, nil
 }
+
+// Indexers answers the instance's indexers.
+func (c RadarrClient) Indexers(ctx context.Context) ([]Indexer, error) {
+	return c.inner.indexers(ctx, "/api/v3/indexer")
+}
+
+// SetMonitored writes the monitored flag of one resource, by its collection path and id.
+func (c RadarrClient) SetMonitored(ctx context.Context, path string, id int64, monitored bool) error {
+	return c.inner.SetMonitored(ctx, path, id, monitored)
+}

@@ -164,9 +164,13 @@ func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbr
 // exists for (its own doc comment), not the attacker-controlled, per-request
 // URL the guard exists to stop. Found needed live: a real sync against the
 // user's own Lidarr on a private address was refused outright until this.
+// arrRequestTimeout is long because a Whisparr library answers its scene list as one response of over a hundred megabytes,
+// minutes in coming.
+const arrRequestTimeout = 20 * time.Minute
+
 func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
-		client := p.providerClient(providerArr, connectionGuard(baseURL), httpx.ClientConfig{Timeout: 60 * time.Second})
+		client := p.providerClient(providerArr, connectionGuard(baseURL), httpx.ClientConfig{Timeout: arrRequestTimeout})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
 	}
 }
@@ -546,6 +550,7 @@ func (p *process) adultService() adult.Service {
 func (p *process) adultCatalog() adult.Catalog {
 	return adult.Catalog{
 		Performers: &adult.PerformerAdds{People: library.NewPeople(p.library), Now: func() time.Time { return clock.NewSystem().Now() }},
+		Studios:    &adult.StudioAdds{Organisations: library.NewOrganisations(p.library), Follows: library.NewSubscriptions(p.library), Now: func() time.Time { return clock.NewSystem().Now() }},
 		Service:    p.adultService(), Categories: adapters.Categories{Cache: p.cache}, DefaultProfileID: p.defaultQualityProfileID,
 		AllowAgain: func(ctx context.Context, provider, externalID string) error {
 			return adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)}.Allow(ctx, adult.MediaType, provider, externalID)

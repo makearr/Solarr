@@ -54,6 +54,9 @@ func (a ArrSync) sonarrSource(importID int64, client arrimport.SonarrClient, opt
 			return arrItem{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored}
 		},
 		workers: 4,
+		monitor: func(ctx context.Context, _ int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
+			return a.monitorSeries(ctx, series, client)
+		},
 		sync: func(ctx context.Context, categoryID int64, series arrimport.SonarrSeries) (library.ArrImportCounts, error) {
 			created, err := a.syncSeries(ctx, importID, categoryID, series, client, profileNames, options.ProfileMap)
 			switch {
@@ -119,6 +122,7 @@ func (a ArrSync) syncSeries(
 	}, a.Clock.Now().Unix()); err != nil {
 		return false, err
 	}
+	a.link(ctx, linkSeries, series.ID, "work", workID)
 	return result.Created, nil
 }
 

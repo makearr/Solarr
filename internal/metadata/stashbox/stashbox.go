@@ -332,3 +332,17 @@ func (c Client) FavouriteScenes(ctx context.Context, favourite string, page, per
 	err := c.query(ctx, `query ($i: SceneQueryInput!) { queryScenes(input: $i) { scenes {`+sceneFields+`} } }`, map[string]any{"i": input}, &found)
 	return found.Query.Scenes, err
 }
+
+// FindStudio reads one studio by id: its name, its parent and its picture.
+func (c Client) FindStudio(ctx context.Context, id string) (Studio, error) {
+	var found struct {
+		Studio *Studio `json:"findStudio"`
+	}
+	if err := c.query(ctx, `query ($id: ID!) { findStudio(id: $id) { id name parent{id name} urls{url type} images{url width height} } }`, map[string]any{"id": id}, &found); err != nil {
+		return Studio{}, err
+	}
+	if found.Studio == nil {
+		return Studio{}, ErrNotFound
+	}
+	return *found.Studio, nil
+}

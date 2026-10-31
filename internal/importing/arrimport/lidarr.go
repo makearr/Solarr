@@ -1,11 +1,13 @@
 // Package arrimport is ADR-52's own home: one REST client per *Arr
 // application, over its documented API and an API key only -- no database
-// reading, no file access, no writes back to the source. Only Lidarr is
+// reading, no file access. It writes to the source in one place only, a resource's monitored flag, and only for a
+// connection whose owner turned that on (2026-10-31). Only Lidarr is
 // fully wired at stage 4 (music exists); the client shapes for the other
 // four apps land with their own "connect, preview, park" support.
 package arrimport
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -309,6 +311,61 @@ func (c LidarrClient) get(ctx context.Context, path string, into any) error {
 	return nil
 }
 
+// getStream is get for a response too large to hold twice: it is decoded as it arrives, to the same bound.
+func (c LidarrClient) getStream(ctx context.Context, path string, into any) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	if err != nil {
+		return fmt.Errorf("arrimport: build request for %s: %w", path, err)
+	}
+	request.Header.Set("X-Api-Key", c.apiKey)
+	response, err := c.client.Do(ctx, request)
+	if err != nil {
+		return fmt.Errorf("arrimport: %s: %w", path, err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	limited := &io.LimitedReader{R: response.Body, N: maxStreamedResponseBytes + 1}
+	if err := json.NewDecoder(limited).Decode(into); err != nil {
+		if limited.N <= 0 {
+			return fmt.Errorf("arrimport: %s: %w (over %d bytes)", path, ErrResponseTooLarge, maxStreamedResponseBytes)
+		}
+		return fmt.Errorf("arrimport: decode response for %s: %w", path, err)
+	}
+	return nil
+}
+
+// maxStreamedResponseBytes bounds a streamed list: a Whisparr library of tens of thousands of scenes answers over 120 MiB.
+const maxStreamedResponseBytes = 1 << 30
+
+// SetMonitored writes one resource's monitored flag: the resource is read, changed in that one field and written back, so
+// nothing else of it changes. path is the resource's collection ("/api/v3/movie"), id the *Arr's own.
+func (c LidarrClient) SetMonitored(ctx context.Context, path string, id int64, monitored bool) error {
+	target := path + "/" + strconv.FormatInt(id, 10)
+	var resource map[string]json.RawMessage
+	if err := c.get(ctx, target, &resource); err != nil {
+		return err
+	}
+	flag, err := json.Marshal(monitored)
+	if err != nil {
+		return err
+	}
+	resource["monitored"] = flag
+	body, err := json.Marshal(resource)
+	if err != nil {
+		return err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPut, c.baseURL+target, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("arrimport: build request for %s: %w", target, err)
+	}
+	request.Header.Set("X-Api-Key", c.apiKey)
+	request.Header.Set("Content-Type", "application/json")
+	response, err := c.client.Do(ctx, request)
+	if err != nil {
+		return fmt.Errorf("arrimport: PUT %s: %w", target, err)
+	}
+	return response.Body.Close()
+}
+
 // MediaManagement is GET config/mediamanagement trimmed to what a library's File Management can take; Lidarr, Sonarr
 // and Radarr share the shape, each with its own word for the file date and its own unmonitor flag.
 type MediaManagement struct {
@@ -336,4 +393,59 @@ func (c LidarrClient) MediaManagement(ctx context.Context) (MediaManagement, err
 		return MediaManagement{}, err
 	}
 	return settings, nil
+}
+
+// Indexer is one of an *Arr's indexers as an import reads it: where it answers and with what key.
+type Indexer struct {
+	Name           string
+	Implementation string
+	Protocol       string
+	Enabled        bool
+	BaseURL        string
+	APIKey         string
+	Categories     []int
+}
+
+type indexerWire struct {
+	Name                    string `json:"name"`
+	Implementation          string `json:"implementation"`
+	Protocol                string `json:"protocol"`
+	EnableRss               bool   `json:"enableRss"`
+	EnableAutomaticSearch   bool   `json:"enableAutomaticSearch"`
+	EnableInteractiveSearch bool   `json:"enableInteractiveSearch"`
+	Fields                  []struct {
+		Name  string          `json:"name"`
+		Value json.RawMessage `json:"value"`
+	} `json:"fields"`
+}
+
+// indexers reads one *Arr's indexers from its own API version's path. An indexer is enabled when it takes part in any
+// search; the Newznab and Torznab ones carry the address and key Solarr can search them with.
+func (c LidarrClient) indexers(ctx context.Context, path string) ([]Indexer, error) {
+	var wire []indexerWire
+	if err := c.get(ctx, path, &wire); err != nil {
+		return nil, err
+	}
+	out := make([]Indexer, len(wire))
+	for index, entry := range wire {
+		found := Indexer{Name: entry.Name, Implementation: entry.Implementation, Protocol: entry.Protocol,
+			Enabled: entry.EnableRss || entry.EnableAutomaticSearch || entry.EnableInteractiveSearch}
+		for _, field := range entry.Fields {
+			switch field.Name {
+			case "baseUrl":
+				_ = json.Unmarshal(field.Value, &found.BaseURL)
+			case "apiKey":
+				_ = json.Unmarshal(field.Value, &found.APIKey)
+			case "categories":
+				_ = json.Unmarshal(field.Value, &found.Categories)
+			}
+		}
+		out[index] = found
+	}
+	return out, nil
+}
+
+// Indexers answers Lidarr's indexers.
+func (c LidarrClient) Indexers(ctx context.Context) ([]Indexer, error) {
+	return c.indexers(ctx, "/api/v1/indexer")
 }

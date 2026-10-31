@@ -22,6 +22,8 @@ type Catalog struct {
 	AllowAgain func(ctx context.Context, provider, externalID string) error
 	// Performers adds a performer a person looked up; nil leaves the add dialog without performers.
 	Performers *PerformerAdds
+	// Studios follows a studio an *Arr import names; nil refuses.
+	Studios *StudioAdds
 }
 
 var _ media.Adding = Catalog{}
@@ -52,6 +54,12 @@ func (c Catalog) AddWork(ctx context.Context, request media.AddRequest) (media.A
 			return media.AddResult{}, fmt.Errorf("%w: no such library", media.ErrInvalidAdd)
 		}
 		return c.Performers.Add(ctx, c.Service, category.ID, request)
+	}
+	if request.Kind == KindStudio {
+		if c.Studios == nil {
+			return media.AddResult{}, media.ErrNotWired
+		}
+		return c.Studios.Add(ctx, c.Service, request.CategoryID, request)
 	}
 	return c.shared().AddWork(ctx, request)
 }

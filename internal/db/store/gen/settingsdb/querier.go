@@ -135,6 +135,7 @@ type Querier interface {
 	// nonce every call, so writing it back unconditionally would be silent,
 	// pointless churn on every unrelated edit.
 	SetArrInstanceAPIKey(ctx context.Context, arg SetArrInstanceAPIKeyParams) error
+	SetArrInstancePushed(ctx context.Context, arg SetArrInstancePushedParams) error
 	SetArrInstanceSyncResult(ctx context.Context, arg SetArrInstanceSyncResultParams) error
 	SetCategoryAccess(ctx context.Context, arg SetCategoryAccessParams) error
 	SetCategoryKind(ctx context.Context, arg SetCategoryKindParams) error

@@ -22,6 +22,7 @@ const APP_WORDS: Partial<Record<ArrInstance["app"], { mediaType: string; monitor
   lidarr: { mediaType: "music", monitored: "Monitored artists and albums", path: "/music" },
   sonarr: { mediaType: "tv", monitored: "Monitored series", path: "/tv" },
   radarr: { mediaType: "movie", monitored: "Monitored movies", path: "/movies" },
+  whisparr: { mediaType: "adult", monitored: "Monitored scenes, performers and studios", path: "/porn" },
 };
 
 /** What one *Arr import brings in (asked 2026-09-30): its library's folders, monitored and unmonitored
@@ -39,6 +40,9 @@ export function ArrSyncOptions({
 }) {
   const libraryLabel = useLibraryLabel();
   const words = APP_WORDS[instance.app] ?? APP_WORDS.lidarr!;
+  const [monitoringOnly, setMonitoringOnly] = useState(false);
+  const [indexers, setIndexers] = useState(false);
+  const [downloadClients, setDownloadClients] = useState(false);
   const [monitored, setMonitored] = useState(true);
   const [unmonitored, setUnmonitored] = useState(false);
   const [albums, setAlbums] = useState<"all" | "missing" | "complete">("all");
@@ -50,7 +54,7 @@ export function ArrSyncOptions({
   const [profiles, setProfiles] = useState<ProfileChoice>({});
   const [settingsInto, setSettingsInto] = useState<number[]>([]);
   // A preview answers the options it was asked with; any change asks again.
-  useEffect(() => setPreview(null), [monitored, unmonitored, albums, rewrites, importFolders, libraryId]);
+  useEffect(() => setPreview(null), [monitored, unmonitored, albums, rewrites, importFolders, libraryId, monitoringOnly]);
 
   const libraries = useLibraries();
   const folders = useQuery({
@@ -65,9 +69,19 @@ export function ArrSyncOptions({
     return path;
   };
 
+  // What the run brings in: the items (or only their monitoring), and the *Arr's indexers and download clients.
   const options = () => ({
-    monitored, unmonitored, albums, path_rewrites: rewrites.filter((entry) => entry.from.trim() && entry.to.trim()),
+    mode: monitoringOnly ? ("monitoring" as const) : ("add" as const),
+    monitored: monitoringOnly ? true : monitored,
+    unmonitored: monitoringOnly ? false : unmonitored,
+    albums,
+    indexers,
+    download_clients: downloadClients,
+    path_rewrites: rewrites.filter((entry) => entry.from.trim() && entry.to.trim()),
   });
+  // A preview counts the items an add would bring; with none to add there is nothing to count.
+  const addsItems = !monitoringOnly && (monitored || unmonitored);
+  const nothingChosen = !monitoringOnly && !monitored && !unmonitored && !indexers && !downloadClients;
   const previewing = useMutation({
     mutationFn: () =>
       ok(api.POST("/arr/instances/{id}/preview", {
@@ -85,7 +99,7 @@ export function ArrSyncOptions({
     mutationFn: async () => {
       const problems: string[] = [];
       // The library's folders first, so the import below finds each artist's library by them.
-      if (importFolders && libraryId !== undefined) {
+      if (!monitoringOnly && importFolders && libraryId !== undefined) {
         let known: { id: number; path: string }[] | undefined;
         for (const folder of folders.data ?? []) {
           const path = rewrite(folder.path);
@@ -117,7 +131,7 @@ export function ArrSyncOptions({
         },
       });
       if (error) throw error;
-      if (importFolders) await api.POST("/schedules/{key}/run", { params: { path: { key: "scan" } } });
+      if (!monitoringOnly && importFolders) await api.POST("/schedules/{key}/run", { params: { path: { key: "scan" } } });
       setNotes(problems);
       return data;
     },
@@ -128,6 +142,27 @@ export function ArrSyncOptions({
   return (
     <section className="flex flex-col gap-2 rounded-md border border-border-subtle bg-canvas p-3 text-xs">
       <h3 className="font-medium text-ink">Import from {instance.name}</h3>
+      <fieldset className="flex flex-col gap-1">
+        <legend className="mb-1 text-ink-muted">What to bring in</legend>
+        <label className="flex items-center gap-1.5">
+          <input type="radio" name={`arr-mode-${instance.id}`} checked={!monitoringOnly} onChange={() => setMonitoringOnly(false)} />
+          What {instance.name} holds: its paths, items and settings, as chosen below
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="radio" name={`arr-mode-${instance.id}`} checked={monitoringOnly} onChange={() => setMonitoringOnly(true)} />
+          Only the monitoring status of what is already here: nothing is added, and what {instance.name} monitors is monitored here
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={indexers} onChange={(event) => setIndexers(event.target.checked)} />
+          Its indexers (Newznab and Torznab ones, as they are switched there)
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={downloadClients} onChange={(event) => setDownloadClients(event.target.checked)} />
+          Its download clients (added switched off: {instance.name} hides their passwords)
+        </label>
+      </fieldset>
+      {!monitoringOnly && (
+        <>
       <label className="flex items-center gap-2">
         <input type="checkbox" checked={importFolders} onChange={(event) => setImportFolders(event.target.checked)} />
         Its library: add its root folders
@@ -190,6 +225,8 @@ export function ArrSyncOptions({
         </label>
         )}
       </div>
+        </>
+      )}
       {preview && (
         <ArrImportPreviewPanel
           preview={preview}
@@ -202,10 +239,10 @@ export function ArrSyncOptions({
         />
       )}
       <div className="flex items-center gap-2">
-        {preview ? (
+        {preview || !addsItems ? (
           <button
             type="button"
-            disabled={start.isPending}
+            disabled={start.isPending || nothingChosen}
             onClick={() => start.mutate()}
             className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
           >
@@ -214,7 +251,7 @@ export function ArrSyncOptions({
         ) : (
           <button
             type="button"
-            disabled={(!monitored && !unmonitored) || (importFolders && (libraryId === undefined || folders.isPending)) || previewing.isPending}
+            disabled={!addsItems || (importFolders && (libraryId === undefined || folders.isPending)) || previewing.isPending}
             onClick={() => previewing.mutate()}
             className="rounded-md bg-accent px-3 py-1 text-xs text-accent-ink disabled:opacity-50"
           >

@@ -31,17 +31,19 @@ type AppUser struct {
 }
 
 type ArrInstance struct {
-	ID            int64
-	App           string
-	Name          string
-	BaseUrl       string
-	ApiKey        []byte
-	CategoryID    sql.NullInt64
-	Enabled       int64
-	CreatedAt     int64
-	UpdatedAt     int64
-	LastSyncedAt  sql.NullInt64
-	LastSyncError sql.NullString
+	ID             int64
+	App            string
+	Name           string
+	BaseUrl        string
+	ApiKey         []byte
+	CategoryID     sql.NullInt64
+	Enabled        int64
+	CreatedAt      int64
+	UpdatedAt      int64
+	LastSyncedAt   sql.NullInt64
+	LastSyncError  sql.NullString
+	PushMonitoring int64
+	LastPushedAt   sql.NullInt64
 }
 
 type CalendarFeed struct {

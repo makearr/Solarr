@@ -29,6 +29,10 @@ type ArrSyncOptions struct {
 	SettingsInto []int64
 	// NewFoldersLibrary is where the *Arr's root folders unknown here are about to be added, for a preview.
 	NewFoldersLibrary *int64
+	// MonitoringOnly sets the monitored flag of what Solarr already holds, adds nothing and ignores the item choices.
+	MonitoringOnly bool
+	// Indexers and DownloadClients also add the *Arr's own, as the connection's.
+	Indexers, DownloadClients bool
 }
 
 // ArrImportPreview is what an import would do, read without changing anything (ADR-52's preview step).
@@ -140,6 +144,41 @@ type ArrSync interface {
 	// RootFolders answers this instance's own configured root folders, read
 	// live -- the setup wizard's "import the root folder(s)" step.
 	RootFolders(ctx context.Context, instanceID int64) ([]string, error)
+	// PushMonitoring writes Solarr's monitoring of what an import linked back to the *Arr, where it differs.
+	PushMonitoring(ctx context.Context, instanceID int64) (ArrPushResult, error)
+}
+
+// ArrPushResult is what one send of monitoring did.
+type ArrPushResult struct{ Checked, Changed int64 }
+
+// routePushArrMonitoring parses the id path parameter.
+func (s *Server) routePushArrMonitoring(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "an instance id must be a number")
+		return
+	}
+	s.PushArrMonitoring(w, r, id)
+}
+
+// PushArrMonitoring sends the monitoring of what an import brought in back to its *Arr, now. Administrator only.
+func (s *Server) PushArrMonitoring(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.arrSync == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "*Arr import is not available")
+		return
+	}
+	result, err := s.arrSync.PushMonitoring(r.Context(), id)
+	switch {
+	case errors.Is(err, settings.ErrNotFound):
+		writeError(w, s.logger, err)
+	case err != nil:
+		writeProblem(w, s.logger, http.StatusBadGateway, TypeUnavailable, "The *Arr could not be written", httpx.Explain(err))
+	default:
+		writeJSON(w, s.logger, http.StatusOK, map[string]int64{"checked": result.Checked, "changed": result.Changed})
+	}
 }
 
 // routeSyncArrInstance parses the id path parameter.
@@ -208,7 +247,9 @@ func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (Arr
 	}
 	options.SettingsInto = derefOr(body.SettingsInto, nil)
 	options.NewFoldersLibrary = body.NewFoldersLibraryId
-	if !options.Monitored && !options.Unmonitored {
+	options.MonitoringOnly = body.Mode != nil && *body.Mode == gen.ArrSyncOptionsModeMonitoring
+	options.Indexers, options.DownloadClients = derefOr(body.Indexers, false), derefOr(body.DownloadClients, false)
+	if !options.MonitoringOnly && !options.Monitored && !options.Unmonitored && !options.Indexers && !options.DownloadClients {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Nothing to import", "choose monitored items, unmonitored items or both")
 		return ArrSyncOptions{}, false
 	}

@@ -12,21 +12,22 @@ import (
 
 const createArrInstance = `-- name: CreateArrInstance :one
 
-INSERT INTO arr_instance (app, name, base_url, api_key, category_id, enabled, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO arr_instance (app, name, base_url, api_key, category_id, enabled, created_at, updated_at, push_monitoring)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at,
-          last_synced_at, last_sync_error
+          last_synced_at, last_sync_error, push_monitoring, last_pushed_at
 `
 
 type CreateArrInstanceParams struct {
-	App        string
-	Name       string
-	BaseUrl    string
-	ApiKey     []byte
-	CategoryID sql.NullInt64
-	Enabled    int64
-	CreatedAt  int64
-	UpdatedAt  int64
+	App            string
+	Name           string
+	BaseUrl        string
+	ApiKey         []byte
+	CategoryID     sql.NullInt64
+	Enabled        int64
+	CreatedAt      int64
+	UpdatedAt      int64
+	PushMonitoring int64
 }
 
 // *Arr instance connections (todo 4.13, ADR-52). Column lists follow table order.
@@ -40,6 +41,7 @@ func (q *Queries) CreateArrInstance(ctx context.Context, arg CreateArrInstancePa
 		arg.Enabled,
 		arg.CreatedAt,
 		arg.UpdatedAt,
+		arg.PushMonitoring,
 	)
 	var i ArrInstance
 	err := row.Scan(
@@ -54,6 +56,8 @@ func (q *Queries) CreateArrInstance(ctx context.Context, arg CreateArrInstancePa
 		&i.UpdatedAt,
 		&i.LastSyncedAt,
 		&i.LastSyncError,
+		&i.PushMonitoring,
+		&i.LastPushedAt,
 	)
 	return i, err
 }
@@ -69,7 +73,7 @@ func (q *Queries) DeleteArrInstance(ctx context.Context, id int64) error {
 
 const getArrInstance = `-- name: GetArrInstance :one
 SELECT id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at,
-       last_synced_at, last_sync_error
+       last_synced_at, last_sync_error, push_monitoring, last_pushed_at
 FROM arr_instance WHERE id = ?
 `
 
@@ -88,13 +92,15 @@ func (q *Queries) GetArrInstance(ctx context.Context, id int64) (ArrInstance, er
 		&i.UpdatedAt,
 		&i.LastSyncedAt,
 		&i.LastSyncError,
+		&i.PushMonitoring,
+		&i.LastPushedAt,
 	)
 	return i, err
 }
 
 const listArrInstances = `-- name: ListArrInstances :many
 SELECT id, app, name, base_url, api_key, category_id, enabled, created_at, updated_at,
-       last_synced_at, last_sync_error
+       last_synced_at, last_sync_error, push_monitoring, last_pushed_at
 FROM arr_instance ORDER BY app, name
 `
 
@@ -119,6 +125,8 @@ func (q *Queries) ListArrInstances(ctx context.Context) ([]ArrInstance, error) {
 			&i.UpdatedAt,
 			&i.LastSyncedAt,
 			&i.LastSyncError,
+			&i.PushMonitoring,
+			&i.LastPushedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -152,6 +160,20 @@ func (q *Queries) SetArrInstanceAPIKey(ctx context.Context, arg SetArrInstanceAP
 	return err
 }
 
+const setArrInstancePushed = `-- name: SetArrInstancePushed :exec
+UPDATE arr_instance SET last_pushed_at = ? WHERE id = ?
+`
+
+type SetArrInstancePushedParams struct {
+	LastPushedAt sql.NullInt64
+	ID           int64
+}
+
+func (q *Queries) SetArrInstancePushed(ctx context.Context, arg SetArrInstancePushedParams) error {
+	_, err := q.db.ExecContext(ctx, setArrInstancePushed, arg.LastPushedAt, arg.ID)
+	return err
+}
+
 const setArrInstanceSyncResult = `-- name: SetArrInstanceSyncResult :exec
 UPDATE arr_instance SET last_synced_at = ?, last_sync_error = ? WHERE id = ?
 `
@@ -169,17 +191,18 @@ func (q *Queries) SetArrInstanceSyncResult(ctx context.Context, arg SetArrInstan
 
 const updateArrInstance = `-- name: UpdateArrInstance :exec
 UPDATE arr_instance
-SET name = ?, base_url = ?, category_id = ?, enabled = ?, updated_at = ?
+SET name = ?, base_url = ?, category_id = ?, enabled = ?, updated_at = ?, push_monitoring = ?
 WHERE id = ?
 `
 
 type UpdateArrInstanceParams struct {
-	Name       string
-	BaseUrl    string
-	CategoryID sql.NullInt64
-	Enabled    int64
-	UpdatedAt  int64
-	ID         int64
+	Name           string
+	BaseUrl        string
+	CategoryID     sql.NullInt64
+	Enabled        int64
+	UpdatedAt      int64
+	PushMonitoring int64
+	ID             int64
 }
 
 func (q *Queries) UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error {
@@ -189,6 +212,7 @@ func (q *Queries) UpdateArrInstance(ctx context.Context, arg UpdateArrInstancePa
 		arg.CategoryID,
 		arg.Enabled,
 		arg.UpdatedAt,
+		arg.PushMonitoring,
 		arg.ID,
 	)
 	return err

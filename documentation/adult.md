@@ -79,5 +79,5 @@ release group, original filename, StashDB id, part number.
 
 ## Not built yet
 
-phash, fingerprint submission, picture galleries as a library kind, an import from a Whisparr instance, ThePornDB's import
-lists.
+phash, fingerprint submission, picture galleries as a library kind, ThePornDB's import lists. An import from a Whisparr
+instance is [arr-import.md](arr-import.md).

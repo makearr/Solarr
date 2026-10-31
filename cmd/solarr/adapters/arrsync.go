@@ -22,6 +22,9 @@ import (
 // musicProviderArtist is the id a Lidarr artist is matched by.
 const musicProviderArtist = music.ProviderArtist
 
+// musicProviderReleaseGroup is the id a Lidarr album is matched by.
+const musicProviderReleaseGroup = music.ProviderReleaseGroup
+
 // LidarrClientFactory builds a REST client for one instance's own base URL
 // and decrypted API key -- injected so this package never builds an
 // httpx.Client itself (cmd/solarr/app/providers.go's own job, the same
@@ -55,8 +58,17 @@ type ArrSync struct {
 	Lidarr           LidarrClientFactory
 	// TV adds the series a Sonarr import maps; Categories resolves a library's quality profile.
 	TV TVAdder
-	// Movies adds the movies a Radarr import maps.
-	Movies     media.Adding
+	// Movies adds the movies a Radarr import maps; Adult the scenes, performers and studios a Whisparr import maps.
+	Movies, Adult media.Adding
+	// Series finds what Solarr holds by a provider's id, for a monitoring-only import; Organisations a studio.
+	Series        library.Series
+	Organisations library.Organisations
+	// Links remembers what each *Arr item is here, for sending monitoring back.
+	Links library.ArrLinks
+	// instanceID is the connection a run is of; set on the copy a run works with.
+	instanceID int64
+	// Setup adds the *Arr's indexers and download clients an import brings; nil brings none.
+	Setup      ArrSetup
 	Categories Categories
 	// WarmFilms and WarmSeries read in bulk what Wikidata says of the films (TMDB ids) and series (TheTVDB ids) an
 	// import is about to add, so each add finds it kept instead of one serial query apiece. Nil warms nothing.
@@ -162,6 +174,7 @@ func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
 	options apiserver.ArrSyncOptions,
 ) {
+	a.instanceID = instanceID
 	walk := arrWalk{importID: importID, options: options, progress: a.Progress, place: func(rootFolder string) (int64, bool) {
 		return a.categoryFor(instance, rootFolder, a.Cache.Snapshot().RootFolders())
 	}}
@@ -173,10 +186,15 @@ func (a ArrSync) runAndFinish(
 		counts, syncErr = walkArr(ctx, walk, a.sonarrSource(importID, client.Sonarr(), options))
 	case settings.ArrAppRadarr:
 		counts, syncErr = walkArr(ctx, walk, a.radarrSource(importID, client.Radarr(), options))
+	case settings.ArrAppWhisparr:
+		counts, syncErr = walkArr(ctx, walk, a.whisparrSource(importID, client.Whisparr(), options))
 	default:
 		counts, syncErr = walkArr(ctx, walk, a.lidarrSource(importID, client, options))
 	}
 	defer a.Progress.clear(importID)
+	if setupErr := a.importSetup(ctx, instance, client, options); setupErr != nil {
+		syncErr = errors.Join(syncErr, setupErr)
+	}
 
 	finishedAt := a.Clock.Now().Unix()
 	errMsg := ""
@@ -224,6 +242,8 @@ func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client a
 		from, err = client.Sonarr().MediaManagement(ctx)
 	case settings.ArrAppRadarr:
 		from, err = client.Radarr().MediaManagement(ctx)
+	case settings.ArrAppWhisparr:
+		from, err = client.Whisparr().MediaManagement(ctx)
 	default:
 		from, err = client.MediaManagement(ctx)
 	}
@@ -247,7 +267,7 @@ func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client a
 
 // arrAppSupported is every app an import is mapped for.
 func arrAppSupported(app settings.ArrApp) bool {
-	return app == settings.ArrAppLidarr || app == settings.ArrAppSonarr || app == settings.ArrAppRadarr
+	return app == settings.ArrAppLidarr || app == settings.ArrAppSonarr || app == settings.ArrAppRadarr || app == settings.ArrAppWhisparr
 }
 
 // RootFolders reads one instance's own configured root folders live -- the
@@ -273,6 +293,8 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 		folders, err = client.Sonarr().RootFolders(ctx)
 	case settings.ArrAppRadarr:
 		folders, err = client.Radarr().RootFolders(ctx)
+	case settings.ArrAppWhisparr:
+		folders, err = client.Whisparr().RootFolders(ctx)
 	default:
 		folders, err = client.RootFolders(ctx)
 	}
@@ -366,6 +388,9 @@ func (a ArrSync) lidarrSource(importID int64, client arrimport.LidarrClient, opt
 			return arrItem{Name: artist.ArtistName, RootFolder: artist.RootFolderPath, Monitored: artist.Monitored}
 		},
 		workers: 1,
+		monitor: func(ctx context.Context, _ int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
+			return a.monitorArtist(ctx, artist, client)
+		},
 		sync: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
 			var counts library.ArrImportCounts
 			personID, created, err := a.syncArtist(ctx, importID, artist, artist.Monitored)
@@ -449,6 +474,7 @@ func (a ArrSync) syncArtist(
 	}, now.Unix()); err != nil {
 		return 0, false, err
 	}
+	a.link(ctx, linkArtist, artist.ID, "person", personID)
 	return personID, created, nil
 }
 
@@ -509,6 +535,7 @@ func (a ArrSync) syncAlbum(
 	}, now.Unix()); err != nil {
 		return false, err
 	}
+	a.link(ctx, linkAlbum, album.ID, "work", workID)
 	return resolution.WorkCreated, nil
 }
 

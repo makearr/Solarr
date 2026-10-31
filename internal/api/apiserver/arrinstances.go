@@ -52,7 +52,7 @@ func (s *Server) AddArrInstance(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.auth.Settings.CreateArrInstance(r.Context(), settings.ArrInstanceRequest{
 		App: settings.ArrApp(body.App), Name: body.Name, BaseURL: body.BaseUrl,
-		CategoryID: body.CategoryId, Enabled: derefOr(body.Enabled, true),
+		CategoryID: body.CategoryId, Enabled: derefOr(body.Enabled, true), PushMonitoring: derefOr(body.PushMonitoring, false),
 	}, secrets.Secret(body.ApiKey), s.wall.Now().Unix())
 	if err != nil {
 		writeArrInstanceError(w, s, err, "The connection has problems", "Nothing was created.")
@@ -92,7 +92,7 @@ func (s *Server) UpdateArrInstance(w http.ResponseWriter, r *http.Request, id in
 	}
 	updated, err := s.auth.Settings.UpdateArrInstance(r.Context(), id, settings.ArrInstanceRequest{
 		App: existing.App, Name: body.Name, BaseURL: body.BaseUrl,
-		CategoryID: body.CategoryId, Enabled: derefOr(body.Enabled, true),
+		CategoryID: body.CategoryId, Enabled: derefOr(body.Enabled, true), PushMonitoring: derefOr(body.PushMonitoring, existing.PushMonitoring),
 	}, s.wall.Now().Unix())
 	if err != nil {
 		writeArrInstanceError(w, s, err, "The connection has problems", "Nothing was changed.")
@@ -181,13 +181,17 @@ func arrInstanceView(instance settings.ArrInstance) gen.ArrInstance {
 	// Cache.DecryptedAPIKey), so a list response has nothing to hint from.
 	view := gen.ArrInstance{
 		Id: instance.ID, App: gen.ArrApp(instance.App), Name: instance.Name, BaseUrl: instance.BaseURL,
-		CategoryId: instance.CategoryID, Enabled: instance.Enabled,
+		CategoryId: instance.CategoryID, Enabled: instance.Enabled, PushMonitoring: &instance.PushMonitoring,
 		ApiKey:    gen.SecretMask{HasValue: true},
 		CreatedAt: unixTime(instance.CreatedAt), UpdatedAt: unixTime(instance.UpdatedAt),
 	}
 	if instance.LastSyncedAt != nil {
 		at := unixTime(*instance.LastSyncedAt)
 		view.LastSyncedAt = &at
+	}
+	if instance.LastPushedAt != nil {
+		at := unixTime(*instance.LastPushedAt)
+		view.LastPushedAt = &at
 	}
 	if instance.LastSyncError != "" {
 		reason := instance.LastSyncError

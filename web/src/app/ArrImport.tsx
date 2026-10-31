@@ -48,10 +48,12 @@ export function ArrImport() {
       <header className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold">*Arr import</h1>
         <p className="text-sm leading-relaxed text-ink-muted">
-          Connect an existing Sonarr/Radarr/Lidarr/Readarr/Whisparr and bring in what it already
-          monitors as intent -- never a download, never a write back to the source. Lidarr (artists
-          and albums), Sonarr (series and seasons) and Radarr (movies) sync today; the others connect and wait for their own stage. Connect Prowlarr to use
-          its active indexers and download clients here.
+          Connect an existing Sonarr/Radarr/Lidarr/Whisparr and choose what to bring in: its paths, what it
+          monitors (as intent, never a download), only the monitoring status of what is already here, its
+          indexers and its download clients. A connection may also send monitoring back, which is the one
+          thing Solarr ever writes to an *Arr, and is off until you turn it on. Lidarr (artists and
+          albums), Sonarr (series), Radarr (movies) and Whisparr (scenes, performers, studios) sync today;
+          Readarr connects and waits. Connect Prowlarr to use its active indexers and download clients here.
         </p>
       </header>
 
@@ -187,9 +189,50 @@ function InstanceCard({
       {started && <RunSummary run={started} />}
 
       <ArrConnectionTools instanceId={instance.id} app={instance.app} />
+      {instance.app !== "prowlarr" && instance.app !== "readarr" && <PushMonitoring instance={instance} onChanged={onChanged} />}
 
       {expanded && <InstanceHistory instanceId={instance.id} />}
     </li>
+  );
+}
+
+/** Whether this connection sends the monitoring of what an import brought in back to its *Arr, and a send now. */
+function PushMonitoring({ instance, onChanged }: { instance: ArrInstance; onChanged: () => void }) {
+  const [result, setResult] = useState<{ checked: number; changed: number } | null>(null);
+  const toggle = useMutation({
+    mutationFn: async (on: boolean) => {
+      await ok(api.PATCH("/arr/instances/{id}", {
+        params: { path: { id: instance.id } },
+        body: { name: instance.name, base_url: instance.base_url, category_id: instance.category_id, enabled: instance.enabled, push_monitoring: on },
+      }));
+    },
+    onSuccess: onChanged,
+  });
+  const send = useMutation({
+    mutationFn: () => ok(api.POST("/arr/instances/{id}/push", { params: { path: { id: instance.id } } })),
+    onSuccess: (data) => {
+      setResult(data);
+      onChanged();
+    },
+  });
+  const on = instance.push_monitoring === true;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+      <label className="flex items-center gap-1.5">
+        <input type="checkbox" checked={on} disabled={toggle.isPending} onChange={(event) => toggle.mutate(event.target.checked)} />
+        Send monitoring back to {instance.name}
+      </label>
+      <span>Only items an import brought in, only their monitored flag; Solarr's state stands.</span>
+      {on && (
+        <button type="button" disabled={send.isPending} onClick={() => send.mutate()}
+          className="rounded-md border border-border-subtle px-2 py-1 hover:text-ink disabled:opacity-50">
+          {send.isPending ? "Sending…" : "Send now"}
+        </button>
+      )}
+      {on && instance.last_pushed_at && <span>Last sent {new Date(instance.last_pushed_at).toLocaleString()}</span>}
+      {result && <span>{result.checked} compared, {result.changed} changed there.</span>}
+      {(toggle.isError || send.isError) && <span className="text-danger">{((send.error ?? toggle.error) as { detail?: string })?.detail ?? "That did not work."}</span>}
+    </div>
   );
 }
 
@@ -198,7 +241,7 @@ function RunSummary({ run }: { run: ArrImportRun }) {
     return (
       <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
         {run.artists_total
-          ? `Walking ${run.app === "sonarr" ? "series" : run.app === "radarr" ? "movie" : "artist"} ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
+          ? `Walking ${run.app === "sonarr" ? "series" : run.app === "radarr" ? "movie" : run.app === "whisparr" ? "item" : "artist"} ${Math.min((run.artists_done ?? 0) + 1, run.artists_total)} of ${run.artists_total}.`
           : "Started."}{" "}
         A real library takes a while (one call per artist or series, one pass over the movies); expand history below to watch it finish.
       </p>
@@ -206,9 +249,10 @@ function RunSummary({ run }: { run: ArrImportRun }) {
   }
   return (
     <p className="rounded-md bg-canvas px-2 py-1.5 text-xs text-ink-muted">
-      {run.state === "DONE" && (run.app === "sonarr" || run.app === "radarr") ? (
+      {run.state === "DONE" && (run.app === "sonarr" || run.app === "radarr" || run.app === "whisparr") ? (
         <>
-          {run.artists_created} {run.app === "radarr" ? "movies" : "series"} added, {run.artists_matched} matched
+          {run.artists_created} {run.app === "radarr" ? "movies" : run.app === "whisparr" ? "items" : "series"} added, {run.artists_matched} matched
+          {run.items_parked > 0 ? `, ${run.items_parked} not here` : ""}
         </>
       ) : run.state === "DONE" ? (
         <>
@@ -294,6 +338,7 @@ function AddInstance({
   const [baseUrl, setBaseUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [categoryId, setCategoryId] = useState("");
+  const [pushMonitoring, setPushMonitoring] = useState(false);
 
   const create = useMutation({
     mutationFn: async () => {
@@ -305,6 +350,7 @@ function AddInstance({
           api_key: apiKey,
           category_id: categoryId ? Number(categoryId) : undefined,
           enabled: true,
+          push_monitoring: pushMonitoring,
         },
       }));
     },
@@ -375,6 +421,10 @@ function AddInstance({
             </option>
           ))}
         </select>
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-ink-muted">
+        <input type="checkbox" checked={pushMonitoring} onChange={(event) => setPushMonitoring(event.target.checked)} />
+        Send monitoring back
       </label>
       <Button
         variant="primary"

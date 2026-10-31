@@ -1642,6 +1642,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/arr/instances/{id}/push": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send the monitored flag of what an import brought in back to this *Arr, now, where it differs. The connection must have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only. */
+        post: operations["pushArrMonitoring"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/arr/instances/{id}/indexers": {
         parameters: {
             query?: never;
@@ -6104,6 +6123,22 @@ export interface components {
         /** @description What one import brings in. Absent is monitored items and every album, as before options. */
         ArrSyncOptions: {
             /**
+             * @description add brings in what the *Arr holds (the options below choose which); monitoring only sets the monitored flag of what Solarr already holds, in both directions, and adds nothing.
+             * @default add
+             * @enum {string}
+             */
+            mode: "add" | "monitoring";
+            /**
+             * @description Also add the *Arr's Newznab and Torznab indexers here, as the connection's own.
+             * @default false
+             */
+            indexers: boolean;
+            /**
+             * @description Also add the *Arr's download clients Solarr can use.
+             * @default false
+             */
+            download_clients: boolean;
+            /**
              * @description Monitored artists and albums.
              * @default true
              */
@@ -6144,7 +6179,7 @@ export interface components {
              * @description What the counts count.
              * @enum {string}
              */
-            item_kind: "artists" | "series" | "movies";
+            item_kind: "artists" | "series" | "movies" | "scenes";
             roots: components["schemas"]["ArrPreviewRoot"][];
             profiles: components["schemas"]["ArrPreviewProfile"][];
             settings: components["schemas"]["ArrPreviewSettings"][];
@@ -6248,6 +6283,10 @@ export interface components {
             /** Format: date-time */
             last_synced_at?: string;
             last_sync_error?: string;
+            /** @description Send the monitored flag of what an import brought in back to the *Arr when it changes here. The one write Solarr ever makes to an *Arr; off unless turned on. */
+            push_monitoring?: boolean;
+            /** Format: date-time */
+            last_pushed_at?: string;
         };
         Indexer: {
             /** Format: int64 */
@@ -6503,6 +6542,8 @@ export interface components {
             category_id?: number;
             /** @default true */
             enabled: boolean;
+            /** @default false */
+            push_monitoring: boolean;
         };
         UpdateArrInstanceRequest: {
             name: string;
@@ -6511,6 +6552,8 @@ export interface components {
             category_id?: number;
             /** @default true */
             enabled: boolean;
+            /** @description Absent keeps what it is. */
+            push_monitoring?: boolean;
         };
         ArrImportRun: {
             /** Format: int64 */
@@ -11303,6 +11346,37 @@ export interface operations {
             404: components["responses"]["Problem"];
             409: components["responses"]["Problem"];
             /** @description The instance could not be read. */
+            502: components["responses"]["Problem"];
+        };
+    };
+    pushArrMonitoring: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description How many items were compared and how many changed at the *Arr. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: int64 */
+                        checked: number;
+                        /** Format: int64 */
+                        changed: number;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
             502: components["responses"]["Problem"];
         };
     };

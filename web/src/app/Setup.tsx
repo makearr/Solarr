@@ -79,8 +79,8 @@ interface ConnectOutcome {
   rootFolderErrors: string[];
 }
 
-// Where an app's content comes from; Readarr and Whisparr connect for later, their import is not built.
-const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr"];
+// Where an app's content comes from; Readarr connects for later, its import is not built.
+const SYNCS: readonly ArrApp[] = ["lidarr", "sonarr", "radarr", "whisparr"];
 
 function ConnectArr({
   onSkip,
@@ -101,6 +101,7 @@ function ConnectArr({
   const [mediaTypeTouched, setMediaTypeTouched] = useState(false);
   const [connectKind, setConnectKind] = useState("");
   const [importRootFolders, setImportRootFolders] = useState(true);
+  const [pushMonitoring, setPushMonitoring] = useState(false);
   const [outcome, setOutcome] = useState<ConnectOutcome | null>(null);
   // Every *Arr connected in this step, and the one whose import is being chosen.
   const [connected, setConnected] = useState<ConnectOutcome[]>([]);
@@ -129,7 +130,7 @@ function ConnectArr({
       }
 
       const { data: instance, error: instanceError } = await api.POST("/arr/instances", {
-        body: { app, name, base_url: baseUrl, api_key: apiKey, category_id: category.id, enabled: true },
+        body: { app, name, base_url: baseUrl, api_key: apiKey, category_id: category.id, enabled: true, push_monitoring: pushMonitoring },
       });
       if (instanceError) throw instanceError;
 
@@ -222,11 +223,12 @@ function ConnectArr({
 
   return (
     <Panel
-      title="Step 2 — Import from Lidarr, Sonarr or Radarr"
+      title="Step 2 — Import from Lidarr, Sonarr, Radarr or Whisparr"
       description={
-        "Already run Lidarr, Sonarr or Radarr? Connect each one: its root folders become a library here, and " +
-        "its artists, series and movies come in with their monitoring. Readarr and Whisparr can be connected " +
-        "now; their import comes later."
+        "Already run Lidarr, Sonarr, Radarr or Whisparr? Connect each one: its root folders become a library here, and " +
+        "you choose what comes in: its items with their monitoring, only the monitoring status of what is here, its " +
+        "indexers, its download clients. It can also send monitoring back, if you want. Readarr can be connected " +
+        "now; its import comes later."
       }
     >
       {connected.length > 0 && (
@@ -325,6 +327,10 @@ function ConnectArr({
             onChange={(event) => setImportRootFolders(event.target.checked)}
           />
           Import the root folder(s) from {app}
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={pushMonitoring} onChange={(event) => setPushMonitoring(event.target.checked)} />
+          Send monitoring back to {app} (only what an import brings in, only its monitored flag)
         </label>
 
         {connect.isError && <Problem error={connect.error} />}

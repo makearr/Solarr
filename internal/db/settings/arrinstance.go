@@ -49,6 +49,9 @@ type ArrInstance struct {
 	UpdatedAt     int64
 	LastSyncedAt  *int64
 	LastSyncError string
+	// PushMonitoring sends the monitored flag of what was imported back to the *Arr, when it changes here.
+	PushMonitoring bool
+	LastPushedAt   *int64
 }
 
 // ArrInstanceRequest is what CreateArrInstance/UpdateArrInstance accept for
@@ -60,6 +63,8 @@ type ArrInstanceRequest struct {
 	BaseURL    string
 	CategoryID *int64
 	Enabled    bool
+	// PushMonitoring sends monitoring changes back to the *Arr; off unless the owner turns it on.
+	PushMonitoring bool
 }
 
 func validateArrInstance(request ArrInstanceRequest) config.Problems {
@@ -135,7 +140,7 @@ func (c *Cache) CreateArrInstance(
 		created, err = c.queries.WithTx(tx).CreateArrInstance(ctx, settingsdb.CreateArrInstanceParams{
 			App: string(request.App), Name: request.Name, BaseUrl: request.BaseURL, ApiKey: sealed,
 			CategoryID: nullInt64(request.CategoryID), Enabled: boolToInt(request.Enabled),
-			CreatedAt: at, UpdatedAt: at,
+			CreatedAt: at, UpdatedAt: at, PushMonitoring: boolToInt(request.PushMonitoring),
 		})
 		return err
 	})
@@ -163,7 +168,7 @@ func (c *Cache) UpdateArrInstance(ctx context.Context, id int64, request ArrInst
 	err := c.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		return c.queries.WithTx(tx).UpdateArrInstance(ctx, settingsdb.UpdateArrInstanceParams{
 			Name: request.Name, BaseUrl: request.BaseURL, CategoryID: nullInt64(request.CategoryID),
-			Enabled: boolToInt(request.Enabled), UpdatedAt: at, ID: id,
+			Enabled: boolToInt(request.Enabled), UpdatedAt: at, ID: id, PushMonitoring: boolToInt(request.PushMonitoring),
 		})
 	})
 	if err != nil {
@@ -250,5 +255,17 @@ func convertArrInstance(row settingsdb.ArrInstance) ArrInstance {
 		CategoryID: int64Ptr(row.CategoryID), Enabled: row.Enabled != 0,
 		CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
 		LastSyncedAt: int64Ptr(row.LastSyncedAt), LastSyncError: row.LastSyncError.String,
+		PushMonitoring: row.PushMonitoring != 0, LastPushedAt: int64Ptr(row.LastPushedAt),
 	}
+}
+
+// SetArrInstancePushed records when monitoring changes were last sent back to the connection's *Arr.
+func (c *Cache) SetArrInstancePushed(ctx context.Context, id, at int64) error {
+	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return c.queries.WithTx(tx).SetArrInstancePushed(ctx, settingsdb.SetArrInstancePushedParams{LastPushedAt: sql.NullInt64{Int64: at, Valid: true}, ID: id})
+	})
+	if err != nil {
+		return fmt.Errorf("settings: arr instance %d pushed: %w", id, err)
+	}
+	return nil
 }

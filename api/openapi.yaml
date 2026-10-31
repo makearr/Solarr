@@ -2538,6 +2538,34 @@ paths:
           $ref: "#/components/responses/Problem"
           description: The instance could not be read.
 
+  /arr/instances/{id}/push:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: pushArrMonitoring
+      tags: [settings]
+      summary: >-
+        Send the monitored flag of what an import brought in back to this *Arr, now, where it differs. The connection must
+        have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only.
+      responses:
+        "200":
+          description: How many items were compared and how many changed at the *Arr.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [checked, changed]
+                properties:
+                  checked: { type: integer, format: int64 }
+                  changed: { type: integer, format: int64 }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "502": { $ref: "#/components/responses/Problem" }
+
   /arr/instances/{id}/indexers:
     parameters:
       - name: id
@@ -9230,6 +9258,21 @@ components:
       type: object
       description: What one import brings in. Absent is monitored items and every album, as before options.
       properties:
+        mode:
+          type: string
+          enum: [add, monitoring]
+          default: add
+          description: >-
+            add brings in what the *Arr holds (the options below choose which); monitoring only sets the monitored flag
+            of what Solarr already holds, in both directions, and adds nothing.
+        indexers:
+          type: boolean
+          default: false
+          description: Also add the *Arr's Newznab and Torznab indexers here, as the connection's own.
+        download_clients:
+          type: boolean
+          default: false
+          description: Also add the *Arr's download clients Solarr can use.
         monitored: { type: boolean, default: true, description: Monitored artists and albums. }
         unmonitored:
           type: boolean
@@ -9277,7 +9320,7 @@ components:
       type: object
       required: [item_kind, roots, profiles, settings]
       properties:
-        item_kind: { type: string, enum: [artists, series, movies], description: What the counts count. }
+        item_kind: { type: string, enum: [artists, series, movies, scenes], description: What the counts count. }
         roots:
           type: array
           items: { $ref: "#/components/schemas/ArrPreviewRoot" }
@@ -9361,6 +9404,12 @@ components:
         updated_at: { type: string, format: date-time }
         last_synced_at: { type: string, format: date-time }
         last_sync_error: { type: string }
+        push_monitoring:
+          type: boolean
+          description: >-
+            Send the monitored flag of what an import brought in back to the *Arr when it changes here. The one write
+            Solarr ever makes to an *Arr; off unless turned on.
+        last_pushed_at: { type: string, format: date-time }
 
     Indexer:
       type: object
@@ -9661,6 +9710,7 @@ components:
         api_key: { type: string, minLength: 1 }
         category_id: { type: integer, format: int64 }
         enabled: { type: boolean, default: true }
+        push_monitoring: { type: boolean, default: false }
 
     UpdateArrInstanceRequest:
       type: object
@@ -9670,6 +9720,7 @@ components:
         base_url: { type: string, minLength: 1 }
         category_id: { type: integer, format: int64 }
         enabled: { type: boolean, default: true }
+        push_monitoring: { type: boolean, description: Absent keeps what it is. }
 
     ArrImportRun:
       type: object

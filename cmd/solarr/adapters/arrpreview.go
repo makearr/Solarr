@@ -165,6 +165,20 @@ func readPreviewSource(ctx context.Context, app settings.ArrApp, client arrimpor
 		folders, _ = radarr.RootFolders(ctx)
 		profiles, _ = radarr.QualityProfiles(ctx)
 		source.settings, err = radarr.MediaManagement(ctx)
+	case settings.ArrAppWhisparr:
+		whisparr := client.Whisparr()
+		source.itemKind, source.mediaType = "scenes", "adult"
+		scenes, listErr := whisparr.Items(ctx)
+		if listErr != nil {
+			return previewSource{}, listErr
+		}
+		for _, scene := range scenes {
+			source.items = append(source.items, previewItem{rootFolder: scene.RootFolderPath, monitored: scene.Monitored,
+				profileID: scene.QualityProfileID, provider: adultProviderStashDB, externalID: scene.Identifier()})
+		}
+		folders, _ = whisparr.RootFolders(ctx)
+		profiles, _ = whisparr.QualityProfiles(ctx)
+		source.settings, err = whisparr.MediaManagement(ctx)
 	default:
 		source.itemKind, source.mediaType = "artists", "music"
 		artists, listErr := client.Artists(ctx)

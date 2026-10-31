@@ -19,6 +19,9 @@ type arrSource[T any] struct {
 	describe func(item T) arrItem
 	// sync makes one item Solarr's in the library its root folder belongs to; an error still keeps its counts.
 	sync func(ctx context.Context, categoryID int64, item T) (library.ArrImportCounts, error)
+	// monitor sets what Solarr already holds of one item to the *Arr's monitored flag and adds nothing; nil means the app
+	// has no monitoring-only import. categoryID is the library its root folder belongs to, 0 when none does.
+	monitor func(ctx context.Context, categoryID int64, item T) (library.ArrImportCounts, error)
 	// workers is how many items are synced at once; each waits mostly on providers that pace themselves.
 	workers int
 }
@@ -48,10 +51,14 @@ func walkArr[T any](ctx context.Context, walk arrWalk, source arrSource[T]) (lib
 	if err != nil {
 		return library.ArrImportCounts{}, fmt.Errorf("list: %w", err)
 	}
+	if walk.options.MonitoringOnly && source.monitor == nil {
+		return library.ArrImportCounts{}, errors.New("this app has no monitoring-only import")
+	}
 	var chosen []T
 	for _, item := range all {
 		monitored := source.describe(item).Monitored
-		if (monitored && walk.options.Monitored) || (!monitored && walk.options.Unmonitored) {
+		// Monitoring only follows the flag both ways, so every item counts.
+		if walk.options.MonitoringOnly || (monitored && walk.options.Monitored) || (!monitored && walk.options.Unmonitored) {
 			chosen = append(chosen, item)
 		}
 	}
@@ -70,7 +77,10 @@ func walkArr[T any](ctx context.Context, walk arrWalk, source arrSource[T]) (lib
 		var got library.ArrImportCounts
 		categoryID, placed := walk.place(rewritePath(described.RootFolder, walk.options.PathRewrites))
 		err := fmt.Errorf("no category matches root folder %q", described.RootFolder)
-		if placed {
+		switch {
+		case walk.options.MonitoringOnly:
+			got, err = source.monitor(ctx, categoryID, item)
+		case placed:
 			got, err = source.sync(ctx, categoryID, item)
 		}
 		mu.Lock()

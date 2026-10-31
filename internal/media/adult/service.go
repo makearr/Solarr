@@ -33,6 +33,7 @@ type Server interface {
 	ScenesByFingerprint(ctx context.Context, files [][]stashbox.Fingerprint) ([][]stashbox.Scene, error)
 	FindPerformer(ctx context.Context, id string) (stashbox.Performer, error)
 	SearchPerformers(ctx context.Context, term string, limit int) ([]stashbox.Performer, error)
+	FindStudio(ctx context.Context, id string) (stashbox.Studio, error)
 	ScenesOf(ctx context.Context, filter stashbox.SceneFilter, page, perPage int) ([]stashbox.Scene, error)
 }
 

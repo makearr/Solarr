@@ -39,7 +39,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/solarr/adapters": {"internal/db/store", "internal/media/works",
+	"cmd/solarr/adapters": {"internal/db/store", "internal/platform/secrets", "internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",

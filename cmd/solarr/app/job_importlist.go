@@ -41,3 +41,19 @@ func (p *process) enqueueImportListSync(ctx context.Context) (jobs.EnqueueResult
 	}
 	return result, err
 }
+
+// arrPushJob sends the monitoring of what an import brought in back to the connections that asked for it.
+var arrPushJob = jobs.Definition{Name: "Sending monitoring back to the *Arrs", Type: "arr.push", Pool: jobs.PoolMetadata, Mutating: true, MaxAttempts: 1}
+
+// registerArrPushJob wires that send.
+func (p *process) registerArrPushJob(registry *jobs.Registry, executor *jobs.Executor) error {
+	if err := registry.Register(arrPushJob); err != nil {
+		return err
+	}
+	executor.Handle(arrPushJob.Type, p.arrSync())
+	return nil
+}
+
+func (p *process) enqueueArrPush(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.queue.Enqueue(ctx, jobs.Request{Type: arrPushJob.Type, ActionKey: string(arrPushJob.Type), Priority: jobs.PriorityLow, Payload: []byte("{}")})
+}

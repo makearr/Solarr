@@ -90,6 +90,14 @@ type ArrImportItem struct {
 	CreatedAt          int64
 }
 
+type ArrLink struct {
+	InstanceID int64
+	SourceKind string
+	SourceID   string
+	LocalKind  string
+	LocalID    int64
+}
+
 type Artwork struct {
 	ID          int64
 	SubjectType string

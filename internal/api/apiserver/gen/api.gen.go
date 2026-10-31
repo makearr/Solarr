@@ -54,6 +54,7 @@ const (
 const (
 	ArrImportPreviewItemKindArtists ArrImportPreviewItemKind = "artists"
 	ArrImportPreviewItemKindMovies  ArrImportPreviewItemKind = "movies"
+	ArrImportPreviewItemKindScenes  ArrImportPreviewItemKind = "scenes"
 	ArrImportPreviewItemKindSeries  ArrImportPreviewItemKind = "series"
 )
 
@@ -70,6 +71,12 @@ const (
 	ArrSyncOptionsAlbumsAll      ArrSyncOptionsAlbums = "all"
 	ArrSyncOptionsAlbumsComplete ArrSyncOptionsAlbums = "complete"
 	ArrSyncOptionsAlbumsMissing  ArrSyncOptionsAlbums = "missing"
+)
+
+// Defines values for ArrSyncOptionsMode.
+const (
+	ArrSyncOptionsModeAdd        ArrSyncOptionsMode = "add"
+	ArrSyncOptionsModeMonitoring ArrSyncOptionsMode = "monitoring"
 )
 
 // Defines values for AuthPolicyConfiguredMode.
@@ -1062,11 +1069,12 @@ type AddArrInstanceRequest struct {
 	ApiKey string `json:"api_key"`
 
 	// App Which *Arr application a connection talks to (ADR-52). Only lidarr has a real sync this pass (music exists); the other four can be connected for when their own stage ships. prowlarr has no library: its active indexers and download clients are used from it.
-	App        ArrApp `json:"app"`
-	BaseUrl    string `json:"base_url"`
-	CategoryId *int64 `json:"category_id,omitempty"`
-	Enabled    *bool  `json:"enabled,omitempty"`
-	Name       string `json:"name"`
+	App            ArrApp `json:"app"`
+	BaseUrl        string `json:"base_url"`
+	CategoryId     *int64 `json:"category_id,omitempty"`
+	Enabled        *bool  `json:"enabled,omitempty"`
+	Name           string `json:"name"`
+	PushMonitoring *bool  `json:"push_monitoring,omitempty"`
 }
 
 // AddCandidate defines model for AddCandidate.
@@ -1276,10 +1284,14 @@ type ArrInstance struct {
 	CreatedAt     time.Time  `json:"created_at"`
 	Enabled       bool       `json:"enabled"`
 	Id            int64      `json:"id"`
+	LastPushedAt  *time.Time `json:"last_pushed_at,omitempty"`
 	LastSyncError *string    `json:"last_sync_error,omitempty"`
 	LastSyncedAt  *time.Time `json:"last_synced_at,omitempty"`
 	Name          string     `json:"name"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+
+	// PushMonitoring Send the monitored flag of what an import brought in back to the *Arr when it changes here. The one write Solarr ever makes to an *Arr; off unless turned on.
+	PushMonitoring *bool     `json:"push_monitoring,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // ArrPreviewProfile defines model for ArrPreviewProfile.
@@ -1347,6 +1359,15 @@ type ArrSyncOptions struct {
 	// Albums Which albums, by what the *Arr holds of them.
 	Albums *ArrSyncOptionsAlbums `json:"albums,omitempty"`
 
+	// DownloadClients Also add the *Arr's download clients Solarr can use.
+	DownloadClients *bool `json:"download_clients,omitempty"`
+
+	// Indexers Also add the *Arr's Newznab and Torznab indexers here, as the connection's own.
+	Indexers *bool `json:"indexers,omitempty"`
+
+	// Mode add brings in what the *Arr holds (the options below choose which); monitoring only sets the monitored flag of what Solarr already holds, in both directions, and adds nothing.
+	Mode *ArrSyncOptionsMode `json:"mode,omitempty"`
+
 	// Monitored Monitored artists and albums.
 	Monitored *bool `json:"monitored,omitempty"`
 
@@ -1374,6 +1395,9 @@ type ArrSyncOptions struct {
 
 // ArrSyncOptionsAlbums Which albums, by what the *Arr holds of them.
 type ArrSyncOptionsAlbums string
+
+// ArrSyncOptionsMode add brings in what the *Arr holds (the options below choose which); monitoring only sets the monitored flag of what Solarr already holds, in both directions, and adds nothing.
+type ArrSyncOptionsMode string
 
 // AuthPolicy defines model for AuthPolicy.
 type AuthPolicy struct {
@@ -4920,6 +4944,9 @@ type UpdateArrInstanceRequest struct {
 	CategoryId *int64 `json:"category_id,omitempty"`
 	Enabled    *bool  `json:"enabled,omitempty"`
 	Name       string `json:"name"`
+
+	// PushMonitoring Absent keeps what it is.
+	PushMonitoring *bool `json:"push_monitoring,omitempty"`
 }
 
 // UpdateDownloaderRequest defines model for UpdateDownloaderRequest.
@@ -6700,6 +6727,9 @@ type ServerInterface interface {
 	// What an import with these options would do, read only (ADR-52's preview). Administrator only.
 	// (POST /arr/instances/{id}/preview)
 	PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64)
+	// Send the monitored flag of what an import brought in back to this *Arr, now, where it differs. The connection must have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only.
+	// (POST /arr/instances/{id}/push)
+	PushArrMonitoring(w http.ResponseWriter, r *http.Request, id int64)
 	// The instance's own configured root folders, read live. Administrator only.
 	// (GET /arr/instances/{id}/rootfolders)
 	ListArrInstanceRootFolders(w http.ResponseWriter, r *http.Request, id int64)
@@ -7618,6 +7648,12 @@ func (_ Unimplemented) UseArrInstanceIndexers(w http.ResponseWriter, r *http.Req
 // What an import with these options would do, read only (ADR-52's preview). Administrator only.
 // (POST /arr/instances/{id}/preview)
 func (_ Unimplemented) PreviewArrImport(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Send the monitored flag of what an import brought in back to this *Arr, now, where it differs. The connection must have push_monitoring on; only items an import matched are touched, and only their monitored flag. Administrator only.
+// (POST /arr/instances/{id}/push)
+func (_ Unimplemented) PushArrMonitoring(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9696,6 +9732,39 @@ func (siw *ServerInterfaceWrapper) PreviewArrImport(w http.ResponseWriter, r *ht
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.PreviewArrImport(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PushArrMonitoring operation middleware
+func (siw *ServerInterfaceWrapper) PushArrMonitoring(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PushArrMonitoring(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -19070,6 +19139,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/arr/instances/{id}/preview", wrapper.PreviewArrImport)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/arr/instances/{id}/push", wrapper.PushArrMonitoring)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/arr/instances/{id}/rootfolders", wrapper.ListArrInstanceRootFolders)

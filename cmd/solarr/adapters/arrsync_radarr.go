@@ -48,6 +48,9 @@ func (a ArrSync) radarrSource(importID int64, client arrimport.RadarrClient, opt
 			return arrItem{Name: radarr.Title, RootFolder: radarr.RootFolderPath, Monitored: radarr.Monitored}
 		},
 		workers: 4,
+		monitor: func(ctx context.Context, _ int64, radarr arrimport.RadarrMovie) (library.ArrImportCounts, error) {
+			return a.monitorMovie(ctx, radarr)
+		},
 		sync: func(ctx context.Context, categoryID int64, radarr arrimport.RadarrMovie) (library.ArrImportCounts, error) {
 			created, err := a.syncMovie(ctx, importID, categoryID, radarr, profileNames, options.ProfileMap)
 			switch {
@@ -125,6 +128,7 @@ func (a ArrSync) syncMovie(
 	}, a.Clock.Now().Unix()); err != nil {
 		return false, err
 	}
+	a.link(ctx, linkMovie, radarr.ID, "work", workID)
 	return result.Created, nil
 }
 
