@@ -724,6 +724,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		LibrarySuggester: p.suggester(),
 		ArrSync:          p.arrSync(),
+		CategoryMerger:   library.NewCategoryMerges(p.library),
 		Prowlarr:         adapters.Prowlarr{Cache: p.cache, List: p.listProwlarr},
 		ArrConnections: adapters.Prowlarr{
 			Cache: p.cache, List: p.listProwlarr, Lidarr: p.arrClientFactory(), Clock: clock.NewSystem(),
