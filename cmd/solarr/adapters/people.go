@@ -139,6 +139,14 @@ func (a People) GetPersonDetail(ctx context.Context, id int64, visible []int64) 
 	setString(&view.Died, profile.Died)
 	setString(&view.ImageUrl, profile.ImageURL)
 	setString(&view.Biography, profile.Biography)
+	if len(profile.GenreTags) > 0 {
+		tags := make([]gen.PersonGenreTag, len(profile.GenreTags))
+		for i, genre := range profile.GenreTags {
+			tags[i] = gen.PersonGenreTag{Id: genre.TagID, Name: genre.Name}
+		}
+		view.GenreTags = &tags
+	}
+	view.Attributes = attributesView(profile.Attributes)
 	if extras := profile.Extras; len(extras.Facts)+len(extras.Links)+len(extras.Images) > 0 {
 		facts := make([]gen.PersonFact, len(extras.Facts))
 		for i, fact := range extras.Facts {
@@ -270,4 +278,72 @@ func (a People) LibraryFor(mediaType string, pageCategoryID int64) int64 {
 		}
 	}
 	return 0
+}
+
+// Edit implements apiserver.PersonEditor.
+func (a People) Edit(ctx context.Context, personID int64, edit gen.PersonEdit) error {
+	attributes := library.PersonAttributes{}
+	if given := edit.Attributes; true {
+		attributes = library.PersonAttributes{
+			Nationality: derefString(given.Nationality), HeightCm: derefInt(given.HeightCm), WeightKg: derefInt(given.WeightKg),
+			Measurements: derefString(given.Measurements), HairColor: derefString(given.HairColor), Ethnicity: derefString(given.Ethnicity),
+			Tattoos: derefString(given.Tattoos), Piercings: derefString(given.Piercings),
+		}
+		if given.Status != nil {
+			attributes.Status = string(*given.Status)
+		}
+	}
+	err := a.People.Edit(ctx, personID, library.PersonEdit{Name: edit.Name, Gender: derefString(edit.Gender), Attributes: attributes})
+	return personError(err)
+}
+
+// Merge implements apiserver.PersonEditor.
+func (a People) Merge(ctx context.Context, loserID, winnerID int64) error {
+	return personError(a.People.MergePeople(ctx, loserID, winnerID))
+}
+
+func personError(err error) error {
+	if errors.Is(err, library.ErrPersonNotFound) {
+		return fmt.Errorf("%w: %w", apiserver.ErrPersonNotFound, err)
+	}
+	return err
+}
+
+func derefString(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func derefInt(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+// attributesView maps a person's attributes; nil when none is known.
+func attributesView(in library.PersonAttributes) *gen.PersonAttributes {
+	if in == (library.PersonAttributes{}) {
+		return nil
+	}
+	view := gen.PersonAttributes{}
+	setString(&view.Nationality, in.Nationality)
+	setString(&view.Measurements, in.Measurements)
+	setString(&view.HairColor, in.HairColor)
+	setString(&view.Ethnicity, in.Ethnicity)
+	setString(&view.Tattoos, in.Tattoos)
+	setString(&view.Piercings, in.Piercings)
+	if in.HeightCm > 0 {
+		view.HeightCm = &in.HeightCm
+	}
+	if in.WeightKg > 0 {
+		view.WeightKg = &in.WeightKg
+	}
+	if in.Status != "" {
+		status := gen.PersonAttributesStatus(in.Status)
+		view.Status = &status
+	}
+	return &view
 }

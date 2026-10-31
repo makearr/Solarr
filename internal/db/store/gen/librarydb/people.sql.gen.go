@@ -153,8 +153,8 @@ func (q *Queries) AssignTag(ctx context.Context, arg AssignTagParams) error {
 
 const backfillPersonDetails = `-- name: BackfillPersonDetails :exec
 UPDATE person SET
-  name           = COALESCE(NULLIF(CAST(?1 AS TEXT), ''), name),
-  sort_name      = COALESCE(NULLIF(CAST(?2 AS TEXT), ''), sort_name),
+  name           = CASE WHEN name_locked = 1 THEN name ELSE COALESCE(NULLIF(CAST(?1 AS TEXT), ''), name) END,
+  sort_name      = CASE WHEN name_locked = 1 THEN sort_name ELSE COALESCE(NULLIF(CAST(?2 AS TEXT), ''), sort_name) END,
   disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN ?3 ELSE disambiguation END,
   kind           = CASE WHEN COALESCE(kind, '') = ''           THEN ?4           ELSE kind END,
   gender         = CASE WHEN COALESCE(gender, '') = ''         THEN ?5         ELSE gender END,
@@ -305,7 +305,7 @@ INSERT INTO person (name, sort_name, disambiguation, kind, gender, country,
                     born, died, fields_json, monitored, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, sort_name, disambiguation, kind, gender, country, born, died,
-          fields_json, monitored, added_at
+          fields_json, monitored, added_at, name_locked
 `
 
 type CreatePersonParams struct {
@@ -351,6 +351,7 @@ func (q *Queries) CreatePerson(ctx context.Context, arg CreatePersonParams) (Per
 		&i.FieldsJson,
 		&i.Monitored,
 		&i.AddedAt,
+		&i.NameLocked,
 	)
 	return i, err
 }
@@ -536,16 +537,31 @@ JOIN person_alias a ON a.person_id = p.id
 WHERE a.normalized = ? ORDER BY p.sort_name COLLATE NOCASE, p.id
 `
 
+type FindPeopleByAliasRow struct {
+	ID             int64
+	Name           string
+	SortName       string
+	Disambiguation sql.NullString
+	Kind           sql.NullString
+	Gender         sql.NullString
+	Country        sql.NullString
+	Born           sql.NullString
+	Died           sql.NullString
+	FieldsJson     sql.NullString
+	Monitored      int64
+	AddedAt        int64
+}
+
 // A stage name is often the only way to connect a release to a person (ADR-32).
-func (q *Queries) FindPeopleByAlias(ctx context.Context, normalized string) ([]Person, error) {
+func (q *Queries) FindPeopleByAlias(ctx context.Context, normalized string) ([]FindPeopleByAliasRow, error) {
 	rows, err := q.db.QueryContext(ctx, findPeopleByAlias, normalized)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Person{}
+	items := []FindPeopleByAliasRow{}
 	for rows.Next() {
-		var i Person
+		var i FindPeopleByAliasRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -596,7 +612,7 @@ func (q *Queries) GetOrganisation(ctx context.Context, id int64) (Organisation, 
 
 const getPerson = `-- name: GetPerson :one
 SELECT id, name, sort_name, disambiguation, kind, gender, country, born, died,
-       fields_json, monitored, added_at
+       fields_json, monitored, added_at, name_locked
 FROM person WHERE id = ?
 `
 
@@ -616,13 +632,14 @@ func (q *Queries) GetPerson(ctx context.Context, id int64) (Person, error) {
 		&i.FieldsJson,
 		&i.Monitored,
 		&i.AddedAt,
+		&i.NameLocked,
 	)
 	return i, err
 }
 
 const getPersonByExternalID = `-- name: GetPersonByExternalID :one
 SELECT p.id, p.name, p.sort_name, p.disambiguation, p.kind, p.gender, p.country,
-       p.born, p.died, p.fields_json, p.monitored, p.added_at
+       p.born, p.died, p.fields_json, p.monitored, p.added_at, p.name_locked
 FROM person p
 JOIN person_external_id e ON e.person_id = p.id
 WHERE e.provider = ? AND e.external_id = ?
@@ -649,6 +666,7 @@ func (q *Queries) GetPersonByExternalID(ctx context.Context, arg GetPersonByExte
 		&i.FieldsJson,
 		&i.Monitored,
 		&i.AddedAt,
+		&i.NameLocked,
 	)
 	return i, err
 }
@@ -1119,7 +1137,7 @@ func (q *Queries) ListEnabledSubscriptions(ctx context.Context) ([]Subscription,
 }
 
 const listGenresForPersonDiscography = `-- name: ListGenresForPersonDiscography :many
-SELECT DISTINCT t.name AS tag_name
+SELECT DISTINCT t.id AS tag_id, t.name AS tag_name
 FROM tag_assignment a
 JOIN tag t ON t.id = a.tag_id
 JOIN credit c ON c.work_id = a.subject_id
@@ -1127,22 +1145,27 @@ WHERE a.subject_type = 'work' AND c.person_id = ?1
 ORDER BY t.name
 `
 
+type ListGenresForPersonDiscographyRow struct {
+	TagID   int64
+	TagName string
+}
+
 // Genre chips for the artist page (Lidarr-like): the union of every genre
 // tagged on any work credited to this person -- Person itself carries no
 // genre of its own (ADR-32's own fields are biographical, not stylistic).
-func (q *Queries) ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error) {
+func (q *Queries) ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]ListGenresForPersonDiscographyRow, error) {
 	rows, err := q.db.QueryContext(ctx, listGenresForPersonDiscography, personID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []string{}
+	items := []ListGenresForPersonDiscographyRow{}
 	for rows.Next() {
-		var tag_name string
-		if err := rows.Scan(&tag_name); err != nil {
+		var i ListGenresForPersonDiscographyRow
+		if err := rows.Scan(&i.TagID, &i.TagName); err != nil {
 			return nil, err
 		}
-		items = append(items, tag_name)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1553,6 +1576,20 @@ func (q *Queries) RecordPersonRefresh(ctx context.Context, arg RecordPersonRefre
 	return err
 }
 
+const renamePersonByHand = `-- name: RenamePersonByHand :exec
+UPDATE person SET name = ?1, sort_name = ?1, name_locked = 1 WHERE id = ?2
+`
+
+type RenamePersonByHandParams struct {
+	Name string
+	ID   int64
+}
+
+func (q *Queries) RenamePersonByHand(ctx context.Context, arg RenamePersonByHandParams) error {
+	_, err := q.db.ExecContext(ctx, renamePersonByHand, arg.Name, arg.ID)
+	return err
+}
+
 const setOrganisationMonitored = `-- name: SetOrganisationMonitored :exec
 UPDATE organisation SET monitored = ? WHERE id = ?
 `
@@ -1564,6 +1601,20 @@ type SetOrganisationMonitoredParams struct {
 
 func (q *Queries) SetOrganisationMonitored(ctx context.Context, arg SetOrganisationMonitoredParams) error {
 	_, err := q.db.ExecContext(ctx, setOrganisationMonitored, arg.Monitored, arg.ID)
+	return err
+}
+
+const setPersonGender = `-- name: SetPersonGender :exec
+UPDATE person SET gender = ? WHERE id = ?
+`
+
+type SetPersonGenderParams struct {
+	Gender sql.NullString
+	ID     int64
+}
+
+func (q *Queries) SetPersonGender(ctx context.Context, arg SetPersonGenderParams) error {
+	_, err := q.db.ExecContext(ctx, setPersonGender, arg.Gender, arg.ID)
 	return err
 }
 

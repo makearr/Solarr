@@ -7,7 +7,7 @@ import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
 import { inputStyle, labelStyle } from "@/ui/form";
 
-/** Puts a work in one of the library's collections made by hand, or in a new one. */
+/** Puts a work in one of the library's collections, a provider's included, or in a new one. */
 export function AddToCollection({ categoryId, workId, title, onClose }: { categoryId: string; workId: number; title: string; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [chosen, setChosen] = useState("");
@@ -16,7 +16,7 @@ export function AddToCollection({ categoryId, workId, title, onClose }: { catego
     queryKey: ["franchises", categoryId],
     queryFn: () => ok(api.GET("/franchises", { params: { query: { category_id: Number(categoryId) } } })),
   });
-  const mine = (list.data?.franchises ?? []).filter((franchise) => franchise.kind === "custom");
+  const mine = list.data?.franchises ?? [];
   const add = useMutation({
     mutationFn: async () => {
       let id = Number(chosen);

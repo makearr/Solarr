@@ -5,11 +5,11 @@ INSERT INTO person (name, sort_name, disambiguation, kind, gender, country,
                     born, died, fields_json, monitored, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, sort_name, disambiguation, kind, gender, country, born, died,
-          fields_json, monitored, added_at;
+          fields_json, monitored, added_at, name_locked;
 
 -- name: GetPerson :one
 SELECT id, name, sort_name, disambiguation, kind, gender, country, born, died,
-       fields_json, monitored, added_at
+       fields_json, monitored, added_at, name_locked
 FROM person WHERE id = ?;
 
 -- name: SetPersonMonitored :exec
@@ -20,8 +20,8 @@ UPDATE person SET monitored = ? WHERE id = ?;
 -- had a source, not a refresh (a manual override must always win, ADR-8).
 -- name: BackfillPersonDetails :exec
 UPDATE person SET
-  name           = COALESCE(NULLIF(CAST(sqlc.arg(name) AS TEXT), ''), name),
-  sort_name      = COALESCE(NULLIF(CAST(sqlc.arg(sort_name) AS TEXT), ''), sort_name),
+  name           = CASE WHEN name_locked = 1 THEN name ELSE COALESCE(NULLIF(CAST(sqlc.arg(name) AS TEXT), ''), name) END,
+  sort_name      = CASE WHEN name_locked = 1 THEN sort_name ELSE COALESCE(NULLIF(CAST(sqlc.arg(sort_name) AS TEXT), ''), sort_name) END,
   disambiguation = CASE WHEN COALESCE(disambiguation, '') = '' THEN sqlc.arg(disambiguation) ELSE disambiguation END,
   kind           = CASE WHEN COALESCE(kind, '') = ''           THEN sqlc.arg(kind)           ELSE kind END,
   gender         = CASE WHEN COALESCE(gender, '') = ''         THEN sqlc.arg(gender)         ELSE gender END,
@@ -72,7 +72,7 @@ ON CONFLICT (provider, external_id) DO UPDATE SET person_id = excluded.person_id
 
 -- name: GetPersonByExternalID :one
 SELECT p.id, p.name, p.sort_name, p.disambiguation, p.kind, p.gender, p.country,
-       p.born, p.died, p.fields_json, p.monitored, p.added_at
+       p.born, p.died, p.fields_json, p.monitored, p.added_at, p.name_locked
 FROM person p
 JOIN person_external_id e ON e.person_id = p.id
 WHERE e.provider = ? AND e.external_id = ?;
@@ -233,7 +233,7 @@ ORDER BY t.name, t.id;
 -- tagged on any work credited to this person -- Person itself carries no
 -- genre of its own (ADR-32's own fields are biographical, not stylistic).
 -- name: ListGenresForPersonDiscography :many
-SELECT DISTINCT t.name AS tag_name
+SELECT DISTINCT t.id AS tag_id, t.name AS tag_name
 FROM tag_assignment a
 JOIN tag t ON t.id = a.tag_id
 JOIN credit c ON c.work_id = a.subject_id
@@ -327,3 +327,9 @@ UPDATE work SET
                            ORDER BY cr.ord, cr.person_id LIMIT 1)
 WHERE work.id = sqlc.arg(work_id)
   AND EXISTS (SELECT 1 FROM credit cr WHERE cr.work_id = sqlc.arg(work_id) AND cr.part_id = 0 AND cr.edition_id = 0 AND cr.role = sqlc.arg(role));
+
+-- name: RenamePersonByHand :exec
+UPDATE person SET name = sqlc.arg(name), sort_name = sqlc.arg(name), name_locked = 1 WHERE id = sqlc.arg(id);
+
+-- name: SetPersonGender :exec
+UPDATE person SET gender = ? WHERE id = ?;

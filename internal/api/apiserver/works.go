@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -86,6 +87,11 @@ type WorksFilter struct {
 	AboveRating bool
 	// MediaType keeps only works of one media type, "" all (a mixed library's type chip).
 	MediaType string
+	// MediaTypes keeps only works of these types, nil any: the types the library holds, so a work whose file lies under the
+	// library's folder without being of its type is not listed in it.
+	MediaTypes []string
+	// PersonID keeps only works the person is credited on, 0 any.
+	PersonID int64
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
 }
@@ -212,7 +218,9 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Sort: sort, Direction: direction,
 			Fresh: derefOr(params.Fresh, false), Wanted: derefOr(params.Wanted, false), CutoffUnmet: derefOr(params.CutoffUnmet, false),
 			Where: derefOr(params.Where, ""), TagIDs: carry, ExcludedTagIDs: without, AboveRating: derefOr(params.AboveRating, false),
-			MediaType: derefOr(params.MediaType, ""),
+			MediaType:  derefOr(params.MediaType, ""),
+			PersonID:   derefOr(params.PersonId, 0),
+			MediaTypes: s.libraryMediaTypes(params.CategoryId, derefOr(params.WholeLibrary, false)),
 		},
 		workCursor, limit+1)
 	if err != nil {
@@ -220,6 +228,29 @@ func (s *Server) ListWorks(w http.ResponseWriter, r *http.Request, params gen.Li
 		return
 	}
 	writeJSON(w, s.logger, http.StatusOK, buildWorkPage(rows, limit, sort, s.wall.Now()))
+}
+
+// libraryMediaTypes are the media types of the library the list is of: its own, and with whole the types of its further
+// members; nil when no library is named.
+func (s *Server) libraryMediaTypes(categoryID *int64, whole bool) []string {
+	if categoryID == nil {
+		return nil
+	}
+	snapshot := s.auth.Settings.Snapshot()
+	categories := snapshot.LibraryCategories(*categoryID)
+	if !whole {
+		categories = nil
+		if category, found := snapshot.Category(*categoryID); found {
+			categories = append(categories, category)
+		}
+	}
+	var types []string
+	for _, category := range categories {
+		if !slices.Contains(types, category.MediaType) {
+			types = append(types, category.MediaType)
+		}
+	}
+	return types
 }
 
 // startAtLetter is the cursor that begins a title or artist ordering at the letter: everything sorting after it, which is

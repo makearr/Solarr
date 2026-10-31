@@ -3,6 +3,7 @@ package apiserver
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -123,6 +124,14 @@ type PersonRemover interface {
 	// Remove unfollows and deletes the person, never their files. A missing person answers an error wrapping
 	// sql.ErrNoRows.
 	Remove(ctx context.Context, personID, userID int64) error
+}
+
+// PersonEditor changes a person by hand.
+type PersonEditor interface {
+	// Edit answers ErrPersonNotFound for an id that is none and ErrInvalidChoice for an empty name.
+	Edit(ctx context.Context, personID int64, edit gen.PersonEdit) error
+	// Merge folds the loser into the winner; ErrPersonNotFound when either is none.
+	Merge(ctx context.Context, loserID, winnerID int64) error
 }
 
 // routeListPeople parses the query string into the generated parameters.
@@ -395,4 +404,74 @@ func (s *Server) personVisibility(w http.ResponseWriter, r *http.Request) ([]int
 		categoryIDs = []int64{}
 	}
 	return categoryIDs, true
+}
+
+func (s *Server) routeEditPerson(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a person id must be a number")
+		return
+	}
+	s.EditPerson(w, r, id)
+}
+
+// EditPerson renames a person or sets their gender and attributes by hand.
+func (s *Server) EditPerson(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body gen.PersonEdit
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || strings.TrimSpace(body.Name) == "" {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected a name and the attributes")
+		return
+	}
+	if s.personEditor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "people are not available")
+		return
+	}
+	if err := s.personEditor.Edit(r.Context(), id, body); err != nil {
+		s.writePersonError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) routeMergePerson(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a person id must be a number")
+		return
+	}
+	s.MergePerson(w, r, id)
+}
+
+// MergePerson folds a person into another.
+func (s *Server) MergePerson(w http.ResponseWriter, r *http.Request, id int64) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	var body struct {
+		IntoID int64 `json:"into_id"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSetupBody)).Decode(&body); err != nil || body.IntoID <= 0 || body.IntoID == id {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "expected into_id, another person")
+		return
+	}
+	if s.personEditor == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "people are not available")
+		return
+	}
+	if err := s.personEditor.Merge(r.Context(), id, body.IntoID); err != nil {
+		s.writePersonError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) writePersonError(w http.ResponseWriter, err error) {
+	if errors.Is(err, ErrPersonNotFound) {
+		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "no such person")
+		return
+	}
+	writeError(w, s.logger, err)
 }

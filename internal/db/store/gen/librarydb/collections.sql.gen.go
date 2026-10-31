@@ -34,6 +34,21 @@ func (q *Queries) AddCollectionMember(ctx context.Context, arg AddCollectionMemb
 	return err
 }
 
+const addCollectionMemberByHand = `-- name: AddCollectionMemberByHand :exec
+INSERT INTO collection_member (collection_id, work_id, part_id, ord, by_hand) VALUES (?, ?, 0, 0, 1)
+ON CONFLICT (collection_id, work_id, part_id) DO UPDATE SET by_hand = 1
+`
+
+type AddCollectionMemberByHandParams struct {
+	CollectionID int64
+	WorkID       int64
+}
+
+func (q *Queries) AddCollectionMemberByHand(ctx context.Context, arg AddCollectionMemberByHandParams) error {
+	_, err := q.db.ExecContext(ctx, addCollectionMemberByHand, arg.CollectionID, arg.WorkID)
+	return err
+}
+
 const addCollectionRefusal = `-- name: AddCollectionRefusal :exec
 INSERT INTO collection_refusal (provider, external_id, work_id) VALUES (?, ?, ?)
 ON CONFLICT (provider, external_id, work_id) DO NOTHING
@@ -172,7 +187,7 @@ const createCollection = `-- name: CreateCollection :one
 
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked
 `
 
 type CreateCollectionParams struct {
@@ -208,6 +223,7 @@ func (q *Queries) CreateCollection(ctx context.Context, arg CreateCollectionPara
 		&i.AddedAt,
 		&i.PosterUrl,
 		&i.CategoryID,
+		&i.NameLocked,
 	)
 	return i, err
 }
@@ -373,7 +389,7 @@ func (q *Queries) GetArtwork(ctx context.Context, arg GetArtworkParams) (string,
 }
 
 const getCollection = `-- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id FROM collection WHERE id = ?
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked FROM collection WHERE id = ?
 `
 
 func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, error) {
@@ -390,12 +406,13 @@ func (q *Queries) GetCollection(ctx context.Context, id int64) (Collection, erro
 		&i.AddedAt,
 		&i.PosterUrl,
 		&i.CategoryID,
+		&i.NameLocked,
 	)
 	return i, err
 }
 
 const getCollectionByExternalID = `-- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?
 `
@@ -420,6 +437,7 @@ func (q *Queries) GetCollectionByExternalID(ctx context.Context, arg GetCollecti
 		&i.AddedAt,
 		&i.PosterUrl,
 		&i.CategoryID,
+		&i.NameLocked,
 	)
 	return i, err
 }
@@ -654,15 +672,22 @@ SELECT collection_id, work_id, part_id, ord
 FROM collection_member WHERE collection_id = ? ORDER BY ord, work_id, part_id
 `
 
-func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error) {
+type ListCollectionMembersRow struct {
+	CollectionID int64
+	WorkID       int64
+	PartID       int64
+	Ord          sql.NullInt64
+}
+
+func (q *Queries) ListCollectionMembers(ctx context.Context, collectionID int64) ([]ListCollectionMembersRow, error) {
 	rows, err := q.db.QueryContext(ctx, listCollectionMembers, collectionID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CollectionMember{}
+	items := []ListCollectionMembersRow{}
 	for rows.Next() {
-		var i CollectionMember
+		var i ListCollectionMembersRow
 		if err := rows.Scan(
 			&i.CollectionID,
 			&i.WorkID,
@@ -753,7 +778,7 @@ func (q *Queries) ListCollectionMembersInCategory(ctx context.Context, arg ListC
 }
 
 const listCollectionsForWork = `-- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name
@@ -779,6 +804,7 @@ func (q *Queries) ListCollectionsForWork(ctx context.Context, workID int64) ([]C
 			&i.AddedAt,
 			&i.PosterUrl,
 			&i.CategoryID,
+			&i.NameLocked,
 		); err != nil {
 			return nil, err
 		}
@@ -852,7 +878,7 @@ func (q *Queries) ListCollectionsInCategory(ctx context.Context, arg ListCollect
 }
 
 const listCollectionsOfKind = `-- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked
 FROM collection WHERE kind = ?1 AND media_type = ?2 ORDER BY name, id
 `
 
@@ -881,6 +907,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 			&i.AddedAt,
 			&i.PosterUrl,
 			&i.CategoryID,
+			&i.NameLocked,
 		); err != nil {
 			return nil, err
 		}
@@ -896,7 +923,7 @@ func (q *Queries) ListCollectionsOfKind(ctx context.Context, arg ListCollections
 }
 
 const listCollectionsOfWorkParts = `-- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ?1 AND m.part_id <> 0 AND c.kind = ?2
 ORDER BY c.name, c.id
@@ -927,6 +954,7 @@ func (q *Queries) ListCollectionsOfWorkParts(ctx context.Context, arg ListCollec
 			&i.AddedAt,
 			&i.PosterUrl,
 			&i.CategoryID,
+			&i.NameLocked,
 		); err != nil {
 			return nil, err
 		}
@@ -2225,6 +2253,21 @@ func (q *Queries) RecordGroupObservation(ctx context.Context, arg RecordGroupObs
 	return err
 }
 
+const removeAutoCollectionMember = `-- name: RemoveAutoCollectionMember :exec
+DELETE FROM collection_member WHERE collection_id = ? AND work_id = ? AND part_id = 0 AND by_hand = 0
+`
+
+type RemoveAutoCollectionMemberParams struct {
+	CollectionID int64
+	WorkID       int64
+}
+
+// A pass that no longer finds a work in a franchise takes it out; one a person put there stays.
+func (q *Queries) RemoveAutoCollectionMember(ctx context.Context, arg RemoveAutoCollectionMemberParams) error {
+	_, err := q.db.ExecContext(ctx, removeAutoCollectionMember, arg.CollectionID, arg.WorkID)
+	return err
+}
+
 const removeCollectionMember = `-- name: RemoveCollectionMember :exec
 DELETE FROM collection_member WHERE collection_id = ? AND work_id = ? AND part_id = 0
 `
@@ -2252,6 +2295,23 @@ type RenameCollectionParams struct {
 func (q *Queries) RenameCollection(ctx context.Context, arg RenameCollectionParams) error {
 	_, err := q.db.ExecContext(ctx, renameCollection, arg.Name, arg.Monitored, arg.ID)
 	return err
+}
+
+const renameCollectionByHand = `-- name: RenameCollectionByHand :execrows
+UPDATE collection SET name = ?, name_locked = 1 WHERE id = ?
+`
+
+type RenameCollectionByHandParams struct {
+	Name string
+	ID   int64
+}
+
+func (q *Queries) RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, renameCollectionByHand, arg.Name, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const renameCustomCollection = `-- name: RenameCustomCollection :execrows
@@ -2300,7 +2360,7 @@ func (q *Queries) SetCollectionMonitored(ctx context.Context, arg SetCollectionM
 }
 
 const setCollectionName = `-- name: SetCollectionName :exec
-UPDATE collection SET name = ? WHERE id = ?
+UPDATE collection SET name = ? WHERE id = ? AND name_locked = 0
 `
 
 type SetCollectionNameParams struct {

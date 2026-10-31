@@ -173,7 +173,7 @@ func planUniverses(direct map[string][]int64, labels map[string]string, parents 
 		components[find(qid)] = append(components[find(qid)], qid)
 	}
 	var all []Universe
-	for top, qids := range components {
+	for _, qids := range components {
 		works := map[int64]bool{}
 		for _, qid := range qids {
 			for _, workID := range direct[qid] {
@@ -183,7 +183,8 @@ func planUniverses(direct map[string][]int64, labels map[string]string, parents 
 		if len(works) < 2 {
 			continue
 		}
-		// The top of the parts is the whole: "Marvel Cinematic Universe", not "Phase One".
+		// The top of the parts is the whole: "Marvel Cinematic Universe", not "Phase One" or "X-Men".
+		top := topOfComponent(qids, direct, parents)
 		universe := Universe{QID: top, Name: labels[top]}
 		for workID := range works {
 			universe.Works = append(universe.Works, workID)
@@ -208,6 +209,41 @@ func planUniverses(direct map[string][]int64, labels map[string]string, parents 
 		kept = append(kept, universe)
 	}
 	return kept
+}
+
+// topOfComponent is the franchise of the component that is part of no other member and holds the most of the others; the
+// union-find root is arbitrary and once named the Marvel Cinematic Universe after one of its parts.
+func topOfComponent(qids []string, direct map[string][]int64, parents map[string][]string) string {
+	children := map[string][]string{}
+	for _, qid := range qids {
+		for _, parent := range parents[qid] {
+			if _, named := direct[parent]; named {
+				children[parent] = append(children[parent], qid)
+			}
+		}
+	}
+	reach := func(start string) int {
+		seen := map[string]bool{start: true}
+		stack := []string{start}
+		for len(stack) > 0 {
+			current := stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+			for _, child := range children[current] {
+				if !seen[child] {
+					seen[child] = true
+					stack = append(stack, child)
+				}
+			}
+		}
+		return len(seen)
+	}
+	best, bestReach := "", -1
+	for _, qid := range qids {
+		if reached := reach(qid); reached > bestReach || reached == bestReach && compareStrings(qid, best) < 0 {
+			best, bestReach = qid, reached
+		}
+	}
+	return best
 }
 
 func compareStrings(a, b string) int {

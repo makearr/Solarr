@@ -35,6 +35,7 @@ import {
 } from "../IndexViews";
 import { formatBytes } from "../Queue";
 import { TagChips } from "../TagChips";
+import { PersonFilter } from "../PersonFilter";
 import { BulkEditWork } from "./EditWork";
 import { LibraryMoveDialog } from "./LibraryMoveDialog";
 import { formatMinutes } from "./workFormat";
@@ -42,7 +43,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "above_rating", "type"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "type"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -105,6 +106,7 @@ function selectionBody(request: SelectionRequest) {
     fresh: request.filters.fresh === "1" ? true : undefined,
     where: whereWithTitle(request.filters.where, request.filters.q),
     tags: request.filters.tags || undefined,
+    person_id: request.filters.person ? Number(request.filters.person) : undefined,
     above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
     whole_library: request.filters.whole_library === "1" ? true : undefined,
     media_type: request.filters.type || undefined,
@@ -184,6 +186,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             dir: query.direction === "desc" ? "desc" : undefined,
             from: query.filters.from || undefined,
             tags: query.filters.tags || undefined,
+            person_id: query.filters.person ? Number(query.filters.person) : undefined,
             above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
             whole_library: wholeLibrary || undefined,
             media_type: chosenType || undefined,
@@ -239,6 +242,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
           </span>
         )}
         <TagChips categoryId={Number(categoryId)} wholeLibrary={wholeLibrary} value={routeView.query.filters.tags ?? ""} onChange={(tags) => setFilter("tags", tags)} />
+        <PersonFilter categoryId={Number(categoryId)} value={routeView.query.filters.person ?? ""} onChange={(person) => setFilter("person", person)} />
         <CustomFilterMenu
           fields={filterFieldsOf(info)}
           storageKey={`${categoryId}.${level}`}
@@ -292,7 +296,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.above_rating ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>

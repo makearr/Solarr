@@ -22,6 +22,8 @@ type PersonExtras struct {
 	Facts  []PersonFact
 	Links  []PersonWebLink
 	Images []string
+	// Attributes are what the provider says; a person's own edits stand over them.
+	Attributes PersonAttributes
 }
 
 type extrasFields struct {
@@ -65,7 +67,10 @@ func (p People) SetExtras(ctx context.Context, personID int64, extras PersonExtr
 		_, err := tx.ExecContext(ctx,
 			`UPDATE person SET fields_json = json_set(COALESCE(NULLIF(fields_json, ''), '{}'), '$.facts', json(?), '$.links', json(?), '$.images', json(?)) WHERE id = ?`,
 			string(facts), string(links), string(images), personID)
-		return err
+		if err != nil {
+			return err
+		}
+		return setFieldsKey(ctx, tx, personID, "attributes", extras.Attributes)
 	})
 	if err != nil {
 		return fmt.Errorf("library: person %d extras: %w", personID, err)

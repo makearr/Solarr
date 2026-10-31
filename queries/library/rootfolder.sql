@@ -16,13 +16,16 @@ SELECT root_folder_id FROM work_root_folder WHERE work_id = ? ORDER BY root_fold
 -- a subscription-discovered work has no root folder yet but still belongs to its
 -- category (private/next.md's work_root_folder retirement). Distinct because a
 -- scanned, monitored work has rows on both sides and must count once.
+-- Only works of the library's own media type: a series whose file lies in the movies folder is not a movie.
 -- name: CountWorksVisibleToCategory :one
-SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM (
+SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
   SELECT work_id FROM work_root_folder
   WHERE root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)))
   UNION
   SELECT work_id FROM desired_item WHERE category_id = sqlc.arg(category_id)
-);
+) AS visible
+JOIN work ON work.id = visible.work_id
+WHERE sqlc.arg(media_type) = '' OR work.media_type = sqlc.arg(media_type);
 
 -- The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 -- have a monitored item not yet complete and a tracklist, the wanted list's own condition.
@@ -35,7 +38,8 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
 ) AS visible
 WHERE EXISTS (SELECT 1 FROM desired_item di
               WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))
-  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id);
+  AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
+  AND (sqlc.arg(media_type) = '' OR EXISTS (SELECT 1 FROM work WHERE work.id = visible.work_id AND work.media_type = sqlc.arg(media_type)));
 
 -- The "parts" count for one category (ADR-54's work_part-entity navigation levels,
 -- e.g. music's Tracks): every work_part belonging to a work visible to the
@@ -47,7 +51,7 @@ WHERE work_id IN (
   WHERE root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)))
   UNION
   SELECT work_id FROM desired_item WHERE category_id = sqlc.arg(category_id)
-);
+) AND (sqlc.arg(media_type) = '' OR work_id IN (SELECT id FROM work WHERE media_type = sqlc.arg(media_type)));
 
 -- The "artists" count for one category (ADR-54's person-entity navigation levels,
 -- e.g. music's Artists): distinct persons credited with role 'artist' on a work
@@ -65,7 +69,7 @@ SELECT CAST(COUNT(DISTINCT person_id) AS INTEGER) AS total FROM (
     WHERE root_folder_id IN (SELECT value FROM json_each(sqlc.arg(root_folder_ids)))
     UNION
     SELECT di.work_id FROM desired_item di WHERE di.category_id = sqlc.arg(category_id)
-  )
+  ) AND (sqlc.arg(media_type) = '' OR work_id IN (SELECT id FROM work WHERE media_type = sqlc.arg(media_type)))
   UNION
   SELECT s.subject_id AS person_id FROM subscription s JOIN person p ON p.id = s.subject_id
   WHERE s.subject_type = 'person' AND s.enabled = 1 AND p.monitored = 1

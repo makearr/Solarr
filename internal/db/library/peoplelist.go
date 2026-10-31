@@ -13,14 +13,24 @@ import (
 // PersonFields are the fields a custom filter of a people list may name, role among the given ones.
 func PersonFields(roles []string) map[string]listfilter.Field {
 	return map[string]listfilter.Field{
-		"name":      {Kind: listfilter.Text},
-		"country":   {Kind: listfilter.Text},
-		"monitored": {Kind: listfilter.Bool},
-		"photo":     {Kind: listfilter.Bool},
-		"works":     {Kind: listfilter.Number},
-		"wanted":    {Kind: listfilter.Number},
-		"complete":  {Kind: listfilter.Number},
-		"role":      {Kind: listfilter.Enum, Choices: roles},
+		"name":         {Kind: listfilter.Text},
+		"country":      {Kind: listfilter.Text},
+		"gender":       {Kind: listfilter.Text},
+		"nationality":  {Kind: listfilter.Text},
+		"height":       {Kind: listfilter.Number},
+		"weight":       {Kind: listfilter.Number},
+		"measurements": {Kind: listfilter.Text},
+		"hair_colour":  {Kind: listfilter.Text},
+		"ethnicity":    {Kind: listfilter.Text},
+		"status":       {Kind: listfilter.Enum, Choices: PersonStatuses},
+		"tattoos":      {Kind: listfilter.Text},
+		"piercings":    {Kind: listfilter.Text},
+		"monitored":    {Kind: listfilter.Bool},
+		"photo":        {Kind: listfilter.Bool},
+		"works":        {Kind: listfilter.Number},
+		"wanted":       {Kind: listfilter.Number},
+		"complete":     {Kind: listfilter.Number},
+		"role":         {Kind: listfilter.Enum, Choices: roles},
 	}
 }
 
@@ -196,6 +206,25 @@ func (q peopleQuery) condition(condition listfilter.Condition) sqlPart {
 	case "country":
 		fragment, arguments := condition.SQL(listfilter.Text, "COALESCE(p.country, '')")
 		return sqlPart{fragment, arguments}
+	case "gender":
+		fragment, arguments := condition.SQL(listfilter.Text, "COALESCE(p.gender, '')")
+		return sqlPart{fragment, arguments}
+	case "height", "weight":
+		fragment, arguments := condition.SQL(listfilter.Number, "COALESCE("+personAttribute(condition.Field+"_"+map[string]string{"height": "cm", "weight": "kg"}[condition.Field])+", 0)")
+		return sqlPart{fragment, arguments}
+	case "nationality":
+		fragment, arguments := condition.SQL(listfilter.Text, "COALESCE("+personAttribute("nationality")+", p.country, '')")
+		return sqlPart{fragment, arguments}
+	case "measurements", "ethnicity", "tattoos", "piercings", "hair_colour":
+		key := map[string]string{"hair_colour": "hair_color"}[condition.Field]
+		if key == "" {
+			key = condition.Field
+		}
+		fragment, arguments := condition.SQL(listfilter.Text, "COALESCE("+personAttribute(key)+", '')")
+		return sqlPart{fragment, arguments}
+	case "status":
+		fragment, arguments := condition.SQL(listfilter.Enum, "COALESCE("+personAttribute("status")+", CASE WHEN COALESCE(p.died, '') <> '' THEN 'deceased' ELSE 'active' END)")
+		return sqlPart{fragment, arguments}
 	case "monitored":
 		fragment, arguments := condition.SQL(listfilter.Bool, "p.monitored = 1")
 		return sqlPart{fragment, arguments}
@@ -342,4 +371,9 @@ func visiblePerson(personIDExpr string, visible []int64) sqlPart {
 			" AND s.enabled = 1 AND " + followed.sql + "))",
 		args: append(slices.Clone(member.args), followed.args...),
 	}
+}
+
+// personAttribute is the SQL for one attribute of a person: what they set by hand, else what the provider says; NULL when neither.
+func personAttribute(key string) string {
+	return "COALESCE(NULLIF(json_extract(p.fields_json, '$.attributes_hand." + key + "'), ''), NULLIF(json_extract(p.fields_json, '$.attributes." + key + "'), ''))"
 }

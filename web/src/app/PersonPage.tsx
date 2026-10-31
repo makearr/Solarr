@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 
-import { Link, useNavigate, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -19,6 +19,10 @@ import { ChooseImage } from "./ChooseImage";
 import { useAllParts } from "./work/WorkParts";
 import { CoverArt } from "./CoverArt";
 import { FollowPanel } from "./FollowPanel";
+import { PersonPicker } from "./PersonPicker";
+import { Button } from "@/ui/Button";
+import { Dialog } from "@/ui/Dialog";
+import { inputStyle, labelStyle } from "@/ui/form";
 
 type PersonWork = components["schemas"]["PersonWork"];
 type Credit = components["schemas"]["WorkCredit"];
@@ -100,6 +104,8 @@ export function PersonPage() {
   const searchMissing = usePersonAction(id, "/people/{id}/search");
   const refresh = usePersonAction(id, "/people/{id}/refresh");
   const monitorAll = usePersonAction(id, "/people/{id}/monitor-all");
+  const [editing, setEditing] = useState(false);
+  const [merging, setMerging] = useState(false);
   const remove = useMutation({
     mutationFn: async () => {
       await ok(api.POST("/people/{id}/remove", { params: { path: { id } } }));
@@ -132,6 +138,9 @@ export function PersonPage() {
     [person.born && `Born ${person.born}`, person.died && `Died ${person.died}`].filter(Boolean).join(" · "),
   ].filter((fact): fact is string => Boolean(fact));
   const links = Object.entries(person.ids).filter(([provider]) => PROFILE_LINKS[provider]);
+  const details = detailRows(person);
+  const tagLibrary = from ?? sectionIds[0];
+  const tagLevel = tagLibrary === undefined ? undefined : libraryOf(tagLibrary)?.levels.find((level) => level.entity === "work")?.key;
   const profiled = [...new Map(sectionIds.map((categoryId) => [libraryOf(categoryId)?.media_type ?? "", categoryId])).values()];
 
   return (
@@ -158,6 +167,12 @@ export function PersonPage() {
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
             <div className="flex items-start justify-between gap-4">
               <h1 className="text-xl font-semibold">{person.name}</h1>
+              {administrator && (
+                <span className="flex shrink-0 gap-2">
+                  <Button onClick={() => setEditing(true)}>Edit</Button>
+                  <Button onClick={() => setMerging(true)}>Merge into…</Button>
+                </span>
+              )}
               {administrator && leads && (
                 <button
                   type="button"
@@ -180,10 +195,12 @@ export function PersonPage() {
             </div>
             {facts.length > 0 && <p className="text-sm text-ink-muted">{facts.join(" · ")}</p>}
             {person.aliases.length > 0 && <p className="text-xs text-ink-muted">Also known as {person.aliases.join(", ")}</p>}
-            {person.genres.length > 0 && <GenreChips genres={person.genres} />}
-            {person.facts && person.facts.length > 0 && (
+            {person.genres.length > 0 && (
+              <GenreChips genres={person.genres} tags={person.genre_tags ?? []} categoryId={tagLibrary === undefined ? undefined : String(tagLibrary)} level={tagLevel} />
+            )}
+            {details.length > 0 && (
               <dl className="grid max-w-xl grid-cols-[max-content_1fr] gap-x-5 gap-y-1 pt-2 text-sm" aria-label="Details">
-                {person.facts.map((fact) => (
+                {details.map((fact) => (
                   <Fragment key={fact.label}>
                     <dt className="text-ink-muted">{fact.label}</dt>
                     <dd>{fact.value}</dd>
@@ -270,6 +287,8 @@ export function PersonPage() {
           );
         })}
         {sectionIds.length === 0 && <p className="text-sm text-ink-muted">No work in your libraries credits them yet.</p>}
+        {editing && <EditPerson person={person} onClose={() => setEditing(false)} />}
+        {merging && <MergePerson person={person} onClose={() => setMerging(false)} />}
 
         {profiled.length > 0 && <KnownForSection personId={person.id} categoryIds={profiled} />}
       </div>
@@ -280,22 +299,207 @@ export function PersonPage() {
 /** One of the artist verbs on a person; the page is read again when it succeeds. */
 /** A person's genres; a performer's tags run to dozens, so the first few show and the rest wait behind a button. */
 const VISIBLE_GENRES = 12;
-function GenreChips({ genres }: { genres: readonly string[] }) {
+function GenreChips({ genres, tags, categoryId, level }: { genres: readonly string[]; tags: readonly { id: number; name: string }[]; categoryId?: string; level?: string }) {
   const [all, setAll] = useState(false);
   const shown = all ? genres : genres.slice(0, VISIBLE_GENRES);
+  const chip = "rounded-full border border-border-subtle px-2 py-0.5 text-xs text-ink-muted";
   return (
     <div className="flex flex-wrap items-center gap-1.5 pt-1">
-      {shown.map((genre) => (
-        <span key={genre} className="rounded-full border border-border-subtle px-2 py-0.5 text-xs text-ink-muted">
-          {genre}
-        </span>
-      ))}
+      {shown.map((genre) => {
+        const tag = tags.find((entry) => entry.name === genre);
+        return tag && categoryId && level ? (
+          <Link
+            key={genre}
+            to="/library/$categoryId/$level"
+            params={{ categoryId, level }}
+            search={{ tags: String(tag.id) }}
+            title={`Everything in this library tagged ${genre}`}
+            className={`${chip} hover:border-accent hover:text-accent`}
+          >
+            {genre}
+          </Link>
+        ) : (
+          <span key={genre} className={chip}>
+            {genre}
+          </span>
+        );
+      })}
       {genres.length > VISIBLE_GENRES && (
         <button type="button" onClick={() => setAll(!all)} className="text-xs text-accent hover:underline">
           {all ? "Show fewer" : `Show all ${genres.length}`}
         </button>
       )}
     </div>
+  );
+}
+
+type PersonDetail = components["schemas"]["PersonDetail"];
+
+/** The overview's rows: gender, nationality, status and the attributes first, then the provider's other facts. */
+function detailRows(person: PersonDetail): { label: string; value: string }[] {
+  const attributes = person.attributes ?? {};
+  const mine: { label: string; value: string | undefined }[] = [
+    { label: "Gender", value: person.gender },
+    { label: "Nationality", value: attributes.nationality },
+    { label: "Status", value: attributes.status && attributes.status[0]!.toUpperCase() + attributes.status.slice(1) },
+    { label: "Height", value: attributes.height_cm ? `${attributes.height_cm} cm` : undefined },
+    { label: "Weight", value: attributes.weight_kg ? `${attributes.weight_kg} kg` : undefined },
+    { label: "Measurements", value: attributes.measurements },
+    { label: "Hair colour", value: attributes.hair_color },
+    { label: "Ethnicity", value: attributes.ethnicity },
+    { label: "Tattoos", value: attributes.tattoos },
+    { label: "Piercings", value: attributes.piercings },
+  ];
+  const rows = mine.filter((row): row is { label: string; value: string } => Boolean(row.value));
+  const taken = new Set(rows.map((row) => row.label.toLowerCase()));
+  return [...rows, ...(person.facts ?? []).filter((fact) => !taken.has(fact.label.toLowerCase()))];
+}
+
+const GENDERS = ["Female", "Male", "Trans woman", "Trans man", "Non-binary"];
+
+/** Rename a person and set their gender and attributes; what is saved here stays through a provider's refresh. */
+function EditPerson({ person, onClose }: { person: PersonDetail; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const given = person.attributes ?? {};
+  const [name, setName] = useState(person.name);
+  const [gender, setGender] = useState(person.gender ?? "");
+  const [text, setText] = useState({
+    nationality: given.nationality ?? "",
+    height: given.height_cm ? String(given.height_cm) : "",
+    weight: given.weight_kg ? String(given.weight_kg) : "",
+    measurements: given.measurements ?? "",
+    hair: given.hair_color ?? "",
+    ethnicity: given.ethnicity ?? "",
+    status: given.status ?? "",
+    tattoos: given.tattoos ?? "",
+    piercings: given.piercings ?? "",
+  });
+  const set = (key: keyof typeof text) => (event: { target: { value: string } }) => setText({ ...text, [key]: event.target.value });
+  const save = useMutation({
+    mutationFn: () =>
+      ok(
+        api.PATCH("/people/{id}", {
+          params: { path: { id: person.id } },
+          body: {
+            name: name.trim(),
+            gender: gender.trim() || undefined,
+            attributes: {
+              nationality: text.nationality.trim() || undefined,
+              height_cm: Number(text.height) > 0 ? Number(text.height) : undefined,
+              weight_kg: Number(text.weight) > 0 ? Number(text.weight) : undefined,
+              measurements: text.measurements.trim() || undefined,
+              hair_color: text.hair.trim() || undefined,
+              ethnicity: text.ethnicity.trim() || undefined,
+              status: text.status === "" ? undefined : (text.status as "active" | "inactive" | "deceased"),
+              tattoos: text.tattoos.trim() || undefined,
+              piercings: text.piercings.trim() || undefined,
+            },
+          },
+        }),
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["person", person.id] });
+      invalidatePeopleLists(queryClient);
+      invalidateWorkLists(queryClient);
+      onClose();
+    },
+  });
+  const field = (label: string, key: keyof typeof text, placeholder?: string) => (
+    <label className={labelStyle}>
+      {label}
+      <input className={inputStyle} value={text[key]} onChange={set(key)} placeholder={placeholder} />
+    </label>
+  );
+  return (
+    <Dialog
+      title={`Edit ${person.name}`}
+      description="What you set here stays when a provider refreshes the person."
+      onClose={onClose}
+      actions={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" busy={save.isPending} disabled={!name.trim()} onClick={() => save.mutate()}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        <label className={`${labelStyle} col-span-2`}>
+          Name
+          <input className={inputStyle} value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label className={labelStyle}>
+          Gender
+          <input className={inputStyle} list="person-genders" value={gender} onChange={(event) => setGender(event.target.value)} />
+          <datalist id="person-genders">
+            {GENDERS.map((entry) => (
+              <option key={entry} value={entry} />
+            ))}
+          </datalist>
+        </label>
+        <label className={labelStyle}>
+          Status
+          <select className={inputStyle} value={text.status} onChange={set("status")}>
+            <option value="">Unknown</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="deceased">Deceased</option>
+          </select>
+        </label>
+        {field("Nationality", "nationality")}
+        {field("Ethnicity", "ethnicity")}
+        {field("Height (cm)", "height")}
+        {field("Weight (kg)", "weight")}
+        {field("Measurements", "measurements", "86-61-89")}
+        {field("Hair colour", "hair")}
+        {field("Tattoos", "tattoos")}
+        {field("Piercings", "piercings")}
+        {save.isError && <p className="col-span-2 text-xs text-danger">That could not be saved.</p>}
+      </div>
+    </Dialog>
+  );
+}
+
+/** Fold this person into another one found by name: their credits, ids and tags move over, the name becomes an alias. */
+function MergePerson({ person, onClose }: { person: PersonDetail; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [target, setTarget] = useState<{ id: number; name: string }>();
+  const merge = useMutation({
+    mutationFn: () => ok(api.POST("/people/{id}/merge", { params: { path: { id: person.id } }, body: { into_id: target!.id } })),
+    onSuccess: () => {
+      invalidatePeopleLists(queryClient);
+      invalidateWorkLists(queryClient);
+      void queryClient.invalidateQueries({ queryKey: ["person"] });
+      void navigate({ to: "/people/$id", params: { id: String(target!.id) } });
+      onClose();
+    },
+  });
+  return (
+    <Dialog
+      title={`Merge ${person.name} into another person`}
+      description="Their works, ids, tags and follows move to the person you pick, and this name becomes an alias of theirs. Files stay where they are."
+      onClose={onClose}
+      actions={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" busy={merge.isPending} disabled={!target} onClick={() => merge.mutate()}>
+            {target ? `Merge into ${target.name}` : "Merge"}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-2">
+        {target && (
+          <p className="text-sm">
+            Merge into <strong>{target.name}</strong>
+          </p>
+        )}
+        <PersonPicker autoFocus exclude={person.id} label="Find the person to merge into" onPick={setTarget} />
+        {merge.isError && <p className="text-xs text-danger">That could not be merged.</p>}
+      </div>
+    </Dialog>
   );
 }
 
@@ -322,6 +526,26 @@ function onePerWork(credits: Credit[]): { credit: Credit; roles: string[] }[] {
   return out;
 }
 
+const WORK_ORDERS: readonly (readonly [string, string])[] = [["", "Default"], ["title", "Title"], ["year", "Year"], ["status", "Availability"]];
+const STATUS_RANK = ["complete", "downloading", "incomplete", "unreleased", "unverified"];
+
+/** The works in the order the person chose, as the library's own list offers it; the default keeps the server's. */
+function sortWorks<T>(items: readonly T[], workOf: (item: T) => PersonWork, sort: string, descending: boolean): T[] {
+  if (sort === "") return [...items];
+  const compare = (a: PersonWork, b: PersonWork): number => {
+    switch (sort) {
+      case "year":
+        return (a.year ?? Number.MAX_SAFE_INTEGER) - (b.year ?? Number.MAX_SAFE_INTEGER);
+      case "status":
+        return STATUS_RANK.indexOf(a.status) - STATUS_RANK.indexOf(b.status);
+      default:
+        return a.sort_title.localeCompare(b.sort_title);
+    }
+  };
+  const ordered = [...items].sort((a, b) => compare(workOf(a), workOf(b)) || workOf(a).sort_title.localeCompare(workOf(b).sort_title) || workOf(a).id - workOf(b).id);
+  return descending ? ordered.reverse() : ordered;
+}
+
 /** One library's part of the person: the lead role as that library lists it (an artist's discography by release
  *  type), every other role as a wall of the works, with the role chips when there are several. */
 function LibrarySection({ name, type, credits }: { name: string; type?: MediaTypeInfo; credits: Credit[] }) {
@@ -333,8 +557,12 @@ function LibrarySection({ name, type, credits }: { name: string; type?: MediaTyp
   const shown = role ? credits.filter((credit) => credit.role === role) : credits;
   const workCount = new Set(shown.map((credit) => credit.work.id)).size;
   const works = (workCount === 1 ? type?.work.one : type?.work.many) ?? (workCount === 1 ? "work" : "works");
-  const leadWorks = shown.filter((credit) => credit.role === lead).map((credit) => credit.work);
-  const others = onePerWork(shown.filter((credit) => credit.role !== lead));
+  const { sort = "", dir = "" } = useSearch({ strict: false }) as { sort?: string; dir?: string };
+  const navigate = useNavigate();
+  const order = (next: { sort?: string; dir?: string }) =>
+    void navigate({ to: ".", replace: true, search: (previous: Record<string, unknown>) => ({ ...previous, ...next }) });
+  const leadWorks = sortWorks(shown.filter((credit) => credit.role === lead).map((credit) => credit.work), (work) => work, sort, dir === "desc");
+  const others = sortWorks(onePerWork(shown.filter((credit) => credit.role !== lead)), (entry) => entry.credit.work, sort, dir === "desc");
   return (
     <section className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -353,6 +581,22 @@ function LibrarySection({ name, type, credits }: { name: string; type?: MediaTyp
               {key ? label(key) : "All"}
             </button>
           ))}
+        {workCount > 1 && (
+          <span className="ml-auto flex items-center gap-1 text-xs">
+            <select aria-label="Order" value={sort} onChange={(event) => order({ sort: event.target.value || undefined })} className="rounded-md border border-border-subtle bg-canvas px-2 py-1 text-xs text-ink">
+              {WORK_ORDERS.map(([key, text]) => (
+                <option key={key} value={key}>
+                  {key === "" ? "Order: default" : text}
+                </option>
+              ))}
+            </select>
+            {sort !== "" && (
+              <button type="button" aria-label={dir === "desc" ? "Descending" : "Ascending"} onClick={() => order({ dir: dir === "desc" ? undefined : "desc" })} className="rounded-md border border-border-subtle px-2 py-1 text-ink-muted hover:text-ink">
+                {dir === "desc" ? "↓" : "↑"}
+              </button>
+            )}
+          </span>
+        )}
       </div>
       {groupDiscography(leadWorks).map((group) => (
         <div key={group.label} className="flex flex-col gap-1.5">

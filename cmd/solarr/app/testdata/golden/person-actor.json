@@ -20,6 +20,16 @@
       }
     }
   ],
+  "genre_tags": [
+    {
+      "id": 1,
+      "name": "Drama"
+    },
+    {
+      "id": 2,
+      "name": "Mystery"
+    }
+  ],
   "genres": [
     "Drama",
     "Mystery"

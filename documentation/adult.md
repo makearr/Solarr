@@ -39,7 +39,7 @@ A scene is a work with one wanted item. Its studio is an organisation of kind `s
 are credits in the `performer` role, its tags are tags of the `adult` tree (every provider tag becomes a tag), and its release
 day is the work's `release` date, so the calendar and "not out yet" work as for films.
 
-Performers are people with extra facts. `adult.performers` (the *Refresh people* schedule) reads each performer from the
+Performers are people with extra facts and attributes (height, hair, ethnicity, measurements, tattoos, piercings, status), which the people list filters on and a person's own edits stand over. `adult.performers` (the *Refresh people* schedule) reads each performer from the
 servers that know them and fills gender, country, birth and death, aliases, a picture, and the page's facts (ethnicity, hair,
 eyes, height, measurements, breasts, career, tattoos, piercings), links and a picture gallery. Core keeps these as
 `library.PersonExtras` in `person.fields_json` without knowing what they mean (ADR-23). A biography comes from Wikidata's

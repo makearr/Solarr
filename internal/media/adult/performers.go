@@ -195,6 +195,11 @@ func PerformerDetails(in stashbox.Performer) (library.PersonIdentity, library.Pe
 	if in.SceneCount > 0 {
 		fact("Scenes on the server", strconv.Itoa(in.SceneCount))
 	}
+	extras.Attributes = library.PersonAttributes{
+		Nationality: in.Country, HeightCm: in.Height, Measurements: measurements(in), HairColor: enumLabel(in.HairColor),
+		Ethnicity: enumLabel(in.Ethnicity), Tattoos: modifications(in.Tattoos), Piercings: modifications(in.Piercings),
+		Status: performerStatus(in),
+	}
 	for _, link := range in.URLs {
 		extras.Links = append(extras.Links, library.PersonWebLink{Label: linkLabel(link), URL: link.URL})
 	}
@@ -207,6 +212,17 @@ func PerformerDetails(in stashbox.Performer) (library.PersonIdentity, library.Pe
 		identity.ImageURL = extras.Images[0]
 	}
 	return identity, extras
+}
+
+// performerStatus is deceased with a death date, inactive once the career has an end, else active.
+func performerStatus(in stashbox.Performer) string {
+	switch {
+	case in.DeathDate != "":
+		return library.PersonDeceased
+	case in.CareerEndYear > 0:
+		return library.PersonInactive
+	}
+	return library.PersonActive
 }
 
 // mergePerformer keeps the first server's values and adds what a later one has that the first lacks.
@@ -246,6 +262,7 @@ func mergePerformer(identity library.PersonIdentity, extras library.PersonExtras
 			extras.Images = append(extras.Images, image)
 		}
 	}
+	extras.Attributes = moreExtras.Attributes.Over(extras.Attributes)
 	return identity, extras
 }
 

@@ -168,13 +168,13 @@ func (f Franchises) Create(ctx context.Context, mediaType string, categoryID int
 	return id, nil
 }
 
-// ErrNotCustomCollection is a collection that is not a hand-made one, or none: only those are renamed, deleted or filled by hand.
+// ErrNotCustomCollection is a collection that is not a hand-made one, or none: only those are deleted outright.
 var ErrNotCustomCollection = errors.New("library: not a collection made by hand")
 
-// Rename renames a hand-made collection.
+// Rename renames a collection of any kind; a provider's or Solarr's keeps the name from then on.
 func (f Franchises) Rename(ctx context.Context, id int64, name string) error {
 	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) {
-		return queries.RenameCustomCollection(ctx, librarydb.RenameCustomCollectionParams{Name: name, ID: id})
+		return queries.RenameCollectionByHand(ctx, librarydb.RenameCollectionByHandParams{Name: name, ID: id})
 	})
 }
 
@@ -183,14 +183,15 @@ func (f Franchises) Delete(ctx context.Context, id int64) error {
 	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) { return queries.DeleteCustomCollection(ctx, id) })
 }
 
-// AddMember puts a work in a hand-made collection.
+// AddMember puts a work in a collection of any kind; in a provider's or Solarr's it stays until a person takes it out.
 func (f Franchises) AddMember(ctx context.Context, id, workID int64) error {
 	return f.customWrite(ctx, id, func(queries *librarydb.Queries) (int64, error) {
-		collection, err := queries.GetCollection(ctx, id)
-		if err != nil || collection.Kind != CustomKind {
+		if _, err := queries.GetCollection(ctx, id); errors.Is(err, sql.ErrNoRows) {
+			return 0, nil
+		} else if err != nil {
 			return 0, err
 		}
-		return 1, queries.AddCollectionMember(ctx, librarydb.AddCollectionMemberParams{CollectionID: id, WorkID: workID, PartID: 0})
+		return 1, queries.AddCollectionMemberByHand(ctx, librarydb.AddCollectionMemberByHandParams{CollectionID: id, WorkID: workID})
 	})
 }
 
@@ -726,7 +727,7 @@ func (f Franchises) RemoveFromFranchise(ctx context.Context, id int64, workIDs [
 	err := f.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		for _, workID := range workIDs {
-			if err := queries.RemoveCollectionMember(ctx, librarydb.RemoveCollectionMemberParams{CollectionID: id, WorkID: workID}); err != nil {
+			if err := queries.RemoveAutoCollectionMember(ctx, librarydb.RemoveAutoCollectionMemberParams{CollectionID: id, WorkID: workID}); err != nil {
 				return err
 			}
 		}

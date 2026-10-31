@@ -3,7 +3,7 @@
 -- name: CreateCollection :one
 INSERT INTO collection (media_type, name, kind, source, monitored, complete_at, added_at)
 VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id;
+RETURNING id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked;
 
 -- name: AddCollectionMember :exec
 INSERT INTO collection_member (collection_id, work_id, part_id, ord)
@@ -27,7 +27,7 @@ WHERE c.id = ?
 GROUP BY c.id;
 
 -- name: ListCollectionsForWork :many
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
 FROM collection c
 JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = ? ORDER BY c.name;
@@ -235,17 +235,17 @@ WHERE m.collection_id IN (sqlc.slice(collection_ids))
 ORDER BY m.collection_id, m.ord, m.part_id;
 
 -- name: ListCollectionsOfKind :many
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked
 FROM collection WHERE kind = sqlc.arg(kind) AND media_type = sqlc.arg(media_type) ORDER BY name, id;
 
 -- name: ListCollectionsOfWorkParts :many
-SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
+SELECT DISTINCT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
 FROM collection c JOIN collection_member m ON m.collection_id = c.id
 WHERE m.work_id = sqlc.arg(work_id) AND m.part_id <> 0 AND c.kind = sqlc.arg(kind)
 ORDER BY c.name, c.id;
 
 -- name: GetCollection :one
-SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id FROM collection WHERE id = ?;
+SELECT id, media_type, name, kind, source, monitored, complete_at, added_at, poster_url, category_id, name_locked FROM collection WHERE id = ?;
 
 -- name: RenameCollection :exec
 UPDATE collection SET name = ?, monitored = ? WHERE id = ?;
@@ -324,7 +324,7 @@ ORDER BY a.work_id, a.sort_key, b.id;
 
 -- A collection a provider names, found by its id there: a movie's franchise.
 -- name: GetCollectionByExternalID :one
-SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id
+SELECT c.id, c.media_type, c.name, c.kind, c.source, c.monitored, c.complete_at, c.added_at, c.poster_url, c.category_id, c.name_locked
 FROM collection c JOIN collection_external_id e ON e.collection_id = c.id
 WHERE e.provider = ? AND e.external_id = ?;
 
@@ -333,7 +333,7 @@ INSERT INTO collection_external_id (provider, external_id, collection_id) VALUES
 ON CONFLICT (provider, external_id) DO NOTHING;
 
 -- name: SetCollectionName :exec
-UPDATE collection SET name = ? WHERE id = ?;
+UPDATE collection SET name = ? WHERE id = ? AND name_locked = 0;
 
 -- name: SetCollectionMonitored :exec
 UPDATE collection SET monitored = ? WHERE id = ?;
@@ -371,6 +371,17 @@ RETURNING id;
 
 -- name: RenameCustomCollection :execrows
 UPDATE collection SET name = ? WHERE id = ? AND kind = 'custom';
+
+-- name: RenameCollectionByHand :execrows
+UPDATE collection SET name = ?, name_locked = 1 WHERE id = ?;
+
+-- name: AddCollectionMemberByHand :exec
+INSERT INTO collection_member (collection_id, work_id, part_id, ord, by_hand) VALUES (?, ?, 0, 0, 1)
+ON CONFLICT (collection_id, work_id, part_id) DO UPDATE SET by_hand = 1;
+
+-- A pass that no longer finds a work in a franchise takes it out; one a person put there stays.
+-- name: RemoveAutoCollectionMember :exec
+DELETE FROM collection_member WHERE collection_id = ? AND work_id = ? AND part_id = 0 AND by_hand = 0;
 
 -- name: DeleteCustomCollection :execrows
 DELETE FROM collection WHERE id = ? AND kind = 'custom';

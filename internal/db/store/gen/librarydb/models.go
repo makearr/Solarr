@@ -186,6 +186,7 @@ type Collection struct {
 	AddedAt    int64
 	PosterUrl  string
 	CategoryID int64
+	NameLocked int64
 }
 
 type CollectionExternalID struct {
@@ -199,6 +200,7 @@ type CollectionMember struct {
 	WorkID       int64
 	PartID       int64
 	Ord          sql.NullInt64
+	ByHand       int64
 }
 
 type CollectionRefusal struct {
@@ -621,6 +623,7 @@ type Person struct {
 	FieldsJson     sql.NullString
 	Monitored      int64
 	AddedAt        int64
+	NameLocked     int64
 }
 
 type PersonAlias struct {

@@ -94,6 +94,8 @@ func (a Works) ListWorks(
 			ExcludedTagIDs:  filter.ExcludedTagIDs,
 			AboveRating:     aboveRating(filter.AboveRating, filter.CategoryIDs, a.RatingLimit),
 			MediaType:       filter.MediaType,
+			MediaTypes:      filter.MediaTypes,
+			PersonID:        filter.PersonID,
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,

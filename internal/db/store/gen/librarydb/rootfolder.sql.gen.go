@@ -17,7 +17,7 @@ SELECT CAST(COUNT(DISTINCT person_id) AS INTEGER) AS total FROM (
     WHERE root_folder_id IN (SELECT value FROM json_each(?1))
     UNION
     SELECT di.work_id FROM desired_item di WHERE di.category_id = ?2
-  )
+  ) AND (?3 = '' OR work_id IN (SELECT id FROM work WHERE media_type = ?3))
   UNION
   SELECT s.subject_id AS person_id FROM subscription s JOIN person p ON p.id = s.subject_id
   WHERE s.subject_type = 'person' AND s.enabled = 1 AND p.monitored = 1
@@ -28,6 +28,7 @@ SELECT CAST(COUNT(DISTINCT person_id) AS INTEGER) AS total FROM (
 type CountArtistCreditsVisibleToCategoryParams struct {
 	RootFolderIds interface{}
 	CategoryID    int64
+	MediaType     interface{}
 }
 
 // The "artists" count for one category (ADR-54's person-entity navigation levels,
@@ -39,7 +40,7 @@ type CountArtistCreditsVisibleToCategoryParams struct {
 // An artist monitored in this library counts at once, before enrichment has credited any work
 // to them (answered 2026-09-24: "Artists 0" right after adding one read as broken).
 func (q *Queries) CountArtistCreditsVisibleToCategory(ctx context.Context, arg CountArtistCreditsVisibleToCategoryParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countArtistCreditsVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	row := q.db.QueryRowContext(ctx, countArtistCreditsVisibleToCategory, arg.RootFolderIds, arg.CategoryID, arg.MediaType)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -55,17 +56,19 @@ SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
 WHERE EXISTS (SELECT 1 FROM desired_item di
               WHERE di.work_id = visible.work_id AND di.monitored = 1 AND di.state IN ('MISSING', 'PARTIAL'))
   AND EXISTS (SELECT 1 FROM work_part tracklist WHERE tracklist.work_id = visible.work_id)
+  AND (?3 = '' OR EXISTS (SELECT 1 FROM work WHERE work.id = visible.work_id AND work.media_type = ?3))
 `
 
 type CountWantedWorksVisibleToCategoryParams struct {
 	RootFolderIds interface{}
 	CategoryID    int64
+	MediaType     interface{}
 }
 
 // The Wanted page's total for one category: the works CountWorksVisibleToCategory counts that
 // have a monitored item not yet complete and a tracklist, the wanted list's own condition.
 func (q *Queries) CountWantedWorksVisibleToCategory(ctx context.Context, arg CountWantedWorksVisibleToCategoryParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWantedWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	row := q.db.QueryRowContext(ctx, countWantedWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID, arg.MediaType)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
@@ -78,36 +81,40 @@ WHERE work_id IN (
   WHERE root_folder_id IN (SELECT value FROM json_each(?1))
   UNION
   SELECT work_id FROM desired_item WHERE category_id = ?2
-)
+) AND (?3 = '' OR work_id IN (SELECT id FROM work WHERE media_type = ?3))
 `
 
 type CountWorkPartsVisibleToCategoryParams struct {
 	RootFolderIds interface{}
 	CategoryID    int64
+	MediaType     interface{}
 }
 
 // The "parts" count for one category (ADR-54's work_part-entity navigation levels,
 // e.g. music's Tracks): every work_part belonging to a work visible to the
 // category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
 func (q *Queries) CountWorkPartsVisibleToCategory(ctx context.Context, arg CountWorkPartsVisibleToCategoryParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWorkPartsVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	row := q.db.QueryRowContext(ctx, countWorkPartsVisibleToCategory, arg.RootFolderIds, arg.CategoryID, arg.MediaType)
 	var total int64
 	err := row.Scan(&total)
 	return total, err
 }
 
 const countWorksVisibleToCategory = `-- name: CountWorksVisibleToCategory :one
-SELECT CAST(COUNT(DISTINCT work_id) AS INTEGER) AS total FROM (
+SELECT CAST(COUNT(DISTINCT visible.work_id) AS INTEGER) AS total FROM (
   SELECT work_id FROM work_root_folder
   WHERE root_folder_id IN (SELECT value FROM json_each(?1))
   UNION
   SELECT work_id FROM desired_item WHERE category_id = ?2
-)
+) AS visible
+JOIN work ON work.id = visible.work_id
+WHERE ?3 = '' OR work.media_type = ?3
 `
 
 type CountWorksVisibleToCategoryParams struct {
 	RootFolderIds interface{}
 	CategoryID    int64
+	MediaType     interface{}
 }
 
 // The "works" count for one category: the union of on-disk presence
@@ -115,8 +122,9 @@ type CountWorksVisibleToCategoryParams struct {
 // a subscription-discovered work has no root folder yet but still belongs to its
 // category (private/next.md's work_root_folder retirement). Distinct because a
 // scanned, monitored work has rows on both sides and must count once.
+// Only works of the library's own media type: a series whose file lies in the movies folder is not a movie.
 func (q *Queries) CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID)
+	row := q.db.QueryRowContext(ctx, countWorksVisibleToCategory, arg.RootFolderIds, arg.CategoryID, arg.MediaType)
 	var total int64
 	err := row.Scan(&total)
 	return total, err

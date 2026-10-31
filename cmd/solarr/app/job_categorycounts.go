@@ -52,7 +52,7 @@ func (j categoryCountsJob) Run(ctx context.Context, _ jobs.Job) error {
 			}
 		}
 		scopes[index] = library.CategoryScope{
-			CategoryID: category.ID, RootFolderIDs: roots, OfflineRootFolderIDs: offline,
+			CategoryID: category.ID, RootFolderIDs: roots, OfflineRootFolderIDs: offline, MediaType: category.MediaType,
 		}
 	}
 

@@ -625,6 +625,13 @@ const (
 	PermissionRequest Permission = "request"
 )
 
+// Defines values for PersonAttributesStatus.
+const (
+	PersonAttributesStatusActive   PersonAttributesStatus = "active"
+	PersonAttributesStatusDeceased PersonAttributesStatus = "deceased"
+	PersonAttributesStatusInactive PersonAttributesStatus = "inactive"
+)
+
 // Defines values for PersonWorkStatus.
 const (
 	PersonWorkStatusComplete    PersonWorkStatus = "complete"
@@ -3977,9 +3984,28 @@ type Person struct {
 	SortName       string  `json:"sort_name"`
 }
 
+// PersonAttributes The descriptive facts of a person the list filters on; absent or zero is unknown. What a person set by hand stands over the provider's.
+type PersonAttributes struct {
+	Ethnicity    *string                 `json:"ethnicity,omitempty"`
+	HairColor    *string                 `json:"hair_color,omitempty"`
+	HeightCm     *int                    `json:"height_cm,omitempty"`
+	Measurements *string                 `json:"measurements,omitempty"`
+	Nationality  *string                 `json:"nationality,omitempty"`
+	Piercings    *string                 `json:"piercings,omitempty"`
+	Status       *PersonAttributesStatus `json:"status,omitempty"`
+	Tattoos      *string                 `json:"tattoos,omitempty"`
+	WeightKg     *int                    `json:"weight_kg,omitempty"`
+}
+
+// PersonAttributesStatus defines model for PersonAttributes.Status.
+type PersonAttributesStatus string
+
 // PersonDetail defines model for PersonDetail.
 type PersonDetail struct {
 	Aliases []string `json:"aliases"`
+
+	// Attributes The descriptive facts of a person the list filters on; absent or zero is unknown. What a person set by hand stands over the provider's.
+	Attributes *PersonAttributes `json:"attributes,omitempty"`
 
 	// Biography From the providers, when one has it (ADR-8).
 	Biography      *string      `json:"biography,omitempty"`
@@ -3992,6 +4018,9 @@ type PersonDetail struct {
 	// Facts The media type's own labelled facts of the person (a performer's height, hair, career), in its order.
 	Facts  *[]PersonFact `json:"facts,omitempty"`
 	Gender *string       `json:"gender,omitempty"`
+
+	// GenreTags The same genres with the tag each is, so one opens the library list of everything carrying it.
+	GenreTags *[]PersonGenreTag `json:"genre_tags,omitempty"`
 
 	// Genres Every genre tagged on any of their works; a person carries none of their own (ADR-32).
 	Genres []string `json:"genres"`
@@ -4015,6 +4044,16 @@ type PersonDetail struct {
 	Monitored bool             `json:"monitored"`
 	Name      string           `json:"name"`
 	SortName  string           `json:"sort_name"`
+}
+
+// PersonEdit defines model for PersonEdit.
+type PersonEdit struct {
+	// Attributes The descriptive facts of a person the list filters on; absent or zero is unknown. What a person set by hand stands over the provider's.
+	Attributes PersonAttributes `json:"attributes"`
+
+	// Gender Free text; a provider's values are Female, Male, Trans woman, Trans man, Non-binary.
+	Gender *string `json:"gender,omitempty"`
+	Name   string  `json:"name"`
 }
 
 // PersonEntry defines model for PersonEntry.
@@ -4061,6 +4100,12 @@ type PersonEntry struct {
 type PersonFact struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
+}
+
+// PersonGenreTag defines model for PersonGenreTag.
+type PersonGenreTag struct {
+	Id   int64  `json:"id"`
+	Name string `json:"name"`
 }
 
 // PersonLibrary A person's place in one library the caller may read.
@@ -5852,7 +5897,7 @@ type ListPeopleParams struct {
 	// Role Comma-separated credit roles, as the media types declare them; any when absent.
 	Role *string `form:"role,omitempty" json:"role,omitempty"`
 
-	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name and country (text), monitored and photo (bool), works, wanted and complete (number), role (one of the roles).
+	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name, country, gender, nationality, measurements, hair_colour, ethnicity, tattoos and piercings (text), height and weight (number), status (active, inactive, deceased), monitored and photo (bool), works, wanted and complete (number), role (one of the roles).
 	Where *string               `form:"where,omitempty" json:"where,omitempty"`
 	Sort  *ListPeopleParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
 	Dir   *ListPeopleParamsDir  `form:"dir,omitempty" json:"dir,omitempty"`
@@ -5891,6 +5936,11 @@ type UnfollowPersonParams struct {
 // ListPersonKnownForParams defines parameters for ListPersonKnownFor.
 type ListPersonKnownForParams struct {
 	Category int64 `form:"category" json:"category"`
+}
+
+// MergePersonJSONBody defines parameters for MergePerson.
+type MergePersonJSONBody struct {
+	IntoId int64 `json:"into_id"`
 }
 
 // ListQueueParams defines parameters for ListQueue.
@@ -6094,6 +6144,9 @@ type ListWorksParams struct {
 	// WholeLibrary With category_id, every media type of that library (its All list), not that one category.
 	WholeLibrary *bool `form:"whole_library,omitempty" json:"whole_library,omitempty"`
 
+	// PersonId Only works the person is credited on.
+	PersonId *int64 `form:"person_id,omitempty" json:"person_id,omitempty"`
+
 	// MediaType Only works of this media type (the All list's type chip).
 	MediaType *string `form:"media_type,omitempty" json:"media_type,omitempty"`
 
@@ -6124,8 +6177,11 @@ type BulkEditWorksJSONBody struct {
 	// MonitorOption One of the type's monitor options, applied after the rest.
 	MonitorOption *string `json:"monitor_option,omitempty"`
 	Monitored     *bool   `json:"monitored,omitempty"`
-	Preview       *bool   `json:"preview,omitempty"`
-	Profile       *struct {
+
+	// PersonId The list's person filter.
+	PersonId *int64 `json:"person_id,omitempty"`
+	Preview  *bool  `json:"preview,omitempty"`
+	Profile  *struct {
 		Id *int64 `json:"id"`
 	} `json:"profile,omitempty"`
 	RemoveTags *[]string `json:"remove_tags,omitempty"`
@@ -6151,8 +6207,11 @@ type BulkMoveWorksToLibraryJSONBody struct {
 	Ids         *[]int64 `json:"ids,omitempty"`
 
 	// LibraryId The library the selection was made in.
-	LibraryId    *int64  `json:"library_id,omitempty"`
-	MediaType    *string `json:"media_type,omitempty"`
+	LibraryId *int64  `json:"library_id,omitempty"`
+	MediaType *string `json:"media_type,omitempty"`
+
+	// PersonId The list's person filter.
+	PersonId     *int64  `json:"person_id,omitempty"`
 	Preview      *bool   `json:"preview,omitempty"`
 	Tags         *string `json:"tags,omitempty"`
 	Wanted       *bool   `json:"wanted,omitempty"`
@@ -6179,7 +6238,10 @@ type BulkSetWorkMonitoredJSONBody struct {
 	// MediaType The All list's type chip.
 	MediaType *string `json:"media_type,omitempty"`
 	Monitored bool    `json:"monitored"`
-	Preview   *bool   `json:"preview,omitempty"`
+
+	// PersonId The list's person filter.
+	PersonId *int64 `json:"person_id,omitempty"`
+	Preview  *bool  `json:"preview,omitempty"`
 
 	// Tags The list's tag chips
 	Tags *string `json:"tags,omitempty"`
@@ -6562,6 +6624,9 @@ type PreviewOrganisationFollowJSONRequestBody = FollowRequest
 // LinkSameContentJSONRequestBody defines body for LinkSameContent for application/json ContentType.
 type LinkSameContentJSONRequestBody LinkSameContentJSONBody
 
+// EditPersonJSONRequestBody defines body for EditPerson for application/json ContentType.
+type EditPersonJSONRequestBody = PersonEdit
+
 // ChoosePersonArtworkJSONRequestBody defines body for ChoosePersonArtwork for application/json ContentType.
 type ChoosePersonArtworkJSONRequestBody = ImagePick
 
@@ -6570,6 +6635,9 @@ type FollowPersonJSONRequestBody = FollowRequest
 
 // PreviewPersonFollowJSONRequestBody defines body for PreviewPersonFollow for application/json ContentType.
 type PreviewPersonFollowJSONRequestBody = FollowRequest
+
+// MergePersonJSONRequestBody defines body for MergePerson for application/json ContentType.
+type MergePersonJSONRequestBody MergePersonJSONBody
 
 // UpdatePrioritySettingsJSONRequestBody defines body for UpdatePrioritySettings for application/json ContentType.
 type UpdatePrioritySettingsJSONRequestBody = PrioritySettings
@@ -7242,6 +7310,9 @@ type ServerInterface interface {
 	// One person, with what they did in each library the caller may read.
 	// (GET /people/{id})
 	GetPerson(w http.ResponseWriter, r *http.Request, id int64)
+	// Rename a person or set their gender and attributes by hand. Administrator only.
+	// (PATCH /people/{id})
+	EditPerson(w http.ResponseWriter, r *http.Request, id int64)
 	// A person's cached Wikidata image, if one was found.
 	// (GET /people/{id}/artwork)
 	GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams)
@@ -7266,6 +7337,9 @@ type ServerInterface interface {
 	// What the providers know a person for, newest first, each marked with the library's work when it holds it.
 	// (GET /people/{id}/known-for)
 	ListPersonKnownFor(w http.ResponseWriter, r *http.Request, id int64, params ListPersonKnownForParams)
+	// Fold this person into another. Administrator only.
+	// (POST /people/{id}/merge)
+	MergePerson(w http.ResponseWriter, r *http.Request, id int64)
 	// Monitor every album of this artist's discography. Administrator only.
 	// (POST /people/{id}/monitor-all)
 	MonitorPersonAll(w http.ResponseWriter, r *http.Request, id int64)
@@ -8676,6 +8750,12 @@ func (_ Unimplemented) GetPerson(w http.ResponseWriter, r *http.Request, id int6
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Rename a person or set their gender and attributes by hand. Administrator only.
+// (PATCH /people/{id})
+func (_ Unimplemented) EditPerson(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // A person's cached Wikidata image, if one was found.
 // (GET /people/{id}/artwork)
 func (_ Unimplemented) GetPersonArtwork(w http.ResponseWriter, r *http.Request, id int64, params GetPersonArtworkParams) {
@@ -8721,6 +8801,12 @@ func (_ Unimplemented) PreviewPersonFollow(w http.ResponseWriter, r *http.Reques
 // What the providers know a person for, newest first, each marked with the library's work when it holds it.
 // (GET /people/{id}/known-for)
 func (_ Unimplemented) ListPersonKnownFor(w http.ResponseWriter, r *http.Request, id int64, params ListPersonKnownForParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Fold this person into another. Administrator only.
+// (POST /people/{id}/merge)
+func (_ Unimplemented) MergePerson(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15369,6 +15455,39 @@ func (siw *ServerInterfaceWrapper) GetPerson(w http.ResponseWriter, r *http.Requ
 	handler.ServeHTTP(w, r)
 }
 
+// EditPerson operation middleware
+func (siw *ServerInterfaceWrapper) EditPerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.EditPerson(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetPersonArtwork operation middleware
 func (siw *ServerInterfaceWrapper) GetPersonArtwork(w http.ResponseWriter, r *http.Request) {
 
@@ -15671,6 +15790,39 @@ func (siw *ServerInterfaceWrapper) ListPersonKnownFor(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListPersonKnownFor(w, r, id, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// MergePerson operation middleware
+func (siw *ServerInterfaceWrapper) MergePerson(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.MergePerson(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17641,6 +17793,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 	err = runtime.BindQueryParameter("form", true, false, "whole_library", r.URL.Query(), &params.WholeLibrary)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "whole_library", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "person_id" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "person_id", r.URL.Query(), &params.PersonId)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "person_id", Err: err})
 		return
 	}
 
@@ -19698,6 +19858,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/people/{id}", wrapper.GetPerson)
 	})
 	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/people/{id}", wrapper.EditPerson)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people/{id}/artwork", wrapper.GetPersonArtwork)
 	})
 	r.Group(func(r chi.Router) {
@@ -19720,6 +19883,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/people/{id}/known-for", wrapper.ListPersonKnownFor)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/people/{id}/merge", wrapper.MergePerson)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/people/{id}/monitor-all", wrapper.MonitorPersonAll)

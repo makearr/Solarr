@@ -1,7 +1,6 @@
 package library_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
@@ -46,11 +45,23 @@ func TestACollectionMadeByHandHoldsWorksOfItsLibraryAndNoOtherKindIsEditable(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := franchises.Rename(t.Context(), provider, "Mine now"); !errors.Is(err, library.ErrNotCustomCollection) {
-		t.Errorf("renaming a provider's collection = %v, want it refused", err)
+	if err := franchises.Rename(t.Context(), provider, "Mine now"); err != nil {
+		t.Fatalf("renaming a provider's collection = %v", err)
 	}
-	if err := franchises.AddMember(t.Context(), provider, result.WorkID); !errors.Is(err, library.ErrNotCustomCollection) {
-		t.Errorf("filling a provider's collection = %v, want it refused", err)
+	if _, err := franchises.Join(t.Context(), "tv", "wikidata", "Q1", "A franchise", result.WorkID); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := franchises.Get(t.Context(), provider); err != nil || got.Name != "Mine now" {
+		t.Errorf("after the provider names it again = %+v, %v; want the name a person gave it", got, err)
+	}
+	if err := franchises.AddMember(t.Context(), provider, result.WorkID); err != nil {
+		t.Fatalf("filling a provider's collection = %v", err)
+	}
+	if err := franchises.RemoveFromFranchise(t.Context(), provider, []int64{result.WorkID}); err != nil {
+		t.Fatal(err)
+	}
+	if members, err := franchises.MembersOf(t.Context(), provider); err != nil || len(members) != 1 {
+		t.Errorf("members after a pass drops the work = %v, %v; want the one a person added to stay", members, err)
 	}
 	if err := franchises.RemoveMember(t.Context(), id, result.WorkID); err != nil {
 		t.Fatal(err)

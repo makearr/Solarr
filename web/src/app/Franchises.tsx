@@ -242,7 +242,7 @@ function CollectionDetail({
         {custom && <Chip>{t("collection.mine")}</Chip>}
         {administrator && (
           <span className="ml-auto flex gap-2">
-            {custom && <Button onClick={() => setRenaming(true)}>{t("collection.rename")}</Button>}
+            <Button onClick={() => setRenaming(true)}>{t("collection.rename")}</Button>
             <Button busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
               {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
             </Button>

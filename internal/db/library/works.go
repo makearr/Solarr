@@ -79,9 +79,13 @@ const (
 // it never reaches the SQL (section 21.2).
 type WorkFilter struct {
 	MediaType string
-	Language  string
-	YearFrom  int64
-	YearTo    int64
+	// MediaTypes keeps only works of these types; nil any.
+	MediaTypes []string
+	// PersonID keeps only works the person is credited on; 0 any.
+	PersonID int64
+	Language string
+	YearFrom int64
+	YearTo   int64
 	// TitlePrefix matches the start of the sort title, which is already normalised
 	// for ordering.
 	TitlePrefix string
@@ -207,6 +211,11 @@ func NewWorks(opened *store.Store) Works { return Works{store: opened} }
 func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []any) {
 	var predicates store.Predicates
 	predicates.AddIf(filter.MediaType != "", "media_type = ?", filter.MediaType)
+	if filter.MediaTypes != nil {
+		fragment, arguments, _ := membershipStrings("media_type IN (%s)", filter.MediaTypes)
+		predicates.Add(fragment, arguments...)
+	}
+	predicates.AddIf(filter.PersonID != 0, "EXISTS (SELECT 1 FROM credit pc WHERE pc.work_id = work.id AND pc.person_id = ?)", filter.PersonID)
 	predicates.AddIf(filter.Language != "", "original_language = ?", filter.Language)
 	predicates.AddIf(filter.YearFrom != 0, "year >= ?", filter.YearFrom)
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)
@@ -540,4 +549,17 @@ func (w Works) AlternateTitles(ctx context.Context, workID int64) ([]string, err
 		titles = append(titles, row.Title)
 	}
 	return titles, nil
+}
+
+// membershipStrings is membershipFragment for names: an empty list matches nothing.
+func membershipStrings(template string, names []string) (string, []any, bool) {
+	if len(names) == 0 {
+		return "0 = 1", nil, true
+	}
+	arguments := make([]any, len(names))
+	placeholders := make([]string, len(names))
+	for index, name := range names {
+		placeholders[index], arguments[index] = "?", name
+	}
+	return fmt.Sprintf(template, strings.Join(placeholders, ",")), arguments, true
 }

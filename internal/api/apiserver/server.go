@@ -107,6 +107,8 @@ type Config struct {
 	Organisations OrganisationsReader
 	// PersonRemover removes an artist. Optional: nil answers 503.
 	PersonRemover PersonRemover
+	// PersonEditor renames, edits and merges people. Optional: nil answers 503.
+	PersonEditor PersonEditor
 	// Follower follows people and organisations into libraries. Optional: nil answers 503.
 	Follower Follower
 	// IncompleteDiscographies feeds Discover's library-derived suggestions. Optional: nil answers 503.
@@ -306,6 +308,7 @@ type Server struct {
 	people                  PeopleReader
 	organisations           OrganisationsReader
 	personRemover           PersonRemover
+	personEditor            PersonEditor
 	follower                Follower
 	artistActions           ArtistActions
 	artworkChoices          ArtworkChoices
@@ -431,6 +434,7 @@ func New(config Config) (*Server, error) {
 		people:                  config.People,
 		organisations:           config.Organisations,
 		personRemover:           config.PersonRemover,
+		personEditor:            config.PersonEditor,
 		follower:                config.Follower,
 		artistActions:           config.ArtistActions,
 		artworkChoices:          config.ArtworkChoices,
@@ -713,6 +717,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/organisations", server.routeListOrganisations)
 			secured.Get("/organisations/{id}", server.routeGetOrganisation)
 			secured.Get("/people/{id}", server.routeGetPerson)
+			secured.Patch("/people/{id}", server.routeEditPerson)
+			secured.Post("/people/{id}/merge", server.routeMergePerson)
 			secured.Get("/people/{id}/artwork", server.routeGetPersonArtwork)
 			secured.Put("/people/{id}/artwork", server.routeChoosePersonArtwork)
 			secured.Get("/people/{id}/artwork/options", server.routeGetPersonArtworkOptions)
@@ -1083,6 +1089,14 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 	}
 	if raw := query.Get("media_type"); raw != "" {
 		params.MediaType = &raw
+	}
+	if raw := query.Get("person_id"); raw != "" {
+		person, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "person_id must be a number")
+			return
+		}
+		params.PersonId = &person
 	}
 	if raw := query.Get("above_rating"); raw != "" {
 		above := raw == "true"

@@ -15,6 +15,7 @@ type Querier interface {
 	AddAltNumbering(ctx context.Context, arg AddAltNumberingParams) error
 	AddArrImportItem(ctx context.Context, arg AddArrImportItemParams) (ArrImportItem, error)
 	AddCollectionMember(ctx context.Context, arg AddCollectionMemberParams) error
+	AddCollectionMemberByHand(ctx context.Context, arg AddCollectionMemberByHandParams) error
 	AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
@@ -185,6 +186,7 @@ type Querier interface {
 	// a subscription-discovered work has no root folder yet but still belongs to its
 	// category (private/next.md's work_root_folder retirement). Distinct because a
 	// scanned, monitored work has rows on both sides and must count once.
+	// Only works of the library's own media type: a series whose file lies in the movies folder is not a movie.
 	CountWorksVisibleToCategory(ctx context.Context, arg CountWorksVisibleToCategoryParams) (int64, error)
 	// Copies one part's coverage onto another's: the same broadcast held once satisfies both.
 	CoverPartLikeAnother(ctx context.Context, arg CoverPartLikeAnotherParams) error
@@ -345,7 +347,7 @@ type Querier interface {
 	// identifier. That is the cross-album duplicate question (ADR-35).
 	FindPartsByExternalID(ctx context.Context, arg FindPartsByExternalIDParams) ([]WorkPart, error)
 	// A stage name is often the only way to connect a release to a person (ADR-32).
-	FindPeopleByAlias(ctx context.Context, normalized string) ([]Person, error)
+	FindPeopleByAlias(ctx context.Context, normalized string) ([]FindPeopleByAliasRow, error)
 	FindWorkPart(ctx context.Context, arg FindWorkPartParams) (WorkPart, error)
 	// Monitoring on an album type is the point: "studio albums, not live".
 	FindWorksByClassification(ctx context.Context, arg FindWorksByClassificationParams) ([]Work, error)
@@ -544,7 +546,7 @@ type Querier interface {
 	ListCharacterCreditsOfType(ctx context.Context, mediaType string) ([]ListCharacterCreditsOfTypeRow, error)
 	// Genres stored before they were tags, a page of works at a time.
 	ListClassificationGenres(ctx context.Context, pageSize int64) ([]ListClassificationGenresRow, error)
-	ListCollectionMembers(ctx context.Context, collectionID int64) ([]CollectionMember, error)
+	ListCollectionMembers(ctx context.Context, collectionID int64) ([]ListCollectionMembersRow, error)
 	// The works of a library in the collections, monitored as the library's own item says, files counted.
 	ListCollectionMembersInCategory(ctx context.Context, arg ListCollectionMembersInCategoryParams) ([]ListCollectionMembersInCategoryRow, error)
 	ListCollectionsForWork(ctx context.Context, workID int64) ([]Collection, error)
@@ -614,7 +616,7 @@ type Querier interface {
 	// Genre chips for the artist page (Lidarr-like): the union of every genre
 	// tagged on any work credited to this person -- Person itself carries no
 	// genre of its own (ADR-32's own fields are biographical, not stylistic).
-	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]string, error)
+	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]ListGenresForPersonDiscographyRow, error)
 	ListGenresOfType(ctx context.Context, mediaType string) ([]ListGenresOfTypeRow, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
 	// The artists with something held in a library, and the release groups they hold there: what a discography is
@@ -1025,12 +1027,16 @@ type Querier interface {
 	// root rather than assumed to be free (ADR-12).
 	RecycledBytesForRoot(ctx context.Context, rootFolderID sql.NullInt64) (int64, error)
 	RelocateLibraryPath(ctx context.Context, arg RelocateLibraryPathParams) (int64, error)
+	// A pass that no longer finds a work in a franchise takes it out; one a person put there stays.
+	RemoveAutoCollectionMember(ctx context.Context, arg RemoveAutoCollectionMemberParams) error
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveCollectionMember(ctx context.Context, arg RemoveCollectionMemberParams) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
 	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
+	RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error)
 	RenameCustomCollection(ctx context.Context, arg RenameCustomCollectionParams) (int64, error)
+	RenamePersonByHand(ctx context.Context, arg RenamePersonByHandParams) error
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
 	// already holds the new one (M1f, 2026-09-25).
@@ -1140,6 +1146,7 @@ type Querier interface {
 	SetOshash(ctx context.Context, arg SetOshashParams) error
 	SetPartRef(ctx context.Context, arg SetPartRefParams) error
 	SetPersonBiography(ctx context.Context, arg SetPersonBiographyParams) error
+	SetPersonGender(ctx context.Context, arg SetPersonGenderParams) error
 	// A provider's picture of a person is kept in fields_json and never replaces one already there.
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error

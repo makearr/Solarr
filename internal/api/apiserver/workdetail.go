@@ -192,6 +192,8 @@ type BulkSelection struct {
 	AboveRating bool
 	// MediaType is the All list's type chip, "" for every type.
 	MediaType string
+	// PersonID is the list's person filter, 0 for none.
+	PersonID int64
 }
 
 // WorksMonitor toggles monitored state at the album and part level (section
@@ -532,6 +534,7 @@ func (s *Server) BulkSetWorkMonitored(w http.ResponseWriter, r *http.Request) {
 		RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, IDs: derefOr(body.Ids, nil), ExcludedIDs: derefOr(body.ExcludedIds, nil),
 		Fresh: derefOr(body.Fresh, false), Wanted: derefOr(body.Wanted, false), CutoffUnmet: derefOr(body.CutoffUnmet, false),
 		Where: derefOr(body.Where, ""), AboveRating: derefOr(body.AboveRating, false), MediaType: derefOr(body.MediaType, ""),
+		PersonID: derefOr(body.PersonId, 0),
 	}
 	if selection.TagIDs, selection.ExcludedTagIDs, err = parseTagChips(derefOr(body.Tags, "")); err != nil {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "tags must be tag ids, a negative one to leave out")

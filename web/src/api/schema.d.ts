@@ -3908,6 +3908,30 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /**
+         * Rename a person or set their gender and attributes by hand. Administrator only.
+         * @description What is set here stays through a provider's refresh; the old name becomes an alias. The attributes sent replace the ones set by hand before.
+         */
+        patch: operations["editPerson"];
+        trace?: never;
+    };
+    "/people/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fold this person into another. Administrator only.
+         * @description Credits, ids, tags, pictures and subscriptions move to into_id, this person's name becomes an alias of it, and this person is deleted. Files stay where they are.
+         */
+        post: operations["mergePerson"];
+        delete?: never;
+        options?: never;
+        head?: never;
         patch?: never;
         trace?: never;
     };
@@ -7042,6 +7066,7 @@ export interface components {
             biography?: string;
             /** @description A provider's photo, when one is known. */
             image_url?: string;
+            attributes?: components["schemas"]["PersonAttributes"];
             /** @description The media type's own labelled facts of the person (a performer's height, hair, career), in its order. */
             facts?: components["schemas"]["PersonFact"][];
             /** @description Addresses of the person at the providers and elsewhere. */
@@ -7051,6 +7076,8 @@ export interface components {
             aliases: string[];
             /** @description Every genre tagged on any of their works; a person carries none of their own (ADR-32). */
             genres: string[];
+            /** @description The same genres with the tag each is, so one opens the library list of everything carrying it. */
+            genre_tags?: components["schemas"]["PersonGenreTag"][];
             /** @description Provider to the person's id there. */
             ids: {
                 [key: string]: string;
@@ -7058,6 +7085,30 @@ export interface components {
             /** @description Only libraries the caller may read; nothing reveals another. */
             libraries: components["schemas"]["PersonLibrary"][];
             credits: components["schemas"]["WorkCredit"][];
+        };
+        /** @description The descriptive facts of a person the list filters on; absent or zero is unknown. What a person set by hand stands over the provider's. */
+        PersonAttributes: {
+            nationality?: string;
+            height_cm?: number;
+            weight_kg?: number;
+            measurements?: string;
+            hair_color?: string;
+            ethnicity?: string;
+            /** @enum {string} */
+            status?: "active" | "inactive" | "deceased";
+            tattoos?: string;
+            piercings?: string;
+        };
+        PersonEdit: {
+            name: string;
+            /** @description Free text; a provider's values are Female, Male, Trans woman, Trans man, Non-binary. */
+            gender?: string;
+            attributes: components["schemas"]["PersonAttributes"];
+        };
+        PersonGenreTag: {
+            /** Format: int64 */
+            id: number;
+            name: string;
         };
         PersonFact: {
             label: string;
@@ -10695,6 +10746,11 @@ export interface operations {
                     tags?: string;
                     /** @default false */
                     above_rating?: boolean;
+                    /**
+                     * Format: int64
+                     * @description The list's person filter.
+                     */
+                    person_id?: number;
                     /** @default false */
                     whole_library?: boolean;
                     media_type?: string;
@@ -11092,6 +11148,8 @@ export interface operations {
                 above_rating?: boolean;
                 /** @description With category_id, every media type of that library (its All list), not that one category. */
                 whole_library?: boolean;
+                /** @description Only works the person is credited on. */
+                person_id?: number;
                 /** @description Only works of this media type (the All list's type chip). */
                 media_type?: string;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
@@ -12550,6 +12608,11 @@ export interface operations {
                      */
                     above_rating?: boolean;
                     /**
+                     * Format: int64
+                     * @description The list's person filter.
+                     */
+                    person_id?: number;
+                    /**
                      * @description The selection is of the library's All list.
                      * @default false
                      */
@@ -12607,6 +12670,11 @@ export interface operations {
                     tags?: string;
                     /** @default false */
                     above_rating?: boolean;
+                    /**
+                     * Format: int64
+                     * @description The list's person filter.
+                     */
+                    person_id?: number;
                     /** @default false */
                     whole_library?: boolean;
                     media_type?: string;
@@ -15434,7 +15502,7 @@ export interface operations {
                 category?: number;
                 /** @description Comma-separated credit roles, as the media types declare them; any when absent. */
                 role?: string;
-                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name and country (text), monitored and photo (bool), works, wanted and complete (number), role (one of the roles). */
+                /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name, country, gender, nationality, measurements, hair_colour, ethnicity, tattoos and piercings (text), height and weight (number), status (active, inactive, deceased), monitored and photo (bool), works, wanted and complete (number), role (one of the roles). */
                 where?: string;
                 sort?: "name" | "works" | "latest" | "added";
                 dir?: "asc" | "desc";
@@ -15488,6 +15556,65 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    editPerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonEdit"];
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    mergePerson: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    into_id: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Merged. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
         };
     };

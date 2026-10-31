@@ -16,6 +16,8 @@ import (
 type CategoryScope struct {
 	CategoryID    int64
 	RootFolderIDs []int64
+	// MediaType is the library's own: only works of it count, whatever lies under its folders. Empty counts every type.
+	MediaType string
 	// OfflineRootFolderIDs is the subset of RootFolderIDs settings.db currently
 	// declares offline (section 10.4) -- also the caller's own policy fact,
 	// composed in Go the same way RootFolderIDs itself is (ADR-25). Backs
@@ -86,25 +88,25 @@ func (c CategoryCounters) reconcileScope(
 		return nil, fmt.Errorf("encode root folder ids: %w", err)
 	}
 	works, err := reader.CountWorksVisibleToCategory(ctx, librarydb.CountWorksVisibleToCategoryParams{
-		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID, MediaType: scope.MediaType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("count works: %w", err)
 	}
 	parts, err := reader.CountWorkPartsVisibleToCategory(ctx, librarydb.CountWorkPartsVisibleToCategoryParams{
-		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID, MediaType: scope.MediaType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("count parts: %w", err)
 	}
 	wanted, err := reader.CountWantedWorksVisibleToCategory(ctx, librarydb.CountWantedWorksVisibleToCategoryParams{
-		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID, MediaType: scope.MediaType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("count wanted works: %w", err)
 	}
 	artists, err := reader.CountArtistCreditsVisibleToCategory(ctx, librarydb.CountArtistCreditsVisibleToCategoryParams{
-		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID,
+		RootFolderIds: string(encodedRootFolderIDs), CategoryID: scope.CategoryID, MediaType: scope.MediaType,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("count artists: %w", err)

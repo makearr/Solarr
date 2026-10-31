@@ -403,7 +403,10 @@ func TestPeopleList_CustomFilterConditions(t *testing.T) {
 	people := library.NewPeople(opened)
 	fields := library.PersonFields([]string{"artist"})
 	for field, spec := range fields {
-		value := map[listfilter.Kind]string{listfilter.Text: "x", listfilter.Number: "1", listfilter.Bool: "true", listfilter.Enum: "artist"}[spec.Kind]
+		value := map[listfilter.Kind]string{listfilter.Text: "x", listfilter.Number: "1", listfilter.Bool: "true"}[spec.Kind]
+		if spec.Kind == listfilter.Enum {
+			value = spec.Choices[0]
+		}
 		op := map[listfilter.Kind]string{listfilter.Text: "contains", listfilter.Number: "ge", listfilter.Bool: "is", listfilter.Enum: "is"}[spec.Kind]
 		conditions, err := listfilter.Parse(`[{"field":"`+field+`","op":"`+op+`","value":"`+value+`"}]`, fields)
 		if err != nil {

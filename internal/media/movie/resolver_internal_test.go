@@ -56,3 +56,15 @@ func TestPlanUniversesJoinsPartsOfAUniverseAndKeepsWhatTMDBLacks(t *testing.T) {
 		t.Fatalf("universes = %+v\nwant %+v: the phases and heroes join the Marvel one, Ihaol holds a film TMDB's collection lacks, a lone film and a TMDB collection's own films make none", got, want)
 	}
 }
+
+func TestPlanUniversesNamesAComponentAfterItsTopNotAnArbitraryPart(t *testing.T) {
+	direct := map[string][]int64{"Q-mcu": {1}, "Q-phase1": {2, 3}, "Q-mutants": {4, 5}, "Q-fox": {6}}
+	labels := map[string]string{"Q-mcu": "Marvel Cinematic Universe", "Q-phase1": "Phase One", "Q-mutants": "Mutants", "Q-fox": "Fox Marvel"}
+	parents := map[string][]string{"Q-phase1": {"Q-mcu"}, "Q-mutants": {"Q-mcu", "Q-fox"}}
+	for range 50 {
+		got := planUniverses(direct, labels, parents, nil)
+		if len(got) != 1 || got[0].QID != "Q-mcu" || got[0].Name != "Marvel Cinematic Universe" {
+			t.Fatalf("universes = %+v, want one named after Q-mcu", got)
+		}
+	}
+}

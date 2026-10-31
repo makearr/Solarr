@@ -25,16 +25,26 @@ type PersonProfile struct {
 	ImageURL       string
 	Biography      string
 	// Extras are the media type's own facts, links and further pictures of the person.
-	Extras    PersonExtras
-	Monitored bool
-	AddedAt   int64
-	Aliases   []string
+	Extras PersonExtras
+	// Attributes are the provider's and the person's own, merged.
+	Attributes PersonAttributes
+	Monitored  bool
+	AddedAt    int64
+	Aliases    []string
 	// IDs maps provider to the person's id there.
 	IDs map[string]string
 	// Genres are tagged on any of their works; a person carries none of their own (ADR-32).
 	Genres []string
+	// GenreTags are the same genres with the tag each is, for a link to everything carrying it.
+	GenreTags []PersonGenre
 	// Libraries are where the viewer finds them, by role.
 	Libraries []PersonLibrary
+}
+
+// PersonGenre is a genre tagged on a person's works.
+type PersonGenre struct {
+	TagID int64
+	Name  string
 }
 
 // PersonLibrary is a person's place in one library: a role and how many works they hold it on.
@@ -78,13 +88,18 @@ func (p People) Get(ctx context.Context, id int64, visible []int64) (PersonProfi
 		Kind: person.Kind.String, Gender: person.Gender.String, Country: person.Country.String,
 		Born: person.Born.String, Died: person.Died.String, Monitored: person.Monitored == 1, AddedAt: person.AddedAt,
 		ImageURL: imageFromFields(person.FieldsJson), Biography: biographyFromFields(person.FieldsJson),
-		Extras: extrasFromFields(person.FieldsJson),
+		Extras: extrasFromFields(person.FieldsJson), Attributes: attributesFromFields(person.FieldsJson, person.Died.String),
 	}
 	if profile.Aliases, err = queries.ListAliasesForPerson(ctx, id); err != nil {
 		return PersonProfile{}, fmt.Errorf("library: person %d aliases: %w", id, err)
 	}
-	if profile.Genres, err = queries.ListGenresForPersonDiscography(ctx, id); err != nil {
+	genres, err := queries.ListGenresForPersonDiscography(ctx, id)
+	if err != nil {
 		return PersonProfile{}, fmt.Errorf("library: person %d genres: %w", id, err)
+	}
+	for _, genre := range genres {
+		profile.Genres = append(profile.Genres, genre.TagName)
+		profile.GenreTags = append(profile.GenreTags, PersonGenre{TagID: genre.TagID, Name: genre.TagName})
 	}
 	externals, err := queries.ListPersonExternalIDs(ctx, id)
 	if err != nil {

@@ -1856,6 +1856,7 @@ paths:
                 where: { type: string }
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
+                person_id: { type: integer, format: int64, description: The list's person filter. }
                 whole_library: { type: boolean, default: false }
                 media_type: { type: string }
                 wanted: { type: boolean, default: false }
@@ -2272,6 +2273,10 @@ paths:
           in: query
           description: With category_id, every media type of that library (its All list), not that one category.
           schema: { type: boolean, default: false }
+        - name: person_id
+          in: query
+          description: Only works the person is credited on.
+          schema: { type: integer, format: int64 }
         - name: media_type
           in: query
           description: Only works of this media type (the All list's type chip).
@@ -3622,6 +3627,7 @@ paths:
                 where: { type: string, description: The list's custom filter (the JSON the list carried), when "select all matching" was made under it. }
                 tags: { type: string, description: The list's tag chips, as listWorks takes them. }
                 above_rating: { type: boolean, default: false, description: The list's Above rating filter. }
+                person_id: { type: integer, format: int64, description: The list's person filter. }
                 whole_library: { type: boolean, default: false, description: The selection is of the library's All list. }
                 media_type: { type: string, description: The All list's type chip. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
@@ -3668,6 +3674,7 @@ paths:
                 where: { type: string }
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
+                person_id: { type: integer, format: int64, description: The list's person filter. }
                 whole_library: { type: boolean, default: false }
                 media_type: { type: string }
                 wanted: { type: boolean, default: false }
@@ -6295,8 +6302,8 @@ paths:
         - name: where
           in: query
           description: >-
-            A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name and
-            country (text), monitored and photo (bool), works, wanted and complete (number), role (one of the roles).
+            A custom filter, a JSON array of conditions (field, op, value) that must all hold. Fields: name,
+            country, gender, nationality, measurements, hair_colour, ethnicity, tattoos and piercings (text), height and weight (number), status (active, inactive, deceased), monitored and photo (bool), works, wanted and complete (number), role (one of the roles).
           schema: { type: string }
         - name: sort
           in: query
@@ -6352,6 +6359,52 @@ paths:
               schema: { $ref: "#/components/schemas/PersonDetail" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+    patch:
+      operationId: editPerson
+      tags: [people]
+      summary: Rename a person or set their gender and attributes by hand. Administrator only.
+      description: >-
+        What is set here stays through a provider's refresh; the old name becomes an alias. The attributes sent replace the ones set by hand before.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PersonEdit" }
+      responses:
+        "204": { description: Saved. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /people/{id}/merge:
+    post:
+      operationId: mergePerson
+      tags: [people]
+      summary: Fold this person into another. Administrator only.
+      description: >-
+        Credits, ids, tags, pictures and subscriptions move to into_id, this person's name becomes an alias of it, and this person is deleted. Files stay where they are.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [into_id]
+              properties:
+                into_id: { type: integer, format: int64 }
+      responses:
+        "204": { description: Merged. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
   /images/remote:
@@ -10263,6 +10316,7 @@ components:
               type: string
               description: From the providers, when one has it (ADR-8).
             image_url: { type: string, description: "A provider's photo, when one is known." }
+            attributes: { $ref: "#/components/schemas/PersonAttributes" }
             facts:
               type: array
               description: The media type's own labelled facts of the person (a performer's height, hair, career), in its order.
@@ -10282,6 +10336,10 @@ components:
               type: array
               items: { type: string }
               description: Every genre tagged on any of their works; a person carries none of their own (ADR-32).
+            genre_tags:
+              type: array
+              description: The same genres with the tag each is, so one opens the library list of everything carrying it.
+              items: { $ref: "#/components/schemas/PersonGenreTag" }
             ids:
               type: object
               additionalProperties: { type: string }
@@ -10293,6 +10351,35 @@ components:
             credits:
               type: array
               items: { $ref: "#/components/schemas/WorkCredit" }
+
+    PersonAttributes:
+      type: object
+      description: The descriptive facts of a person the list filters on; absent or zero is unknown. What a person set by hand stands over the provider's.
+      properties:
+        nationality: { type: string }
+        height_cm: { type: integer }
+        weight_kg: { type: integer }
+        measurements: { type: string }
+        hair_color: { type: string }
+        ethnicity: { type: string }
+        status: { type: string, enum: [active, inactive, deceased] }
+        tattoos: { type: string }
+        piercings: { type: string }
+
+    PersonEdit:
+      type: object
+      required: [name, attributes]
+      properties:
+        name: { type: string }
+        gender: { type: string, description: "Free text; a provider's values are Female, Male, Trans woman, Trans man, Non-binary." }
+        attributes: { $ref: "#/components/schemas/PersonAttributes" }
+
+    PersonGenreTag:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: integer, format: int64 }
+        name: { type: string }
 
     PersonFact:
       type: object
