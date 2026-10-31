@@ -43,6 +43,9 @@ const (
 	// StatSearches: value and count the searches of the last 30 days (key "searched") and those that found a release
 	// the library accepts (key "found"); counted in statistics.db, where the search log is.
 	StatSearches = "searches"
+	// StatFilesBelowCutoff: per library and media type (key), value the files that miss the library's cutoff and count
+	// the files judged; written by the cutoff check, not by the rollup.
+	StatFilesBelowCutoff = "files_below_cutoff"
 	// StatMostSearched: the wanted items searched most that are still missing, key "<work id>|<title>", value the
 	// searches, count when the last ran (Unix seconds).
 	StatMostSearched = "most_searched"

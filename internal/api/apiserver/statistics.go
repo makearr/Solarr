@@ -39,6 +39,7 @@ type StatisticsView struct {
 	DecisionsByOutcome []StatisticsFigure
 	Searches           []StatisticsFigure
 	MostSearched       []StatisticsFigure
+	BelowCutoff        []StatisticsFigure
 }
 
 // StatisticsReader answers a library's statistics from stat_rollup (section 21.12).
@@ -95,6 +96,13 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 			out[index] = gen.StatisticsFiles{Key: figure.Key, Files: figure.Count, Bytes: int64(figure.Value)}
 		}
 		return &out
+	}
+	if len(view.BelowCutoff) > 0 {
+		targets := make([]gen.StatisticsTarget, len(view.BelowCutoff))
+		for index, figure := range view.BelowCutoff {
+			targets[index] = gen.StatisticsTarget{Key: figure.Key, Judged: figure.Count, BelowCutoff: int64(figure.Value)}
+		}
+		out.QualityVsTarget = &targets
 	}
 	out.FilesByVideoCodec, out.FilesByResolution = files(view.FilesByVideoCodec), files(view.FilesByResolution)
 	out.FilesByHdr, out.FilesByAudio = files(view.FilesByHDR), files(view.FilesByAudio)

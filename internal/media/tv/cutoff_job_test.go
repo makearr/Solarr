@@ -284,3 +284,24 @@ func runCutoff(t *testing.T, desired library.Desired, cache *settings.Cache, che
 	})
 	return job.Run(t.Context(), jobs.Job{Type: cutoff.JobType, Payload: payload})
 }
+
+func TestCutoffJobCountsTheFilesBelowTheTarget(t *testing.T) {
+	for _, c := range []struct {
+		resolution string
+		below      int64
+	}{{"720p", 1}, {"1080p", 0}} {
+		fixture := upgradeSeries(t, c.resolution, "")
+		job := fixture.job(map[int64]bool{})
+		items, err := job.CutoffPage(t.Context(), fixture.workID, 0, 100)
+		if err != nil || len(items) == 0 {
+			t.Fatalf("items %+v, %v", items, err)
+		}
+		outcome, err := job.CheckCutoff(t.Context(), fixture.cache.Snapshot(), items[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if outcome.Judged != 2 || outcome.BelowCutoff != c.below {
+			t.Errorf("%s: judged %d, below %d; want 2 and %d", c.resolution, outcome.Judged, outcome.BelowCutoff, c.below)
+		}
+	}
+}

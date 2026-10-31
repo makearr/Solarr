@@ -55,6 +55,17 @@ func (r Rollup) Replace(ctx context.Context, metrics []string, figures []Figure,
 	return nil
 }
 
+// Set stores figures over the rows of the same dimension, leaving every other row of their metrics alone.
+func (r Rollup) Set(ctx context.Context, figures []Figure, computedAt int64) error {
+	err := r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return setFigures(ctx, statisticsdb.New(tx), figures, computedAt)
+	})
+	if err != nil {
+		return fmt.Errorf("statistics: set rollup: %w", err)
+	}
+	return nil
+}
+
 // ReplaceCategory rebuilds one library's rows of one metric.
 func (r Rollup) ReplaceCategory(ctx context.Context, metric string, categoryID int64, figures []Figure, computedAt int64) error {
 	err := r.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {

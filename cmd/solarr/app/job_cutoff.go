@@ -11,8 +11,10 @@ import (
 	"github.com/makearr/Solarr/internal/scanning/probe"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // registerCutoffJob wires the cutoff check: one job in which every media type checks its own items.
@@ -21,7 +23,7 @@ func (p *process) registerCutoffJob(registry *jobs.Registry, executor *jobs.Exec
 		return err
 	}
 	executor.Handle(cutoff.JobType, cutoff.NewJob(cutoff.Config{
-		Desired: library.NewDesired(p.library), Settings: p.cache, Sources: p.cutoffSources, Logger: p.logger,
+		Desired: library.NewDesired(p.library), Settings: p.cache, Sources: p.cutoffSources, Logger: p.logger, Tally: p.recordCutoffTally,
 	}))
 	return nil
 }
@@ -89,4 +91,16 @@ func (p *process) enqueueCutoff(ctx context.Context) (jobs.EnqueueResult, error)
 	return p.queue.Enqueue(ctx, jobs.Request{
 		Type: cutoff.JobType, ActionKey: string(cutoff.JobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
 	})
+}
+
+// recordCutoffTally stores how many files each library holds below its cutoff, for the statistics page.
+func (p *process) recordCutoffTally(ctx context.Context, source string, tallies map[int64]cutoff.Tally) error {
+	figures := make([]statistics.Figure, 0, len(tallies))
+	for categoryID, tally := range tallies {
+		figures = append(figures, statistics.Figure{
+			Metric: library.StatFilesBelowCutoff, Dimension: statistics.Dimension(categoryID, source),
+			Value: float64(tally.BelowCutoff), Count: tally.Judged,
+		})
+	}
+	return statistics.NewRollup(p.statistics).Set(ctx, figures, clock.NewSystem().Now().Unix())
 }

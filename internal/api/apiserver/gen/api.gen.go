@@ -1724,6 +1724,9 @@ type CategoryStatistics struct {
 	// MostSearched The wanted items searched most that are still missing, most first; at most ten.
 	MostSearched *[]StatisticsSearchedItem `json:"most_searched,omitempty"`
 
+	// QualityVsTarget Per media type of the library, the files judged against the library's cutoff and those that miss it; written by the cutoff check.
+	QualityVsTarget *[]StatisticsTarget `json:"quality_vs_target,omitempty"`
+
 	// Searches The searches of the window and how many found a release the library accepts.
 	Searches *StatisticsSearches `json:"searches,omitempty"`
 
@@ -4692,6 +4695,15 @@ type StatisticsSeries struct {
 	SeriesId int64  `json:"series_id"`
 	Title    string `json:"title"`
 	Unaired  *int64 `json:"unaired,omitempty"`
+}
+
+// StatisticsTarget defines model for StatisticsTarget.
+type StatisticsTarget struct {
+	BelowCutoff int64 `json:"below_cutoff"`
+	Judged      int64 `json:"judged"`
+
+	// Key The media type.
+	Key string `json:"key"`
 }
 
 // TVProvider defines model for TVProvider.

@@ -58,6 +58,7 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 		{library.StatDecisionsByOutcome, &view.DecisionsByOutcome},
 		{library.StatSearches, &view.Searches},
 		{library.StatMostSearched, &view.MostSearched},
+		{library.StatFilesBelowCutoff, &view.BelowCutoff},
 	} {
 		figures, err := s.Rollup.ForCategory(ctx, metric.name, categoryID)
 		if err != nil {

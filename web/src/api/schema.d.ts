@@ -8259,6 +8259,8 @@ export interface components {
             /** @description The wanted items searched most that are still missing, most first; at most ten. */
             most_searched?: components["schemas"]["StatisticsSearchedItem"][];
             files_by_codec: components["schemas"]["StatisticsFiles"][];
+            /** @description Per media type of the library, the files judged against the library's cutoff and those that miss it; written by the cutoff check. */
+            quality_vs_target?: components["schemas"]["StatisticsTarget"][];
             /** @description Video libraries only; the measured video codec of each file. */
             files_by_video_codec?: components["schemas"]["StatisticsFiles"][];
             files_by_resolution?: components["schemas"]["StatisticsFiles"][];
@@ -8329,6 +8331,14 @@ export interface components {
             bytes_per_hour: number;
             /** Format: int64 */
             video_kbps: number;
+        };
+        StatisticsTarget: {
+            /** @description The media type. */
+            key: string;
+            /** Format: int64 */
+            judged: number;
+            /** Format: int64 */
+            below_cutoff: number;
         };
         StatisticsCount: {
             key: string;

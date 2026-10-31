@@ -45,6 +45,9 @@ type Outcome struct {
 	Decided bool
 	// Rewrite says the item's counts were recomputed, so State is written even when it reads the same.
 	Rewrite bool
+	// Judged and BelowCutoff count the item's monitored files the profile could judge and those that miss the cutoff;
+	// Judged is 0 when the type does not count.
+	Judged, BelowCutoff int64
 }
 
 // Check is a media type's part: which items it checks, and how one is settled and judged.
@@ -67,7 +70,12 @@ type Config struct {
 	// Sources lists the media types to check; a category narrows it to that library's type, zero is every type.
 	Sources func(categoryID int64) []Source
 	Logger  *slog.Logger
+	// Tally is told, after a full run of one media type, how many files each library holds below its cutoff; optional.
+	Tally func(ctx context.Context, source string, tallies map[int64]Tally) error
 }
+
+// Tally is one library's files judged against its cutoff.
+type Tally struct{ Judged, BelowCutoff int64 }
 
 // Job walks every media type's checkable items once.
 type Job struct{ config Config }
@@ -100,6 +108,7 @@ func (j Job) Run(ctx context.Context, job jobs.Job) error {
 func (j Job) runSource(ctx context.Context, job jobs.Job, source Source, snapshot *settings.Snapshot, workID int64) error {
 	var afterID int64
 	var checked, upgradable, changed, replaced int
+	tallies := map[int64]Tally{}
 	for {
 		items, err := source.Check.CutoffPage(ctx, workID, afterID, PageSize)
 		if err != nil {
@@ -115,6 +124,11 @@ func (j Job) runSource(ctx context.Context, job jobs.Job, source Source, snapsho
 				return err
 			}
 			replaced += outcome.Replaced
+			if outcome.Judged > 0 {
+				tally := tallies[item.CategoryID]
+				tally.Judged, tally.BelowCutoff = tally.Judged+outcome.Judged, tally.BelowCutoff+outcome.BelowCutoff
+				tallies[item.CategoryID] = tally
+			}
 			job.Progress.Add(1)
 			if !outcome.Decided {
 				continue
@@ -132,6 +146,11 @@ func (j Job) runSource(ctx context.Context, job jobs.Job, source Source, snapsho
 		}
 		if len(items) < PageSize || workID != 0 {
 			break
+		}
+	}
+	if workID == 0 && j.config.Tally != nil && len(tallies) > 0 {
+		if err := j.config.Tally(ctx, source.Name, tallies); err != nil {
+			j.config.Logger.Warn("cutoff tally not recorded", slog.String("media_type", source.Name), slog.Any("error", err))
 		}
 	}
 	j.config.Logger.Info("cutoff check finished", slog.String("media_type", source.Name), slog.Int("items", checked),

@@ -11929,6 +11929,10 @@ components:
         files_by_codec:
           type: array
           items: { $ref: "#/components/schemas/StatisticsFiles" }
+        quality_vs_target:
+          type: array
+          description: Per media type of the library, the files judged against the library's cutoff and those that miss it; written by the cutoff check.
+          items: { $ref: "#/components/schemas/StatisticsTarget" }
         files_by_video_codec:
           type: array
           description: Video libraries only; the measured video codec of each file.
@@ -12015,6 +12019,14 @@ components:
         files: { type: integer, format: int64 }
         bytes_per_hour: { type: integer, format: int64 }
         video_kbps: { type: integer, format: int64 }
+
+    StatisticsTarget:
+      type: object
+      required: [key, judged, below_cutoff]
+      properties:
+        key: { type: string, description: The media type. }
+        judged: { type: integer, format: int64 }
+        below_cutoff: { type: integer, format: int64 }
 
     StatisticsCount:
       type: object

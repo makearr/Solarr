@@ -195,6 +195,22 @@ export function Statistics() {
               </section>
             </>
           )}
+          {(data.quality_vs_target ?? []).length > 0 && (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-medium">Quality against the target</h2>
+              <p className="text-xs text-ink-muted">Monitored files the quality profile judged, and how many miss the library&apos;s cutoff. Updated by the cutoff check.</p>
+              <ul className="flex flex-col gap-1.5">
+                {(data.quality_vs_target ?? []).map((row) => (
+                  <li key={row.key} className="flex items-center gap-3 text-sm">
+                    <span className="w-28 shrink-0 capitalize">{row.key}</span>
+                    <span className="flex-1 text-xs tabular-nums text-ink-muted">
+                      {row.judged - row.below_cutoff} of {row.judged} meet the cutoff · {row.below_cutoff} below
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           <WorkList title={`Biggest ${words.works}`} note={`The 20 ${words.works} taking most space, each file counted once.`} rows={data.series_by_size} categoryId={categoryId ?? ""} />
           <WorkList
             title="Gaps"

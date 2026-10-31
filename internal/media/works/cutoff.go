@@ -85,11 +85,11 @@ func (c Cutoff) CheckCutoff(ctx context.Context, snapshot *settings.Snapshot, it
 	if item.State == StatePartial {
 		return cutoff.Outcome{Replaced: settled}, nil
 	}
-	state, decided, err := c.stateFor(ctx, snapshot, item)
+	state, decided, tally, err := c.stateFor(ctx, snapshot, item)
 	if err != nil {
 		return cutoff.Outcome{}, err
 	}
-	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided}, nil
+	return cutoff.Outcome{Replaced: settled, State: state, Decided: decided, Judged: tally.Judged, BelowCutoff: tally.BelowCutoff}, nil
 }
 
 // settle keeps, per part a download brought a second file for, the strictly better measured file and recycles the
@@ -193,23 +193,25 @@ func allMeasured(files []File) bool {
 	return true
 }
 
-// stateFor judges the item's monitored files; decided is false while any file is unmeasured or there is none.
-func (c Cutoff) stateFor(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (string, bool, error) {
+// stateFor judges the item's monitored files; decided is false while any file is unmeasured or there is none. The
+// tally is empty unless every monitored file was judged.
+func (c Cutoff) stateFor(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (string, bool, cutoff.Tally, error) {
 	category, found := snapshot.Category(item.CategoryID)
 	if !found {
-		return "", false, nil
+		return "", false, cutoff.Tally{}, nil
 	}
 	if !category.QualityUpgrades || c.NeverUpgrades {
-		return StateComplete, true, nil
+		return StateComplete, true, cutoff.Tally{}, nil
 	}
 	files, err := c.Files(ctx, item.ID)
 	if err != nil {
-		return "", false, fmt.Errorf("cutoff check item %d: %w", item.ID, err)
+		return "", false, cutoff.Tally{}, fmt.Errorf("cutoff check item %d: %w", item.ID, err)
 	}
 	if len(files) == 0 || !allMeasured(files) {
-		return "", false, nil
+		return "", false, cutoff.Tally{}, nil
 	}
-	judgedAny := false
+	judgedAny, unmet := false, false
+	var tally cutoff.Tally
 	for _, file := range files {
 		if !file.Monitored {
 			continue
@@ -217,18 +219,26 @@ func (c Cutoff) stateFor(ctx context.Context, snapshot *settings.Snapshot, item 
 		judgement, judged := quality.Judge(snapshot, category, file.Facts)
 		switch {
 		case !judged:
-			return StateComplete, true, nil
+			return StateComplete, true, cutoff.Tally{}, nil
 		case c.Versions && judgement.MeetsCutoff:
-			return StateComplete, true, nil
+			return StateComplete, true, cutoff.Tally{}, nil
 		case !c.Versions && !judgement.MeetsCutoff:
-			return StateUpgradable, true, nil
+			unmet = true
+			tally.BelowCutoff++
 		}
 		judgedAny = true
+		tally.Judged++
 	}
-	if c.Versions && judgedAny {
-		return StateUpgradable, true, nil
+	switch {
+	case c.Versions:
+		tally = cutoff.Tally{}
+		if judgedAny {
+			return StateUpgradable, true, tally, nil
+		}
+	case unmet:
+		return StateUpgradable, true, tally, nil
 	}
-	return StateComplete, true, nil
+	return StateComplete, true, tally, nil
 }
 
 // BelowCutoff are the item's files that miss the library's cutoff, by part, the first of each: what an upgrade
