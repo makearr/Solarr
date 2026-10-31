@@ -103,6 +103,9 @@ type Security struct {
 	TrustedProxyCIDRs  []string `yaml:"trusted_proxy_cidrs"`
 }
 
+// DefaultCacheSizeKB is the page cache each connection of the library database gets.
+const DefaultCacheSizeKB = 65536
+
 // Database tunes SQLite (ADR-2, ADR-3).
 type Database struct {
 	BusyTimeout Duration `yaml:"busy_timeout"`
@@ -173,7 +176,7 @@ func Default() Config {
 		Database: Database{
 			BusyTimeout: Duration(15 * time.Second),
 			PageSize:    4096,
-			CacheSizeKB: 65536,
+			CacheSizeKB: DefaultCacheSizeKB,
 			WriteWarn:   Duration(50 * time.Millisecond),
 			WriteHard:   Duration(2 * time.Second),
 		},

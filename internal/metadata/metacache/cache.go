@@ -15,6 +15,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/metadatadb"
+	"github.com/makearr/Solarr/internal/platform/hitcount"
 )
 
 // ErrNotFound reports a cache miss.
@@ -31,10 +32,20 @@ type Entry struct {
 }
 
 // Cache is metadata.db.
-type Cache struct{ store *store.Store }
+type Cache struct {
+	store *store.Store
+	// Lookups counts what Get answered from the cache; optional.
+	Lookups *hitcount.Counter
+}
 
 // New builds it over an open metadata store.
 func New(opened *store.Store) Cache { return Cache{store: opened} }
+
+// Counting answers the cache with its lookups counted into counter.
+func (c Cache) Counting(counter *hitcount.Counter) Cache {
+	c.Lookups = counter
+	return c
+}
 
 // Get returns the cached entry for (kind, externalID), or ErrNotFound.
 func (c Cache) Get(ctx context.Context, kind, externalID string) (Entry, error) {
@@ -42,11 +53,13 @@ func (c Cache) Get(ctx context.Context, kind, externalID string) (Entry, error) 
 		Kind: kind, ExternalID: externalID,
 	})
 	if errors.Is(err, sql.ErrNoRows) {
+		c.Lookups.Miss()
 		return Entry{}, ErrNotFound
 	}
 	if err != nil {
 		return Entry{}, fmt.Errorf("metacache: get %s:%s: %w", kind, externalID, err)
 	}
+	c.Lookups.Hit()
 	return Entry{Source: row.Source, Body: row.Body, FetchedAt: time.Unix(row.FetchedAt, 0)}, nil
 }
 

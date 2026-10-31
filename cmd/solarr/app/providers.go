@@ -111,7 +111,7 @@ func (p *process) musicBrainzProvider() musicbrainz.Provider {
 	sources := p.config.Metadata.MusicBrainz
 	return musicbrainz.New(musicbrainz.Config{
 		Sources: p.musicBrainzSources(sources), LiveOrder: p.liveMetadataSourceOrder,
-		Cache: metacache.New(p.metadata), Clock: clock.NewSystem(),
+		Cache: metacache.New(p.metadata).Counting(&p.metadataLookups), Clock: clock.NewSystem(),
 		Logger: p.logger, RefreshAfter: sources.RefreshAfter.AsDuration(),
 	})
 }
@@ -484,7 +484,7 @@ func (p *process) tvProviders() adapters.TVProviders {
 // remoteImages is the provider picture cache, on its own rate bucket so a wall of posters cannot starve the metadata calls.
 func (p *process) remoteImages() *remoteimage.Cache {
 	client := p.providerClient(providerImages, nil, httpx.ClientConfig{})
-	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), Hosts: remoteimage.DefaultHosts}
+	return &remoteimage.Cache{HTTP: client, FS: p.fsys, Dir: filepath.Join(p.config.Paths.CacheDir, "images"), Hosts: remoteimage.DefaultHosts, Lookups: &p.imageLookups}
 }
 
 // unidentifiedTV places queued TV files by a person's choice.

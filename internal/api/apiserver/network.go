@@ -139,23 +139,33 @@ func (s *Server) writeNetworkSettingsError(w http.ResponseWriter, err error) {
 // disk, preserving the rest of the file (config.SetServerPort's own doc
 // comment explains why a full remarshal is not acceptable here).
 func (s *Server) writeConfigServerPort(port int) error {
+	return s.patchConfig(func(data []byte) ([]byte, error) { return config.SetServerPort(data, port) })
+}
+
+// readConfig reads config.yml, bounded.
+func (s *Server) readConfig() ([]byte, error) {
 	file, err := s.fsys.Open(s.configPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	data, err := io.ReadAll(io.LimitReader(file, config.MaxDocumentBytes+1))
 	closeErr := file.Close()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if int64(len(data)) > config.MaxDocumentBytes {
-		return fmt.Errorf("config: %s exceeds the %d byte limit", s.configPath, config.MaxDocumentBytes)
+		return nil, fmt.Errorf("config: %s exceeds the %d byte limit", s.configPath, config.MaxDocumentBytes)
 	}
-	if closeErr != nil {
-		return closeErr
-	}
+	return data, closeErr
+}
 
-	patched, err := config.SetServerPort(data, port)
+// patchConfig rewrites config.yml with what patch makes of it.
+func (s *Server) patchConfig(patch func([]byte) ([]byte, error)) error {
+	data, err := s.readConfig()
+	if err != nil {
+		return err
+	}
+	patched, err := patch(data)
 	if err != nil {
 		return err
 	}

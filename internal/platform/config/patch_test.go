@@ -92,3 +92,20 @@ func TestSetServerPort_RefusesADocumentWithNoServerSection(t *testing.T) {
 		t.Error("SetServerPort on a document with no server.port = nil error, want one")
 	}
 }
+
+func TestSetDatabaseCacheSizeKB_ChangesOnlyThatLineOfTheShippedTemplate(t *testing.T) {
+	fsys := newConfigFS(t)
+	if _, err := config.Create(fsys, "/config/config.yml", fixedKey, noEnv); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	original := readAll(t, fsys, "/config/config.yml")
+
+	patched, err := config.SetDatabaseCacheSizeKB([]byte(original), 131072)
+	if err != nil {
+		t.Fatalf("SetDatabaseCacheSizeKB: %v", err)
+	}
+	want := strings.Replace(original, "cache_size_kb: 65536", "cache_size_kb: 131072", 1)
+	if string(patched) != want {
+		t.Errorf("patched document differs from the original in more than the one line:\n%s", patched)
+	}
+}

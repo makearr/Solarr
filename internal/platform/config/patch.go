@@ -17,17 +17,27 @@ import (
 // field (ADR-58's revised precedence: config.yml now outranks settings.db,
 // and the interface may write to it).
 func SetServerPort(data []byte, port int) ([]byte, error) {
+	return setInt(data, "server.port", port, func(loaded Config) int { return loaded.Server.Port })
+}
+
+// SetDatabaseCacheSizeKB surgically updates only database.cache_size_kb, which takes effect on the next start.
+func SetDatabaseCacheSizeKB(data []byte, kilobytes int) ([]byte, error) {
+	return setInt(data, "database.cache_size_kb", kilobytes, func(loaded Config) int { return loaded.Database.CacheSizeKB })
+}
+
+// setInt replaces one integer at a dotted path and verifies the patched document reads it back.
+func setInt(data []byte, dotted string, value int, read func(Config) int) ([]byte, error) {
 	file, err := parser.ParseBytes(data, parser.ParseComments)
 	if err != nil {
 		return nil, fmt.Errorf("config: parse: %w", err)
 	}
 
-	path, err := yaml.PathString("$.server.port")
+	path, err := yaml.PathString("$." + dotted)
 	if err != nil {
 		return nil, fmt.Errorf("config: build path: %w", err)
 	}
-	if err := path.ReplaceWithReader(file, strings.NewReader(strconv.Itoa(port))); err != nil {
-		return nil, fmt.Errorf("config: set server.port: %w", err)
+	if err := path.ReplaceWithReader(file, strings.NewReader(strconv.Itoa(value))); err != nil {
+		return nil, fmt.Errorf("config: set %s: %w", dotted, err)
 	}
 
 	result := []byte(file.String())
@@ -40,8 +50,8 @@ func SetServerPort(data []byte, port int) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("config: patched document is invalid: %w", err)
 	}
-	if reparsed.Server.Port != port {
-		return nil, fmt.Errorf("config: server.port not found in the document -- expected to write %d", port)
+	if read(reparsed) != value {
+		return nil, fmt.Errorf("config: %s not found in the document -- expected to write %d", dotted, value)
 	}
 
 	return result, nil

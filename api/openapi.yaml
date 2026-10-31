@@ -1274,6 +1274,44 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /cache/memory:
+    get:
+      operationId: getDatabaseMemory
+      tags: [settings]
+      summary: The SQLite page cache of each database, its size setting, and how often it answered.
+      responses:
+        "200":
+          description: The setting and each database's cache and file sizes.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatabaseMemory" }
+        "401": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setDatabaseMemory
+      tags: [settings]
+      summary: Set the library database's page cache size. Administrator only.
+      description: >-
+        Written to config.yml (database.cache_size_kb); the databases keep the size they were opened with until the
+        next start.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cache_size_kb]
+              properties:
+                cache_size_kb: { type: integer, format: int64, minimum: 2048, maximum: 16777216 }
+      responses:
+        "200":
+          description: Saved.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatabaseMemory" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /recyclebin:
     get:
       operationId: getRecycleBinLimits
@@ -7662,6 +7700,36 @@ components:
             physical file size, which does not shrink on eviction without a
             VACUUM this codebase deliberately does not run.
         measured_at: { type: string, format: date-time }
+        images_hits: { type: integer, format: int64, description: Pictures found already cached since the process started. }
+        images_misses: { type: integer, format: int64 }
+        metadata_hits: { type: integer, format: int64, description: Provider responses found in the cache since the process started. }
+        metadata_misses: { type: integer, format: int64 }
+
+    DatabaseMemory:
+      type: object
+      required: [configured_kb, running_kb, default_kb, restart_required, databases]
+      properties:
+        configured_kb: { type: integer, format: int64, description: database.cache_size_kb in config.yml, per connection of the library database. }
+        running_kb: { type: integer, format: int64, description: The size the library database was opened with. }
+        default_kb: { type: integer, format: int64 }
+        restart_required: { type: boolean, description: True while configured_kb differs from running_kb. }
+        databases:
+          type: array
+          items: { $ref: "#/components/schemas/DatabaseMemoryRow" }
+
+    DatabaseMemoryRow:
+      type: object
+      required: [name, file_bytes, wal_bytes, per_connection_kb, connections, limit_bytes, used_bytes, hits, misses]
+      properties:
+        name: { type: string }
+        file_bytes: { type: integer, format: int64 }
+        wal_bytes: { type: integer, format: int64 }
+        per_connection_kb: { type: integer, format: int64 }
+        connections: { type: integer, format: int64, description: How many connections were sampled; the limit and the use cover those. }
+        limit_bytes: { type: integer, format: int64 }
+        used_bytes: { type: integer, format: int64 }
+        hits: { type: integer, format: int64, description: Page cache hits since the connections opened. }
+        misses: { type: integer, format: int64 }
 
     NetworkSettings:
       type: object

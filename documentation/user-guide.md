@@ -307,7 +307,10 @@ Files a library scan could not identify wait under **Library → Music → Unide
 - **Settings → Cache** (expert) bounds the provider answers and resized artwork Solarr keeps: a size limit (10 GiB),
   an age (90 days), the images/metadata split, and **Keep disk free** (10%): when the disk under the cache runs short of
   that, the next cache maintenance shrinks the cache by the shortfall, below its size limit. The page shows the disk's
-  size and free space and warns when the size limit is larger than the disk. Clearing it is always safe.
+  size and free space and warns when the size limit is larger than the disk. Clearing it is always safe. **Database
+  memory** sets the library database's SQLite page cache (default 64 MB per connection, written to `config.yml`, applied
+  at the next start; **Set defaults** restores the default), and shows every database's file size, how full its cache is
+  and its hit ratio, beside the hit ratios of the picture and provider-response caches (counted since the start).
 - **A root Solarr cannot reach** (missing, unreadable, or empty although it held files: an unmounted disk) is declared
   offline by Solarr, checked every five minutes, and declared online again once reached. A root *you* declare offline
   stays offline until you declare it online.

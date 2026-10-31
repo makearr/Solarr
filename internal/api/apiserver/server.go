@@ -213,6 +213,8 @@ type Config struct {
 	// clear (todo 4.19). Optional: without it, the cache endpoints answer
 	// 503.
 	CacheManager CacheManager
+	// DatabaseMemory reports each database's page cache; optional.
+	DatabaseMemory DatabaseMemoryReader
 	// WorkAdder looks works up and adds them (ADR-56). Optional: nil answers 503.
 	WorkAdder WorkAdder
 	// ImportLists previews, checks and runs import lists (ADR-38). Optional: nil leaves them unchecked, never previewed.
@@ -342,6 +344,7 @@ type Server struct {
 	downloadRoots           DownloadFolderChecker
 	scheduler               Scheduler
 	cacheManager            CacheManager
+	databaseMemory          DatabaseMemoryReader
 	workAdder               WorkAdder
 	importLists             ImportListSync
 	arrSync                 ArrSync
@@ -465,6 +468,7 @@ func New(config Config) (*Server, error) {
 		downloadRoots:           config.DownloadRoots,
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
+		databaseMemory:          config.DatabaseMemory,
 		workAdder:               config.WorkAdder,
 		importLists:             config.ImportLists,
 		arrSync:                 config.ArrSync,
@@ -762,6 +766,8 @@ func New(config Config) (*Server, error) {
 			secured.Patch("/network", server.UpdateNetworkSettings)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
+			secured.Get("/cache/memory", server.GetDatabaseMemory)
+			secured.Put("/cache/memory", server.SetDatabaseMemory)
 			secured.Get("/recyclebin", server.GetRecycleBinLimits)
 			secured.Patch("/recyclebin", server.UpdateRecycleBinLimits)
 			secured.Get("/recyclebin/entries", server.ListRecycleBinEntries)

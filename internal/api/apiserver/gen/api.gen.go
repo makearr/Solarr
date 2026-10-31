@@ -1538,14 +1538,22 @@ type CacheReport struct {
 	DiskTotalBytes *int64 `json:"disk_total_bytes,omitempty"`
 
 	// ImagesBytes Absent until the cache maintenance task has run once.
-	ImagesBytes        *int64     `json:"images_bytes,omitempty"`
+	ImagesBytes *int64 `json:"images_bytes,omitempty"`
+
+	// ImagesHits Pictures found already cached since the process started.
+	ImagesHits         *int64     `json:"images_hits,omitempty"`
+	ImagesMisses       *int64     `json:"images_misses,omitempty"`
 	ImagesSharePercent int64      `json:"images_share_percent"`
 	MaxAgeDays         int64      `json:"max_age_days"`
 	MaxBytes           int64      `json:"max_bytes"`
 	MeasuredAt         *time.Time `json:"measured_at,omitempty"`
 
 	// MetadataBytes Logical bytes stored, a real measurement -- not metadata.db's own physical file size, which does not shrink on eviction without a VACUUM this codebase deliberately does not run.
-	MetadataBytes        *int64 `json:"metadata_bytes,omitempty"`
+	MetadataBytes *int64 `json:"metadata_bytes,omitempty"`
+
+	// MetadataHits Provider responses found in the cache since the process started.
+	MetadataHits         *int64 `json:"metadata_hits,omitempty"`
+	MetadataMisses       *int64 `json:"metadata_misses,omitempty"`
 	MetadataSharePercent int64  `json:"metadata_share_percent"`
 
 	// MinFreePercent Percent of the disk under the cache kept free; the cache shrinks below max_bytes to keep it. 0 is off. Default 10.
@@ -1845,6 +1853,36 @@ type DashboardSummary struct {
 	// Library Read from the `counter` table, never aggregated live (section 21.12, ADR-28). Absent counters report zero, so an empty library and an uncounted one look the same until the reconciliation job has run.
 	Library     LibraryCounts `json:"library"`
 	RootFolders []RootFolder  `json:"root_folders"`
+}
+
+// DatabaseMemory defines model for DatabaseMemory.
+type DatabaseMemory struct {
+	// ConfiguredKb database.cache_size_kb in config.yml
+	ConfiguredKb int64               `json:"configured_kb"`
+	Databases    []DatabaseMemoryRow `json:"databases"`
+	DefaultKb    int64               `json:"default_kb"`
+
+	// RestartRequired True while configured_kb differs from running_kb.
+	RestartRequired bool `json:"restart_required"`
+
+	// RunningKb The size the library database was opened with.
+	RunningKb int64 `json:"running_kb"`
+}
+
+// DatabaseMemoryRow defines model for DatabaseMemoryRow.
+type DatabaseMemoryRow struct {
+	// Connections How many connections were sampled; the limit and the use cover those.
+	Connections int64 `json:"connections"`
+	FileBytes   int64 `json:"file_bytes"`
+
+	// Hits Page cache hits since the connections opened.
+	Hits            int64  `json:"hits"`
+	LimitBytes      int64  `json:"limit_bytes"`
+	Misses          int64  `json:"misses"`
+	Name            string `json:"name"`
+	PerConnectionKb int64  `json:"per_connection_kb"`
+	UsedBytes       int64  `json:"used_bytes"`
+	WalBytes        int64  `json:"wal_bytes"`
 }
 
 // Decision ADR-10: reasons are the result, never a side channel. score is derived from components, never computed separately, so the explanation and the decision cannot drift apart.
@@ -5314,6 +5352,11 @@ type UpdateCacheBudgetJSONBody struct {
 	MinFreePercent *int64 `json:"min_free_percent,omitempty"`
 }
 
+// SetDatabaseMemoryJSONBody defines parameters for SetDatabaseMemory.
+type SetDatabaseMemoryJSONBody struct {
+	CacheSizeKb int64 `json:"cache_size_kb"`
+}
+
 // ListCalendarParams defines parameters for ListCalendar.
 type ListCalendarParams struct {
 	// From ISO date, inclusive.
@@ -6277,6 +6320,9 @@ type LoginJSONRequestBody LoginJSONBody
 // UpdateCacheBudgetJSONRequestBody defines body for UpdateCacheBudget for application/json ContentType.
 type UpdateCacheBudgetJSONRequestBody UpdateCacheBudgetJSONBody
 
+// SetDatabaseMemoryJSONRequestBody defines body for SetDatabaseMemory for application/json ContentType.
+type SetDatabaseMemoryJSONRequestBody SetDatabaseMemoryJSONBody
+
 // CreateCategoryJSONRequestBody defines body for CreateCategory for application/json ContentType.
 type CreateCategoryJSONRequestBody CreateCategoryJSONBody
 
@@ -6669,6 +6715,12 @@ type ServerInterface interface {
 	// Remove everything in both namespaces immediately. Administrator only.
 	// (POST /cache/clear)
 	ClearCache(w http.ResponseWriter, r *http.Request)
+	// The SQLite page cache of each database, its size setting, and how often it answered.
+	// (GET /cache/memory)
+	GetDatabaseMemory(w http.ResponseWriter, r *http.Request)
+	// Set the library database's page cache size. Administrator only.
+	// (PUT /cache/memory)
+	SetDatabaseMemory(w http.ResponseWriter, r *http.Request)
 	// Releases in a date window, earliest first.
 	// (GET /calendar)
 	ListCalendar(w http.ResponseWriter, r *http.Request, params ListCalendarParams)
@@ -7617,6 +7669,18 @@ func (_ Unimplemented) UpdateCacheBudget(w http.ResponseWriter, r *http.Request)
 // Remove everything in both namespaces immediately. Administrator only.
 // (POST /cache/clear)
 func (_ Unimplemented) ClearCache(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The SQLite page cache of each database, its size setting, and how often it answered.
+// (GET /cache/memory)
+func (_ Unimplemented) GetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Set the library database's page cache size. Administrator only.
+// (PUT /cache/memory)
+func (_ Unimplemented) SetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9937,6 +10001,50 @@ func (siw *ServerInterfaceWrapper) ClearCache(w http.ResponseWriter, r *http.Req
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ClearCache(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetDatabaseMemory operation middleware
+func (siw *ServerInterfaceWrapper) GetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetDatabaseMemory(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetDatabaseMemory operation middleware
+func (siw *ServerInterfaceWrapper) SetDatabaseMemory(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetDatabaseMemory(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -18977,6 +19085,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/cache/clear", wrapper.ClearCache)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/cache/memory", wrapper.GetDatabaseMemory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/cache/memory", wrapper.SetDatabaseMemory)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/calendar", wrapper.ListCalendar)

@@ -838,6 +838,27 @@ export interface paths {
         patch: operations["updateCacheBudget"];
         trace?: never;
     };
+    "/cache/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The SQLite page cache of each database, its size setting, and how often it answered. */
+        get: operations["getDatabaseMemory"];
+        /**
+         * Set the library database's page cache size. Administrator only.
+         * @description Written to config.yml (database.cache_size_kb); the databases keep the size they were opened with until the next start.
+         */
+        put: operations["setDatabaseMemory"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/recyclebin": {
         parameters: {
             query?: never;
@@ -4785,6 +4806,62 @@ export interface components {
             metadata_bytes?: number;
             /** Format: date-time */
             measured_at?: string;
+            /**
+             * Format: int64
+             * @description Pictures found already cached since the process started.
+             */
+            images_hits?: number;
+            /** Format: int64 */
+            images_misses?: number;
+            /**
+             * Format: int64
+             * @description Provider responses found in the cache since the process started.
+             */
+            metadata_hits?: number;
+            /** Format: int64 */
+            metadata_misses?: number;
+        };
+        DatabaseMemory: {
+            /**
+             * Format: int64
+             * @description database.cache_size_kb in config.yml
+             */
+            configured_kb: number;
+            /**
+             * Format: int64
+             * @description The size the library database was opened with.
+             */
+            running_kb: number;
+            /** Format: int64 */
+            default_kb: number;
+            /** @description True while configured_kb differs from running_kb. */
+            restart_required: boolean;
+            databases: components["schemas"]["DatabaseMemoryRow"][];
+        };
+        DatabaseMemoryRow: {
+            name: string;
+            /** Format: int64 */
+            file_bytes: number;
+            /** Format: int64 */
+            wal_bytes: number;
+            /** Format: int64 */
+            per_connection_kb: number;
+            /**
+             * Format: int64
+             * @description How many connections were sampled; the limit and the use cover those.
+             */
+            connections: number;
+            /** Format: int64 */
+            limit_bytes: number;
+            /** Format: int64 */
+            used_bytes: number;
+            /**
+             * Format: int64
+             * @description Page cache hits since the connections opened.
+             */
+            hits: number;
+            /** Format: int64 */
+            misses: number;
         };
         /** @description ADR-58's own port resolution, proxy and IP whitelist. The whitelist can only ever deny -- it never authenticates and never grants (Invariant 89) -- and neither it nor the proxy does anything until its own enable flag is on. */
         NetworkSettings: {
@@ -9809,6 +9886,57 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CacheReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getDatabaseMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setting and each database's cache and file sizes. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseMemory"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setDatabaseMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: int64 */
+                    cache_size_kb: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatabaseMemory"];
                 };
             };
             400: components["responses"]["Problem"];

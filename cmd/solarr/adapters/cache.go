@@ -6,6 +6,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/platform/clock"
 )
@@ -16,6 +17,24 @@ type CacheManager struct {
 	Cache    *settings.Cache
 	Registry *settings.Registry
 	Clock    clock.Clock
+	// Images and Metadata give the lookups the two caches answered or missed.
+	Images, Metadata interface{ Totals() (hits, misses int64) }
+}
+
+// DatabaseMemory satisfies apiserver.DatabaseMemoryReader over the open stores.
+type DatabaseMemory struct{ Stores []*store.Store }
+
+func (a DatabaseMemory) DatabaseMemory(ctx context.Context) []apiserver.DatabaseMemoryRow {
+	rows := make([]apiserver.DatabaseMemoryRow, 0, len(a.Stores))
+	for _, opened := range a.Stores {
+		report := opened.PageCache(ctx)
+		rows = append(rows, apiserver.DatabaseMemoryRow{
+			Name: report.Name, FileBytes: report.FileBytes, WALBytes: report.WALBytes,
+			PerConnectionKB: int64(report.PerConnectionKB), Connections: int64(report.Connections),
+			LimitBytes: report.LimitBytes, UsedBytes: report.UsedBytes, Hits: report.Hits, Misses: report.Misses,
+		})
+	}
+	return rows
 }
 
 func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
@@ -38,6 +57,12 @@ func (a CacheManager) Report(_ context.Context) (apiserver.CacheReport, error) {
 		if measurement.ShrunkToBytes > 0 {
 			report.ShrunkToBytes = &measurement.ShrunkToBytes
 		}
+	}
+	if a.Images != nil {
+		report.ImagesHits, report.ImagesMisses = a.Images.Totals()
+	}
+	if a.Metadata != nil {
+		report.MetadataHits, report.MetadataMisses = a.Metadata.Totals()
 	}
 	return report, nil
 }

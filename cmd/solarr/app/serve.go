@@ -44,6 +44,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/egress"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/hitcount"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
@@ -67,9 +68,11 @@ type process struct {
 	// logRing is the in-memory buffer the Logs screen reads (revision 7.16).
 	logRing  *logbuffer.Ring
 	settings *store.Store
-	jobs     *store.Store
-	library  *store.Store
-	metadata *store.Store
+	// metadataLookups and imageLookups count the provider response cache and the picture cache for the Cache page.
+	metadataLookups, imageLookups hitcount.Counter
+	jobs                          *store.Store
+	library                       *store.Store
+	metadata                      *store.Store
 	// statistics is what was seen and done; library.db is correct with it empty (D7).
 	statistics *store.Store
 	// configPath is where config.yml lives, for the write-back ADR-58's
@@ -667,8 +670,10 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		CacheManager: adapters.CacheManager{
 			Sweep: p.cacheSweep, Cache: p.cache, Registry: p.settingsRegistry, Clock: clock.NewSystem(),
+			Images: &p.imageLookups, Metadata: &p.metadataLookups,
 		},
-		LibrarySize: library.NewCounters(p.library),
+		DatabaseMemory: adapters.DatabaseMemory{Stores: []*store.Store{p.library, p.settings, p.jobs, p.statistics, p.metadata}},
+		LibrarySize:    library.NewCounters(p.library),
 		Works: adapters.Works{
 			Works: library.NewWorks(p.library), Clock: clock.NewSystem(), Fresh: p.freshWindow,
 			Facets: adapters.MediaTypes{Registry: p.media}.WorkFacets, MediaTypeOf: adapters.Categories{Cache: p.cache}.MediaTypeOf,

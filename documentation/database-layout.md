@@ -131,7 +131,8 @@ databases, is a ceiling several times what it looks like: 64 MiB across six conn
 each was over a gigabyte on hardware that is often a NAS.
 
 `database.cache_size_kb` in `config.yml` therefore sizes `library.db`, the only one that
-grows. The others take their size and pool from what they hold, in
+grows; Settings → Cache edits it and reports each database's cache use and hit ratio (SQLite's
+`sqlite3_db_status` counters, read on request, nothing on the query path; modernc builds only). The others take their size and pool from what they hold, in
 `cmd/solarr/app/serve.go`:
 
 | Database | Read pool | Page cache | Why |

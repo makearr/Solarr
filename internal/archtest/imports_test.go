@@ -23,7 +23,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/db/store", "internal/platform/clock", "internal/platform/config", "internal/platform/fsx",
 		"migrations",
 	},
-	"cmd/solarr/app": {"internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
+	"cmd/solarr/app": {"internal/platform/hitcount", "internal/media/book", "internal/metadata/openlibrary", "internal/metadata/googlebooks", "internal/metadata/itunes", "internal/metadata/fantlab", "internal/metadata/hardcover", "internal/metadata/audible", "internal/media/housekeeping", "internal/metadata/mdblist", "internal/metadata/omdb", "internal/metadata/fanart", "internal/media/knownfor", "internal/media/movie", "internal/moving/sidecar", "internal/importing/placer", "internal/platform/keyedlock", "internal/metadata/radarrmeta", "internal/acquiring/cutoff", "internal/acquiring/rss", "internal/service/follow", "internal/service/importlist",
 		"internal/media", "internal/platform/remoteimage", "cmd/solarr/adapters", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/plan",
 		"internal/acquiring/poll", "internal/acquiring/qbittorrent", "internal/acquiring/sabnzbd",
 		"internal/api/apiserver", "internal/api/auth", "internal/api/health",
@@ -39,7 +39,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
-	"cmd/solarr/adapters": {"internal/media/works",
+	"cmd/solarr/adapters": {"internal/db/store", "internal/media/works",
 		"internal/importing/batch", "internal/moving/renamejob",
 		"internal/db/statistics", "internal/platform/parallel", "internal/service/follow", "internal/service/importlist", "internal/acquiring/download", "internal/acquiring/indexer", "internal/acquiring/poll", "internal/acquiring/qbittorrent",
 		"internal/acquiring/sabnzbd", "internal/acquiring/nzbget", "internal/acquiring/deluge", "internal/acquiring/aria2",
@@ -121,7 +121,8 @@ var allowedInternalImports = map[string][]string{
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
 	"internal/platform/artwork":     {},
-	"internal/platform/remoteimage": {"internal/platform/artwork", "internal/platform/fsx", "internal/platform/httpx"},
+	"internal/platform/remoteimage": {"internal/platform/artwork", "internal/platform/fsx", "internal/platform/hitcount", "internal/platform/httpx"},
+	"internal/platform/hitcount":    {},
 	// Section 11.8's path template compiler/renderer: parsing and string
 	// building only, no I/O of its own. fsx is the one dependency, for the
 	// ADR-14 sanitiser choke point every rendered component passes through.
@@ -347,7 +348,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/db/store/gen/metadatadb":      {},
 	// cache/metadata.db (ADR-2, ADR-29): deliberately generic, so every metadata
 	// provider shares one cache rather than each owning its own database.
-	"internal/metadata/metacache": {"internal/db/store", "internal/db/store/gen/metadatadb"},
+	"internal/metadata/metacache": {"internal/db/store", "internal/db/store/gen/metadatadb", "internal/platform/hitcount"},
 	// ADR-29's provider: two Source implementations over httpx, permanent cache
 	// in front. No store/gen import of its own -- caching goes through metacache.
 	"internal/metadata/musicbrainz": {"internal/platform/clock", "internal/platform/httpx", "internal/metadata/metacache", "internal/metadata/metaresolve", "internal/platform/parallel"},

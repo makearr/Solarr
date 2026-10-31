@@ -89,6 +89,10 @@ export function CacheSettings() {
           budgetBytes={(report.data.max_bytes * report.data.metadata_share_percent) / 100}
         />
         <p className="text-xs text-ink-muted">
+          Hit ratio since the start: images {hitRatio(report.data.images_hits, report.data.images_misses)}, provider responses{" "}
+          {hitRatio(report.data.metadata_hits, report.data.metadata_misses)}.
+        </p>
+        <p className="text-xs text-ink-muted">
           {report.data.measured_at
             ? `Measured ${new Date(report.data.measured_at).toLocaleString()}.`
             : "Not measured yet: the cache maintenance task has not run."}
@@ -110,6 +114,8 @@ export function CacheSettings() {
         )}
       </Card>
 
+      <DatabaseMemoryCard />
+
       <BudgetForm report={report.data} onSave={(budget) => update.mutate(budget)} busy={update.isPending} />
       {update.isError && <p className="text-sm text-danger">That budget was refused.</p>}
 
@@ -119,6 +125,108 @@ export function CacheSettings() {
       </Card>
     </section>
   );
+}
+
+/** The SQLite page cache: the size setting (config.yml, applied at the next start), each database's file size and how
+ *  full and how effective its cache is. SQLite counts the hits itself, so showing them costs the databases nothing. */
+function DatabaseMemoryCard() {
+  const queryClient = useQueryClient();
+  const memory = useQuery({
+    queryKey: ["cache-memory"],
+    queryFn: () => ok(api.GET("/cache/memory")),
+    refetchInterval: 15_000,
+  });
+  const [mib, setMib] = useState<number | null>(null);
+  const save = useMutation({
+    mutationFn: async (kilobytes: number) => {
+      await ok(api.PUT("/cache/memory", { body: { cache_size_kb: kilobytes } }));
+    },
+    onSuccess: () => {
+      setMib(null);
+      return queryClient.invalidateQueries({ queryKey: ["cache-memory"] });
+    },
+  });
+  if (memory.error !== null || !memory.data) return null;
+  const data = memory.data;
+  const shown = mib ?? Math.round(data.configured_kb / 1024);
+  const dirty = shown * 1024 !== data.configured_kb;
+  const submit = () => save.mutate(shown * 1024);
+
+  return (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <Card
+        title="Database memory"
+        help="The page cache SQLite keeps in memory for the library database, per connection (it opens several). A bigger cache means fewer reads from disk; the smaller databases keep their own fixed sizes."
+      >
+        <div className="flex flex-wrap items-end gap-4">
+          <Field label="Library cache per connection (MB)" help={`Default ${Math.round(data.default_kb / 1024)} MB.`} className="w-56">
+            <input
+              type="number"
+              min={2}
+              max={16384}
+              value={shown}
+              disabled={save.isPending}
+              onChange={(event) => setMib(Number(event.target.value))}
+              className={inputStyle}
+            />
+          </Field>
+          <button
+            type="button"
+            onClick={() => setMib(Math.round(data.default_kb / 1024))}
+            disabled={save.isPending || shown * 1024 === data.default_kb}
+            className="mb-5 rounded-md border border-border-subtle px-2 py-1.5 text-xs text-ink-muted hover:text-ink disabled:opacity-50
+                       focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Set defaults
+          </button>
+        </div>
+        {data.restart_required && (
+          <p className="text-xs text-warn">
+            Saved as {Math.round(data.configured_kb / 1024)} MB; the library database runs with {Math.round(data.running_kb / 1024)} MB until Solarr restarts.
+          </p>
+        )}
+        {save.isError && <p className="text-xs text-danger">That size was refused.</p>}
+        <ul className="flex flex-col gap-2">
+          {data.databases.map((row) => (
+            <li key={row.name} className="flex flex-col gap-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium capitalize">{row.name}</span>
+                <span className="text-ink-muted">
+                  file {formatBytes(row.file_bytes)}
+                  {row.wal_bytes > 0 ? ` + log ${formatBytes(row.wal_bytes)}` : ""}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-canvas">
+                <div
+                  className="h-full rounded-full bg-accent"
+                  style={{ width: `${row.limit_bytes > 0 ? Math.min(100, Math.round((row.used_bytes / row.limit_bytes) * 100)) : 0}%` }}
+                />
+              </div>
+              <span className="text-xs text-ink-muted">
+                {row.connections === 0
+                  ? "cache figures not available"
+                  : `cache ${formatBytes(row.used_bytes)} of ${formatBytes(row.limit_bytes)} (${row.connections} connections) · hit ratio ${hitRatio(row.hits, row.misses)}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+        <p className="text-xs text-ink-muted">Hit ratios count since Solarr started.</p>
+      </Card>
+      <SaveBar dirty={dirty} busy={save.isPending} onSave={submit} />
+    </form>
+  );
+}
+
+function hitRatio(hits: number | undefined, misses: number | undefined): string {
+  const total = (hits ?? 0) + (misses ?? 0);
+  if (total === 0) return "no lookups yet";
+  return `${(((hits ?? 0) / total) * 100).toFixed(1)}%`;
 }
 
 function NamespaceBar({ label, bytes, budgetBytes }: { label: string; bytes?: number; budgetBytes: number }) {

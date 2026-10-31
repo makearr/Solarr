@@ -17,6 +17,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/platform/artwork"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/hitcount"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
@@ -42,6 +43,8 @@ type Cache struct {
 	Dir  string
 	// Hosts are the image hosts that may be fetched, each matching itself and its subdomains.
 	Hosts []string
+	// Lookups counts the pictures found already cached; optional.
+	Lookups *hitcount.Counter
 
 	mu    sync.Mutex
 	locks map[string]*imageLock
@@ -85,8 +88,10 @@ func (c *Cache) Ensure(ctx context.Context, address string) (string, error) {
 	}
 	key := Key(address)
 	if c.cached(key) {
+		c.Lookups.Hit()
 		return key, nil
 	}
+	c.Lookups.Miss()
 	release := c.lockFor(key)
 	defer release()
 	if c.cached(key) {
