@@ -43,7 +43,7 @@ if [ -f "$CHANGELOG" ]; then
   { head -n 4 "$CHANGELOG"; echo; echo "$entry"; tail -n +5 "$CHANGELOG"; } > "$CHANGELOG.tmp"
   mv "$CHANGELOG.tmp" "$CHANGELOG"
 else
-  printf '# Changelog\n\nVersion is `YYYY.MM.RRR.BBB` (year.month.release.build); see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
+  printf '# Changelog\n\nVersion is `YYYY.MM.R.BBBB` (year.month.release.build); see\n`documentation/versioning.md`.\n\n%s\n' "$entry" > "$CHANGELOG"
 fi
 
 # ── commit, tag, push ─────────────────────────────────────────────────────────

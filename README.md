@@ -359,7 +359,7 @@ make web           # build the frontend
 make image-local   # build a local image
 ```
 
-Versions are `YYYY.MM.RRR.BBB`: year and month of the release, the release number, and a build number
+Versions are `YYYY.MM.R.BBBB`: year and month of the release, the release number, and a build number
 that advances with every build. See [versioning](documentation/versioning.md).
 
 ---

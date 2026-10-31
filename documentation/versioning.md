@@ -2,18 +2,18 @@
 
 ```text
 YEAR . MONTH . RELEASE . BUILD
-2026 .  10   .   001   .  512
+2026 .  10   .    1    .  0512
  │       │        │        └── build    +1 on every successful build or GitHub push; never resets
- │       │        └─────────── release  +1 on every release; 001 on the first release of a month
+ │       │        └─────────── release  +1 on every release; 1 on the first release of a month
  │       └──────────────────── month    of the latest release, two digits
  └──────────────────────────── year     of the latest release, four digits
 ```
 
-`YYYY.MM.RRR.BBB`, in use since 2026-10-25. `release` and `build` are zero-padded to three digits;
-`build` simply grows a fourth past 999. A **release** is a build published on the maintainer's
+`YYYY.MM.R.BBBB`, in use since 2026-10-31 (`YYYY.MM.RRR.BBB` from 2026-10-25 to then). `release` is not padded;
+`build` is zero-padded to four digits and simply grows a fifth past 9999. A **release** is a build published on the maintainer's
 explicit word (`make image`); everything else — a local image, a push — advances only `build`, so
 any commit or image can be traced back to one number. Until the first release of a month, builds
-keep the year, month and release of the previous one (`2026.10.000.510` means "no release yet
+keep the year, month and release of the previous one (`2026.10.0.0510` means "no release yet
 under this scheme").
 
 **There is no MAJOR or MINOR, and no `1.0`.** Milestones survive as a **name**, not a version
@@ -77,7 +77,7 @@ release.
 `make milestone NAME="music, usenet"` records a name in the `MILESTONE` file at the repository root,
 sitting beside `VERSION`. It does not change any version component. The name shows up:
 
-- In the GitHub release title: `2026.10.001.512 — music, usenet`
+- In the GitHub release title: `2026.10.1.0512 — music, usenet`
 - On the About page and `/api/v1/about`, next to the version, when one is set
 - In `solarr version`'s CLI output
 
@@ -92,8 +92,7 @@ keeps for the file.
 - Not semver. There is no API-stability contract implied by any component.
 - **Not a progress bar.** A higher `release` does not mean "more done this month" — some months
   ship once, some ship ten times, depending on what landed.
-- Sortable as text while `build` stays at three digits, because every part is fixed-width — still
-  prefer `sort -V` and git's own tag ordering, which keep working once `build` passes 999.
+- Not sortable as plain text once `release` reaches 10; use `sort -V` and git's own tag ordering.
 
 ## Injecting it into the binary
 

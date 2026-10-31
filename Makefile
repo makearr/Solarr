@@ -43,9 +43,9 @@ RUN_NODE_ROOT := docker run --rm -u $(UID):$(GID) $(DNS_FLAGS) $(MOUNT) \
         api web web-test web-dev e2e image image-local push scan-image builder binfmt milestone version cache-init clean-cache deps tidy \
         license-check
 
-# Version is year.month.release.build, YYYY.MM.RRR.BBB (documentation/versioning.md). Never parse
-# it as one decimal; the parts are zero-padded strings, so arithmetic goes through expr and pad3.
-VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0000.00.000.000)
+# Version is year.month.release.build, YYYY.MM.R.BBBB (documentation/versioning.md). Never parse
+# it as one decimal; build is a zero-padded string, so arithmetic goes through expr and pad4.
+VERSION     := $(shell tr -d '[:space:]' < VERSION 2>/dev/null || echo 0000.00.0.0000)
 VERSION_PARTS := $(subst ., ,$(VERSION))
 CUR_YEAR    := $(word 1,$(VERSION_PARTS))
 CUR_MONTH   := $(word 2,$(VERSION_PARTS))
@@ -53,13 +53,13 @@ CUR_RELEASE := $(word 3,$(VERSION_PARTS))
 CUR_BUILD   := $(word 4,$(VERSION_PARTS))
 TODAY_YEAR  := $(shell date -u +%Y)
 TODAY_MONTH := $(shell date -u +%m)
-pad3         = $(shell printf %03d $(1))
-NEXT_BUILD  := $(call pad3,$(shell expr $(CUR_BUILD) + 1))
-# A release (make image, on the user's word only) is release+1 in the same month, 001 in a new one.
+pad4         = $(shell printf %04d $(1))
+NEXT_BUILD  := $(call pad4,$(shell expr $(CUR_BUILD) + 1))
+# A release (make image, on the user's word only) is release+1 in the same month, 1 in a new one.
 ifeq ($(TODAY_YEAR)-$(TODAY_MONTH),$(CUR_YEAR)-$(CUR_MONTH))
-NEXT_RELEASE := $(call pad3,$(shell expr $(CUR_RELEASE) + 1))
+NEXT_RELEASE := $(shell expr $(CUR_RELEASE) + 1)
 else
-NEXT_RELEASE := 001
+NEXT_RELEASE := 1
 endif
 NEXT_VERSION  := $(TODAY_YEAR).$(TODAY_MONTH).$(NEXT_RELEASE).$(NEXT_BUILD)
 # Every successful build or push that is not a release advances only the build number.

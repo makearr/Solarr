@@ -32,7 +32,7 @@ named file, linked from the code by path.
 | [metadata-providers.md](metadata-providers.md) | What each metadata provider carries, which library it serves, what the upstream projects use, and how collections are found |
 | [media-tools.md](media-tools.md) | ADR-30's ffprobe, fpcalc and tagging helper: what Alpine has, what it costs |
 | [benchmarks.md](benchmarks.md) | The 500k corpus, the ADR-28 targets as tests, the ADR-5 driver switch |
-| [versioning.md](versioning.md) | `YYYY.MM.RRR.BBB`, what advances it, milestones, what a release (`make image`) does |
+| [versioning.md](versioning.md) | `YYYY.MM.R.BBBB`, what advances it, milestones, what a release (`make image`) does |
 | [licence-compliance.md](licence-compliance.md) | AGPL-3.0 and the §13 network clause |
 
 ## What goes here

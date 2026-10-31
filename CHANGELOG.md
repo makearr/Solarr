@@ -1,6 +1,6 @@
 # Changelog
 
-Version is `YYYY.MM.RRR.BBB` (year.month.release.build) from 2026-10-25; see `documentation/versioning.md`.
+Version is `YYYY.MM.R.BBBB` (year.month.release.build) from 2026-10-31 (`YYYY.MM.RRR.BBB` before); see `documentation/versioning.md`.
 Earlier entries use older schemes; those at and below `0.0.x` predate both and are left as history, unconverted.
 
 ## 2026.10.001.515 — 2026-10-25
