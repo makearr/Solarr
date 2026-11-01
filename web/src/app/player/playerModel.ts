@@ -28,9 +28,33 @@ export function streamUrl(mediaObjectId: number): string {
   return `${API_PREFIX}/files/${mediaObjectId}/stream`;
 }
 
+/** How much of the picture a viewer keeps: the file as it is, or scaled down with a lower bitrate. */
+export type Quality = "original" | "1080p" | "720p" | "480p";
+
+export const QUALITIES: readonly Quality[] = ["original", "1080p", "720p", "480p"];
+
 /** The converted stream from `startSecond`; a transcode has no length of its own, so a seek asks again from the new place. */
-export function transcodeUrl(mediaObjectId: number, startSecond: number): string {
-  return `${API_PREFIX}/files/${mediaObjectId}/transcode?start=${Math.max(0, Math.floor(startSecond))}`;
+export function transcodeUrl(mediaObjectId: number, startSecond: number, quality: Quality = "original"): string {
+  return `${API_PREFIX}/files/${mediaObjectId}/transcode?start=${Math.max(0, Math.floor(startSecond))}&quality=${quality}`;
+}
+
+/** "6.2 Mbit/s" from kbit/s; "" when unknown. */
+export function formatBitrate(kbps: number | undefined): string {
+  if (!kbps || kbps <= 0) return "";
+  return kbps >= 1000 ? `${(kbps / 1000).toFixed(1)} Mbit/s` : `${Math.round(kbps)} kbit/s`;
+}
+
+/** The original file in a line: picture size, codec and bitrate, whichever the probe measured. */
+export function describeSource(facts: {
+  width?: number;
+  height?: number;
+  video_codec?: string;
+  overall_bitrate_kbps?: number;
+  video_bitrate_kbps?: number;
+}): string {
+  const size = facts.width && facts.height ? `${facts.width}×${facts.height}` : "";
+  const bitrate = formatBitrate(facts.overall_bitrate_kbps ?? facts.video_bitrate_kbps);
+  return [size, facts.video_codec?.toUpperCase(), bitrate].filter(Boolean).join(" · ");
 }
 
 /** m:ss, or h:mm:ss from an hour. */

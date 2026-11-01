@@ -727,6 +727,9 @@ type PlaybackFacts struct {
 	Kind                              string
 	DurationMs                        int64
 	Container, VideoCodec, AudioCodec string
+	Width, Height                     int
+	// Bitrates are bit/s as the probe read them; 0 when unmeasured.
+	OverallBitrate, VideoBitrate int64
 }
 
 // PlaybackFacts reads a file's kind, length and measured codecs; sql.ErrNoRows when there is no such object.
@@ -736,7 +739,10 @@ func (p Physical) PlaybackFacts(ctx context.Context, mediaObjectID int64) (Playb
 	if err != nil {
 		return PlaybackFacts{}, fmt.Errorf("library: playback facts of object %d: %w", mediaObjectID, err)
 	}
-	facts := PlaybackFacts{Kind: object.Kind.String, DurationMs: object.DurationMs.Int64}
+	facts := PlaybackFacts{
+		Kind: object.Kind.String, DurationMs: object.DurationMs.Int64, Width: int(object.Width.Int64), Height: int(object.Height.Int64),
+		OverallBitrate: object.OverallBitrate.Int64, VideoBitrate: object.VideoBitrate.Int64,
+	}
 	if !object.MeasuredAttributesID.Valid {
 		return facts, nil
 	}

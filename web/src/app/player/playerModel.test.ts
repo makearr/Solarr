@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { firstRoute, formatClock, isPlayableExtension, routeAfterFailure, transcodeUrl } from "./playerModel";
+import { describeSource, firstRoute, formatBitrate, formatClock, isPlayableExtension, routeAfterFailure, transcodeUrl } from "./playerModel";
 
 describe("playerModel", () => {
   it("offers the player for media types only", () => {
@@ -29,6 +29,13 @@ describe("playerModel", () => {
   });
 
   it("asks a conversion to begin at a whole second", () => {
-    expect(transcodeUrl(7, 90.9)).toBe("/api/v1/files/7/transcode?start=90");
+    expect(transcodeUrl(7, 90.9)).toBe("/api/v1/files/7/transcode?start=90&quality=original");
+    expect(transcodeUrl(7, 0, "480p")).toBe("/api/v1/files/7/transcode?start=0&quality=480p");
+  });
+
+  it("describes the original file by what was measured", () => {
+    expect(describeSource({ width: 1920, height: 1036, video_codec: "h264", overall_bitrate_kbps: 6240 })).toBe("1920×1036 · H264 · 6.2 Mbit/s");
+    expect(describeSource({})).toBe("");
+    expect(formatBitrate(850)).toBe("850 kbit/s");
   });
 });

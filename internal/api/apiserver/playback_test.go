@@ -118,3 +118,26 @@ func TestDirectPlayLikely(t *testing.T) {
 		}
 	}
 }
+
+func TestTranscodeTarget(t *testing.T) {
+	file := apiserver.PlaybackFile{VideoKbps: 3000}
+	for _, test := range []struct {
+		name            string
+		quality         string
+		policy          settings.StreamingSettings
+		file            apiserver.PlaybackFile
+		height, bitrate int64
+	}{
+		{"original keeps size and the source's bitrate", "", settings.StreamingSettings{VideoKbps: 6000}, file, 0, 3000},
+		{"original of an unmeasured file takes the setting", "original", settings.StreamingSettings{VideoKbps: 6000}, apiserver.PlaybackFile{}, 0, 6000},
+		{"original obeys the height cap", "original", settings.StreamingSettings{MaxHeight: 1080, VideoKbps: 6000}, file, 1080, 3000},
+		{"720p", "720p", settings.StreamingSettings{VideoKbps: 6000}, apiserver.PlaybackFile{}, 720, 4000},
+		{"a profile never exceeds the source bitrate", "480p", settings.StreamingSettings{}, apiserver.PlaybackFile{VideoKbps: 900}, 480, 900},
+		{"the cap wins over a taller profile", "1080p", settings.StreamingSettings{MaxHeight: 720}, apiserver.PlaybackFile{}, 720, 8000},
+	} {
+		height, bitrate := apiserver.TranscodeTargetForTest(test.quality, test.policy, test.file)
+		if height != test.height || bitrate != test.bitrate {
+			t.Errorf("%s: got %dp %dk, want %dp %dk", test.name, height, bitrate, test.height, test.bitrate)
+		}
+	}
+}

@@ -30,6 +30,13 @@ Previous and next walk the queue; a finished file starts the next.
 
 Both routes check the caller can read the file's root folder (ADR-27); anything else is a 404.
 
+## Quality
+
+The player shows the original file's size, codec and measured bitrate, and video has a quality menu: **Original**
+(the default), 1080p, 720p, 480p. Original plays the file as it is, or converted at its own size and bitrate when the
+browser cannot play it. The others are always conversions (`?quality=`), 8000, 4000 and 1800 kbit/s, never above the
+source bitrate and never taller than the configured cap. Changing quality mid-stream resumes at the same second.
+
 ## Hardware encoding
 
 Encoding runs on the GPU, and where the GPU can decode the source (VAAPI and NVENC) the frames never leave it: the
@@ -69,8 +76,8 @@ services:
 | `streaming.transcode_enabled` | true | off: only files the browser plays as they are |
 | `streaming.hardware` | auto | auto, software, vaapi, qsv, nvenc |
 | `streaming.device` | empty | render node; empty takes the detected one |
-| `streaming.max_height` | 1080 | taller video is scaled down |
-| `streaming.video_kbps` | 6000 | target video bitrate |
+| `streaming.max_height` | 0 | taller video is scaled down, whatever quality is picked; 0 sets no cap |
+| `streaming.video_kbps` | 6000 | bitrate of a converted original whose own is unknown |
 | `streaming.max_sessions` | 2 | conversions at once; a further one gets 429 |
 
 Not yet in the portable settings export.

@@ -4940,6 +4940,17 @@ export interface components {
             container?: string;
             audio_codec?: string;
             video_codec?: string;
+            /** Format: int64 */
+            width?: number;
+            /** Format: int64 */
+            height?: number;
+            /**
+             * Format: int64
+             * @description The file's own bitrate as the probe measured it.
+             */
+            overall_bitrate_kbps?: number;
+            /** Format: int64 */
+            video_bitrate_kbps?: number;
             /** @description The file's type and codecs are ones browsers play; the player still falls back to a conversion if this one cannot. */
             direct_play_likely: boolean;
             /** @description Transcoding is on and ffmpeg is installed. */
@@ -4951,7 +4962,10 @@ export interface components {
             hardware: "auto" | "software" | "vaapi" | "qsv" | "nvenc";
             /** @description A render node such as /dev/dri/renderD128; empty takes the detected one. */
             device?: string;
-            /** Format: int64 */
+            /**
+             * Format: int64
+             * @description 0 sets no cap.
+             */
             max_height: number;
             /** Format: int64 */
             video_kbps: number;
@@ -10174,6 +10188,8 @@ export interface operations {
             query?: {
                 /** @description Where to begin, in seconds. */
                 start?: number;
+                /** @description How much of the picture to keep. original keeps the source's size and bitrate; the rest scale down and cap the bitrate. Audio ignores it. */
+                quality?: "original" | "1080p" | "720p" | "480p";
             };
             header?: never;
             path: {

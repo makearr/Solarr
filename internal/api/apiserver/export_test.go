@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/authz"
+	"github.com/makearr/Solarr/internal/db/settings"
 )
 
 // WriteErrorForTest exposes the domain-error mapping to the package's external test.
@@ -29,6 +30,11 @@ func (s *Server) CategoriesWithOfflineFilesForTest(ctx context.Context, access a
 // AlbumStatusForTest exposes the album colour rule to the package's external test.
 func AlbumStatusForTest(row PersonWorkRow, now time.Time) string {
 	return string(albumStatus(row, now))
+}
+
+// TranscodeTargetForTest exposes the quality-to-target mapping.
+func TranscodeTargetForTest(quality string, policy settings.StreamingSettings, file PlaybackFile) (int64, int64) {
+	return transcodeTarget(quality, policy, file)
 }
 
 // DirectPlayLikelyForTest exposes the player's direct-play heuristic.

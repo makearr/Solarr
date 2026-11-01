@@ -86,11 +86,11 @@ function StreamingForm({
           <input type="number" min={1} max={32} className={`${inputStyle} w-24`} value={draft.max_sessions} disabled={busy}
             onChange={(event) => set({ max_sessions: Number(event.target.value) })} />
         </SettingRow>
-        <SettingRow label="Largest picture height" help="Taller video is scaled down while it is converted.">
-          <input type="number" min={144} max={4320} className={`${inputStyle} w-24`} value={draft.max_height} disabled={busy}
+        <SettingRow label="Largest picture height" help="Taller video is scaled down while it is converted, whatever quality the viewer picks. 0 sets no cap.">
+          <input type="number" min={0} max={4320} className={`${inputStyle} w-24`} value={draft.max_height} disabled={busy}
             onChange={(event) => set({ max_height: Number(event.target.value) })} />
         </SettingRow>
-        <SettingRow label="Video bitrate (kbit/s)">
+        <SettingRow label="Fallback video bitrate (kbit/s)" help="For a converted original whose own bitrate is unknown; each quality profile sets its own.">
           <input type="number" min={200} max={100000} step={500} className={`${inputStyle} w-24`} value={draft.video_kbps} disabled={busy}
             onChange={(event) => set({ video_kbps: Number(event.target.value) })} />
         </SettingRow>

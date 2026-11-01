@@ -226,13 +226,13 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyStreamingMaxHeight, Kind: KindInt, Tier: TierAdvanced,
 		Name:     "Transcode maximum height",
-		HelpText: "Video taller than this is scaled down while transcoding.",
+		HelpText: "Video taller than this is scaled down while transcoding, whatever quality the viewer picked. 0 sets no cap.",
 		Default:  strconv.Itoa(DefaultStreamingMaxHeight),
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyStreamingVideoKbps, Kind: KindInt, Tier: TierAdvanced,
 		Name:     "Transcode video bitrate",
-		HelpText: "Target video bitrate in kbit/s while transcoding.",
+		HelpText: "Video bitrate in kbit/s for a converted original whose own bitrate is unknown; a quality profile sets its own.",
 		Default:  strconv.Itoa(DefaultStreamingVideoKbps),
 	})
 	registry.MustRegister(SettingDef{

@@ -87,9 +87,13 @@ func deviceArgs(spec Spec) []string {
 	return nil
 }
 
-// videoFilter scales down to the height cap on an even size and puts frames where the encoder reads them.
+// videoFilter scales down to the height cap (none: the source size) on an even size and puts frames where the encoder reads them.
 func videoFilter(spec Spec) string {
-	height := fmt.Sprintf("'trunc(min(ih,%d)/2)*2'", spec.MaxHeight)
+	// No cap keeps the source's size, only evened out: encoders refuse odd dimensions.
+	height := "'trunc(ih/2)*2'"
+	if spec.MaxHeight > 0 {
+		height = fmt.Sprintf("'trunc(min(ih,%d)/2)*2'", spec.MaxHeight)
+	}
 	if spec.HardwareDecode {
 		switch spec.Accel {
 		case VAAPI:

@@ -177,3 +177,26 @@ func TestStream_WithoutFFmpegIsUnavailable(t *testing.T) {
 		t.Fatalf("Stream = %v, want ErrUnavailable", err)
 	}
 }
+
+func TestArgs_NoHeightCapKeepsTheSourceSize(t *testing.T) {
+	args := strings.Join(transcode.Args(transcode.Spec{Kind: transcode.Video, Path: "/a", Accel: transcode.Software, VideoKbps: 5000}), " ")
+	if !strings.Contains(args, "-vf scale=-2:'trunc(ih/2)*2',format=yuv420p") {
+		t.Fatalf("args %q lack the size-keeping filter", args)
+	}
+}
+
+type probeRunner struct{ fakeRunner }
+
+func (probeRunner) Run(context.Context, string, ...string) ([]byte, error) {
+	return []byte(`{"format":{"bit_rate":"6240000","duration":"61.5"},"streams":[
+	 {"codec_type":"video","codec_name":"h264","width":1920,"height":1036,"bit_rate":"5900000"},
+	 {"codec_type":"audio","codec_name":"aac","bit_rate":"192000"}]}`), nil
+}
+
+func TestProbeSource(t *testing.T) {
+	got, err := transcode.NewService(probeRunner{}, nil, nil).ProbeSource(t.Context(), "/m/a.mkv")
+	want := transcode.Source{Width: 1920, Height: 1036, VideoCodec: "h264", AudioCodec: "aac", OverallKbps: 6240, VideoKbps: 5900, DurationMs: 61500}
+	if err != nil || got != want {
+		t.Fatalf("ProbeSource = %+v, %v; want %+v", got, err, want)
+	}
+}

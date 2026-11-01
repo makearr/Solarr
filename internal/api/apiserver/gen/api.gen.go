@@ -933,6 +933,14 @@ const (
 	ResolveCategoryDuplicatesJSONBodyDropActionRecycle ResolveCategoryDuplicatesJSONBodyDropAction = "recycle"
 )
 
+// Defines values for TranscodeFileParamsQuality.
+const (
+	TranscodeFileParamsQualityN1080p   TranscodeFileParamsQuality = "1080p"
+	TranscodeFileParamsQualityN480p    TranscodeFileParamsQuality = "480p"
+	TranscodeFileParamsQualityN720p    TranscodeFileParamsQuality = "720p"
+	TranscodeFileParamsQualityOriginal TranscodeFileParamsQuality = "original"
+)
+
 // Defines values for GetRemoteImageParamsSize.
 const (
 	GetRemoteImageParamsSizeFull  GetRemoteImageParamsSize = "full"
@@ -2354,12 +2362,18 @@ type FilePlayback struct {
 
 	// DurationMs Absent when the probe has not measured it.
 	DurationMs    *int64           `json:"duration_ms,omitempty"`
+	Height        *int64           `json:"height,omitempty"`
 	Kind          FilePlaybackKind `json:"kind"`
 	MediaObjectId int64            `json:"media_object_id"`
 
+	// OverallBitrateKbps The file's own bitrate as the probe measured it.
+	OverallBitrateKbps *int64 `json:"overall_bitrate_kbps,omitempty"`
+
 	// TranscodeAvailable Transcoding is on and ffmpeg is installed.
 	TranscodeAvailable bool    `json:"transcode_available"`
+	VideoBitrateKbps   *int64  `json:"video_bitrate_kbps,omitempty"`
 	VideoCodec         *string `json:"video_codec,omitempty"`
+	Width              *int64  `json:"width,omitempty"`
 }
 
 // FilePlaybackKind defines model for FilePlayback.Kind.
@@ -4922,12 +4936,14 @@ type StreamingReportEffectiveAccel string
 // StreamingSettings defines model for StreamingSettings.
 type StreamingSettings struct {
 	// Device A render node such as /dev/dri/renderD128; empty takes the detected one.
-	Device           *string                   `json:"device,omitempty"`
-	Hardware         StreamingSettingsHardware `json:"hardware"`
-	MaxHeight        int64                     `json:"max_height"`
-	MaxSessions      int64                     `json:"max_sessions"`
-	TranscodeEnabled bool                      `json:"transcode_enabled"`
-	VideoKbps        int64                     `json:"video_kbps"`
+	Device   *string                   `json:"device,omitempty"`
+	Hardware StreamingSettingsHardware `json:"hardware"`
+
+	// MaxHeight 0 sets no cap.
+	MaxHeight        int64 `json:"max_height"`
+	MaxSessions      int64 `json:"max_sessions"`
+	TranscodeEnabled bool  `json:"transcode_enabled"`
+	VideoKbps        int64 `json:"video_kbps"`
 }
 
 // StreamingSettingsHardware defines model for StreamingSettings.Hardware.
@@ -5697,7 +5713,13 @@ type StreamEventsParams struct {
 type TranscodeFileParams struct {
 	// Start Where to begin, in seconds.
 	Start *float64 `form:"start,omitempty" json:"start,omitempty"`
+
+	// Quality How much of the picture to keep. original keeps the source's size and bitrate; the rest scale down and cap the bitrate. Audio ignores it.
+	Quality *TranscodeFileParamsQuality `form:"quality,omitempty" json:"quality,omitempty"`
 }
+
+// TranscodeFileParamsQuality defines parameters for TranscodeFile.
+type TranscodeFileParamsQuality string
 
 // ListFranchisesParams defines parameters for ListFranchises.
 type ListFranchisesParams struct {
@@ -12561,6 +12583,14 @@ func (siw *ServerInterfaceWrapper) TranscodeFile(w http.ResponseWriter, r *http.
 	err = runtime.BindQueryParameter("form", true, false, "start", r.URL.Query(), &params.Start)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "start", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "quality" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "quality", r.URL.Query(), &params.Quality)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "quality", Err: err})
 		return
 	}
 

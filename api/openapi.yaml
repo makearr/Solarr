@@ -1292,6 +1292,10 @@ paths:
           in: query
           description: Where to begin, in seconds.
           schema: { type: number, format: double, minimum: 0, default: 0 }
+        - name: quality
+          in: query
+          description: How much of the picture to keep. original keeps the source's size and bitrate; the rest scale down and cap the bitrate. Audio ignores it.
+          schema: { type: string, enum: [original, 1080p, 720p, 480p], default: original }
       responses:
         "200":
           description: The converted stream.
@@ -7918,6 +7922,10 @@ components:
         container: { type: string }
         audio_codec: { type: string }
         video_codec: { type: string }
+        width: { type: integer, format: int64 }
+        height: { type: integer, format: int64 }
+        overall_bitrate_kbps: { type: integer, format: int64, description: The file's own bitrate as the probe measured it. }
+        video_bitrate_kbps: { type: integer, format: int64 }
         direct_play_likely:
           type: boolean
           description: The file's type and codecs are ones browsers play; the player still falls back to a conversion if this one cannot.
@@ -7930,7 +7938,7 @@ components:
         transcode_enabled: { type: boolean }
         hardware: { type: string, enum: [auto, software, vaapi, qsv, nvenc] }
         device: { type: string, description: A render node such as /dev/dri/renderD128; empty takes the detected one. }
-        max_height: { type: integer, format: int64 }
+        max_height: { type: integer, format: int64, description: 0 sets no cap. }
         video_kbps: { type: integer, format: int64 }
         max_sessions: { type: integer, format: int64 }
 

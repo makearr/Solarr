@@ -83,6 +83,8 @@ const catalogue = {
   "player.mode.bar": "Bar at the bottom",
   "player.mode.mini": "Small window in the corner",
   "player.mode.full": "Full screen",
+  "player.quality": "Quality",
+  "player.quality.original": "Original",
   "player.converted": "converted by the server",
   "player.failed": "This file could not be played.",
   "work.file.one": "File",

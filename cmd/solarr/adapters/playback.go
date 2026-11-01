@@ -43,6 +43,7 @@ func (a Playback) LocatePlayback(ctx context.Context, mediaObjectID int64) (apis
 			MediaObjectID: mediaObjectID, AbsolutePath: filepath.Join(root.Path, candidate.RelPath),
 			RootFolderID: candidate.RootFolderID, Kind: facts.Kind, DurationMs: facts.DurationMs,
 			Container: facts.Container, VideoCodec: facts.VideoCodec, AudioCodec: facts.AudioCodec,
+			Width: facts.Width, Height: facts.Height, OverallKbps: facts.OverallBitrate / 1000, VideoKbps: facts.VideoBitrate / 1000,
 		}, nil
 	}
 	return apiserver.PlaybackFile{}, apiserver.ErrNoSuchFile

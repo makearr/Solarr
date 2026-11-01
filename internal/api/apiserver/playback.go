@@ -37,6 +37,9 @@ type PlaybackFile struct {
 	Kind                              string
 	DurationMs                        int64
 	Container, VideoCodec, AudioCodec string
+	Width, Height                     int
+	// Bitrates in kbit/s, 0 when the probe has not measured them.
+	OverallKbps, VideoKbps int64
 }
 
 var (
@@ -122,6 +125,40 @@ func (s *Server) playbackFile(w http.ResponseWriter, r *http.Request) (PlaybackF
 	return file, kind, true
 }
 
+// withProbedFacts fills what the library has not measured from ffprobe, so a file nobody probed yet still shows its
+// size and bitrate; a probe that fails leaves the file as it was.
+func (s *Server) withProbedFacts(ctx context.Context, file PlaybackFile) PlaybackFile {
+	if s.transcoder == nil || (file.Width > 0 && file.OverallKbps > 0 && file.DurationMs > 0) {
+		return file
+	}
+	source, err := s.transcoder.ProbeSource(ctx, file.AbsolutePath)
+	if err != nil {
+		return file
+	}
+	if file.Width == 0 {
+		file.Width, file.Height = source.Width, source.Height
+	}
+	if file.OverallKbps == 0 {
+		file.OverallKbps = source.OverallKbps
+	}
+	if file.VideoKbps == 0 {
+		file.VideoKbps = source.VideoKbps
+	}
+	if file.DurationMs == 0 {
+		file.DurationMs = source.DurationMs
+	}
+	file.VideoCodec = cmpOr(file.VideoCodec, source.VideoCodec)
+	file.AudioCodec = cmpOr(file.AudioCodec, source.AudioCodec)
+	return file
+}
+
+func cmpOr(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
 func (s *Server) transcodeAvailable() bool {
 	return s.transcoder != nil && s.auth.Settings.Snapshot().StreamingSettings().TranscodeEnabled && s.transcoder.Available()
 }
@@ -140,12 +177,23 @@ func (s *Server) routeGetFilePlayback(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	file = s.withProbedFacts(r.Context(), file)
 	view := gen.FilePlayback{
 		MediaObjectId: file.MediaObjectID, Kind: gen.FilePlaybackKind(kind),
 		DirectPlayLikely: directPlayLikely(file, kind), TranscodeAvailable: s.transcodeAvailable(),
 	}
 	if file.DurationMs > 0 {
 		view.DurationMs = &file.DurationMs
+	}
+	if file.Width > 0 && file.Height > 0 {
+		width, height := int64(file.Width), int64(file.Height)
+		view.Width, view.Height = &width, &height
+	}
+	if file.OverallKbps > 0 {
+		view.OverallBitrateKbps = &file.OverallKbps
+	}
+	if file.VideoKbps > 0 {
+		view.VideoBitrateKbps = &file.VideoKbps
 	}
 	view.Container = nonEmpty(file.Container)
 	view.VideoCodec = nonEmpty(file.VideoCodec)
@@ -199,10 +247,19 @@ func (s *Server) routeTranscodeFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	policy := s.auth.Settings.Snapshot().StreamingSettings()
+	quality := r.URL.Query().Get("quality")
+	if quality != "" && !slices.Contains(qualityNames, quality) {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "quality must be one of original, 1080p, 720p, 480p")
+		return
+	}
+	if kind == "video" && file.VideoKbps == 0 {
+		file = s.withProbedFacts(r.Context(), file)
+	}
+	height, kbps := transcodeTarget(quality, policy, file)
 	resolution := s.transcoder.Resolve(policy.Hardware, policy.Device)
 	spec := transcode.Spec{
 		Kind: transcode.Kind(kind), Path: file.AbsolutePath, StartSecond: start,
-		Accel: resolution.Accel, Device: resolution.Device, MaxHeight: policy.MaxHeight, VideoKbps: policy.VideoKbps,
+		Accel: resolution.Accel, Device: resolution.Device, MaxHeight: height, VideoKbps: kbps,
 	}
 
 	w.Header().Set("Content-Type", spec.ContentType())
@@ -223,6 +280,34 @@ func (s *Server) routeTranscodeFile(w http.ResponseWriter, r *http.Request) {
 	default:
 		s.logger.Warn("transcode ended early", "file", file.AbsolutePath, "error", err)
 	}
+}
+
+var qualityNames = []string{"original", "1080p", "720p", "480p"}
+
+// qualityProfiles are the picture height and video bitrate (kbit/s) of each step below the original.
+var qualityProfiles = map[string]struct{ height, kbps int64 }{
+	"1080p": {1080, 8000}, "720p": {720, 4000}, "480p": {480, 1800},
+}
+
+// transcodeTarget is the picture height (0: the source's own) and bitrate a conversion aims at. The original keeps the
+// source's size and bitrate; a profile never asks for more bitrate than the source has, and the configured
+// height cap still applies to every one.
+func transcodeTarget(quality string, policy settings.StreamingSettings, file PlaybackFile) (height, kbps int64) {
+	height, kbps = policy.MaxHeight, policy.VideoKbps
+	if profile, ok := qualityProfiles[quality]; ok {
+		if height == 0 || profile.height < height {
+			height = profile.height
+		}
+		kbps = profile.kbps
+		if file.VideoKbps > 0 && file.VideoKbps < kbps {
+			kbps = file.VideoKbps
+		}
+		return height, kbps
+	}
+	if file.VideoKbps > 0 {
+		kbps = min(max(file.VideoKbps, 1000), 40000)
+	}
+	return height, kbps
 }
 
 func parseStart(raw string) (float64, error) {

@@ -33,9 +33,9 @@ var StreamingHardwareChoices = []string{
 	StreamingHardwareAuto, StreamingHardwareSoftware, StreamingHardwareVAAPI, StreamingHardwareQSV, StreamingHardwareNVENC,
 }
 
-// Streaming defaults: 1080p at 6 Mbit/s plays over a home network and a modest uplink alike.
+// Streaming defaults: no height cap (the original size), 6 Mbit/s when the source bitrate is unknown.
 const (
-	DefaultStreamingMaxHeight   = 1080
+	DefaultStreamingMaxHeight   = 0
 	DefaultStreamingVideoKbps   = 6000
 	DefaultStreamingMaxSessions = 2
 )
@@ -89,9 +89,9 @@ func validateStreamingSettings(streaming StreamingSettings) config.Problems {
 			Path: KeyStreamingHardware, Value: streaming.Hardware, Expectation: "one of auto, software, vaapi, qsv, nvenc",
 		})
 	}
-	if streaming.MaxHeight < 144 || streaming.MaxHeight > 4320 {
+	if streaming.MaxHeight != 0 && (streaming.MaxHeight < 144 || streaming.MaxHeight > 4320) {
 		problems = append(problems, config.Problem{
-			Path: KeyStreamingMaxHeight, Value: strconv.FormatInt(streaming.MaxHeight, 10), Expectation: "a height between 144 and 4320",
+			Path: KeyStreamingMaxHeight, Value: strconv.FormatInt(streaming.MaxHeight, 10), Expectation: "0 for no cap, or a height between 144 and 4320",
 		})
 	}
 	if streaming.VideoKbps < 200 || streaming.VideoKbps > 100000 {

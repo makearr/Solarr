@@ -9,6 +9,8 @@ import { Button } from "@/ui/Button";
 
 import { usePlayer } from "./PlayerContext";
 import {
+  QUALITIES,
+  describeSource,
   firstRoute,
   formatClock,
   routeAfterFailure,
@@ -17,6 +19,7 @@ import {
   type PlaybackRoute,
   type PlayerItem,
   type PlayerMode,
+  type Quality,
 } from "./playerModel";
 
 type FilePlayback = components["schemas"]["FilePlayback"];
@@ -32,12 +35,12 @@ export function PlayerDock() {
 
 const FRAME: Record<PlayerMode, string> = {
   bar: "shrink-0 flex items-center gap-3 border-t border-border-subtle bg-surface px-3 py-2",
-  mini: "fixed bottom-4 right-4 z-40 flex w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-xl",
+  mini: "fixed bottom-4 right-4 z-40 flex w-[36rem] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-lg border border-border-subtle bg-surface shadow-xl",
   full: "fixed inset-0 z-50 flex flex-col bg-black text-white",
 };
 
 const VIDEO: Record<PlayerMode, string> = {
-  bar: "h-12 w-20 shrink-0 rounded bg-black object-contain",
+  bar: "h-14 w-24 shrink-0 rounded bg-black object-contain",
   mini: "aspect-video w-full bg-black object-contain",
   full: "min-h-0 w-full flex-1 bg-black object-contain",
 };
@@ -60,12 +63,16 @@ function Dock({ item }: { item: PlayerItem }) {
   const [playing, setPlaying] = useState(true);
   const [muted, setMuted] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [quality, setQuality] = useState<Quality>("original");
+  // Where a direct file resumes after a switch back from a converted stream, which restarts it at zero.
+  const resumeAt = useRef(0);
 
   const facts: FilePlayback | undefined = info.data;
-  const route = chosenRoute ?? (facts ? firstRoute(facts) : null);
+  const isVideo = facts?.kind === "video";
+  // A lower quality is always a conversion; the original goes the way the file likes.
+  const route = quality !== "original" && isVideo ? "transcode" : (chosenRoute ?? (facts ? firstRoute(facts) : null));
   const position = route === "transcode" ? offset + clock : clock;
   const length = lengthOf(facts, item, media.current);
-  const isVideo = facts?.kind === "video";
 
   // Escape leaves the full screen for the bar rather than closing the player.
   useEffect(() => {
@@ -84,6 +91,14 @@ function Dock({ item }: { item: PlayerItem }) {
     }
   };
 
+  const chooseQuality = (next: Quality) => {
+    resumeAt.current = position;
+    setOffset(position);
+    setClock(0);
+    setFailed(false);
+    setQuality(next);
+  };
+
   const failedRoute = () => {
     const other = facts && route ? routeAfterFailure(route, facts) : null;
     if (other) {
@@ -96,14 +111,14 @@ function Dock({ item }: { item: PlayerItem }) {
     }
   };
 
-  const src = route === null ? undefined : route === "direct" ? streamUrl(item.mediaObjectId) : transcodeUrl(item.mediaObjectId, offset);
+  const src = route === null ? undefined : route === "direct" ? streamUrl(item.mediaObjectId) : transcodeUrl(item.mediaObjectId, offset, quality);
   const unplayable = info.isError || failed;
 
   return (
     <section aria-label={t("player.label")} data-region="player" className={FRAME[mode]}>
       <video
         ref={media}
-        key={`${route}-${offset}`}
+        key={`${route}-${offset}-${quality}`}
         src={src}
         autoPlay
         muted={muted}
@@ -112,6 +127,10 @@ function Dock({ item }: { item: PlayerItem }) {
         onTimeUpdate={(event) => setClock(event.currentTarget.currentTime)}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onLoadedMetadata={(event) => {
+          if (route === "direct" && resumeAt.current > 0) event.currentTarget.currentTime = resumeAt.current;
+          resumeAt.current = 0;
+        }}
         onError={failedRoute}
         onEnded={player.hasNext ? player.next : undefined}
         onClick={() => togglePlay(media.current)}
@@ -121,8 +140,8 @@ function Dock({ item }: { item: PlayerItem }) {
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">{item.title}</div>
             <div className={`truncate text-xs ${mode === "full" ? "text-white/70" : "text-ink-muted"}`}>
-              {unplayable ? t("player.failed") : (item.subtitle ?? "")}
-              {!unplayable && route === "transcode" && ` · ${t("player.converted")}`}
+              {[unplayable ? t("player.failed") : item.subtitle, facts ? describeSource(facts) : ""].filter(Boolean).join(" · ")}
+              {!unplayable && route === "transcode" && ` · ${t("player.converted")}${quality === "original" ? "" : ` ${quality}`}`}
             </div>
           </div>
           {mode !== "bar" && <Modes mode={mode} onClose={player.close} />}
@@ -153,6 +172,21 @@ function Dock({ item }: { item: PlayerItem }) {
           />
           <span>{length > 0 ? formatClock(length) : "--:--"}</span>
         </div>
+        {isVideo && facts?.transcode_available && (
+          <select
+            aria-label={t("player.quality")}
+            title={t("player.quality")}
+            value={quality}
+            onChange={(event) => chooseQuality(event.target.value as Quality)}
+            className="shrink-0 self-start rounded border border-border-subtle bg-transparent px-1 py-0.5 text-xs"
+          >
+            {QUALITIES.map((choice) => (
+              <option key={choice} value={choice} className="text-black">
+                {choice === "original" ? t("player.quality.original") : choice}
+              </option>
+            ))}
+          </select>
+        )}
         <Button variant="icon" aria-label={muted ? t("player.unmute") : t("player.mute")} onClick={() => setMuted(!muted)}>
           {muted ? <VolumeX aria-hidden className="size-4" /> : <Volume2 aria-hidden className="size-4" />}
         </Button>
