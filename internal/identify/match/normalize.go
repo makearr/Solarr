@@ -45,6 +45,10 @@ func moveTrailingArticle(s string) string {
 
 func stripPunctuation(s string) string {
 	return strings.Map(func(r rune) rune {
+		// An apostrophe joins its word ("Shep's" is "sheps"), whichever of the look-alikes a tagger typed.
+		if r == '\'' || r == '\u2019' || r == '\u2018' || r == '`' {
+			return -1
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) || unicode.IsSpace(r) {
 			return r
 		}

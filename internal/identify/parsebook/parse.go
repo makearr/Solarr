@@ -51,9 +51,11 @@ var (
 	numberingPattern = regexp.MustCompile(`(?i)^(?:(?:book|vol(?:ume)?|part|no)\.?\s*)?[0-9]{1,3}(?:\.[0-9])?\s*(?:[-.:)]\s*|\s+)`)
 	trailingNumber   = regexp.MustCompile(`\s[0-9]{1,3}$`)
 	separatorPattern = regexp.MustCompile(`\s+-\s+|\s*[–—]\s*`)
-	byPattern        = regexp.MustCompile(`(?i)^(.+?)\s+by\s+(.+)$`)
-	formatWord       = regexp.MustCompile(`(?i)\b(epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|cbz|m4b|m4a|mp3|aac|flac|ogg|opus|wma)\b`)
-	noiseWords       = regexp.MustCompile(`(?i)\b(?:(?:hardcover|hardback|paperback|kindle|unknown)\s+edition|unabridged|abridged|retail|ebook|e-book|audiobook|audio\s?book|proper|repack|rerip|` +
+	// exportDate is the " on 02+04+2013" an Open Library export puts after the author.
+	exportDate = regexp.MustCompile(`\s+on\s+\d{2}\+\d{2}\+\d{4}\b`)
+	byPattern  = regexp.MustCompile(`(?i)^(.+?)\s+by\s+(.+)$`)
+	formatWord = regexp.MustCompile(`(?i)\b(epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|cbz|m4b|m4a|mp3|aac|flac|ogg|opus|wma)\b`)
+	noiseWords = regexp.MustCompile(`(?i)\b(?:(?:hardcover|hardback|paperback|kindle|unknown)\s+edition|unabridged|abridged|retail|ebook|e-book|audiobook|audio\s?book|proper|repack|rerip|` +
 		`read\s+by\s+.+|narrated\s+by\s+.+|vbr|cbr|cbz|epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|pdb|pml|m4b|m4a|mp3|aac|flac|ogg|opus|wma|` +
 		`[0-9]{2,3}\s?k(?:bps|b/s)?)\b`)
 )
@@ -74,7 +76,7 @@ func Parse(name string) (Info, bool) {
 		name = strings.NewReplacer(".", " ", "_", " ").Replace(name)
 	}
 	info.read(name)
-	clean := bracketPattern.ReplaceAllString(name, " ")
+	clean := exportDate.ReplaceAllString(bracketPattern.ReplaceAllString(name, " "), " ")
 	clean = noiseWords.ReplaceAllString(clean, " ")
 	if info.Year > 0 {
 		clean = strings.Replace(clean, strconv.Itoa(info.Year), " ", 1)

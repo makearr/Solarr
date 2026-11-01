@@ -203,6 +203,16 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, floa
 			return named[0], model.FolderLooseMatch, true
 		}
 		named = nil
+		// "Series and the Title": the provider's title is the folder's last words, by the author the folder names.
+		var seriesPrefixed []Candidate
+		for rank, candidate := range candidates {
+			if rank < rankedWell && candidate.namesAuthor(info.Author) && endsTheTitle(candidate.Title, info.Title) {
+				seriesPrefixed = append(seriesPrefixed, candidate)
+			}
+		}
+		if len(seriesPrefixed) == 1 {
+			return seriesPrefixed[0], model.FolderLooseMatch, true
+		}
 	}
 	if info.Author == "" {
 		if len(named) == 1 {
@@ -322,4 +332,10 @@ func (f Format) NamedIDs(provider, externalID string) (IDs, bool) {
 		return IDs{ISBN: isbn}, len(isbn) == 13
 	}
 	return IDs{}, false
+}
+
+// endsTheTitle says the candidate's title, of at least two words, is the last words of the longer title a folder gives.
+func endsTheTitle(candidate, folder string) bool {
+	short, long := strings.Fields(parsebook.CleanTitle(candidate)), strings.Fields(parsebook.CleanTitle(folder))
+	return len(short) >= 2 && len(short) < len(long) && slices.Equal(long[len(long)-len(short):], short)
 }

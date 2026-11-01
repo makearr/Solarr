@@ -129,3 +129,10 @@ func TestParsePath_ABindingAfterTheTitleIsNotPartOfIt(t *testing.T) {
 		t.Errorf("got %+v", got)
 	}
 }
+
+func TestParse_AnOpenLibraryExportNameLosesItsDateAndEdition(t *testing.T) {
+	got, ok := parsebook.Parse("The Lantern Keeper, Fast and Slow by Quell, Mara on 02+04+2013 unknown edition")
+	if !ok || got.Title != "The Lantern Keeper, Fast and Slow" || got.Author != "Quell, Mara" {
+		t.Errorf("got %+v", got)
+	}
+}

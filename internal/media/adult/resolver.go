@@ -3,8 +3,10 @@ package adult
 import (
 	"context"
 	"log/slog"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -133,19 +135,29 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 // know the day, the same day. Two such hits are told apart by the day, and two on one day are one scene listed twice.
 func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, float64, bool) {
 	var named []Candidate
+	offByDays := false
 	for _, candidate := range candidates {
 		if candidate.Rank >= rankedWell {
 			continue
 		}
+		near := false
 		if info.Date != "" && candidate.Date != "" && info.Date != candidate.Date {
-			continue
+			// A site's date and a file's differ by a day or two across time zones; only an identical title may bridge it.
+			if !withinDays(info.Date, candidate.Date, dateToleranceDays) || !titleMatches(candidate.Title, info.Title, false) {
+				continue
+			}
+			near = true
 		}
 		sameDay := info.Date != "" && info.Date == candidate.Date
 		if titleMatches(candidate.Title, info.Title, sameDay) {
 			named = append(named, candidate)
+			offByDays = offByDays || near
 		}
 	}
 	if len(named) == 1 {
+		if offByDays {
+			return named[0], model.FolderLooseMatch, true
+		}
 		return named[0], model.FolderExactMatch, true
 	}
 	var onTheDay []Candidate
@@ -175,7 +187,7 @@ func studioKey(name string) string {
 // titleMatches says two titles are the same scene's: equal, or on the same day one holding the other ("Title" and
 // "Title - Scene 3").
 func titleMatches(found, wanted string, sameDay bool) bool {
-	foundKey, wantedKey := NameKey(found), NameKey(wanted)
+	foundKey, wantedKey := NameKey(extraPrefix.ReplaceAllString(found, "")), NameKey(extraPrefix.ReplaceAllString(wanted, ""))
 	if foundKey == "" || wantedKey == "" {
 		return false
 	}
@@ -230,4 +242,20 @@ func NamedIDs(provider, externalID string) (IDs, bool) {
 		return IDs{FansDB: externalID}, externalID != ""
 	}
 	return IDs{}, false
+}
+
+// dateToleranceDays is how far a file's day may sit from the provider's when the title is otherwise identical.
+const dateToleranceDays = 2
+
+// extraPrefix is the "BONUS-" or "BTS-" a network puts before the title of an extra on its site.
+var extraPrefix = regexp.MustCompile(`(?i)^\s*(?:bonus|bts)\s*[-:]\s*`)
+
+// withinDays says two yyyy-mm-dd dates are at most n days apart; unreadable dates are not.
+func withinDays(a, b string, n int) bool {
+	first, firstErr := time.Parse(time.DateOnly, a)
+	second, secondErr := time.Parse(time.DateOnly, b)
+	if firstErr != nil || secondErr != nil {
+		return false
+	}
+	return first.Sub(second).Abs() <= time.Duration(n)*24*time.Hour
 }

@@ -84,7 +84,41 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsemovie
 			return id, nil
 		}
 	}
+	if pick, ok := r.byLeadingWords(ctx, info); ok && model.AcceptsFolderMatch(model.FolderLooseMatch, r.Threshold) {
+		if id := r.add(ctx, categoryID, IDs{TMDB: pick.TMDBID, IMDb: pick.IMDbID}); id != 0 {
+			return id, nil
+		}
+	}
 	return 0, identifications(candidates)
+}
+
+// maxPrefixSearches is how many words are dropped, from each end in turn, in the extra searches one unplaced name costs.
+const maxPrefixSearches = 2
+
+// byLeadingWords finds a film whose provider title is only the start of a longer folder name ("Phineas and Ferb Night of
+// the Living Pharmacists" for "Phineas and Ferb: Night of the Living Pharmacists"): the name is searched by fewer leading
+// or trailing words, and only a hit of the folder's exact year whose title the folder name begins or ends with is taken.
+func (r Resolver) byLeadingWords(ctx context.Context, info parsemovie.Info) (Candidate, bool) {
+	words := strings.Fields(info.Title)
+	if info.Year == 0 || len(words) < 4 {
+		return Candidate{}, false
+	}
+	var queries []string
+	for drop := 1; drop <= maxPrefixSearches && len(words)-drop >= 2; drop++ {
+		queries = append(queries, strings.Join(words[:len(words)-drop], " "), strings.Join(words[drop:], " "))
+	}
+	for _, query := range queries {
+		found, err := r.Service.Search(ctx, query, info.Year, searchLimit)
+		if err != nil {
+			return Candidate{}, false
+		}
+		for _, candidate := range found {
+			if candidate.Year == info.Year && wordsBound(info.Title, candidate.Title) {
+				return candidate, true
+			}
+		}
+	}
+	return Candidate{}, false
 }
 
 func (r Resolver) warn(message, title string, err error) {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parseadult"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
@@ -493,5 +494,26 @@ func TestPickCandidateBreaksATieOfEqualTitlesByYearAndStudio(t *testing.T) {
 	}
 	if _, _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Year: 2023}); ok {
 		t.Error("two hits of one year with no studio to tell them apart were guessed")
+	}
+}
+
+func TestPickCandidateBridgesADayOrTwoOnlyForAnIdenticalTitle(t *testing.T) {
+	hit := []Candidate{{IDs: IDs{StashDB: "a"}, Title: "Class Two", Date: "2020-07-31"}}
+	pick, confidence, ok := pickCandidate(hit, parseadult.Info{Title: "Class Two", Date: "2020-08-01"})
+	if !ok || pick.IDs.StashDB != "a" || confidence != model.FolderLooseMatch {
+		t.Errorf("a day off: %+v, %v, %v; want a at the loose confidence", pick, confidence, ok)
+	}
+	if _, _, ok := pickCandidate(hit, parseadult.Info{Title: "Class Two", Date: "2020-08-03"}); ok {
+		t.Error("three days off was bridged")
+	}
+	if _, _, ok := pickCandidate(hit, parseadult.Info{Title: "Class Two - Scene 3", Date: "2020-08-01"}); ok {
+		t.Error("a day off was bridged for a title that only contains the other")
+	}
+}
+
+func TestPickCandidateReadsPastABonusPrefix(t *testing.T) {
+	hit := []Candidate{{IDs: IDs{StashDB: "a"}, Title: "BONUS-Class Two", Date: "2020-08-01"}}
+	if pick, _, ok := pickCandidate(hit, parseadult.Info{Title: "Class Two", Date: "2020-08-01"}); !ok || pick.IDs.StashDB != "a" {
+		t.Errorf("pick = %+v, %v; want the bonus entry", pick, ok)
 	}
 }

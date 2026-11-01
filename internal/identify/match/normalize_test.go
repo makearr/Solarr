@@ -57,3 +57,12 @@ func TestJaccardWords_SharedPrefixSubset(t *testing.T) {
 		t.Errorf("jaccardWords(subset) = %v, want strictly between 0 and 1", got)
 	}
 }
+
+func TestNormalizeTitle_ApostrophesJoinTheirWordWhicheverTheyAre(t *testing.T) {
+	want := normalizeTitle("Sheps club mix")
+	for _, title := range []string{"Shep's club mix", "Shep’s club mix", "Shep`s club mix"} {
+		if got := normalizeTitle(title); got != want {
+			t.Errorf("normalizeTitle(%q) = %q, want %q", title, got, want)
+		}
+	}
+}

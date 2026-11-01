@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/makearr/Solarr/internal/acquiring/indexer"
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
 	"github.com/makearr/Solarr/internal/metadata/audible"
 	"github.com/makearr/Solarr/internal/metadata/googlebooks"
@@ -279,5 +280,21 @@ func TestPickCandidate_ABookByTwoAuthorsIsFoundUnderEither(t *testing.T) {
 	}
 	if _, _, ok := pickCandidate(candidates, parsebook.Info{Title: "The Long War", Author: "Mara Quell"}); ok {
 		t.Error("a book by neither author was taken")
+	}
+}
+
+func TestPickCandidate_AFolderThatPrefixesTheSeriesNamesTheBookByTheLastWordsAndTheAuthor(t *testing.T) {
+	candidates := []Candidate{{IDs: IDs{OpenLibrary: "OL5W"}, Title: "The Last Ember", Author: "Mara Quell"}}
+	info := parsebook.Info{Title: "Lantern Cycle and the Last Ember", Author: "Mara Quell"}
+	pick, confidence, ok := pickCandidate(candidates, info)
+	if !ok || pick.IDs.OpenLibrary != "OL5W" || confidence != model.FolderLooseMatch {
+		t.Errorf("pick = %+v, %v, %v; want the book at the loose confidence", pick, confidence, ok)
+	}
+	candidates[0].Author = "Tobin Reyes"
+	if _, _, ok := pickCandidate(candidates, info); ok {
+		t.Error("another author's book of those last words was taken")
+	}
+	if _, _, ok := pickCandidate([]Candidate{{Title: "Ember", Author: "Mara Quell"}}, info); ok {
+		t.Error("a single last word was taken for a title")
 	}
 }

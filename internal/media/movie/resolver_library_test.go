@@ -1,11 +1,14 @@
 package movie_test
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 )
 
 func TestAnAliasThatIsPartOfAnotherFilmsTitleDoesNotPlaceAFolderInTheLibrary(t *testing.T) {
@@ -49,4 +52,24 @@ func TestAYearOffByOneIsPlacedAtTheDefaultThresholdAndHeldAboveIt(t *testing.T) 
 			t.Errorf("threshold %s: work %d, placed %v; want placed %v", c.name, id, id > 0, c.placed)
 		}
 	}
+}
+
+func TestAFolderNameLongerThanTheProvidersTitleIsFoundByItsTrailingWords(t *testing.T) {
+	example := theExample()
+	example.Title, example.ReleaseDate = "Night of the Living Pharmacists", "2014-08-01"
+	service, opened := newService(t, shortQueriesOnly{fakeTMDB{configured: true, movie: example}}, nil)
+	resolver := movie.Resolver{Service: service, Reader: library.NewSeriesReader(opened), DefaultProfileID: 1, Categories: categories{}}
+	if id, _ := resolver.Resolve(t.Context(), 5, parsemovie.Info{Title: "Phineas and Ferb Night of the Living Pharmacists", Year: 2014}, movie.IDs{}); id <= 0 {
+		t.Errorf("work = %d, want the film placed through the folder name's trailing words", id)
+	}
+}
+
+// shortQueriesOnly finds nothing for a long query, as a provider does for a title it holds in fewer words.
+type shortQueriesOnly struct{ fakeTMDB }
+
+func (f shortQueriesOnly) SearchMovies(ctx context.Context, query string, year, page int) ([]tmdb.MovieHit, error) {
+	if len(strings.Fields(query)) > 6 {
+		return nil, nil
+	}
+	return f.fakeTMDB.SearchMovies(ctx, query, year, page)
 }
