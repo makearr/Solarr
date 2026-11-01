@@ -289,7 +289,7 @@ var allowedInternalImports = map[string][]string{
 	// from internal/scanning/scan (todo 4.2, confirmed with the user), so it imports
 	// no more than scan itself does.
 	"internal/scanning/probe": {
-		"internal/platform/clock", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
+		"internal/platform/clock", "internal/platform/filekind", "internal/jobs", "internal/db/library", "internal/platform/mediatool",
 		"internal/db/settings", "internal/platform/fsx",
 	},
 	// ADR-48's import.inspect job: internal/importing/inspect for WALK/GROUP/SHAPE,

@@ -21,6 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/platform/clock"
+	"github.com/makearr/Solarr/internal/platform/filekind"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
@@ -250,6 +251,10 @@ func (j *Job) probeBatch(ctx context.Context, files []library.UnmeasuredFile) fu
 	asked := make([]library.UnmeasuredFile, 0, len(files))
 	var failures []failedFile
 	for _, file := range files {
+		// ffprobe cannot read an ebook, and asking again every run only fills the log.
+		if filekind.Of(file.RelPath) == filekind.Book {
+			continue
+		}
 		root, found := j.roots.RootFolder(file.RootFolderID)
 		if !found {
 			failures = append(failures, failedFile{file, fmt.Errorf("root folder %d is not configured", file.RootFolderID)})

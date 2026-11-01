@@ -365,3 +365,43 @@ func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T)
 		}
 	}
 }
+
+// askedTool records every path it is asked to read.
+type askedTool struct {
+	fakeTool
+	asked []string
+}
+
+func (a *askedTool) ReadTags(ctx context.Context, paths []string) ([]mediatool.Probe, error) {
+	a.asked = append(a.asked, paths...)
+	return a.fakeTool.ReadTags(ctx, paths)
+}
+
+func TestJob_RunNeverAsksTheToolAboutAnEbook(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	for _, name := range []string{"story.epub", "track.flac"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("fixture"), 0o644); err != nil {
+			t.Fatalf("write fixture file: %v", err)
+		}
+	}
+	if _, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "story.epub", SizeBytes: 7, QuickHash: "hash-1", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "track.flac", SizeBytes: 7, QuickHash: "hash-2", FirstSeenAt: time.Unix(0, 0)},
+	}); err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	tool := &askedTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "flac", AudioCodec: "flac", Duration: time.Second}}}
+	job := probe.NewJob(probe.Config{
+		Physical: physical, Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots: fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}}, Tool: tool,
+		Clock: clock.NewFakeAtEpoch(), Logger: slog.New(slog.DiscardHandler),
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if len(tool.asked) != 1 || filepath.Base(tool.asked[0]) != "track.flac" {
+		t.Errorf("tool was asked about %v, want only track.flac", tool.asked)
+	}
+}
