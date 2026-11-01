@@ -70,3 +70,54 @@ func TestCategoryDuplicates_ALibraryTheCallerCannotReadIs404(t *testing.T) {
 		t.Fatalf("status %d, want 404", recorder.Code)
 	}
 }
+
+type fakeSimilarVideos struct{}
+
+func (fakeSimilarVideos) SimilarVideos(_ context.Context, roots []int64, _ int) ([]apiserver.SimilarVideoGroupRow, error) {
+	if len(roots) == 0 {
+		return nil, nil
+	}
+	return []apiserver.SimilarVideoGroupRow{{MaxDistance: 4, Videos: []apiserver.SimilarVideoRow{
+		{MediaObjectID: 1, SizeBytes: 900, RootFolderID: roots[0], RelPath: "A/film.mkv"},
+		{MediaObjectID: 2, SizeBytes: 300, RootFolderID: roots[0], RelPath: "B/film.mp4"},
+	}}}, nil
+}
+
+func TestCategorySimilarVideos_ListsGroupsWithFullPaths(t *testing.T) {
+	fixture := newWorksFixture(t)
+	category, _ := fixture.createCategoryWithRoot(t, "Films", "/media/films")
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, category.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	cookies := fixture.signIn(t, "listener")
+
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories/1/similar-videos"))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status %d, body %s", recorder.Code, recorder.Body)
+	}
+	var body struct {
+		Groups []struct {
+			MaxDistance int `json:"max_distance"`
+			Videos      []struct {
+				Path string `json:"path"`
+			} `json:"videos"`
+		} `json:"groups"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if len(body.Groups) != 1 || body.Groups[0].MaxDistance != 4 || len(body.Groups[0].Videos) != 2 || body.Groups[0].Videos[1].Path != "/media/films/B/film.mp4" {
+		t.Errorf("report = %+v, want one group of two with full paths", body)
+	}
+}
+
+func TestCategorySimilarVideos_ALibraryTheCallerCannotReadIs404(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createCategoryWithRoot(t, "Private", "/media/private")
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	cookies := fixture.signIn(t, "listener")
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/categories/1/similar-videos")); recorder.Code != http.StatusNotFound {
+		t.Fatalf("status %d, want 404", recorder.Code)
+	}
+}

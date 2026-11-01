@@ -3720,6 +3720,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/categories/{id}/similar-videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * Videos one library holds in more than one encode, found by perceptual hash (read only).
+         * @description Files that look like the same cut (a re-encode, another size or container), grouped by the distance between their perceptual hashes. Only files the hash pass has reached are compared. Nothing is changed by looking; the groups with the most files come first.
+         */
+        get: operations["getCategorySimilarVideos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/duplicates/resolve": {
         parameters: {
             query?: never;
@@ -8591,6 +8613,21 @@ export interface components {
                     /** @description The copy to keep. */
                     keep: boolean;
                     paths: string[];
+                }[];
+            }[];
+        };
+        SimilarVideoReport: {
+            /** @description True when the library holds more groups than one report shows. */
+            limited: boolean;
+            groups: {
+                /** @description The widest gap */
+                max_distance: number;
+                videos: {
+                    /** Format: int64 */
+                    media_object_id: number;
+                    /** Format: int64 */
+                    size_bytes: number;
+                    path: string;
                 }[];
             }[];
         };
@@ -15327,6 +15364,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DuplicateReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    getCategorySimilarVideos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimilarVideoReport"];
                 };
             };
             401: components["responses"]["Problem"];

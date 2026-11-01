@@ -4819,6 +4819,22 @@ type SetupStatus struct {
 	NeedsAdministrator bool `json:"needs_administrator"`
 }
 
+// SimilarVideoReport defines model for SimilarVideoReport.
+type SimilarVideoReport struct {
+	Groups []struct {
+		// MaxDistance The widest gap
+		MaxDistance int `json:"max_distance"`
+		Videos      []struct {
+			MediaObjectId int64  `json:"media_object_id"`
+			Path          string `json:"path"`
+			SizeBytes     int64  `json:"size_bytes"`
+		} `json:"videos"`
+	} `json:"groups"`
+
+	// Limited True when the library holds more groups than one report shows.
+	Limited bool `json:"limited"`
+}
+
 // StallCleanup Stalled-download cleanup, off unless enabled: every check_minutes a running download of Solarr's own is compared with the last check; one that has not moved gets a strike, and after strikes in a row, or no_progress_hours without moving, it is removed from the client with its files, blocklisted and searched again. Queued and paused downloads never get strikes. Absent numbers take their defaults.
 type StallCleanup struct {
 	// CheckMinutes Absent means 15.
@@ -7065,6 +7081,9 @@ type ServerInterface interface {
 	// Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 	// (POST /categories/{id}/search)
 	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
+	// Videos one library holds in more than one encode, found by perceptual hash (read only).
+	// (GET /categories/{id}/similar-videos)
+	GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request, id int64)
 	// One library's statistics, as the last rollup computed them (section 21.12).
 	// (GET /categories/{id}/statistics)
 	GetCategoryStatistics(w http.ResponseWriter, r *http.Request, id int64)
@@ -8145,6 +8164,12 @@ func (_ Unimplemented) SetLibraryRules(w http.ResponseWriter, r *http.Request, i
 // Automatic search of every monitored, incomplete album in one library, or of the albums named in work_ids ("search this page"). Each album's best release is sent. Runs as a background job; GET /jobs shows its progress.
 // (POST /categories/{id}/search)
 func (_ Unimplemented) SearchCategory(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Videos one library holds in more than one encode, found by perceptual hash (read only).
+// (GET /categories/{id}/similar-videos)
+func (_ Unimplemented) GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11439,6 +11464,39 @@ func (siw *ServerInterfaceWrapper) SearchCategory(w http.ResponseWriter, r *http
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.SearchCategory(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetCategorySimilarVideos operation middleware
+func (siw *ServerInterfaceWrapper) GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetCategorySimilarVideos(w, r, id)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -19849,6 +19907,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/categories/{id}/search", wrapper.SearchCategory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/categories/{id}/similar-videos", wrapper.GetCategorySimilarVideos)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/categories/{id}/statistics", wrapper.GetCategoryStatistics)

@@ -5985,6 +5985,29 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /categories/{id}/similar-videos:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getCategorySimilarVideos
+      tags: [library]
+      summary: Videos one library holds in more than one encode, found by perceptual hash (read only).
+      description: >-
+        Files that look like the same cut (a re-encode, another size or container), grouped by the distance between their
+        perceptual hashes. Only files the hash pass has reached are compared. Nothing is changed by looking; the groups
+        with the most files come first.
+      responses:
+        "200":
+          description: The groups.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimilarVideoReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
   /categories/{id}/duplicates/resolve:
     parameters:
       - name: id
@@ -12337,6 +12360,28 @@ components:
                     lossless: { type: boolean }
                     keep: { type: boolean, description: The copy to keep. }
                     paths: { type: array, items: { type: string } }
+
+    SimilarVideoReport:
+      type: object
+      required: [groups, limited]
+      properties:
+        limited: { type: boolean, description: "True when the library holds more groups than one report shows." }
+        groups:
+          type: array
+          items:
+            type: object
+            required: [max_distance, videos]
+            properties:
+              max_distance: { type: integer, description: The widest gap, in bits of 64, between two neighbours in the group. }
+              videos:
+                type: array
+                items:
+                  type: object
+                  required: [media_object_id, size_bytes, path]
+                  properties:
+                    media_object_id: { type: integer, format: int64 }
+                    size_bytes: { type: integer, format: int64 }
+                    path: { type: string }
 
     LinkPreview:
       type: object

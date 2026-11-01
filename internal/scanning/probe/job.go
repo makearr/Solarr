@@ -68,7 +68,7 @@ type Job struct {
 	clock    clock.Clock
 	logger   *slog.Logger
 	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
-	resumeAt [4]atomic.Int64
+	resumeAt [5]atomic.Int64
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -140,8 +140,17 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 			}
 		}
 	}
-	if err := j.backfillOshash(ctx, started); err != nil {
+	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile); err != nil {
 		return err
+	}
+	if hasher, ok := j.tool.(PerceptualHasher); ok {
+		err := j.backfill(ctx, started, phashPass, "phash", j.physical.ListVideoWithoutPhash,
+			func(ctx context.Context, file library.UnmeasuredFile) error {
+				return j.perceptualHash(ctx, hasher, file)
+			})
+		if err != nil {
+			return err
+		}
 	}
 	j.logger.Info("probe sweep finished", slog.Int("processed", total), slog.Int("failed", failed))
 
@@ -156,41 +165,65 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	return nil
 }
 
-// oshashPass indexes resumeAt for the hash backfill, after the three probe lists.
-const oshashPass = 3
+// oshashPass and phashPass index resumeAt for the video hash backfills, after the three probe lists.
+const (
+	oshashPass = 3
+	phashPass  = 4
+)
 
-// backfillOshash hashes the video files scanned before the hash was written at scan time (ADR-35); a file that
-// cannot be read stays unhashed and is asked again next run.
-func (j *Job) backfillOshash(ctx context.Context, started time.Time) error {
+// PerceptualHasher is the tool's frame hash (ADR-35); a Tool without it leaves video unhashed.
+type PerceptualHasher interface {
+	PerceptualHash(ctx context.Context, path string) (uint64, error)
+}
+
+// backfill hashes the video files a pass still lists (the hash was not written at scan time); a file that cannot
+// be read stays unhashed and is asked again next run.
+func (j *Job) backfill(
+	ctx context.Context, started time.Time, pass int, name string,
+	list func(context.Context, int64, int64) ([]library.UnmeasuredFile, error),
+	hash func(context.Context, library.UnmeasuredFile) error,
+) error {
 	if j.fs == nil {
 		return nil
 	}
-	afterID := j.resumeAt[oshashPass].Swap(0)
+	afterID := j.resumeAt[pass].Swap(0)
 	hashed := 0
 	for {
 		if err := ctx.Err(); err != nil {
 			return jobs.Retryablef("probe.context", string(JobType), err)
 		}
-		batch, err := j.physical.ListVideoWithoutOshash(ctx, afterID, batchSize)
+		batch, err := list(ctx, afterID, batchSize)
 		if err != nil {
 			return fmt.Errorf("probe: %w", err)
 		}
 		for _, file := range batch {
-			if err := j.hashFile(ctx, file); err != nil {
-				j.logger.WarnContext(ctx, "oshash failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+			if err := hash(ctx, file); err != nil {
+				j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
 			} else {
 				hashed++
+			}
+			if j.clock.Now().Sub(started) >= yieldAfter {
+				j.resumeAt[pass].Store(file.MediaObjectID)
+				return fmt.Errorf("probe: %d %s hashes in %s: %w", hashed, name, yieldAfter, jobs.ErrYield)
 			}
 		}
 		if len(batch) < batchSize {
 			return nil
 		}
 		afterID = batch[len(batch)-1].MediaObjectID
-		if j.clock.Now().Sub(started) >= yieldAfter {
-			j.resumeAt[oshashPass].Store(afterID)
-			return fmt.Errorf("probe: %d hashes in %s: %w", hashed, yieldAfter, jobs.ErrYield)
-		}
 	}
+}
+
+func (j *Job) perceptualHash(ctx context.Context, hasher PerceptualHasher, file library.UnmeasuredFile) error {
+	root, found := j.roots.RootFolder(file.RootFolderID)
+	if !found {
+		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
+	}
+	phash, err := hasher.PerceptualHash(ctx, path.Join(root.Path, file.RelPath))
+	if err != nil {
+		return err
+	}
+	return j.physical.SetPhash(ctx, file.MediaObjectID, phash)
 }
 
 func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {

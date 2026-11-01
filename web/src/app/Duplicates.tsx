@@ -95,6 +95,39 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
   );
 }
 
+/** Videos that look like one cut in several encodes, by perceptual hash. Read only: which file to keep is the user's call. */
+function SimilarVideos({ categoryId }: { categoryId: number }) {
+  const report = useQuery({
+    queryKey: ["similar-videos", categoryId],
+    queryFn: () => ok(api.GET("/categories/{id}/similar-videos", { params: { path: { id: categoryId } } })),
+  });
+  const data = report.data;
+  if (!data || data.groups.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
+      <h2 className="text-sm font-medium">Similar videos</h2>
+      <p className="max-w-xl text-xs text-ink-muted">
+        These files look like the same video in another encode, size or container. Only files the background hash pass has
+        reached are compared, so more can appear over time.{data.limited ? " Only the largest groups are shown." : ""}
+      </p>
+      <ul className="flex flex-col gap-3">
+        {data.groups.map((group) => (
+          <li key={group.videos.map((video) => video.media_object_id).join("-")} className="flex flex-col gap-1 text-xs">
+            <span className="text-ink-muted">
+              {group.videos.length} files, at most {group.max_distance} of 64 bits apart
+            </span>
+            {group.videos.map((video) => (
+              <span key={video.media_object_id} className="break-all font-mono">
+                {video.path} <span className="text-ink-muted">({formatBytes(video.size_bytes)})</span>
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 type Group = components["schemas"]["DuplicateReport"]["groups"][number];
 type Copy = Group["copies"][number];
 type Action = "link" | "recycle";
@@ -293,6 +326,7 @@ export function Duplicates() {
         </p>
       </header>
       {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
+      {categoryId !== undefined && <SimilarVideos categoryId={Number(categoryId)} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
       {report.error !== null && !report.isLoading && <p className="text-sm text-danger">The report could not be made.</p>}
       {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}

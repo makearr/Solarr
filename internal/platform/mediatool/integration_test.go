@@ -139,3 +139,36 @@ func TestReadTags_LyricsLanguageAgainstRealFFprobe(t *testing.T) {
 		t.Errorf("lyrics languages = %v, want %v", got, want)
 	}
 }
+
+// The same synthetic video encoded twice (size and bitrate differ) hashes within a few bits; another picture does not.
+func TestPerceptualHash_AgainstRealFFmpeg(t *testing.T) {
+	requireFFmpeg(t)
+	directory := t.TempDir()
+	encode := func(name, source, size, bitrate string) string {
+		path := filepath.Join(directory, name)
+		command := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", source,
+			"-t", "10", "-s", size, "-c:v", "mpeg4", "-b:v", bitrate, path)
+		if output, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("encode %s: %v: %s", name, err, output)
+		}
+		return path
+	}
+	tool := mediatool.New(mediatool.ExecRunner{}, 1)
+	hash := func(path string) uint64 {
+		value, err := tool.PerceptualHash(t.Context(), path)
+		if err != nil {
+			t.Fatalf("PerceptualHash(%s): %v", path, err)
+		}
+		return value
+	}
+	cut := "mandelbrot=size=640x360:rate=10"
+	large := hash(encode("large.mkv", cut, "640x360", "2M"))
+	small := hash(encode("small.mkv", cut, "320x180", "300k"))
+	other := hash(encode("other.mkv", "testsrc2=size=640x360:rate=10:duration=10", "640x360", "2M"))
+	if got := mediatool.PerceptualDistance(large, small); got > 8 {
+		t.Errorf("same cut, two encodes: %d bits apart, want <= 8", got)
+	}
+	if got := mediatool.PerceptualDistance(large, other); got < 12 {
+		t.Errorf("different pictures: %d bits apart, want >= 12", got)
+	}
+}

@@ -119,6 +119,8 @@ type Config struct {
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
 	Duplicates DuplicateReader
+	// SimilarVideos finds a library's videos that look alike. Optional: nil answers 503.
+	SimilarVideos SimilarVideoReader
 	// RecycleBinContents lists and empties the recycle bins. Optional: nil answers 503.
 	RecycleBinContents RecycleBinContents
 	// DuplicateResolver keeps one copy of a track and links or recycles the others. Optional: nil answers 503.
@@ -318,6 +320,7 @@ type Server struct {
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
 	duplicates              DuplicateReader
+	similarVideos           SimilarVideoReader
 	recycleContents         RecycleBinContents
 	duplicateResolver       DuplicateResolver
 	links                   LinkManager
@@ -446,6 +449,7 @@ func New(config Config) (*Server, error) {
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
 		duplicates:              config.Duplicates,
+		similarVideos:           config.SimilarVideos,
 		recycleContents:         config.RecycleBinContents,
 		duplicateResolver:       config.DuplicateResolver,
 		links:                   config.Links,
@@ -706,6 +710,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/categories/{id}", server.routeGetCategory)
 			secured.Get("/categories/{id}/statistics", server.routeGetCategoryStatistics)
 			secured.Get("/categories/{id}/duplicates", server.routeGetCategoryDuplicates)
+			secured.Get("/categories/{id}/similar-videos", server.routeGetCategorySimilarVideos)
 			secured.Post("/categories/{id}/duplicates/resolve", server.routeResolveCategoryDuplicates)
 			secured.Get("/categories/{id}/links", server.routeGetCategoryLinks)
 			secured.Post("/categories/{id}/links", server.routeLinkCategoryCopies)

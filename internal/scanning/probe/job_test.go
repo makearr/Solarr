@@ -312,3 +312,56 @@ func TestJob_RunHashesVideoScannedBeforeTheHashExisted(t *testing.T) {
 		}
 	}
 }
+
+// hashingTool also answers the frame hash; it fails for one file name to show the pass goes on.
+type hashingTool struct {
+	fakeTool
+	failFor string
+}
+
+func (h *hashingTool) PerceptualHash(_ context.Context, path string) (uint64, error) {
+	if filepath.Base(path) == h.failFor {
+		return 0, mediatool.ErrNoFrames
+	}
+	return 0xF0F0F0F0F0F0F0F0, nil
+}
+
+func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T) {
+	opened := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	root := t.TempDir()
+	for _, name := range []string{"a.mkv", "broken.mkv"} {
+		if err := os.WriteFile(filepath.Join(root, name), make([]byte, 100), 0o644); err != nil {
+			t.Fatalf("write fixture file: %v", err)
+		}
+	}
+	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "a.mkv", SizeBytes: 100, QuickHash: "a", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "broken.mkv", SizeBytes: 100, QuickHash: "b", FirstSeenAt: time.Unix(0, 0)},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	job := probe.NewJob(probe.Config{
+		Physical: physical,
+		Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots:    fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool:     &hashingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}}, failFor: "broken.mkv"},
+		FS:       fsx.NewOS(),
+		Clock:    clock.NewFakeAtEpoch(),
+		Logger:   slog.New(slog.DiscardHandler),
+	})
+	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	want := uint64(0xF0F0F0F0F0F0F0F0)
+	for index, wantValid := range []bool{true, false} {
+		object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[index].MediaObjectID)
+		if err != nil {
+			t.Fatalf("GetMediaObject: %v", err)
+		}
+		if object.Phash.Valid != wantValid || (wantValid && uint64(object.Phash.Int64) != want) {
+			t.Errorf("file %d phash = %+v, want valid=%v value %x", index, object.Phash, wantValid, want)
+		}
+	}
+}

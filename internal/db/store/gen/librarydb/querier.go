@@ -619,6 +619,8 @@ type Querier interface {
 	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]ListGenresForPersonDiscographyRow, error)
 	ListGenresOfType(ctx context.Context, mediaType string) ([]ListGenresOfTypeRow, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
+	// Every hashed video with its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
+	ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, error)
 	// The artists with something held in a library, and the release groups they hold there: what a discography is
 	// compared against. A held work without a release-group id yields an empty id.
 	ListHeldReleaseGroupsByArtist(ctx context.Context, categoryID int64) ([]ListHeldReleaseGroupsByArtistRow, error)
@@ -833,6 +835,8 @@ type Querier interface {
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
 	// Video files scanned before oshash was written at scan time; under 64 KiB the hash is undefined, so those never list.
 	ListVideoWithoutOshash(ctx context.Context, arg ListVideoWithoutOshashParams) ([]ListVideoWithoutOshashRow, error)
+	// Video files with no perceptual hash yet: the lowest-priority pass of the probe sweep (ADR-35).
+	ListVideoWithoutPhash(ctx context.Context, arg ListVideoWithoutPhashParams) ([]ListVideoWithoutPhashRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
@@ -1150,6 +1154,7 @@ type Querier interface {
 	// A provider's picture of a person is kept in fields_json and never replaces one already there.
 	SetPersonImageURL(ctx context.Context, arg SetPersonImageURLParams) error
 	SetPersonMonitored(ctx context.Context, arg SetPersonMonitoredParams) error
+	SetPhash(ctx context.Context, arg SetPhashParams) error
 	// Progress mid-sweep: the cursor advances, the watermark does not.
 	SetScanCursor(ctx context.Context, arg SetScanCursorParams) error
 	SetSeasonPartsMonitored(ctx context.Context, arg SetSeasonPartsMonitoredParams) error
