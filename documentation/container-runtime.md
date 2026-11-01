@@ -85,6 +85,10 @@ The image's own `HEALTHCHECK` (`solarr healthcheck`) re-derives this same order 
 `config.yml` and `settings.db` independently on every run, so a port changed from the interface
 does not make the container report itself unhealthy.
 
+Set `SOLARR_HEALTHCHECK_DNS` to a host name (for example `musicbrainz.org`) and the probe also resolves it, so a container
+whose VPN sidecar was recreated, and whose network namespace went stale, reports unhealthy. Unset by default: an instance
+without internet access must stay healthy. The image waits 180 s (`start-period`) before failures count.
+
 ## Network egress and the IP allowlist
 
 `network.proxy`/`network.proxy_bypass` (a global HTTP or SOCKS5 proxy for outbound

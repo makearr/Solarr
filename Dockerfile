@@ -80,9 +80,9 @@ EXPOSE 5454
 
 # Root only until internal/platform/privilege drops to PUID:PGID, which it does before anything else.
 
-# A subcommand of the same binary, so the image needs no curl. start-period
-# covers migrations on a large database.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+# A subcommand of the same binary, so the image needs no curl. start-period covers migrations on a large database and a
+# slow start on a loaded host (45-60 s at load 30).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=3 \
   CMD ["/usr/local/bin/solarr", "healthcheck"]
 
 ENTRYPOINT ["/usr/local/bin/solarr"]

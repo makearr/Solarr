@@ -21,6 +21,8 @@ const (
 	OutcomeFailed    Outcome = "failed"
 	OutcomeRetrying  Outcome = "retrying"
 	OutcomeReclaimed Outcome = "reclaimed"
+	// OutcomeInterrupted is a run the process shutdown cut short; it is not counted as an attempt.
+	OutcomeInterrupted Outcome = "interrupted"
 )
 
 // Complete marks a job succeeded and closes its attempt.
@@ -132,6 +134,36 @@ func (q *Queue) Fail(ctx context.Context, job Job, owner string, attempt Attempt
 		return Resolution{}, fmt.Errorf("%w: job %d", ErrLeaseLost, job.ID)
 	}
 	return resolution, nil
+}
+
+// Release puts a job whose run shutdown cut short back in the queue, its attempt given back.
+func (q *Queue) Release(ctx context.Context, job Job, owner string, attempt Attempt) error {
+	now := q.clock.Now()
+	var affected int64
+	err := q.store.Write(ctx, store.PrioNormal, func(ctx context.Context, tx *sql.Tx) error {
+		queries := q.queries.WithTx(tx)
+		rows, err := queries.ReleaseInterruptedJob(ctx, jobsdb.ReleaseInterruptedJobParams{Now: now.Unix(), ID: job.ID, LeaseOwner: nullString(owner)})
+		if err != nil {
+			return err
+		}
+		affected = rows
+		if rows == 0 {
+			return nil
+		}
+		return queries.RecordAttemptFinish(ctx, jobsdb.RecordAttemptFinishParams{
+			FinishedAt: sql.NullInt64{Int64: now.Unix(), Valid: true},
+			Outcome:    nullString(string(OutcomeInterrupted)),
+			Error:      nullString("interrupted by shutdown"),
+			ID:         attempt.ID,
+		})
+	})
+	if err != nil {
+		return fmt.Errorf("jobs: release %d: %w", job.ID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("%w: job %d", ErrLeaseLost, job.ID)
+	}
+	return nil
 }
 
 // Cancel stops a job that has not finished. A job already running keeps running

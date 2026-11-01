@@ -46,6 +46,13 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 			Link:    "/connections/indexers",
 		})
 	}
+	if a.searchingOffWithConnections(ctx) {
+		checks = append(checks, apiserver.HealthCheck{
+			ID: "searching_off", Severity: apiserver.HealthWarning,
+			Message: "Automatic searching is off, so nothing wanted is searched for until you switch on \"Search for what is missing\" in the scheduler.",
+			Link:    "/settings/scheduler",
+		})
+	}
 	if downloaders, err := a.Cache.Downloaders(ctx); err == nil && !anyEnabledDownloader(downloaders) {
 		checks = append(checks, apiserver.HealthCheck{
 			ID: "no_downloader", Severity: apiserver.HealthWarning,
@@ -253,4 +260,14 @@ func (a SystemHealth) pausedProviders() []apiserver.HealthCheck {
 		})
 	}
 	return checks
+}
+
+// searchingOffWithConnections says a client and an indexer are ready while the search task is switched off.
+func (a SystemHealth) searchingOffWithConnections(ctx context.Context) bool {
+	if a.Cache.Snapshot().ScheduleEnabled("hunt") {
+		return false
+	}
+	indexers, indexerErr := a.Cache.Indexers(ctx)
+	downloaders, downloaderErr := a.Cache.Downloaders(ctx)
+	return indexerErr == nil && downloaderErr == nil && anyEnabledIndexer(indexers) && anyEnabledDownloader(downloaders)
 }

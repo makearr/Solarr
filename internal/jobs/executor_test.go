@@ -303,3 +303,24 @@ func TestExecute_RenewsTheLeaseWhileRunning(t *testing.T) {
 	<-done
 	t.Error("the lease was never extended while the job ran")
 }
+
+func TestExecute_AShutdownGivesTheAttemptBack(t *testing.T) {
+	queue, fake := newQueue(t)
+	executor := newExecutor(t, queue, fake, jobs.ModeNormal)
+	ctx, stop := context.WithCancel(t.Context())
+	executor.Handle(typeBackup, jobs.HandlerFunc(func(run context.Context, _ jobs.Job) error {
+		stop()
+		return fmt.Errorf("scan: %w", run.Err())
+	}))
+
+	enqueued := mustEnqueue(t, queue, jobs.Request{Type: typeBackup})
+	executor.Execute(ctx, claimOne(t, queue, jobs.PoolMaintenance, "worker-1"))
+
+	released, err := queue.Get(t.Context(), enqueued.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if released.State != jobs.StatePending || released.Attempts != 0 {
+		t.Errorf("after a shutdown: state %q, attempts %d; want PENDING with 0", released.State, released.Attempts)
+	}
+}

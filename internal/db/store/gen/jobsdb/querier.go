@@ -55,6 +55,8 @@ type Querier interface {
 	ReclaimExpiredLeases(ctx context.Context, arg ReclaimExpiredLeasesParams) ([]ReclaimExpiredLeasesRow, error)
 	RecordAttemptFinish(ctx context.Context, arg RecordAttemptFinishParams) error
 	RecordAttemptStart(ctx context.Context, arg RecordAttemptStartParams) (JobAttempt, error)
+	// A run cut short by shutdown goes back to the queue without losing the attempt it never got to finish.
+	ReleaseInterruptedJob(ctx context.Context, arg ReleaseInterruptedJobParams) (int64, error)
 	// Renewal is conditional on still owning the lease. A worker whose lease was
 	// reaped must not be able to take it back and race the worker that has it now.
 	RenewLease(ctx context.Context, arg RenewLeaseParams) (int64, error)

@@ -90,3 +90,18 @@ func TestSetScheduleCadences_KeepsSeveralInOrder(t *testing.T) {
 		t.Error("no schedule at all was accepted")
 	}
 }
+
+func TestDecideSearching_DisablesOnlyTheNamedTasksAndIsRemembered(t *testing.T) {
+	cache, cl := newCache(t)
+	if cache.Snapshot().SearchingDecided() {
+		t.Fatal("a new instance counted as decided")
+	}
+	if err := cache.DecideSearching(t.Context(), cl, []string{"hunt", "rss"}); err != nil {
+		t.Fatalf("DecideSearching: %v", err)
+	}
+	snapshot := cache.Snapshot()
+	if !snapshot.SearchingDecided() || snapshot.ScheduleEnabled("hunt") || snapshot.ScheduleEnabled("rss") || !snapshot.ScheduleEnabled("scan") {
+		t.Errorf("decided %v, hunt %v, rss %v, scan %v; want true, false, false, true",
+			snapshot.SearchingDecided(), snapshot.ScheduleEnabled("hunt"), snapshot.ScheduleEnabled("rss"), snapshot.ScheduleEnabled("scan"))
+	}
+}

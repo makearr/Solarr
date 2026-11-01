@@ -26,6 +26,9 @@ import (
 // reports as unhealthy rather than being cut off mid-request.
 const healthcheckTimeout = 4 * time.Second
 
+// healthcheckDNSEnv names a host the probe must also resolve, for instances whose network can go stale underneath them.
+const healthcheckDNSEnv = "SOLARR_HEALTHCHECK_DNS"
+
 // runHealthcheck is what the image's HEALTHCHECK runs. It is a subcommand of
 // the same static binary, so the image needs no curl or wget (section 20.2).
 func runHealthcheck(args []string, out, errOut io.Writer) error {
@@ -54,6 +57,14 @@ func runHealthcheck(args []string, out, errOut io.Writer) error {
 		body, _ := io.ReadAll(io.LimitReader(response.Body, 512))
 		return fmt.Errorf("healthcheck: %s returned %d: %s",
 			endpoint, response.StatusCode, strings.TrimSpace(string(body)))
+	}
+	// Opt-in: an instance behind a VPN container can look healthy while its network namespace is stale.
+	if host := os.Getenv(healthcheckDNSEnv); host != "" {
+		lookup, cancel := context.WithTimeout(context.Background(), healthcheckTimeout/2)
+		defer cancel()
+		if _, err := net.DefaultResolver.LookupHost(lookup, host); err != nil {
+			return fmt.Errorf("healthcheck: cannot resolve %s (%s): %w", host, healthcheckDNSEnv, err)
+		}
 	}
 	_, err = fmt.Fprintln(out, "healthy")
 	return err

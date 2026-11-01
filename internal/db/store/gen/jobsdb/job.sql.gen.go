@@ -928,6 +928,29 @@ func (q *Queries) RecordAttemptStart(ctx context.Context, arg RecordAttemptStart
 	return i, err
 }
 
+const releaseInterruptedJob = `-- name: ReleaseInterruptedJob :execrows
+UPDATE job
+SET state = 'PENDING', attempts = CASE WHEN attempts > 0 THEN attempts - 1 ELSE 0 END,
+    lease_owner = NULL, lease_expires_at = NULL, run_after = ?1,
+    last_error = 'interrupted by shutdown', updated_at = ?1
+WHERE id = ?2 AND lease_owner = ?3
+`
+
+type ReleaseInterruptedJobParams struct {
+	Now        int64
+	ID         int64
+	LeaseOwner sql.NullString
+}
+
+// A run cut short by shutdown goes back to the queue without losing the attempt it never got to finish.
+func (q *Queries) ReleaseInterruptedJob(ctx context.Context, arg ReleaseInterruptedJobParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, releaseInterruptedJob, arg.Now, arg.ID, arg.LeaseOwner)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const renewLease = `-- name: RenewLease :execrows
 
 UPDATE job

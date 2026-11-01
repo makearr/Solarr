@@ -196,6 +196,9 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
 		return err
 	}
+	if err := running.ensureSearchingDecision(ctx); err != nil {
+		return err
+	}
 	if abandoned, err := library.NewArrImports(running.library).AbandonRunning(ctx, clock.NewSystem().Now().Unix()); err != nil {
 		return err
 	} else if abandoned > 0 {

@@ -145,6 +145,7 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 	stopRenewing()
 	<-renewalDone
 
+	shutdown := ctx.Err() != nil && errors.Is(runErr, context.Canceled)
 	// Recorded without cancellation: at shutdown the parent context ends too, and an unrecorded outcome waits out the lease.
 	ctx = context.WithoutCancel(ctx)
 	if runErr == nil || errors.Is(runErr, ErrYield) {
@@ -154,6 +155,13 @@ func (e *Executor) Execute(ctx context.Context, job Job) {
 		}
 		if runErr != nil {
 			e.continueAfterYield(ctx, job, logger)
+		}
+		return
+	}
+
+	if shutdown {
+		if err := e.queue.Release(ctx, job, e.owner, attempt); err != nil {
+			logger.Warn("could not release an interrupted job", slog.Any("error", err))
 		}
 		return
 	}

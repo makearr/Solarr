@@ -469,3 +469,22 @@ func TestListStaleVideoProbes_FindsOnlyVideo(t *testing.T) {
 		t.Errorf("ListStaleVideoProbes = %+v, %v; want %+v", stale, err, want)
 	}
 }
+
+func TestListUnmeasured_NeverListsAnEbookAndStillFillsThePage(t *testing.T) {
+	opened, _ := newLibrary(t)
+	physical := library.NewPhysical(opened)
+	seen := time.Unix(1, 0)
+	_, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
+		{RelPath: "A/book1.epub", SizeBytes: 10, QuickHash: "e1", FirstSeenAt: seen},
+		{RelPath: "A/book2.pdf", SizeBytes: 10, QuickHash: "e2", FirstSeenAt: seen},
+		{RelPath: "A/01.flac", SizeBytes: 10, QuickHash: "a1", FirstSeenAt: seen},
+		{RelPath: "A/02.flac", SizeBytes: 10, QuickHash: "a2", FirstSeenAt: seen},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBatch: %v", err)
+	}
+	files, err := physical.ListUnmeasured(t.Context(), 0, 2)
+	if err != nil || len(files) != 2 || files[0].RelPath != "A/01.flac" || files[1].RelPath != "A/02.flac" {
+		t.Errorf("ListUnmeasured = %+v, %v; want the two flac files although two ebooks come first", files, err)
+	}
+}

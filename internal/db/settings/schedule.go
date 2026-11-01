@@ -227,3 +227,19 @@ func importSchedules(ctx context.Context, queries *settingsdb.Queries, cl clock.
 	}
 	return nil
 }
+
+// KeySearchingDecided marks that this instance has been through the first-start choice about automatic searching.
+const KeySearchingDecided = "acquire.searching_decided"
+
+// SearchingDecided says the first-start choice was made, so an upgrade or a restart does not make it again.
+func (s *Snapshot) SearchingDecided() bool { return s.policyBool(KeySearchingDecided, false) }
+
+// DecideSearching records the first-start choice; with off, the tasks that search and grab by themselves are
+// disabled in the same write, to be switched on in the scheduler once a client and a monitoring choice exist.
+func (c *Cache) DecideSearching(ctx context.Context, cl clock.Clock, off []string) error {
+	values := map[string]string{KeySearchingDecided: "true"}
+	for _, taskKey := range off {
+		values[scheduleEnabledKey(taskKey)] = "false"
+	}
+	return c.setPolicies(ctx, cl, values)
+}

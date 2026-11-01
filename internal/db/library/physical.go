@@ -215,16 +215,24 @@ type UnmeasuredFile struct {
 // already uses (ADR-35), so a file that fails its probe this run does not block
 // the cursor from reaching what comes after it.
 func (p Physical) ListUnmeasured(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
-	rows, err := librarydb.New(p.store.Read()).ListUnmeasured(ctx, librarydb.ListUnmeasuredParams{
-		AfterID: afterID, PageSize: pageSize,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("library: list unmeasured: %w", err)
-	}
-	files := make([]UnmeasuredFile, len(rows))
-	for index, row := range rows {
-		files[index] = UnmeasuredFile{
-			MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath,
+	var files []UnmeasuredFile
+	for int64(len(files)) < pageSize {
+		rows, err := librarydb.New(p.store.Read()).ListUnmeasured(ctx, librarydb.ListUnmeasuredParams{
+			AfterID: afterID, PageSize: pageSize,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("library: list unmeasured: %w", err)
+		}
+		for _, row := range rows {
+			afterID = row.ID
+			// ffprobe cannot read an ebook, so it is never measured and must not be listed again.
+			if filekind.Of(row.RelPath) == filekind.Book {
+				continue
+			}
+			files = append(files, UnmeasuredFile{MediaObjectID: row.ID, RootFolderID: row.RootFolderID, RelPath: row.RelPath})
+		}
+		if int64(len(rows)) < pageSize {
+			break
 		}
 	}
 	return files, nil

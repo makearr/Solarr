@@ -82,6 +82,14 @@ SET state = 'PENDING_RETRY', lease_owner = NULL, lease_expires_at = NULL,
     run_after = ?, last_error = ?, updated_at = ?
 WHERE id = ? AND lease_owner = ?;
 
+-- A run cut short by shutdown goes back to the queue without losing the attempt it never got to finish.
+-- name: ReleaseInterruptedJob :execrows
+UPDATE job
+SET state = 'PENDING', attempts = CASE WHEN attempts > 0 THEN attempts - 1 ELSE 0 END,
+    lease_owner = NULL, lease_expires_at = NULL, run_after = sqlc.arg(now),
+    last_error = 'interrupted by shutdown', updated_at = sqlc.arg(now)
+WHERE id = sqlc.arg(id) AND lease_owner = sqlc.arg(lease_owner);
+
 -- name: CancelJob :execrows
 UPDATE job
 SET state = 'CANCELLED', lease_owner = NULL, lease_expires_at = NULL,
