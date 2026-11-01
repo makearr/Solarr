@@ -26,6 +26,13 @@ func (a UnidentifiedTV) PlaceFile(
 	ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool,
 ) (int64, int64, error) {
 	provider, externalID, season, episodes := placement.Provider, placement.ExternalID, placement.Group, placement.Parts
+	if provider == tv.ProviderContinued {
+		tvdb, group, parts, ok := tv.ReadContinued(externalID)
+		if !ok {
+			return 0, 0, fmt.Errorf("%w: %q is not a continued episode", apiserver.ErrInvalidChoice, externalID)
+		}
+		provider, externalID, season, episodes = tv.ProviderTVDB, tvdb, group, parts
+	}
 	id, err := strconv.ParseInt(externalID, 10, 64)
 	if err != nil || id <= 0 {
 		return 0, 0, fmt.Errorf("%w: %q is not a series id", apiserver.ErrInvalidChoice, externalID)
@@ -59,8 +66,10 @@ func (a UnidentifiedTV) PlaceFile(
 			if err != nil {
 				return workID, resolved, err
 			}
-			// A name that says no episode is left in the queue for its own decision.
-			if _, err := a.Identifier.Resolve(ctx, categoryID, row, ids, 0, nil); err == nil {
+			// A file numbered past its season carries the episode it is; a name that says no episode is left in the queue
+			// for its own decision.
+			group, parts := continuedOf(row)
+			if _, err := a.Identifier.Resolve(ctx, categoryID, row, ids, group, parts); err == nil {
 				resolved++
 			} else if !errors.Is(err, tv.ErrNoEpisodes) && !errors.Is(err, tv.ErrEpisodeUnknown) {
 				return workID, resolved, err
@@ -68,6 +77,19 @@ func (a UnidentifiedTV) PlaceFile(
 		}
 	}
 	return workID, resolved, nil
+}
+
+// continuedOf is the episode a queued file's own candidate says it is, when one does.
+func continuedOf(row library.Row) (int, []int) {
+	for _, candidate := range row.Candidates {
+		if candidate.Provider != tv.ProviderContinued {
+			continue
+		}
+		if _, group, parts, ok := tv.ReadContinued(candidate.ExternalID); ok {
+			return group, parts
+		}
+	}
+	return 0, nil
 }
 
 func translateTVResolveError(err error) error {

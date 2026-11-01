@@ -95,6 +95,8 @@ type Scene struct {
 	Fingerprint []Fingerprint
 	// Sources names the providers that supplied it, in the order they were read.
 	Sources []string
+	// Members are the scenes of a film built from them; empty for anything a provider holds as one.
+	Members []IDs
 }
 
 // Fingerprint is a hash of the scene's file as a server holds it.

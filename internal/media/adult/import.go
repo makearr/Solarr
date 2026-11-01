@@ -196,7 +196,13 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	if request.As != nil && request.Guess > 0 && request.Guess < GuessFloor {
 		return library.Placement{}, batch.ErrGuessTooWeak
 	}
-	if request.As != nil {
+	if request.As != nil && request.As.Provider == ProviderFilm {
+		film, err := i.config.Resolver.AddFilm(ctx, request.CategoryID, request.As.ExternalID)
+		if err != nil {
+			return library.Placement{}, err
+		}
+		workID = film
+	} else if request.As != nil {
 		ids, ok := NamedIDs(request.As.Provider, request.As.ExternalID)
 		if !ok {
 			return library.Placement{}, fmt.Errorf("%w: %s %q is not a scene id", media.ErrInvalidAdd, request.As.Provider, request.As.ExternalID)

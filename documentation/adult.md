@@ -15,6 +15,11 @@ Films come from ThePornDB's REST API (`internal/metadata/theporndb`, `/movies`, 
 Whisparr's server hold scenes only, so a Movies library finds its films only there. They are stored as scenes with the
 film's site as studio.
 
+A film a provider holds only as numbered scenes ("Title - Scene 1", "Title - Scene 2") has no record of its own. A whole file of
+that title is never placed on one scene: Review offers "Title: the whole film of N scenes" first, and picking it builds one work
+(`adult/film.go`) with the film's title, everyone who appears in it and their length added up. Every scene's id stays on the work,
+so a release or fingerprint naming a scene finds the film; the `adult:film` id marks it, and no refresh renames it.
+
 The three stash-box servers are one client, `internal/metadata/stashbox`. Their keys are the owner's own, sealed in
 `settings.db`, never shipped. ThePornDB answers `searchScene` as the others do but not the `queryScenes` filter, so
 following a performer or studio uses StashDB and FansDB.

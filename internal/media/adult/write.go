@@ -2,6 +2,7 @@ package adult
 
 import (
 	"encoding/json"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -58,6 +59,18 @@ func ToWrite(scene Scene, now time.Time) library.SeriesWrite {
 		CertificationAge: -1,
 		Fields:           fieldWrites(scene, source, now),
 		LeadRole:         RolePerformer,
+	}
+	for _, member := range scene.Members {
+		for _, id := range idWrites(member) {
+			if !slices.Contains(write.IDs, id) {
+				write.IDs = append(write.IDs, id)
+			}
+		}
+	}
+	if len(scene.Members) > 0 {
+		// The first scene's id makes it unique: two films may share a title and a studio.
+		_, first := CandidateID(scene.Members[0])
+		write.IDs = append(write.IDs, library.ExternalIDWrite{Provider: ProviderFilm, ExternalID: first})
 	}
 	// A network that names the primary studio adds its id and logo to it (library.SeriesWrite.MoreNetworks).
 	if scene.StudioID != "" {

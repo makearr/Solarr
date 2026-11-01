@@ -64,10 +64,15 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parseadult
 		r.warn("scene lookup failed", info.Title, err)
 		return 0, nil
 	}
-	if pick, confidence, ok := pickCandidate(candidates, info); ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
+	// A whole film beside its numbered scenes is a person's call, however well one scene's title fits.
+	film, isFilm := filmOf(candidates, info)
+	if pick, confidence, ok := pickCandidate(candidates, info); !isFilm && ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
 		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Studio: pick.Studio, Date: pick.Date}); id != 0 {
 			return id, nil
 		}
+	}
+	if isFilm {
+		return 0, append([]model.Identification{film.identification()}, r.identifications(candidates)...)
 	}
 	return 0, r.identifications(candidates)
 }
@@ -115,14 +120,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 	if r.Service.IsExcluded(ctx, ids) {
 		return Excluded
 	}
-	profile := r.DefaultProfileID
-	monitor := MonitorScene
-	if category, ok := r.Categories.Category(categoryID); ok {
-		profile = r.Categories.ProfileFor(category, profile)
-		if category.TVMonitor == settings.TVMonitorNone {
-			monitor = MonitorNone
-		}
-	}
+	profile, monitor := r.addChoices(categoryID)
 	result, err := r.Service.Add(ctx, AddRequest{IDs: ids, Hint: hint, CategoryID: categoryID, ProfileID: profile, Monitor: monitor})
 	if err != nil {
 		r.warn("scene could not be added", ids.StashDB+ids.ThePornDB+ids.FansDB, err)

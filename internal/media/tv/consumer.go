@@ -162,10 +162,14 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		}
 		var links []library.SeriesFileLink
 		var leftover []int
+		look := secondLook{reader: c.config.Reader, categoryID: categoryID, workID: series, now: now}
 		for _, i := range indexes {
 			info, ok := parsetv.ParsePath(readable[i].File.RelPath, now)
 			keys := partKeys(info)
-			if series == 0 || !ok || len(keys) == 0 {
+			if series != 0 && (!ok || len(keys) == 0) && model.AcceptsFolderMatch(model.FolderExactMatch, c.resolver.Threshold) {
+				keys = look.byTitle(ctx, readable[i].File.RelPath)
+			}
+			if series == 0 || len(keys) == 0 {
 				leftover = append(leftover, i)
 				continue
 			}
@@ -201,9 +205,13 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 			}
 		}
 		for _, i := range leftover {
+			own := candidates
+			if continued, found := look.continued(ctx, readable[i].File.RelPath); found {
+				own = []model.Identification{continued}
+			}
 			queued = append(queued, library.QueueEntry{
 				MediaObjectID: registered[i].MediaObjectID, RootFolderID: root.ID, RelPath: readable[i].File.RelPath,
-				Candidates: candidates, At: now.Unix(),
+				Candidates: own, At: now.Unix(),
 			})
 		}
 	}

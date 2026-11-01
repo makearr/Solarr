@@ -150,6 +150,9 @@ func NewFiles(resolver Resolver, unidentified library.Unidentified, clock clock.
 	return works.Files{
 		Series: resolver.Service.Series, Unidentified: unidentified, Clock: clock, AllowAgain: allowAgain,
 		Resolve: func(ctx context.Context, categoryID int64, placement media.Placement) (int64, error) {
+			if placement.Provider == ProviderFilm {
+				return resolver.AddFilm(ctx, categoryID, placement.ExternalID)
+			}
 			ids, ok := NamedIDs(placement.Provider, placement.ExternalID)
 			if !ok {
 				return 0, fmt.Errorf("%w: %s %q is not a scene id", media.ErrInvalidAdd, placement.Provider, placement.ExternalID)

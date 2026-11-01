@@ -63,9 +63,7 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 		touched := map[int64]bool{}
 		var attachedParts []int64
 		for _, link := range links {
-			if err := queries.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: workID, MediaObjectID: link.MediaObjectID, FirstSeenAt: at.Unix()}); err != nil {
-				return fmt.Errorf("link file: %w", err)
-			}
+			linked := false
 			for _, key := range link.Parts {
 				part, found, err := resolveSeriesPart(ctx, queries, workID, key)
 				if err != nil {
@@ -75,6 +73,13 @@ func (s Series) AttachFiles(ctx context.Context, at time.Time, workID, rootFolde
 				if !found || itemID == 0 {
 					result.Unresolved = append(result.Unresolved, link.MediaObjectID)
 					continue
+				}
+				// A file none of whose episodes exists stays out of the work, or the queue would lose it as placed.
+				if !linked {
+					if err := queries.LinkWorkFile(ctx, librarydb.LinkWorkFileParams{WorkID: workID, MediaObjectID: link.MediaObjectID, FirstSeenAt: at.Unix()}); err != nil {
+						return fmt.Errorf("link file: %w", err)
+					}
+					linked = true
 				}
 				if part.Monitored == 0 && !link.KeepMonitoring {
 					if err := queries.SetWorkPartMonitored(ctx, librarydb.SetWorkPartMonitoredParams{Monitored: 1, ID: part.ID}); err != nil {

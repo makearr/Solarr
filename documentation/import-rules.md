@@ -29,3 +29,11 @@ the importer passes in and answers with a `model.Rejection` or nothing.
 | UnverifiedSceneNumbering | needs TheXEM | not ported |
 
 A file ffprobe cannot read is let through (upstream holds it): the tool is optional.
+
+## Files a series' numbers cannot place
+
+A scan takes a second look at a series folder's leftovers (`internal/media/tv/secondlook.go`). A file with no number is placed
+when its name, or the part after the last " - ", is the exact title of one episode; two episodes of that title, or a near match,
+stay in Review. A file numbered past its season's end (S01E19 of a season of 18) is never placed by itself: Review offers the
+episode the number counts on to, "Duplicate episode: a second copy of S02E01" when that one is held, and picking it (with the
+whole folder if asked) adds the file there, where the Duplicates report lists both copies and can link them.

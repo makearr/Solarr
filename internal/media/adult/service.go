@@ -489,6 +489,10 @@ func (s Service) Refresh(ctx context.Context, categoryID, workID int64) (Scene, 
 	if err != nil {
 		return Scene{}, err
 	}
+	// No provider holds the whole of a film built from its scenes: asked, it would answer "Scene 1".
+	if _, film := provider[ProviderFilm]; film {
+		return Scene{}, nil
+	}
 	basics, err := s.Reader.Basics(ctx, workID)
 	if err != nil {
 		return Scene{}, err
