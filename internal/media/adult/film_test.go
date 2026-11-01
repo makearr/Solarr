@@ -21,7 +21,8 @@ import (
 func TestFilmTitle_ReadsANumberedSceneOnly(t *testing.T) {
 	for title, want := range map[string]string{
 		"Long Summer - Scene 1": "Long Summer", "Long Summer, Scene 12": "Long Summer", "Long Summer (Scene 3)": "Long Summer",
-		"Long Summer: scene 2": "Long Summer", "Scene 1": "", "The Scene": "", "Long Summer": "",
+		"Long Summer: scene 2": "Long Summer", "Two Timing In The Sun. Sc1": "Two Timing In The Sun", "Two Timing In The Sun Sc4": "Two Timing In The Sun",
+		"Scene 1": "", "The Scene": "", "Long Summer": "",
 	} {
 		got, numbered := filmTitle(title)
 		if got != want || numbered != (want != "") {
@@ -52,6 +53,19 @@ func TestFilmOf_FindsTheScenesOfTheFilesTitle(t *testing.T) {
 	}
 	if members, ok := filmMembers(picked.ExternalID.ExternalID); !ok || !reflect.DeepEqual(members, []IDs{{StashDB: "s1"}, {ThePornDB: "s2"}}) {
 		t.Errorf("members = %+v, %v", members, ok)
+	}
+}
+
+// Found live: scene records carry upload years, and two providers list one film under two studios, one of them unnamed.
+func TestFilmOf_ToleratesUploadYearsAndTakesTheLargestListing(t *testing.T) {
+	candidates := []Candidate{
+		{IDs: IDs{ThePornDB: "a"}, Title: "Long Summer. Sc1", Year: 2015}, {IDs: IDs{ThePornDB: "b"}, Title: "Long Summer Sc2", Year: 2015},
+		{IDs: IDs{ThePornDB: "c"}, Title: "Long Summer Sc3", Year: 2015},
+		{IDs: IDs{StashDB: "d"}, Title: "Long Summer Scene 2", Studio: "Night Studio", Year: 2015}, {IDs: IDs{StashDB: "e"}, Title: "Long Summer Scene 3", Studio: "Night Studio", Year: 2015},
+	}
+	film, found := filmOf(candidates, parseadult.Info{Title: "Long Summer", Year: 2013})
+	if !found || len(film.Scenes) != 3 {
+		t.Errorf("film = %+v, %v; want the three scenes", film, found)
 	}
 }
 

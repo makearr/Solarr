@@ -108,15 +108,11 @@ func (l *secondLook) continued(ctx context.Context, relPath string) (model.Ident
 	if !known {
 		return model.Identification{}, false
 	}
-	var parts []int
-	group := 0
-	for _, number := range info.EpisodeNumbers {
-		season, episode, past := runsPast(series.Episodes, info.SeasonNumber, number)
-		if !past || (group != 0 && season != group) {
+	group, parts, found := titledEpisode(series.Episodes, relPath)
+	if !found {
+		if group, parts, found = countedOn(series.Episodes, info); !found {
 			return model.Identification{}, false
 		}
-		group = season
-		parts = append(parts, episode)
 	}
 	return model.Identification{
 		Strategy:   "numbering",
@@ -125,6 +121,39 @@ func (l *secondLook) continued(ctx context.Context, relPath string) (model.Ident
 		Confidence: 0.5,
 		Evidence:   []model.MatchEvidence{{Kind: "parse", Detail: continuedDetail(series, info.SeasonNumber, group, parts)}},
 	}, true
+}
+
+// titledEpisode is the one episode the title a file's name carries after its number names, the stronger evidence.
+func titledEpisode(episodes []library.SeriesEpisode, relPath string) (int, []int, bool) {
+	title := fileEpisodeTitle(relPath)
+	if len(title) < shortestTitleKey {
+		return 0, nil, false
+	}
+	var found []library.SeriesEpisode
+	for _, episode := range episodes {
+		if episode.Season > 0 && episodeKey(episode.Title) == title {
+			found = append(found, episode)
+		}
+	}
+	if len(found) != 1 {
+		return 0, nil, false
+	}
+	return found[0].Season, []int{found[0].Number}, true
+}
+
+// countedOn is where a file's numbers count on to, all in one season.
+func countedOn(episodes []library.SeriesEpisode, info parsetv.Info) (int, []int, bool) {
+	group := 0
+	var parts []int
+	for _, number := range info.EpisodeNumbers {
+		season, episode, past := runsPast(episodes, info.SeasonNumber, number)
+		if !past || (group != 0 && season != group) {
+			return 0, nil, false
+		}
+		group = season
+		parts = append(parts, episode)
+	}
+	return group, parts, true
 }
 
 func continuedDetail(series library.SeriesDetailRow, pastSeason, group int, parts []int) string {

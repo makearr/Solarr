@@ -217,3 +217,13 @@ func (Module) ResolveListEntry(_ context.Context, entry media.ListEntry) (media.
 	}
 	return media.ListMatch{}, nil
 }
+
+var _ media.PlacingFiles = Module{}
+
+// PlaceFile implements media.PlacingFiles.
+func (m Module) PlaceFile(ctx context.Context, categoryID, mediaObjectID int64, placement media.Placement, wholeFolder bool) (int64, int64, error) {
+	if m.Files == nil {
+		return 0, 0, media.ErrNotWired
+	}
+	return m.Files.PlaceFile(ctx, categoryID, mediaObjectID, placement, wholeFolder)
+}

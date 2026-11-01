@@ -68,13 +68,14 @@ func TestScan_ANumberPastTheSeasonsEndIsOfferedAsTheEpisodeItCountsOnTo(t *testi
 		writeVideo(t, fsys, series.Title+"/Season 02/"+series.Title+" - S02E01.mkv"),
 		writeVideo(t, fsys, series.Title+"/Season 01/"+series.Title+" - S01E03.mkv"),
 		writeVideo(t, fsys, series.Title+"/Season 01/"+series.Title+" - S01E40.mkv"),
+		writeVideo(t, fsys, series.Title+"/Season 01/"+series.Title+" - S01E41 - Cold Harbour.mkv"),
 	}
 	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
 		t.Fatal(err)
 	}
 	queue, err := library.NewUnidentified(opened).List(t.Context(), []int64{1}, paginate.Cursor{}, 10)
-	if err != nil || len(queue) != 2 {
-		t.Fatalf("queue = %+v, %v; want both files past the season", queue, err)
+	if err != nil || len(queue) != 3 {
+		t.Fatalf("queue = %+v, %v; want the three files past the season", queue, err)
 	}
 	for _, row := range queue {
 		switch row.RelPath {
@@ -85,6 +86,11 @@ func TestScan_ANumberPastTheSeasonsEndIsOfferedAsTheEpisodeItCountsOnTo(t *testi
 			}}
 			if !reflect.DeepEqual(row.Candidates, want) {
 				t.Errorf("candidates = %+v, want %+v", row.Candidates, want)
+			}
+		case series.Title + "/Season 01/" + series.Title + " - S01E41 - Cold Harbour.mkv":
+			// The title it carries outranks the count, which would run past the last season.
+			if len(row.Candidates) != 1 || row.Candidates[0].ExternalID != "1234:1:2" {
+				t.Errorf("candidates = %+v, want the episode titled so", row.Candidates)
 			}
 		default:
 			if len(row.Candidates) != 0 {

@@ -21,7 +21,11 @@ import (
 const ProviderFilm = "adult:film"
 
 // sceneNumbered is a scene title that numbers a part of a film.
-var sceneNumbered = regexp.MustCompile(`(?i)^(.*?)[\s\-:,(\[]*\bscene\s*\d+[)\]]?\s*$`)
+var sceneNumbered = regexp.MustCompile(`(?i)^(.*?)[\s\-:,.(\[]*\b(?:scene|sc)\s*\d+[)\]]?\s*$`)
+
+// filmYearDrift is how far a scene's year may sit from a film's: scene records carry the day a site put them up. Review
+// confirms the film, so a loose year costs little.
+const filmYearDrift = 2
 
 // filmTitle is the film a numbered scene title belongs to.
 func filmTitle(title string) (string, bool) {
@@ -39,7 +43,7 @@ type foundFilm struct {
 }
 
 // filmOf finds the scenes of the one film a whole file is: at least two numbered scenes of the file's title, of one
-// studio. A name that itself numbers a scene is that scene, not the film.
+// studio, the largest listing when providers list it apart. A name that itself numbers a scene is that scene.
 func filmOf(candidates []Candidate, info parseadult.Info) (foundFilm, bool) {
 	if _, numbered := filmTitle(info.Title); numbered {
 		return foundFilm{}, false
@@ -49,7 +53,10 @@ func filmOf(candidates []Candidate, info parseadult.Info) (foundFilm, bool) {
 	var order []string
 	for _, candidate := range candidates {
 		title, numbered := filmTitle(candidate.Title)
-		if !numbered || NameKey(title) != wanted || (info.Year != 0 && candidate.Year != 0 && candidate.Year != info.Year) {
+		if !numbered || NameKey(title) != wanted {
+			continue
+		}
+		if drift := candidate.Year - info.Year; info.Year != 0 && candidate.Year != 0 && (drift > filmYearDrift || drift < -filmYearDrift) {
 			continue
 		}
 		if _, externalID := CandidateID(candidate.IDs); externalID == "" {
@@ -62,16 +69,18 @@ func filmOf(candidates []Candidate, info parseadult.Info) (foundFilm, bool) {
 		}
 		byStudio[key].Scenes = append(byStudio[key].Scenes, candidate)
 	}
-	var films []foundFilm
+	var best foundFilm
+	tied := false
 	for _, key := range order {
-		if len(byStudio[key].Scenes) >= 2 {
-			films = append(films, *byStudio[key])
+		film := *byStudio[key]
+		switch {
+		case len(film.Scenes) > len(best.Scenes):
+			best, tied = film, false
+		case len(film.Scenes) == len(best.Scenes):
+			tied = true
 		}
 	}
-	if len(films) != 1 {
-		return foundFilm{}, false
-	}
-	return films[0], true
+	return best, len(best.Scenes) >= 2 && !tied
 }
 
 // identification offers the film in Review, ahead of its scenes.

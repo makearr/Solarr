@@ -81,6 +81,8 @@ export function UnidentifiedReview() {
   }
 
   const [latest, ...older] = review.data.items;
+  // What the scan offered for this file, named well enough to be chosen from here.
+  const suggestions = (review.data.file.candidates ?? []).filter((candidate) => candidate.title && candidate.provider && candidate.external_id).slice(0, 5);
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-6xl flex-col gap-5 p-6">
@@ -135,6 +137,25 @@ export function UnidentifiedReview() {
 
         {choose.isError && <p className="text-xs text-danger">That {words.work} could not be applied.</p>}
         {notMedia.isError && <p className="text-xs text-danger">The file could not be marked.</p>}
+
+        {suggestions.length > 0 && (
+          <section aria-label="Suggested" className="flex flex-col gap-1.5 rounded-lg border border-border-subtle bg-surface p-3 text-xs">
+            <h2 className="font-medium text-ink">Suggested</h2>
+            {suggestions.map((candidate) => (
+              <div key={`${candidate.provider}:${candidate.external_id}`} className="flex items-center gap-3">
+                <span className="min-w-0 flex-1 text-ink">{candidate.title}</span>
+                <button
+                  type="button"
+                  disabled={choose.isPending}
+                  onClick={() => choose.mutate({ provider: candidate.provider, external_id: candidate.external_id })}
+                  className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink disabled:opacity-50"
+                >
+                  Use this
+                </button>
+              </div>
+            ))}
+          </section>
+        )}
 
         {library && (
           <div className="rounded-lg border border-border-subtle bg-surface p-3">
