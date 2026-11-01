@@ -156,7 +156,18 @@ func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, boo
 	if len(onTheDay) > 0 {
 		return onTheDay[0], true
 	}
+	// With no day, the same title in the same year from the same studio is the same listing again.
+	for _, candidate := range named {
+		if info.Year != 0 && candidate.Year == info.Year && info.Studio != "" && studioKey(candidate.Studio) == studioKey(info.Studio) {
+			return candidate, true
+		}
+	}
 	return Candidate{}, false
+}
+
+// studioKey is a studio's name without the apostrophes sites spell differently ("Devil's Film", "Devils Film").
+func studioKey(name string) string {
+	return NameKey(strings.NewReplacer("'", "", "\u2019", "").Replace(name))
 }
 
 // titleMatches says two titles are the same scene's: equal, or on the same day one holding the other ("Title" and

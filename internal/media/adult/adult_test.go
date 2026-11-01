@@ -477,3 +477,21 @@ func TestSearchAsksEveryProviderSoAFilmOnlyThePornDBHoldsIsStillFound(t *testing
 		t.Errorf("pick = %+v, %v; want the film", pick, ok)
 	}
 }
+
+func TestPickCandidateBreaksATieOfEqualTitlesByYearAndStudio(t *testing.T) {
+	hits := []Candidate{
+		{IDs: IDs{ThePornDB: "t"}, Title: "Well Worth the Wait", Studio: "Other Studio", Year: 2023},
+		{IDs: IDs{StashDB: "a"}, Title: "Well Worth the Wait", Studio: "Devil's Film", Year: 2019},
+		{IDs: IDs{StashDB: "b"}, Title: "Well Worth the Wait", Studio: "Devil's Film", Year: 2023},
+	}
+	pick, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Studio: "Devils Film", Year: 2023})
+	if !ok || pick.IDs.StashDB != "b" {
+		t.Errorf("pick = %+v, %v; want b", pick, ok)
+	}
+	if _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Studio: "Devils Film", Year: 2021}); ok {
+		t.Error("a year no hit has was guessed")
+	}
+	if _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Year: 2023}); ok {
+		t.Error("two hits of one year with no studio to tell them apart were guessed")
+	}
+}
