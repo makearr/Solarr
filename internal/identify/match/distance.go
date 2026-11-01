@@ -193,10 +193,25 @@ func bestTitleSimilarity(a, b string) (score float64, method string) {
 	tokenSimilarity := jaccardWords(normalizedA, normalizedB)
 	jaroWinklerSimilarity := jaroWinkler(normalizedA, normalizedB)
 
+	score, method = tokenSimilarity, "token-set"
 	if jaroWinklerSimilarity > tokenSimilarity {
-		return jaroWinklerSimilarity, "jaro-winkler"
+		score, method = jaroWinklerSimilarity, "jaro-winkler"
 	}
-	return tokenSimilarity, "token-set"
+	if fusedPrefix(normalizedA, normalizedB) {
+		score = min(score, fusedPrefixCap)
+	}
+	return score, method
+}
+
+// fusedPrefixCap keeps a title with a word fused onto the front of the other ("RESail" for "Sail") below the 0.75 title gate.
+const fusedPrefixCap = 0.6
+
+// fusedPrefix reports whether one title is the other with letters glued on in front, no word boundary between.
+func fusedPrefix(a, b string) bool {
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	return len(a) >= 3 && len(a) < len(b) && strings.HasSuffix(b, a) && b[len(b)-len(a)-1] != ' '
 }
 
 // descriptorWords say what kind of release a title is, not which one: two soundtracks share "original motion

@@ -42,3 +42,14 @@ func TestTitleSimilarity_SymbolOnlyTitlesCompareAsWritten(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleSimilarity_FusedPrefixIsNotTheSameTitle(t *testing.T) {
+	for _, tc := range []struct{ a, b string }{{"RESail", "Sail"}, {"Sail", "RESail"}} {
+		if got := match.TitleSimilarity(tc.a, tc.b); got > 0.6 {
+			t.Errorf("TitleSimilarity(%q, %q) = %v, want <= 0.6", tc.a, tc.b, got)
+		}
+	}
+	if got := match.TitleSimilarity("Sail", "Sails"); got < 0.75 {
+		t.Errorf("TitleSimilarity(Sail, Sails) = %v, want a plural to stay close", got)
+	}
+}
