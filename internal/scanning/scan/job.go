@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path"
@@ -130,6 +131,8 @@ type Job struct {
 	physical library.Physical
 	clock    clock.Clock
 	logger   *slog.Logger
+	// sliceBudget bounds one run of a root walk; the walk resumes from its cursor in the job that follows.
+	sliceBudget time.Duration
 }
 
 // Config is what a Job needs. Every field is required except Logger.
@@ -142,7 +145,12 @@ type Config struct {
 	Physical library.Physical
 	Clock    clock.Clock
 	Logger   *slog.Logger
+	// SliceBudget is how long one run walks a root before it yields its pool slot; zero takes DefaultSliceBudget.
+	SliceBudget time.Duration
 }
+
+// DefaultSliceBudget keeps a 200,000-file music walk from holding a scan slot for hours while small libraries wait.
+const DefaultSliceBudget = 10 * time.Minute
 
 // NewJob builds the handler.
 func NewJob(config Config) *Job {
@@ -150,15 +158,20 @@ func NewJob(config Config) *Job {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	budget := config.SliceBudget
+	if budget <= 0 {
+		budget = DefaultSliceBudget
+	}
 	return &Job{
-		sweeper:  NewSweeper(config.FS, config.Clock),
-		scans:    config.Scans,
-		roots:    config.Roots,
-		tool:     config.Tool,
-		sweeps:   config.Sweeps,
-		physical: config.Physical,
-		clock:    config.Clock,
-		logger:   logger,
+		sliceBudget: budget,
+		sweeper:     NewSweeper(config.FS, config.Clock),
+		scans:       config.Scans,
+		roots:       config.Roots,
+		tool:        config.Tool,
+		sweeps:      config.Sweeps,
+		physical:    config.Physical,
+		clock:       config.Clock,
+		logger:      logger,
 	}
 }
 
@@ -218,10 +231,20 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		},
 		advance: func(ctx context.Context, directory string) error { return j.scans.Advance(ctx, root.ID, directory) },
 	}
-	result, err := j.sweeper.Sweep(ctx, root.Path, state,
+	// A full sweep is the evidence that unseen paths are gone, which a resumed one cannot give, so it is never cut into slices.
+	sliceCtx, endSlice := ctx, func() {}
+	if !payload.Full {
+		sliceCtx, endSlice = context.WithTimeout(ctx, j.sliceBudget)
+	}
+	defer endSlice()
+	result, err := j.sweeper.Sweep(sliceCtx, root.Path, state,
 		Options{Full: payload.Full, Include: sweep.Include}, flow.submit)
 	if waited := flow.wait(ctx); err == nil {
 		err = waited
+	}
+	if err != nil && !payload.Full && ctx.Err() == nil && sliceCtx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
+		j.logger.Info("library scan yielding", slog.Int64("root_folder_id", root.ID), slog.Duration("after", j.sliceBudget))
+		return fmt.Errorf("scan of root %d: %s spent: %w", root.ID, j.sliceBudget, jobs.ErrYield)
 	}
 	if err != nil {
 		// Nothing to record: each batch persisted its own cursor as it committed,

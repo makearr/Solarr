@@ -699,3 +699,32 @@ func TestJob_RefusesACategoryNoMediaTypeScans(t *testing.T) {
 		t.Errorf("consumer was handed %d batches, want none", fixture.recorder.batches)
 	}
 }
+
+func TestJob_AWalkOverItsSliceBudgetYieldsAndFinishesNothing(t *testing.T) {
+	fixture := newJobFixture(t, "Artist/Album/01.flac", "Artist/Album/02.flac")
+	handler := scan.NewJob(scan.Config{
+		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
+		Tool: fixture.tool, Sweeps: scan.Always{Consumer: fixture.recorder, Include: scan.IsAudio}, Physical: library.NewPhysical(fixture.store),
+		Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler), SliceBudget: time.Nanosecond,
+	})
+
+	err := fixture.run(t, handler, scan.Payload{RootFolderID: 1})
+	if !errors.Is(err, jobs.ErrYield) {
+		t.Fatalf("Run = %v, want a yield", err)
+	}
+	if progress := fixture.progress(t); !progress.SweptThrough.IsZero() {
+		t.Errorf("progress = %+v, want the sweep left unfinished for the next slice", progress)
+	}
+}
+
+func TestJob_AFullSweepIsNeverSliced(t *testing.T) {
+	fixture := newJobFixture(t, "Artist/Album/01.flac")
+	handler := scan.NewJob(scan.Config{
+		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
+		Tool: fixture.tool, Sweeps: scan.Always{Consumer: fixture.recorder, Include: scan.IsAudio}, Physical: library.NewPhysical(fixture.store),
+		Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler), SliceBudget: time.Nanosecond,
+	})
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("a full sweep was cut short: %v", err)
+	}
+}
