@@ -1,4 +1,4 @@
-package adapters
+package arrmap
 
 import (
 	"testing"
@@ -25,7 +25,7 @@ func TestMonitorChoiceUsesTheTypesOwnWordsForMonitoredAndNot(t *testing.T) {
 		for _, key := range test.options {
 			descriptor.MonitorOptions = append(descriptor.MonitorOptions, media.Choice{Key: key})
 		}
-		got, known := monitorChoice(descriptor, test.monitored)
+		got, known := MonitorChoice(descriptor, test.monitored)
 		if got != test.want || known != test.known {
 			t.Errorf("%s: got %q, %v; want %q, %v", test.name, got, known, test.want, test.known)
 		}

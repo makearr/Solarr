@@ -5,35 +5,13 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
-	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
-
-// previewItem is one *Arr item as a preview counts it: its root folder, profile, and the id it would be matched by.
-type previewItem struct {
-	rootFolder string
-	monitored  bool
-	profileID  int64
-	// provider and externalID find it in Solarr; an empty externalID is an item the import skips.
-	provider, externalID string
-	// person says the id is a person's (a Lidarr artist), not a work's.
-	person bool
-}
-
-// previewSource is what one app gives a preview: its items, root folders, profiles and Media Management.
-type previewSource struct {
-	itemKind  string
-	mediaType string
-	items     []previewItem
-	roots     []string
-	profiles  map[int64]string
-	settings  arrimport.MediaManagement
-}
 
 // Preview reads what Sync would do with options and changes nothing (ADR-52's preview): per root folder where it is
 // here and what of it is new, per profile the Solarr profile proposed, per library the settings that would change.
@@ -42,21 +20,21 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 	if err != nil {
 		return apiserver.ArrImportPreview{}, err
 	}
-	if !arrAppSupported(instance.App) {
+	if !a.supported(instance.App) {
 		return apiserver.ArrImportPreview{}, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
 	if err != nil {
 		return apiserver.ArrImportPreview{}, err
 	}
-	source, err := readPreviewSource(ctx, instance.App, a.Lidarr(instance.BaseURL, apiKey.Reveal()))
+	source, err := a.Importers[instance.App].Preview(ctx, a.Lidarr(instance.BaseURL, apiKey.Reveal()))
 	if err != nil {
 		return apiserver.ArrImportPreview{}, err
 	}
 
 	snapshot := a.Cache.Snapshot()
 	roots := snapshot.RootFolders()
-	preview := apiserver.ArrImportPreview{ItemKind: source.itemKind}
+	preview := apiserver.ArrImportPreview{ItemKind: source.ItemKind}
 	byPath := map[string]int{}
 	rootFor := func(path string) *apiserver.ArrPreviewRoot {
 		if index, seen := byPath[path]; seen {
@@ -77,22 +55,22 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 		preview.Roots = append(preview.Roots, root)
 		return &preview.Roots[len(preview.Roots)-1]
 	}
-	for _, path := range source.roots {
+	for _, path := range source.Roots {
 		rootFor(path)
 	}
 
 	profileItems := map[int64]int64{}
-	for _, item := range source.items {
-		if (item.monitored && !options.Monitored) || (!item.monitored && !options.Unmonitored) {
+	for _, item := range source.Items {
+		if (item.Monitored && !options.Monitored) || (!item.Monitored && !options.Unmonitored) {
 			continue
 		}
-		root := rootFor(item.rootFolder)
+		root := rootFor(item.RootFolder)
 		root.Chosen++
-		profileItems[item.profileID]++
+		profileItems[item.ProfileID]++
 		switch held, err := a.held(ctx, item); {
 		case err != nil:
 			return apiserver.ArrImportPreview{}, err
-		case item.externalID == "":
+		case item.ExternalID == "":
 			root.WithoutID++
 		case held:
 			root.InLibrary++
@@ -102,11 +80,11 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 	}
 
 	for id, count := range profileItems {
-		profile := apiserver.ArrPreviewProfile{ArrProfileID: id, Name: source.profiles[id], Items: count}
+		profile := apiserver.ArrPreviewProfile{ArrProfileID: id, Name: source.Profiles[id], Items: count}
 		if profile.Name == "" {
 			profile.Name = "Profile " + strconv.FormatInt(id, 10)
 		}
-		profile.ProposedProfileID = sameNameProfile(snapshot.QualityProfiles(), source.mediaType, source.profiles[id])
+		profile.ProposedProfileID = arrmap.SameNameProfile(snapshot.QualityProfiles(), source.MediaType, source.Profiles[id])
 		preview.Profiles = append(preview.Profiles, profile)
 	}
 	slices.SortFunc(preview.Profiles, func(x, y apiserver.ArrPreviewProfile) int { return int(y.Items - x.Items) })
@@ -122,103 +100,22 @@ func (a ArrSync) Preview(ctx context.Context, instanceID int64, options apiserve
 		if !found {
 			continue
 		}
-		_, changes := arrFileManagement(category.FileManagement, source.settings, instance.App, a.extraFileDefaults(category.MediaType))
+		_, changes := arrFileManagement(category.FileManagement, source.Settings, instance.App, a.extraFileDefaults(category.MediaType))
 		preview.Settings = append(preview.Settings, apiserver.ArrPreviewSettings{LibraryID: id, Changes: changes})
 	}
 	return preview, nil
 }
 
-// readPreviewSource reads one app's items, root folders, profiles and Media Management, live.
-func readPreviewSource(ctx context.Context, app settings.ArrApp, client arrimport.LidarrClient) (previewSource, error) {
-	var (
-		source   previewSource
-		folders  []arrimport.LidarrRootFolder
-		profiles []arrimport.SonarrQualityProfile
-		err      error
-	)
-	switch app {
-	case settings.ArrAppSonarr:
-		sonarr := client.Sonarr()
-		source.itemKind, source.mediaType = "series", "tv"
-		series, listErr := sonarr.Series(ctx)
-		if listErr != nil {
-			return previewSource{}, listErr
-		}
-		for _, one := range series {
-			source.items = append(source.items, previewItem{rootFolder: one.RootFolderPath, monitored: one.Monitored,
-				profileID: one.QualityProfileID, provider: tvProviderTVDB, externalID: nonZero(one.TVDBID)})
-		}
-		folders, _ = sonarr.RootFolders(ctx)
-		profiles, _ = sonarr.QualityProfiles(ctx)
-		source.settings, err = sonarr.MediaManagement(ctx)
-	case settings.ArrAppRadarr:
-		radarr := client.Radarr()
-		source.itemKind, source.mediaType = "movies", "movie"
-		movies, listErr := radarr.Movies(ctx)
-		if listErr != nil {
-			return previewSource{}, listErr
-		}
-		for _, movie := range movies {
-			source.items = append(source.items, previewItem{rootFolder: movie.RootFolderPath, monitored: movie.Monitored,
-				profileID: movie.QualityProfileID, provider: movieProviderTMDB, externalID: nonZero(movie.TMDBID)})
-		}
-		folders, _ = radarr.RootFolders(ctx)
-		profiles, _ = radarr.QualityProfiles(ctx)
-		source.settings, err = radarr.MediaManagement(ctx)
-	case settings.ArrAppWhisparr:
-		whisparr := client.Whisparr()
-		source.itemKind, source.mediaType = "scenes", "adult"
-		scenes, listErr := whisparr.Items(ctx)
-		if listErr != nil {
-			return previewSource{}, listErr
-		}
-		for _, scene := range scenes {
-			source.items = append(source.items, previewItem{rootFolder: scene.RootFolderPath, monitored: scene.Monitored,
-				profileID: scene.QualityProfileID, provider: adultProviderStashDB, externalID: scene.Identifier()})
-		}
-		folders, _ = whisparr.RootFolders(ctx)
-		profiles, _ = whisparr.QualityProfiles(ctx)
-		source.settings, err = whisparr.MediaManagement(ctx)
-	default:
-		source.itemKind, source.mediaType = "artists", "music"
-		artists, listErr := client.Artists(ctx)
-		if listErr != nil {
-			return previewSource{}, listErr
-		}
-		for _, artist := range artists {
-			source.items = append(source.items, previewItem{rootFolder: artist.RootFolderPath, monitored: artist.Monitored,
-				profileID: artist.QualityProfileID, provider: musicProviderArtist, externalID: artist.ForeignArtistID, person: true})
-		}
-		folders, _ = client.RootFolders(ctx)
-		lidarrProfiles, _ := client.QualityProfiles(ctx)
-		for _, profile := range lidarrProfiles {
-			profiles = append(profiles, arrimport.SonarrQualityProfile(profile))
-		}
-		source.settings, err = client.MediaManagement(ctx)
-	}
-	if err != nil {
-		return previewSource{}, fmt.Errorf("media management: %w", err)
-	}
-	for _, folder := range folders {
-		source.roots = append(source.roots, folder.Path)
-	}
-	source.profiles = make(map[int64]string, len(profiles))
-	for _, profile := range profiles {
-		source.profiles[profile.ID] = profile.Name
-	}
-	return source, nil
-}
-
 // held reports an item Solarr already holds by its id; the import matches it and leaves it as it is.
-func (a ArrSync) held(ctx context.Context, item previewItem) (bool, error) {
-	if item.externalID == "" {
+func (a ArrSync) held(ctx context.Context, item arrmap.PreviewItem) (bool, error) {
+	if item.ExternalID == "" {
 		return false, nil
 	}
-	if item.person {
-		_, found, err := a.People.FindByExternalID(ctx, item.provider, item.externalID)
+	if item.Person {
+		_, found, err := a.People.FindByExternalID(ctx, item.Provider, item.ExternalID)
 		return found, err
 	}
-	_, found, err := a.Identity.WorkByExternalID(ctx, item.provider, item.externalID)
+	_, found, err := a.Identity.WorkByExternalID(ctx, item.Provider, item.ExternalID)
 	return found, err
 }
 
@@ -244,26 +141,4 @@ func longestRoot(roots []settings.RootFolder, path string) (settings.RootFolder,
 		}
 	}
 	return best, found
-}
-
-// sameNameProfile is the Solarr profile of a media type named like an *Arr profile (a shipped movie profile's name
-// leads with "Movie "), nil for none: the rule an import without a mapping follows.
-func sameNameProfile(profiles []settings.QualityProfile, mediaType, name string) *int64 {
-	if name == "" {
-		return nil
-	}
-	for _, profile := range profiles {
-		if profile.MediaType == mediaType && strings.EqualFold(strings.TrimPrefix(profile.Name, "Movie "), name) {
-			id := profile.ID
-			return &id
-		}
-	}
-	return nil
-}
-
-func nonZero(id int64) string {
-	if id == 0 {
-		return ""
-	}
-	return strconv.FormatInt(id, 10)
 }

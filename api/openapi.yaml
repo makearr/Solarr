@@ -9560,6 +9560,11 @@ components:
           description: >-
             add brings in what the *Arr holds (the options below choose which); monitoring only sets the monitored flag
             of what Solarr already holds, in both directions, and adds nothing.
+        limit:
+          type: integer
+          minimum: 0
+          default: 0
+          description: Stop after the first this many chosen items, to try an import on a few. 0 takes all of them.
         indexers:
           type: boolean
           default: false

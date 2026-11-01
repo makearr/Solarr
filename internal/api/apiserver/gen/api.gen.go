@@ -1410,6 +1410,9 @@ type ArrSyncOptions struct {
 	// Indexers Also add the *Arr's Newznab and Torznab indexers here, as the connection's own.
 	Indexers *bool `json:"indexers,omitempty"`
 
+	// Limit Stop after the first this many chosen items, to try an import on a few. 0 takes all of them.
+	Limit *int `json:"limit,omitempty"`
+
 	// Mode add brings in what the *Arr holds (the options below choose which); monitoring only sets the monitored flag of what Solarr already holds, in both directions, and adds nothing.
 	Mode *ArrSyncOptionsMode `json:"mode,omitempty"`
 

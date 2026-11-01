@@ -17,8 +17,6 @@ const mediaModulePrefix = "internal/media/"
 // directWiredMediaFiles still import a media module directly. The list only shrinks: each entry
 // goes when its file asks the registry instead, and nothing is ever added.
 var directWiredMediaFiles = []string{
-	"cmd/solarr/adapters/arrsync.go",
-	"cmd/solarr/adapters/arrsync_sonarr.go",
 	"cmd/solarr/adapters/artistactions.go",
 	"cmd/solarr/adapters/artwork.go",
 	"cmd/solarr/adapters/candidatesearch.go",

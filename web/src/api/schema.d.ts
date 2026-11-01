@@ -6364,6 +6364,11 @@ export interface components {
              */
             mode: "add" | "monitoring";
             /**
+             * @description Stop after the first this many chosen items, to try an import on a few. 0 takes all of them.
+             * @default 0
+             */
+            limit: number;
+            /**
              * @description Also add the *Arr's Newznab and Torznab indexers here, as the connection's own.
              * @default false
              */

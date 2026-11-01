@@ -43,6 +43,7 @@ export function ArrSyncOptions({
   const [monitoringOnly, setMonitoringOnly] = useState(false);
   const [indexers, setIndexers] = useState(false);
   const [downloadClients, setDownloadClients] = useState(false);
+  const [limit, setLimit] = useState("");
   const [monitored, setMonitored] = useState(true);
   const [unmonitored, setUnmonitored] = useState(false);
   const [albums, setAlbums] = useState<"all" | "missing" | "complete">("all");
@@ -75,6 +76,7 @@ export function ArrSyncOptions({
     monitored: monitoringOnly ? true : monitored,
     unmonitored: monitoringOnly ? false : unmonitored,
     albums,
+    limit: Number(limit) || 0,
     indexers,
     download_clients: downloadClients,
     path_rewrites: rewrites.filter((entry) => entry.from.trim() && entry.to.trim()),
@@ -185,6 +187,12 @@ export function ArrSyncOptions({
       {importFolders && (folders.data ?? []).length > 0 && (
         <p className="pl-6 font-mono text-ink-muted">{(folders.data ?? []).map((folder) => rewrite(folder.path)).join(" · ")}</p>
       )}
+      <label className="flex items-center gap-2">
+        Try it on the first
+        <input type="number" min={0} aria-label="How many items to try" placeholder="all" value={limit}
+          onChange={(event) => setLimit(event.target.value)} className={`${input} w-16`} />
+        items only
+      </label>
       <div className="flex flex-col gap-1">
         <span className="text-ink-muted">
           Its paths read here as ({instance.name}'s {words.path} is /mnt/media{words.path} here, say)

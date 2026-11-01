@@ -25,12 +25,14 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/jobs/cachebudget"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/adult"
 	"github.com/makearr/Solarr/internal/media/book"
 	"github.com/makearr/Solarr/internal/media/movie"
+	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
@@ -990,23 +992,46 @@ func (p *process) vanishedFiles() adapters.VanishedFiles {
 // arrSync is the *Arr import over the real stores: the API's import and preview, and the job that sends monitoring back.
 func (p *process) arrSync() adapters.ArrSync {
 	return adapters.ArrSync{
-		Progress: adapters.NewArrProgress(), Registry: p.media,
+		Progress: adapters.NewArrProgress(), Registry: p.media, Importers: p.arrImporters(),
 		Cache: p.cache, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library),
-		Subscriptions: library.NewSubscriptions(p.library), Desired: library.NewDesired(p.library),
-		Imports: library.NewArrImports(p.library),
+		Imports: library.NewArrImports(p.library), Desired: library.NewDesired(p.library), Subscriptions: library.NewSubscriptions(p.library),
 		Reverter: library.NewArrImportRevert(
 			library.NewArrImports(p.library), library.NewIdentity(p.library),
 			library.NewPeople(p.library), library.NewSubscriptions(p.library),
 		),
-		DefaultProfileID: p.defaultQualityProfileID, Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
-		TV: p.tvService(), Movies: p.movieCatalog(), Adult: p.adultCatalog(), Categories: adapters.Categories{Cache: p.cache}, Logger: p.logger,
-		Series: library.NewSeries(p.library), Organisations: library.NewOrganisations(p.library),
-		Setup: adapters.ArrSetup{Cache: p.cache, Clock: clock.NewSystem()}, Links: library.NewArrLinks(p.library),
-		WarmFilms: func(ctx context.Context, ids []string) error {
-			return p.wikidataFacts().Warm(ctx, wikidata.FactFilm, ids)
+		Clock: clock.NewSystem(), Lidarr: p.arrClientFactory(),
+		Setup: adapters.ArrSetup{Cache: p.cache, Clock: clock.NewSystem()}, Links: library.NewArrLinks(p.library), Logger: p.logger,
+	}
+}
+
+// arrImporters is each *Arr app's mapping onto its media type.
+func (p *process) arrImporters() map[settings.ArrApp]arrmap.Importer {
+	wall := clock.NewSystem()
+	monitors := arrmap.Monitors{
+		Series: library.NewSeries(p.library), Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
+		Subscriptions: library.NewSubscriptions(p.library), Organisations: library.NewOrganisations(p.library), Registry: p.media, Clock: wall,
+	}
+	categories := adapters.Categories{Cache: p.cache}
+	profileFor := func(category settings.Category) int64 {
+		return categories.ProfileFor(category, p.defaultQualityProfileID)
+	}
+	warm := func(what string, fact wikidata.FactKind) func(context.Context, []string) {
+		return arrmap.LogWarm(p.logger, wall, what, func(ctx context.Context, ids []string) error { return p.wikidataFacts().Warm(ctx, fact, ids) })
+	}
+	return map[settings.ArrApp]arrmap.Importer{
+		settings.ArrAppLidarr: music.LidarrImport{
+			Categories: categories, Identity: library.NewIdentity(p.library), People: library.NewPeople(p.library), Desired: library.NewDesired(p.library),
+			Monitors: monitors, DefaultProfileID: p.defaultQualityProfileID, Clock: wall,
 		},
-		WarmSeries: func(ctx context.Context, ids []string) error {
-			return p.wikidataFacts().Warm(ctx, wikidata.FactSeries, ids)
+		settings.ArrAppSonarr: tv.SonarrImport{
+			Adder: p.tvService(), Cache: p.cache, Desired: library.NewDesired(p.library), ProfileFor: profileFor,
+			Warm: warm("series", wikidata.FactSeries), Monitors: monitors, Logger: p.logger,
+		},
+		settings.ArrAppRadarr: movie.RadarrImport{
+			Adding: p.movieCatalog(), Cache: p.cache, ProfileFor: profileFor, Warm: warm("films", wikidata.FactFilm), Monitors: monitors,
+		},
+		settings.ArrAppWhisparr: adult.WhisparrImport{
+			Adding: p.adultCatalog(), Organisations: library.NewOrganisations(p.library), Monitors: monitors,
 		},
 	}
 }

@@ -37,9 +37,14 @@ connection or in the setup assistant). It is the one thing Solarr writes to an *
 
 ## Where it is
 
-`internal/importing/arrimport` (the clients, including `SetMonitored`), `cmd/solarr/adapters/arr*.go` (the walk, the sources, the
-monitoring pass, `arrpush.go`), `internal/api/apiserver/arrimports.go` and `api/openapi.yaml` (`ArrSyncOptions.mode`,
+`internal/importing/arrimport` (the clients, including `SetMonitored`), `internal/importing/arrmap` (the walk, the monitoring
+of what is held, `arrmap.Importer`), each type's `arrimport.go` (`music.LidarrImport`, `tv.SonarrImport`, `movie.RadarrImport`,
+`adult.WhisparrImport`: what an item of that app becomes), `cmd/solarr/adapters/arr*.go` (the run and its recording, `arr_link`,
+the preview's sums, `arrpush.go`), `internal/api/apiserver/arrimports.go` and `api/openapi.yaml` (`ArrSyncOptions.mode`, `limit`,
 `indexers`, `download_clients`; `push_monitoring` on a connection; `POST /arr/instances/{id}/push`).
+
+Lidarr's import adopts from Lidarr's record and calls no metadata source (16k albums at MusicBrainz's 1/s would take hours);
+Sonarr, Radarr and Whisparr add through the type's own add, which reads its sources.
 
 ## Merging two libraries
 

@@ -1,4 +1,4 @@
-package adapters
+package movie
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -35,11 +35,8 @@ func TestRadarrImportWarmsWikidataWithEveryTMDBIDBeforeTheWalk(t *testing.T) {
 		httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
 		httpx.ClientConfig{Provider: "radarr-test", UserAgent: "test", Transport: radarrAnswers{}})
 	var warmed []string
-	sync := ArrSync{Clock: fake, WarmFilms: func(_ context.Context, ids []string) error {
-		warmed = append(warmed, ids...)
-		return nil
-	}}
-	movies, err := sync.radarrSource(1, arrimport.NewRadarrClient(client, "http://radarr.local", "key"), apiserver.ArrSyncOptions{}).list(t.Context())
+	radarr := RadarrImport{Warm: func(_ context.Context, ids []string) { warmed = append(warmed, ids...) }}
+	movies, err := radarr.source(arrmap.Run{Client: arrimport.NewLidarrClient(client, "http://radarr.local", "key")}).List(t.Context())
 	if err != nil || len(movies) != 3 {
 		t.Fatalf("list = %d movies, %v", len(movies), err)
 	}

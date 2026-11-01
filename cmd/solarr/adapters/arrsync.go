@@ -13,17 +13,11 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/media"
-	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
 )
-
-// musicProviderArtist is the id a Lidarr artist is matched by.
-const musicProviderArtist = music.ProviderArtist
-
-// musicProviderReleaseGroup is the id a Lidarr album is matched by.
-const musicProviderReleaseGroup = music.ProviderReleaseGroup
 
 // LidarrClientFactory builds a REST client for one instance's own base URL
 // and decrypted API key -- injected so this package never builds an
@@ -31,10 +25,7 @@ const musicProviderReleaseGroup = music.ProviderReleaseGroup
 // rate limiter/breaker/proxy wiring every other provider already gets).
 type LidarrClientFactory func(baseURL, apiKey string) arrimport.LidarrClient
 
-// ArrSync runs one *Arr import (todo 4.13, ADR-52): a monitored artist
-// becomes person+subscription, a monitored album becomes a desired_item,
-// each matched by its own MusicBrainz id (ADR-8) so a Lidarr-driven work
-// and a scan- or search-driven one always land on the same row.
+// ArrSync runs one *Arr import (todo 4.13, ADR-52); what an item becomes is its media type's Importer.
 //
 // Sync returns as soon as the run is recorded RUNNING; the actual walk runs
 // detached in its own goroutine, and a caller polls GET /arr/imports/{id}
@@ -46,33 +37,22 @@ type LidarrClientFactory func(baseURL, apiKey string) arrimport.LidarrClient
 // the "revisit if a real large library proves this wrong" this type's
 // earlier doc comment already named as the thing to watch for.
 type ArrSync struct {
-	Cache            *settings.Cache
-	Identity         library.Identity
-	People           library.People
-	Subscriptions    library.Subscriptions
-	Desired          library.Desired
-	Imports          library.ArrImports
-	Reverter         library.ArrImportRevert
-	DefaultProfileID int64
-	Clock            clock.Clock
-	Lidarr           LidarrClientFactory
-	// TV adds the series a Sonarr import maps; Categories resolves a library's quality profile.
-	TV TVAdder
-	// Movies adds the movies a Radarr import maps; Adult the scenes, performers and studios a Whisparr import maps.
-	Movies, Adult media.Adding
-	// Series finds what Solarr holds by a provider's id, for a monitoring-only import; Organisations a studio.
-	Series        library.Series
-	Organisations library.Organisations
+	Cache    *settings.Cache
+	Identity library.Identity
+	People   library.People
+	Imports  library.ArrImports
+	Reverter library.ArrImportRevert
+	Clock    clock.Clock
+	// Desired and Subscriptions read the monitoring a push sends back.
+	Desired       library.Desired
+	Subscriptions library.Subscriptions
+	Lidarr        LidarrClientFactory
+	// Importers is each app's mapping onto its media type, set where the modules are registered.
+	Importers map[settings.ArrApp]arrmap.Importer
 	// Links remembers what each *Arr item is here, for sending monitoring back.
 	Links library.ArrLinks
-	// instanceID is the connection a run is of; set on the copy a run works with.
-	instanceID int64
 	// Setup adds the *Arr's indexers and download clients an import brings; nil brings none.
-	Setup      ArrSetup
-	Categories Categories
-	// WarmFilms and WarmSeries read in bulk what Wikidata says of the films (TMDB ids) and series (TheTVDB ids) an
-	// import is about to add, so each add finds it kept instead of one serial query apiece. Nil warms nothing.
-	WarmFilms, WarmSeries func(ctx context.Context, ids []string) error
+	Setup ArrSetup
 	// Registry answers each media type's defaults a preview compares against; nil compares against none.
 	Registry *media.Registry
 	// Progress holds the live figure of running imports; nil keeps none.
@@ -132,7 +112,7 @@ func (a ArrSync) Sync(ctx context.Context, instanceID int64, options apiserver.A
 	if err != nil {
 		return apiserver.ArrImportRun{}, err
 	}
-	if !arrAppSupported(instance.App) {
+	if !a.supported(instance.App) {
 		return apiserver.ArrImportRun{}, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -174,23 +154,8 @@ func (a ArrSync) runAndFinish(
 	ctx context.Context, importID, instanceID int64, instance settings.ArrInstance, client arrimport.LidarrClient,
 	options apiserver.ArrSyncOptions,
 ) {
-	a.instanceID = instanceID
-	walk := arrWalk{importID: importID, options: options, progress: a.Progress, place: func(rootFolder string) (int64, bool) {
-		return a.categoryFor(instance, rootFolder, a.Cache.Snapshot().RootFolders())
-	}}
-	var counts library.ArrImportCounts
-	var syncErr error
 	settingsErr := a.takeSettings(ctx, instance.App, client, options.SettingsInto)
-	switch instance.App {
-	case settings.ArrAppSonarr:
-		counts, syncErr = walkArr(ctx, walk, a.sonarrSource(importID, client.Sonarr(), options))
-	case settings.ArrAppRadarr:
-		counts, syncErr = walkArr(ctx, walk, a.radarrSource(importID, client.Radarr(), options))
-	case settings.ArrAppWhisparr:
-		counts, syncErr = walkArr(ctx, walk, a.whisparrSource(importID, client.Whisparr(), options))
-	default:
-		counts, syncErr = walkArr(ctx, walk, a.lidarrSource(importID, client, options))
-	}
+	counts, syncErr := a.Importers[instance.App].Import(ctx, a.run(importID, instance, client, options))
 	defer a.Progress.clear(importID)
 	if setupErr := a.importSetup(ctx, instance, client, options); setupErr != nil {
 		syncErr = errors.Join(syncErr, setupErr)
@@ -226,6 +191,34 @@ func (a ArrSync) runAndFinish(
 	if err := a.Cache.SetArrInstanceSyncResult(ctx, instanceID, finishedAt, errMsg); err != nil && a.Logger != nil {
 		a.Logger.Warn("arr import: recording instance sync result failed",
 			slog.Int64("instance_id", instanceID), slog.Any("error", err))
+	}
+}
+
+// run is one import as a mapping sees it: what a walk records and links, the walk's place and progress.
+func (a ArrSync) run(importID int64, instance settings.ArrInstance, client arrimport.LidarrClient, options apiserver.ArrSyncOptions) arrmap.Run {
+	return arrmap.Run{
+		Client: client,
+		Options: arrmap.Options{
+			Monitored: options.Monitored, Unmonitored: options.Unmonitored, Albums: options.Albums, ProfileMap: options.ProfileMap,
+			MonitoringOnly: options.MonitoringOnly, Limit: options.Limit,
+		},
+		Place: func(rootFolder string) (int64, bool) {
+			return a.categoryFor(instance, rewritePath(rootFolder, options.PathRewrites), a.Cache.Snapshot().RootFolders())
+		},
+		Progress: func(done, total int64) { a.Progress.set(importID, done, total) },
+		Record: func(ctx context.Context, item library.NewArrImportItem) error {
+			_, err := a.Imports.AddItem(ctx, importID, item, a.Clock.Now().Unix())
+			return err
+		},
+		Link: func(ctx context.Context, sourceKind string, sourceID int64, localKind string, localID int64) {
+			if localID == 0 {
+				return
+			}
+			err := a.Links.Link(ctx, instance.ID, library.ArrLink{SourceKind: sourceKind, SourceID: strconv.FormatInt(sourceID, 10), LocalKind: localKind, LocalID: localID})
+			if err != nil && a.Logger != nil {
+				a.Logger.Warn("arr import: link not kept", "kind", sourceKind, "id", sourceID, "error", err)
+			}
+		},
 	}
 }
 
@@ -265,9 +258,10 @@ func (a ArrSync) takeSettings(ctx context.Context, app settings.ArrApp, client a
 	return errors.Join(failures...)
 }
 
-// arrAppSupported is every app an import is mapped for.
-func arrAppSupported(app settings.ArrApp) bool {
-	return app == settings.ArrAppLidarr || app == settings.ArrAppSonarr || app == settings.ArrAppRadarr || app == settings.ArrAppWhisparr
+// supported is every app an import is mapped for.
+func (a ArrSync) supported(app settings.ArrApp) bool {
+	_, found := a.Importers[app]
+	return found
 }
 
 // RootFolders reads one instance's own configured root folders live -- the
@@ -278,7 +272,7 @@ func (a ArrSync) RootFolders(ctx context.Context, instanceID int64) ([]string, e
 	if err != nil {
 		return nil, err
 	}
-	if !arrAppSupported(instance.App) {
+	if !a.supported(instance.App) {
 		return nil, fmt.Errorf("%w: %s", apiserver.ErrArrAppNotYetSupported, instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -378,159 +372,6 @@ func arrImportItemView(item library.ArrImportItem) apiserver.ArrImportItem {
 	}
 }
 
-// lidarrSource walks Lidarr's artists: each becomes a person (followed when monitored), then its wanted albums
-// become works with an album item, each matched by its MusicBrainz id. One album failing does not stop the artist's.
-func (a ArrSync) lidarrSource(importID int64, client arrimport.LidarrClient, options apiserver.ArrSyncOptions) arrSource[arrimport.LidarrArtist] {
-	return arrSource[arrimport.LidarrArtist]{
-		connect: func(ctx context.Context) error { _, err := client.SystemStatus(ctx); return err },
-		list:    client.Artists,
-		describe: func(artist arrimport.LidarrArtist) arrItem {
-			return arrItem{Name: artist.ArtistName, RootFolder: artist.RootFolderPath, Monitored: artist.Monitored}
-		},
-		workers: 1,
-		monitor: func(ctx context.Context, _ int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
-			return a.monitorArtist(ctx, artist, client)
-		},
-		sync: func(ctx context.Context, categoryID int64, artist arrimport.LidarrArtist) (library.ArrImportCounts, error) {
-			var counts library.ArrImportCounts
-			personID, created, err := a.syncArtist(ctx, importID, artist, artist.Monitored)
-			if err != nil {
-				return counts, err
-			}
-			if created {
-				counts.ArtistsCreated++
-			} else {
-				counts.ArtistsMatched++
-			}
-			albums, err := client.Albums(ctx, artist.ID)
-			if err != nil {
-				return counts, fmt.Errorf("list albums: %w", err)
-			}
-			var failures []string
-			for _, album := range albums {
-				wanted := (album.Monitored && options.Monitored) || (!album.Monitored && options.Unmonitored)
-				if !wanted || !albumWanted(album, options.Albums) {
-					continue
-				}
-				workCreated, err := a.syncAlbum(ctx, importID, categoryID, personID, album, options.ProfileMap[artist.QualityProfileID])
-				switch {
-				case err != nil:
-					failures = append(failures, fmt.Sprintf("%s: %v", album.Title, err))
-				case workCreated:
-					counts.AlbumsCreated++
-				default:
-					counts.AlbumsMatched++
-				}
-			}
-			if len(failures) > 0 {
-				return counts, errors.New(strings.Join(failures, "; "))
-			}
-			return counts, nil
-		},
-	}
-}
-
-// syncArtist resolves-or-creates the person behind artist's own MusicBrainz
-// id and ensures their subscription, recording one arr_import_item either
-// way. created reports whether this call is the one that created the
-// person -- a brand-new person cannot have had a prior subscription either,
-// so the subscription is created exactly when the person is.
-func (a ArrSync) syncArtist(
-	ctx context.Context, importID int64, artist arrimport.LidarrArtist, follow bool,
-) (personID int64, created bool, err error) {
-	if artist.ForeignArtistID == "" {
-		return 0, false, errors.New("no MusicBrainz artist id")
-	}
-	now := a.Clock.Now()
-
-	_, found, err := a.People.FindByExternalID(ctx, music.ProviderArtist, artist.ForeignArtistID)
-	if err != nil {
-		return 0, false, err
-	}
-	personID, err = a.People.ResolvePerson(ctx, now, music.ArtistLink(artist.ForeignArtistID, library.PersonIdentity{Name: artist.ArtistName}))
-	if err != nil {
-		return 0, false, err
-	}
-	created = !found
-
-	// An unmonitored artist arrives as an artist in the library, not one followed for new albums.
-	var subscription *int64
-	if follow {
-		subscriptionID, err := a.People.Subscribe(ctx, now, personID, 0, library.SubscriptionRequest{
-			MediaTypes: []string{string(music.MediaType)}, Roles: []string{music.CreditRoleArtist},
-		})
-		if err != nil {
-			return 0, false, err
-		}
-		subscription = &subscriptionID
-	}
-
-	if _, err := a.Imports.AddItem(ctx, importID, library.NewArrImportItem{
-		Kind: library.ArrImportItemArtist, SourceID: strconv.FormatInt(artist.ID, 10), Title: artist.ArtistName,
-		PersonID: &personID, PersonCreated: created, SubscriptionID: subscription,
-	}, now.Unix()); err != nil {
-		return 0, false, err
-	}
-	a.link(ctx, linkArtist, artist.ID, "person", personID)
-	return personID, created, nil
-}
-
-// syncAlbum resolves-or-creates the work behind album's own MusicBrainz
-// release-group id and ensures its album-level desired_item, recording one
-// arr_import_item either way. A newly created work gets personID credited
-// as its primary artist (AddCredit's own role="artist" ord=0 case) -- an
-// already-matched work is left exactly as whatever created it already
-// credited, never overwritten.
-func (a ArrSync) syncAlbum(
-	ctx context.Context, importID, categoryID, personID int64, album arrimport.LidarrAlbum, mapped *int64,
-) (workCreated bool, err error) {
-	if album.ForeignAlbumID == "" {
-		return false, errors.New("no MusicBrainz release-group id")
-	}
-	now := a.Clock.Now()
-
-	resolutions, err := a.Identity.ResolveWorksDetailed(ctx, now, []library.WorkLink{music.AlbumLink(album.ForeignAlbumID, album.Title)})
-	if err != nil {
-		return false, err
-	}
-	resolution := resolutions[0]
-
-	if resolution.WorkCreated {
-		if err := a.People.AddLeadCredit(ctx, resolution.WorkID, personID, music.CreditRoleArtist); err != nil {
-			return false, err
-		}
-	}
-
-	profileID := a.DefaultProfileID
-	if category, ok := a.Cache.Snapshot().Category(categoryID); ok && category.QualityProfileID != nil {
-		profileID = *category.QualityProfileID
-	}
-	if mapped != nil {
-		profileID = *mapped
-	}
-	item, err := a.Desired.EnsureAlbumItem(ctx, library.AlbumRequest{
-		WorkID: resolution.WorkID, CategoryID: categoryID, ProfileID: profileID, Monitored: album.Monitored,
-	})
-	if err != nil {
-		return false, err
-	}
-
-	workID, itemID := resolution.WorkID, item.ID
-	if _, err := a.Imports.AddItem(ctx, importID, library.NewArrImportItem{
-		Kind: library.ArrImportItemAlbum, SourceID: strconv.FormatInt(album.ID, 10), Title: album.Title,
-		WorkID: &workID, WorkCreated: resolution.WorkCreated,
-		// A work this call did not create cannot be told apart from one
-		// whose desired_item already existed without a pre-check this pass
-		// skips (desired_item_created is informational only -- revert acts
-		// on WorkCreated, which cascades desired_item with it).
-		DesiredItemID: &itemID, DesiredItemCreated: resolution.WorkCreated,
-	}, now.Unix()); err != nil {
-		return false, err
-	}
-	a.link(ctx, linkAlbum, album.ID, "work", workID)
-	return resolution.WorkCreated, nil
-}
-
 // categoryFor answers which category a Lidarr artist's own root folder path
 // belongs to. instance.CategoryID, when set, always wins -- the simple
 // "everything from this instance goes to one category" case ADR-52 allows
@@ -571,31 +412,4 @@ func rewritePath(path string, rewrites []apiserver.PathRewrite) string {
 		}
 	}
 	return path
-}
-
-// albumWanted is the albums option: every album, those the *Arr lacks a track of, or those it holds whole.
-func albumWanted(album arrimport.LidarrAlbum, which string) bool {
-	switch which {
-	case "missing":
-		return !album.Complete()
-	case "complete":
-		return album.Complete()
-	default:
-		return true
-	}
-}
-
-// warm reads Wikidata in bulk ahead of a walk; a failure only costs speed, each add still asks on its own.
-func (a ArrSync) warm(ctx context.Context, what string, warm func(context.Context, []string) error, ids []string) {
-	logger := a.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	started := a.Clock.Now()
-	if err := warm(ctx, ids); err != nil {
-		logger.WarnContext(ctx, "arr import: warming wikidata failed", slog.String("works", what), slog.Any("error", err))
-		return
-	}
-	logger.InfoContext(ctx, "arr import: wikidata warmed", slog.String("works", what), slog.Int("ids", len(ids)),
-		slog.Duration("took", a.Clock.Now().Sub(started)))
 }

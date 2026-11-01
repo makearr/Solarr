@@ -33,6 +33,8 @@ type ArrSyncOptions struct {
 	MonitoringOnly bool
 	// Indexers and DownloadClients also add the *Arr's own, as the connection's.
 	Indexers, DownloadClients bool
+	// Limit stops after the first this many chosen items, to try an import on a few; zero is all of them.
+	Limit int
 }
 
 // ArrImportPreview is what an import would do, read without changing anything (ADR-52's preview step).
@@ -249,6 +251,7 @@ func (s *Server) readArrSyncOptions(w http.ResponseWriter, r *http.Request) (Arr
 	options.NewFoldersLibrary = body.NewFoldersLibraryId
 	options.MonitoringOnly = body.Mode != nil && *body.Mode == gen.ArrSyncOptionsModeMonitoring
 	options.Indexers, options.DownloadClients = derefOr(body.Indexers, false), derefOr(body.DownloadClients, false)
+	options.Limit = derefOr(body.Limit, 0)
 	if !options.MonitoringOnly && !options.Monitored && !options.Unmonitored && !options.Indexers && !options.DownloadClients {
 		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Nothing to import", "choose monitored items, unmonitored items or both")
 		return ArrSyncOptions{}, false

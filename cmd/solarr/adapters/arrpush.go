@@ -10,6 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/importing/arrimport"
+	"github.com/makearr/Solarr/internal/importing/arrmap"
 	"github.com/makearr/Solarr/internal/jobs"
 )
 
@@ -24,7 +25,7 @@ func (a ArrSync) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	var failures []error
 	for _, instance := range instances {
-		if !instance.Enabled || !instance.PushMonitoring || !arrAppSupported(instance.App) {
+		if !instance.Enabled || !instance.PushMonitoring || !a.supported(instance.App) {
 			continue
 		}
 		if _, err := a.PushMonitoring(ctx, instance.ID); err != nil {
@@ -44,7 +45,7 @@ func (a ArrSync) PushMonitoring(ctx context.Context, instanceID int64) (apiserve
 	if !instance.PushMonitoring {
 		return apiserver.ArrPushResult{}, errors.New("this connection does not send monitoring back")
 	}
-	if !arrAppSupported(instance.App) {
+	if !a.supported(instance.App) {
 		return apiserver.ArrPushResult{}, fmt.Errorf("no sending back for %s", instance.App)
 	}
 	apiKey, err := a.Cache.DecryptedAPIKey(ctx, instanceID)
@@ -135,7 +136,7 @@ func (p *pusher) movies(ctx context.Context) error {
 	}
 	var failures []error
 	for _, movie := range movies {
-		failures = append(failures, p.send(ctx, linkMovie, movie.ID, movie.Monitored, "/api/v3/movie", radarr.SetMonitored))
+		failures = append(failures, p.send(ctx, arrmap.LinkMovie, movie.ID, movie.Monitored, "/api/v3/movie", radarr.SetMonitored))
 	}
 	return errors.Join(failures...)
 }
@@ -148,7 +149,7 @@ func (p *pusher) series(ctx context.Context) error {
 	}
 	var failures []error
 	for _, one := range series {
-		failures = append(failures, p.send(ctx, linkSeries, one.ID, one.Monitored, "/api/v3/series", sonarr.SetMonitored))
+		failures = append(failures, p.send(ctx, arrmap.LinkSeries, one.ID, one.Monitored, "/api/v3/series", sonarr.SetMonitored))
 	}
 	return errors.Join(failures...)
 }
@@ -160,8 +161,8 @@ func (p *pusher) artists(ctx context.Context) error {
 	}
 	var failures []error
 	for _, artist := range artists {
-		failures = append(failures, p.send(ctx, linkArtist, artist.ID, artist.Monitored, "/api/v1/artist", p.client.SetMonitored))
-		if _, linked := p.links[linkArtist][strconv.FormatInt(artist.ID, 10)]; !linked {
+		failures = append(failures, p.send(ctx, arrmap.LinkArtist, artist.ID, artist.Monitored, "/api/v1/artist", p.client.SetMonitored))
+		if _, linked := p.links[arrmap.LinkArtist][strconv.FormatInt(artist.ID, 10)]; !linked {
 			continue
 		}
 		albums, err := p.client.Albums(ctx, artist.ID)
@@ -170,7 +171,7 @@ func (p *pusher) artists(ctx context.Context) error {
 			continue
 		}
 		for _, album := range albums {
-			failures = append(failures, p.send(ctx, linkAlbum, album.ID, album.Monitored, "/api/v1/album", p.client.SetMonitored))
+			failures = append(failures, p.send(ctx, arrmap.LinkAlbum, album.ID, album.Monitored, "/api/v1/album", p.client.SetMonitored))
 		}
 	}
 	return errors.Join(failures...)
@@ -184,22 +185,22 @@ func (p *pusher) whisparr(ctx context.Context) error {
 		return err
 	}
 	for _, performer := range performers {
-		failures = append(failures, p.send(ctx, linkPerformer, performer.ID, performer.Monitored, arrimport.WhisparrPerformerPath, whisparr.SetMonitored))
+		failures = append(failures, p.send(ctx, arrmap.LinkPerformer, performer.ID, performer.Monitored, arrimport.WhisparrPerformerPath, whisparr.SetMonitored))
 	}
 	studios, err := whisparr.Studios(ctx)
 	if err != nil {
 		return errors.Join(append(failures, err)...)
 	}
 	for _, studio := range studios {
-		failures = append(failures, p.send(ctx, linkStudio, studio.ID, studio.Monitored, arrimport.WhisparrStudioPath, whisparr.SetMonitored))
+		failures = append(failures, p.send(ctx, arrmap.LinkStudio, studio.ID, studio.Monitored, arrimport.WhisparrStudioPath, whisparr.SetMonitored))
 	}
-	if len(p.links[linkScene]) > 0 {
+	if len(p.links[arrmap.LinkScene]) > 0 {
 		scenes, err := whisparr.Items(ctx)
 		if err != nil {
 			return errors.Join(append(failures, err)...)
 		}
 		for _, scene := range scenes {
-			failures = append(failures, p.send(ctx, linkScene, scene.ID, scene.Monitored, arrimport.WhisparrScenePath, whisparr.SetMonitored))
+			failures = append(failures, p.send(ctx, arrmap.LinkScene, scene.ID, scene.Monitored, arrimport.WhisparrScenePath, whisparr.SetMonitored))
 		}
 	}
 	return errors.Join(failures...)

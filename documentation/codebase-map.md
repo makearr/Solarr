@@ -26,7 +26,7 @@ internal/
 │               skyhook  tvmaze  tmdb  tvdb  openlibrary  googlebooks  audible  stashbox  whisparr
 ├── identify/   model  parse  parsetv  parsebook  parseadult  match  score  priority
 ├── scanning/   scan  probe
-├── importing/  inspect  importjob  batch  placer  rules  arrimport
+├── importing/  inspect  importjob  batch  placer  rules  arrimport  arrmap
 ├── moving/     mover  moverjob  drainjob  renamejob  placement  naming  sidecar
 ├── acquiring/  indexer (Newznab/Torznab client, indexer base and catalog)  download (client interface and bases)
 │               poll  plan  judge  dispatch  rss
