@@ -157,7 +157,7 @@ func Persist(
 	candidate, err := candidates.Upsert(ctx, library.NewReleaseCandidate{
 		IndexerID: find.Conn.ID, GUID: find.Raw.GUID, Title: find.Raw.Title,
 		SizeBytes: sizeBytes, Seeders: seeders, Leechers: leechers, PublishedAt: publishedAt,
-		Protocol: ProtocolFor(find.Conn.Impl), DownloadURL: find.Raw.Link,
+		Protocol: ProtocolFor(find.Conn.Impl), DownloadURL: sealed(find.Conn, find.Raw.Link),
 		ParseConfidence: &confidence, Source: source,
 		FirstSeenAt: at.Unix(), ExpiresAt: at.Add(RetentionDefault).Unix(),
 	})
@@ -193,4 +193,11 @@ func jsonOrEmptyArray(v any) string {
 		return "[]"
 	}
 	return string(encoded)
+}
+
+func sealed(conn Conn, link string) string {
+	if conn.Seal == nil {
+		return link
+	}
+	return conn.Seal(link)
 }

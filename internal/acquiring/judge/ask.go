@@ -30,6 +30,8 @@ type Conn struct {
 	// Params are the search parameters the indexer's caps list for each function ("tvsearch" -> tvdbid, season, ...);
 	// a function absent here is treated as unknown and tried.
 	Params map[string][]string
+	// Seal removes the indexer's credential from a download link before it is stored; nil leaves the link as it is.
+	Seal func(link string) string
 }
 
 // Takes reports whether the indexer accepts every parameter a structured query uses; unknown caps accept anything.

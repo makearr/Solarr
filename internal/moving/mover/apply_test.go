@@ -405,3 +405,32 @@ func TestPlaceOne_AFailedCopyRungLeavesTheDestinationFreeForTheNextOne(t *testin
 		t.Errorf("method = %q, want hardlink -- the failed copy must not block the next rung", method)
 	}
 }
+
+// Same size, different bytes: only the content hash can tell (the other Verify tests all fail on size first).
+func TestVerify_CatchesSameSizeDifferentBytes(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/src/a.flac", "the bytes")
+	writeFile(t, fsys, "/dst/a.flac", "thE bytes")
+	if err := mover.Verify(fsys, "/src/a.flac", "/dst/a.flac", int64(len("the bytes"))); !errors.Is(err, mover.ErrHashMismatch) {
+		t.Fatalf("Verify = %v, want ErrHashMismatch", err)
+	}
+	writeFile(t, fsys, "/dst/b.flac", "the bytes")
+	if err := mover.Verify(fsys, "/src/a.flac", "/dst/b.flac", int64(len("the bytes"))); err != nil {
+		t.Fatalf("Verify of identical bytes = %v, want nil", err)
+	}
+}
+
+// A persisted relative path that climbs out of its root is refused (Invariant 20).
+func TestRootRelativePath_RefusesAPathOutsideTheRoot(t *testing.T) {
+	fsys := fsx.NewMem(clock.NewFakeAtEpoch())
+	writeFile(t, fsys, "/root/Album/a.flac", "x")
+	writeFile(t, fsys, "/elsewhere/secret.flac", "x")
+	for _, relative := range []string{"../elsewhere/secret.flac", "Album/../../elsewhere/secret.flac", "/elsewhere/secret.flac", "", "."} {
+		if got, err := mover.RootRelativePath(fsys, "/root", relative); err == nil {
+			t.Errorf("RootRelativePath(%q) = %q, want a refusal", relative, got)
+		}
+	}
+	if got, err := mover.RootRelativePath(fsys, "/root", "Album/a.flac"); err != nil || got != "/root/Album/a.flac" {
+		t.Errorf("RootRelativePath inside = %q, %v; want /root/Album/a.flac", got, err)
+	}
+}

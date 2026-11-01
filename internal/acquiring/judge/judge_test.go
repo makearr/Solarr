@@ -60,6 +60,29 @@ func TestRevisionBreaksTiesOnlyAfterQuality(t *testing.T) {
 	}
 }
 
+// With the tiers tied an upgrade must win by the profile's minimum score delta; a tier win needs no delta (Invariant 21).
+func TestBeatsIncumbentNeedsTheMinimumDeltaOnATierTie(t *testing.T) {
+	scored := func(delta float64) model.Decision {
+		return model.Decision{Components: []model.ScoreComponent{{Rule: "r", Delta: delta}}}
+	}
+	for _, tc := range []struct {
+		name               string
+		candidate, current float64
+		minDelta           float64
+		want               bool
+	}{
+		{"a tie keeps the incumbent", 5, 5, 0, false},
+		{"any gain with no minimum", 5.1, 5, 0, true},
+		{"a gain below the minimum", 6, 5, 2, false},
+		{"a gain at the minimum", 7, 5, 2, true},
+		{"a loss", 4, 5, 0, false},
+	} {
+		if got := judge.BeatsIncumbent(scored(tc.candidate), scored(tc.current), tc.minDelta); got != tc.want {
+			t.Errorf("%s: = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestFindsRankAcceptedFirstThenQualityThenDistance(t *testing.T) {
 	ranked := profiles(t, webProfile)
 	good := judge.Find{Raw: indexer.RawItem{Title: "good"}, Decision: judge.EvaluateInOrder(ranked, facts("1080p", "webdl"), nil)}

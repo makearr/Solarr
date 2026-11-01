@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/indexer"
 	"github.com/makearr/Solarr/internal/acquiring/judge"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -103,7 +104,8 @@ func (p *process) searchConns(ctx context.Context, categories func(settings.Inde
 		if !known {
 			continue
 		}
-		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: categories(found)}
+		conn := judge.Conn{ID: found.ID, Name: found.Name, Impl: found.Impl, Priority: found.Priority, Client: client, Categories: categories(found),
+			Seal: func(link string) string { return indexer.SealLink(link, apiKey.Reveal()) }}
 		if p.indexerCaps != nil {
 			if params := p.indexerCaps.searchParams(ctx, found.ID, found.BaseURL, client, capsSearch); params != nil {
 				conn.Params = map[string][]string{function: params}
@@ -217,7 +219,7 @@ func (p *process) fetchRelease(ctx context.Context, indexerID int64, link string
 		if !known {
 			return nil, fmt.Errorf("indexer %d is a kind Solarr has no implementation of", indexerID)
 		}
-		return client.Fetch(ctx, link)
+		return client.Fetch(ctx, indexer.UnsealLink(link, apiKey.Reveal()))
 	}
 	return nil, fmt.Errorf("indexer %d is no longer configured", indexerID)
 }

@@ -664,3 +664,82 @@ func TestJob_CopiesAFileToAnotherLibrarysRoot(t *testing.T) {
 		t.Errorf("paths = %v, want %v", where, want)
 	}
 }
+
+// Invariant 77: when the repoint fails, the source is still the only record of the file and must stay.
+func TestJob_AFailedRepointKeepsTheSource(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/Artist/Album/track.flac", "the bytes")
+	objectID := fx.registerObject(t, 1, "Artist/Album/track.flac", "the bytes")
+	fx.registerObject(t, 2, "Artist/Album/track.flac", "other file") // owns the destination path, so the repoint is refused
+
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonCategory), FilesTotal: 1, BytesTotal: 9, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+		MediaObjectID: objectID, DestRootID: 2, DestRelPath: "Artist/Album/track.flac", Bytes: 9,
+	}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+	roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}
+	if err := fx.run(t, fx.job(roots), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if got := fx.readFile(t, "/root1/Artist/Album/track.flac"); got != "the bytes" {
+		t.Errorf("source = %q, want it kept after the repoint failed", got)
+	}
+	items, err := moveJobs.ListItems(t.Context(), jobID)
+	if err != nil {
+		t.Fatalf("ListItems: %v", err)
+	}
+	if len(items) != 1 || items[0].State == library.MoveItemDone {
+		t.Errorf("items = %+v, want the item not done", items)
+	}
+}
+
+// A crash between repoint and unlink leaves the old path; resuming removes it only when it still matches the new copy.
+func TestJob_ResumeKeepsAnOldSourceWhoseContentDiffers(t *testing.T) {
+	for _, tc := range []struct {
+		name, oldContent string
+		wantKept         bool
+	}{
+		{"identical copy is removed", "the bytes", false},
+		{"same size, different bytes is kept", "thE bytes", true},
+	} {
+		fx := newFixture(t)
+		fx.writeFile(t, "/root2/Artist/Album/track.flac", "the bytes")
+		fx.writeFile(t, "/root1/Artist/Album/track.flac", tc.oldContent)
+		objectID := fx.registerObject(t, 2, "Artist/Album/track.flac", "the bytes")
+
+		plan, err := json.Marshal(mover.MovePlan{Moves: []mover.PlannedMove{{
+			MediaObjectID: objectID, SourceRootFolderID: 1, SourceRelPath: "Artist/Album/track.flac",
+			DestRootFolderID: 2, DestRelPath: "Artist/Album/track.flac", SizeBytes: 9,
+		}}})
+		if err != nil {
+			t.Fatalf("marshal plan: %v", err)
+		}
+		moveJobs := library.NewMoveJobs(fx.store)
+		jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+			Reason: string(mover.ReasonCategory), FilesTotal: 1, BytesTotal: 9, PlanJSON: string(plan), CreatedAt: fx.clock.Now().Unix(),
+		})
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{
+			MediaObjectID: objectID, DestRootID: 2, DestRelPath: "Artist/Album/track.flac", Bytes: 9,
+		}}); err != nil {
+			t.Fatalf("AddItems: %v", err)
+		}
+		roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}
+		if err := fx.run(t, fx.job(roots), jobID); err != nil {
+			t.Fatalf("%s: Run: %v", tc.name, err)
+		}
+		if kept := fx.exists("/root1/Artist/Album/track.flac"); kept != tc.wantKept {
+			t.Errorf("%s: old source kept = %v, want %v", tc.name, kept, tc.wantKept)
+		}
+	}
+}

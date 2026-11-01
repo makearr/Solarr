@@ -117,8 +117,7 @@ func (clause *InClause) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UpgradePolicy is parsed but deliberately not evaluated -- deciding whether an
-// upgrade is allowed needs an incumbent file and acquisition history (stage 6).
+// UpgradePolicy is the profile's upgrade hysteresis; Window is not read yet (the planner counts a fixed week).
 type UpgradePolicy struct {
 	MinDelta     float64  `json:"min_delta"`
 	MinFileAge   Duration `json:"min_file_age"`

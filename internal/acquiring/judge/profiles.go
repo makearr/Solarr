@@ -129,3 +129,28 @@ func StrictlyBetter(candidate, incumbent model.Decision) bool {
 	winner, _ := model.Compare(candidate.Quality, incumbent.Quality)
 	return winner < 0 || (winner == 0 && candidate.Score() > incumbent.Score())
 }
+
+// BeatsIncumbent is StrictlyBetter for an upgrade: equal in the tiers, the score must also win by the profile's
+// minimum delta (Invariant 21).
+func BeatsIncumbent(candidate, incumbent model.Decision, minDelta float64) bool {
+	winner, _ := model.Compare(candidate.Quality, incumbent.Quality)
+	gain := candidate.Score() - incumbent.Score()
+	return winner < 0 || (winner == 0 && gain > 0 && gain >= minDelta)
+}
+
+// UpgradePolicyFor is the upgrade policy of the category's first quality profile; the zero policy when it has none.
+func UpgradePolicyFor(snapshot *settings.Snapshot, categoryID int64) score.UpgradePolicy {
+	category, found := snapshot.Category(categoryID)
+	if !found || len(category.QualityProfileIDs) == 0 {
+		return score.UpgradePolicy{}
+	}
+	profile, found := snapshot.QualityProfile(category.QualityProfileIDs[0])
+	if !found {
+		return score.UpgradePolicy{}
+	}
+	policy, err := score.ParseUpgrade([]byte(profile.UpgradeJSON))
+	if err != nil {
+		return score.UpgradePolicy{}
+	}
+	return policy
+}

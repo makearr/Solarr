@@ -464,6 +464,27 @@ func TestPoll_AnImportItsLibraryCouldNotTakeIsKeptUntilPlaced(t *testing.T) {
 	}
 }
 
+// A placement that failed in the library (EIO, permissions) is not the release's fault: kept and not blocklisted.
+func TestPoll_APlacementErrorKeepsTheDownloadAndDoesNotBlocklist(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	sessionID, _ := e.finishImport(t, sent, false, library.UnitSkip)
+	if err := e.sessions.Finish(t.Context(), sessionID, library.ImportFailed, 4, "rename: input/output error"); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.LastError != "the library could not place it: rename: input/output error" {
+		t.Errorf("= %s %q, want IMPORTING with the real error", got.State, got.LastError)
+	}
+	if len(e.client.removed) != 0 || len(e.searched) != 0 {
+		t.Errorf("removed %v, searched %v; want the download kept", e.client.removed, e.searched)
+	}
+	indexerID := int64(3)
+	if blocked, err := e.blocklist.IsBlocked(t.Context(), &indexerID, "guid-nzo-1", "", e.clock.Now().Unix()); err != nil || blocked {
+		t.Errorf("blocklisted = %v, %v; want the release left alone", blocked, err)
+	}
+}
+
 // One unit placed while another waits for a person: the download still holds the waiting unit's files (Invariants 74, 79).
 func TestPoll_APlacedUnitDoesNotCleanUpADownloadWithAUnitStillWaiting(t *testing.T) {
 	e := newEnv(t)

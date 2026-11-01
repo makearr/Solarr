@@ -570,12 +570,11 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 		return j.cleanUp(ctx, client, acquisition)
 	case waiting > 0:
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForReview, now)
+	case session.Error != "":
+		// The library failed to place it (permissions, I/O), which says nothing about the release: kept, not blocklisted.
+		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, "the library could not place it: "+session.Error, now)
 	default:
-		reason := "the import found nothing it could use"
-		if session.Error != "" {
-			reason = session.Error
-		}
-		return j.failed(ctx, client, acquisition, library.BlocklistImportFailed, reason)
+		return j.failed(ctx, client, acquisition, library.BlocklistImportFailed, "the import found nothing it could use")
 	}
 }
 
