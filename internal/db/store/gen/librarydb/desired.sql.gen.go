@@ -1374,22 +1374,24 @@ SELECT di.id, di.category_id, di.media_ref, di.monitored, di.satisfaction_kind, 
        CAST(COALESCE(h.after_failure, 0) AS INTEGER) AS after_failure,
        CAST(COALESCE((SELECT a.arrived_at FROM work_arrival a WHERE a.work_id = di.work_id), 0) AS INTEGER) AS arrived_at,
        CAST((SELECT COUNT(*) FROM acquisition aq WHERE aq.desired_item_id = di.id AND aq.state = 'IMPORTED'
-             AND aq.updated_at >= ?2) AS INTEGER) AS recent_imports,
+             AND aq.updated_at >= COALESCE(json_extract(CAST(?2 AS TEXT), '$."' || di.category_id || '"'),
+                                           ?3)) AS INTEGER) AS recent_imports,
        CAST(COALESCE((SELECT rs.seen_at FROM rss_sighting rs WHERE rs.desired_item_id = di.id), 0) AS INTEGER) AS rss_seen_at,
        CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification wc WHERE wc.work_id = di.work_id AND wc.age >= 0), -1) AS INTEGER) AS rating_age
 FROM desired_item di
 LEFT JOIN hunt_queue h ON h.desired_item_id = di.id
-WHERE (CAST(?3 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?4
+WHERE (CAST(?4 AS INTEGER) = 0 OR di.dirty = 1) AND di.id > ?5
 ORDER BY di.id
-LIMIT ?5
+LIMIT ?6
 `
 
 type ListPlanInputsParams struct {
-	Kind         string
-	ImportsSince int64
-	DirtyOnly    int64
-	AfterID      int64
-	PageSize     int64
+	Kind                   string
+	ImportsSinceByCategory string
+	ImportsSince           int64
+	DirtyOnly              int64
+	AfterID                int64
+	PageSize               int64
 }
 
 type ListPlanInputsRow struct {
@@ -1416,6 +1418,7 @@ type ListPlanInputsRow struct {
 func (q *Queries) ListPlanInputs(ctx context.Context, arg ListPlanInputsParams) ([]ListPlanInputsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listPlanInputs,
 		arg.Kind,
+		arg.ImportsSinceByCategory,
 		arg.ImportsSince,
 		arg.DirtyOnly,
 		arg.AfterID,

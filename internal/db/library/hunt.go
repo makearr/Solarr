@@ -3,9 +3,11 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"strconv"
 
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
@@ -40,10 +42,25 @@ type PlanInput struct {
 	RatingAge int64
 }
 
+// ImportsSince is when imports start counting against an item's upgrade limit: each library has its profile's window.
+type ImportsSince struct {
+	Default    int64
+	ByCategory map[int64]int64
+}
+
 // PlanInputs pages through the dirty set, or with dirtyOnly false through every item, by id.
-func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize, importsSince int64) ([]PlanInput, error) {
+func (h Hunt) PlanInputs(ctx context.Context, dirtyOnly bool, afterID, pageSize int64, since ImportsSince) ([]PlanInput, error) {
+	byCategory := make(map[string]int64, len(since.ByCategory))
+	for id, at := range since.ByCategory {
+		byCategory[strconv.FormatInt(id, 10)] = at
+	}
+	sinceJSON, err := json.Marshal(byCategory)
+	if err != nil {
+		return nil, fmt.Errorf("library: encode upgrade windows: %w", err)
+	}
 	rows, err := librarydb.New(h.store.Read()).ListPlanInputs(ctx, librarydb.ListPlanInputsParams{
-		Kind: WorkDateStreet, DirtyOnly: boolToInt(dirtyOnly), AfterID: afterID, PageSize: pageSize, ImportsSince: importsSince,
+		Kind: WorkDateStreet, DirtyOnly: boolToInt(dirtyOnly), AfterID: afterID, PageSize: pageSize,
+		ImportsSince: since.Default, ImportsSinceByCategory: string(sinceJSON),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: list plan inputs: %w", err)

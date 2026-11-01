@@ -123,3 +123,38 @@ func TestDuplicates_VideoIsToldApartByEpisodeRecordNotByTitle(t *testing.T) {
 		}
 	}
 }
+
+// Two editions of a film are not duplicates of each other, however alike their files (Invariant 10).
+func TestDuplicates_EditionsOfAWorkAreNotDuplicates(t *testing.T) {
+	opened, _ := newLibrary(t)
+	work := createWork(t, opened, "movie", "Film").ID
+	createPart(t, opened, work, "film", "001", "Film")
+	theatrical := createDesired(t, opened, work, "SINGLE", 1).ID
+	extended := createDesired(t, opened, work, "SINGLE", 1).ID
+	for index, item := range []int64{theatrical, extended} {
+		object := createObject(t, opened, fmt.Sprintf("e%d", index), 1000+int64(index))
+		err := opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			if _, err := librarydb.New(tx).AddLibraryPath(ctx, librarydb.AddLibraryPathParams{
+				MediaObjectID: object.ID, RootFolderID: 1, RelPath: fmt.Sprintf("Film/%d.mkv", index), LinkKind: "primary", IsPrimary: 1, CreatedAt: 1,
+			}); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `INSERT INTO edition (id, work_id, kind, label) VALUES (?, ?, 'cut', ?)`, index+1, work, fmt.Sprint(index)); err != nil {
+				return err
+			}
+			if _, err := tx.ExecContext(ctx, `UPDATE desired_item SET edition_id = ? WHERE id = ?`, index+1, item); err != nil {
+				return err
+			}
+			_, err := tx.ExecContext(ctx, `UPDATE media_object SET duration_ms = 7200000 WHERE id = ?`, object.ID)
+			return err
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		attach(t, opened, item, object.ID, "primary", "film")
+	}
+	groups, err := library.NewDuplicates(opened).Groups(t.Context(), 1, []int64{1}, 50, false)
+	if err != nil || len(groups) != 0 {
+		t.Fatalf("Groups = %+v, %v; want none", groups, err)
+	}
+}

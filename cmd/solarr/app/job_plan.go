@@ -85,8 +85,8 @@ func (p *process) planFacts(context.Context) (plan.Facts, error) {
 	}
 	return plan.Facts{
 		Policy:  plan.Policy{Weights: weights, NewReleaseDays: int(stored.NewReleaseDays), RSSFreshHours: int(*stored.RSSFreshHours)},
-		Upgrade: p.upgradeRules(snapshot),
-		Admits:  p.ratingAdmits,
+		Upgrade: p.upgradeRules(snapshot), UpgradeWindows: upgradeWindows(snapshot),
+		Admits: p.ratingAdmits,
 		CategoryRank: func(categoryID int64) int64 {
 			if rank, found := ranks[categoryID]; found {
 				return rank
@@ -122,6 +122,24 @@ func (p *process) upgradeRules(snapshot *settings.Snapshot) func(categoryID int6
 		}
 		return plan.UpgradeRules{MinFileAge: 24 * time.Hour, MaxPerWindow: 3}
 	}
+}
+
+// upgradeWindows reads the window of each library whose first quality profile states one.
+func upgradeWindows(snapshot *settings.Snapshot) map[int64]time.Duration {
+	windows := make(map[int64]time.Duration)
+	for _, category := range snapshot.Categories() {
+		if len(category.QualityProfileIDs) == 0 {
+			continue
+		}
+		profile, ok := snapshot.QualityProfile(category.QualityProfileIDs[0])
+		if !ok {
+			continue
+		}
+		if policy, err := score.ParseUpgrade([]byte(profile.UpgradeJSON)); err == nil && policy.Window > 0 {
+			windows[category.ID] = time.Duration(policy.Window)
+		}
+	}
+	return windows
 }
 
 // searchesPerHour is the hunt's budget; with no indexer enabled there is nothing to spend it on.

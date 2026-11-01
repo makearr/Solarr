@@ -117,7 +117,7 @@ func (clause *InClause) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// UpgradePolicy is the profile's upgrade hysteresis; Window is not read yet (the planner counts a fixed week).
+// UpgradePolicy is the profile's upgrade hysteresis.
 type UpgradePolicy struct {
 	MinDelta     float64  `json:"min_delta"`
 	MinFileAge   Duration `json:"min_file_age"`

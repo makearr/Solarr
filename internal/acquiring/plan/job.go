@@ -33,6 +33,8 @@ type Facts struct {
 	CategoryRank func(categoryID int64) int64
 	// Upgrade answers a library's upgrade hysteresis.
 	Upgrade func(categoryID int64) UpgradeRules
+	// UpgradeWindows is each library's window for MaxPerWindow; a library not named has UpgradeWindow.
+	UpgradeWindows map[int64]time.Duration
 	// Admits answers whether a library's maximum rating lets in a work admitting age (-1 unrated); nil admits all.
 	Admits func(categoryID, age int64) bool
 }
@@ -43,6 +45,15 @@ func (f Facts) upgradeRules(categoryID int64) UpgradeRules {
 		return UpgradeRules{}
 	}
 	return f.Upgrade(categoryID)
+}
+
+// importsSince is when imports start counting against each library's upgrade limit.
+func (f Facts) importsSince(now time.Time) library.ImportsSince {
+	since := library.ImportsSince{Default: now.Add(-UpgradeWindow).Unix(), ByCategory: make(map[int64]int64, len(f.UpgradeWindows))}
+	for categoryID, window := range f.UpgradeWindows {
+		since.ByCategory[categoryID] = now.Add(-window).Unix()
+	}
+	return since
 }
 
 // JobConfig is what a Job needs; every field but Logger is required.
@@ -80,7 +91,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		return fmt.Errorf("plan: settings: %w", err)
 	}
 	now := j.config.Clock.Now()
-	dirty, err := j.config.Hunt.PlanInputs(ctx, true, 0, dirtyBudget, now.Add(-UpgradeWindow).Unix())
+	dirty, err := j.config.Hunt.PlanInputs(ctx, true, 0, dirtyBudget, facts.importsSince(now))
 	if err != nil {
 		return err
 	}
@@ -107,7 +118,7 @@ func (j *Job) sweep(ctx context.Context, facts Facts, now time.Time) (int, error
 		j.sweepAfter = 0
 	}
 	slice := max((maxID+sweepSlices-1)/sweepSlices, 50)
-	inputs, err := j.config.Hunt.PlanInputs(ctx, false, j.sweepAfter, slice, now.Add(-UpgradeWindow).Unix())
+	inputs, err := j.config.Hunt.PlanInputs(ctx, false, j.sweepAfter, slice, facts.importsSince(now))
 	if err != nil {
 		return 0, err
 	}

@@ -2,6 +2,8 @@ package library_test
 
 import (
 	"context"
+	"fmt"
+	"maps"
 	"slices"
 	"testing"
 
@@ -23,7 +25,7 @@ func TestPlanInputsReadTheDirtySetWithReleaseDateAndSearchRecord(t *testing.T) {
 		t.Fatalf("RecordSearched: %v", err)
 	}
 
-	got, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
+	got, err := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
 	if err != nil {
 		t.Fatalf("PlanInputs: %v", err)
 	}
@@ -44,7 +46,7 @@ func TestApplyPlanClearsDirtyAndKeepsTheSearchRecord(t *testing.T) {
 	if err := desired.RecordSearched(t.Context(), item.ID, 4_000); err != nil {
 		t.Fatalf("RecordSearched: %v", err)
 	}
-	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
+	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
 	if err != nil {
 		t.Fatalf("PlanInputs: %v", err)
 	}
@@ -67,7 +69,7 @@ func TestApplyPlanClearsDirtyAndKeepsTheSearchRecord(t *testing.T) {
 	if len(rows) != 1 || rows[0] != want {
 		t.Fatalf("hunt rows = %+v, want %+v", rows, want)
 	}
-	if dirty, _ := hunt.PlanInputs(t.Context(), true, 0, 10, 0); len(dirty) != 0 {
+	if dirty, _ := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{}); len(dirty) != 0 {
 		t.Fatalf("%d items still dirty after planning", len(dirty))
 	}
 }
@@ -78,7 +80,7 @@ func TestApplyPlanSkipsAnItemChangedSinceItWasRead(t *testing.T) {
 	work := createWork(t, opened, "music", "Tender Prey")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt := library.NewHunt(opened)
-	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
+	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
 	if err != nil {
 		t.Fatalf("PlanInputs: %v", err)
 	}
@@ -104,7 +106,7 @@ func TestPostponeKeepsTheHuntAwayUntilThen(t *testing.T) {
 	work := createWork(t, opened, "music", "Tender Prey")
 	item := createDesired(t, opened, work.ID, "SET", 12)
 	hunt := library.NewHunt(opened)
-	inputs, _ := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
+	inputs, _ := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
 	if _, err := hunt.ApplyPlan(t.Context(), []library.PlannedHunt{{Input: inputs[0], Class: "missing"}}, 1); err != nil {
 		t.Fatalf("ApplyPlan: %v", err)
 	}
@@ -160,7 +162,7 @@ func TestNextToHunt_ModesAndReleaseRanges(t *testing.T) {
 		ids[index] = item.ID
 		mustRecordSearched(t, desired, item.ID, searched[index])
 	}
-	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, 0)
+	inputs, err := hunt.PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,5 +212,30 @@ func TestNextToHunt_ModesAndReleaseRanges(t *testing.T) {
 	}
 	if got := draw(library.HuntOldestSearched, 0, 6_000); !slices.Equal(got, []int64{ids[0], ids[3]}) {
 		t.Errorf("gaps (before 6000) = %v, want the older one and the undated one", got)
+	}
+}
+
+// Each library's imports count over its own profile's window, and a library not named over the default.
+func TestPlanInputs_CountsImportsOverEachLibrarysWindow(t *testing.T) {
+	opened, _ := newLibrary(t)
+	short := createDesired(t, opened, createWork(t, opened, "movie", "Short").ID, "SINGLE", 1)
+	long := createDesiredInCategory(t, opened, createWork(t, opened, "movie", "Long").ID, 2)
+	for _, item := range []int64{short.ID, long.ID} {
+		imported := createAcquisition(t, opened, item, fmt.Sprintf("nzo-%d", item), "DOWNLOADING")
+		write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+			return q.SetAcquisitionState(ctx, librarydb.SetAcquisitionStateParams{ID: imported.ID, State: "IMPORTED", UpdatedAt: 500})
+		})
+	}
+
+	got, err := library.NewHunt(opened).PlanInputs(t.Context(), true, 0, 10, library.ImportsSince{Default: 1000, ByCategory: map[int64]int64{2: 100}})
+	if err != nil {
+		t.Fatalf("PlanInputs: %v", err)
+	}
+	counts := map[int64]int64{}
+	for _, input := range got {
+		counts[input.ID] = input.RecentImports
+	}
+	if want := map[int64]int64{short.ID: 0, long.ID: 1}; !maps.Equal(counts, want) {
+		t.Errorf("RecentImports = %v, want %v", counts, want)
 	}
 }

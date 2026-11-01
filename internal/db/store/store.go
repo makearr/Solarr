@@ -25,6 +25,8 @@ const (
 	defaultCacheSizeKB  = 65536
 	defaultWriteWarn    = 50 * time.Millisecond
 	defaultWriteHard    = 2 * time.Second
+	// testWriteCeiling fails any test run over this, whatever the test wired: ten times the budget, so load cannot trip it.
+	testWriteCeiling = 10 * defaultWriteHard
 	// Measured: a 200-row import batch settles the log at about 1.7 MB at this
 	// interval, against 10 MB and climbing with no checkpoint at all.
 	defaultCheckpointEveryCommits = 64

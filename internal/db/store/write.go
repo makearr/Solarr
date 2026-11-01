@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"flag"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -254,4 +255,11 @@ func (s *Store) reportDuration(op *writeOp, duration, queueWait time.Duration) {
 	if s.config.OnBudgetExceeded != nil {
 		s.config.OnBudgetExceeded(report)
 	}
+	if duration >= testWriteCeiling && underGoTest() {
+		panic(fmt.Sprintf("store %s: a %s transaction ran %s, Invariant 2's ceiling under test is %s",
+			s.config.Name, report.Priority, duration, testWriteCeiling))
+	}
 }
+
+// underGoTest answers from the flag `go test` registers, so the binary does not link the testing package.
+func underGoTest() bool { return flag.Lookup("test.v") != nil }

@@ -20,7 +20,7 @@ SELECT mo.id AS media_object_id, mo.size_bytes,
        CAST(COALESCE(a.sample_rate, 0) AS INTEGER) AS sample_rate,
        CAST(COALESCE(wp.title, '') AS TEXT) AS track_title,
        w.canonical_title AS album_title,
-       d.work_id, wp.id AS part_id, w.media_type,
+       d.work_id, wp.id AS part_id, w.media_type, CAST(COALESCE(d.edition_id, 0) AS INTEGER) AS edition_id,
        CAST(COALESCE((SELECT tp.name FROM credit tc JOIN person tp ON tp.id = tc.person_id
                       WHERE tc.work_id = d.work_id AND tc.part_id = wp.id AND tc.role = 'artist' ORDER BY tc.ord LIMIT 1),
                      (SELECT ap.name FROM person ap WHERE ap.id = w.lead_person_id), '') AS TEXT) AS artist,
@@ -51,6 +51,7 @@ type ListTrackFilesWithMetadataRow struct {
 	WorkID        int64
 	PartID        int64
 	MediaType     string
+	EditionID     int64
 	Artist        string
 	RootFolderID  int64
 	RelPath       string
@@ -82,6 +83,7 @@ func (q *Queries) ListTrackFilesWithMetadata(ctx context.Context, categoryID int
 			&i.WorkID,
 			&i.PartID,
 			&i.MediaType,
+			&i.EditionID,
 			&i.Artist,
 			&i.RootFolderID,
 			&i.RelPath,

@@ -71,7 +71,7 @@ type UpgradeRules struct {
 	MaxPerWindow int64
 }
 
-// UpgradeWindow is how far back an album's imports count against MaxPerWindow.
+// UpgradeWindow is how far back an item's imports count against MaxPerWindow where its profile states no window.
 const UpgradeWindow = 7 * 24 * time.Hour
 
 // upgradeHold is how long an album that used up its window is left alone before it is looked at again.

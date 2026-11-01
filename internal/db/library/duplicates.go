@@ -63,6 +63,8 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 	type key struct {
 		artist, title string
 		partID        int64
+		// Different editions of a work are never one another's duplicates (Invariant 10).
+		editionID int64
 	}
 	byTrack := map[key][]*DuplicateCopy{}
 	titles := map[key][2]string{}
@@ -71,9 +73,9 @@ func (d Duplicates) Groups(ctx context.Context, categoryID int64, rootFolderIDs 
 		if !inRoots[row.RootFolderID] || row.DurationMs <= 0 {
 			continue
 		}
-		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle)}
+		k := key{artist: normaliseTrackText(row.Artist), title: normaliseTrackText(row.TrackTitle), editionID: row.EditionID}
 		if !byName {
-			k = key{partID: row.PartID}
+			k = key{partID: row.PartID, editionID: row.EditionID}
 		} else if k.title == "" {
 			continue
 		}
