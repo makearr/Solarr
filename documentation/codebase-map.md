@@ -17,7 +17,7 @@ cmd/solarr/            CLI: serve, config check, user, healthcheck, version
 
 internal/
 ├── api/        apiserver (+gen)  auth  authz  health  webui
-├── platform/   clock config egress events fsx httpx paginate privilege secrets
+├── platform/   clock config egress events fsx httpx logthrottle paginate privilege secrets
 │               mediatool archive artwork
 ├── db/         store (+gen)  settings  library (+fixture)  recovery
 ├── jobs/       the durable queue, executor, dispatcher, task registry

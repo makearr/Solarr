@@ -262,3 +262,7 @@ added it. The badge shows on the album page, posters, the albums table and the a
 "Identify as..." places a held unit as the album named whether identification found candidates or none. It and a
 file's manual resolve are one form (`web/src/app/IdentifyAs.tsx`); the resolve goes through the file's library's
 `media.PlacingFiles`, so a TV file is placed by series, season and episodes through the same request.
+
+The other media types read the same setting: their folder-to-title rules report `FolderExactMatch` (1.0), `FolderSettledMatch`
+(0.95, a title told apart by episode numbers) or `FolderLooseMatch` (0.9, near title, year off by one), so raising the setting sends
+the looser rules to Review.

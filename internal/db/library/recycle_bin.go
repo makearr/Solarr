@@ -114,14 +114,7 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 		return Entry{}, err
 	}
 
-	if err := relocate(q.fsys, req.OriginalPath, recycledPath, info.Size); err != nil {
-		return Entry{}, fmt.Errorf("recycle bin: move %q to %q: %w", req.OriginalPath, recycledPath, err)
-	}
-
-	if req.RemoveEmptyFolders {
-		q.removeEmptyFolders(filepath.Dir(req.OriginalPath), req.RootPath)
-	}
-
+	// The row first: a file moved without one would never expire and no screen would show it.
 	now := q.clock.Now()
 	var row librarydb.RecycleBin
 	err = q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
@@ -135,12 +128,18 @@ func (q RecycleBin) Put(ctx context.Context, req PutRequest) (Entry, error) {
 		return writeErr
 	})
 	if err != nil {
-		// The move already happened -- rolling it back would leave the caller
-		// worse off if the second rename also fails, and a file sitting in
-		// recycle bin with no row is exactly what a startup orphan sweep
-		// (a documented follow-up) exists to reconcile, not this call.
-		return Entry{}, fmt.Errorf(
-			"recycle bin: moved %q to %q but failed to record it: %w", req.OriginalPath, recycledPath, err)
+		return Entry{}, fmt.Errorf("recycle bin: record %q: %w", req.OriginalPath, err)
+	}
+
+	if err := relocate(q.fsys, req.OriginalPath, recycledPath, info.Size); err != nil {
+		_ = q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			return librarydb.New(tx).DeleteRecycleBinEntry(ctx, row.ID)
+		})
+		return Entry{}, fmt.Errorf("recycle bin: move %q to %q: %w", req.OriginalPath, recycledPath, err)
+	}
+
+	if req.RemoveEmptyFolders {
+		q.removeEmptyFolders(filepath.Dir(req.OriginalPath), req.RootPath)
 	}
 	return recycleBinEntryFromRow(row), nil
 }

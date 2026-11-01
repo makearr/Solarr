@@ -212,7 +212,7 @@ func (y yardstick[W]) evaluate(raws []indexer.RawItem, conn judge.Conn) []judge.
 }
 
 // requireUpgrade rejects an accepted release that does not beat the file of every part it would replace by quality
-// (Invariant 72: a tie keeps what is owned). Only what a file can show is compared: a release name states a source, a
+// (ADR-40: a tie keeps what is owned). Only what a file can show is compared: a release name states a source, a
 // group and a repack that the measured file does not, so with them it would always out-rank the file it replaces.
 func (y yardstick[W]) requireUpgrade(decision *model.Decision, release Release) {
 	if decision.Outcome != model.OutcomeAccept || len(y.incumbents) == 0 {

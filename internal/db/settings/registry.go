@@ -185,8 +185,9 @@ func NewDefaultRegistry() *Registry {
 		Key: KeyImportAutoCommitConfidence, Kind: KindFloat, Tier: TierNormal,
 		Name: "Identification confidence",
 		HelpText: "How likely an identification must be to be right before a scan or an import " +
-			"acts on it without asking; below it, the file waits for review.",
-		Default: "0.9",
+			"acts on it without asking; below it, the file waits for review. Every media type follows it: 0.90 takes " +
+			"exact and near matches, 0.95 only exact ones and those settled by episode numbers, 1.0 only exact ones.",
+		Default: strconv.FormatFloat(DefaultImportAutoCommitConfidence, 'f', -1, 64),
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyImportTransferLadder, Kind: KindStringList, Tier: TierNormal,

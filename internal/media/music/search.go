@@ -207,7 +207,7 @@ type yardstick struct {
 	languagePolicy      *score.LanguagePolicy
 	preferPropers       bool
 	// incumbent is the worst owned file's decision when the album is below its cutoff: a release must
-	// strictly beat it to be an upgrade (Invariant 72). Nil otherwise.
+	// strictly beat it to be an upgrade (ADR-40). Nil otherwise.
 	incumbent *model.Decision
 	// minUpgradeDelta is the profile's score gain a release needs over the incumbent when the tiers tie.
 	minUpgradeDelta float64

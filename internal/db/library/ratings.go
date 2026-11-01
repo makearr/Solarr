@@ -83,7 +83,8 @@ const workRatingAge = "CAST(COALESCE((SELECT MAX(wc.age) FROM work_certification
 // aboveRatingSQL holds a work a limit does not admit; its arguments are allow-unrated (0 or 1) and the age.
 const aboveRatingSQL = "((" + workRatingAge + " < 0 AND ? = 0) OR " + workRatingAge + " > ?)"
 
-// CountAboveRating answers how many of a library's works its maximum rating does not admit.
+// CountAboveRating answers how many of a library's works its maximum rating does not admit; a live count on purpose, as the
+// limit is whatever the preview asks about and no counter holds it.
 func (w Works) CountAboveRating(ctx context.Context, categoryID int64, limit RatingLimit) (int64, error) {
 	var count int64
 	err := w.store.Read().QueryRowContext(ctx,

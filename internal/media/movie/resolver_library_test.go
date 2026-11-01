@@ -31,3 +31,22 @@ func TestAnAliasThatIsPartOfAnotherFilmsTitleDoesNotPlaceAFolderInTheLibrary(t *
 		t.Errorf("a translated alias places the folder: %d, want %d", id, added.WorkID)
 	}
 }
+
+func TestAYearOffByOneIsPlacedAtTheDefaultThresholdAndHeldAboveIt(t *testing.T) {
+	service, opened := newService(t, fakeTMDB{configured: true, movie: theExample()}, nil)
+	info := parsemovie.Info{Title: "The Example Film", Year: 1998}
+	// Held first: once added, the film is found in the library at any threshold.
+	for _, c := range []struct {
+		name      string
+		threshold func() float64
+		placed    bool
+	}{
+		{"0.95", func() float64 { return 0.95 }, false},
+		{"0.90", func() float64 { return 0.9 }, true},
+	} {
+		resolver := movie.Resolver{Service: service, Reader: library.NewSeriesReader(opened), DefaultProfileID: 1, Categories: categories{}, Threshold: c.threshold}
+		if id, _ := resolver.Resolve(t.Context(), 5, info, movie.IDs{}); (id > 0) != c.placed {
+			t.Errorf("threshold %s: work %d, placed %v; want placed %v", c.name, id, id > 0, c.placed)
+		}
+	}
+}

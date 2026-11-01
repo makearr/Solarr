@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"strings"
 	"time"
+
+	"github.com/makearr/Solarr/internal/platform/logthrottle"
 )
 
 // TransactionReport describes a transaction that ran longer than its budget (Invariant 2,
@@ -234,6 +236,7 @@ func (s *Store) reportDuration(op *writeOp, duration, queueWait time.Duration) {
 
 	if duration < s.config.WriteHard {
 		s.logger.Warn("write transaction over its warning budget",
+			slog.Any("throttle", logthrottle.Key(s.config.Name)),
 			slog.String("priority", report.Priority.String()),
 			slog.Duration("duration", report.Duration),
 			slog.Duration("budget", report.Budget),

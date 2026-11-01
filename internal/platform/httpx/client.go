@@ -47,20 +47,24 @@ type ClientConfig struct {
 	Proxy LiveProxyPolicy
 	// LiveUserAgent, when set, is read on every request and replaces UserAgent.
 	LiveUserAgent func() string
+	// RejectedKeyOpens makes a 401 or 403 count towards the breaker; off for a service the user runs, whose settings they
+	// fix and test again straight away.
+	RejectedKeyOpens bool
 }
 
 // Client is the only way out of the process (Invariant 28). One per provider,
 // sharing the limiter and breaker registries.
 type Client struct {
-	provider      string
-	userAgent     string
-	liveUserAgent func() string
-	timeout       time.Duration
-	inner         *http.Client
-	limiter       *Limiter
-	breaker       *Breaker
-	guard         *Guard
-	clock         clock.Clock
+	provider         string
+	userAgent        string
+	liveUserAgent    func() string
+	rejectedKeyOpens bool
+	timeout          time.Duration
+	inner            *http.Client
+	limiter          *Limiter
+	breaker          *Breaker
+	guard            *Guard
+	clock            clock.Clock
 	// proxy nil means this client never proxies (see checkProxiedDestination).
 	proxy LiveProxyPolicy
 	// routedBy is the proxy policy the pooled connections were opened under.
@@ -84,15 +88,16 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 	}
 
 	return &Client{
-		provider:      config.Provider,
-		userAgent:     config.UserAgent,
-		liveUserAgent: config.LiveUserAgent,
-		timeout:       timeout,
-		limiter:       limiter,
-		breaker:       breaker,
-		guard:         guard,
-		clock:         c,
-		proxy:         config.Proxy,
+		provider:         config.Provider,
+		userAgent:        config.UserAgent,
+		liveUserAgent:    config.LiveUserAgent,
+		rejectedKeyOpens: config.RejectedKeyOpens,
+		timeout:          timeout,
+		limiter:          limiter,
+		breaker:          breaker,
+		guard:            guard,
+		clock:            c,
+		proxy:            config.Proxy,
 		inner: &http.Client{
 			Transport: transport,
 			CheckRedirect: func(request *http.Request, via []*http.Request) error {
@@ -194,9 +199,13 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	class := ClassifyStatus(response.StatusCode)
 	retryAfter := ParseRetryAfter(response.Header.Get("Retry-After"), c.clock.Now())
 	c.limiter.Observe(c.provider, Outcome{Success: class != ClassRetryable, RetryAfter: retryAfter})
-	// A terminal status says our request was wrong, not that the provider is
-	// unhealthy, so it must not count towards the breaker.
-	c.breaker.Observe(c.provider, class != ClassRetryable)
+	// A terminal status says our request was wrong, not that the provider is unhealthy, so it does not count towards the
+	// breaker, except a refused key: asking again cannot succeed.
+	if c.rejectedKeyOpens && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden) {
+		c.breaker.ObserveRejected(c.provider)
+	} else {
+		c.breaker.Observe(c.provider, class != ClassRetryable)
+	}
 
 	if class == ClassSuccess {
 		// cancel is deferred to the body's own Close, not run here: a caller

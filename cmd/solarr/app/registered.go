@@ -68,7 +68,7 @@ func (p *process) musicModule() music.Module {
 		Clock:        clock.NewSystem(),
 		Logger:       p.logger,
 		// One identification threshold for scan and import (2026-09-24).
-		Threshold:  func() float64 { return p.cache.Snapshot().ImportAutoCommitConfidence() },
+		Threshold:  p.acceptThreshold,
 		Desired:    &desired,
 		People:     &people,
 		Categories: adapters.Categories{Cache: p.cache},
@@ -130,7 +130,7 @@ func (p *process) tvModule() tv.Module {
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 		SharedFiles: p.enqueueSharedFiles,
 	})
 	retry := tv.NewRetryJob(tv.RetryConfig{
@@ -405,7 +405,7 @@ func (p *process) movieModule() movie.Module {
 	consumer := movie.NewConsumer(movie.ConsumerConfig{
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 	})
 	catalog := p.movieCatalog()
 	return movie.Module{
@@ -425,7 +425,7 @@ func (p *process) movieModule() movie.Module {
 		Files: movie.Files{
 			Resolver: movie.Resolver{
 				Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
-				DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+				DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 			},
 			Series: library.NewSeries(p.library), Unidentified: library.NewUnidentified(p.library), Clock: clock.NewSystem(),
 			AllowAgain: catalog.AllowAgain,
@@ -550,7 +550,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 	authors := book.AuthorWorks{Format: format, People: library.NewPeople(p.library), Reader: library.NewSeriesReader(p.library), Source: service.OpenLibrary}
 	resolver := book.Resolver{
 		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-		Locks: &keyedlock.Locks{},
+		Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
 	}
 	grab := p.bookGrab(format)
 	conns := p.bookIndexerConns(format)
@@ -564,7 +564,7 @@ func (p *process) bookModule(format book.Format) book.Module {
 		Sweep: scan.Sweep{
 			Consumer: book.NewConsumer(book.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
-				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 			}),
 			Include: format.Includes, Probe: format.Probes,
 			Housekeeping: housekeeping.Sweep{
@@ -659,7 +659,7 @@ func (p *process) adultModule() adult.Module {
 	conns := p.adultIndexerConns
 	resolver := adult.Resolver{
 		Service: service, Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
-		Locks: &keyedlock.Locks{},
+		Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
 	}
 	return adult.Module{
 		Registrations: []media.JobRegistration{
@@ -670,7 +670,7 @@ func (p *process) adultModule() adult.Module {
 		Sweep: scan.Sweep{
 			Consumer: adult.NewConsumer(adult.ConsumerConfig{
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
-				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache},
+				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 			}),
 			Include: adult.IsScene,
 			Housekeeping: housekeeping.Sweep{
@@ -757,3 +757,6 @@ func (p *process) adultGrab() adult.Grab {
 		},
 	}
 }
+
+// acceptThreshold is import.auto_commit_confidence as the settings hold it now, for every media type's accept rule.
+func (p *process) acceptThreshold() float64 { return p.cache.Snapshot().ImportAutoCommitConfidence() }

@@ -162,3 +162,25 @@ func TestBreaker_OneProviderDoesNotAffectAnother(t *testing.T) {
 		t.Errorf("healthy indexer = %v, want nil", err)
 	}
 }
+
+func TestARejectedKeyOpensTheCircuitAndIsReported(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 3})
+	for range 3 {
+		if err := breaker.Allow("omdb"); err != nil {
+			t.Fatalf("Allow before the threshold: %v", err)
+		}
+		breaker.ObserveRejected("omdb")
+	}
+	if err := breaker.Allow("omdb"); err == nil {
+		t.Fatal("a provider that refused its key three times was still asked")
+	}
+	paused := breaker.Paused()
+	if len(paused) != 1 || paused[0].Provider != "omdb" || !paused[0].KeyRejected {
+		t.Errorf("Paused = %+v, want omdb with its key rejected", paused)
+	}
+	breaker.Observe("omdb", true)
+	if len(breaker.Paused()) != 0 {
+		t.Error("a success did not close the circuit")
+	}
+}

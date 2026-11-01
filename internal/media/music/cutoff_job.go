@@ -66,7 +66,7 @@ func (j CutoffJob) CutoffPage(ctx context.Context, workID, afterID, limit int64)
 }
 
 // replaceSuperseded keeps, per track a download brought a second file for, the strictly better measured
-// file (a tie keeps the owned one, Invariant 72) and recycles the rest; answers how many were recycled.
+// file (a tie keeps the owned one, ADR-40) and recycles the rest; answers how many were recycled.
 func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Snapshot, item library.CutoffItem) (int, error) {
 	if j.Recycle == nil {
 		return 0, nil

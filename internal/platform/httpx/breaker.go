@@ -3,6 +3,7 @@ package httpx
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -63,6 +64,9 @@ func (e *OpenError) Error() string {
 
 func (e *OpenError) Unwrap() error { return ErrCircuitOpen }
 
+// ThrottleKey lets the log keep one line per paused provider (logthrottle.Keyed).
+func (e *OpenError) ThrottleKey() string { return "circuit:" + e.Provider }
+
 // BreakerSnapshot is one provider's breaker state, for the UI and notifications.
 type BreakerSnapshot struct {
 	Provider            string
@@ -70,6 +74,8 @@ type BreakerSnapshot struct {
 	ConsecutiveFailures int
 	OpenedAt            time.Time
 	RetryAt             time.Time
+	// KeyRejected is set when the failures that opened the circuit were 401 or 403 answers.
+	KeyRejected bool
 }
 
 // Breaker skips providers that are consistently failing (ADR-13 step 3, Invariant 26).
@@ -88,6 +94,8 @@ type breakerEntry struct {
 	cooldown            time.Duration
 	// probing marks the single in-flight half-open request.
 	probing bool
+	// rejected says the last failure was a refused key, not an outage.
+	rejected bool
 }
 
 // NewBreaker returns a breaker. A zero config takes the defaults.
@@ -137,13 +145,20 @@ func (b *Breaker) Allow(provider string) error {
 }
 
 // Observe records the result of a request that Allow permitted.
-func (b *Breaker) Observe(provider string, success bool) {
+func (b *Breaker) Observe(provider string, success bool) { b.observe(provider, success, false) }
+
+// ObserveRejected records a 401 or 403: a failure that opens the circuit like any other, so a refused key is not asked
+// again and again, and that the health list can tell from an outage.
+func (b *Breaker) ObserveRejected(provider string) { b.observe(provider, false, true) }
+
+func (b *Breaker) observe(provider string, success, rejected bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	entry := b.entryLocked(provider)
 	now := b.clock.Now()
 
+	entry.rejected = rejected && !success
 	if success {
 		entry.state = BreakerClosed
 		entry.consecutiveFailures = 0
@@ -187,11 +202,30 @@ func (b *Breaker) State(provider string) BreakerSnapshot {
 		State:               entry.state,
 		ConsecutiveFailures: entry.consecutiveFailures,
 		OpenedAt:            entry.openedAt,
+		KeyRejected:         entry.rejected,
 	}
 	if entry.state != BreakerClosed {
 		snapshot.RetryAt = entry.openedAt.Add(entry.cooldown)
 	}
 	return snapshot
+}
+
+// Paused lists the providers whose circuit is not closed, by name.
+func (b *Breaker) Paused() []BreakerSnapshot {
+	b.mu.Lock()
+	names := make([]string, 0, len(b.providers))
+	for name, entry := range b.providers {
+		if entry.state != BreakerClosed {
+			names = append(names, name)
+		}
+	}
+	b.mu.Unlock()
+	slices.Sort(names)
+	paused := make([]BreakerSnapshot, 0, len(names))
+	for _, name := range names {
+		paused = append(paused, b.State(name))
+	}
+	return paused
 }
 
 func (b *Breaker) entryLocked(provider string) *breakerEntry {

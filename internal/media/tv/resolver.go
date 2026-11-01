@@ -32,7 +32,9 @@ type Resolver struct {
 	// the providers once between them; nil means no serialising.
 	Locks *keyedlock.Locks
 	// Resolved remembers the series of each folder; nil remembers none.
-	Resolved   *FolderMemory
+	Resolved *FolderMemory
+	// Threshold is import.auto_commit_confidence; nil takes its default.
+	Threshold  func() float64
 	Categories interface {
 		Category(id int64) (settings.Category, bool)
 		ProfileFor(category settings.Category, fallback int64) int64
@@ -195,7 +197,7 @@ func (c Resolver) resolveFolder(ctx context.Context, categoryID int64, folder st
 		c.Logger.Warn("tv series lookup failed", slog.String("folder", folder), slog.Any("error", err))
 		return 0, nil
 	}
-	if pick, ok := c.pick(ctx, candidates, guess, relPaths); ok {
+	if pick, confidence, ok := c.pick(ctx, candidates, guess, relPaths); ok && model.AcceptsFolderMatch(confidence, c.Threshold) {
 		if id := c.add(ctx, categoryID, IDs{TVDB: pick.TVDBID, TMDB: pick.TMDBID}); id != 0 {
 			return id, nil
 		}
@@ -341,23 +343,25 @@ func scanMonitor(policy string) MonitorOption {
 
 // pick chooses the candidate a folder is: the one with its title (and year), or the one whose episodes the folder's files
 // fit; namesakes the episodes leave tied go by exact season episode counts. Anything less clear is a person's decision.
-func (c Resolver) pick(ctx context.Context, candidates []Candidate, guess FolderGuess, relPaths []string) (Candidate, bool) {
+func (c Resolver) pick(ctx context.Context, candidates []Candidate, guess FolderGuess, relPaths []string) (Candidate, float64, bool) {
 	matches := titleMatches(candidates, guess)
 	if len(matches) == 1 {
-		return matches[0], true
+		return matches[0], model.FolderExactMatch, true
 	}
 	if len(matches) > 1 {
 		if picked, ok := c.byEpisodes(ctx, matches, relPaths, c.Clock.Now()); ok {
-			return picked, true
+			return picked, model.FolderSettledMatch, true
 		}
-		return c.bySeasonCounts(ctx, matches, relPaths, c.Clock.Now())
+		picked, ok := c.bySeasonCounts(ctx, matches, relPaths, c.Clock.Now())
+		return picked, model.FolderSettledMatch, ok
 	}
 	matches = nearTitles(candidates, guess)
 	if len(matches) == 0 && countNumbered(relPaths, c.Clock.Now()) >= episodesToTrustTheNumbers {
 		// A folder named in another language still has its episode numbers: the top hits are judged by those alone.
 		matches = candidates[:min(len(candidates), maxEpisodeJudged)]
 	}
-	return c.byEpisodes(ctx, matches, relPaths, c.Clock.Now())
+	picked, ok := c.byEpisodes(ctx, matches, relPaths, c.Clock.Now())
+	return picked, model.FolderLooseMatch, ok
 }
 
 // titleMatches are the candidates named like the folder, ignoring TheTVDB's "(2014)" or "(US)" qualifier; a year the

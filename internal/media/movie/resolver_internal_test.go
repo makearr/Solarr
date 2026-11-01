@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 )
 
@@ -31,7 +32,7 @@ func TestPickCandidateTakesALoneTitleWithoutAYearAndABoundedTitleInTheExactYear(
 		{"another year is not taken", parsemovie.Info{Title: "Dguzoli Haheix Special", Year: 2013}, hits("Dguzoli Haheix"), 0},
 	}
 	for _, c := range cases {
-		got, ok := pickCandidate(c.candidates, c.info)
+		got, _, ok := pickCandidate(c.candidates, c.info)
 		if (c.want != 0) != ok || got.TMDBID != c.want {
 			t.Errorf("%s: picked %+v (%v), want id %d", c.name, got, ok, c.want)
 		}
@@ -74,10 +75,21 @@ func TestPickCandidateTakesTheExactTitleAndYearWhereverItRanksButAYearOffByOneOn
 		{TMDBID: 1, Title: "Drag Me to Hell", Year: 2009}, {TMDBID: 2, Title: "In Hell", Year: 2003}, {TMDBID: 3, Title: "Catching Hell", Year: 2011},
 		{TMDBID: 4, Title: "Hell", Year: 2011},
 	}
-	if pick, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2011}); !ok || pick.TMDBID != 4 {
+	if pick, _, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2011}); !ok || pick.TMDBID != 4 {
 		t.Errorf("pick = %+v, %v; want id 4", pick, ok)
 	}
-	if _, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2012}); ok {
+	if _, _, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2012}); ok {
 		t.Error("a year off by one was taken from below the top three")
+	}
+}
+
+func TestPickCandidateReportsALooseConfidenceForAYearOffByOne(t *testing.T) {
+	hits := []Candidate{{TMDBID: 1, Title: "Hell", Year: 2012}}
+	if _, confidence, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2011}); !ok || confidence != model.FolderLooseMatch {
+		t.Errorf("year off by one: confidence %v, ok %v; want loose", confidence, ok)
+	}
+	hits = []Candidate{{TMDBID: 1, Title: "Hell", Year: 2011}}
+	if _, confidence, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2011}); !ok || confidence != model.FolderExactMatch {
+		t.Errorf("exact: confidence %v, ok %v; want exact", confidence, ok)
 	}
 }

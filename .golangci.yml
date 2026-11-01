@@ -75,6 +75,7 @@ linters:
       # CLI commands write to stdout by definition.
       - path: cmd/solarr/
         linters: [forbidigo]
+        text: use log/slog
       # Tests drive the real filesystem and clock deliberately, and construct
       # http.Response values directly, which bodyclose cannot reason about.
       - path: _test\.go

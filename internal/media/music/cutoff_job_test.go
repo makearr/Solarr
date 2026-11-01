@@ -153,7 +153,7 @@ func TestCutoffJob_AnAlbumsOwnProfileDecidesWhetherItIsUpgradable(t *testing.T) 
 }
 
 // M1d: searching an album below its cutoff offers only releases strictly better than the files it has;
-// an equal one is refused as no upgrade (Invariant 72: ties keep the incumbent).
+// an equal one is refused as no upgrade (ADR-40: ties keep the incumbent).
 func TestSearchItem_AnUpgradableAlbumAcceptsOnlyABetterRelease(t *testing.T) {
 	env := newSearchTestEnv(t)
 	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)

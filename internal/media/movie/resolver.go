@@ -35,6 +35,8 @@ type Resolver struct {
 		ProfileFor(category settings.Category, fallback int64) int64
 	}
 	Locks *keyedlock.Locks
+	// Threshold is import.auto_commit_confidence; nil takes its default.
+	Threshold func() float64
 }
 
 // Resolve answers the work a parsed name (and the ids its nfo names) is: 0 when it could not be placed, in which case the
@@ -77,7 +79,7 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsemovie
 			candidates = append(candidates, more...)
 		}
 	}
-	if pick, ok := pickCandidate(candidates, info); ok {
+	if pick, confidence, ok := pickCandidate(candidates, info); ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
 		if id := r.add(ctx, categoryID, IDs{TMDB: pick.TMDBID, IMDb: pick.IMDbID}); id != 0 {
 			return id, nil
 		}
@@ -178,7 +180,7 @@ const rankedWell = 3
 // pickCandidate chooses the first hit with the named title and a year that agrees, when it is among the provider's top
 // few. With no year named it chooses the one hit of that title, if no other hit shares it; with no such hit, the
 // provider's first, when its year is exactly the named one and one title is the other's beginning or end.
-func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, bool) {
+func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, float64, bool) {
 	wanted := map[string]bool{}
 	for _, title := range append([]string{info.Title}, info.AllTitles...) {
 		wanted[parsetv.CleanTitle(title)], wanted[titleKey(title)] = true, true
@@ -195,9 +197,9 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 			}
 		}
 		if same != 1 {
-			return Candidate{}, false
+			return Candidate{}, 0, false
 		}
-		return sole, true
+		return sole, model.FolderLooseMatch, true
 	}
 	// An exact year beats a year off by one, wherever each sits in the first few.
 	for _, exactYear := range []bool{true, false} {
@@ -208,14 +210,17 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 			}
 			sameYear := candidate.Year == info.Year
 			if named(candidate) && yearsAgree(candidate.Year, info.Year) && sameYear == exactYear {
-				return candidate, true
+				if exactYear {
+					return candidate, model.FolderExactMatch, true
+				}
+				return candidate, model.FolderLooseMatch, true
 			}
 		}
 	}
 	if len(candidates) > 0 && candidates[0].Year == info.Year && (wordsBound(info.Title, candidates[0].Title) || wordsBound(candidates[0].Title, info.Title)) {
-		return candidates[0], true
+		return candidates[0], model.FolderLooseMatch, true
 	}
-	return Candidate{}, false
+	return Candidate{}, 0, false
 }
 
 // titleKey is a title's letters and digits alone, apostrophes gone ("Straight A's" is "Straight As"): CleanTitle also drops

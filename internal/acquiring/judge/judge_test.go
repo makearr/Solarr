@@ -248,3 +248,16 @@ func TestDuplicatesAcrossIndexersIgnorePunctuationNotWords(t *testing.T) {
 		t.Errorf("kept = %q\nwant %q", titles, want)
 	}
 }
+
+func TestStrictlyBetterRefusesATieInTheTiersAndInTheScore(t *testing.T) {
+	ranked := profiles(t, webProfile)
+	same := func() model.Decision { return judge.EvaluateInOrder(ranked, facts("1080p", "webdl"), nil) }
+	if judge.StrictlyBetter(same(), same()) {
+		t.Error("equal tiers and equal scores counted as an upgrade")
+	}
+	higher := same()
+	higher.Components = append(higher.Components, model.ScoreComponent{Rule: "r", Delta: 1})
+	if !judge.StrictlyBetter(higher, same()) || judge.StrictlyBetter(same(), higher) {
+		t.Error("equal tiers: only the higher score should win")
+	}
+}

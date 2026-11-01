@@ -487,3 +487,24 @@ func TestClient_DropsPooledConnectionsWhenTheProxyChanges(t *testing.T) {
 		t.Errorf("idle connections closed %d times, want 2: once per change, never on an unchanged policy", transport.closes)
 	}
 }
+
+func TestClient_ARefusedKeyOpensTheBreakerOnlyWhereAskedTo(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		opens bool
+		want  httpx.BreakerState
+	}{{"metadata provider", true, httpx.BreakerOpen}, {"the user's own service", false, httpx.BreakerClosed}} {
+		transport := &roundTripper{responses: []*http.Response{respond(http.StatusUnauthorized, nil)}}
+		fake := clock.NewFakeAtEpoch()
+		breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 2})
+		client := httpx.NewClient(fake, httpx.NewGuard(fakeResolver{}, refusingDial, nil),
+			httpx.NewLimiter(fake, httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+			breaker, httpx.ClientConfig{Provider: "omdb", Transport: transport, RejectedKeyOpens: c.opens})
+		for range 3 {
+			_, _ = client.Get(t.Context(), "https://omdb.invalid/?apikey=x")
+		}
+		if got := breaker.State("omdb"); got.State != c.want || got.KeyRejected != c.opens {
+			t.Errorf("%s: breaker %+v, want state %q with key rejected %v", c.name, got, c.want, c.opens)
+		}
+	}
+}

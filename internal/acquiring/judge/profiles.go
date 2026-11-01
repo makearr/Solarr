@@ -123,7 +123,7 @@ func rankedBy(decision model.Decision, rank int, name, how string) model.Decisio
 	return decision
 }
 
-// StrictlyBetter is Invariant 72: higher by the quality tiers, or equal there and higher in score. A tie keeps what
+// StrictlyBetter is ADR-40: higher by the quality tiers, or equal there and higher in score. A tie keeps what
 // is owned.
 func StrictlyBetter(candidate, incumbent model.Decision) bool {
 	winner, _ := model.Compare(candidate.Quality, incumbent.Quality)

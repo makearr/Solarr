@@ -39,6 +39,8 @@ type Resolver struct {
 	DefaultProfileID int64
 	Categories       Categories
 	Locks            *keyedlock.Locks
+	// Threshold is import.auto_commit_confidence; nil takes its default.
+	Threshold func() float64
 }
 
 // Resolve answers the work a parsed name is: 0 when it could not be placed, in which case the candidates say what was
@@ -75,7 +77,7 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsebook.
 		// A folder above a book is often its series, not its author.
 		candidates, _ = r.Service.Search(ctx, categoryID, info.Title, "", searchLimit)
 	}
-	pick, ok := pickCandidate(candidates, info)
+	pick, confidence, ok := pickCandidate(candidates, info)
 	for _, reading := range otherReadings(info) {
 		if ok {
 			break
@@ -83,10 +85,10 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parsebook.
 		// The name's best reading may be only its subtitle ("A Novel"): each other reading is searched on its own.
 		found, err := r.Service.Search(ctx, categoryID, reading, info.Author, searchLimit)
 		if err == nil {
-			pick, ok = pickCandidate(found, info)
+			pick, confidence, ok = pickCandidate(found, info)
 		}
 	}
-	if ok {
+	if ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
 		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Author: pick.Author}); id != 0 {
 			return id, nil
 		}
@@ -174,7 +176,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 
 // pickCandidate chooses the first of the provider's top few with exactly the named title and, when an author is named,
 // that author; with no author named, the one such hit of that title.
-func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool) {
+func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, float64, bool) {
 	wanted := map[string]bool{}
 	for _, title := range append([]string{info.Title}, info.Titles...) {
 		wanted[parsebook.CleanTitle(title)] = true
@@ -198,19 +200,19 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 			}
 		}
 		if len(named) == 1 {
-			return named[0], true
+			return named[0], model.FolderLooseMatch, true
 		}
 		named = nil
 	}
 	if info.Author == "" {
 		if len(named) == 1 {
-			return named[0], true
+			return named[0], model.FolderLooseMatch, true
 		}
-		return Candidate{}, false
+		return Candidate{}, 0, false
 	}
 	for _, candidate := range named {
 		if candidate.namesAuthor(info.Author) {
-			return candidate, true
+			return candidate, model.FolderExactMatch, true
 		}
 	}
 	// A name in another script (Liu Cixin, 刘慈欣) cannot be compared with the folder's, so the title alone speaks.
@@ -221,9 +223,9 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 		}
 	}
 	if len(unreadable) > 0 && len(unreadable) == len(named) {
-		return unreadable[0], true
+		return unreadable[0], model.FolderLooseMatch, true
 	}
-	return Candidate{}, false
+	return Candidate{}, 0, false
 }
 
 // namesAuthor says the folder's author is one of the book's authors: a book by two is found under either.

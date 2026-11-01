@@ -143,22 +143,22 @@ func TestPickCandidateTakesTheOneSceneOfThatTitleAndDay(t *testing.T) {
 		{IDs: IDs{StashDB: "b"}, Title: "Class Two", Date: "2020-05-14"},
 		{IDs: IDs{StashDB: "c"}, Title: "Something Else", Date: "2020-05-14"},
 	}
-	pick, ok := pickCandidate(candidates, parseadult.Info{Title: "Class Two", Date: "2020-05-14"})
+	pick, _, ok := pickCandidate(candidates, parseadult.Info{Title: "Class Two", Date: "2020-05-14"})
 	if !ok || pick.IDs.StashDB != "b" {
 		t.Errorf("pick = %+v, %v; want b", pick, ok)
 	}
-	if _, ok := pickCandidate(candidates[:1], parseadult.Info{Title: "Class Two", Date: "2020-05-14"}); ok {
+	if _, _, ok := pickCandidate(candidates[:1], parseadult.Info{Title: "Class Two", Date: "2020-05-14"}); ok {
 		t.Error("a scene of another day was taken")
 	}
 	twice := []Candidate{{IDs: IDs{StashDB: "x"}, Title: "Class Two", Date: "2020-05-14"}, {IDs: IDs{ThePornDB: "y"}, Title: "Class Two", Date: "2020-05-14"}}
-	if pick, ok := pickCandidate(twice, parseadult.Info{Title: "Class Two", Date: "2020-05-14"}); !ok || pick.IDs.StashDB != "x" {
+	if pick, _, ok := pickCandidate(twice, parseadult.Info{Title: "Class Two", Date: "2020-05-14"}); !ok || pick.IDs.StashDB != "x" {
 		t.Errorf("one scene listed twice: pick = %+v, %v; want the first", pick, ok)
 	}
 	two := []Candidate{{Title: "Class Two"}, {Title: "Class Two"}}
-	if _, ok := pickCandidate(two, parseadult.Info{Title: "Class Two"}); ok {
+	if _, _, ok := pickCandidate(two, parseadult.Info{Title: "Class Two"}); ok {
 		t.Error("two equal hits with no day to tell them apart were guessed")
 	}
-	suffixed, ok := pickCandidate([]Candidate{{IDs: IDs{StashDB: "d"}, Title: "Class Two", Date: "2020-05-14"}}, parseadult.Info{Title: "Class Two - Scene 3", Date: "2020-05-14"})
+	suffixed, _, ok := pickCandidate([]Candidate{{IDs: IDs{StashDB: "d"}, Title: "Class Two", Date: "2020-05-14"}}, parseadult.Info{Title: "Class Two - Scene 3", Date: "2020-05-14"})
 	if !ok || suffixed.IDs.StashDB != "d" {
 		t.Errorf("a scene number after the title kept the scene from matching: %+v, %v", suffixed, ok)
 	}
@@ -472,7 +472,7 @@ func TestSearchAsksEveryProviderSoAFilmOnlyThePornDBHoldsIsStillFound(t *testing
 	if err != nil || len(found) != 2 {
 		t.Fatalf("found = %+v, %v; want StashDB's unrelated hit and the film", found, err)
 	}
-	pick, ok := pickCandidate(found, parseadult.Info{Title: "Big Film Vol. 3", Year: 2017})
+	pick, _, ok := pickCandidate(found, parseadult.Info{Title: "Big Film Vol. 3", Year: 2017})
 	if !ok || pick.IDs.ThePornDB != "m-9" {
 		t.Errorf("pick = %+v, %v; want the film", pick, ok)
 	}
@@ -484,14 +484,14 @@ func TestPickCandidateBreaksATieOfEqualTitlesByYearAndStudio(t *testing.T) {
 		{IDs: IDs{StashDB: "a"}, Title: "Well Worth the Wait", Studio: "Devil's Film", Year: 2019},
 		{IDs: IDs{StashDB: "b"}, Title: "Well Worth the Wait", Studio: "Devil's Film", Year: 2023},
 	}
-	pick, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Studio: "Devils Film", Year: 2023})
+	pick, _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Studio: "Devils Film", Year: 2023})
 	if !ok || pick.IDs.StashDB != "b" {
 		t.Errorf("pick = %+v, %v; want b", pick, ok)
 	}
-	if _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Studio: "Devils Film", Year: 2021}); ok {
+	if _, _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Studio: "Devils Film", Year: 2021}); ok {
 		t.Error("a year no hit has was guessed")
 	}
-	if _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Year: 2023}); ok {
+	if _, _, ok := pickCandidate(hits, parseadult.Info{Title: "Well Worth the Wait", Year: 2023}); ok {
 		t.Error("two hits of one year with no studio to tell them apart were guessed")
 	}
 }

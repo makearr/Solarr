@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -10,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 // SystemHealth answers the health checks that need more than the settings
@@ -27,6 +29,8 @@ type SystemHealth struct {
 	Registry *media.Registry
 	// AboveRating counts a library's works its maximum rating does not admit; nil skips that check.
 	AboveRating func(ctx context.Context, categoryID int64, limit library.RatingLimit) (int64, error)
+	// Paused lists the providers whose circuit is open; nil skips that check.
+	Paused func() []httpx.BreakerSnapshot
 }
 
 // Checks reports what is missing. Every probe is best-effort: a failure to
@@ -54,6 +58,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.vanishedHeld(ctx, snapshot)...)
 	checks = append(checks, a.mediaChecks(snapshot)...)
 	checks = append(checks, a.heldByRating(ctx, snapshot)...)
+	checks = append(checks, a.pausedProviders()...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
 
@@ -224,4 +229,28 @@ func anyEnabledDownloader(downloaders []settings.Downloader) bool {
 		}
 	}
 	return false
+}
+
+// pausedProviders names each metadata provider the breaker has stopped asking, and says when its key was refused. The
+// connections of a user's own services have their own screens.
+func (a SystemHealth) pausedProviders() []apiserver.HealthCheck {
+	if a.Paused == nil {
+		return nil
+	}
+	var checks []apiserver.HealthCheck
+	for _, paused := range a.Paused() {
+		if strings.Contains(paused.Provider, ":") {
+			continue
+		}
+		reason := "it keeps failing"
+		if paused.KeyRejected {
+			reason = "its key was rejected, so check it"
+		}
+		checks = append(checks, apiserver.HealthCheck{
+			ID: "provider_paused_" + paused.Provider, Severity: apiserver.HealthWarning,
+			Message: fmt.Sprintf("%s is paused until %s: %s.", paused.Provider, paused.RetryAt.Local().Format("15:04"), reason),
+			Link:    "/settings/metadata",
+		})
+	}
+	return checks
 }

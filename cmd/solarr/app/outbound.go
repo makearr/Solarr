@@ -1,6 +1,7 @@
 package app
 
 import (
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -129,6 +130,8 @@ func (p *process) providerClient(provider string, guard *httpx.Guard, config htt
 		guard = httpx.NewGuard(nil, nil, nil)
 	}
 	config.Provider = provider
+	config.RejectedKeyOpens = !strings.HasPrefix(provider, providerIndexerPrefix) && !strings.HasPrefix(provider, providerDownloaderPrefix) &&
+		provider != providerProwlarr && provider != providerArr && provider != providerWhisparr
 	if config.UserAgent == "" && config.LiveUserAgent == nil {
 		config.UserAgent = httpx.UserAgent(p.build.Version)
 	}

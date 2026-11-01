@@ -391,3 +391,28 @@ func TestRecycleBinEmpty_RemovesEveryEntryAndListShowsThemNewestFirst(t *testing
 		t.Errorf("after Empty: %+v, %d", entries, total)
 	}
 }
+
+// refusingRename is a filesystem whose rename always fails, as a full or read-only destination does.
+type refusingRename struct{ *fsx.Mem }
+
+func (refusingRename) Rename(string, string) error { return errors.New("read-only file system") }
+
+func TestRecycleBinPut_AFailedMoveLeavesNoRow(t *testing.T) {
+	opened, _ := newLibrary(t)
+	fake := clock.NewFakeAtEpoch()
+	mem := fsx.NewMem(fake)
+	q := library.NewRecycleBin(opened, refusingRename{mem}, fake)
+	putTestFile(t, mem, "/media/root/track.flac", []byte("audio bytes"))
+
+	if _, err := q.Put(t.Context(), library.PutRequest{
+		RootPath: "/media/root", OriginalPath: "/media/root/track.flac", Reason: library.ReasonJunk, Retain: time.Hour,
+	}); err == nil {
+		t.Fatal("Put succeeded although the move failed")
+	}
+	if _, count, _, err := q.List(t.Context()); err != nil || count != 0 {
+		t.Errorf("rows after a failed move = %d (%v), want 0", count, err)
+	}
+	if got := readTestFile(t, mem, "/media/root/track.flac"); got != "audio bytes" {
+		t.Errorf("original = %q, want it untouched", got)
+	}
+}

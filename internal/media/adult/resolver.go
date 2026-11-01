@@ -34,6 +34,8 @@ type Resolver struct {
 	DefaultProfileID int64
 	Categories       Categories
 	Locks            *keyedlock.Locks
+	// Threshold is import.auto_commit_confidence; nil takes its default.
+	Threshold func() float64
 }
 
 // Resolve answers the work a parsed name (and the file's oshash, when it has one) is: 0 when it could not be placed,
@@ -60,7 +62,7 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parseadult
 		r.warn("scene lookup failed", info.Title, err)
 		return 0, nil
 	}
-	if pick, ok := pickCandidate(candidates, info); ok {
+	if pick, confidence, ok := pickCandidate(candidates, info); ok && model.AcceptsFolderMatch(confidence, r.Threshold) {
 		if id := r.add(ctx, categoryID, pick.IDs, Hint{Title: pick.Title, Studio: pick.Studio, Date: pick.Date}); id != 0 {
 			return id, nil
 		}
@@ -129,7 +131,7 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs, hint Hint)
 
 // pickCandidate chooses the one of the provider's top few that is the named scene: the same title and, where both
 // know the day, the same day. Two such hits are told apart by the day, and two on one day are one scene listed twice.
-func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, bool) {
+func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, float64, bool) {
 	var named []Candidate
 	for _, candidate := range candidates {
 		if candidate.Rank >= rankedWell {
@@ -144,7 +146,7 @@ func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, boo
 		}
 	}
 	if len(named) == 1 {
-		return named[0], true
+		return named[0], model.FolderExactMatch, true
 	}
 	var onTheDay []Candidate
 	for _, candidate := range named {
@@ -154,15 +156,15 @@ func pickCandidate(candidates []Candidate, info parseadult.Info) (Candidate, boo
 	}
 	// The same title on the same day twice is one scene a network lists under two sites: the provider's best ranked is it.
 	if len(onTheDay) > 0 {
-		return onTheDay[0], true
+		return onTheDay[0], model.FolderLooseMatch, true
 	}
 	// With no day, the same title in the same year from the same studio is the same listing again.
 	for _, candidate := range named {
 		if info.Year != 0 && candidate.Year == info.Year && info.Studio != "" && studioKey(candidate.Studio) == studioKey(info.Studio) {
-			return candidate, true
+			return candidate, model.FolderLooseMatch, true
 		}
 	}
-	return Candidate{}, false
+	return Candidate{}, 0, false
 }
 
 // studioKey is a studio's name without the apostrophes sites spell differently ("Devil's Film", "Devils Film").

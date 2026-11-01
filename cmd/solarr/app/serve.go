@@ -47,6 +47,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/hitcount"
 	"github.com/makearr/Solarr/internal/platform/logbuffer"
+	"github.com/makearr/Solarr/internal/platform/logthrottle"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/secrets"
@@ -225,6 +226,9 @@ func loadOrCreateConfig(fsys fsx.FS, path string, out io.Writer) (config.Config,
 // count rather than bytes: a count is what an operator reasons about.
 const logRingCapacity = 2000
 
+// logRepeatWindow is how long a keyed warning (an open circuit, a slow write) is logged once.
+const logRepeatWindow = time.Minute
+
 // newLogger builds the process logger and the in-memory ring the Logs screen
 // reads. The ring wraps the real handler rather than replacing it, so nothing
 // stops being written to stdout.
@@ -235,7 +239,7 @@ func newLogger(loaded config.Config) (*slog.Logger, *logbuffer.Ring) {
 		handler = slog.NewTextHandler(os.Stdout, options)
 	}
 	ring := logbuffer.NewRing(handler, logRingCapacity)
-	return slog.New(ring), ring
+	return slog.New(logthrottle.New(ring, clock.NewSystem(), logRepeatWindow)), ring
 }
 
 func slogLevel(level config.LogLevel) slog.Level {
@@ -705,7 +709,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		},
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
-			AboveRating: library.NewWorks(p.library).CountAboveRating,
+			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,
 		},
 		Blocklist: adapters.Blocklist{Store: library.NewBlocklistStore(p.library)},
 		History:   adapters.History{History: statistics.NewHistory(p.statistics)},

@@ -204,7 +204,7 @@ func (p *process) bookImporter(format book.Format) book.Importer {
 		}),
 		Resolver: book.Resolver{
 			Service: p.bookService(format), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
-			Locks: &keyedlock.Locks{},
+			Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
 		},
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
@@ -231,7 +231,7 @@ func (p *process) tvImporter() tv.Importer {
 		Desired: library.NewDesired(p.library), Acquisitions: library.NewAcquisitions(p.library),
 		Resolver: tv.Resolver{
 			Service: service, Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
-			DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
+			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Threshold: p.acceptThreshold,
 		},
 		Categories: categories, BlockedContent: library.NewBlockedContentStore(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
@@ -255,7 +255,7 @@ func (p *process) movieImporter() movie.Importer {
 		}),
 		Resolver: movie.Resolver{
 			Service: p.movieService(), Reader: library.NewSeriesReader(p.library), Logger: p.logger,
-			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Locks: &keyedlock.Locks{},
+			DefaultProfileID: p.defaultQualityProfileID, Categories: categories, Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
 		},
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},
@@ -299,7 +299,7 @@ func (p *process) adultImporter() adult.Importer {
 		}),
 		Resolver: adult.Resolver{
 			Service: p.adultService(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: categories,
-			Locks: &keyedlock.Locks{},
+			Locks: &keyedlock.Locks{}, Threshold: p.acceptThreshold,
 		},
 		Categories: categories, Clock: clock.NewSystem(), Logger: p.logger,
 		Exclusions:     adapters.WorkExclusions{Exclusions: library.NewExclusions(p.library)},

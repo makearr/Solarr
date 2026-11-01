@@ -18,6 +18,8 @@ import (
 
 // ConsumerConfig is what a Consumer needs; every field but Logger is required.
 type ConsumerConfig struct {
+	// Threshold is import.auto_commit_confidence; nil takes its default.
+	Threshold        func() float64
 	FS               fsx.FS
 	Physical         library.Physical
 	Unidentified     library.Unidentified
@@ -45,7 +47,7 @@ func NewConsumer(config ConsumerConfig) Consumer {
 	}
 	return Consumer{config: config, logger: logger, resolver: Resolver{
 		Service: config.Service, Logger: logger, DefaultProfileID: config.DefaultProfileID,
-		Categories: config.Categories, Locks: &keyedlock.Locks{},
+		Categories: config.Categories, Locks: &keyedlock.Locks{}, Threshold: config.Threshold,
 	}}
 }
 

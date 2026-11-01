@@ -35,7 +35,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/wikidata", "internal/moving/drainjob",
 		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
-		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/mediatool", "internal/platform/transcode",
+		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/logthrottle", "internal/platform/mediatool", "internal/platform/transcode",
 		"internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
@@ -67,11 +67,13 @@ var allowedInternalImports = map[string][]string{
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
 	// whatever handler it is given and knows nothing about this codebase.
 	"internal/platform/logbuffer": {},
-	"internal/platform/config":    {"internal/platform/fsx", "internal/platform/privilege"},
-	"internal/platform/events":    {"internal/platform/clock"},
-	"internal/platform/fsx":       {"internal/platform/clock"},
-	"internal/platform/httpx":     {"internal/platform/clock"},
-	"internal/api/health":         {"internal/db/store"},
+	// Keeps a repeating warning to one line a minute.
+	"internal/platform/logthrottle": {"internal/platform/clock"},
+	"internal/platform/config":      {"internal/platform/fsx", "internal/platform/privilege"},
+	"internal/platform/events":      {"internal/platform/clock"},
+	"internal/platform/fsx":         {"internal/platform/clock"},
+	"internal/platform/httpx":       {"internal/platform/clock"},
+	"internal/api/health":           {"internal/db/store"},
 	"internal/jobs": {
 		"internal/platform/clock", "internal/platform/paginate", "internal/db/store", "internal/db/store/gen/jobsdb",
 	},
@@ -114,7 +116,7 @@ var allowedInternalImports = map[string][]string{
 	"internal/metadata/acoustid": {"internal/platform/httpx"},
 	// The only unprompted outbound call, so it needs the one way out (Invariant 28).
 	"internal/platform/egress": {"internal/platform/clock", "internal/platform/httpx"},
-	"internal/db/store":        {"internal/platform/clock", "internal/platform/fsx"},
+	"internal/db/store":        {"internal/platform/clock", "internal/platform/fsx", "internal/platform/logthrottle"},
 	// ADR-30's external tools. It runs subprocesses and parses their output; it
 	// touches no database and no filesystem of ours.
 	"internal/platform/mediatool": {},
