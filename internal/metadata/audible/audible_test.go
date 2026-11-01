@@ -84,3 +84,19 @@ func TestAnUnknownRegionIsTheUSStoreAndAMalformedASINIsNotAsked(t *testing.T) {
 		t.Errorf("a malformed ASIN was asked: %v", transport.asked)
 	}
 }
+
+func TestBookFallsBackToAnotherStoresCatalogWhenAudnexusHasNoRecord(t *testing.T) {
+	transport := &answer{bodies: map[string]string{"api.audible.de/1.0/catalog/products/B000000002": `{"product":{"asin":"B000000002","title":"Episode One",
+		"release_date":"2024-02-29","runtime_length_min":30,"language":"german","merchandising_summary":"Hello.",
+		"product_images":{"500":"https://m.media-amazon.com/500.jpg"}}}`}}
+	book, err := client(t, transport, "us").Book(t.Context(), "B000000002")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if book.Title != "Episode One" || book.Year() != 2024 || book.RuntimeLengthMin != 30 || book.Image != "https://m.media-amazon.com/500.jpg" {
+		t.Errorf("book = %+v", book)
+	}
+	if _, err := client(t, &answer{}, "us").Book(t.Context(), "B000000003"); !errors.Is(err, audible.ErrNotFound) {
+		t.Errorf("unlisted ASIN err = %v", err)
+	}
+}

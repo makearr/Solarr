@@ -206,13 +206,55 @@ func (c Client) Book(ctx context.Context, asin string) (Book, error) {
 		return Book{}, ErrNotFound
 	}
 	var book Book
-	if err := get(ctx, c.audnexus, c.audnexusBase+"/books/"+asin+c.regionQuery(), &book); err != nil {
+	err := get(ctx, c.audnexus, c.audnexusBase+"/books/"+asin+c.regionQuery(), &book)
+	if err == nil && book.ASIN != "" {
+		return book, nil
+	}
+	// Audnexus lacks podcast episodes and other-store titles that the stores' own catalogs still list.
+	if found, catalogErr := c.catalogBook(ctx, asin); catalogErr == nil {
+		return found, nil
+	}
+	if err != nil {
 		return Book{}, err
 	}
-	if book.ASIN == "" {
-		return Book{}, ErrNotFound
+	return Book{}, ErrNotFound
+}
+
+// storeOrder is the order the other stores are asked after the configured one.
+var storeOrder = []string{"us", "de", "uk", "fr", "ca", "au", "it", "es", "in", "jp"}
+
+// catalogBook reads one product by ASIN from the first store that lists it.
+func (c Client) catalogBook(ctx context.Context, asin string) (Book, error) {
+	regions := append([]string{c.regionCode()}, storeOrder...)
+	asked := map[string]bool{}
+	for _, region := range regions {
+		if asked[region] {
+			continue
+		}
+		asked[region] = true
+		var found struct {
+			Product productJSON `json:"product"`
+		}
+		address := c.catalogBase + regionDomains[region] + "/1.0/catalog/products/" + asin + "?" + url.Values{"response_groups": {searchGroups}}.Encode()
+		if err := get(ctx, c.catalog, address, &found); err != nil || found.Product.Title == "" {
+			continue
+		}
+		found.Product.Images = found.Product.ProductImages
+		return found.Product.asBook(), nil
 	}
-	return book, nil
+	return Book{}, ErrNotFound
+}
+
+// asBook is the product in Audnexus's shape, for what a catalog lookup by ASIN can fill.
+func (p Product) asBook() Book {
+	book := Book{
+		ASIN: p.ASIN, Title: p.Title, Subtitle: p.Subtitle, Authors: p.Authors, Narrators: p.Narrators, Publisher: p.Publisher,
+		Summary: p.Summary, ReleaseDate: p.ReleaseDate, Image: p.Cover(), Language: p.Language, RuntimeLengthMin: p.RuntimeMin, FormatType: p.FormatType,
+	}
+	if len(p.Series) > 0 {
+		book.SeriesPrimary = &SeriesRef{ASIN: p.Series[0].ASIN, Name: p.Series[0].Title, Position: p.Series[0].Sequence}
+	}
+	return book
 }
 
 // Author reads one author by ASIN from Audnexus.
