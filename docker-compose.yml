@@ -16,6 +16,12 @@ services:
     ports:
       - "5454:5454"
 
+    # Optional: GPU encoding for the built-in player's conversions (documentation/media-player.md).
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # group_add:
+    #   - "991"   # the host's render group: getent group render
+
     volumes:
       # Config, databases, backups and cache. Keep on local storage: SQLite WAL
       # is unsupported on NFS and SMB.

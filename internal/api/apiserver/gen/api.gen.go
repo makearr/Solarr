@@ -266,6 +266,12 @@ const (
 	FileManagementSharedFileFallbackSymlink FileManagementSharedFileFallback = "symlink"
 )
 
+// Defines values for FilePlaybackKind.
+const (
+	FilePlaybackKindAudio FilePlaybackKind = "audio"
+	FilePlaybackKindVideo FilePlaybackKind = "video"
+)
+
 // Defines values for FranchiseKind.
 const (
 	FranchiseKindCustom    FranchiseKind = "custom"
@@ -787,6 +793,30 @@ const (
 	SettingDefinitionTierAdvanced SettingDefinitionTier = "advanced"
 	SettingDefinitionTierExpert   SettingDefinitionTier = "expert"
 	SettingDefinitionTierNormal   SettingDefinitionTier = "normal"
+)
+
+// Defines values for StreamingEncoderAccel.
+const (
+	StreamingEncoderAccelNvenc StreamingEncoderAccel = "nvenc"
+	StreamingEncoderAccelQsv   StreamingEncoderAccel = "qsv"
+	StreamingEncoderAccelVaapi StreamingEncoderAccel = "vaapi"
+)
+
+// Defines values for StreamingReportEffectiveAccel.
+const (
+	StreamingReportEffectiveAccelNvenc    StreamingReportEffectiveAccel = "nvenc"
+	StreamingReportEffectiveAccelQsv      StreamingReportEffectiveAccel = "qsv"
+	StreamingReportEffectiveAccelSoftware StreamingReportEffectiveAccel = "software"
+	StreamingReportEffectiveAccelVaapi    StreamingReportEffectiveAccel = "vaapi"
+)
+
+// Defines values for StreamingSettingsHardware.
+const (
+	StreamingSettingsHardwareAuto     StreamingSettingsHardware = "auto"
+	StreamingSettingsHardwareNvenc    StreamingSettingsHardware = "nvenc"
+	StreamingSettingsHardwareQsv      StreamingSettingsHardware = "qsv"
+	StreamingSettingsHardwareSoftware StreamingSettingsHardware = "software"
+	StreamingSettingsHardwareVaapi    StreamingSettingsHardware = "vaapi"
 )
 
 // Defines values for TVProviderId.
@@ -2313,6 +2343,27 @@ type FileManagementRescanAfterRefresh string
 
 // FileManagementSharedFileFallback How a file one broadcast shares with another series reaches this library's series when the two are on different filesystems and no link can be made: a second copy (the default) or a symbolic link. Omitted on a save keeps what is stored.
 type FileManagementSharedFileFallback string
+
+// FilePlayback defines model for FilePlayback.
+type FilePlayback struct {
+	AudioCodec *string `json:"audio_codec,omitempty"`
+	Container  *string `json:"container,omitempty"`
+
+	// DirectPlayLikely The file's type and codecs are ones browsers play; the player still falls back to a conversion if this one cannot.
+	DirectPlayLikely bool `json:"direct_play_likely"`
+
+	// DurationMs Absent when the probe has not measured it.
+	DurationMs    *int64           `json:"duration_ms,omitempty"`
+	Kind          FilePlaybackKind `json:"kind"`
+	MediaObjectId int64            `json:"media_object_id"`
+
+	// TranscodeAvailable Transcoding is on and ffmpeg is installed.
+	TranscodeAvailable bool    `json:"transcode_available"`
+	VideoCodec         *string `json:"video_codec,omitempty"`
+}
+
+// FilePlaybackKind defines model for FilePlayback.Kind.
+type FilePlaybackKind string
 
 // Follow The caller's follow of a person or organisation in one library.
 type Follow struct {
@@ -4834,6 +4885,54 @@ type StatisticsTarget struct {
 	Key string `json:"key"`
 }
 
+// StreamingEncoder defines model for StreamingEncoder.
+type StreamingEncoder struct {
+	Accel StreamingEncoderAccel `json:"accel"`
+
+	// Detail Why it failed
+	Detail  *string `json:"detail,omitempty"`
+	Device  *string `json:"device,omitempty"`
+	Name    *string `json:"name,omitempty"`
+	Working bool    `json:"working"`
+}
+
+// StreamingEncoderAccel defines model for StreamingEncoder.Accel.
+type StreamingEncoderAccel string
+
+// StreamingReport defines model for StreamingReport.
+type StreamingReport struct {
+	ActiveSessions int                `json:"active_sessions"`
+	Detected       []StreamingEncoder `json:"detected"`
+
+	// Effective The encoder a conversion would use now.
+	Effective struct {
+		Accel  StreamingReportEffectiveAccel `json:"accel"`
+		Device *string                       `json:"device,omitempty"`
+
+		// Note Present when the setting could not be met as written.
+		Note *string `json:"note,omitempty"`
+	} `json:"effective"`
+	FfmpegAvailable bool              `json:"ffmpeg_available"`
+	Settings        StreamingSettings `json:"settings"`
+}
+
+// StreamingReportEffectiveAccel defines model for StreamingReport.Effective.Accel.
+type StreamingReportEffectiveAccel string
+
+// StreamingSettings defines model for StreamingSettings.
+type StreamingSettings struct {
+	// Device A render node such as /dev/dri/renderD128; empty takes the detected one.
+	Device           *string                   `json:"device,omitempty"`
+	Hardware         StreamingSettingsHardware `json:"hardware"`
+	MaxHeight        int64                     `json:"max_height"`
+	MaxSessions      int64                     `json:"max_sessions"`
+	TranscodeEnabled bool                      `json:"transcode_enabled"`
+	VideoKbps        int64                     `json:"video_kbps"`
+}
+
+// StreamingSettingsHardware defines model for StreamingSettings.Hardware.
+type StreamingSettingsHardware string
+
 // TVProvider defines model for TVProvider.
 type TVProvider struct {
 	// Adds What this provider contributes to a series.
@@ -5592,6 +5691,12 @@ type StreamEventsParams struct {
 	// Topics Comma-separated subset of topics. Absent means every topic the caller may see. An unrecognised name is rejected rather than ignored, so a typo is not a silently empty stream.
 	Topics      *[]EventTopic `form:"topics,omitempty" json:"topics,omitempty"`
 	LastEventID *string       `json:"Last-Event-ID,omitempty"`
+}
+
+// TranscodeFileParams defines parameters for TranscodeFile.
+type TranscodeFileParams struct {
+	// Start Where to begin, in seconds.
+	Start *float64 `form:"start,omitempty" json:"start,omitempty"`
 }
 
 // ListFranchisesParams defines parameters for ListFranchises.
@@ -6690,6 +6795,9 @@ type SetUserDefaultsJSONRequestBody = UserDefaults
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
 
+// UpdateStreamingJSONRequestBody defines body for UpdateStreaming for application/json ContentType.
+type UpdateStreamingJSONRequestBody = StreamingSettings
+
 // CreateTagJSONRequestBody defines body for CreateTag for application/json ContentType.
 type CreateTagJSONRequestBody CreateTagJSONBody
 
@@ -7031,9 +7139,18 @@ type ServerInterface interface {
 	// Change a pattern's content. Administrator only. `builtin` never changes -- a shipped default stays a shipped default, only editable and removable (ADR-53's own text), never rebrandable as user-added.
 	// (PATCH /exclusions/{id})
 	UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, id int64)
+	// What the built-in player needs to know to play a file.
+	// (GET /files/{mediaObjectId}/playback)
+	GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
 	// "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
 	// (POST /files/{mediaObjectId}/remove-block)
 	RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// The file's own bytes, with byte ranges, for the browser to play as it is.
+	// (GET /files/{mediaObjectId}/stream)
+	StreamFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
+	// The file converted by ffmpeg into what a browser plays, streamed as it is made.
+	// (GET /files/{mediaObjectId}/transcode)
+	TranscodeFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64, params TranscodeFileParams)
 	// A library's franchises (a movie's collections) with the films of each it holds.
 	// (GET /franchises)
 	ListFranchises(w http.ResponseWriter, r *http.Request, params ListFranchisesParams)
@@ -7484,6 +7601,15 @@ type ServerInterface interface {
 	// List a directory, for picking a path by hand. Administrator only.
 	// (GET /storage/browse)
 	BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams)
+	// The player's transcode policy and what hardware encoding was detected.
+	// (GET /streaming)
+	GetStreaming(w http.ResponseWriter, r *http.Request)
+	// Change the transcode policy. Administrator only.
+	// (PATCH /streaming)
+	UpdateStreaming(w http.ResponseWriter, r *http.Request)
+	// Try every encoder again, after a driver or device was added. Administrator only.
+	// (POST /streaming/detect)
+	DetectStreamingHardware(w http.ResponseWriter, r *http.Request)
 	// The jobs running now, with progress and an estimate of the time left.
 	// (GET /system/activity)
 	GetActivity(w http.ResponseWriter, r *http.Request)
@@ -8192,9 +8318,27 @@ func (_ Unimplemented) UpdateExclusionPattern(w http.ResponseWriter, r *http.Req
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// What the built-in player needs to know to play a file.
+// (GET /files/{mediaObjectId}/playback)
+func (_ Unimplemented) GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // "This is fake, get rid of it and make sure it never comes back" (architecture.md section 10.8/ADR-53 section 3). Administrator only.
 // (POST /files/{mediaObjectId}/remove-block)
 func (_ Unimplemented) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The file's own bytes, with byte ranges, for the browser to play as it is.
+// (GET /files/{mediaObjectId}/stream)
+func (_ Unimplemented) StreamFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The file converted by ffmpeg into what a browser plays, streamed as it is made.
+// (GET /files/{mediaObjectId}/transcode)
+func (_ Unimplemented) TranscodeFile(w http.ResponseWriter, r *http.Request, mediaObjectId int64, params TranscodeFileParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9095,6 +9239,24 @@ func (_ Unimplemented) CreateFirstAdministrator(w http.ResponseWriter, r *http.R
 // List a directory, for picking a path by hand. Administrator only.
 // (GET /storage/browse)
 func (_ Unimplemented) BrowsePath(w http.ResponseWriter, r *http.Request, params BrowsePathParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The player's transcode policy and what hardware encoding was detected.
+// (GET /streaming)
+func (_ Unimplemented) GetStreaming(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the transcode policy. Administrator only.
+// (PATCH /streaming)
+func (_ Unimplemented) UpdateStreaming(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Try every encoder again, after a driver or device was added. Administrator only.
+// (POST /streaming/detect)
+func (_ Unimplemented) DetectStreamingHardware(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12270,6 +12432,39 @@ func (siw *ServerInterfaceWrapper) UpdateExclusionPattern(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// GetFilePlayback operation middleware
+func (siw *ServerInterfaceWrapper) GetFilePlayback(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetFilePlayback(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // RemoveAndBlockFile operation middleware
 func (siw *ServerInterfaceWrapper) RemoveAndBlockFile(w http.ResponseWriter, r *http.Request) {
 
@@ -12294,6 +12489,83 @@ func (siw *ServerInterfaceWrapper) RemoveAndBlockFile(w http.ResponseWriter, r *
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.RemoveAndBlockFile(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// StreamFile operation middleware
+func (siw *ServerInterfaceWrapper) StreamFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.StreamFile(w, r, mediaObjectId)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// TranscodeFile operation middleware
+func (siw *ServerInterfaceWrapper) TranscodeFile(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "mediaObjectId" -------------
+	var mediaObjectId int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "mediaObjectId", chi.URLParam(r, "mediaObjectId"), &mediaObjectId, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "mediaObjectId", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params TranscodeFileParams
+
+	// ------------- Optional query parameter "start" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "start", r.URL.Query(), &params.Start)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "start", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.TranscodeFile(w, r, mediaObjectId, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17166,6 +17438,72 @@ func (siw *ServerInterfaceWrapper) BrowsePath(w http.ResponseWriter, r *http.Req
 	handler.ServeHTTP(w, r)
 }
 
+// GetStreaming operation middleware
+func (siw *ServerInterfaceWrapper) GetStreaming(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetStreaming(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// UpdateStreaming operation middleware
+func (siw *ServerInterfaceWrapper) UpdateStreaming(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.UpdateStreaming(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// DetectStreamingHardware operation middleware
+func (siw *ServerInterfaceWrapper) DetectStreamingHardware(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.DetectStreamingHardware(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetActivity operation middleware
 func (siw *ServerInterfaceWrapper) GetActivity(w http.ResponseWriter, r *http.Request) {
 
@@ -19579,7 +19917,16 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Patch(options.BaseURL+"/exclusions/{id}", wrapper.UpdateExclusionPattern)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/playback", wrapper.GetFilePlayback)
+	})
+	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/files/{mediaObjectId}/remove-block", wrapper.RemoveAndBlockFile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/stream", wrapper.StreamFile)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/files/{mediaObjectId}/transcode", wrapper.TranscodeFile)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/franchises", wrapper.ListFranchises)
@@ -20030,6 +20377,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/storage/browse", wrapper.BrowsePath)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/streaming", wrapper.GetStreaming)
+	})
+	r.Group(func(r chi.Router) {
+		r.Patch(options.BaseURL+"/streaming", wrapper.UpdateStreaming)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/streaming/detect", wrapper.DetectStreamingHardware)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/system/activity", wrapper.GetActivity)

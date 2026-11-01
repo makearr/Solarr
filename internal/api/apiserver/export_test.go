@@ -30,3 +30,8 @@ func (s *Server) CategoriesWithOfflineFilesForTest(ctx context.Context, access a
 func AlbumStatusForTest(row PersonWorkRow, now time.Time) string {
 	return string(albumStatus(row, now))
 }
+
+// DirectPlayLikelyForTest exposes the player's direct-play heuristic.
+func DirectPlayLikelyForTest(file PlaybackFile, kind string) bool {
+	return directPlayLikely(file, kind)
+}

@@ -204,6 +204,44 @@ func NewDefaultRegistry() *Registry {
 		Default: "true",
 	})
 
+	// Streaming: the preview player's transcode, edited as one form (documentation/media-player.md).
+	registry.MustRegister(SettingDef{
+		Key: KeyStreamingTranscodeEnabled, Kind: KindBool, Tier: TierNormal,
+		Name:     "Transcode for the player",
+		HelpText: "Lets the built-in player convert a file its browser cannot play with ffmpeg. Off, only files the browser plays as they are can be previewed.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyStreamingHardware, Kind: KindString, Tier: TierAdvanced,
+		Name:     "Transcode hardware",
+		HelpText: "auto uses the best GPU encoder found working (NVIDIA, then VAAPI for Intel and AMD, then Intel QSV); software never uses a GPU.",
+		Default:  StreamingHardwareAuto,
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyStreamingDevice, Kind: KindString, Tier: TierAdvanced,
+		Name:     "Transcode render device",
+		HelpText: "The render node VAAPI and QSV use, such as /dev/dri/renderD128. Empty takes the one detection found.",
+		Default:  "",
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyStreamingMaxHeight, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Transcode maximum height",
+		HelpText: "Video taller than this is scaled down while transcoding.",
+		Default:  strconv.Itoa(DefaultStreamingMaxHeight),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyStreamingVideoKbps, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Transcode video bitrate",
+		HelpText: "Target video bitrate in kbit/s while transcoding.",
+		Default:  strconv.Itoa(DefaultStreamingVideoKbps),
+	})
+	registry.MustRegister(SettingDef{
+		Key: KeyStreamingMaxSessions, Kind: KindInt, Tier: TierAdvanced,
+		Name:     "Simultaneous transcodes",
+		HelpText: "How many conversions run at once; a further one is refused until one ends.",
+		Default:  strconv.Itoa(DefaultStreamingMaxSessions),
+	})
+
 	// Network (ADR-58): self-hosted networking, tuned by someone running
 	// this behind a reverse proxy or restricting it to a LAN -- advanced,
 	// not normal (a working library needs none of it changed) and not

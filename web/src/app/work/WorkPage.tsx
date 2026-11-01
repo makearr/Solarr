@@ -37,6 +37,7 @@ import { externalLinks, fileChips, formatMinutes, isUnverified } from "./workFor
 import { GroupSection, MonitorToggle, PartTable, PersonLink, useAllParts, type PartActions } from "./WorkParts";
 import { WorkCollections } from "./WorkCollections";
 import { WorkSearchTab } from "./WorkSearchTab";
+import { PlayButton } from "../player/PlayButton";
 
 type Work = components["schemas"]["WorkDetail"];
 type Group = components["schemas"]["WorkGroup"];
@@ -736,7 +737,10 @@ function WholeFiles({ work }: { work: Work }) {
       <ul className="flex flex-col divide-y divide-border-subtle text-sm">
         {files.map((file) => (
           <li key={file.media_object_id} className="flex flex-col gap-1 py-2">
-            {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
+            <span className="flex items-center gap-2">
+              <PlayButton extension={file.extension} item={{ mediaObjectId: file.media_object_id, title: work.title, durationMs: work.runtime_ms ?? undefined }} />
+              {file.path && <span className="break-all font-mono text-xs">{file.path}</span>}
+            </span>
             <span className="flex flex-wrap items-center gap-1">
               {fileChips(file).map((chip) => (
                 <Chip key={chip}>{chip}</Chip>

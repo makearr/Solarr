@@ -5,6 +5,7 @@ import { Tags } from "./Tags";
 import { Categories } from "./Categories";
 import { MetadataSettings } from "./MetadataSettings";
 import { Network } from "./Network";
+import { Streaming } from "./Streaming";
 import { Priority } from "./Priority";
 import { UnwantedFiles } from "./UnwantedFiles";
 import { useFooterItems, useShowCalendar, useShowFooter, type FooterItem } from "@/lib/interfacePreferences";
@@ -77,6 +78,14 @@ export function NetworkSettings() {
   return (
     <SettingsPage title="Network" requiredTier="advanced">
       <Network />
+    </SettingsPage>
+  );
+}
+
+export function PlayerSettings() {
+  return (
+    <SettingsPage title="Player" requiredTier="normal">
+      <Streaming />
     </SettingsPage>
   );
 }

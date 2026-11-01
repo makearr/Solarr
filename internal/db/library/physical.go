@@ -720,3 +720,30 @@ func workIDsOfObject(ctx context.Context, tx *sql.Tx, mediaObjectID int64) ([]in
 	}
 	return works, rows.Err()
 }
+
+// PlaybackFacts is what the built-in player needs of a file beyond where it is.
+type PlaybackFacts struct {
+	// Kind is media_object.kind: "audio", "video" or another file type, empty when never classified.
+	Kind                              string
+	DurationMs                        int64
+	Container, VideoCodec, AudioCodec string
+}
+
+// PlaybackFacts reads a file's kind, length and measured codecs; sql.ErrNoRows when there is no such object.
+func (p Physical) PlaybackFacts(ctx context.Context, mediaObjectID int64) (PlaybackFacts, error) {
+	queries := librarydb.New(p.store.Read())
+	object, err := queries.GetMediaObject(ctx, mediaObjectID)
+	if err != nil {
+		return PlaybackFacts{}, fmt.Errorf("library: playback facts of object %d: %w", mediaObjectID, err)
+	}
+	facts := PlaybackFacts{Kind: object.Kind.String, DurationMs: object.DurationMs.Int64}
+	if !object.MeasuredAttributesID.Valid {
+		return facts, nil
+	}
+	row, err := queries.GetAttributes(ctx, object.MeasuredAttributesID.Int64)
+	if err != nil {
+		return PlaybackFacts{}, fmt.Errorf("library: playback attributes of object %d: %w", mediaObjectID, err)
+	}
+	facts.Container, facts.VideoCodec, facts.AudioCodec = row.Container.String, row.VideoCodec.String, row.AudioCodec.String
+	return facts, nil
+}

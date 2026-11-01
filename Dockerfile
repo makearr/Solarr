@@ -59,7 +59,10 @@ COPY --from=build /usr/share/zoneinfo /usr/share/zoneinfo
 
 # fpcalc (chromaprint) and ffprobe (ffmpeg) for MediaTool (ADR-30), and mutagen for
 # the tag writer (revision D3, +57 MB). Reintroduces the RUN the comment above avoided.
-RUN apk add --no-cache ffmpeg chromaprint py3-mutagen
+# mesa-va-gallium (AMD) and intel-media-driver with onevpl-intel-gpu (Intel QSV, x86 only) let ffmpeg encode on a GPU for the
+# player's transcode; they cost nothing without a device passed in (documentation/media-player.md).
+RUN apk add --no-cache ffmpeg chromaprint py3-mutagen mesa-va-gallium libva-utils \
+ && if [ "$(uname -m)" = x86_64 ]; then apk add --no-cache intel-media-driver onevpl-intel-gpu; fi
 COPY --chmod=0755 internal/platform/mediatool/solarr-tag /usr/local/bin/solarr-tag
 
 COPY --from=build /out/solarr /usr/local/bin/solarr

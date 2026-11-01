@@ -50,6 +50,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 	"github.com/makearr/Solarr/internal/platform/privilege"
 	"github.com/makearr/Solarr/internal/platform/secrets"
+	"github.com/makearr/Solarr/internal/platform/transcode"
 	"github.com/makearr/Solarr/migrations"
 )
 
@@ -89,6 +90,8 @@ type process struct {
 	cache       *settings.Cache
 	// tool runs the external media tools (ADR-30); one for the process.
 	tool mediatool.Tool
+	// transcoder converts files for the built-in player; detection runs at start.
+	transcoder *transcode.Service
 	// media is every media type compiled in; core asks it instead of naming one.
 	media      *media.Registry
 	bus        *events.Bus
@@ -182,6 +185,7 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	running := &process{
 		build: build, config: loaded, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
+		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{}, fsys),
 	}
 	defer running.close()
 
@@ -608,6 +612,7 @@ func (p *process) startServer(ctx context.Context) error {
 	defer stop()
 
 	p.startBackupSchedules()
+	go p.detectTranscodeHardware(stopping)
 
 	dispatcherDone := make(chan struct{})
 	go func() {
@@ -799,6 +804,8 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		BlockedContent:   adapters.BlockedContent{Blocks: library.NewBlockedContentStore(p.library)},
 		Packs:            adapters.Packs{Packs: library.NewPacks(p.library)},
 		RemoveAndBlocker: p.fileRemover(),
+		Playback:         adapters.Playback{Physical: library.NewPhysical(p.library), Cache: p.cache},
+		Transcoder:       p.transcoder,
 		ImportSessions: adapters.ImportSessions{
 			Sessions: library.NewImportSessions(p.library),
 			Revert: library.NewImportRevert(
@@ -989,5 +996,13 @@ func (p *process) arrSync() adapters.ArrSync {
 		WarmSeries: func(ctx context.Context, ids []string) error {
 			return p.wikidataFacts().Warm(ctx, wikidata.FactSeries, ids)
 		},
+	}
+}
+
+// detectTranscodeHardware tries every GPU encoder once at start, off the serving path: each try runs ffmpeg.
+func (p *process) detectTranscodeHardware(ctx context.Context) {
+	for _, found := range p.transcoder.Detect(ctx) {
+		p.logger.Info("transcode encoder", slog.String("accel", string(found.Accel)), slog.String("device", found.Device),
+			slog.String("name", found.Name), slog.Bool("working", found.Working), slog.String("detail", found.Detail))
 	}
 }

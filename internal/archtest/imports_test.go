@@ -35,7 +35,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/metadata/wikidata", "internal/moving/drainjob",
 		"internal/moving/linkjob", "internal/moving/mover", "internal/moving/moverjob", "internal/moving/renamejob", "internal/platform/clock", "internal/platform/config",
 		"internal/platform/egress", "internal/platform/events", "internal/platform/fsx",
-		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/mediatool",
+		"internal/platform/httpx", "internal/platform/logbuffer", "internal/platform/mediatool", "internal/platform/transcode",
 		"internal/platform/privilege",
 		"internal/platform/secrets", "internal/scanning/probe", "internal/scanning/scan", "migrations",
 	},
@@ -61,7 +61,7 @@ var allowedInternalImports = map[string][]string{
 		"internal/platform/clock", "internal/platform/config", "internal/platform/events", "internal/platform/fsx",
 		"internal/jobs", "internal/identify/model", "internal/platform/paginate", "internal/identify/parse",
 		"internal/platform/privilege", "internal/identify/score", "internal/db/settings", "internal/platform/secrets",
-		"internal/identify/quality", "internal/platform/listfilter", "internal/platform/httpx",
+		"internal/identify/quality", "internal/platform/listfilter", "internal/platform/httpx", "internal/platform/transcode",
 	},
 	"internal/platform/clock": {},
 	// A bounded in-memory slog handler (revision 7.16). Stdlib only: it wraps
@@ -118,6 +118,8 @@ var allowedInternalImports = map[string][]string{
 	// ADR-30's external tools. It runs subprocesses and parses their output; it
 	// touches no database and no filesystem of ours.
 	"internal/platform/mediatool": {},
+	// The player's ffmpeg conversion: encoder detection reads device nodes through fsx.
+	"internal/platform/transcode": {"internal/platform/fsx"},
 	// Section 21.6's resize-and-encode step: pure image processing (stdlib image
 	// package plus a pure-Go WebP encoder dependency), no I/O of its own.
 	"internal/platform/artwork":     {},

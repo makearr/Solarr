@@ -22,6 +22,7 @@ import (
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/events"
 	"github.com/makearr/Solarr/internal/platform/fsx"
+	"github.com/makearr/Solarr/internal/platform/transcode"
 )
 
 // APIPrefix is where every versioned endpoint lives (section 13.1).
@@ -215,6 +216,9 @@ type Config struct {
 	// clear (todo 4.19). Optional: without it, the cache endpoints answer
 	// 503.
 	CacheManager CacheManager
+	// Playback finds the file the built-in player opens; Transcoder converts it. Both optional: without them the player answers 503.
+	Playback   PlaybackLocator
+	Transcoder *transcode.Service
 	// DatabaseMemory reports each database's page cache; optional.
 	DatabaseMemory DatabaseMemoryReader
 	// WorkAdder looks works up and adds them (ADR-56). Optional: nil answers 503.
@@ -349,6 +353,8 @@ type Server struct {
 	downloadRoots           DownloadFolderChecker
 	scheduler               Scheduler
 	cacheManager            CacheManager
+	playback                PlaybackLocator
+	transcoder              *transcode.Service
 	databaseMemory          DatabaseMemoryReader
 	workAdder               WorkAdder
 	importLists             ImportListSync
@@ -475,6 +481,8 @@ func New(config Config) (*Server, error) {
 		downloadRoots:           config.DownloadRoots,
 		scheduler:               config.Scheduler,
 		cacheManager:            config.CacheManager,
+		playback:                config.Playback,
+		transcoder:              config.Transcoder,
 		databaseMemory:          config.DatabaseMemory,
 		workAdder:               config.WorkAdder,
 		importLists:             config.ImportLists,
@@ -776,6 +784,12 @@ func New(config Config) (*Server, error) {
 			secured.Post("/schedules/{key}/run", server.routeRunSchedule)
 			secured.Get("/network", server.GetNetworkSettings)
 			secured.Patch("/network", server.UpdateNetworkSettings)
+			secured.Get("/files/{mediaObjectId}/playback", server.routeGetFilePlayback)
+			secured.Get("/files/{mediaObjectId}/stream", server.routeStreamFile)
+			secured.Get("/files/{mediaObjectId}/transcode", server.routeTranscodeFile)
+			secured.Get("/streaming", server.GetStreaming)
+			secured.Patch("/streaming", server.UpdateStreaming)
+			secured.Post("/streaming/detect", server.DetectStreamingHardware)
 			secured.Get("/cache", server.GetCache)
 			secured.Patch("/cache", server.UpdateCacheBudget)
 			secured.Get("/cache/memory", server.GetDatabaseMemory)

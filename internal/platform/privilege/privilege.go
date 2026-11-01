@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"syscall"
 
@@ -130,8 +131,9 @@ func Apply(fsys fsx.FS, identity Identity, directories []string, logger *slog.Lo
 // drop relinquishes root permanently. Groups then gid then uid: setuid is what
 // removes the ability to make the other two calls.
 func drop(identity Identity) error {
-	if err := syscall.Setgroups([]int{identity.GID}); err != nil {
-		return fmt.Errorf("privilege: set groups to %d: %w", identity.GID, err)
+	groups := append([]int{identity.GID}, gpuGroups(gpuDeviceDir, identity.GID)...)
+	if err := syscall.Setgroups(groups); err != nil {
+		return fmt.Errorf("privilege: set groups to %v: %w", groups, err)
 	}
 	if err := syscall.Setgid(identity.GID); err != nil {
 		return fmt.Errorf("privilege: become gid %d: %w", identity.GID, err)
@@ -217,4 +219,28 @@ func WarnIfUnapplicable(identity Identity, out io.Writer) {
 			"         away, so PUID and PGID cannot be applied and nothing will be chowned.\n"+
 			"         Remove --user and let PUID/PGID do it, or set --user to match them.\n\n",
 		identity.UID, identity.GID, current.UID, current.GID)
+}
+
+// gpuDeviceDir is where a container is handed a GPU (--device /dev/dri).
+const gpuDeviceDir = "/dev/dri"
+
+// gpuGroups are the non-root groups owning the GPU device nodes, which the dropped user keeps so the player can
+// encode on the GPU without the operator matching a render group id to PGID. Nothing else of root's groups survives.
+func gpuGroups(dir string, primary int) []int {
+	pattern, err := filepath.Glob(filepath.Join(dir, "*"))
+	if err != nil {
+		return nil
+	}
+	var groups []int
+	for _, node := range pattern {
+		var info syscall.Stat_t
+		if syscall.Stat(node, &info) != nil {
+			continue
+		}
+		gid := int(info.Gid)
+		if gid != 0 && gid != primary && !slices.Contains(groups, gid) {
+			groups = append(groups, gid)
+		}
+	}
+	return groups
 }

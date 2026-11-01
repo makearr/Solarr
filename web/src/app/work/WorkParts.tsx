@@ -11,6 +11,7 @@ import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
+import { PlayButton } from "../player/PlayButton";
 import { fileChips, formatDuration, formatMinutes, partState, type PartState } from "./workFormat";
 
 type Part = components["schemas"]["WorkPart"];
@@ -242,6 +243,9 @@ function PartRow({
           <Button variant="icon" title="Choose the release yourself" aria-label={`${t("action.interactive")} ${title}`} onClick={() => actions.onInteractive?.(part, group)}>
             <User aria-hidden className="size-3.5" />
           </Button>
+        )}
+        {part.file && (
+          <PlayButton extension={part.file.extension} item={{ mediaObjectId: part.file.media_object_id, title, durationMs: part.runtime_ms ?? undefined }} />
         )}
         {actions.onCrossover && (
           <Button variant="icon" title={t("crossover.action")} aria-label={`${t("crossover.action")} ${title}`} onClick={() => actions.onCrossover?.(part)}>

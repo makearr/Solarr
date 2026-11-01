@@ -1231,6 +1231,125 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /files/{mediaObjectId}/playback:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: getFilePlayback
+      tags: [library]
+      summary: What the built-in player needs to know to play a file.
+      description: >-
+        The kind (audio or video), the length, the codecs and whether a browser is likely to play it as it is.
+        404 when the file does not exist or is not in a library the caller can read (ADR-27).
+      responses:
+        "200":
+          description: The playback facts.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FilePlayback" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /files/{mediaObjectId}/stream:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: streamFile
+      tags: [library]
+      summary: The file's own bytes, with byte ranges, for the browser to play as it is.
+      responses:
+        "200":
+          description: The file.
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        "206": { description: The requested range. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+
+  /files/{mediaObjectId}/transcode:
+    parameters:
+      - name: mediaObjectId
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    get:
+      operationId: transcodeFile
+      tags: [library]
+      summary: The file converted by ffmpeg into what a browser plays, streamed as it is made.
+      description: >-
+        Video comes as fragmented MP4 (H.264 and AAC), audio as MP3. The length is unknown while it streams, so a
+        player seeks by asking again with start. 503 when transcoding is off or ffmpeg is missing, 429 when every
+        conversion slot is busy.
+      parameters:
+        - name: start
+          in: query
+          description: Where to begin, in seconds.
+          schema: { type: number, format: double, minimum: 0, default: 0 }
+      responses:
+        "200":
+          description: The converted stream.
+          content:
+            video/mp4:
+              schema: { type: string, format: binary }
+            audio/mpeg:
+              schema: { type: string, format: binary }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "429": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /streaming:
+    get:
+      operationId: getStreaming
+      tags: [settings]
+      summary: The player's transcode policy and what hardware encoding was detected.
+      responses:
+        "200":
+          description: The policy, the detection and the encoder that will run.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StreamingReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+    patch:
+      operationId: updateStreaming
+      tags: [settings]
+      summary: Change the transcode policy. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StreamingSettings" }
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StreamingReport" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /streaming/detect:
+    post:
+      operationId: detectStreamingHardware
+      tags: [settings]
+      summary: Try every encoder again, after a driver or device was added. Administrator only.
+      responses:
+        "200":
+          description: The report after detection.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StreamingReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /cache:
     get:
       operationId: getCache
@@ -7788,6 +7907,59 @@ components:
             Encoded the same way the value itself is stored (a JSON array
             for string_list). Always empty for kind entity.
         help_text: { type: string }
+
+    FilePlayback:
+      type: object
+      required: [media_object_id, kind, direct_play_likely, transcode_available]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        kind: { type: string, enum: [audio, video] }
+        duration_ms: { type: integer, format: int64, description: Absent when the probe has not measured it. }
+        container: { type: string }
+        audio_codec: { type: string }
+        video_codec: { type: string }
+        direct_play_likely:
+          type: boolean
+          description: The file's type and codecs are ones browsers play; the player still falls back to a conversion if this one cannot.
+        transcode_available: { type: boolean, description: Transcoding is on and ffmpeg is installed. }
+
+    StreamingSettings:
+      type: object
+      required: [transcode_enabled, hardware, max_height, video_kbps, max_sessions]
+      properties:
+        transcode_enabled: { type: boolean }
+        hardware: { type: string, enum: [auto, software, vaapi, qsv, nvenc] }
+        device: { type: string, description: A render node such as /dev/dri/renderD128; empty takes the detected one. }
+        max_height: { type: integer, format: int64 }
+        video_kbps: { type: integer, format: int64 }
+        max_sessions: { type: integer, format: int64 }
+
+    StreamingEncoder:
+      type: object
+      required: [accel, working]
+      properties:
+        accel: { type: string, enum: [vaapi, qsv, nvenc] }
+        device: { type: string }
+        name: { type: string, example: Intel }
+        working: { type: boolean }
+        detail: { type: string, description: Why it failed, when it did. }
+
+    StreamingReport:
+      type: object
+      required: [settings, ffmpeg_available, detected, effective, active_sessions]
+      properties:
+        settings: { $ref: "#/components/schemas/StreamingSettings" }
+        ffmpeg_available: { type: boolean }
+        detected: { type: array, items: { $ref: "#/components/schemas/StreamingEncoder" } }
+        effective:
+          type: object
+          required: [accel]
+          description: The encoder a conversion would use now.
+          properties:
+            accel: { type: string, enum: [software, vaapi, qsv, nvenc] }
+            device: { type: string }
+            note: { type: string, description: Present when the setting could not be met as written. }
+        active_sessions: { type: integer }
 
     CacheReport:
       type: object

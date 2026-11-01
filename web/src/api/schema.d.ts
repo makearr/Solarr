@@ -817,6 +817,104 @@ export interface paths {
         patch: operations["updateNetworkSettings"];
         trace?: never;
     };
+    "/files/{mediaObjectId}/playback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * What the built-in player needs to know to play a file.
+         * @description The kind (audio or video), the length, the codecs and whether a browser is likely to play it as it is. 404 when the file does not exist or is not in a library the caller can read (ADR-27).
+         */
+        get: operations["getFilePlayback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{mediaObjectId}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        /** The file's own bytes, with byte ranges, for the browser to play as it is. */
+        get: operations["streamFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/files/{mediaObjectId}/transcode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * The file converted by ffmpeg into what a browser plays, streamed as it is made.
+         * @description Video comes as fragmented MP4 (H.264 and AAC), audio as MP3. The length is unknown while it streams, so a player seeks by asking again with start. 503 when transcoding is off or ffmpeg is missing, 429 when every conversion slot is busy.
+         */
+        get: operations["transcodeFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/streaming": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The player's transcode policy and what hardware encoding was detected. */
+        get: operations["getStreaming"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the transcode policy. Administrator only. */
+        patch: operations["updateStreaming"];
+        trace?: never;
+    };
+    "/streaming/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Try every encoder again, after a driver or device was added. Administrator only. */
+        post: operations["detectStreamingHardware"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/cache": {
         parameters: {
             query?: never;
@@ -4828,6 +4926,61 @@ export interface components {
             /** @description Encoded the same way the value itself is stored (a JSON array for string_list). Always empty for kind entity. */
             default: string;
             help_text?: string;
+        };
+        FilePlayback: {
+            /** Format: int64 */
+            media_object_id: number;
+            /** @enum {string} */
+            kind: "audio" | "video";
+            /**
+             * Format: int64
+             * @description Absent when the probe has not measured it.
+             */
+            duration_ms?: number;
+            container?: string;
+            audio_codec?: string;
+            video_codec?: string;
+            /** @description The file's type and codecs are ones browsers play; the player still falls back to a conversion if this one cannot. */
+            direct_play_likely: boolean;
+            /** @description Transcoding is on and ffmpeg is installed. */
+            transcode_available: boolean;
+        };
+        StreamingSettings: {
+            transcode_enabled: boolean;
+            /** @enum {string} */
+            hardware: "auto" | "software" | "vaapi" | "qsv" | "nvenc";
+            /** @description A render node such as /dev/dri/renderD128; empty takes the detected one. */
+            device?: string;
+            /** Format: int64 */
+            max_height: number;
+            /** Format: int64 */
+            video_kbps: number;
+            /** Format: int64 */
+            max_sessions: number;
+        };
+        StreamingEncoder: {
+            /** @enum {string} */
+            accel: "vaapi" | "qsv" | "nvenc";
+            device?: string;
+            /** @example Intel */
+            name?: string;
+            working: boolean;
+            /** @description Why it failed */
+            detail?: string;
+        };
+        StreamingReport: {
+            settings: components["schemas"]["StreamingSettings"];
+            ffmpeg_available: boolean;
+            detected: components["schemas"]["StreamingEncoder"][];
+            /** @description The encoder a conversion would use now. */
+            effective: {
+                /** @enum {string} */
+                accel: "software" | "vaapi" | "qsv" | "nvenc";
+                device?: string;
+                /** @description Present when the setting could not be met as written. */
+                note?: string;
+            };
+            active_sessions: number;
         };
         /** @description The cache's own budgets and last-measured size per namespace (ADR-60). */
         CacheReport: {
@@ -9957,6 +10110,161 @@ export interface operations {
                 };
             };
             400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getFilePlayback: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The playback facts. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FilePlayback"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    streamFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The file. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                };
+            };
+            /** @description The requested range. */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+        };
+    };
+    transcodeFile: {
+        parameters: {
+            query?: {
+                /** @description Where to begin, in seconds. */
+                start?: number;
+            };
+            header?: never;
+            path: {
+                mediaObjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The converted stream. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp4": string;
+                    "audio/mpeg": string;
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            429: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getStreaming: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The policy, the detection and the encoder that will run. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamingReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    updateStreaming: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamingSettings"];
+            };
+        };
+        responses: {
+            /** @description Updated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamingReport"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    detectStreamingHardware: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report after detection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamingReport"];
+                };
+            };
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
         };

@@ -4,6 +4,8 @@ import { useShowFooter } from "@/lib/interfacePreferences";
 import { isAdministratorPath, useIsAdministrator } from "@/lib/useAdministrator";
 
 import { NotificationBell } from "./Notifications";
+import { PlayerProvider } from "./player/PlayerContext";
+import { PlayerDock } from "./player/PlayerDock";
 import { SearchBox } from "./SearchBox";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -17,6 +19,7 @@ import { UserMenu } from "./UserMenu";
 export function Shell({ children }: { children: React.ReactNode }) {
   const [showFooter] = useShowFooter();
   return (
+    <PlayerProvider>
     <div className="flex h-full flex-col">
       <div className="flex min-h-0 flex-1">
         <Sidebar />
@@ -36,8 +39,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </main>
         </div>
       </div>
+      <PlayerDock />
       {showFooter && <StatusBar />}
     </div>
+    </PlayerProvider>
   );
 }
 

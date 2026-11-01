@@ -65,6 +65,7 @@ export const SETTINGS: Section = {
     { label: "Web UI", path: "/settings/webui", tier: "normal" },
     { label: "Metadata", path: "/settings/metadata", tier: "normal", administrator: true },
     { label: "Quality profiles", path: "/quality-profiles", tier: "advanced", administrator: true },
+    { label: "Player", path: "/settings/player", tier: "normal", administrator: true },
     { label: "Network", path: "/settings/network", tier: "advanced", administrator: true },
     { label: "Scheduler", path: "/settings/scheduler", tier: "normal", administrator: true },
     { label: "Backups", path: "/settings/backups", tier: "normal", administrator: true },
