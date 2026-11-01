@@ -81,3 +81,16 @@ func TestAYearlessFolderIsNotPlacedOnTheYearQualifiedNamesakeTheLibraryHolds(t *
 		t.Errorf("the yearless folder was placed on the 2024 series %d", got)
 	}
 }
+
+func TestAYearlessFolderIsNotPlacedOnTheNamesakeThatDiffersByAnArticle(t *testing.T) {
+	sky := fixtureSkyhook()
+	sky.Title = "Example Show"
+	service, opened := newService(t, noSearchSkyhook{series: sky}, fakeTVmaze{err: errors.New("down")})
+	if _, err := service.Add(t.Context(), tv.AddRequest{IDs: tv.IDs{TVDB: 1234}, CategoryID: 3, ProfileID: 1, Monitor: tv.MonitorNone}); err != nil {
+		t.Fatal(err)
+	}
+	resolver := tv.Resolver{Service: service, Reader: library.NewSeriesReader(opened), Clock: service.Clock, Logger: slog.Default(), DefaultProfileID: 1, Categories: categories{}}
+	if got, _ := resolver.ResolveFolder(t.Context(), 3, "The Example Show", []string{"The Example Show/Season 1/x - S01E01.mp4"}, tv.FolderGuess{}); got != 0 {
+		t.Errorf("the folder with an article was placed on the series without it, %d", got)
+	}
+}

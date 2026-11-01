@@ -278,11 +278,12 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 		if parsetv.CleanTitle(title.Title) == want || parsetv.CleanTitle(trailingBrackets.ReplaceAllString(title.Title, "")) == want {
 			seen[title.WorkID] = title.Year
 			qualified[title.WorkID] = qualified[title.WorkID] || (guess.Year > 0 && strings.Contains(title.Title, "("+strconv.Itoa(guess.Year)+")"))
-			unqualified[title.WorkID] = unqualified[title.WorkID] || parsetv.CleanTitle(title.Title) == want && !yearQualifier.MatchString(title.Title)
+			unqualified[title.WorkID] = unqualified[title.WorkID] || plainTitleKey(title.Title) == plainTitleKey(guess.Title)
 		}
 	}
 	if guess.Year == 0 {
-		// A yearless folder is not shown to be the namesake the library holds ("Title (2024)"): the original may be unheld.
+		// A yearless folder is not shown to be a namesake that differs in a qualifier or an article ("Title (2024)",
+		// "The Title"): the other may be unheld, so the providers' list and the episodes decide.
 		for id := range seen {
 			if !unqualified[id] {
 				delete(seen, id)
@@ -305,8 +306,6 @@ func (c Resolver) inLibrary(ctx context.Context, categoryID int64, guess FolderG
 	}
 	return 0, false
 }
-
-var yearQualifier = regexp.MustCompile(`\s*\(\d{4}\)\s*$`)
 
 func (c Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 	if c.Service.IsExcluded(ctx, ids) {
