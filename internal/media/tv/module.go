@@ -39,8 +39,6 @@ type Module struct {
 	Feed
 	// CutoffJob is TV's part of the cutoff check.
 	CutoffJob
-	// Retry identifies again the files that waited for review; nil leaves the job unregistered.
-	Retry *RetryJob
 	// ServerFiles writes Jellyfin and Kodi files; nil leaves the job unregistered.
 	ServerFiles *ServerFilesJob
 	// SharedFiles places episodes two series share; nil leaves the job unregistered.
@@ -233,11 +231,6 @@ func (m Module) RegisterJobs(register media.JobRegistrar) error {
 			return err
 		}
 	}
-	if m.Retry != nil {
-		if err := register(RetryDefinition, m.Retry); err != nil {
-			return err
-		}
-	}
 	if m.SharedFiles != nil {
 		if err := register(SharedFilesDefinition, m.SharedFiles); err != nil {
 			return err
@@ -317,7 +310,7 @@ func (Module) Descriptor() media.Descriptor {
 		Kinds:             libraryKinds,
 		FileSettings:      fileSettings,
 		ScanMonitor:       scanMonitoring,
-		UnidentifiedRetry: RetryScheduleKey,
+		UnidentifiedRetry: media.IdentifyRetryKey,
 	}
 }
 

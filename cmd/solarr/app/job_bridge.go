@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/media/tv"
@@ -22,23 +21,6 @@ func (p *process) enqueueBridge(ctx context.Context) (jobs.EnqueueResult, error)
 	result, err := tv.EnqueueBridge(ctx, p.queue)
 	if err != nil {
 		p.logger.Warn("enqueue people bridge", slog.Any("error", err))
-	}
-	return result, err
-}
-
-// tvRetryTask is the "Identify waiting TV files" task, under the key TV's descriptor names for the Retry button.
-func (p *process) tvRetryTask() jobs.Task {
-	return jobs.Task{
-		Key: tv.RetryScheduleKey, Name: "Identify waiting TV files", DefaultCadence: tvRetryScheduleCron,
-		Tier: string(settings.TierNormal), Category: jobs.CategoryLibrary, Enqueue: p.enqueueTVRetry,
-	}
-}
-
-// enqueueTVRetry submits one retry of the files waiting for review; registered as the "Identify waiting TV files" task.
-func (p *process) enqueueTVRetry(ctx context.Context) (jobs.EnqueueResult, error) {
-	result, err := tv.EnqueueRetry(ctx, p.queue)
-	if err != nil {
-		p.logger.Warn("enqueue tv retry", slog.Any("error", err))
 	}
 	return result, err
 }

@@ -105,3 +105,26 @@ func TestDecideSearching_DisablesOnlyTheNamedTasksAndIsRemembered(t *testing.T) 
 			snapshot.SearchingDecided(), snapshot.ScheduleEnabled("hunt"), snapshot.ScheduleEnabled("rss"), snapshot.ScheduleEnabled("scan"))
 	}
 }
+
+func TestCarryScheduleOver_CopiesOnlyWhatTheNewTaskLacks(t *testing.T) {
+	cache, cl := newCache(t)
+	if err := cache.SetScheduleCadences(t.Context(), cl, "old", []string{"0 3 * * *"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetScheduleEnabled(t.Context(), cl, "old", false); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.SetScheduleEnabled(t.Context(), cl, "new", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := cache.CarryScheduleOver(t.Context(), cl, "old", "new"); err != nil {
+		t.Fatal(err)
+	}
+	snapshot := cache.Snapshot()
+	if got := snapshot.ScheduleCadences("new", "x"); !reflect.DeepEqual(got, []string{"0 3 * * *"}) {
+		t.Errorf("cadence = %q, want the old one carried over", got)
+	}
+	if !snapshot.ScheduleEnabled("new") {
+		t.Error("the new task's own enabled flag was overwritten")
+	}
+}

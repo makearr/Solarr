@@ -12,7 +12,6 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
-	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media/tv"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -372,7 +371,7 @@ func TestScanLeavesNamesakesToAPersonWhenBothSeasonCountsFit(t *testing.T) {
 	}
 }
 
-func TestRetryPlacesFilesWaitingForReviewOnceTheProvidersKnowTheSeries(t *testing.T) {
+func TestARescanPlacesFilesWaitingForReviewOnceTheProvidersKnowTheSeries(t *testing.T) {
 	on := false
 	consumer, opened, fsys := newConsumer(t, switchSkyhook{on: &on, series: fixtureSkyhook()})
 	root := settings.RootFolder{ID: 1, Path: scanRoot, Online: true}
@@ -387,24 +386,19 @@ func TestRetryPlacesFilesWaitingForReviewOnceTheProvidersKnowTheSeries(t *testin
 	if waiting, _ := unidentified.Count(t.Context()); waiting != 2 {
 		t.Fatalf("waiting = %d, want both files queued", waiting)
 	}
-	job := tv.NewRetryJob(tv.RetryConfig{
-		Unidentified: unidentified, Consumer: consumer, FS: fsys,
-		Libraries: func() []tv.RetryLibrary {
-			return []tv.RetryLibrary{{CategoryID: 3, Roots: []settings.RootFolder{root}}}
-		},
-	})
-	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+	// The identify-retry task rescans the waiting folders; the consumer sees the same files again.
+	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
 		t.Fatal(err)
 	}
 	if waiting, _ := unidentified.Count(t.Context()); waiting != 2 {
-		t.Errorf("waiting = %d after a retry with the provider still off, want 2", waiting)
+		t.Errorf("waiting = %d after a rescan with the provider still off, want 2", waiting)
 	}
 	on = true
-	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+	if err := consumer.Observe(t.Context(), root, 3, batch); err != nil {
 		t.Fatal(err)
 	}
 	if waiting, _ := unidentified.Count(t.Context()); waiting != 0 {
-		t.Errorf("waiting = %d after the retry, want the files placed", waiting)
+		t.Errorf("waiting = %d after the rescan, want the files placed", waiting)
 	}
 	if list, _ := seriesIn(t.Context(), opened, 3); len(list) != 1 || list[0].Counts.Present != 2 {
 		t.Errorf("list = %+v, want the series with both episodes present", list)

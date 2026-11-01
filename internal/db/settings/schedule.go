@@ -243,3 +243,23 @@ func (c *Cache) DecideSearching(ctx context.Context, cl clock.Clock, off []strin
 	}
 	return c.setPolicies(ctx, cl, values)
 }
+
+// CarryScheduleOver gives a task that replaced another the schedule its predecessor was customised to, unless it has
+// its own; the old keys stay behind, unread.
+func (c *Cache) CarryScheduleOver(ctx context.Context, cl clock.Clock, from, to string) error {
+	snapshot := c.Snapshot()
+	values := map[string]string{}
+	for _, pair := range [][2]string{
+		{scheduleCadenceKey(from), scheduleCadenceKey(to)}, {scheduleEnabledKey(from), scheduleEnabledKey(to)},
+		{scheduleStartupKey(from), scheduleStartupKey(to)},
+	} {
+		old, hadOld := snapshot.policy[pair[0]]
+		if _, hasNew := snapshot.policy[pair[1]]; hadOld && !hasNew {
+			values[pair[1]] = old
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return c.setPolicies(ctx, cl, values)
+}

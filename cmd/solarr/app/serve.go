@@ -199,6 +199,9 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	if err := running.ensureSearchingDecision(ctx); err != nil {
 		return err
 	}
+	if err := running.cache.CarryScheduleOver(ctx, clock.NewSystem(), "tv_retry", media.IdentifyRetryKey); err != nil {
+		return err
+	}
 	if abandoned, err := library.NewArrImports(running.library).AbandonRunning(ctx, clock.NewSystem().Now().Unix()); err != nil {
 		return err
 	} else if abandoned > 0 {

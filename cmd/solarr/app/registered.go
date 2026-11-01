@@ -125,26 +125,13 @@ func (p *process) musicModule() music.Module {
 	}}
 }
 
-// tvModule wires TV's sweep and the job that identifies again the files that waited for review.
+// tvModule wires TV's sweep; its waiting files are identified again by the shared identify-retry task.
 func (p *process) tvModule() tv.Module {
 	consumer := tv.NewConsumer(tv.ConsumerConfig{
 		FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library),
 		Service: p.tvService(), Reader: library.NewSeriesReader(p.library), Clock: clock.NewSystem(), Logger: p.logger,
 		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 		SharedFiles: p.enqueueSharedFiles,
-	})
-	retry := tv.NewRetryJob(tv.RetryConfig{
-		Unidentified: library.NewUnidentified(p.library), Consumer: consumer, FS: p.fsys, Logger: p.logger,
-		Libraries: func() []tv.RetryLibrary {
-			snapshot := p.cache.Snapshot()
-			var libraries []tv.RetryLibrary
-			for _, category := range snapshot.Categories() {
-				if category.MediaType == tv.MediaType {
-					libraries = append(libraries, tv.RetryLibrary{CategoryID: category.ID, Roots: snapshot.RootFoldersForCategory(category.ID)})
-				}
-			}
-			return libraries
-		},
 	})
 	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
@@ -190,7 +177,6 @@ func (p *process) tvModule() tv.Module {
 			Desired: library.NewDesired(p.library), Series: library.NewSeriesReader(p.library), Settings: p.cache,
 			Recycle: p.recycleSuperseded, Logger: p.logger,
 		},
-		Retry: retry,
 		ServerFiles: &tv.ServerFilesJob{
 			Writer: tv.ServerFiles{
 				FS: p.fsys, Reader: library.NewSeriesReader(p.library), Crossovers: library.NewCrossovers(p.library),

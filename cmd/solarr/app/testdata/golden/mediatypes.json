@@ -798,7 +798,7 @@
     },
     "search_terms": [],
     "searches_library": false,
-    "unidentified_retry": "tv_retry",
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "part",
     "work": {
       "many": "Series",

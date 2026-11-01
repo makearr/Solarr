@@ -25,8 +25,7 @@ func (p *process) identifyRetryTask() jobs.Task {
 	}
 }
 
-// enqueueIdentifyRetry rescans the folders of the waiting files of every library whose type declares this retry (a type
-// with its own, TV's, is left to it); each folder goes through its own media type's consumer, probed as a scan would.
+// enqueueIdentifyRetry rescans the folders of the waiting files of every library whose type declares this retry ; each folder goes through its own media type's consumer, probed as a scan would.
 func (p *process) enqueueIdentifyRetry(ctx context.Context) (jobs.EnqueueResult, error) {
 	unidentified := library.NewUnidentified(p.library)
 	snapshot := p.cache.Snapshot()
