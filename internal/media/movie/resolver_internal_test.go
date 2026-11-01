@@ -68,3 +68,16 @@ func TestPlanUniversesNamesAComponentAfterItsTopNotAnArbitraryPart(t *testing.T)
 		}
 	}
 }
+
+func TestPickCandidateTakesTheExactTitleAndYearWhereverItRanksButAYearOffByOneOnlyNearTheTop(t *testing.T) {
+	hits := []Candidate{
+		{TMDBID: 1, Title: "Drag Me to Hell", Year: 2009}, {TMDBID: 2, Title: "In Hell", Year: 2003}, {TMDBID: 3, Title: "Catching Hell", Year: 2011},
+		{TMDBID: 4, Title: "Hell", Year: 2011},
+	}
+	if pick, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2011}); !ok || pick.TMDBID != 4 {
+		t.Errorf("pick = %+v, %v; want id 4", pick, ok)
+	}
+	if _, ok := pickCandidate(hits, parsemovie.Info{Title: "Hell", Year: 2012}); ok {
+		t.Error("a year off by one was taken from below the top three")
+	}
+}

@@ -257,3 +257,17 @@ func TestWarn_APausedProviderIsNotAWarningPerBook(t *testing.T) {
 		t.Errorf("logged %q for a failure, want a warning", logged.String())
 	}
 }
+
+func TestPickCandidate_AnExactTitleByTheNamedAuthorIsTakenWhereverTheProviderRanksIt(t *testing.T) {
+	var candidates []Candidate
+	for i, title := range []string{"Book Four", "Book Five", "Book Six", "Book Seven", "Book Eight", "Book Nine", "Book Ten", "Dungeon Crawler Carl"} {
+		candidates = append(candidates, Candidate{IDs: IDs{ASIN: "B00000000" + string(rune('0'+i))}, Title: title, Author: "Matt Dinniman"})
+	}
+	pick, ok := pickCandidate(candidates, parsebook.Info{Title: "Dungeon Crawler Carl", Author: "Matt Dinniman"})
+	if !ok || pick.Title != "Dungeon Crawler Carl" {
+		t.Errorf("pick = %+v, %v", pick, ok)
+	}
+	if _, ok := pickCandidate(candidates, parsebook.Info{Title: "Dungeon Crawler Carl"}); ok {
+		t.Error("an exact title below the top three was taken with no author named")
+	}
+}

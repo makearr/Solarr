@@ -112,3 +112,13 @@ func TestNames_HoldsANameAgainstTheWantedBook(t *testing.T) {
 		t.Error("a title before its subtitle, with no author known, should name the book")
 	}
 }
+
+func TestParse_ABracketedTenDigitIDIsTheASINOfAnOlderBook(t *testing.T) {
+	got, ok := parsebook.Parse("Mara Quell - The Lantern Keeper (2021-04-15) [1781105421]")
+	if !ok || got.ASIN != "1781105421" || got.Title != "The Lantern Keeper" {
+		t.Errorf("got %+v", got)
+	}
+	if got, _ := parsebook.Parse("Mara Quell - The Lantern Keeper 1781105421"); got.ASIN != "" {
+		t.Errorf("an unbracketed number was taken as an ASIN: %+v", got)
+	}
+}

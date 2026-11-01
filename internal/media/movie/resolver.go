@@ -171,8 +171,8 @@ func (r Resolver) add(ctx context.Context, categoryID int64, ids IDs) int64 {
 	return result.WorkID
 }
 
-// rankedWell is how far down a provider's own ranking an exact title-and-year hit may sit and still be taken: two films
-// can share a title and a year, and the provider ranks the better known first, as Radarr takes it.
+// rankedWell is how far down a provider's own ranking a hit whose year is off by one may sit and still be taken; of two
+// films sharing a title and year the provider's better known is first, as Radarr takes it.
 const rankedWell = 3
 
 // pickCandidate chooses the first hit with the named title and a year that agrees, when it is among the provider's top
@@ -202,7 +202,8 @@ func pickCandidate(candidates []Candidate, info parsemovie.Info) (Candidate, boo
 	// An exact year beats a year off by one, wherever each sits in the first few.
 	for _, exactYear := range []bool{true, false} {
 		for rank, candidate := range candidates {
-			if rank >= rankedWell {
+			// An exact title in the exact year needs no good rank: "Hell" (2011) sits below "Drag Me to Hell".
+			if rank >= rankedWell && !exactYear {
 				break
 			}
 			sameYear := candidate.Year == info.Year

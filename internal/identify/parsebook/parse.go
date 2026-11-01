@@ -39,10 +39,12 @@ var EbookFormats = []string{"epub", "epub3", "cbz", "azw3", "azw", "kfx", "mobi"
 var AudioFormats = []string{"m4b", "m4a", "mp3", "aac", "flac", "ogg", "opus", "wma", "mp4", "wav"}
 
 var (
-	yearPattern      = regexp.MustCompile(`(?:^|[^0-9])((?:1[5-9]|20)[0-9]{2})(?:[^0-9]|$)`)
-	bitratePattern   = regexp.MustCompile(`(?i)\b([0-9]{2,3})\s?k(?:bps|b/s|bit)?\b`)
-	isbnPattern      = regexp.MustCompile(`\b(97[89][0-9]{10})\b`)
-	asinPattern      = regexp.MustCompile(`\b(B0[0-9A-Z]{8})\b`)
+	yearPattern    = regexp.MustCompile(`(?:^|[^0-9])((?:1[5-9]|20)[0-9]{2})(?:[^0-9]|$)`)
+	bitratePattern = regexp.MustCompile(`(?i)\b([0-9]{2,3})\s?k(?:bps|b/s|bit)?\b`)
+	isbnPattern    = regexp.MustCompile(`\b(97[89][0-9]{10})\b`)
+	asinPattern    = regexp.MustCompile(`\b(B0[0-9A-Z]{8})\b`)
+	// bracketedASIN is an older book's ASIN, which is its ISBN-10, named in brackets as an audiobook folder does.
+	bracketedASIN    = regexp.MustCompile(`\[([0-9]{9}[0-9X])\]`)
 	bracketPattern   = regexp.MustCompile(`[\[(\{][^\])\}]*[\])\}]`)
 	versionPattern   = regexp.MustCompile(`(?i)\b(?:proper|repack|rerip)\b|\bv([2-9])\b`)
 	groupPattern     = regexp.MustCompile(`-([A-Za-z0-9]{2,15})$`)
@@ -103,6 +105,8 @@ func (info *Info) read(name string) {
 		info.ISBN = found[1]
 	}
 	if found := asinPattern.FindStringSubmatch(name); found != nil {
+		info.ASIN = found[1]
+	} else if found := bracketedASIN.FindStringSubmatch(name); found != nil {
 		info.ASIN = found[1]
 	}
 	lowered := strings.ToLower(name)

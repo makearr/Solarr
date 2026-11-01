@@ -22,7 +22,7 @@ const Excluded int64 = -1
 // searchLimit is how many hits one search keeps.
 const searchLimit = 10
 
-// rankedWell is how far down a provider's own ranking an exact title-and-author hit may sit and still be taken.
+// rankedWell is how far down a provider's own ranking an exact title may sit and still be taken when no author is named.
 const rankedWell = 3
 
 // Categories is the library settings a resolver reads.
@@ -181,7 +181,8 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 	}
 	var named []Candidate
 	for rank, candidate := range candidates {
-		if rank >= rankedWell {
+		// With an author named, an exact title by that author needs no good rank: Audible lists book 1 eighth.
+		if rank >= rankedWell && info.Author == "" {
 			break
 		}
 		if wanted[parsebook.CleanTitle(candidate.Title)] || wanted[parsebook.CleanTitle(trailingEdition.ReplaceAllString(candidate.Title, ""))] {
