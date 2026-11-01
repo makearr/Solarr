@@ -53,7 +53,7 @@ var (
 	separatorPattern = regexp.MustCompile(`\s+-\s+|\s*[–—]\s*`)
 	byPattern        = regexp.MustCompile(`(?i)^(.+?)\s+by\s+(.+)$`)
 	formatWord       = regexp.MustCompile(`(?i)\b(epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|cbz|m4b|m4a|mp3|aac|flac|ogg|opus|wma)\b`)
-	noiseWords       = regexp.MustCompile(`(?i)\b(?:unabridged|abridged|retail|ebook|e-book|audiobook|audio\s?book|proper|repack|rerip|` +
+	noiseWords       = regexp.MustCompile(`(?i)\b(?:(?:hardcover|hardback|paperback|kindle|unknown)\s+edition|unabridged|abridged|retail|ebook|e-book|audiobook|audio\s?book|proper|repack|rerip|` +
 		`read\s+by\s+.+|narrated\s+by\s+.+|vbr|cbr|cbz|epub3|epub|azw3|azw|kfx|mobi|pdf|fb2|djvu|pdb|pml|m4b|m4a|mp3|aac|flac|ogg|opus|wma|` +
 		`[0-9]{2,3}\s?k(?:bps|b/s)?)\b`)
 )

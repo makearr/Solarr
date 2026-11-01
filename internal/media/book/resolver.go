@@ -193,7 +193,7 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 		// Only a lone hit by the named author whose title continues as a subtitle ("Title: Subtitle") is the book.
 		for rank, candidate := range candidates {
 			if rank < rankedWell && wanted[parsebook.CleanTitle(subtitleHead.Split(candidate.Title, 2)[0])] &&
-				(parsebook.NamesAuthor(" "+parsebook.CleanTitle(info.Author)+" ", candidate.Author) || PersonKey(candidate.Author) == PersonKey(info.Author)) {
+				candidate.namesAuthor(info.Author) {
 				named = append(named, candidate)
 			}
 		}
@@ -209,7 +209,7 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 		return Candidate{}, false
 	}
 	for _, candidate := range named {
-		if parsebook.NamesAuthor(" "+parsebook.CleanTitle(info.Author)+" ", candidate.Author) || PersonKey(candidate.Author) == PersonKey(info.Author) {
+		if candidate.namesAuthor(info.Author) {
 			return candidate, true
 		}
 	}
@@ -224,6 +224,24 @@ func pickCandidate(candidates []Candidate, info parsebook.Info) (Candidate, bool
 		return unreadable[0], true
 	}
 	return Candidate{}, false
+}
+
+// namesAuthor says the folder's author is one of the book's authors: a book by two is found under either.
+func (c Candidate) namesAuthor(wanted string) bool {
+	spaced := " " + parsebook.CleanTitle(wanted) + " "
+	for _, name := range append([]string{c.Author}, c.CoAuthors...) {
+		if parsebook.NamesAuthor(spaced, name) || PersonKey(name) == PersonKey(wanted) {
+			return true
+		}
+	}
+	return false
+}
+
+func othersThanFirst(names []string) []string {
+	if len(names) < 2 {
+		return nil
+	}
+	return names[1:]
 }
 
 // trailingEdition is a provider's "(Korean Edition)" or "(The Three-Body Problem Series Book 2)" after a title.

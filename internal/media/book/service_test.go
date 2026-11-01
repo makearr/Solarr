@@ -271,3 +271,13 @@ func TestPickCandidate_AnExactTitleByTheNamedAuthorIsTakenWhereverTheProviderRan
 		t.Error("an exact title below the top three was taken with no author named")
 	}
 }
+
+func TestPickCandidate_ABookByTwoAuthorsIsFoundUnderEither(t *testing.T) {
+	candidates := []Candidate{{IDs: IDs{ASIN: "B00DUX1RT2"}, Title: "The Long War", Author: "Stephen Baxter", CoAuthors: []string{"Terry Pratchett"}}}
+	if pick, ok := pickCandidate(candidates, parsebook.Info{Title: "The Long War", Author: "Terry Pratchett"}); !ok || pick.IDs.ASIN != "B00DUX1RT2" {
+		t.Errorf("pick = %+v, %v", pick, ok)
+	}
+	if _, ok := pickCandidate(candidates, parsebook.Info{Title: "The Long War", Author: "Mara Quell"}); ok {
+		t.Error("a book by neither author was taken")
+	}
+}

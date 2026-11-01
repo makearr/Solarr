@@ -416,13 +416,15 @@ func (s Service) WarmWikidata(ctx context.Context, due []library.RefreshCandidat
 
 // Candidate is one book a search found.
 type Candidate struct {
-	IDs      IDs
-	Title    string
-	Author   string
-	Year     int
-	Overview string
-	Cover    string
-	Traits   media.Traits
+	IDs    IDs
+	Title  string
+	Author string
+	// CoAuthors are the book's other authors, which only the match of a folder's author reads.
+	CoAuthors []string
+	Year      int
+	Overview  string
+	Cover     string
+	Traits    media.Traits
 }
 
 // Search finds books by title and, when given, author: an audiobook in Audible's catalog first, a book in Open Library,
@@ -475,8 +477,12 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 		for _, product := range products {
 			candidate := Candidate{IDs: IDs{ASIN: product.ASIN}, Title: product.Title, Year: product.Year(), Overview: cleanText(product.Summary), Cover: product.Cover(),
 				Traits: media.Traits{OriginalLanguage: language(product.Language)}}
-			if len(product.Authors) > 0 {
-				candidate.Author = product.Authors[0].Name
+			for position, person := range product.Authors {
+				if position == 0 {
+					candidate.Author = person.Name
+				} else {
+					candidate.CoAuthors = append(candidate.CoAuthors, person.Name)
+				}
 			}
 			candidates = append(candidates, candidate)
 		}
@@ -490,7 +496,7 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 		}
 		for _, doc := range docs {
 			found := FromOpenLibrary(openlibrary.Work{}, doc)
-			candidates = append(candidates, Candidate{IDs: IDs{OpenLibrary: doc.WorkID()}, Title: doc.Title, Author: first(doc.AuthorNames),
+			candidates = append(candidates, Candidate{IDs: IDs{OpenLibrary: doc.WorkID()}, Title: doc.Title, Author: first(doc.AuthorNames), CoAuthors: othersThanFirst(doc.AuthorNames),
 				Year: doc.FirstPublishYear, Cover: openlibrary.CoverURL(doc.CoverID), Traits: media.Traits{Genres: found.Genres, OriginalLanguage: found.Language}})
 		}
 	case settings.BookSourceGoogleBooks:

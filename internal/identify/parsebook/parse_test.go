@@ -122,3 +122,10 @@ func TestParse_ABracketedTenDigitIDIsTheASINOfAnOlderBook(t *testing.T) {
 		t.Errorf("an unbracketed number was taken as an ASIN: %+v", got)
 	}
 }
+
+func TestParsePath_ABindingAfterTheTitleIsNotPartOfIt(t *testing.T) {
+	got, ok := parsebook.ParsePath("Mara Quell/The Last Lantern (A Novel of the Keepers) Hardcover Edition/Mara Quell - The Last Lantern (A Novel of the Keepers) Hardcover Edition.epub", false)
+	if !ok || got.Title != "The Last Lantern" || got.Author != "Mara Quell" {
+		t.Errorf("got %+v", got)
+	}
+}
