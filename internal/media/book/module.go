@@ -237,6 +237,7 @@ func (m Module) Descriptor() media.Descriptor {
 		// A held import folder is committed by hand, and a removed book's files are left out by the scan.
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
+		UnidentifiedRetry:     media.IdentifyRetryKey,
 		ExtraFiles:            media.ExtraFilesDefault{Import: true, Extensions: []string{"opf", "jpg", "cue"}},
 		GuessFloor:            GuessFloor,
 		FileSettings:          format.fileSettings(),

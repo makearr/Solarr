@@ -736,3 +736,6 @@ func Capability[T any](r *Registry, key Key) (T, bool) {
 	capability, ok := module.(T)
 	return capability, ok
 }
+
+// IdentifyRetryKey is the one schedule that asks again about the files of every type but TV that waited for review.
+const IdentifyRetryKey = "identify_retry"

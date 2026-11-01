@@ -175,11 +175,12 @@ func (Module) Descriptor() media.Descriptor {
 		CommitsHeldImports: true,
 		DuplicatesByName:   true,
 		// Lidarr's: off, and when on lyrics, cue sheets, rip logs and release notes.
-		ExtraFiles:      media.ExtraFilesDefault{Extensions: []string{"lrc", "cue", "log", "nfo"}},
-		FileSettings:    fileSettings,
-		ScanMonitor:     scanMonitoring,
-		SearchesLibrary: true,
-		CoverSources:    true,
+		ExtraFiles:        media.ExtraFilesDefault{Extensions: []string{"lrc", "cue", "log", "nfo"}},
+		FileSettings:      fileSettings,
+		ScanMonitor:       scanMonitoring,
+		UnidentifiedRetry: media.IdentifyRetryKey,
+		SearchesLibrary:   true,
+		CoverSources:      true,
 	}
 }
 

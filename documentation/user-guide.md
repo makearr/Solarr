@@ -174,6 +174,10 @@ episode numbers of its files when they clearly fit one series. **Settings → Me
 first one that holds a field (plot, genres, rating, artwork) supplies it; the default is open and fast first (Skyhook, TVmaze,
 TMDB, TheTVDB, AniList). Wikidata is listed there too: it recognises the same person in TV and music.
 
+The files of every other library that a scan could not place (music, movies, books, audiobooks, adult) are asked about again
+every night as well (task **Identify waiting files**, 05:30): the folders holding them are rescanned through the library's own
+media type, so a provider outage or an update that fixes a title no longer leaves them in Review for good.
+
 A TV library's **Quality** page takes a **target** of picture quality (resolution, video codec, HDR, audio codec, file type; a part left
 on "any" is free). Releases that match it are ranked first inside the profile's own limits, and each episode on the series page shows what
 the probe measured of its file (resolution, codec, HDR, audio, size, subtitles) and whether it meets the target. Subtitles count from the

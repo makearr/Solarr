@@ -176,6 +176,7 @@ func (Module) Descriptor() media.Descriptor {
 		// A held import file is committed by hand, and a removed scene's file is left out by the scan.
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
+		UnidentifiedRetry:     media.IdentifyRetryKey,
 		ExtraFiles:            media.ExtraFilesDefault{Import: true, Extensions: []string{"srt", "nfo", "jpg"}},
 		GuessFloor:            GuessFloor,
 		FileSettings:          fileSettings(),

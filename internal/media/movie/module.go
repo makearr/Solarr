@@ -213,6 +213,7 @@ func (Module) Descriptor() media.Descriptor {
 		// A held import folder is committed by hand, and a removed movie's files are left out by the scan.
 		CommitsHeldImports:    true,
 		ScanHonoursExclusions: true,
+		UnidentifiedRetry:     media.IdentifyRetryKey,
 		// Radarr leaves subtitles where they are unless asked; here they come along, as in TV.
 		ExtraFiles:   media.ExtraFilesDefault{Import: true, Extensions: []string{"srt"}},
 		GuessFloor:   GuessFloor,

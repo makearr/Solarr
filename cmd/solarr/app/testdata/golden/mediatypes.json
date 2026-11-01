@@ -274,6 +274,7 @@
       }
     ],
     "searches_library": true,
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "work",
     "work": {
       "many": "Albums",
@@ -1079,6 +1080,7 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "work",
     "work": {
       "many": "Movies",
@@ -1288,6 +1290,7 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "work",
     "work": {
       "many": "Scenes",
@@ -1497,6 +1500,7 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "work",
     "work": {
       "many": "Books",
@@ -1723,6 +1727,7 @@
     },
     "search_terms": [],
     "searches_library": false,
+    "unidentified_retry": "identify_retry",
     "wanted_grain": "work",
     "work": {
       "many": "Audiobooks",
