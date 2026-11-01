@@ -49,12 +49,12 @@ func TestLongLibraryWorkDoesNotShareOnePool(t *testing.T) {
 		return definition.Pool
 	}
 	got := map[string]jobs.Pool{
-		"scan": pool(scan.JobType), "probe": pool(probe.JobType), "move": pool(moverjob.JobType),
+		"scan": pool(scan.JobType), "rescan": pool(scan.RescanJobType), "probe": pool(probe.JobType), "move": pool(moverjob.JobType),
 		"statistics": pool(statisticsJobType), "database maintenance": pool(databaseMaintenanceJobType),
 		"backup": pool(backupJobType),
 	}
 	want := map[string]jobs.Pool{
-		"scan": jobs.PoolScan, "probe": jobs.PoolFiles, "move": jobs.PoolMove,
+		"scan": jobs.PoolScan, "rescan": jobs.PoolRescan, "probe": jobs.PoolFiles, "move": jobs.PoolMove,
 		"statistics": jobs.PoolHousekeeping, "database maintenance": jobs.PoolMaintenance,
 		"backup": jobs.PoolMaintenance,
 	}

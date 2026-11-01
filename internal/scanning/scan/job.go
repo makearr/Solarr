@@ -30,6 +30,15 @@ var Definition = jobs.Definition{
 	Type: JobType, Pool: jobs.PoolScan, Mutating: true, MaxAttempts: 3,
 }
 
+// RescanJobType is the registered type of a rescan of named directories, run by the scan's own handler.
+const RescanJobType = jobs.Type("library.rescan")
+
+// RescanDefinition declares the folder rescan: the work of a few folders, in a pool of its own.
+var RescanDefinition = jobs.Definition{
+	Name: "Reading folders again",
+	Type: RescanJobType, Pool: jobs.PoolRescan, Mutating: true, MaxAttempts: 3,
+}
+
 // Payload is what a scan job carries.
 type Payload struct {
 	RootFolderID int64 `json:"root_folder_id"`
@@ -396,7 +405,7 @@ func EnqueueDirectories(
 	}
 	digest := sha256.Sum256([]byte(strings.Join(sorted, "\x00")))
 	return queue.Enqueue(ctx, jobs.Request{
-		Type:      JobType,
+		Type:      RescanJobType,
 		ActionKey: fmt.Sprintf("%s:directories:%x", ActionKeyFor(rootFolderID), digest[:8]),
 		Priority:  jobs.PriorityLow,
 		Payload:   payload,

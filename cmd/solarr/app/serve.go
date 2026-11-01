@@ -533,6 +533,7 @@ func (p *process) startJobs(ctx context.Context) error {
 			{Pool: jobs.PoolMetadata, Capacity: p.config.Workers.Metadata},
 			{Pool: jobs.PoolImport, Capacity: jobs.ImportCapacity},
 			{Pool: jobs.PoolScan, Capacity: scanWorkers},
+			{Pool: jobs.PoolRescan, Capacity: 1},
 			{Pool: jobs.PoolFiles, Capacity: fileWorkers},
 			{Pool: jobs.PoolMove, Capacity: 1},
 			{Pool: jobs.PoolHousekeeping, Capacity: housekeepingWorkers},

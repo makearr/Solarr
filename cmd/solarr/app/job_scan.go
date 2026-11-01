@@ -20,8 +20,11 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 	if err := registry.Register(scan.Definition); err != nil {
 		return err
 	}
+	if err := registry.Register(scan.RescanDefinition); err != nil {
+		return err
+	}
 	reportToolReadiness(ctx, p.tool, p.logger)
-	executor.Handle(scan.JobType, scan.NewJob(scan.Config{
+	handler := scan.NewJob(scan.Config{
 		FS:       p.fsys,
 		Scans:    library.NewScans(p.library),
 		Roots:    adapters.Roots{Cache: p.cache},
@@ -30,7 +33,9 @@ func (p *process) registerScanJob(ctx context.Context, registry *jobs.Registry, 
 		Physical: library.NewPhysical(p.library),
 		Clock:    clock.NewSystem(),
 		Logger:   p.logger,
-	}))
+	})
+	executor.Handle(scan.JobType, handler)
+	executor.Handle(scan.RescanJobType, handler)
 	return p.registerMediaJobs(registry, executor)
 }
 
