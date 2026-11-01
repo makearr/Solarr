@@ -553,6 +553,9 @@ func (j *Job) followImport(ctx context.Context, client Client, acquisition libra
 	case noRoom > 0:
 		// A library-side failure is never the release's: kept, not blocklisted, until the import retry places it.
 		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForRoom, now)
+	case waiting > 0 && placed > 0:
+		// Units still held for a person need the downloaded files, so nothing is cleaned up yet.
+		return j.config.Acquisitions.SetState(ctx, acquisition.ID, StateImporting, WaitingForReview, now)
 	case placed > 0 && stall.ImportingFinished:
 		return j.finishedImported(ctx, client, acquisition)
 	case placed > 0:

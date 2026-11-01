@@ -464,6 +464,24 @@ func TestPoll_AnImportItsLibraryCouldNotTakeIsKeptUntilPlaced(t *testing.T) {
 	}
 }
 
+// One unit placed while another waits for a person: the download still holds the waiting unit's files (Invariants 74, 79).
+func TestPoll_APlacedUnitDoesNotCleanUpADownloadWithAUnitStillWaiting(t *testing.T) {
+	e := newEnv(t)
+	sent := e.send(t, "nzo-1")
+	sessionID, _ := e.finishImport(t, sent, true, library.UnitCommit)
+	units, err := e.sessions.AddUnits(t.Context(), sessionID, []library.NewUnit{{RelPath: "Disc 2", Shape: library.UnitSet, FileCount: 1, EvidenceJSON: "{}"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.sessions.SetUnitDecisions(t.Context(), sessionID, []library.UnitDecision{{UnitID: units[0], Decision: library.UnitQueue}}); err != nil {
+		t.Fatal(err)
+	}
+	e.run(t)
+	if got := e.state(t, sent.ID); got.State != poll.StateImporting || got.LastError != poll.WaitingForReview || len(e.client.removed) != 0 {
+		t.Errorf("= %s %q, removed %v; want IMPORTING waiting for review, nothing removed", got.State, got.LastError, e.client.removed)
+	}
+}
+
 // A release whose every unit was skipped (nothing new, blocked content) brought nothing usable: failed and searched again.
 func TestPoll_AnImportThatBroughtNothingUsableFails(t *testing.T) {
 	e := newEnv(t)
