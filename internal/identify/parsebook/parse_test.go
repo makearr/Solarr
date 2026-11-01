@@ -70,6 +70,25 @@ func TestParsePath_AnAudiobookIsItsFolderAndItsAuthorTheOneAbove(t *testing.T) {
 	}
 }
 
+func TestNames_AnAuthorInAnotherScriptDoesNotVetoTheTitle(t *testing.T) {
+	cases := []struct {
+		name    string
+		authors []string
+		want    bool
+	}{
+		{"Liu Cixin - The Dark Forest [EPUB]", []string{"刘慈欣"}, true},
+		{"The Dark Forest [EPUB]", []string{"刘慈欣"}, true},
+		{"Liu Cixin - Ember Roads [EPUB]", []string{"刘慈欣"}, false},
+		{"Tobin Reyes - The Dark Forest", []string{"Mara Quell"}, false},
+		{"Лю Цысинь - The Dark Forest", []string{"刘慈欣"}, true},
+	}
+	for _, c := range cases {
+		if got := parsebook.Names(c.name, "The Dark Forest", c.authors); got != c.want {
+			t.Errorf("Names(%q, %v) = %v, want %v", c.name, c.authors, got, c.want)
+		}
+	}
+}
+
 func TestNames_HoldsANameAgainstTheWantedBook(t *testing.T) {
 	authors := []string{"Mara Quell"}
 	cases := []struct {
