@@ -290,8 +290,8 @@ func (p *process) tvHunt(ctx context.Context, itemID int64) (plan.Outcome, error
 }
 
 // musicAdder is music's lookup and add: albums become wanted, artists followed.
-func (p *process) musicAdder() adapters.Discover {
-	return adapters.Discover{
+func (p *process) musicAdder() music.Adder {
+	return music.Adder{
 		Provider: p.musicBrainzProvider(), Identity: library.NewIdentity(p.library),
 		Desired: library.NewDesired(p.library), People: library.NewPeople(p.library),
 		Categories:       adapters.Categories{Cache: p.cache},

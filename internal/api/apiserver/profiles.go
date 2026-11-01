@@ -44,7 +44,7 @@ func (s *Server) CreateQualityProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	created, err := s.auth.Settings.CreateQualityProfileFor(r.Context(), derefOr(body.MediaType, "music"),
+	created, err := s.auth.Settings.CreateQualityProfileFor(r.Context(), derefOr(body.MediaType, settings.UnstatedProfileMediaType),
 		body.Name, body.Rules, body.Upgrade)
 	if err != nil {
 		var problems config.Problems

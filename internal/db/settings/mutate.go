@@ -448,7 +448,7 @@ func (c *Cache) DeleteCategory(ctx context.Context, id int64) error {
 // syntactically valid JSON (ADR-44 -- a bad policy must be refused on write, not
 // discovered later at startup).
 func (c *Cache) CreateQualityProfile(ctx context.Context, name, rulesJSON, upgradeJSON string) (QualityProfile, error) {
-	return c.CreateQualityProfileFor(ctx, "music", name, rulesJSON, upgradeJSON)
+	return c.CreateQualityProfileFor(ctx, UnstatedProfileMediaType, name, rulesJSON, upgradeJSON)
 }
 
 // CreateQualityProfileFor adds a quality profile judging one media type.

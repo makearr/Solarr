@@ -447,10 +447,7 @@ func (a ArrSync) syncArtist(
 	if err != nil {
 		return 0, false, err
 	}
-	personID, err = a.People.ResolvePerson(ctx, now, library.PersonLink{
-		Provider: music.ProviderArtist, ExternalID: artist.ForeignArtistID,
-		Person: library.PersonIdentity{Name: artist.ArtistName},
-	})
+	personID, err = a.People.ResolvePerson(ctx, now, music.ArtistLink(artist.ForeignArtistID, library.PersonIdentity{Name: artist.ArtistName}))
 	if err != nil {
 		return 0, false, err
 	}
@@ -460,7 +457,7 @@ func (a ArrSync) syncArtist(
 	var subscription *int64
 	if follow {
 		subscriptionID, err := a.People.Subscribe(ctx, now, personID, 0, library.SubscriptionRequest{
-			MediaTypes: []string{"music"}, Roles: []string{"artist"},
+			MediaTypes: []string{string(music.MediaType)}, Roles: []string{music.CreditRoleArtist},
 		})
 		if err != nil {
 			return 0, false, err
@@ -492,12 +489,7 @@ func (a ArrSync) syncAlbum(
 	}
 	now := a.Clock.Now()
 
-	resolutions, err := a.Identity.ResolveWorksDetailed(ctx, now, []library.WorkLink{{
-		Provider: music.ProviderReleaseGroup, ExternalID: album.ForeignAlbumID, Confidence: 1.0,
-		Work: library.WorkIdentity{
-			MediaType: "music", CanonicalTitle: album.Title, SortTitle: music.SortTitle(album.Title),
-		},
-	}})
+	resolutions, err := a.Identity.ResolveWorksDetailed(ctx, now, []library.WorkLink{music.AlbumLink(album.ForeignAlbumID, album.Title)})
 	if err != nil {
 		return false, err
 	}

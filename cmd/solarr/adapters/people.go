@@ -2,7 +2,6 @@ package adapters
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -11,9 +10,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/db/library"
-	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/media"
-	"github.com/makearr/Solarr/internal/media/music"
 	"github.com/makearr/Solarr/internal/metadata/musicbrainz"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/listfilter"
@@ -248,18 +245,6 @@ func nonNil(values []string) []string {
 		return []string{}
 	}
 	return values
-}
-
-// monitorFiltersFor encodes a library's own release-type default onto a
-// subscription, so what an artist brings in is fixed when they are added
-// rather than moving with the library's setting afterwards.
-func monitorFiltersFor(category settings.Category) (string, error) {
-	types := category.MonitorReleaseTypes
-	encoded, err := json.Marshal(music.SubscriptionFilters{IncludePrimaryTypes: &types})
-	if err != nil {
-		return "", fmt.Errorf("adapters: encode subscription filters: %w", err)
-	}
-	return string(encoded), nil
 }
 
 // LibraryFor is the library a work of the media type is added to from a person's page: the page's own when it is of

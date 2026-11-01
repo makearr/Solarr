@@ -25,14 +25,14 @@ func (p *process) identifyRetryTask() jobs.Task {
 	}
 }
 
-// enqueueIdentifyRetry rescans the folders of the waiting files of every library but TV's, which has its own retry;
-// each folder goes through its own media type's consumer, probed as a scan would.
+// enqueueIdentifyRetry rescans the folders of the waiting files of every library whose type declares this retry (a type
+// with its own, TV's, is left to it); each folder goes through its own media type's consumer, probed as a scan would.
 func (p *process) enqueueIdentifyRetry(ctx context.Context) (jobs.EnqueueResult, error) {
 	unidentified := library.NewUnidentified(p.library)
 	snapshot := p.cache.Snapshot()
 	var last jobs.EnqueueResult
 	for _, category := range snapshot.Categories() {
-		if category.MediaType == "tv" {
+		if !sharedRetry(p.media, category.MediaType) {
 			continue
 		}
 		for _, root := range snapshot.RootFoldersForCategory(category.ID) {
@@ -51,4 +51,10 @@ func (p *process) enqueueIdentifyRetry(ctx context.Context) (jobs.EnqueueResult,
 		}
 	}
 	return last, nil
+}
+
+// sharedRetry says a library of the media type has its waiting files retried by this schedule, as its type declares.
+func sharedRetry(registry *media.Registry, mediaType string) bool {
+	module, found := registry.Module(media.Key(mediaType))
+	return found && module.Descriptor().UnidentifiedRetry == media.IdentifyRetryKey
 }

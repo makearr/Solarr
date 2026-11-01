@@ -99,6 +99,8 @@ func notWired(err error) error {
 		return apiserver.ErrDiscoverUnsupportedMediaType
 	case errors.Is(err, media.ErrSourceUnavailable):
 		return fmt.Errorf("%w: %w", apiserver.ErrSeriesSourceUnavailable, err)
+	case errors.Is(err, media.ErrUnknownCandidate):
+		return fmt.Errorf("%w: %w", apiserver.ErrCandidateNotFound, err)
 	case errors.Is(err, media.ErrInvalidAdd):
 		return fmt.Errorf("%w: %w", apiserver.ErrInvalidChoice, err)
 	case errors.Is(err, media.ErrQueryTooShort):

@@ -435,6 +435,9 @@ var ErrSourceUnavailable = errors.New("media: the metadata sources are not avail
 // ErrInvalidAdd reports an add or lookup the type cannot take: an id it does not know, a monitor option it lacks.
 var ErrInvalidAdd = errors.New("media: that cannot be added")
 
+// ErrUnknownCandidate reports an id to add that no metadata source knows, or one not shaped like the source's ids.
+var ErrUnknownCandidate = errors.New("media: no metadata source knows that id")
+
 // ErrQueryTooShort reports a lookup with too little to search by.
 var ErrQueryTooShort = errors.New("media: the search is too short")
 

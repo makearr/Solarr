@@ -20,6 +20,10 @@ var MediaTypes = []string{
 	"podcast", "news", "youtube",
 }
 
+// UnstatedProfileMediaType is the media type of a quality profile or target that names none: every one predating the
+// column judged music, and an export of a music-only instance still leaves it out.
+const UnstatedProfileMediaType = "music"
+
 // maxPriorityRank keeps the composite acquisition priority in a sane range (ADR-36).
 const maxPriorityRank = 10_000
 

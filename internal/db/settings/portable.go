@@ -794,7 +794,7 @@ func (d Document) Validate(callerAddress netip.Addr) config.Problems {
 		where := fmt.Sprintf("quality_targets[%d]", index)
 		entry := target.target()
 		if entry.MediaType == "" {
-			entry.MediaType = "music"
+			entry.MediaType = UnstatedProfileMediaType
 		}
 		key := entry.MediaType + "\x00" + entry.Name
 		for _, problem := range validateQualityTargetNamed(&entry) {
@@ -1015,7 +1015,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 			}
 			mediaType := profile.MediaType
 			if mediaType == "" {
-				mediaType = "music"
+				mediaType = UnstatedProfileMediaType
 			}
 			if !slices.Contains(MediaTypes, mediaType) {
 				return fmt.Errorf("quality profile %q: media_type %q is not one of %s", profile.Name, mediaType, strings.Join(MediaTypes, ", "))
@@ -1032,7 +1032,7 @@ func (c *Cache) Import(ctx context.Context, cl clock.Clock, callerAddress netip.
 		for _, target := range document.QualityTargets {
 			entry := target.target()
 			if entry.MediaType == "" {
-				entry.MediaType = "music"
+				entry.MediaType = UnstatedProfileMediaType
 			}
 			key := entry.MediaType + "\x00" + entry.Name
 			if _, exists := targetIDByKey[key]; exists {
@@ -1406,9 +1406,9 @@ func importScalarSettings(ctx context.Context, queries *settingsdb.Queries, cl c
 	return nil
 }
 
-// exportedMediaType leaves music out, so an export of a music-only instance reads as before.
+// exportedMediaType leaves the unstated type out, so an export of a music-only instance reads as before.
 func exportedMediaType(mediaType string) string {
-	if mediaType == "music" {
+	if mediaType == UnstatedProfileMediaType {
 		return ""
 	}
 	return mediaType
