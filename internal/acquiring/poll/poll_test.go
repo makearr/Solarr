@@ -249,6 +249,22 @@ func TestPoll_RefusesAPathOutsideTheDownloadFolders(t *testing.T) {
 	}
 }
 
+// A client naming a whole download folder -- an empty name, "..", a mapping one level short -- has none of it imported.
+func TestPoll_RefusesAWholeDownloadFolder(t *testing.T) {
+	for _, reported := range []string{"/downloads", "/downloads/", "/downloads/complete/.."} {
+		e := newEnv(t)
+		sent := e.send(t, "nzo-1")
+		if err := e.fsys.MkdirAll("/downloads/complete", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "x", State: download.StateCompleted, Path: reported}}
+		e.run(t)
+		if got := e.state(t, sent.ID); got.State != poll.StateCompleted || got.LastError == "" || len(e.imported) != 0 {
+			t.Errorf("%q: = %s %q, imported %v; want COMPLETED with the reason and nothing imported", reported, got.State, got.LastError, e.imported)
+		}
+	}
+}
+
 // A failed download is blocklisted for 30 days, removed with its files, and the album searched again.
 func TestPoll_AFailedDownloadIsBlocklistedAndSearchedAgain(t *testing.T) {
 	e := newEnv(t)

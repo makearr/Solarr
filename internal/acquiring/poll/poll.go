@@ -502,9 +502,13 @@ func (j *Job) checkPath(ctx context.Context, localPath string) string {
 	inside := false
 	for _, folder := range folders {
 		root := path.Clean(folder)
+		if clean == root {
+			// A download folder holds every other download too: a client naming it (an empty or ".." name, a
+			// mapping that ends one level short) must not have all of it imported as this one.
+			return fmt.Sprintf("%s is a whole download folder, not one download in it", localPath)
+		}
 		if fsx.Within(root, clean) {
 			inside = true
-			break
 		}
 	}
 	if !inside {
