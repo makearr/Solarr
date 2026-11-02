@@ -1,5 +1,6 @@
 [
   {
+    "air_time": "2020-02-03T20:00:00Z",
     "artist": "S01E01 Slack Water",
     "category_id": 2,
     "on_disk": true,
@@ -10,6 +11,7 @@
     "work_id": 2
   },
   {
+    "air_time": "2020-02-10T20:00:00Z",
     "artist": "S01E02 The Long Pier",
     "category_id": 2,
     "on_disk": true,
@@ -20,6 +22,7 @@
     "work_id": 2
   },
   {
+    "air_time": "2020-02-17T20:00:00Z",
     "artist": "S01E03 Signals",
     "category_id": 2,
     "on_disk": false,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -20,6 +21,8 @@ type CalendarRow struct {
 	OnDisk      bool
 	// PartID and CategoryID are set for a TV episode.
 	PartID, CategoryID int64
+	// AirTime is an episode's air moment as Unix seconds, zero when only its date is known.
+	AirTime int64
 }
 
 // CalendarReader answers releases in a date window. Defined here and
@@ -114,6 +117,10 @@ func (s *Server) ListCalendar(w http.ResponseWriter, r *http.Request, params gen
 		}
 		if row.PartID != 0 {
 			view.PartId, view.CategoryId = &row.PartID, &row.CategoryID
+			if row.AirTime != 0 {
+				airTime := time.Unix(row.AirTime, 0).UTC()
+				view.AirTime = &airTime
+			}
 		}
 		views[i] = view
 	}

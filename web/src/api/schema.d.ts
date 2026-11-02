@@ -6373,6 +6373,11 @@ export interface components {
              * @description The TV library an episode is in, for linking to its series.
              */
             category_id?: number;
+            /**
+             * Format: date-time
+             * @description An episode's air moment, absent when only its date is known.
+             */
+            air_time?: string;
         };
         /** @description One captured log line. */
         LogRecord: {

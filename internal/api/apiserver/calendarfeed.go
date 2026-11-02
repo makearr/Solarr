@@ -143,6 +143,11 @@ func (s *Server) GetCalendarFeedICS(w http.ResponseWriter, r *http.Request, para
 // calendarFeedLimit is the most releases one feed carries; a year of a large library fits.
 const calendarFeedLimit = 500
 
+const (
+	icsUTC      = "20060102T150405Z"
+	episodeSlot = time.Hour // the runtime is not on the calendar row
+)
+
 // renderICS writes one all-day event per release with a full date (RFC 5545). A release dated
 // only by month or year has no day to put it on, so a calendar client never sees it.
 func renderICS(rows []CalendarRow, now time.Time) string {
@@ -156,7 +161,7 @@ func renderICS(rows []CalendarRow, now time.Time) string {
 	line("PRODID:-//Solarr//Calendar//EN")
 	line("CALSCALE:GREGORIAN")
 	line("X-WR-CALNAME:Solarr")
-	stamp := now.Format("20060102T150405Z")
+	stamp := now.Format(icsUTC)
 	for _, row := range rows {
 		day, err := time.Parse(time.DateOnly, row.ReleaseDate)
 		if err != nil {
@@ -181,8 +186,14 @@ func renderICS(rows []CalendarRow, now time.Time) string {
 			line(fmt.Sprintf("UID:solarr-work-%d", row.WorkID))
 		}
 		line("DTSTAMP:" + stamp)
-		line("DTSTART;VALUE=DATE:" + day.Format("20060102"))
-		line("DTEND;VALUE=DATE:" + day.AddDate(0, 0, 1).Format("20060102"))
+		if row.AirTime != 0 {
+			start := time.Unix(row.AirTime, 0).UTC()
+			line("DTSTART:" + start.Format(icsUTC))
+			line("DTEND:" + start.Add(episodeSlot).Format(icsUTC))
+		} else {
+			line("DTSTART;VALUE=DATE:" + day.Format("20060102"))
+			line("DTEND;VALUE=DATE:" + day.AddDate(0, 0, 1).Format("20060102"))
+		}
 		line("SUMMARY:" + escapeICS(summary))
 		line("DESCRIPTION:" + escapeICS(status))
 		line("TRANSP:TRANSPARENT")

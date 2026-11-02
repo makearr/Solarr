@@ -1651,7 +1651,9 @@ type CalendarDate struct {
 
 // CalendarEntry One release in the calendar window.
 type CalendarEntry struct {
-	Artist *string `json:"artist,omitempty"`
+	// AirTime An episode's air moment, absent when only its date is known.
+	AirTime *time.Time `json:"air_time,omitempty"`
+	Artist  *string    `json:"artist,omitempty"`
 
 	// CategoryId The TV library an episode is in, for linking to its series.
 	CategoryId *int64 `json:"category_id,omitempty"`

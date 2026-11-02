@@ -24,7 +24,7 @@ func (a Calendar) Entries(
 		rows[i] = apiserver.CalendarRow{
 			WorkID: entry.WorkID, Title: entry.Title, Artist: entry.Artist,
 			PrimaryType: entry.Subtype, ReleaseDate: entry.ReleaseDate, OnDisk: entry.OnDisk,
-			PartID: entry.PartID, CategoryID: entry.CategoryID,
+			PartID: entry.PartID, CategoryID: entry.CategoryID, AirTime: entry.AirTime,
 		}
 	}
 	return rows, nil

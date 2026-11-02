@@ -70,6 +70,12 @@ function tone(entry: CalendarEntry, today: string): string {
   return entry.release_date > today ? "border-l-accent" : "border-l-danger";
 }
 
+/** An episode's air time in the viewer's own zone, "20:30 " ahead of its label. */
+function airClock(entry: CalendarEntry): string {
+  if (!entry.air_time) return "";
+  return `${new Date(entry.air_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} `;
+}
+
 /** One release: cover, title and artist, coloured by whether it is held. */
 function ReleaseCard({ entry, today, compact }: { entry: CalendarEntry; today: string; compact?: boolean }) {
   const target = entryTarget(entry);
@@ -84,7 +90,7 @@ function ReleaseCard({ entry, today, compact }: { entry: CalendarEntry; today: s
       {!compact && entry.part_id == null && <CoverArt workId={entry.work_id} title={entry.title} size="thumb" className="size-10 shrink-0 rounded object-cover" />}
       <span className="min-w-0 flex-1">
         <span className="block truncate font-medium">{entry.title}</span>
-        {!compact && entry.artist && <span className="block truncate text-ink-muted">{entry.artist}</span>}
+        {!compact && entry.artist && <span className="block truncate text-ink-muted">{airClock(entry)}{entry.artist}</span>}
       </span>
     </Link>
   );

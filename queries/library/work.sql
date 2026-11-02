@@ -504,7 +504,7 @@ SELECT CAST(EXISTS (SELECT 1 FROM work_external_id WHERE provider = 'local:album
 
 -- TV episodes in a date window, for the calendar: monitored episodes of series the caller's libraries hold.
 -- name: ListCalendarEpisodes :many
-SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.date,
+SELECT p.id AS part_id, p.work_id, w.canonical_title, p.media_ref, p.title, p.date, p.available_at,
        (SELECT MIN(d.category_id) FROM desired_item d WHERE d.work_id = w.id
           AND d.category_id IN (SELECT value FROM json_each(sqlc.arg(category_ids)))) AS category_id,
        EXISTS (SELECT 1 FROM desired_item_file f JOIN desired_item d2 ON d2.id = f.desired_item_id

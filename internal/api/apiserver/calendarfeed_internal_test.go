@@ -39,3 +39,17 @@ func TestFoldICS(t *testing.T) {
 		t.Errorf("unfolding does not give the original back:\n%q", unfolded)
 	}
 }
+
+func TestRenderICSTimesAnEpisodeWithAnAirMoment(t *testing.T) {
+	now := time.Date(2026, 9, 24, 8, 0, 0, 0, time.UTC)
+	air := time.Date(2026, 10, 2, 19, 30, 0, 0, time.UTC).Unix()
+	got := renderICS([]CalendarRow{{WorkID: 3, PartID: 9, Title: "Show", Artist: "S01E02 Pilot", ReleaseDate: "2026-10-02", AirTime: air}}, now)
+	for _, want := range []string{"UID:solarr-work-3-part-9\r\n", "DTSTART:20261002T193000Z\r\n", "DTEND:20261002T203000Z\r\n"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in %q", want, got)
+		}
+	}
+	if strings.Contains(got, "VALUE=DATE") {
+		t.Errorf("a timed episode must not be an all-day event: %q", got)
+	}
+}

@@ -9538,6 +9538,10 @@ components:
           type: integer
           format: int64
           description: The TV library an episode is in, for linking to its series.
+        air_time:
+          type: string
+          format: date-time
+          description: An episode's air moment, absent when only its date is known.
 
     LogRecord:
       type: object
