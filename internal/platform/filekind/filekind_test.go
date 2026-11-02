@@ -9,6 +9,7 @@ import (
 func TestOf(t *testing.T) {
 	for relPath, want := range map[string]filekind.Kind{
 		"Artist/Album/01 - Song.FLAC":               filekind.Audio,
+		"Author/Title/Title.M4B":                    filekind.Audio,
 		"Show/Season 01/Show - S01E01.mkv":          filekind.Video,
 		"Show/Season 01/Show - S01E01.en.srt":       filekind.Subtitle,
 		"Artist/Album/cover.JPG":                    filekind.Image,

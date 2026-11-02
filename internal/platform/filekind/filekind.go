@@ -26,7 +26,7 @@ var byExtension = map[string]Kind{}
 
 func init() {
 	for kind, extensions := range map[Kind][]string{
-		Audio:    {".flac", ".mp3", ".m4a", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wma", ".ape", ".wv", ".alac", ".dsf", ".dff"},
+		Audio:    {".flac", ".mp3", ".m4a", ".m4b", ".aac", ".ogg", ".opus", ".wav", ".aiff", ".aif", ".wma", ".ape", ".wv", ".alac", ".dsf", ".dff"},
 		Video:    {".mkv", ".mp4", ".m4v", ".avi", ".ts", ".m2ts", ".mov", ".wmv", ".webm", ".mpg", ".mpeg", ".flv", ".ogm", ".iso"},
 		Subtitle: {".srt", ".vtt", ".ass", ".ssa", ".sub", ".idx"},
 		Image:    {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"},

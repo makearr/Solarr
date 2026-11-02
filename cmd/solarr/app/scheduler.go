@@ -19,6 +19,7 @@ const (
 	scanScheduleCron               = "0 */6 * * *"   // every 6 hours
 	refreshWorksScheduleCron       = "20 * * * *"    // every hour; a running series is due twice a day, 40 a run
 	subscriptionExpandScheduleCron = "10 */12 * * *" // every 12 hours
+	franchiseExpandScheduleCron    = "25 */12 * * *" // every 12 hours; at most 25 works a run
 	importListScheduleCron         = "35 * * * *"    // hourly; each list runs once its own cadence has passed
 	arrPushScheduleCron            = "50 */6 * * *"  // every six hours; only connections that send monitoring back
 	picturesScheduleCron           = "10 * * * *"    // hourly; 1,500 series pictures a run until the library's are all kept
@@ -106,6 +107,10 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Key: "subscription_expand", Name: "Add the works of followed people", DefaultCadence: subscriptionExpandScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Startup: jobs.StartupOn,
 		Enqueue: p.enqueueFollowSweep,
+	})
+	registry.MustRegister(jobs.Task{
+		Key: "franchise_expand", Name: "Add the new works of monitored franchises", DefaultCadence: franchiseExpandScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryMetadata, Enqueue: p.enqueueFranchiseExpand,
 	})
 	registry.MustRegister(jobs.Task{
 		Key: "import_lists", Name: "Add what import lists name", DefaultCadence: importListScheduleCron,

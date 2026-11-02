@@ -131,6 +131,9 @@ func (p *process) searchAgain(ctx context.Context, desiredItemID int64) error {
 	if err != nil {
 		return err
 	}
+	if item.Monitored == 0 {
+		return nil
+	}
 	category, found := p.cache.Snapshot().Category(item.CategoryID)
 	if !found {
 		return nil
