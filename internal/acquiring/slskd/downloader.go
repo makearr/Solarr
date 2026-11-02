@@ -67,6 +67,12 @@ func lastSegment(path string) string {
 	return path[strings.LastIndexAny(path, `\/`)+1:]
 }
 
+// plainName says whether a name a peer chose is one plain entry of a folder. "..", "." or nothing would make a
+// finished download's path the downloads folder itself or the one above it, which would then be imported.
+func plainName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsRune(name, 0)
+}
+
 // stem is a file's name without its extension: a film and its subtitles share it.
 func stem(name string) string {
 	if dot := strings.LastIndex(name, "."); dot > 0 {
@@ -119,7 +125,7 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 			folder := lastSegment(directory.Directory)
 			whole := summarise(directory.Files)
 			whole.ClientRef, whole.Name = ref{username: user.Username, directory: directory.Directory}.String(), folder
-			if whole.State == download.StateCompleted {
+			if whole.State == download.StateCompleted && plainName(folder) {
 				whole.Path = root + "/" + folder
 			}
 			downloads = append(downloads, whole)
@@ -127,7 +133,7 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 				name := lastSegment(file.Filename)
 				part := summarise(sameStem(directory.Files, name))
 				part.ClientRef, part.Name, part.Part = ref{username: user.Username, directory: directory.Directory, file: name}.String(), name, true
-				if part.State == download.StateCompleted {
+				if part.State == download.StateCompleted && plainName(folder) && plainName(name) {
 					part.Path = root + "/" + folder + "/" + name
 				}
 				downloads = append(downloads, part)
