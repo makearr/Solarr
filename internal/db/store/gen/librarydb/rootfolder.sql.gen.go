@@ -198,6 +198,47 @@ func (q *Queries) ListRootFoldersForWork(ctx context.Context, workID int64) ([]i
 	return items, nil
 }
 
+const listUnalignedWorkFileLocations = `-- name: ListUnalignedWorkFileLocations :many
+SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id
+WHERE f.work_id IN (SELECT value FROM json_each(?1))
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = f.work_id)
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file df WHERE df.media_object_id = f.media_object_id)
+ORDER BY f.work_id, lp.id
+`
+
+type ListUnalignedWorkFileLocationsRow struct {
+	WorkID       int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
+// being read again, and on a first import that was half the library (live_test 35).
+func (q *Queries) ListUnalignedWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListUnalignedWorkFileLocationsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUnalignedWorkFileLocations, workIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUnalignedWorkFileLocationsRow{}
+	for rows.Next() {
+		var i ListUnalignedWorkFileLocationsRow
+		if err := rows.Scan(&i.WorkID, &i.RootFolderID, &i.RelPath); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listWorkFileLocations = `-- name: ListWorkFileLocations :many
 SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
 FROM work_file f

@@ -53,6 +53,9 @@ func NewConsumer(config ConsumerConfig) Consumer {
 
 var _ scan.Consumer = Consumer{}
 
+// ScanGather is how many files of a library's one-scene folders a scan hands over together: one fingerprint query's worth.
+const ScanGather = fingerprintsPerQuery
+
 // Observe implements scan.Consumer.
 func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categoryID int64, batch []scan.Observed) error {
 	now := c.config.Clock.Now()
@@ -83,6 +86,12 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		return fmt.Errorf("adult: %w", err)
 	}
 
+	hashes := make([]string, len(files))
+	for i, file := range files {
+		hashes[i] = file.OSHash
+	}
+	known := c.resolver.Service.ByFingerprints(ctx, categoryID, hashes)
+
 	byWork := map[int64][]int64{}
 	var order []int64
 	var queued []library.QueueEntry
@@ -91,7 +100,7 @@ func (c Consumer) Observe(ctx context.Context, root settings.RootFolder, categor
 		var workID int64
 		var candidates []model.Identification
 		if ok || files[i].OSHash != "" {
-			workID, candidates = c.resolver.Resolve(ctx, categoryID, info, files[i].OSHash)
+			workID, candidates = c.resolver.ResolveKnown(ctx, categoryID, info, files[i].OSHash, known)
 		}
 		switch workID {
 		case Excluded:

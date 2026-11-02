@@ -52,6 +52,7 @@ const (
 	franchisePassScheduleCron      = "20 */4 * * *" // every four hours; 60 series a run, Wikidata asks for polite use
 	bridgeScheduleCron             = "50 3 * * *"   // daily at 03:50; 300 people a run, after the night's refreshes
 	identifyRetryScheduleCron      = "30 5 * * *"   // daily at 05:30: providers learn new series and fix old data overnight
+	outageRetryScheduleCron        = "*/5 * * * *"  // every 5 minutes; does nothing unless a provider came back
 	importRetryScheduleCron        = "*/30 * * * *" // twice an hour; a full disk or an offline root is not fixed in a minute
 	tvTitleRenameScheduleCron      = "25 */6 * * *" // every 6 hours; a TBA title is usually filled within a day
 )
@@ -81,6 +82,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 		Enqueue: p.passEnqueue(media.PassPictures, false), EnqueueManual: p.passEnqueue(media.PassPictures, true),
 	})
 	registry.MustRegister(p.identifyRetryTask())
+	registry.MustRegister(p.outageRetryTask())
 	registry.MustRegister(p.importRetryTask())
 	registry.MustRegister(p.tvTitleRenameTask())
 	registry.MustRegister(jobs.Task{

@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"slices"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -506,5 +507,85 @@ func TestClient_ARefusedKeyOpensTheBreakerOnlyWhereAskedTo(t *testing.T) {
 		if got := breaker.State("omdb"); got.State != c.want || got.KeyRejected != c.opens {
 			t.Errorf("%s: breaker %+v, want state %q with key rejected %v", c.name, got, c.want, c.opens)
 		}
+	}
+}
+
+// bodyReader reads each request's body as a real connection does, so a retry that does not rewind sends nothing.
+type bodyReader struct {
+	roundTripper
+	bodies []string
+}
+
+func (b *bodyReader) RoundTrip(request *http.Request) (*http.Response, error) {
+	sent, _ := io.ReadAll(request.Body)
+	b.bodies = append(b.bodies, string(sent))
+	return b.roundTripper.RoundTrip(request)
+}
+
+func retryClient(t *testing.T, transport http.RoundTripper, config httpx.ClientConfig) (*httpx.Client, *httpx.Breaker) {
+	t.Helper()
+	// The real clock: the retry's pause would wait forever on a fake nobody advances.
+	wall := clock.NewSystem()
+	breaker := httpx.NewBreaker(wall, httpx.BreakerConfig{FailureThreshold: 2})
+	config.Provider, config.Transport = "provider", transport
+	return httpx.NewClient(wall, httpx.NewGuard(nil, nil, nil), httpx.NewLimiter(wall, httpx.Config{}, httpx.NoJitter), breaker, config), breaker
+}
+
+// A dropped connection is asked once more, the body with it, and is no failure of the provider's when that works.
+func TestClient_RetriesADroppedConnectionWithItsBody(t *testing.T) {
+	transport := &bodyReader{roundTripper: roundTripper{errs: []error{syscall.ECONNRESET, nil}, responses: []*http.Response{nil, respond(http.StatusOK, nil)}}}
+	client, breaker := retryClient(t, transport, httpx.ClientConfig{RetryTransient: true})
+	request, err := http.NewRequest(http.MethodPost, "https://example.com/graphql", strings.NewReader("query"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := client.Do(t.Context(), request)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	_ = response.Body.Close()
+	if transport.calls != 2 || !slices.Equal(transport.bodies, []string{"query", "query"}) {
+		t.Errorf("calls = %d, bodies %q", transport.calls, transport.bodies)
+	}
+	if failures := breaker.State("provider").ConsecutiveFailures; failures != 0 {
+		t.Errorf("failures = %d, want none counted", failures)
+	}
+}
+
+func TestClient_RetriesOnlyOnceAndOnlyWhenAsked(t *testing.T) {
+	failing := func() *roundTripper {
+		return &roundTripper{errs: []error{syscall.ECONNRESET, syscall.ECONNRESET, syscall.ECONNRESET}, responses: []*http.Response{nil, nil, nil}}
+	}
+	for retry, wantCalls := range map[bool]int{true: 2, false: 1} {
+		transport := failing()
+		client, _ := retryClient(t, transport, httpx.ClientConfig{RetryTransient: retry})
+		request, _ := http.NewRequest(http.MethodGet, "https://example.com/", nil)
+		if _, err := client.Do(t.Context(), request); err == nil {
+			t.Fatalf("retry %v: want the failure to stand", retry)
+		}
+		if transport.calls != wantCalls {
+			t.Errorf("retry %v: calls = %d, want %d", retry, transport.calls, wantCalls)
+		}
+	}
+}
+
+// A GraphQL server answers its own errors with 200; only counting them opens the breaker (FansDB, 2026-11-01).
+func TestClient_AnAnswerThatFailedCountsTowardsTheBreakerAndStaysReadable(t *testing.T) {
+	transport := &roundTripper{build: func(*http.Request) *http.Response { return respond(http.StatusOK, nil) }}
+	client, breaker := retryClient(t, transport, httpx.ClientConfig{AnswerFailed: func(start []byte) bool { return string(start) == "body" }})
+	for range 2 {
+		request, _ := http.NewRequest(http.MethodGet, "https://example.com/", nil)
+		response, err := client.Do(t.Context(), request)
+		if err != nil {
+			t.Fatalf("Do: %v", err)
+		}
+		body, _ := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if string(body) != "body" {
+			t.Errorf("body = %q, want it whole", body)
+		}
+	}
+	if state := breaker.State("provider").State; state != httpx.BreakerOpen {
+		t.Errorf("state = %s, want open", state)
 	}
 }

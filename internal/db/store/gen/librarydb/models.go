@@ -721,6 +721,9 @@ type ScanState struct {
 	DirectoriesRead int64
 	VanishedHeld    int64
 	VanishedThrough int64
+	RunStartedAt    int64
+	RunFull         int64
+	FilesSeen       int64
 }
 
 type StatRollup struct {

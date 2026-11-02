@@ -520,10 +520,11 @@ func (p *process) aniListClient() anilist.Client {
 func (p *process) adultService() adult.Service {
 	p.adultOnce.Do(func() {
 		server := func(provider, endpoint string) adult.Server {
-			return stashbox.New(p.providerClient(provider, nil, httpx.ClientConfig{}), endpoint, p.providerKey(provider))
+			return stashbox.New(p.providerClient(provider, nil, httpx.ClientConfig{AnswerFailed: stashbox.AnswerFailed}), endpoint, p.providerKey(provider))
 		}
 		p.adultShared = adult.Service{
-			Whisparr: whisparr.New(p.providerClient(providerWhisparr, nil, httpx.ClientConfig{})),
+			Memo:     adult.NewSearchMemo(clock.NewSystem()),
+			Whisparr: whisparr.New(p.providerClient(providerWhisparr, nil, httpx.ClientConfig{Timeout: whisparrTimeout})),
 			Movies:   theporndb.New(p.providerClient(providerThePornDB, nil, httpx.ClientConfig{}), p.providerKey(settings.AdultSourceThePornDB)),
 			Servers: map[string]adult.Server{
 				adult.ProviderStashDB:   server(providerStashDB, stashbox.StashDBEndpoint),

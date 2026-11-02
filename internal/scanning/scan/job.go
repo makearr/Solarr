@@ -104,6 +104,8 @@ type Sweep struct {
 	Include func(relPath string) bool
 	// Probe picks the included files ffprobe can read (a book library's audio, not its ebooks); nil probes all.
 	Probe func(relPath string) bool
+	// GatherFiles, above zero, hands folders of few files to the consumer together, about this many at a time.
+	GatherFiles int
 	// Housekeeping is optional.
 	Housekeeping Housekeeping
 	// OnSwept is optional: told after every sweep of a root, so derived counts catch up at once.
@@ -212,14 +214,20 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	if err != nil {
 		return err
 	}
-	if err := j.scans.Start(ctx, root.ID, j.clock.Now()); err != nil {
+	// A cursor is a sweep under way: this run continues it, in the mode it began in, from when it began.
+	resumed := progress.Cursor != ""
+	run := library.ScanRun{StartedAt: j.clock.Now(), Full: payload.Full}
+	if resumed && !progress.RunStartedAt.IsZero() {
+		run = library.ScanRun{StartedAt: progress.RunStartedAt, Full: progress.RunFull, FilesSeen: progress.FilesSeen}
+	}
+	if err := j.scans.Start(ctx, root.ID, j.clock.Now(), run); err != nil {
 		return err
 	}
 
 	state := State{SweptThrough: progress.SweptThrough, Cursor: progress.Cursor}
 	if payload.Full {
 		// The last sweep's count is the best estimate of this one's, for the status bar's ETA.
-		job.Progress.SetTotal(progress.FilesFound)
+		job.Progress.Set(run.FilesSeen, progress.FilesFound)
 	}
 	flow := pipeline{
 		observe: func(ctx context.Context, batch Batch) error {
@@ -229,20 +237,18 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 			job.Progress.Add(int64(len(batch.Files)))
 			return nil
 		},
-		advance: func(ctx context.Context, directory string) error { return j.scans.Advance(ctx, root.ID, directory) },
+		advance: func(ctx context.Context, directory string, files int64) error {
+			return j.scans.Advance(ctx, root.ID, directory, files)
+		},
 	}
-	// A full sweep is the evidence that unseen paths are gone, which a resumed one cannot give, so it is never cut into slices.
-	sliceCtx, endSlice := ctx, func() {}
-	if !payload.Full {
-		sliceCtx, endSlice = context.WithTimeout(ctx, j.sliceBudget)
-	}
+	sliceCtx, endSlice := context.WithTimeout(ctx, j.sliceBudget)
 	defer endSlice()
 	result, err := j.sweeper.Sweep(sliceCtx, root.Path, state,
-		Options{Full: payload.Full, Include: sweep.Include}, flow.submit)
+		Options{Full: payload.Full, Include: sweep.Include, GatherFiles: sweep.GatherFiles}, flow.submit)
 	if waited := flow.wait(ctx); err == nil {
 		err = waited
 	}
-	if err != nil && !payload.Full && ctx.Err() == nil && sliceCtx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
+	if err != nil && ctx.Err() == nil && sliceCtx.Err() != nil && errors.Is(err, context.DeadlineExceeded) {
 		j.logger.Info("library scan yielding", slog.Int64("root_folder_id", root.ID), slog.Duration("after", j.sliceBudget))
 		return fmt.Errorf("scan of root %d: %s spent: %w", root.ID, j.sliceBudget, jobs.ErrYield)
 	}
@@ -252,10 +258,12 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		return err
 	}
 
+	// The watermark is when the whole sweep began: a directory changed behind an earlier run's walk is read next time.
+	sweptThrough := run.StartedAt
 	finished := library.FinishedScan{
-		SweptThrough:    result.State.SweptThrough,
+		SweptThrough:    sweptThrough,
 		FinishedAt:      j.clock.Now(),
-		FilesFound:      int64(result.FilesFound),
+		FilesFound:      run.FilesSeen + int64(result.FilesFound),
 		DirectoriesRead: int64(result.DirectoriesRead),
 	}
 	if err := j.scans.Finish(ctx, root.ID, finished); err != nil {
@@ -263,7 +271,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	j.logger.Info("library scan finished",
 		slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
-		slog.Int("files_found", result.FilesFound),
+		slog.Int64("files_found", finished.FilesFound),
 		slog.Int("directories_read", result.DirectoriesRead),
 		slog.Int("directories_visited", result.DirectoriesVisited))
 
@@ -271,11 +279,12 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	// that a path it did not re-observe is actually gone (section 10.4). An
 	// incremental sweep skips directories whose mtime did not move and would
 	// wrongly mark their contents missing.
-	// A resumed sweep did not see what lies before its cursor this run (an incremental one may never have), so it proves nothing gone.
-	resumed := progress.Cursor != ""
+	// A resumed sweep counts when all of it was full and began at run.StartedAt: its earlier runs saw what lies before the
+	// cursor. One whose start was not kept, or a cursor an incremental sweep left, proves nothing gone.
+	wholeRun := run.Full && (!resumed || !progress.RunStartedAt.IsZero())
 	outcome := SweepOutcome{EmptyDirectories: result.EmptyDirectories}
-	if payload.Full && !resumed && j.markMissing(ctx, root, result.State.SweptThrough) {
-		outcome.MissingSince = result.State.SweptThrough
+	if wholeRun && j.markMissing(ctx, root, sweptThrough) {
+		outcome.MissingSince = sweptThrough
 	}
 	if sweep.Housekeeping != nil {
 		if err := sweep.Housekeeping.AfterSweep(ctx, root, payload.CategoryID, outcome); err != nil {

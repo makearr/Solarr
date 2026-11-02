@@ -177,6 +177,17 @@ ORDER BY id LIMIT sqlc.arg(page_size);
 -- name: WithdrawEdition :exec
 UPDATE edition SET kind = 'withdrawn' WHERE id = ? AND kind = 'unknown';
 
+-- An album going unverified: its placeholders would otherwise be asked about for a release group it no longer has.
+-- name: WithdrawWorkEditions :exec
+UPDATE edition SET kind = 'withdrawn' WHERE work_id = ? AND kind = 'unknown';
+
+-- What ties an album to a provider, leaving the local name an unverified album goes by.
+-- name: DeleteVerifiedWorkExternalIDs :exec
+DELETE FROM work_external_id WHERE work_id = ? AND provider NOT LIKE 'local:%';
+
+-- name: UnmonitorWorkItems :exec
+UPDATE desired_item SET monitored = 0 WHERE work_id = ?;
+
 -- name: UpdateEdition :exec
 UPDATE edition SET kind = ?, year = ?, format = ?, catalogue_number = ?,
        barcode = ?, runtime_ms = ?

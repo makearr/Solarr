@@ -403,8 +403,8 @@ func NewDefaultRegistry() *Registry {
 	registry.MustRegister(SettingDef{
 		Key: KeyMetadataDisabledProviders, Kind: KindStringList, Tier: TierNormal,
 		Name:     "Metadata providers switched off",
-		HelpText: "Providers no library asks; their keys stay stored.",
-		Default:  `[]`,
+		HelpText: "Providers no library asks; their keys stay stored. Google Books starts here: without a key of your own it answers 429.",
+		Default:  `["` + BookSourceGoogleBooks + `"]`,
 	})
 	registry.MustRegister(SettingDef{
 		Key: KeyMetadataProviderPaces, Kind: KindStringList, Tier: TierAdvanced,

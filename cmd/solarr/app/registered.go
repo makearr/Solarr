@@ -658,7 +658,8 @@ func (p *process) adultModule() adult.Module {
 				FS: p.fsys, Physical: library.NewPhysical(p.library), Unidentified: library.NewUnidentified(p.library), Service: service,
 				Clock: clock.NewSystem(), Logger: p.logger, DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 			}),
-			Include: adult.IsScene,
+			Include:     adult.IsScene,
+			GatherFiles: adult.ScanGather,
 			Housekeeping: housekeeping.Sweep{
 				Categories: adapters.Categories{Cache: p.cache}, Desired: library.NewDesired(p.library),
 				Grain: adult.Module{}.Descriptor().WantedGrain, FS: p.fsys, Logger: p.logger,

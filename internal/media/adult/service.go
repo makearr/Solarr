@@ -66,6 +66,8 @@ type Service struct {
 	Exclusions  library.Exclusions
 	Clock       clock.Clock
 	Logger      *slog.Logger
+	// Memo keeps searches a while, the empty ones too; nil asks every time.
+	Memo *searchMemo
 }
 
 func (s Service) warn(source, what string, err error) {
@@ -101,12 +103,18 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 	order := s.order(categoryID)
 	answers := map[string]Scene{}
 	// A provider early in the order may lack the title a later one teaches it: it is asked again once the first round ran.
+	askedWith := map[string]askedAbout{}
 	for round := 0; round < 2; round++ {
 		for _, name := range order {
 			if _, asked := answers[name]; asked {
 				continue
 			}
-			if answer, ok := s.ask(ctx, name, ids, hintFrom(hint, answers, order)); ok {
+			known := hintFrom(hint, answers, order)
+			if askedWith[name] == (askedAbout{ids, known}) {
+				continue
+			}
+			askedWith[name] = askedAbout{ids, known}
+			if answer, ok := s.ask(ctx, name, ids, known); ok {
 				answers[name] = answer
 				ids = mergeIDs(ids, answer.IDs)
 			}
@@ -129,6 +137,12 @@ func (s Service) FetchFor(ctx context.Context, categoryID int64, ids IDs, hint H
 	}
 	scene.IDs = mergeIDs(scene.IDs, ids)
 	return scene, nil
+}
+
+// askedAbout is what a provider was asked with: the same again gets the same answer.
+type askedAbout struct {
+	ids  IDs
+	hint Hint
 }
 
 func mergeIDs(first, second IDs) IDs {
@@ -179,7 +193,7 @@ func (s Service) askServer(ctx context.Context, name string, ids IDs, hint Hint)
 		return Scene{}, false
 	}
 	for _, term := range searchTerms(hint) {
-		found, err := server.SearchScenes(ctx, term, searchLimit)
+		found, err := memoized(ctx, s.Memo, name, term, func() ([]stashbox.Scene, error) { return server.SearchScenes(ctx, term, searchLimit) })
 		if err != nil {
 			s.warn(name, term, err)
 			return Scene{}, false
@@ -212,7 +226,7 @@ func (s Service) askMovie(ctx context.Context, ids IDs, hint Hint) (Scene, bool)
 		return Scene{}, false
 	}
 	for _, term := range searchTerms(hint) {
-		found, err := s.Movies.SearchMovies(ctx, term, searchLimit)
+		found, err := memoized(ctx, s.Memo, ProviderThePornDB+":movies", term, func() ([]theporndb.Movie, error) { return s.Movies.SearchMovies(ctx, term, searchLimit) })
 		if err != nil {
 			s.warn(ProviderThePornDB, term, err)
 			return Scene{}, false
@@ -231,7 +245,7 @@ func (s Service) askWhisparr(ctx context.Context, ids IDs, hint Hint) (Scene, bo
 		return Scene{}, false
 	}
 	for _, term := range searchTerms(hint) {
-		found, err := s.Whisparr.SearchScenes(ctx, term)
+		found, err := memoized(ctx, s.Memo, sourceWhisparr, term, func() ([]whisparr.Scene, error) { return s.Whisparr.SearchScenes(ctx, term) })
 		if err != nil {
 			s.warn(sourceWhisparr, term, err)
 			return Scene{}, false
@@ -305,6 +319,12 @@ type Query struct {
 // them, one scene found at
 // several providers once with the ids of all. A provider that fails is skipped; only all failing is an error.
 func (s Service) Search(ctx context.Context, categoryID int64, query Query, limit int) ([]Candidate, error) {
+	return s.SearchUntil(ctx, categoryID, query, limit, nil)
+}
+
+// SearchUntil is Search that stops asking once enough says what has been found settles it: a scan placing a file has no
+// use for the other providers' lists, and asks each of them again for the scene's fields when it adds it.
+func (s Service) SearchUntil(ctx context.Context, categoryID int64, query Query, limit int, enough func([]Candidate) bool) ([]Candidate, error) {
 	title := strings.TrimSpace(query.Title)
 	if title == "" {
 		return nil, nil
@@ -327,6 +347,9 @@ func (s Service) Search(ctx context.Context, categoryID int64, query Query, limi
 		}
 		asked++
 		found = mergeCandidates(found, candidatesOf(scenes, limit))
+		if enough != nil && enough(found) {
+			break
+		}
 	}
 	if asked == 0 && failure != nil {
 		return nil, fmt.Errorf("adult: search %q: %w", title, failure)
@@ -354,7 +377,7 @@ func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([
 		if s.Whisparr == nil {
 			return nil, nil
 		}
-		found, err := s.Whisparr.SearchScenes(ctx, term)
+		found, err := memoized(ctx, s.Memo, sourceWhisparr, term, func() ([]whisparr.Scene, error) { return s.Whisparr.SearchScenes(ctx, term) })
 		scenes := make([]Scene, 0, len(found))
 		for _, scene := range found {
 			scenes = append(scenes, FromWhisparr(scene))
@@ -365,13 +388,13 @@ func (s Service) searchOne(ctx context.Context, name, term string, limit int) ([
 	if !ok || server == nil || !server.Configured() {
 		return nil, nil
 	}
-	found, err := server.SearchScenes(ctx, term, limit)
+	found, err := memoized(ctx, s.Memo, name, term, func() ([]stashbox.Scene, error) { return server.SearchScenes(ctx, term, limit) })
 	scenes := make([]Scene, 0, len(found))
 	for _, scene := range found {
 		scenes = append(scenes, FromStashBox(name, scene))
 	}
 	if name == ProviderThePornDB && s.Movies != nil && s.Movies.Configured() {
-		films, filmErr := s.Movies.SearchMovies(ctx, term, limit)
+		films, filmErr := memoized(ctx, s.Memo, ProviderThePornDB+":movies", term, func() ([]theporndb.Movie, error) { return s.Movies.SearchMovies(ctx, term, limit) })
 		for _, film := range films {
 			scenes = append(scenes, FromMovie(film))
 		}
@@ -396,27 +419,39 @@ func candidatesOf(scenes []Scene, limit int) []Candidate {
 	return out
 }
 
-// ByFingerprint finds the scene a file's hashes name at the first server of the library's order that knows it. It
-// answers false when no server knows the file or the hashes name more than one scene.
-func (s Service) ByFingerprint(ctx context.Context, categoryID int64, prints []stashbox.Fingerprint) (Scene, bool) {
-	if len(prints) == 0 {
-		return Scene{}, false
-	}
+// fingerprintsPerQuery is the most files one stash-box query names; Stash itself sends 40 at a time.
+const fingerprintsPerQuery = 40
+
+// ByFingerprints finds the scene of each oshash, one query per server and 40 files, asking a later server only about what
+// the earlier ones did not know. A hash that no server knows, or that names more than one scene, is absent.
+func (s Service) ByFingerprints(ctx context.Context, categoryID int64, oshashes []string) map[string]Scene {
+	found := map[string]Scene{}
+	left := slices.Compact(slices.Sorted(slices.Values(oshashes)))
+	left = slices.DeleteFunc(left, func(hash string) bool { return hash == "" })
 	for _, name := range s.order(categoryID) {
 		server, ok := s.Servers[name]
-		if !ok || server == nil || !server.Configured() {
+		if !ok || server == nil || !server.Configured() || len(left) == 0 {
 			continue
 		}
-		answers, err := server.ScenesByFingerprint(ctx, [][]stashbox.Fingerprint{prints})
-		if err != nil {
-			s.warn(name, "fingerprint", err)
-			continue
+		for chunk := range slices.Chunk(left, fingerprintsPerQuery) {
+			files := make([][]stashbox.Fingerprint, len(chunk))
+			for i, hash := range chunk {
+				files[i] = []stashbox.Fingerprint{{Hash: hash, Algorithm: stashbox.AlgorithmOSHash}}
+			}
+			answers, err := server.ScenesByFingerprint(ctx, files)
+			if err != nil {
+				s.warn(name, "fingerprint", err)
+				continue
+			}
+			for i, answer := range answers {
+				if i < len(chunk) && len(answer) == 1 {
+					found[chunk[i]] = FromStashBox(name, answer[0])
+				}
+			}
 		}
-		if len(answers) == 1 && len(answers[0]) == 1 {
-			return FromStashBox(name, answers[0][0]), true
-		}
+		left = slices.DeleteFunc(left, func(hash string) bool { _, known := found[hash]; return known })
 	}
-	return Scene{}, false
+	return found
 }
 
 // MonitorOption is Whisparr's "Monitor" choice when a scene is added.

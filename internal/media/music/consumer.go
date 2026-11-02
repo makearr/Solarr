@@ -279,7 +279,10 @@ func (c Consumer) settleUnverified(
 	if present, err := c.identity.AnyUnverified(ctx); err != nil || !present {
 		return err
 	}
-	_, err := c.identity.LeaveUnverified(ctx, resolved)
+	deleted, err := c.identity.LeaveUnverified(ctx, resolved)
+	if len(deleted) > 0 {
+		c.logger.Info("unverified albums removed: their last files were identified", slog.Any("titles", deleted))
+	}
 	return err
 }
 

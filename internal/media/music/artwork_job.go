@@ -252,10 +252,13 @@ func (j *ArtworkJob) sweep(
 			return j.processOne(ctx, batch[index], lookup)
 		})
 		progress.Add(int64(len(batch)))
+		paused := false
 		for index, candidate := range batch {
 			total++
 			afterWorkID = candidate.WorkID
 			switch err := outcomes[index]; {
+			case errors.Is(err, httpx.ErrCircuitOpen):
+				paused = true
 			case errors.Is(err, musicbrainz.ErrNoCoverArt):
 				// Not a failure: nothing in the archive. Asked again next sweep,
 				// which is cheap and right if art is added later.
@@ -265,6 +268,11 @@ func (j *ArtworkJob) sweep(
 				j.logger.WarnContext(ctx, "cover art fetch failed", slog.String("kind", kind),
 					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
 			}
+		}
+		// A source down says nothing of the albums left: the next sweep asks after them, not this one.
+		if paused {
+			j.logger.Warn("music artwork sweep stopped: the source is paused", slog.String("kind", kind), slog.Int("processed", total))
+			return nil
 		}
 		if len(batch) < artworkBatchSize {
 			break

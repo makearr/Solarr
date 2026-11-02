@@ -140,7 +140,7 @@ var fileSettings = []media.FileSetting{
 	{Key: media.FileDeleteEmptyFolders, Label: "Delete Empty Folders", Help: "Delete empty artist and album folders during disk scan and when track files are deleted."},
 	{Key: media.FileUnmonitorDeleted, Label: "Unmonitor Deleted Tracks", Help: "An album with a track deleted from disk is automatically unmonitored."},
 	{Key: media.FileMergeLeadAliases, Label: "Merge Artists Stored Under Several Names", Help: "After each disk scan, an artist found under several folder names or aliases becomes one artist: the identified artist wins, otherwise the name with the most albums. Files stay where they are."},
-	{Key: media.FileRescanAfterRefresh, Label: "Rescan Artist Folder after Refresh", Help: "Rescan the artist's folders after refreshing its metadata; otherwise changes to files on disk are not noticed after a refresh."},
+	{Key: media.FileRescanAfterRefresh, Label: "Rescan Artist Folder after Refresh", Help: "Rescan the artist's folders after refreshing its metadata; otherwise changes to files on disk are not noticed until the next scan. An automatic refresh reads only the folders of files that met no track."},
 	{Key: media.FileChangeFileDate, Label: "Change File Date", Help: "Change the file date on import and rescan.", Options: []media.Choice{{Key: "none", Label: "None"}, {Key: "release_date", Label: "Album Release Date"}}},
 	{Key: media.FileImportExtraFiles, Label: "Import Extra Files", Help: "Bring matching files along with the tracks: lyrics, cue sheets, rip logs."},
 	{Key: media.FileExtraFileExtensions, Label: "Extra File Extensions", Help: "Comma separated, such as lrc,cue,log,nfo. A file named like a track takes the track's new name; others keep theirs."},

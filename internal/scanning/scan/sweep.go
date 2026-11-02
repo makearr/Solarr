@@ -92,6 +92,9 @@ type Options struct {
 	// Include decides whether a file is worth reporting at all. A nil Include takes
 	// everything, which is what a caller with no media-type opinion wants.
 	Include func(relPath string) bool
+	// GatherFiles, above zero, holds whole directories back until about this many files are together, and emits them as
+	// one batch named after the last: a library of one file per folder is otherwise one lookup per batch.
+	GatherFiles int
 }
 
 // Sweeper walks one root folder.
@@ -137,6 +140,9 @@ func (s Sweeper) Sweep(
 	}
 
 	err := walk.directory(ctx, "")
+	if err == nil {
+		err = walk.flushGathered(ctx)
+	}
 	result := Result{
 		State:              State{SweptThrough: state.SweptThrough, Cursor: walk.cursor},
 		DirectoriesVisited: walk.visited,
@@ -171,6 +177,9 @@ type sweep struct {
 	resumeFrom string
 	// cursor is the last directory committed by this run.
 	cursor string
+
+	// gathered is the files of whole directories waiting for Options.GatherFiles.
+	gathered Batch
 
 	visited int
 	read    int
@@ -272,6 +281,9 @@ func (w *sweep) filesIn(
 			RelPath: childRelative, SizeBytes: child.Size, ModTime: child.ModTime,
 		})
 		if len(batch.Files) == w.options.BatchSize {
+			if err := w.flushGathered(ctx); err != nil {
+				return err
+			}
 			batch.Partial = true
 			if err := w.commit(ctx, batch); err != nil {
 				return err
@@ -282,9 +294,31 @@ func (w *sweep) filesIn(
 	// A directory whose files were all filtered out still counts as swept: the
 	// cursor has to advance past it or a resume would read it again forever.
 	if len(batch.Files) == 0 {
+		if len(w.gathered.Files) > 0 {
+			w.gathered.Directory = relative
+			return nil
+		}
 		w.cursor = relative
 		return nil
 	}
+	if w.options.GatherFiles <= 0 {
+		return w.commit(ctx, batch)
+	}
+	w.gathered.Directory = relative
+	w.gathered.Files = append(w.gathered.Files, batch.Files...)
+	if len(w.gathered.Files) < w.options.GatherFiles {
+		return nil
+	}
+	return w.flushGathered(ctx)
+}
+
+// flushGathered emits the directories held back; the cursor passes them only once they are committed.
+func (w *sweep) flushGathered(ctx context.Context) error {
+	if len(w.gathered.Files) == 0 {
+		return nil
+	}
+	batch := w.gathered
+	w.gathered = Batch{}
 	return w.commit(ctx, batch)
 }
 

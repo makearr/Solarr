@@ -1,7 +1,9 @@
 package app
 
 import (
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/media"
 )
@@ -34,5 +36,26 @@ func TestSharedRetry_FollowsTheTypesDeclarationNotItsName(t *testing.T) {
 		if got[mediaType] != expected {
 			t.Errorf("sharedRetry(%q) = %v, want %v", mediaType, got[mediaType], expected)
 		}
+	}
+}
+
+// A provider coming back retries its own libraries' files, and flapping does not re-read them every time.
+func TestTakeRecoveredMediaTypes(t *testing.T) {
+	p := &process{}
+	at := time.Unix(1_000_000, 0)
+	p.noteProviderRecovered("images")
+	if got := p.takeRecoveredMediaTypes(at); len(got) != 0 {
+		t.Errorf("a non-metadata client gave %v", got)
+	}
+	p.noteProviderRecovered("stashdb")
+	if got := p.takeRecoveredMediaTypes(at); !slices.Equal(got, []string{"adult"}) {
+		t.Errorf("got %v, want adult", got)
+	}
+	p.noteProviderRecovered("stashdb")
+	if got := p.takeRecoveredMediaTypes(at.Add(time.Minute)); len(got) != 0 {
+		t.Errorf("flapping gave %v inside the spacing", got)
+	}
+	if got := p.takeRecoveredMediaTypes(at.Add(outageRetrySpacing + time.Minute)); !slices.Equal(got, []string{"adult"}) {
+		t.Errorf("got %v, want the held note honoured after the spacing", got)
 	}
 }

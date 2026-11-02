@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
 )
@@ -110,9 +111,31 @@ func (c Client) get(ctx context.Context, route string, query url.Values, into an
 // SearchScenes finds scenes by words of their title; the server answers a bad query with 400, which is no scenes.
 func (c Client) SearchScenes(ctx context.Context, term string) ([]Scene, error) {
 	var scenes []Scene
-	err := c.get(ctx, "scene/search", url.Values{"q": {term}}, &scenes)
+	err := c.get(ctx, "scene/search", url.Values{"q": {shortTerm(term)}}, &scenes)
 	return scenes, err
 }
+
+// maxTermRunes bounds a query: the server times out on a whole file title of performers and tag lists (2026-11-01).
+const maxTermRunes = 80
+
+// shortTerm is what a long name is searched by: its first clause, where that says enough, cut at a word.
+func shortTerm(term string) string {
+	runes := []rune(term)
+	if len(runes) <= maxTermRunes {
+		return term
+	}
+	if clause, _, listed := strings.Cut(term, ","); listed && len(strings.Fields(clause)) >= minClauseWords && len([]rune(clause)) <= maxTermRunes {
+		return strings.TrimSpace(clause)
+	}
+	cut := string(runes[:maxTermRunes])
+	if space := strings.LastIndexByte(cut, ' '); space > 0 {
+		cut = cut[:space]
+	}
+	return strings.TrimSpace(cut)
+}
+
+// minClauseWords keeps a tag list's first tag from standing in for the title.
+const minClauseWords = 3
 
 // SearchSites finds sites and studios by name.
 func (c Client) SearchSites(ctx context.Context, term string) ([]Site, error) {

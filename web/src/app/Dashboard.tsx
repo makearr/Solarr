@@ -21,6 +21,39 @@ type LibraryEntry = components["schemas"]["Library"];
 // wide screen without a second query.
 const RECENT_LIMIT = 10;
 
+// A scan moves in batches; a slower poll than the status bar is enough for a figure this coarse.
+const SCAN_REFRESH_MS = 10_000;
+
+/** One scan: its running count against what the last scan found. The last count is an estimate, so the
+ *  bar stops short of full and a first scan shows the count alone. */
+function ScanLine({ scan }: { scan: components["schemas"]["ScanRun"] }) {
+  const expected = scan.files_expected;
+  const share = expected > 0 ? Math.min(scan.files_seen / expected, 0.99) : null;
+  const seen = scan.files_seen.toLocaleString();
+  return (
+    <li className="rounded-md border border-border-subtle bg-surface px-3 py-2 text-sm">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate" title={scan.path}>{scan.library || scan.path}</span>
+        <span className="shrink-0 text-xs tabular-nums text-ink-muted">
+          {share === null ? `${seen} files so far` : `${seen} of about ${expected.toLocaleString()} files`}
+        </span>
+      </div>
+      {share !== null && (
+        <div
+          role="progressbar"
+          aria-label={`Scan of ${scan.library || scan.path}`}
+          aria-valuenow={Math.round(share * 100)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          className="mt-1.5 h-1 overflow-hidden rounded-full bg-border-subtle"
+        >
+          <div className="h-full bg-accent" style={{ width: `${share * 100}%` }} />
+        </div>
+      )}
+    </li>
+  );
+}
+
 /** The landing page. Search and Add lead, because those are the two things
  *  anyone opens this for; recently added follows with real cover art; the
  *  "is it set up and is it doing anything" panels stay below. */
@@ -40,6 +73,12 @@ export function Dashboard() {
   const health = useQuery({
     queryKey: ["system-health"],
     queryFn: () => ok(api.GET("/system/health")),
+  });
+
+  const scans = useQuery({
+    queryKey: ["scans"],
+    queryFn: () => ok(api.GET("/scans")),
+    refetchInterval: SCAN_REFRESH_MS,
   });
 
   const firstLibrary = libraries.data?.[0];
@@ -99,6 +138,16 @@ export function Dashboard() {
                     </Link>
                   )}
                 </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {scans.data && scans.data.scans.length > 0 && (
+          <Section title="Scanning">
+            <ul className="flex flex-col gap-2">
+              {scans.data.scans.map((scan) => (
+                <ScanLine key={scan.root_folder_id} scan={scan} />
               ))}
             </ul>
           </Section>

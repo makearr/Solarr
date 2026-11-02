@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -98,5 +99,26 @@ func TestBookFallsBackToAnotherStoresCatalogWhenAudnexusHasNoRecord(t *testing.T
 	}
 	if _, err := client(t, &answer{}, "us").Book(t.Context(), "B000000003"); !errors.Is(err, audible.ErrNotFound) {
 		t.Errorf("unlisted ASIN err = %v", err)
+	}
+}
+
+// The store ranks a series' later books above the one named; the exact title leads and the rest keep their order.
+func TestSearchPutsTheExactTitleFirst(t *testing.T) {
+	transport := &answer{bodies: map[string]string{"api.audible.com/1.0/catalog/products": `{"products":[
+		{"asin":"B000000002","title":"Lantern Keeper Returns"},{"asin":"B000000003","title":"Lantern Road"},{"asin":"B000000001","title":"The Lantern Keeper"}]}`}}
+	found, err := client(t, transport, "us").Search(t.Context(), "the lantern keeper", "Mara Quell", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 3 || found[0].ASIN != "B000000001" || found[1].ASIN != "B000000002" || found[2].ASIN != "B000000003" {
+		t.Errorf("found = %+v, want the exact title first and the rest in order", found)
+	}
+}
+
+func TestCreditsSplitsTranslatorsFromAuthors(t *testing.T) {
+	product := audible.Product{Authors: []audible.Person{{Name: "Mara Quell"}, {Name: "Tobin Reyes"}, {Name: "Ilse Varga - translator"}}}
+	authors, translators := product.Credits()
+	if !slices.Equal(authors, []string{"Mara Quell", "Tobin Reyes"}) || !slices.Equal(translators, []string{"Ilse Varga"}) {
+		t.Errorf("authors %v, translators %v", authors, translators)
 	}
 }

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -162,6 +163,13 @@ const performerFields = `id name disambiguation aliases gender birth_date death_
 	height cup_size band_size waist_size hip_size breast_type career_start_year career_end_year
 	tattoos{location description} piercings{location description} urls{url type} images{url width height}
 	scene_count merged_into_id`
+
+// answerErrors finds a GraphQL "errors" list; inside a string its quotes would be escaped.
+var answerErrors = regexp.MustCompile(`"errors"\s*:\s*\[\s*\{`)
+
+// AnswerFailed says a server answered 200 with its own errors, which is how a broken one fails every query (FansDB,
+// 2026-11-01). Clients of these servers set it, so the breaker stops asking.
+func AnswerFailed(start []byte) bool { return answerErrors.Match(start) }
 
 func (c Client) query(ctx context.Context, query string, variables map[string]any, into any) error {
 	if !c.Configured() {

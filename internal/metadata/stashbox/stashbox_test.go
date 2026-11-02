@@ -96,3 +96,15 @@ func TestScenesByFingerprintAsksOneListPerFile(t *testing.T) {
 		t.Errorf("found = %+v", found)
 	}
 }
+
+func TestAnswerFailedFindsAServersOwnErrors(t *testing.T) {
+	for answer, want := range map[string]bool{
+		`{"errors":[{"message":"window_agg placeholder should not be executed"}],"data":null}`: true,
+		`{"data":{"searchScene":[{"title":"The word \"errors\":[{ in a title"}]}}`:             false,
+		`{"data":{"searchScene":[]},"errors":[]}`:                                              false,
+	} {
+		if got := stashbox.AnswerFailed([]byte(answer)); got != want {
+			t.Errorf("AnswerFailed(%s) = %v, want %v", answer, got, want)
+		}
+	}
+}

@@ -34,7 +34,8 @@ UPDATE scan_state
 SET swept_through = ?1, cursor = '',
     finished_at = ?2,
     files_found = ?3,
-    directories_read = ?4
+    directories_read = ?4,
+    run_started_at = 0, run_full = 0, files_seen = 0
 WHERE root_folder_id = ?5
 `
 
@@ -61,7 +62,8 @@ func (q *Queries) FinishScan(ctx context.Context, arg FinishScanParams) error {
 const getScanState = `-- name: GetScanState :one
 
 SELECT root_folder_id, swept_through, cursor, started_at, finished_at,
-       files_found, directories_read, vanished_held, vanished_through
+       files_found, directories_read, vanished_held, vanished_through,
+       run_started_at, run_full, files_seen
 FROM scan_state WHERE root_folder_id = ?
 `
 
@@ -80,6 +82,9 @@ func (q *Queries) GetScanState(ctx context.Context, rootFolderID int64) (ScanSta
 		&i.DirectoriesRead,
 		&i.VanishedHeld,
 		&i.VanishedThrough,
+		&i.RunStartedAt,
+		&i.RunFull,
+		&i.FilesSeen,
 	)
 	return i, err
 }
@@ -102,7 +107,8 @@ func (q *Queries) HoldVanished(ctx context.Context, arg HoldVanishedParams) erro
 
 const listScanStates = `-- name: ListScanStates :many
 SELECT root_folder_id, swept_through, cursor, started_at, finished_at,
-       files_found, directories_read, vanished_held, vanished_through
+       files_found, directories_read, vanished_held, vanished_through,
+       run_started_at, run_full, files_seen
 FROM scan_state ORDER BY root_folder_id
 `
 
@@ -125,6 +131,9 @@ func (q *Queries) ListScanStates(ctx context.Context) ([]ScanState, error) {
 			&i.DirectoriesRead,
 			&i.VanishedHeld,
 			&i.VanishedThrough,
+			&i.RunStartedAt,
+			&i.RunFull,
+			&i.FilesSeen,
 		); err != nil {
 			return nil, err
 		}
@@ -140,36 +149,49 @@ func (q *Queries) ListScanStates(ctx context.Context) ([]ScanState, error) {
 }
 
 const setScanCursor = `-- name: SetScanCursor :exec
-UPDATE scan_state SET cursor = ? WHERE root_folder_id = ?
+UPDATE scan_state SET cursor = ?1, files_seen = files_seen + ?2
+WHERE root_folder_id = ?3
 `
 
 type SetScanCursorParams struct {
 	Cursor       string
+	Files        int64
 	RootFolderID int64
 }
 
 // Progress mid-sweep: the cursor advances, the watermark does not.
 func (q *Queries) SetScanCursor(ctx context.Context, arg SetScanCursorParams) error {
-	_, err := q.db.ExecContext(ctx, setScanCursor, arg.Cursor, arg.RootFolderID)
+	_, err := q.db.ExecContext(ctx, setScanCursor, arg.Cursor, arg.Files, arg.RootFolderID)
 	return err
 }
 
 const startScan = `-- name: StartScan :exec
 INSERT INTO scan_state (root_folder_id, swept_through, cursor, started_at, finished_at,
-                        files_found, directories_read)
-VALUES (?1, 0, '', ?2, NULL, 0, 0)
+                        files_found, directories_read, run_started_at, run_full, files_seen)
+VALUES (?1, 0, '', ?2, NULL, 0, 0,
+        ?3, ?4, ?5)
 ON CONFLICT (root_folder_id) DO UPDATE SET
-  started_at = excluded.started_at, finished_at = NULL
+  started_at = excluded.started_at, finished_at = NULL, run_started_at = excluded.run_started_at,
+  run_full = excluded.run_full, files_seen = excluded.files_seen
 `
 
 type StartScanParams struct {
 	RootFolderID int64
 	StartedAt    sql.NullInt64
+	RunStartedAt int64
+	RunFull      int64
+	FilesSeen    int64
 }
 
 // A sweep that starts records only that it started: the watermark must not move
 // until one finishes, or an interrupted scan would look complete.
 func (q *Queries) StartScan(ctx context.Context, arg StartScanParams) error {
-	_, err := q.db.ExecContext(ctx, startScan, arg.RootFolderID, arg.StartedAt)
+	_, err := q.db.ExecContext(ctx, startScan,
+		arg.RootFolderID,
+		arg.StartedAt,
+		arg.RunStartedAt,
+		arg.RunFull,
+		arg.FilesSeen,
+	)
 	return err
 }

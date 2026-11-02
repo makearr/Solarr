@@ -5154,6 +5154,48 @@ paths:
                 items: { $ref: "#/components/schemas/Library" }
         "401": { $ref: "#/components/responses/Problem" }
 
+  /libraries/{id}/identify-again:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    post:
+      operationId: identifyLibraryAgain
+      tags: [library]
+      summary: Ask the providers about this library's waiting files now.
+      responses:
+        "202":
+          description: The folders are queued; the rescan runs in the background.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [folders]
+                properties:
+                  folders: { type: integer, format: int32, description: How many folders will be read again. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /scans:
+    get:
+      operationId: listScans
+      tags: [library]
+      summary: Each library scan under way, with how far it has come.
+      responses:
+        "200":
+          description: The scans, in no promised order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [scans]
+                properties:
+                  scans: { type: array, items: { $ref: "#/components/schemas/ScanRun" } }
+        "401": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /libraries/{id}/last-level:
     parameters:
       - name: id
@@ -8185,10 +8227,27 @@ components:
           type: array
           items: { $ref: "#/components/schemas/MetadataProviderInfo" }
 
+    ScanRun:
+      type: object
+      required: [root_folder_id, library, path, files_seen, files_expected, full]
+      properties:
+        root_folder_id: { type: integer, format: int64 }
+        library: { type: string }
+        path: { type: string }
+        full: { type: boolean, description: It reads every folder rather than the changed ones. }
+        files_seen: { type: integer, format: int64, description: Files committed so far. }
+        files_expected: { type: integer, format: int64, description: What the last finished scan found; 0 when none has. }
+        started_at: { type: string, format: date-time }
+
     MetadataProviderInfo:
       type: object
-      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for, key_stored, per_minute, default_per_minute, max_per_minute, published]
+      required: [key, label, carries, needs_key, enabled, can_disable, media_types, also_for, key_stored, per_minute, default_per_minute, max_per_minute, published, status]
       properties:
+        status:
+          type: string
+          enum: [answering, failing, key_rejected, paused]
+          description: How it stands now. failing is repeated errors, paused is its own rate limit or daily quota.
+        status_until: { type: string, format: date-time, description: When it is asked again; absent while it answers. }
         key: { type: string }
         label: { type: string }
         carries: { type: array, items: { type: string }, description: What the provider supplies. }

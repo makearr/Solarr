@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"slices"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -37,18 +38,41 @@ func (s *Server) metadataSourcesView(category settings.Category) gen.LibraryMeta
 		Available: []gen.MetadataProviderInfo{},
 	}
 	for _, provider := range settings.MetadataProvidersFor(category.MediaType) {
-		view.Available = append(view.Available, providerInfo(snapshot, provider))
+		view.Available = append(view.Available, s.providerInfo(snapshot, provider))
 	}
 	return view
 }
 
-func providerInfo(snapshot *settings.Snapshot, provider settings.MetadataProvider) gen.MetadataProviderInfo {
+// The states a metadata provider can be in, for Settings -> Metadata.
+const (
+	ProviderAnswering   = "answering"
+	ProviderFailing     = "failing"
+	ProviderKeyRejected = "key_rejected"
+	ProviderPaused      = "paused"
+)
+
+// MetadataProviderStatus is how a provider stands; Until is when it is asked again, zero while it answers.
+type MetadataProviderStatus struct {
+	State string
+	Until time.Time
+}
+
+func (s *Server) providerInfo(snapshot *settings.Snapshot, provider settings.MetadataProvider) gen.MetadataProviderInfo {
 	pace, _ := snapshot.ProviderPace(provider.Key)
 	ceiling := provider.MaxPerMinute
 	if ceiling == 0 {
 		ceiling = settings.MaxProviderPerMinute
 	}
+	status := MetadataProviderStatus{State: ProviderAnswering}
+	if s.providerStatus != nil {
+		status = s.providerStatus(provider.Key)
+	}
+	var until *time.Time
+	if !status.Until.IsZero() {
+		until = &status.Until
+	}
 	return gen.MetadataProviderInfo{
+		Status: gen.MetadataProviderInfoStatus(status.State), StatusUntil: until,
 		Key: provider.Key, Label: provider.Label, Carries: provider.Carries, NeedsKey: provider.NeedsKey && !keyStored(snapshot, provider.Key),
 		Enabled: snapshot.ProviderEnabled(provider.Key), CanDisable: snapshot.ProviderCanBeSwitchedOff(provider.Key),
 		KeyStored:  snapshot.ProviderKeyStored(provider.Key),
@@ -118,7 +142,7 @@ func (s *Server) ListMetadataProviders(w http.ResponseWriter, r *http.Request) {
 	snapshot := s.auth.Settings.Snapshot()
 	providers := make([]gen.MetadataProviderInfo, 0, len(settings.MetadataProviders))
 	for _, provider := range settings.MetadataProviders {
-		providers = append(providers, providerInfo(snapshot, provider))
+		providers = append(providers, s.providerInfo(snapshot, provider))
 	}
 	writeJSON(w, s.logger, http.StatusOK, struct {
 		Providers []gen.MetadataProviderInfo `json:"providers"`

@@ -251,7 +251,7 @@ the caller has committed a batch, because it means "everything up to here is dur
 
 ### Progress is persisted per batch
 
-`scan_state` (migration 0011) holds one row per root folder. **Only a completed sweep
+`scan_state` (migration 0011, 0102) holds one row per root folder. A sweep may span several job runs, each yielding after ten minutes: `run_started_at` and `run_full` carry it across them, so a resumed full sweep still proves paths gone and the watermark is the start of the whole sweep; `files_seen` is its running count, which the dashboard shows against the last `files_found`. **Only a completed sweep
 moves the watermark**; a sweep that starts records only that it started, and one that
 is interrupted leaves its cursor behind so a restart resumes rather than rescanning.
 The cursor is written *after* the consumer has committed a batch — writing it first

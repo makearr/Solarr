@@ -91,3 +91,14 @@ FROM work_file f
 JOIN library_path lp ON lp.media_object_id = f.media_object_id
 WHERE f.work_id IN (SELECT value FROM json_each(sqlc.arg(work_ids)))
 ORDER BY f.work_id, lp.id;
+
+-- The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
+-- being read again, and on a first import that was half the library (live_test 35).
+-- name: ListUnalignedWorkFileLocations :many
+SELECT f.work_id AS work_id, lp.root_folder_id AS root_folder_id, lp.rel_path AS rel_path
+FROM work_file f
+JOIN library_path lp ON lp.media_object_id = f.media_object_id
+WHERE f.work_id IN (SELECT value FROM json_each(sqlc.arg(work_ids)))
+  AND EXISTS (SELECT 1 FROM desired_item d WHERE d.work_id = f.work_id)
+  AND NOT EXISTS (SELECT 1 FROM desired_item_file df WHERE df.media_object_id = f.media_object_id)
+ORDER BY f.work_id, lp.id;

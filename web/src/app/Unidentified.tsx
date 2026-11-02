@@ -20,13 +20,10 @@ const FILTER_KEYS: readonly string[] = ["category_id"];
 export function Unidentified() {
   const queryClient = useQueryClient();
   const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
-  // A type whose providers can be asked again names the schedule that does it.
-  const retryKey = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.unidentified_retry;
+  // A type whose providers can be asked again names the schedule that does it; here it runs for this library alone.
+  const canRetry = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.unidentified_retry != null;
   const retry = useMutation({
-    mutationFn: async () => {
-      const { error, response } = await api.POST("/schedules/{key}/run", { params: { path: { key: retryKey! } } });
-      if (error && response.status !== 409) throw error;
-    },
+    mutationFn: () => ok(api.POST("/libraries/{id}/identify-again", { params: { path: { id: Number(categoryId) } } })),
     onSuccess: () => {
       // The sweep runs in the background; look again once it has had a moment.
       window.setTimeout(() => void queryClient.invalidateQueries(), 8000);
@@ -116,15 +113,15 @@ export function Unidentified() {
         <span className="text-xs text-ink-muted">
           Files a scan found but could not confidently match to a work
         </span>
-        {retryKey && (
+        {canRetry && categoryId && (
         <button
           type="button"
           disabled={retry.isPending}
           onClick={() => retry.mutate()}
-          title="Ask the providers about the waiting TV files again, with everything the folders' episode numbers say"
+          title="Ask the providers about this library's waiting files again, now"
           className="ml-auto rounded-md border border-border-subtle px-2 py-1 text-xs text-ink-muted hover:text-ink disabled:opacity-50"
         >
-          {retry.isSuccess ? "Started: it runs in the background" : "Try TV files again"}
+          {retry.isSuccess ? `${retry.data.folders} folders queued: it runs in the background` : "Identify again"}
         </button>
         )}
       </div>

@@ -545,6 +545,14 @@ const (
 	MediaTypeInfoWorkImagePoster MediaTypeInfoWorkImage = "poster"
 )
 
+// Defines values for MetadataProviderInfoStatus.
+const (
+	MetadataProviderInfoStatusAnswering   MetadataProviderInfoStatus = "answering"
+	MetadataProviderInfoStatusFailing     MetadataProviderInfoStatus = "failing"
+	MetadataProviderInfoStatusKeyRejected MetadataProviderInfoStatus = "key_rejected"
+	MetadataProviderInfoStatusPaused      MetadataProviderInfoStatus = "paused"
+)
+
 // Defines values for MetadataSettingsCoverSources.
 const (
 	MetadataSettingsCoverSourcesCoverartarchive MetadataSettingsCoverSources = "coverartarchive"
@@ -3651,7 +3659,16 @@ type MetadataProviderInfo struct {
 
 	// Published What the provider says it can take.
 	Published string `json:"published"`
+
+	// Status How it stands now. failing is repeated errors, paused is its own rate limit or daily quota.
+	Status MetadataProviderInfoStatus `json:"status"`
+
+	// StatusUntil When it is asked again; absent while it answers.
+	StatusUntil *time.Time `json:"status_until,omitempty"`
 }
+
+// MetadataProviderInfoStatus How it stands now. failing is repeated errors, paused is its own rate limit or daily quota.
+type MetadataProviderInfoStatus string
 
 // MetadataSettings The metadata providers' own settings.
 type MetadataSettings struct {
@@ -4701,6 +4718,22 @@ type SameContentSuggestion struct {
 	Title          string `json:"title"`
 	WorkId         int64  `json:"work_id"`
 	WorkTitle      string `json:"work_title"`
+}
+
+// ScanRun defines model for ScanRun.
+type ScanRun struct {
+	// FilesExpected What the last finished scan found; 0 when none has.
+	FilesExpected int64 `json:"files_expected"`
+
+	// FilesSeen Files committed so far.
+	FilesSeen int64 `json:"files_seen"`
+
+	// Full It reads every folder rather than the changed ones.
+	Full         bool       `json:"full"`
+	Library      string     `json:"library"`
+	Path         string     `json:"path"`
+	RootFolderId int64      `json:"root_folder_id"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
 }
 
 // Schedule One registered periodic task (ADR-59), its effective settings and run-state.
@@ -7324,6 +7357,9 @@ type ServerInterface interface {
 	// The navigation tree -- libraries the caller may see, with their levels (ADR-54).
 	// (GET /libraries)
 	ListLibraries(w http.ResponseWriter, r *http.Request)
+	// Ask the providers about this library's waiting files now.
+	// (POST /libraries/{id}/identify-again)
+	IdentifyLibraryAgain(w http.ResponseWriter, r *http.Request, id int64)
 	// The import list types a library takes, with the settings each asks for, and the monitor options of its media type.
 	// (GET /libraries/{id}/import-list-types)
 	ListImportListTypes(w http.ResponseWriter, r *http.Request, id int64)
@@ -7594,6 +7630,9 @@ type ServerInterface interface {
 	// Accept the files a full scan found gone as deleted (section 10.4). Administrator only.
 	// (POST /rootfolders/{id}/vanished/accept)
 	AcceptVanishedFiles(w http.ResponseWriter, r *http.Request, id int64)
+	// Each library scan under way, with how far it has come.
+	// (GET /scans)
+	ListScans(w http.ResponseWriter, r *http.Request)
 	// Every registered periodic task (ADR-59).
 	// (GET /schedules)
 	ListSchedules(w http.ResponseWriter, r *http.Request)
@@ -8650,6 +8689,12 @@ func (_ Unimplemented) ListLibraries(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
+// Ask the providers about this library's waiting files now.
+// (POST /libraries/{id}/identify-again)
+func (_ Unimplemented) IdentifyLibraryAgain(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
 // The import list types a library takes, with the settings each asks for, and the monitor options of its media type.
 // (GET /libraries/{id}/import-list-types)
 func (_ Unimplemented) ListImportListTypes(w http.ResponseWriter, r *http.Request, id int64) {
@@ -9187,6 +9232,12 @@ func (_ Unimplemented) RenameRootFolder(w http.ResponseWriter, r *http.Request, 
 // Accept the files a full scan found gone as deleted (section 10.4). Administrator only.
 // (POST /rootfolders/{id}/vanished/accept)
 func (_ Unimplemented) AcceptVanishedFiles(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Each library scan under way, with how far it has come.
+// (GET /scans)
+func (_ Unimplemented) ListScans(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -14150,6 +14201,39 @@ func (siw *ServerInterfaceWrapper) ListLibraries(w http.ResponseWriter, r *http.
 	handler.ServeHTTP(w, r)
 }
 
+// IdentifyLibraryAgain operation middleware
+func (siw *ServerInterfaceWrapper) IdentifyLibraryAgain(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.IdentifyLibraryAgain(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // ListImportListTypes operation middleware
 func (siw *ServerInterfaceWrapper) ListImportListTypes(w http.ResponseWriter, r *http.Request) {
 
@@ -17080,6 +17164,28 @@ func (siw *ServerInterfaceWrapper) AcceptVanishedFiles(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AcceptVanishedFiles(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListScans operation middleware
+func (siw *ServerInterfaceWrapper) ListScans(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListScans(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20152,6 +20258,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/libraries", wrapper.ListLibraries)
 	})
 	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/libraries/{id}/identify-again", wrapper.IdentifyLibraryAgain)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/libraries/{id}/import-list-types", wrapper.ListImportListTypes)
 	})
 	r.Group(func(r chi.Router) {
@@ -20420,6 +20529,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/rootfolders/{id}/vanished/accept", wrapper.AcceptVanishedFiles)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/scans", wrapper.ListScans)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/schedules", wrapper.ListSchedules)

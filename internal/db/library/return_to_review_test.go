@@ -45,23 +45,41 @@ func albumWithFiles(t *testing.T, addedBy *int64) (int64, []int64, *librarydb.Qu
 	return work.ID, ids, queries, library.NewIdentity(opened), opened
 }
 
-// M1f: an album whose release group no longer exists anywhere goes back to Review file by file,
-// with the retired id as a hint, and the work nobody asked for is gone.
-func TestReturnToReview_QueuesTheFilesAndDeletesAnUnaskedWork(t *testing.T) {
-	workID, files, queries, identity, _ := albumWithFiles(t, nil)
+var localName = model.ExternalID{Provider: "local:album", ExternalID: "/music/heka/detisisu binip|detisisu binip", Confidence: 0.1}
 
-	returned, err := identity.ReturnToReview(t.Context(), workID, retiredHint, 5)
-	if err != nil || returned != (library.ReturnedToReview{Files: 2, WorkDeleted: true}) {
-		t.Fatalf("ReturnToReview = %+v, %v; want 2 files, work deleted", returned, err)
+// M1f: an album whose release group no longer exists anywhere goes back to Review file by file, with the retired id as a
+// hint. Its identification is not taken away for nothing (live_test 36): it stays, as an unverified album, and the
+// files' history says what happened.
+func TestReturnToReview_KeepsTheAlbumUnverifiedWithItsFiles(t *testing.T) {
+	workID, files, queries, identity, opened := albumWithFiles(t, nil)
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		return q.LinkWorkExternalID(ctx, librarydb.LinkWorkExternalIDParams{Provider: "musicbrainz:release-group", ExternalID: "rg-retired", WorkID: workID, Confidence: 1, FirstSeenAt: 1})
+	})
+
+	returned, err := identity.ReturnToReview(t.Context(), workID, retiredHint, localName, 5)
+	if err != nil || returned != (library.ReturnedToReview{Files: 2, Title: "Detisisu Binip", Unverified: true}) {
+		t.Fatalf("ReturnToReview = %+v, %v; want 2 files, unverified", returned, err)
 	}
 	for _, mediaObjectID := range files {
 		entry, err := queries.GetUnidentified(t.Context(), mediaObjectID)
 		if err != nil || entry.CandidatesJson != `[{"strategy":"retired release group","provider":"musicbrainz:release-group","external_id":"rg-retired","confidence":0.2}]` {
 			t.Errorf("queue entry for %d = %+v, %v; want the retired release group as a hint", mediaObjectID, entry, err)
 		}
+		attempts, err := queries.ListIdentificationAttempts(t.Context(), mediaObjectID)
+		if err != nil || len(attempts) != 1 || attempts[0].Outcome != "queued" {
+			t.Errorf("attempts for %d = %+v, %v; want one saying it was queued", mediaObjectID, attempts, err)
+		}
 	}
-	if _, err := queries.GetWork(t.Context(), workID); err == nil {
-		t.Error("the work nobody asked for is still there")
+	if count, err := queries.CountWorkFiles(t.Context(), workID); err != nil || count != 2 {
+		t.Errorf("work holds %d files, %v; want both still on it", count, err)
+	}
+	ids, err := queries.ListWorkExternalIDs(t.Context(), workID)
+	if err != nil || len(ids) != 1 || ids[0].Provider != "local:album" {
+		t.Errorf("external ids = %+v, %v; want the local name alone", ids, err)
+	}
+	items, err := queries.ListDesiredItemsForWork(t.Context(), workID)
+	if err != nil || len(items) != 1 || items[0].Monitored != 0 {
+		t.Errorf("items = %+v, %v; want the album unmonitored", items, err)
 	}
 }
 
@@ -70,8 +88,8 @@ func TestReturnToReview_KeepsAWorkAPersonAdded(t *testing.T) {
 	person := int64(1)
 	workID, _, queries, identity, _ := albumWithFiles(t, &person)
 
-	returned, err := identity.ReturnToReview(t.Context(), workID, retiredHint, 5)
-	if err != nil || returned != (library.ReturnedToReview{Files: 2}) {
+	returned, err := identity.ReturnToReview(t.Context(), workID, retiredHint, localName, 5)
+	if err != nil || returned != (library.ReturnedToReview{Files: 2, Title: "Detisisu Binip"}) {
 		t.Fatalf("ReturnToReview = %+v, %v; want 2 files, work kept", returned, err)
 	}
 	items, err := queries.ListDesiredItemsForWork(t.Context(), workID)
@@ -96,13 +114,13 @@ func TestLeaveUnverified_TheAlbumGoesWithItsLastFile(t *testing.T) {
 		t.Fatalf("AnyUnverified = %v, %v; want true", present, err)
 	}
 
-	if deleted, err := identity.LeaveUnverified(t.Context(), files[:1]); err != nil || deleted != 0 {
-		t.Fatalf("first file: deleted %d, %v; want the album kept", deleted, err)
+	if deleted, err := identity.LeaveUnverified(t.Context(), files[:1]); err != nil || len(deleted) != 0 {
+		t.Fatalf("first file: deleted %v, %v; want the album kept", deleted, err)
 	}
 	if left, err := queries.CountWorkFiles(t.Context(), workID); err != nil || left != 1 {
 		t.Fatalf("files left = %d, %v; want 1", left, err)
 	}
-	if deleted, err := identity.LeaveUnverified(t.Context(), files[1:]); err != nil || deleted != 1 {
-		t.Fatalf("last file: deleted %d, %v; want the album gone", deleted, err)
+	if deleted, err := identity.LeaveUnverified(t.Context(), files[1:]); err != nil || len(deleted) != 1 {
+		t.Fatalf("last file: deleted %v, %v; want the album gone", deleted, err)
 	}
 }

@@ -34,7 +34,7 @@ func TestScanStart_RecordsTheAttemptWithoutMovingTheWatermark(t *testing.T) {
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
 
-	if err := scans.Start(t.Context(), 1, sweepStart); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	progress, err := scans.Progress(t.Context(), 1)
@@ -56,10 +56,10 @@ func TestScanFinish_MovesTheWatermarkAndClearsTheCursor(t *testing.T) {
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
 
-	if err := scans.Start(t.Context(), 1, sweepStart); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if err := scans.Advance(t.Context(), 1, "Nick Cave/Tender Prey"); err != nil {
+	if err := scans.Advance(t.Context(), 1, "Nick Cave/Tender Prey", 1); err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
 	err := scans.Finish(t.Context(), 1, library.FinishedScan{
@@ -95,11 +95,11 @@ func TestScanAdvance_SurvivesAsAResumePointWhenTheSweepNeverFinished(t *testing.
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
 
-	if err := scans.Start(t.Context(), 1, sweepStart); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	for _, cursor := range []string{"a", "a/c", "a-b"} {
-		if err := scans.Advance(t.Context(), 1, cursor); err != nil {
+		if err := scans.Advance(t.Context(), 1, cursor, 1); err != nil {
 			t.Fatalf("Advance(%q): %v", cursor, err)
 		}
 	}
@@ -125,14 +125,14 @@ func TestScanStart_KeepsTheCursorOfAnInterruptedSweep(t *testing.T) {
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
 
-	if err := scans.Start(t.Context(), 1, sweepStart); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
-	if err := scans.Advance(t.Context(), 1, "Nick Cave"); err != nil {
+	if err := scans.Advance(t.Context(), 1, "Nick Cave", 1); err != nil {
 		t.Fatalf("Advance: %v", err)
 	}
 	restarted := sweepStart.Add(time.Hour)
-	if err := scans.Start(t.Context(), 1, restarted); err != nil {
+	if err := scans.Start(t.Context(), 1, restarted, library.ScanRun{StartedAt: restarted}); err != nil {
 		t.Fatalf("Start again: %v", err)
 	}
 
@@ -157,7 +157,7 @@ func TestScanStart_AfterACompletedSweepKeepsTheWatermarkAndTheEmptyCursor(t *tes
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
 
-	if err := scans.Start(t.Context(), 1, sweepStart); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	err := scans.Finish(t.Context(), 1, library.FinishedScan{
@@ -166,7 +166,7 @@ func TestScanStart_AfterACompletedSweepKeepsTheWatermarkAndTheEmptyCursor(t *tes
 	if err != nil {
 		t.Fatalf("Finish: %v", err)
 	}
-	if err := scans.Start(t.Context(), 1, sweepFinish.Add(time.Hour)); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepFinish.Add(time.Hour), library.ScanRun{StartedAt: sweepFinish.Add(time.Hour)}); err != nil {
 		t.Fatalf("Start again: %v", err)
 	}
 
@@ -186,7 +186,7 @@ func TestScanAll_ListsEveryRootWithProgress(t *testing.T) {
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
 	for _, root := range []int64{3, 1} {
-		if err := scans.Start(t.Context(), root, sweepStart); err != nil {
+		if err := scans.Start(t.Context(), root, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 			t.Fatalf("Start(%d): %v", root, err)
 		}
 	}
@@ -203,7 +203,7 @@ func TestScanAll_ListsEveryRootWithProgress(t *testing.T) {
 func TestScanForget_RemovesARootThatHasLeftTheConfiguration(t *testing.T) {
 	opened, _ := newLibrary(t)
 	scans := library.NewScans(opened)
-	if err := scans.Start(t.Context(), 1, sweepStart); err != nil {
+	if err := scans.Start(t.Context(), 1, sweepStart, library.ScanRun{StartedAt: sweepStart}); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	if err := scans.Forget(t.Context(), 1); err != nil {
@@ -216,5 +216,36 @@ func TestScanForget_RemovesARootThatHasLeftTheConfiguration(t *testing.T) {
 	}
 	if len(all) != 0 {
 		t.Errorf("All = %+v after forgetting the only root", all)
+	}
+}
+
+// One sweep over several job runs keeps its start and its count, which is what its watermark and its progress are read from.
+func TestScanRun_SurvivesAContinuedRunAndClearsOnFinish(t *testing.T) {
+	opened, _ := newLibrary(t)
+	scans := library.NewScans(opened)
+	run := library.ScanRun{StartedAt: sweepStart, Full: true}
+	if err := scans.Start(t.Context(), 1, sweepStart, run); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if err := scans.Advance(t.Context(), 1, "a", 3); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	if err := scans.Advance(t.Context(), 1, "b", 4); err != nil {
+		t.Fatalf("Advance: %v", err)
+	}
+	run.FilesSeen = 7
+	if err := scans.Start(t.Context(), 1, sweepStart.Add(time.Hour), run); err != nil {
+		t.Fatalf("Start again: %v", err)
+	}
+	progress, err := scans.Progress(t.Context(), 1)
+	if err != nil || !progress.RunStartedAt.Equal(sweepStart) || !progress.RunFull || progress.FilesSeen != 7 || progress.Cursor != "b" {
+		t.Fatalf("progress = %+v, %v; want the run carried on", progress, err)
+	}
+	if err := scans.Finish(t.Context(), 1, library.FinishedScan{SweptThrough: sweepStart, FinishedAt: sweepFinish, FilesFound: 7}); err != nil {
+		t.Fatalf("Finish: %v", err)
+	}
+	progress, err = scans.Progress(t.Context(), 1)
+	if err != nil || !progress.RunStartedAt.IsZero() || progress.RunFull || progress.FilesSeen != 0 || progress.FilesFound != 7 {
+		t.Errorf("progress = %+v, %v; want the run cleared and its count kept", progress, err)
 	}
 }

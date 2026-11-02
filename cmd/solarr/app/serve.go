@@ -96,11 +96,15 @@ type process struct {
 	// transcoder converts files for the built-in player; detection runs at start.
 	transcoder *transcode.Service
 	// media is every media type compiled in; core asks it instead of naming one.
-	media      *media.Registry
-	bus        *events.Bus
-	dispatcher *jobs.Dispatcher
-	server     *apiserver.Server
-	timezone   string
+	media *media.Registry
+	// recovered are the metadata providers back from an outage, waiting for the task that retries their files.
+	recoveredMu     sync.Mutex
+	recovered       map[string]bool
+	lastOutageRetry map[string]time.Time
+	bus             *events.Bus
+	dispatcher      *jobs.Dispatcher
+	server          *apiserver.Server
+	timezone        string
 	// defaultQualityProfileID is ensureDefaultQualityProfile's fallback,
 	// used when a category has none of its own configured (todo 4.4).
 	defaultQualityProfileID int64
@@ -715,6 +719,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			Settings: p.cache, Identity: library.NewIdentity(p.library), Facets: adapters.MediaTypes{Registry: p.media}.Facets,
 			Refreshing: adapters.MediaTypes{Registry: p.media}.RefreshingOf, GenreTree: adapters.MediaTypes{Registry: p.media}.GenreTreeKey,
 		},
+		MetadataProviderStatus: p.metadataProviderStatus,
+		LibraryIdentifier:      p,
+		Scans:                  adapters.ScanProgress{Scans: library.NewScans(p.library), Cache: p.cache},
 		SystemHealth: adapters.SystemHealth{
 			Cache: p.cache, Acquisitions: library.NewAcquisitions(p.library), Vanished: p.vanishedFiles(), Registry: p.media,
 			AboveRating: library.NewWorks(p.library).CountAboveRating, Paused: p.outbound().breaker.Paused,

@@ -96,7 +96,7 @@
         "label": "Merge Artists Stored Under Several Names"
       },
       {
-        "help": "Rescan the artist's folders after refreshing its metadata; otherwise changes to files on disk are not noticed after a refresh.",
+        "help": "Rescan the artist's folders after refreshing its metadata; otherwise changes to files on disk are not noticed until the next scan. An automatic refresh reads only the folders of files that met no track.",
         "key": "rescan_after_refresh",
         "label": "Rescan Artist Folder after Refresh"
       },

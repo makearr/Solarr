@@ -38,6 +38,12 @@ A scan registers each video file with its oshash (and the quick hash), then reso
 Names read: `[Studio] Title (2020-05-14).mp4` below a studio folder, `Title (2018).mp4`, a trailing `- Performer`, and a scene
 group's `Studio.20.05.14.Performer.Title.1080p`. phash is not computed yet.
 
+**What a scan costs the providers.** A library of one file per folder is gathered into batches of 40 (`scan.Sweep.GatherFiles`),
+whose oshashes go to each server in one query. A title search stops at the first provider that settles it, except in a movies
+library, where a later provider may hold the film's numbered scenes. Searches are remembered for an hour, empty ones too
+(`searchMemo`), and a provider is asked again only with something new. Whisparr's search gets at most 80 characters, the first
+clause of a long name, and a 10-second timeout.
+
 ## What is stored
 
 A scene is a work with one wanted item. Its studio is an organisation of kind `studio` (its network beside it), its performers

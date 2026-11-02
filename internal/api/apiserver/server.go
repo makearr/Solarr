@@ -157,6 +157,12 @@ type Config struct {
 	// ImportInspector enqueues ADR-48's own inspection job. Optional: without
 	// it, InspectImport answers 503.
 	ImportInspector ImportInspector
+	// MetadataProviderStatus says how a provider stands. Optional: without it every provider reads as answering.
+	MetadataProviderStatus func(key string) MetadataProviderStatus
+	// LibraryIdentifier asks again about a library's waiting files; nil answers 503.
+	LibraryIdentifier LibraryIdentifier
+	// Scans reports the library scans under way; nil answers 503.
+	Scans ScanReader
 	// FingerprintRetrier re-runs what a missing AcoustID key skipped, once one
 	// is entered (D12). Optional: without it the key is still stored, and a full
 	// rescan still recovers those files.
@@ -305,6 +311,9 @@ type Server struct {
 	worksMonitor            WorksMonitor
 	workEditor              WorkEditor
 	search                  SearchReader
+	providerStatus          func(key string) MetadataProviderStatus
+	libraryIdentifier       LibraryIdentifier
+	scans                   ScanReader
 	unidentified            UnidentifiedReader
 	unidentifiedResolver    UnidentifiedResolver
 	artwork                 ArtworkReader
@@ -434,6 +443,9 @@ func New(config Config) (*Server, error) {
 		worksMonitor:            config.WorksMonitor,
 		workEditor:              config.WorkEditor,
 		search:                  config.Search,
+		providerStatus:          config.MetadataProviderStatus,
+		libraryIdentifier:       config.LibraryIdentifier,
+		scans:                   config.Scans,
 		unidentified:            config.Unidentified,
 		unidentifiedResolver:    config.UnidentifiedResolver,
 		artwork:                 config.Artwork,
@@ -696,6 +708,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/mediatypes", server.ListMediaTypes)
 			secured.Get("/libraries", server.ListLibraries)
 			secured.Put("/libraries/{id}/last-level", server.routeSetLibraryLastLevel)
+			secured.Post("/libraries/{id}/identify-again", server.routeIdentifyLibraryAgain)
+			secured.Get("/scans", server.ListScans)
 			secured.Get("/libraries/{id}/import-lists", server.routeListImportLists)
 			secured.Post("/libraries/{id}/import-lists", server.routeCreateImportList)
 			secured.Get("/libraries/{id}/import-list-types", server.routeListImportListTypes)

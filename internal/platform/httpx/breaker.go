@@ -34,6 +34,8 @@ type BreakerConfig struct {
 	// probe, up to MaxCooldown.
 	Cooldown    time.Duration
 	MaxCooldown time.Duration
+	// OnRecovered is told, off the lock, when a probe closes a circuit that was open.
+	OnRecovered func(provider string)
 }
 
 func (c BreakerConfig) withDefaults() BreakerConfig {
@@ -152,6 +154,13 @@ func (b *Breaker) Observe(provider string, success bool) { b.observe(provider, s
 func (b *Breaker) ObserveRejected(provider string) { b.observe(provider, false, true) }
 
 func (b *Breaker) observe(provider string, success, rejected bool) {
+	if b.record(provider, success, rejected) && b.config.OnRecovered != nil {
+		b.config.OnRecovered(provider)
+	}
+}
+
+// record answers whether this result closed an open circuit.
+func (b *Breaker) record(provider string, success, rejected bool) (recovered bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
@@ -160,12 +169,13 @@ func (b *Breaker) observe(provider string, success, rejected bool) {
 
 	entry.rejected = rejected && !success
 	if success {
+		recovered = entry.state != BreakerClosed
 		entry.state = BreakerClosed
 		entry.consecutiveFailures = 0
 		entry.probing = false
 		entry.cooldown = b.config.Cooldown
 		entry.openedAt = time.Time{}
-		return
+		return recovered
 	}
 
 	entry.consecutiveFailures++
@@ -176,12 +186,13 @@ func (b *Breaker) observe(provider string, success, rejected bool) {
 		entry.state = BreakerOpen
 		entry.openedAt = now
 		entry.cooldown = min(entry.cooldown*2, b.config.MaxCooldown)
-		return
+		return false
 	}
 	if entry.consecutiveFailures >= b.config.FailureThreshold {
 		entry.state = BreakerOpen
 		entry.openedAt = now
 	}
+	return false
 }
 
 // Abandon gives back a half-open probe that never reached the provider, judging nothing: the next request probes instead.

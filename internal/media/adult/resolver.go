@@ -11,7 +11,6 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parseadult"
-	"github.com/makearr/Solarr/internal/metadata/stashbox"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
@@ -43,14 +42,21 @@ type Resolver struct {
 // Resolve answers the work a parsed name (and the file's oshash, when it has one) is: 0 when it could not be placed,
 // in which case the candidates say what was considered, or Excluded.
 func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parseadult.Info, oshash string) (int64, []model.Identification) {
+	var known map[string]Scene
+	if oshash != "" {
+		known = r.Service.ByFingerprints(ctx, categoryID, []string{oshash})
+	}
+	return r.ResolveKnown(ctx, categoryID, info, oshash, known)
+}
+
+// ResolveKnown is Resolve with the fingerprints already asked: known holds what the servers said of a batch's hashes.
+func (r Resolver) ResolveKnown(ctx context.Context, categoryID int64, info parseadult.Info, oshash string, known map[string]Scene) (int64, []model.Identification) {
 	if r.Locks != nil {
 		defer r.Locks.Lock(strconv.FormatInt(categoryID, 10) + "|" + NameKey(info.Studio) + "|" + NameKey(info.Title) + "|" + info.Date + "|" + oshash)()
 	}
-	if oshash != "" {
-		if scene, found := r.Service.ByFingerprint(ctx, categoryID, []stashbox.Fingerprint{{Hash: oshash, Algorithm: stashbox.AlgorithmOSHash}}); found {
-			if id := r.ByIDs(ctx, categoryID, scene.IDs, Hint{Title: scene.Title, Studio: scene.Studio, Date: scene.Date}); id != 0 {
-				return id, nil
-			}
+	if scene, found := known[oshash]; found {
+		if id := r.ByIDs(ctx, categoryID, scene.IDs, Hint{Title: scene.Title, Studio: scene.Studio, Date: scene.Date}); id != 0 {
+			return id, nil
 		}
 	}
 	if strings.TrimSpace(info.Title) == "" {
@@ -59,7 +65,16 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parseadult
 	if id, found := r.inLibrary(ctx, categoryID, info); found {
 		return id, nil
 	}
-	candidates, err := r.Service.Search(ctx, categoryID, Query{Title: info.Title, Studio: info.Studio, Date: info.Date}, searchLimit)
+	// Stops at the first provider that settles it; a film may need the numbered scenes of a later one, so a movies library asks all.
+	settled := func(found []Candidate) bool {
+		_, isFilm := filmOf(found, info)
+		_, confidence, ok := pickCandidate(found, info)
+		return !isFilm && ok && model.AcceptsFolderMatch(confidence, r.Threshold)
+	}
+	if r.wantsFilms(categoryID) {
+		settled = nil
+	}
+	candidates, err := r.Service.SearchUntil(ctx, categoryID, Query{Title: info.Title, Studio: info.Studio, Date: info.Date}, searchLimit, settled)
 	if err != nil {
 		r.warn("scene lookup failed", info.Title, err)
 		return 0, nil
@@ -75,6 +90,18 @@ func (r Resolver) Resolve(ctx context.Context, categoryID int64, info parseadult
 		return 0, append([]model.Identification{film.identification()}, r.identifications(candidates)...)
 	}
 	return 0, r.identifications(candidates)
+}
+
+// kindMovies is the library kind of whole films.
+const kindMovies = "movies"
+
+// wantsFilms says a library holds whole films, whose files a single scene's title can seem to name.
+func (r Resolver) wantsFilms(categoryID int64) bool {
+	if r.Categories == nil {
+		return false
+	}
+	category, found := r.Categories.Category(categoryID)
+	return found && category.Kind == kindMovies
 }
 
 func (r Resolver) warn(message, title string, err error) {

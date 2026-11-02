@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
@@ -25,6 +26,8 @@ type fakeServer struct {
 	scenes   []stashbox.Scene
 	asked    []string
 	byPrints map[string]stashbox.Scene
+	// printCalls is how many files each fingerprint query named.
+	printCalls []int
 }
 
 func (*fakeServer) Configured() bool { return true }
@@ -45,6 +48,7 @@ func (f *fakeServer) FindScene(_ context.Context, id string) (stashbox.Scene, er
 }
 
 func (f *fakeServer) ScenesByFingerprint(_ context.Context, files [][]stashbox.Fingerprint) ([][]stashbox.Scene, error) {
+	f.printCalls = append(f.printCalls, len(files))
 	out := make([][]stashbox.Scene, len(files))
 	for i, file := range files {
 		if scene, ok := f.byPrints[file[0].Hash]; ok {
@@ -129,11 +133,11 @@ func TestFetchForRefusesAnotherScenesAnswer(t *testing.T) {
 func TestByFingerprintNeedsExactlyOneSceneAtAServer(t *testing.T) {
 	server := &fakeServer{byPrints: map[string]stashbox.Scene{"abc": stashScene()}}
 	service := Service{Servers: map[string]Server{ProviderStashDB: server}, Sources: []string{ProviderStashDB}}
-	scene, found := service.ByFingerprint(t.Context(), 0, []stashbox.Fingerprint{{Hash: "abc", Algorithm: stashbox.AlgorithmOSHash}})
+	scene, found := service.ByFingerprints(t.Context(), 0, []string{"abc"})["abc"]
 	if !found || scene.IDs.StashDB != "sb-1" {
 		t.Errorf("found = %v, scene = %+v", found, scene)
 	}
-	if _, found := service.ByFingerprint(t.Context(), 0, []stashbox.Fingerprint{{Hash: "zzz"}}); found {
+	if _, found := service.ByFingerprints(t.Context(), 0, []string{"zzz"})["zzz"]; found {
 		t.Error("an unknown hash identified a scene")
 	}
 }
@@ -515,5 +519,66 @@ func TestPickCandidateReadsPastABonusPrefix(t *testing.T) {
 	hit := []Candidate{{IDs: IDs{StashDB: "a"}, Title: "BONUS-Class Two", Date: "2020-08-01"}}
 	if pick, _, ok := pickCandidate(hit, parseadult.Info{Title: "Class Two", Date: "2020-08-01"}); !ok || pick.IDs.StashDB != "a" {
 		t.Errorf("pick = %+v, %v; want the bonus entry", pick, ok)
+	}
+}
+
+// A batch's hashes go to a server in one query, and a later server hears only what the earlier did not know.
+func TestByFingerprintsAsksOnceForABatch(t *testing.T) {
+	first := &fakeServer{byPrints: map[string]stashbox.Scene{"abc": stashScene()}}
+	second := &fakeServer{byPrints: map[string]stashbox.Scene{"def": stashScene()}}
+	service := Service{Servers: map[string]Server{ProviderStashDB: first, ProviderThePornDB: second}, Sources: []string{ProviderStashDB, ProviderThePornDB}}
+	found := service.ByFingerprints(t.Context(), 0, []string{"abc", "def", "", "abc"})
+	if len(found) != 2 {
+		t.Fatalf("found = %+v, want both", found)
+	}
+	if !slices.Equal(first.printCalls, []int{2}) || !slices.Equal(second.printCalls, []int{1}) {
+		t.Errorf("queries = %v then %v, want one of 2 then one of 1", first.printCalls, second.printCalls)
+	}
+}
+
+// A confident answer ends the search: a scan does not need every provider's list.
+func TestSearchUntilStopsAtTheFirstProviderThatSettlesIt(t *testing.T) {
+	first, second := &fakeServer{scenes: []stashbox.Scene{stashScene()}}, &fakeServer{}
+	service := Service{Servers: map[string]Server{ProviderStashDB: first, ProviderThePornDB: second}, Sources: []string{ProviderStashDB, ProviderThePornDB}}
+	found, err := service.SearchUntil(t.Context(), 0, Query{Title: "Class Two"}, 10, func(c []Candidate) bool { return len(c) > 0 })
+	if err != nil || len(found) != 1 {
+		t.Fatalf("found = %+v, %v", found, err)
+	}
+	if len(second.asked) != 0 {
+		t.Errorf("the second provider was asked %v after the first settled it", second.asked)
+	}
+}
+
+// The words a search asked are not asked again when the scene is added, and neither is an empty answer.
+func TestMemoAsksOneProviderTheSameWordsOnce(t *testing.T) {
+	cl := clock.NewFakeAtEpoch()
+	server := &fakeServer{}
+	service := Service{Servers: map[string]Server{ProviderStashDB: server}, Sources: []string{ProviderStashDB}, Memo: NewSearchMemo(cl)}
+	for range 2 {
+		if _, err := service.Search(t.Context(), 0, Query{Title: "Class Two"}, 10); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(server.asked) != 1 {
+		t.Errorf("asked = %v, want once", server.asked)
+	}
+	cl.Advance(searchMemoTTL + time.Second)
+	if _, err := service.Search(t.Context(), 0, Query{Title: "Class Two"}, 10); err != nil {
+		t.Fatal(err)
+	}
+	if len(server.asked) != 2 {
+		t.Errorf("asked = %v, want the expired answer asked again", server.asked)
+	}
+}
+
+// A provider that learned nothing new between rounds is not asked the same thing twice.
+func TestFetchForAsksAProviderAgainOnlyWithSomethingNew(t *testing.T) {
+	server := &fakeServer{}
+	service := Service{Servers: map[string]Server{ProviderStashDB: server}, Sources: []string{ProviderStashDB}}
+	if _, err := service.FetchFor(t.Context(), 0, IDs{}, Hint{Title: "Class Two"}); !errors.Is(err, ErrNoSource) {
+		t.Fatalf("err = %v", err)
+	}
+	if len(server.asked) != 1 {
+		t.Errorf("asked = %v, want one round", server.asked)
 	}
 }

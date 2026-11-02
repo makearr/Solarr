@@ -58,5 +58,12 @@ func (c *Cache) SetProviderKey(ctx context.Context, cl clock.Clock, provider str
 	if !has {
 		return fmt.Errorf("settings: %s takes no key", provider)
 	}
-	return c.setSealedPolicy(ctx, cl, setting, key)
+	if err := c.setSealedPolicy(ctx, cl, setting, key); err != nil {
+		return err
+	}
+	// A provider that starts off for want of a key comes on with one.
+	if provider == BookSourceGoogleBooks && !key.IsZero() {
+		return c.SetProviderEnabled(ctx, cl, provider, true)
+	}
+	return nil
 }

@@ -17,9 +17,15 @@ import (
 type realigner struct{ p *process }
 
 // RealignWorks honours each library's "Rescan Artist Folder after Refresh" (Sonarr's): always,
-// only after a manual refresh, or never.
+// only after a manual refresh, or never. Only a person's refresh reads every file again; an automatic one reads the
+// folders of the files that met no track, the rest being matched from what the scan claimed.
 func (r realigner) RealignWorks(ctx context.Context, workIDs []int64, manual bool) error {
-	locations, err := library.NewIdentity(r.p.library).WorkFileLocations(ctx, workIDs)
+	identity := library.NewIdentity(r.p.library)
+	read := identity.UnalignedFileLocations
+	if manual {
+		read = identity.WorkFileLocations
+	}
+	locations, err := read(ctx, workIDs)
 	if err != nil {
 		return err
 	}

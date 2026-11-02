@@ -188,3 +188,12 @@ Every pass reads Wikidata for the whole library in a few bulk queries (`TiesOf`,
 **TMDB ids** are stored under one key per kind, because TMDB numbers each kind on its own: `tmdb` for series, people
 and networks, `tmdb:movie` for films, `tmdb:company` for studios, `tmdb:collection` for collections
 (`internal/metadata/tmdb/keys.go`). A lookup by provider id also names the media type it wants.
+
+## When a provider fails
+
+A provider's status is on Settings -> Metadata: **Failing** (five failures in a row, its circuit open), **Key rejected** (401 or
+403) or **Paused** (its own rate limit or daily quota), each with when it is asked next. A stash-box server's GraphQL errors count
+as failures though they arrive as 200. Metadata requests are all reads, so a dropped connection or a timeout is retried once after
+half a second, except at Whisparr. When a circuit closes again, the task `identify_after_outage` retries the waiting files of the
+libraries that provider serves, at most hourly per provider. Google Books ships switched off, since it answers 429 without a key,
+and comes on when a key is stored.

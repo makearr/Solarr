@@ -3255,6 +3255,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/libraries/{id}/identify-again": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask the providers about this library's waiting files now. */
+        post: operations["identifyLibraryAgain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/scans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Each library scan under way, with how far it has come. */
+        get: operations["listScans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/libraries/{id}/last-level": {
         parameters: {
             query?: never;
@@ -5248,7 +5284,37 @@ export interface components {
             default: string[];
             available: components["schemas"]["MetadataProviderInfo"][];
         };
+        ScanRun: {
+            /** Format: int64 */
+            root_folder_id: number;
+            library: string;
+            path: string;
+            /** @description It reads every folder rather than the changed ones. */
+            full: boolean;
+            /**
+             * Format: int64
+             * @description Files committed so far.
+             */
+            files_seen: number;
+            /**
+             * Format: int64
+             * @description What the last finished scan found; 0 when none has.
+             */
+            files_expected: number;
+            /** Format: date-time */
+            started_at?: string;
+        };
         MetadataProviderInfo: {
+            /**
+             * @description How it stands now. failing is repeated errors, paused is its own rate limit or daily quota.
+             * @enum {string}
+             */
+            status: "answering" | "failing" | "key_rejected" | "paused";
+            /**
+             * Format: date-time
+             * @description When it is asked again; absent while it answers.
+             */
+            status_until?: string;
             key: string;
             label: string;
             /** @description What the provider supplies. */
@@ -14429,6 +14495,61 @@ export interface operations {
                 };
             };
             401: components["responses"]["Problem"];
+        };
+    };
+    identifyLibraryAgain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folders are queued; the rescan runs in the background. */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /**
+                         * Format: int32
+                         * @description How many folders will be read again.
+                         */
+                        folders: number;
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listScans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The scans, in no promised order. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        scans: components["schemas"]["ScanRun"][];
+                    };
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     setLibraryLastLevel: {

@@ -31,7 +31,7 @@ func TestPipeline_ObservesConcurrentlyAndAdvancesInOrder(t *testing.T) {
 			running.Add(-1)
 			return nil
 		},
-		advance: func(_ context.Context, directory string) error {
+		advance: func(_ context.Context, directory string, _ int64) error {
 			mu.Lock()
 			defer mu.Unlock()
 			advanced = append(advanced, directory)
@@ -68,7 +68,7 @@ func TestPipeline_AFailureStopsTheCursorBeforeIt(t *testing.T) {
 			}
 			return nil
 		},
-		advance: func(_ context.Context, directory string) error {
+		advance: func(_ context.Context, directory string, _ int64) error {
 			advanced = append(advanced, directory)
 			return nil
 		},
@@ -106,7 +106,7 @@ func TestPipeline_ASlowDirectoryDoesNotIdleTheOtherSlots(t *testing.T) {
 			}
 			return nil
 		},
-		advance: func(_ context.Context, directory string) error {
+		advance: func(_ context.Context, directory string, _ int64) error {
 			advanced = append(advanced, directory)
 			return nil
 		},
@@ -143,5 +143,30 @@ func TestPipeline_ASlowDirectoryDoesNotIdleTheOtherSlots(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatalf("stalled behind the slow directory after %d others", observed.Load())
+	}
+}
+
+// A directory's partial batches count when the cursor finally passes it.
+func TestPipeline_CountsPartialBatchesWhenTheCursorPassesThem(t *testing.T) {
+	var counted []int64
+	flow := pipeline{
+		observe: func(context.Context, Batch) error { return nil },
+		advance: func(_ context.Context, _ string, files int64) error { counted = append(counted, files); return nil },
+	}
+	ctx := t.Context()
+	for _, batch := range []Batch{
+		{Directory: "a", Partial: true, Files: make([]Found, 2)},
+		{Directory: "a", Files: make([]Found, 1)},
+		{Directory: "b", Files: make([]Found, 4)},
+	} {
+		if err := flow.submit(ctx, batch); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := flow.wait(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(counted) != 2 || counted[0] != 3 || counted[1] != 4 {
+		t.Errorf("counted = %v, want [3 4]", counted)
 	}
 }

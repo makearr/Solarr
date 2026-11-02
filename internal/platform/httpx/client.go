@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -50,6 +52,11 @@ type ClientConfig struct {
 	// RejectedKeyOpens makes a 401 or 403 count towards the breaker; off for a service the user runs, whose settings they
 	// fix and test again straight away.
 	RejectedKeyOpens bool
+	// RetryTransient asks once more after a dropped connection or a timeout; only for clients whose every request is a read.
+	RetryTransient bool
+	// AnswerFailed reads the start of a 200 answer and says it is a failure all the same: a GraphQL server reports its
+	// own errors that way, and the breaker has to count them.
+	AnswerFailed func(start []byte) bool
 }
 
 // Client is the only way out of the process (Invariant 28). One per provider,
@@ -59,6 +66,8 @@ type Client struct {
 	userAgent        string
 	liveUserAgent    func() string
 	rejectedKeyOpens bool
+	retryTransient   bool
+	answerFailed     func(start []byte) bool
 	timeout          time.Duration
 	inner            *http.Client
 	limiter          *Limiter
@@ -92,6 +101,8 @@ func NewClient(c clock.Clock, guard *Guard, limiter *Limiter, breaker *Breaker, 
 		userAgent:        config.UserAgent,
 		liveUserAgent:    config.LiveUserAgent,
 		rejectedKeyOpens: config.RejectedKeyOpens,
+		retryTransient:   config.RetryTransient,
+		answerFailed:     config.AnswerFailed,
 		timeout:          timeout,
 		limiter:          limiter,
 		breaker:          breaker,
@@ -175,6 +186,13 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	}
 
 	response, err := c.inner.Do(request.WithContext(timedOut))
+	if c.retryTransient && err != nil && transient(err) && ctx.Err() == nil {
+		cancel()
+		var rewound bool
+		if timedOut, cancel, rewound = c.rewindForRetry(ctx, request); rewound {
+			response, err = c.inner.Do(request.WithContext(timedOut))
+		}
+	}
 	var magnet *MagnetRedirect
 	if errors.As(err, &magnet) {
 		cancel()
@@ -204,7 +222,7 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 	if c.rejectedKeyOpens && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden) {
 		c.breaker.ObserveRejected(c.provider)
 	} else {
-		c.breaker.Observe(c.provider, class != ClassRetryable)
+		c.breaker.Observe(c.provider, class != ClassRetryable && !c.failedAnswer(response))
 	}
 
 	if class == ClassSuccess {
@@ -229,6 +247,52 @@ func (c *Client) Do(ctx context.Context, request *http.Request) (*http.Response,
 		RetryAfter: retryAfter,
 		Header:     response.Header,
 	}
+}
+
+// answerPeekBytes is how much of an answer AnswerFailed sees; a server's own error is short and comes first.
+const answerPeekBytes = 64 << 10
+
+// failedAnswer lets AnswerFailed read the start of a successful answer, which the caller still reads whole.
+func (c *Client) failedAnswer(response *http.Response) bool {
+	if c.answerFailed == nil || response.StatusCode < 200 || response.StatusCode >= 300 {
+		return false
+	}
+	start, err := io.ReadAll(io.LimitReader(response.Body, answerPeekBytes))
+	response.Body = struct {
+		io.Reader
+		io.Closer
+	}{io.MultiReader(bytes.NewReader(start), response.Body), response.Body}
+	return err == nil && c.answerFailed(start)
+}
+
+// transientRetryPause is long enough for a reset connection to be replaced and short enough not to hold a scan worker.
+const transientRetryPause = 500 * time.Millisecond
+
+// rewindForRetry waits out the pause and prepares request to be sent again with a fresh timeout; false leaves the first
+// failure standing, with cancel safe to call.
+func (c *Client) rewindForRetry(ctx context.Context, request *http.Request) (context.Context, context.CancelFunc, bool) {
+	if request.Body != nil && request.GetBody == nil {
+		return ctx, func() {}, false
+	}
+	if err := c.clock.Sleep(ctx, transientRetryPause); err != nil {
+		return ctx, func() {}, false
+	}
+	if request.GetBody != nil {
+		body, err := request.GetBody()
+		if err != nil {
+			return ctx, func() {}, false
+		}
+		request.Body = body
+	}
+	timedOut, cancel := context.WithTimeout(ctx, c.timeout)
+	return timedOut, cancel, true
+}
+
+// transient says a request failed on the way, not by the provider's answer: a dropped connection or a timeout.
+func transient(err error) bool {
+	var timeout interface{ Timeout() bool }
+	return errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.EPIPE) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &timeout) && timeout.Timeout())
 }
 
 // cancelOnCloseBody ties a Do call's own request-scoped timeout to the

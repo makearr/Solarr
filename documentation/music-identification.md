@@ -266,3 +266,12 @@ file's manual resolve are one form (`web/src/app/IdentifyAs.tsx`); the resolve g
 The other media types read the same setting: their folder-to-title rules report `FolderExactMatch` (1.0), `FolderSettledMatch`
 (0.95, a title told apart by episode numbers) or `FolderLooseMatch` (0.9, near title, year off by one), so raising the setting sends
 the looser rules to Review.
+
+## A release group no source knows any more
+
+Enrichment finding a release group 404 at every source queues the album's files in Review with the retired id as a hint and records
+an attempt, so the history agrees with the queue. An identification is not taken away for want of a better one: the album stays as an
+unverified album (D6), unmonitored, under the name a scan of its folder would give it, with its files. Only a person's wanted album
+gives up its files and stays wanted.
+
+An automatic refresh rescans only the folders of files that met no track of a wanted album; a person's refresh reads them all.

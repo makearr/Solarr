@@ -4,11 +4,13 @@
 package audible
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -196,7 +198,34 @@ func (c Client) Search(ctx context.Context, title, author string, limit int) ([]
 		product.Images = product.ProductImages
 		products = append(products, product.Product)
 	}
+	// Relevance put book 1 of a series eighth, and the catalog's Title sort sixth (2026-11-02): the exact title leads here instead.
+	slices.SortStableFunc(products, func(a, b Product) int {
+		return cmp.Compare(exactTitle(b, title), exactTitle(a, title))
+	})
 	return products, nil
+}
+
+// exactTitle is 1 for a product of exactly that title, for sorting.
+func exactTitle(product Product, title string) int {
+	if strings.EqualFold(product.Title, title) {
+		return 1
+	}
+	return 0
+}
+
+// translatorSuffix is how Audible marks a translator among a book's authors: "Ken Liu - translator".
+var translatorSuffix = regexp.MustCompile(`(?i)\s*[-\x{2013}]\s*(?:translator|[\p{L} ]*übersetzer[\p{L}]*|traducteur|traductor)\s*$`)
+
+// Credits splits a product's listed authors into its authors and its translators, in credit order.
+func (p Product) Credits() (authors, translators []string) {
+	for _, person := range p.Authors {
+		if translatorSuffix.MatchString(person.Name) {
+			translators = append(translators, translatorSuffix.ReplaceAllString(person.Name, ""))
+		} else {
+			authors = append(authors, person.Name)
+		}
+	}
+	return authors, translators
 }
 
 // Book reads one audiobook by ASIN from Audnexus.

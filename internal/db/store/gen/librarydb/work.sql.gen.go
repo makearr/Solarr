@@ -496,6 +496,16 @@ func (q *Queries) DeleteEditionCredits(ctx context.Context, editionID int64) err
 	return err
 }
 
+const deleteVerifiedWorkExternalIDs = `-- name: DeleteVerifiedWorkExternalIDs :exec
+DELETE FROM work_external_id WHERE work_id = ? AND provider NOT LIKE 'local:%'
+`
+
+// What ties an album to a provider, leaving the local name an unverified album goes by.
+func (q *Queries) DeleteVerifiedWorkExternalIDs(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteVerifiedWorkExternalIDs, workID)
+	return err
+}
+
 const deleteWork = `-- name: DeleteWork :exec
 DELETE FROM work WHERE id = ?
 `
@@ -2339,6 +2349,15 @@ func (q *Queries) UnlinkWorkFiles(ctx context.Context, workID int64) error {
 	return err
 }
 
+const unmonitorWorkItems = `-- name: UnmonitorWorkItems :exec
+UPDATE desired_item SET monitored = 0 WHERE work_id = ?
+`
+
+func (q *Queries) UnmonitorWorkItems(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, unmonitorWorkItems, workID)
+	return err
+}
+
 const updateEdition = `-- name: UpdateEdition :exec
 UPDATE edition SET kind = ?, year = ?, format = ?, catalogue_number = ?,
        barcode = ?, runtime_ms = ?
@@ -2429,6 +2448,16 @@ UPDATE edition SET kind = 'withdrawn' WHERE id = ? AND kind = 'unknown'
 // no longer a placeholder, so enrichment stops asking about it.
 func (q *Queries) WithdrawEdition(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, withdrawEdition, id)
+	return err
+}
+
+const withdrawWorkEditions = `-- name: WithdrawWorkEditions :exec
+UPDATE edition SET kind = 'withdrawn' WHERE work_id = ? AND kind = 'unknown'
+`
+
+// An album going unverified: its placeholders would otherwise be asked about for a release group it no longer has.
+func (q *Queries) WithdrawWorkEditions(ctx context.Context, workID int64) error {
+	_, err := q.db.ExecContext(ctx, withdrawWorkEditions, workID)
 	return err
 }
 

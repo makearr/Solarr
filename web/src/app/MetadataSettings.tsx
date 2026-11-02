@@ -205,6 +205,7 @@ function ProviderRow({
         <span className="min-w-0 flex-1 truncate text-xs text-ink-muted" title={provider.carries.join(", ")}>
           {provider.carries.join(", ")}
         </span>
+        <ProviderStatus provider={provider} />
         {provider.per_minute > 0 && (
           <span className="text-xs tabular-nums text-ink-muted" title={`Published: ${provider.published}`}>
             {formatPace(provider.per_minute)}
@@ -819,3 +820,15 @@ function BackfillForm({
 const inputStyle =
   "rounded-md border border-border-subtle bg-canvas px-1.5 py-1 text-xs text-ink " +
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent";
+
+// What is wrong with a provider, and when it is asked again. Nothing is shown while it answers.
+const PROVIDER_STATUS_LABELS = { failing: "Failing", key_rejected: "Key rejected", paused: "Paused" } as const;
+
+function ProviderStatus({ provider }: { provider: Provider }) {
+  if (provider.status === "answering") return null;
+  const label = PROVIDER_STATUS_LABELS[provider.status];
+  const until = provider.status_until
+    ? new Date(provider.status_until).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : null;
+  return <span className="rounded-md border border-danger px-1.5 text-xs text-danger">{until ? `${label} until ${until}` : label}</span>;
+}

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/httpx"
@@ -54,6 +55,9 @@ var providerLimits = withMetadataPaces(map[string]httpx.Limits{
 	// A wall of posters must not starve the metadata calls.
 	providerImages: {MinInterval: 100 * time.Millisecond},
 })
+
+// whisparrTimeout is shorter than the shared one: a stuck search there held a scan worker for half a minute (2026-11-01).
+const whisparrTimeout = 10 * time.Second
 
 // metadataBuckets names the limiter bucket of a metadata provider whose client is named otherwise.
 var metadataBuckets = map[string]string{settings.MovieSourceRadarr: providerRadarrMeta}
@@ -116,7 +120,7 @@ func (p *process) outbound() outbound {
 		wall := clock.NewSystem()
 		p.outboundShared = outbound{
 			limiter: httpx.NewLimiter(wall, httpx.Config{Providers: providerLimits, Prefixes: providerFamilyLimits, LivePace: p.livePace}, nil),
-			breaker: httpx.NewBreaker(wall, httpx.BreakerConfig{}),
+			breaker: httpx.NewBreaker(wall, httpx.BreakerConfig{OnRecovered: p.noteProviderRecovered}),
 		}
 	})
 	return p.outboundShared
@@ -132,6 +136,8 @@ func (p *process) providerClient(provider string, guard *httpx.Guard, config htt
 	config.Provider = provider
 	config.RejectedKeyOpens = !strings.HasPrefix(provider, providerIndexerPrefix) && !strings.HasPrefix(provider, providerDownloaderPrefix) &&
 		provider != providerProwlarr && provider != providerArr && provider != providerWhisparr
+	_, metadata := settings.MetadataProviderByKey(provider)
+	config.RetryTransient = metadata && provider != providerWhisparr
 	if config.UserAgent == "" && config.LiveUserAgent == nil {
 		config.UserAgent = httpx.UserAgent(p.build.Version)
 	}
@@ -153,4 +159,19 @@ func (p *process) tvSourcesPaused() []string {
 		}
 	}
 	return paused
+}
+
+// metadataProviderStatus is how a metadata provider stands right now, for Settings -> Metadata.
+func (p *process) metadataProviderStatus(key string) apiserver.MetadataProviderStatus {
+	shared, bucket, now := p.outbound(), bucketOf(key), clock.NewSystem().Now()
+	if circuit := shared.breaker.State(bucket); circuit.State != httpx.BreakerClosed {
+		if circuit.KeyRejected {
+			return apiserver.MetadataProviderStatus{State: apiserver.ProviderKeyRejected, Until: circuit.RetryAt}
+		}
+		return apiserver.MetadataProviderStatus{State: apiserver.ProviderFailing, Until: circuit.RetryAt}
+	}
+	if until := shared.limiter.State(bucket).PausedUntil; until.After(now) {
+		return apiserver.MetadataProviderStatus{State: apiserver.ProviderPaused, Until: until}
+	}
+	return apiserver.MetadataProviderStatus{State: apiserver.ProviderAnswering}
 }

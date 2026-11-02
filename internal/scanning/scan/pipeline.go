@@ -18,16 +18,19 @@ const observeWindow = 8 * observeConcurrency
 // walk order, so a restart resumes after the last batch that, with every one before it, committed.
 type pipeline struct {
 	observe  func(ctx context.Context, batch Batch) error
-	advance  func(ctx context.Context, directory string) error
+	advance  func(ctx context.Context, directory string, files int64) error
 	window   []pending
 	running  int
 	finished chan struct{}
 	failed   error
+	// unadvanced counts the settled files of a directory the cursor may not pass yet.
+	unadvanced int64
 }
 
 type pending struct {
 	directory string
 	partial   bool
+	files     int64
 	done      chan error
 }
 
@@ -47,7 +50,7 @@ func (p *pipeline) submit(ctx context.Context, batch Batch) error {
 		<-p.finished
 		p.running--
 	}
-	slot := pending{directory: batch.Directory, partial: batch.Partial, done: make(chan error, 1)}
+	slot := pending{directory: batch.Directory, partial: batch.Partial, files: int64(len(batch.Files)), done: make(chan error, 1)}
 	p.window = append(p.window, slot)
 	p.running++
 	go func() {
@@ -88,10 +91,13 @@ func (p *pipeline) settleOldest(ctx context.Context, observed error) error {
 		p.failed = observed
 		return observed
 	}
+	p.unadvanced += oldest.files
 	if oldest.partial {
 		return nil
 	}
-	if err := p.advance(ctx, oldest.directory); err != nil {
+	files := p.unadvanced
+	p.unadvanced = 0
+	if err := p.advance(ctx, oldest.directory, files); err != nil {
 		p.failed = err
 		return err
 	}

@@ -184,3 +184,22 @@ func TestARejectedKeyOpensTheCircuitAndIsReported(t *testing.T) {
 		t.Error("a success did not close the circuit")
 	}
 }
+
+// Only a circuit that was open reports its recovery, and a request's ordinary success does not.
+func TestBreaker_ReportsRecoveryOnce(t *testing.T) {
+	fake := clock.NewFakeAtEpoch()
+	var recovered []string
+	breaker := httpx.NewBreaker(fake, httpx.BreakerConfig{FailureThreshold: 1, Cooldown: time.Minute,
+		OnRecovered: func(provider string) { recovered = append(recovered, provider) }})
+	breaker.Observe("p", true)
+	breaker.Observe("p", false)
+	fake.Advance(2 * time.Minute)
+	if err := breaker.Allow("p"); err != nil {
+		t.Fatal(err)
+	}
+	breaker.Observe("p", true)
+	breaker.Observe("p", true)
+	if len(recovered) != 1 || recovered[0] != "p" {
+		t.Errorf("recovered = %v, want p once", recovered)
+	}
+}

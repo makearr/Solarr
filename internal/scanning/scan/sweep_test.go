@@ -495,3 +495,20 @@ func TestSweep_NeverWalksTheRootsRecycleBin(t *testing.T) {
 		t.Errorf("found %v, want %v", collected.sorted(), want)
 	}
 }
+
+// A library of one file per folder reaches the consumer in groups, and the cursor passes a group only as a whole.
+func TestSweep_GathersSmallFoldersIntoOneBatch(t *testing.T) {
+	lib := newTree(t, "a/1.flac", "b/1.flac", "c/1.flac")
+	var batches []scan.Batch
+	result, err := scan.NewSweeper(lib.fsys, lib.clock).Sweep(t.Context(), root, scan.State{},
+		scan.Options{Full: true, GatherFiles: 2}, func(_ context.Context, batch scan.Batch) error {
+			batches = append(batches, batch)
+			return nil
+		})
+	if err != nil || !result.Completed || result.FilesFound != 3 {
+		t.Fatalf("Sweep = %+v, %v", result, err)
+	}
+	if len(batches) != 2 || batches[0].Directory != "b" || len(batches[0].Files) != 2 || batches[1].Directory != "c" || len(batches[1].Files) != 1 {
+		t.Errorf("batches = %+v; want a and b together under b, then the rest flushed", batches)
+	}
+}

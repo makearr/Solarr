@@ -29,6 +29,11 @@ type ScanProgress struct {
 	// VanishedThrough is that sweep's start, which accepting marks against.
 	VanishedHeld    int64
 	VanishedThrough time.Time
+	// RunStartedAt is when the sweep in progress began, across the job runs it took; zero when none is, or for one from
+	// before this was kept. RunFull says that sweep reads every directory; FilesSeen is what it has committed so far.
+	RunStartedAt time.Time
+	RunFull      bool
+	FilesSeen    int64
 }
 
 // Running reports a sweep that started and has not finished, which after a restart
@@ -69,13 +74,25 @@ func (s Scans) All(ctx context.Context) ([]ScanProgress, error) {
 	return progress, nil
 }
 
-// Start records that a sweep began. It deliberately does not touch the watermark or
+// ScanRun is the sweep a job run belongs to: a new one, or the one it continues.
+type ScanRun struct {
+	StartedAt time.Time
+	Full      bool
+	FilesSeen int64
+}
+
+// Start records that a job run began on run. It deliberately does not touch the watermark or
 // the cursor: an interrupted sweep must still be resumable, and a sweep that starts
 // has proved nothing.
-func (s Scans) Start(ctx context.Context, rootFolderID int64, at time.Time) error {
+func (s Scans) Start(ctx context.Context, rootFolderID int64, at time.Time, run ScanRun) error {
+	full := int64(0)
+	if run.Full {
+		full = 1
+	}
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).StartScan(ctx, librarydb.StartScanParams{
 			RootFolderID: rootFolderID, StartedAt: nullableTime(at),
+			RunStartedAt: run.StartedAt.Unix(), RunFull: full, FilesSeen: run.FilesSeen,
 		})
 	})
 	if err != nil {
@@ -84,12 +101,12 @@ func (s Scans) Start(ctx context.Context, rootFolderID int64, at time.Time) erro
 	return nil
 }
 
-// Advance records how far a sweep has committed. It runs once per batch, so it is
+// Advance records how far a sweep has committed and the files that took it there. It runs once per batch, so it is
 // one small write rather than a transaction held across the walk (Invariant 2).
-func (s Scans) Advance(ctx context.Context, rootFolderID int64, cursor string) error {
+func (s Scans) Advance(ctx context.Context, rootFolderID int64, cursor string, files int64) error {
 	err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		return librarydb.New(tx).SetScanCursor(ctx, librarydb.SetScanCursorParams{
-			Cursor: cursor, RootFolderID: rootFolderID,
+			Cursor: cursor, Files: files, RootFolderID: rootFolderID,
 		})
 	})
 	if err != nil {
@@ -162,6 +179,9 @@ func (s Scans) Forget(ctx context.Context, rootFolderID int64) error {
 func progressFrom(row librarydb.ScanState) ScanProgress {
 	return ScanProgress{
 		RootFolderID:    row.RootFolderID,
+		RunStartedAt:    unixOrZero(row.RunStartedAt),
+		RunFull:         row.RunFull != 0,
+		FilesSeen:       row.FilesSeen,
 		SweptThrough:    unixOrZero(row.SweptThrough),
 		Cursor:          row.Cursor,
 		StartedAt:       unixOrZeroNullable(row.StartedAt),

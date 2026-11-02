@@ -670,15 +670,30 @@ func (j *EnrichJob) returnRetiredToReview(ctx context.Context, workID int64, rel
 		ExternalID: &model.ExternalID{
 			Provider: ProviderReleaseGroup, ExternalID: releaseGroupMBID, Confidence: retiredCandidateConfidence,
 		},
-	}, j.clock.Now().Unix())
+	}, model.ExternalID{Provider: ProviderLocalAlbum, ExternalID: j.unverifiedKey(ctx, workID, releaseGroupMBID), Confidence: unverifiedConfidence},
+		j.clock.Now().Unix())
 	if err != nil {
 		j.logger.WarnContext(ctx, "retired release group: files not returned to review",
 			slog.Int64("work_id", workID), slog.Any("error", err))
 		return
 	}
 	j.logger.InfoContext(ctx, "release group retired: the album's files went back to Review",
-		slog.Int64("work_id", workID), slog.String("release_group", releaseGroupMBID),
-		slog.Int("files", returned.Files), slog.Bool("work_deleted", returned.WorkDeleted))
+		slog.Int64("work_id", workID), slog.String("title", returned.Title), slog.String("release_group", releaseGroupMBID),
+		slog.Int("files", returned.Files), slog.Bool("kept_unverified", returned.Unverified))
+}
+
+// unverifiedKey is the local name a scan of the album's folder would give it, so a rescan finds the same album.
+func (j *EnrichJob) unverifiedKey(ctx context.Context, workID int64, releaseGroupMBID string) string {
+	work, err := j.identity.WorkIdentityOf(ctx, workID)
+	locations, locationsErr := j.identity.WorkFileLocations(ctx, []int64{workID})
+	if err != nil || locationsErr != nil || len(locations) == 0 || j.roots == nil {
+		return "retired:" + releaseGroupMBID
+	}
+	root, found := j.roots.RootFolder(locations[0].RootFolderID)
+	if !found {
+		return "retired:" + releaseGroupMBID
+	}
+	return localAlbumKey(root.Path, path.Dir(locations[0].RelPath), work.CanonicalTitle)
 }
 
 // albumKey is one album lookup, in its library's provider order (0: the caller's); err set means there is nothing to look up.

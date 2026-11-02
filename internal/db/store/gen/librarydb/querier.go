@@ -283,6 +283,8 @@ type Querier interface {
 	DeleteUnidentified(ctx context.Context, mediaObjectID int64) error
 	// A held release (ready_queue) keeps its candidate however old.
 	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
+	// What ties an album to a provider, leaving the local name an unverified album goes by.
+	DeleteVerifiedWorkExternalIDs(ctx context.Context, workID int64) error
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
@@ -803,6 +805,9 @@ type Querier interface {
 	// Every file that covers a track, with what identifies the track: its title, artist and length. Duplicates are found
 	// from these in Go, by what the file is and not by its bytes.
 	ListTrackFilesWithMetadata(ctx context.Context, categoryID int64) ([]ListTrackFilesWithMetadataRow, error)
+	// The same, only the files a wanted album holds that met no track: a file already aligned has nothing to gain from
+	// being read again, and on a first import that was half the library (live_test 35).
+	ListUnalignedWorkFileLocations(ctx context.Context, workIds interface{}) ([]ListUnalignedWorkFileLocationsRow, error)
 	// Media objects not yet given a kind, oldest first, each with its primary path: what the start-up pass classifies.
 	ListUnclassifiedMediaObjects(ctx context.Context, arg ListUnclassifiedMediaObjectsParams) ([]ListUnclassifiedMediaObjectsRow, error)
 	// Fingerprint generation is the lowest-priority background work and resumable,
@@ -1195,6 +1200,7 @@ type Querier interface {
 	UnlinkWorkFiles(ctx context.Context, workID int64) error
 	// A library's "Unmonitor Deleted Tracks": items holding a file a full scan just found gone.
 	UnmonitorDesiredItemsWithMissingFiles(ctx context.Context, arg UnmonitorDesiredItemsWithMissingFilesParams) (int64, error)
+	UnmonitorWorkItems(ctx context.Context, workID int64) error
 	UpdateEdition(ctx context.Context, arg UpdateEditionParams) error
 	UpdateSubscriptionScope(ctx context.Context, arg UpdateSubscriptionScopeParams) error
 	// A provider fills what a work lacks and corrects what it measured; year and language, once set, stay.
@@ -1229,6 +1235,8 @@ type Querier interface {
 	// A placeholder whose release no source knows any more, replaced by one chosen from the files:
 	// no longer a placeholder, so enrichment stops asking about it.
 	WithdrawEdition(ctx context.Context, id int64) error
+	// An album going unverified: its placeholders would otherwise be asked about for a release group it no longer has.
+	WithdrawWorkEditions(ctx context.Context, workID int64) error
 	// A work has files while one of them has a path no sweep found gone.
 	WorkHasLiveFile(ctx context.Context, workID int64) (int64, error)
 	// A work's release day: its earliest dated release, '' when it has none to the day.

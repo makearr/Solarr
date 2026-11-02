@@ -257,6 +257,26 @@ func (i Identity) WorkFileLocations(ctx context.Context, workIDs []int64) ([]Wor
 	return locations, nil
 }
 
+// UnalignedFileLocations answers the paths of these works' files that met no track of a wanted album.
+func (i Identity) UnalignedFileLocations(ctx context.Context, workIDs []int64) ([]WorkFileLocation, error) {
+	if len(workIDs) == 0 {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(workIDs)
+	if err != nil {
+		return nil, fmt.Errorf("library: encode work ids: %w", err)
+	}
+	rows, err := librarydb.New(i.store.Read()).ListUnalignedWorkFileLocations(ctx, string(encoded))
+	if err != nil {
+		return nil, fmt.Errorf("library: unaligned file locations: %w", err)
+	}
+	locations := make([]WorkFileLocation, len(rows))
+	for index, row := range rows {
+		locations[index] = WorkFileLocation{WorkID: row.WorkID, RootFolderID: row.RootFolderID, RelPath: row.RelPath}
+	}
+	return locations, nil
+}
+
 // linkWorkFile remembers a file a work was resolved from, when the link names
 // one, so the work's embedded cover art can be read and its files rescanned.
 func linkWorkFile(ctx context.Context, queries *librarydb.Queries, at time.Time, workID int64, link WorkLink) error {
@@ -378,13 +398,20 @@ func resolveEdition(
 
 // ReturnedToReview is what ReturnToReview did with an album.
 type ReturnedToReview struct {
-	Files       int
-	WorkDeleted bool
+	Files int
+	// Title names the album, for the log line that explains why it changed.
+	Title string
+	// Unverified says it stays, files and all, under its local name; otherwise a person's wanted album lost its files.
+	Unverified bool
 }
 
-// ReturnToReview queues an album's files for identification with candidate as a weak hint and detaches
-// them (M1f: its release group is gone); the work goes unless a person added it.
-func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate model.Identification, at int64) (ReturnedToReview, error) {
+// reviewAttemptPasses is the attempt a returned file gets, so its history agrees with the queue.
+const reviewAttemptPasses = `[{"pass":"embedded_tags","outcome":"retired"}]`
+
+// ReturnToReview queues an album's files for identification with candidate as a weak hint (M1f: its release group is
+// gone). An identification is not taken away for want of a better one, so the album stays as the unverified album
+// unverified names (D6), its files on it, unmonitored; only a person's wanted album gives its files up and stays wanted.
+func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate model.Identification, unverified model.ExternalID, at int64) (ReturnedToReview, error) {
 	var result ReturnedToReview
 	candidatesJSON, err := encodeCandidates([]model.Identification{candidate})
 	if err != nil {
@@ -392,14 +419,27 @@ func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate mo
 	}
 	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
+		work, err := queries.GetWork(ctx, workID)
+		if err != nil {
+			return fmt.Errorf("read work: %w", err)
+		}
+		result.Title = work.CanonicalTitle
 		paths, err := queries.ListWorkFilePaths(ctx, workID)
 		if err != nil {
 			return fmt.Errorf("list files: %w", err)
 		}
-		for _, step := range []func(context.Context, int64) error{queries.DetachDesiredFilesForWork, queries.UnlinkWorkFiles} {
-			if err := step(ctx, workID); err != nil {
-				return err
-			}
+		wanted, err := queries.CountPersonAddedItems(ctx, workID)
+		if err != nil {
+			return err
+		}
+		result.Unverified = wanted == 0
+		if result.Unverified {
+			err = goUnverified(ctx, queries, workID, unverified, at)
+		} else {
+			err = giveUpFiles(ctx, queries, workID)
+		}
+		if err != nil {
+			return err
 		}
 		queued := map[int64]bool{}
 		for _, file := range paths {
@@ -413,22 +453,47 @@ func (i Identity) ReturnToReview(ctx context.Context, workID int64, candidate mo
 			}); err != nil {
 				return fmt.Errorf("queue file %d: %w", file.MediaObjectID, err)
 			}
+			if err := queries.InsertIdentificationAttempt(ctx, librarydb.InsertIdentificationAttemptParams{
+				MediaObjectID: file.MediaObjectID, AttemptedAt: at, Outcome: "queued", PassesJson: reviewAttemptPasses,
+			}); err != nil {
+				return fmt.Errorf("record attempt for file %d: %w", file.MediaObjectID, err)
+			}
 		}
 		result.Files = len(queued)
-		wanted, err := queries.CountPersonAddedItems(ctx, workID)
-		if err != nil {
-			return err
+		if result.Unverified {
+			return nil
 		}
-		if wanted > 0 {
-			return queries.ResetDesiredItemsForWork(ctx, workID)
-		}
-		result.WorkDeleted = true
-		return deleteFilelessWork(ctx, queries, workID)
+		return queries.ResetDesiredItemsForWork(ctx, workID)
 	})
 	if err != nil {
 		return ReturnedToReview{}, fmt.Errorf("library: return work %d to review: %w", workID, err)
 	}
 	return result, nil
+}
+
+// goUnverified swaps an album's provider ids for its local name; its placeholders go too, or enrichment asks about them forever.
+func goUnverified(ctx context.Context, queries *librarydb.Queries, workID int64, unverified model.ExternalID, at int64) error {
+	if err := queries.DeleteVerifiedWorkExternalIDs(ctx, workID); err != nil {
+		return fmt.Errorf("drop provider ids: %w", err)
+	}
+	if err := queries.LinkWorkExternalID(ctx, librarydb.LinkWorkExternalIDParams{
+		Provider: unverified.Provider, ExternalID: unverified.ExternalID, WorkID: workID, Confidence: unverified.Confidence, FirstSeenAt: at,
+	}); err != nil {
+		return fmt.Errorf("link local name: %w", err)
+	}
+	if err := queries.WithdrawWorkEditions(ctx, workID); err != nil {
+		return fmt.Errorf("withdraw editions: %w", err)
+	}
+	return queries.UnmonitorWorkItems(ctx, workID)
+}
+
+func giveUpFiles(ctx context.Context, queries *librarydb.Queries, workID int64) error {
+	for _, step := range []func(context.Context, int64) error{queries.DetachDesiredFilesForWork, queries.UnlinkWorkFiles} {
+		if err := step(ctx, workID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // WorkIdentityOf answers what a work is called, to carry its name onto the album it turns out to be.
@@ -494,32 +559,32 @@ func (i Identity) AnyUnverified(ctx context.Context) (bool, error) {
 }
 
 // LeaveUnverified takes identified files off every unverified album they were on (D6), deleting an album
-// left with no files unless a person added it; one batch, one transaction. Answers albums deleted.
-func (i Identity) LeaveUnverified(ctx context.Context, mediaObjectIDs []int64) (deleted int, err error) {
+// left with no files unless a person added it; one batch, one transaction. Answers the albums deleted, by title.
+func (i Identity) LeaveUnverified(ctx context.Context, mediaObjectIDs []int64) (deleted []string, err error) {
 	if len(mediaObjectIDs) == 0 {
-		return 0, nil
+		return nil, nil
 	}
 	err = i.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		for _, mediaObjectID := range mediaObjectIDs {
-			n, err := leaveUnverified(ctx, queries, mediaObjectID)
+			titles, err := leaveUnverified(ctx, queries, mediaObjectID)
 			if err != nil {
 				return err
 			}
-			deleted += n
+			deleted = append(deleted, titles...)
 		}
 		return nil
 	})
 	if err != nil {
-		return 0, fmt.Errorf("library: leave unverified: %w", err)
+		return nil, fmt.Errorf("library: leave unverified: %w", err)
 	}
 	return deleted, nil
 }
 
-func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjectID int64) (deleted int, err error) {
+func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjectID int64) (deleted []string, err error) {
 	workIDs, err := queries.ListUnverifiedWorksForFile(ctx, mediaObjectID)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	for _, workID := range workIDs {
 		if err := queries.DetachDesiredFileForWork(ctx, librarydb.DetachDesiredFileForWorkParams{
@@ -541,10 +606,14 @@ func leaveUnverified(ctx context.Context, queries *librarydb.Queries, mediaObjec
 		if files > 0 || asked > 0 {
 			continue
 		}
+		work, err := queries.GetWork(ctx, workID)
+		if err != nil {
+			return deleted, err
+		}
 		if err := deleteFilelessWork(ctx, queries, workID); err != nil {
 			return deleted, err
 		}
-		deleted++
+		deleted = append(deleted, work.CanonicalTitle)
 	}
 	return deleted, nil
 }

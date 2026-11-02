@@ -717,14 +717,64 @@ func TestJob_AWalkOverItsSliceBudgetYieldsAndFinishesNothing(t *testing.T) {
 	}
 }
 
-func TestJob_AFullSweepIsNeverSliced(t *testing.T) {
+func TestJob_AFullSweepYieldsToo(t *testing.T) {
 	fixture := newJobFixture(t, "Artist/Album/01.flac")
 	handler := scan.NewJob(scan.Config{
 		FS: fixture.fsys, Scans: library.NewScans(fixture.store), Roots: fixture.roots,
 		Tool: fixture.tool, Sweeps: scan.Always{Consumer: fixture.recorder, Include: scan.IsAudio}, Physical: library.NewPhysical(fixture.store),
 		Clock: fixture.clock, Logger: slog.New(slog.DiscardHandler), SliceBudget: time.Nanosecond,
 	})
-	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
-		t.Fatalf("a full sweep was cut short: %v", err)
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); !errors.Is(err, jobs.ErrYield) {
+		t.Fatalf("Run = %v, want a yield", err)
+	}
+}
+
+// A full sweep that took two runs saw everything, the first run what lies before the cursor: it proves what it did not
+// see is gone, and its watermark is when it began, or a change behind the first run's walk is never read.
+func TestJob_AFullSweepResumedInALaterRunProvesPathsGone(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac", "b/01.flac")
+	began := fixture.clock.Now()
+	staleID := fixture.stalePath(t, "gone/vanished.flac", began.Add(-time.Hour).Unix())
+	scans := library.NewScans(fixture.store)
+	if err := scans.Start(t.Context(), 1, began, library.ScanRun{StartedAt: began, Full: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scans.Advance(t.Context(), 1, "a", 1); err != nil {
+		t.Fatal(err)
+	}
+	fixture.clock.Advance(time.Hour)
+
+	if err := fixture.run(t, fixture.job(t, scan.IsAudio), scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if missing := fixture.missingSince(t, staleID); !missing.Valid {
+		t.Error("a path the two-run sweep never saw was not marked missing")
+	}
+	progress := fixture.progress(t)
+	if !progress.SweptThrough.Equal(began) || progress.FilesFound != 2 {
+		t.Errorf("progress = %+v, want the watermark at %s and both runs' files counted", progress, began)
+	}
+	if got := fixture.recorder.paths(); !slices.Equal(got, []string{"b/01.flac"}) {
+		t.Errorf("read %v, want only what lay past the cursor", got)
+	}
+}
+
+// A cursor with no recorded start may be an incremental sweep's: resuming it proves nothing.
+func TestJob_AResumedSweepOfUnknownStartMarksNothing(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac", "b/01.flac")
+	staleID := fixture.stalePath(t, "gone/vanished.flac", fixture.clock.Now().Add(-time.Hour).Unix())
+	scans := library.NewScans(fixture.store)
+	if err := scans.Start(t.Context(), 1, fixture.clock.Now(), library.ScanRun{StartedAt: time.Unix(0, 0)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := scans.Advance(t.Context(), 1, "a", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := fixture.run(t, fixture.job(t, scan.IsAudio), scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if missing := fixture.missingSince(t, staleID); missing.Valid {
+		t.Error("a sweep of unknown start marked a path missing")
 	}
 }

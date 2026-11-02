@@ -421,10 +421,12 @@ type Candidate struct {
 	Author string
 	// CoAuthors are the book's other authors, which only the match of a folder's author reads.
 	CoAuthors []string
-	Year      int
-	Overview  string
-	Cover     string
-	Traits    media.Traits
+	// Translators are named apart from the authors, which they are not.
+	Translators []string
+	Year        int
+	Overview    string
+	Cover       string
+	Traits      media.Traits
 }
 
 // Search finds books by title and, when given, author: an audiobook in Audible's catalog first, a book in Open Library,
@@ -477,13 +479,8 @@ func (s Service) searchOne(ctx context.Context, name, title, author string, limi
 		for _, product := range products {
 			candidate := Candidate{IDs: IDs{ASIN: product.ASIN}, Title: product.Title, Year: product.Year(), Overview: cleanText(product.Summary), Cover: product.Cover(),
 				Traits: media.Traits{OriginalLanguage: language(product.Language)}}
-			for position, person := range product.Authors {
-				if position == 0 {
-					candidate.Author = person.Name
-				} else {
-					candidate.CoAuthors = append(candidate.CoAuthors, person.Name)
-				}
-			}
+			authors, translators := product.Credits()
+			candidate.Author, candidate.CoAuthors, candidate.Translators = first(authors), othersThanFirst(authors), translators
 			candidates = append(candidates, candidate)
 		}
 	case settings.BookSourceOpenLibrary:
