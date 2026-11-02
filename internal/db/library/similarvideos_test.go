@@ -41,3 +41,15 @@ func TestGroupSimilar_NineBitsApartAreNotOneCut(t *testing.T) {
 		t.Errorf("groups = %+v, want none", groups)
 	}
 }
+
+func TestGroupSimilar_EpisodesWithTheSameOpeningButOtherLengthsAreNotOneCut(t *testing.T) {
+	hashes := []uint64{0, 0b11}
+	videos := []SimilarVideo{{MediaObjectID: 1, DurationMs: 2_700_000}, {MediaObjectID: 2, DurationMs: 2_640_000}}
+	if groups := groupSimilar(videos, hashes, 10); len(groups) != 0 {
+		t.Errorf("groups = %+v, want none", groups)
+	}
+	videos[1].DurationMs = 2_690_000
+	if groups := groupSimilar(videos, hashes, 10); len(groups) != 1 {
+		t.Errorf("groups = %+v, want the re-encode joined", groups)
+	}
+}

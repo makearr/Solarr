@@ -335,7 +335,7 @@ SELECT CAST(EXISTS (SELECT 1 FROM library_path WHERE root_folder_id = ? AND miss
 
 -- Every hashed video with its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
 -- name: ListHashedVideos :many
-SELECT o.id, o.size_bytes, o.phash, lp.root_folder_id, lp.rel_path
+SELECT o.id, o.size_bytes, o.phash, o.duration_ms, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.phash IS NOT NULL AND o.kind = 'video'

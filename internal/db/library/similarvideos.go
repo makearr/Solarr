@@ -21,8 +21,10 @@ func NewSimilarVideos(opened *store.Store) SimilarVideos { return SimilarVideos{
 type SimilarVideo struct {
 	MediaObjectID int64
 	SizeBytes     int64
-	RootFolderID  int64
-	RelPath       string
+	// DurationMs is zero when unprobed; the duration gate then lets the pair through.
+	DurationMs   int64
+	RootFolderID int64
+	RelPath      string
 }
 
 // SimilarGroup is files whose hashes chain together within the distance; the largest comes first.
@@ -34,6 +36,14 @@ type SimilarGroup struct {
 
 // similarMaxBits is the Hamming distance at or under which two videos count as one cut.
 const similarMaxBits = 8
+
+// sameLength is whether two durations can be one cut: episodes sharing an opening differ by far more than an encode does.
+func sameLength(first, second int64) bool {
+	if first == 0 || second == 0 {
+		return true
+	}
+	return max(first, second)-min(first, second) <= max(5_000, max(first, second)/50)
+}
 
 // similarBands splits a hash for the pigeonhole index: two hashes within similarMaxBits bits agree on at least one of
 // similarMaxBits+1 bands, so only files sharing a band are compared.
@@ -55,7 +65,7 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, limit 
 		if !inRoots[row.RootFolderID] || !row.Phash.Valid {
 			continue
 		}
-		videos = append(videos, SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, RootFolderID: row.RootFolderID, RelPath: row.RelPath})
+		videos = append(videos, SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath})
 		hashes = append(hashes, uint64(row.Phash.Int64))
 	}
 	return groupSimilar(videos, hashes, limit), nil
@@ -87,7 +97,7 @@ func groupSimilar(videos []SimilarVideo, hashes []uint64, limit int) []SimilarGr
 			for i, first := range members {
 				for _, second := range members[i+1:] {
 					distance := bits.OnesCount64(hashes[first] ^ hashes[second])
-					if distance > similarMaxBits {
+					if distance > similarMaxBits || !sameLength(videos[first].DurationMs, videos[second].DurationMs) {
 						continue
 					}
 					rootFirst, rootSecond := find(first), find(second)
