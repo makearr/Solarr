@@ -575,8 +575,9 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 }
 
 const listHashedVideos = `-- name: ListHashedVideos :many
-SELECT o.id, o.size_bytes, o.phash, o.duration_ms, lp.root_folder_id, lp.rel_path
+SELECT o.id, o.size_bytes, o.phash, o.duration_ms, lp.root_folder_id, lp.rel_path, f.frames
 FROM media_object o
+JOIN video_frame_hash f ON f.media_object_id = o.id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.phash IS NOT NULL AND o.kind = 'video'
 ORDER BY o.id
@@ -589,9 +590,10 @@ type ListHashedVideosRow struct {
 	DurationMs   sql.NullInt64
 	RootFolderID int64
 	RelPath      string
+	Frames       []byte
 }
 
-// Every hashed video with its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
+// Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
 func (q *Queries) ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, error) {
 	rows, err := q.db.QueryContext(ctx, listHashedVideos)
 	if err != nil {
@@ -608,6 +610,7 @@ func (q *Queries) ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, 
 			&i.DurationMs,
 			&i.RootFolderID,
 			&i.RelPath,
+			&i.Frames,
 		); err != nil {
 			return nil, err
 		}
@@ -1147,6 +1150,57 @@ func (q *Queries) ListUnmeasured(ctx context.Context, arg ListUnmeasuredParams) 
 	return items, nil
 }
 
+const listVideoWithoutFrameHashes = `-- name: ListVideoWithoutFrameHashes :many
+SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
+FROM media_object o
+JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
+WHERE o.kind = 'video' AND o.id > ?1
+  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id)
+ORDER BY o.id
+LIMIT ?2
+`
+
+type ListVideoWithoutFrameHashesParams struct {
+	AfterID  int64
+	PageSize int64
+}
+
+type ListVideoWithoutFrameHashesRow struct {
+	ID           int64
+	SizeBytes    int64
+	RootFolderID int64
+	RelPath      string
+}
+
+// Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
+func (q *Queries) ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error) {
+	rows, err := q.db.QueryContext(ctx, listVideoWithoutFrameHashes, arg.AfterID, arg.PageSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListVideoWithoutFrameHashesRow{}
+	for rows.Next() {
+		var i ListVideoWithoutFrameHashesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.SizeBytes,
+			&i.RootFolderID,
+			&i.RelPath,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listVideoWithoutOshash = `-- name: ListVideoWithoutOshash :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
@@ -1178,56 +1232,6 @@ func (q *Queries) ListVideoWithoutOshash(ctx context.Context, arg ListVideoWitho
 	items := []ListVideoWithoutOshashRow{}
 	for rows.Next() {
 		var i ListVideoWithoutOshashRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.SizeBytes,
-			&i.RootFolderID,
-			&i.RelPath,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listVideoWithoutPhash = `-- name: ListVideoWithoutPhash :many
-SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
-FROM media_object o
-JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.phash IS NULL AND o.kind = 'video' AND o.id > ?1
-ORDER BY o.id
-LIMIT ?2
-`
-
-type ListVideoWithoutPhashParams struct {
-	AfterID  int64
-	PageSize int64
-}
-
-type ListVideoWithoutPhashRow struct {
-	ID           int64
-	SizeBytes    int64
-	RootFolderID int64
-	RelPath      string
-}
-
-// Video files with no perceptual hash yet: the lowest-priority pass of the probe sweep (ADR-35).
-func (q *Queries) ListVideoWithoutPhash(ctx context.Context, arg ListVideoWithoutPhashParams) ([]ListVideoWithoutPhashRow, error) {
-	rows, err := q.db.QueryContext(ctx, listVideoWithoutPhash, arg.AfterID, arg.PageSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListVideoWithoutPhashRow{}
-	for rows.Next() {
-		var i ListVideoWithoutPhashRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SizeBytes,
@@ -1585,6 +1589,21 @@ type SetPhashParams struct {
 
 func (q *Queries) SetPhash(ctx context.Context, arg SetPhashParams) error {
 	_, err := q.db.ExecContext(ctx, setPhash, arg.Phash, arg.ID)
+	return err
+}
+
+const setVideoFrameHashes = `-- name: SetVideoFrameHashes :exec
+INSERT INTO video_frame_hash (media_object_id, frames) VALUES (?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET frames = excluded.frames
+`
+
+type SetVideoFrameHashesParams struct {
+	MediaObjectID int64
+	Frames        []byte
+}
+
+func (q *Queries) SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error {
+	_, err := q.db.ExecContext(ctx, setVideoFrameHashes, arg.MediaObjectID, arg.Frames)
 	return err
 }
 

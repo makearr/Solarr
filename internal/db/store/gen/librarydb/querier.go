@@ -623,7 +623,7 @@ type Querier interface {
 	ListGenresForPersonDiscography(ctx context.Context, personID int64) ([]ListGenresForPersonDiscographyRow, error)
 	ListGenresOfType(ctx context.Context, mediaType string) ([]ListGenresOfTypeRow, error)
 	ListGroupObservations(ctx context.Context, arg ListGroupObservationsParams) ([]GroupObservation, error)
-	// Every hashed video with its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
+	// Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
 	ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, error)
 	// The artists with something held in a library, and the release groups they hold there: what a discography is
 	// compared against. A held work without a release-group id yields an empty id.
@@ -840,10 +840,10 @@ type Querier interface {
 	ListUnverifiedWorksForFile(ctx context.Context, mediaObjectID int64) ([]int64, error)
 	// Monitored albums below their library's cutoff: what the Cutoff Unmet search walks.
 	ListUpgradableDesiredItems(ctx context.Context, arg ListUpgradableDesiredItemsParams) ([]ListUpgradableDesiredItemsRow, error)
+	// Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
+	ListVideoWithoutFrameHashes(ctx context.Context, arg ListVideoWithoutFrameHashesParams) ([]ListVideoWithoutFrameHashesRow, error)
 	// Video files scanned before oshash was written at scan time; under 64 KiB the hash is undefined, so those never list.
 	ListVideoWithoutOshash(ctx context.Context, arg ListVideoWithoutOshashParams) ([]ListVideoWithoutOshashRow, error)
-	// Video files with no perceptual hash yet: the lowest-priority pass of the probe sweep (ADR-35).
-	ListVideoWithoutPhash(ctx context.Context, arg ListVideoWithoutPhashParams) ([]ListVideoWithoutPhashRow, error)
 	// RSS sync: the monitored, incomplete albums credited to an artist of this name or alias, ignoring case.
 	ListWantedAlbumsByArtistName(ctx context.Context, arg ListWantedAlbumsByArtistNameParams) ([]int64, error)
 	// A library's missing parts, newest first: monitored, out (past their time and grace, as PartOut says), and no file covers them (Sonarr's Wanted, Missing).
@@ -1170,6 +1170,7 @@ type Querier interface {
 	SetStatRollup(ctx context.Context, arg SetStatRollupParams) error
 	SetTagName(ctx context.Context, arg SetTagNameParams) error
 	SetTagParentColumn(ctx context.Context, arg SetTagParentColumnParams) error
+	SetVideoFrameHashes(ctx context.Context, arg SetVideoFrameHashesParams) error
 	SetWorkCertification(ctx context.Context, arg SetWorkCertificationParams) error
 	SetWorkClassification(ctx context.Context, arg SetWorkClassificationParams) error
 	SetWorkDate(ctx context.Context, arg SetWorkDateParams) error

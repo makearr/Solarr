@@ -156,17 +156,22 @@ LIMIT sqlc.arg(page_size);
 -- name: SetOshash :exec
 UPDATE media_object SET oshash = ? WHERE id = ?;
 
--- Video files with no perceptual hash yet: the lowest-priority pass of the probe sweep (ADR-35).
--- name: ListVideoWithoutPhash :many
+-- Video files with no per-frame hash yet, those hashed before it included: the lowest-priority pass of the probe sweep (ADR-35).
+-- name: ListVideoWithoutFrameHashes :many
 SELECT o.id, o.size_bytes, lp.root_folder_id, lp.rel_path
 FROM media_object o
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
-WHERE o.phash IS NULL AND o.kind = 'video' AND o.id > sqlc.arg(after_id)
+WHERE o.kind = 'video' AND o.id > sqlc.arg(after_id)
+  AND NOT EXISTS (SELECT 1 FROM video_frame_hash f WHERE f.media_object_id = o.id)
 ORDER BY o.id
 LIMIT sqlc.arg(page_size);
 
 -- name: SetPhash :exec
 UPDATE media_object SET phash = ? WHERE id = ?;
+
+-- name: SetVideoFrameHashes :exec
+INSERT INTO video_frame_hash (media_object_id, frames) VALUES (?, ?)
+ON CONFLICT (media_object_id) DO UPDATE SET frames = excluded.frames;
 
 -- Probe coverage, the same per-root shape CountLibraryPathsByRootFolder already
 -- answers for the denominator (library.CategoryCounters' own precedent) --
@@ -333,10 +338,11 @@ ORDER BY lp.media_object_id, d.work_id, f.media_ref;
 -- name: RootHoldsFiles :one
 SELECT CAST(EXISTS (SELECT 1 FROM library_path WHERE root_folder_id = ? AND missing_since IS NULL) AS INTEGER) AS holds;
 
--- Every hashed video with its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
+-- Every video with frame hashes and its primary path; the similar-video report brute-forces Hamming distance in Go (ADR-35).
 -- name: ListHashedVideos :many
-SELECT o.id, o.size_bytes, o.phash, o.duration_ms, lp.root_folder_id, lp.rel_path
+SELECT o.id, o.size_bytes, o.phash, o.duration_ms, lp.root_folder_id, lp.rel_path, f.frames
 FROM media_object o
+JOIN video_frame_hash f ON f.media_object_id = o.id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
 WHERE o.phash IS NOT NULL AND o.kind = 'video'
 ORDER BY o.id;

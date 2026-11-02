@@ -1,9 +1,20 @@
 package library
 
 import (
+	"math/bits"
+	"math/rand"
 	"reflect"
 	"testing"
+
+	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
+
+// sameFrames is a full set of frames that match whatever else they are compared with, for tests about the mean hash.
+var sameFrames = []FrameHash{{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}}
+
+func hashed(video SimilarVideo, mean uint64) hashedVideo {
+	return hashedVideo{video: video, mean: mean, frames: sameFrames}
+}
 
 func TestGroupSimilar_JoinsNearHashesAcrossBandsAndLeavesStrangersAlone(t *testing.T) {
 	base := uint64(0x0123456789ABCDEF)
@@ -14,42 +25,163 @@ func TestGroupSimilar_JoinsNearHashesAcrossBandsAndLeavesStrangersAlone(t *testi
 		^base,                // far
 		0xF0F0F0F0F0F0F0F0,   // far
 	}
-	videos := make([]SimilarVideo, len(hashes))
+	videos := make([]hashedVideo, len(hashes))
 	for index := range videos {
-		videos[index] = SimilarVideo{MediaObjectID: int64(index + 1), SizeBytes: int64(100 - index)}
+		videos[index] = hashed(SimilarVideo{MediaObjectID: int64(index + 1), SizeBytes: int64(100 - index)}, hashes[index])
 	}
-	groups := groupSimilar(videos, hashes, 10)
-	if len(groups) != 1 {
-		t.Fatalf("groups = %+v, want one", groups)
-	}
-	var ids []int64
-	for _, video := range groups[0].Videos {
-		ids = append(ids, video.MediaObjectID)
-	}
-	if want := []int64{1, 2, 3}; !reflect.DeepEqual(ids, want) {
-		t.Errorf("group ids = %v, want %v", ids, want)
-	}
-	if groups[0].MaxDistance != 5 {
-		t.Errorf("MaxDistance = %d, want 5", groups[0].MaxDistance)
+	groups := groupSimilar(videos, 10)
+	want := []SimilarGroup{{MaxDistance: 5, Videos: []SimilarVideo{
+		{MediaObjectID: 1, SizeBytes: 100}, {MediaObjectID: 2, SizeBytes: 99}, {MediaObjectID: 3, SizeBytes: 98},
+	}}}
+	if !reflect.DeepEqual(groups, want) {
+		t.Errorf("groups = %+v, want %+v", groups, want)
 	}
 }
 
 func TestGroupSimilar_NineBitsApartAreNotOneCut(t *testing.T) {
-	hashes := []uint64{0, 0x1FF}
-	videos := []SimilarVideo{{MediaObjectID: 1}, {MediaObjectID: 2}}
-	if groups := groupSimilar(videos, hashes, 10); len(groups) != 0 {
+	videos := []hashedVideo{hashed(SimilarVideo{MediaObjectID: 1}, 0), hashed(SimilarVideo{MediaObjectID: 2}, 0x1FF)}
+	if groups := groupSimilar(videos, 10); groups != nil {
 		t.Errorf("groups = %+v, want none", groups)
 	}
 }
 
 func TestGroupSimilar_EpisodesWithTheSameOpeningButOtherLengthsAreNotOneCut(t *testing.T) {
-	hashes := []uint64{0, 0b11}
-	videos := []SimilarVideo{{MediaObjectID: 1, DurationMs: 2_700_000}, {MediaObjectID: 2, DurationMs: 2_640_000}}
-	if groups := groupSimilar(videos, hashes, 10); len(groups) != 0 {
+	videos := []hashedVideo{
+		hashed(SimilarVideo{MediaObjectID: 1, DurationMs: 2_700_000}, 0),
+		hashed(SimilarVideo{MediaObjectID: 2, DurationMs: 2_640_000}, 0b11),
+	}
+	if groups := groupSimilar(videos, 10); groups != nil {
 		t.Errorf("groups = %+v, want none", groups)
 	}
-	videos[1].DurationMs = 2_690_000
-	if groups := groupSimilar(videos, hashes, 10); len(groups) != 1 {
-		t.Errorf("groups = %+v, want the re-encode joined", groups)
+	videos[1].video.DurationMs = 2_690_000
+	want := []SimilarGroup{{MaxDistance: 2, Videos: []SimilarVideo{videos[0].video, videos[1].video}}}
+	if groups := groupSimilar(videos, 10); !reflect.DeepEqual(groups, want) {
+		t.Errorf("groups = %+v, want %+v", groups, want)
+	}
+}
+
+// scene is a grey 32x32 frame: one shared backdrop (the set, the studio) with the shot's own shapes in front of it.
+func scene(shot int64) []byte {
+	frame := make([]byte, 32*32)
+	paint := func(seed int64, blobs int) {
+		random := rand.New(rand.NewSource(seed))
+		for range blobs {
+			cx, cy, radius, level := random.Intn(32), random.Intn(32), 3+random.Intn(8), byte(random.Intn(255))
+			for y := range 32 {
+				for x := range 32 {
+					if (x-cx)*(x-cx)+(y-cy)*(y-cy) < radius*radius {
+						frame[y*32+x] = level
+					}
+				}
+			}
+		}
+	}
+	paint(1000, 12)
+	paint(shot, 4)
+	return frame
+}
+
+func regrade(frame []byte, seed int64) []byte {
+	random := rand.New(rand.NewSource(seed))
+	out := make([]byte, len(frame))
+	for index, value := range frame {
+		out[index] = byte(max(0, min(255, int(value)*9/10+12+random.Intn(7)-3)))
+	}
+	return out
+}
+
+func videoOf(t *testing.T, id, durationMs int64, frames [][]byte) hashedVideo {
+	t.Helper()
+	hash, err := mediatool.HashOfFrames(frames)
+	if err != nil {
+		t.Fatal(err)
+	}
+	video := hashedVideo{video: SimilarVideo{MediaObjectID: id, SizeBytes: 1000 - id, DurationMs: durationMs}, mean: hash.Mean}
+	for _, frame := range hash.Frames {
+		video.frames = append(video.frames, FrameHash{Slot: frame.Slot, Hash: frame.Hash})
+	}
+	return video
+}
+
+// Two episodes of one show: the same set, the same kinds of shots, so the same mean frame, but other shots at each moment.
+func TestGroupSimilar_EpisodesSharingABackdropAreNotOneCutAndAReencodeIs(t *testing.T) {
+	var episode, next, reencode [][]byte
+	for shot := range int64(7) {
+		episode = append(episode, scene(shot))
+		next = append(next, scene((shot+3)%7))
+		reencode = append(reencode, regrade(scene(shot), shot))
+	}
+	reencode[5] = nil
+	first := videoOf(t, 1, 2_700_000, episode)
+	second := videoOf(t, 2, 2_700_000, next)
+	again := videoOf(t, 3, 2_699_000, reencode)
+	if distance := bits.OnesCount64(first.mean ^ second.mean); distance > similarMaxBits {
+		t.Fatalf("the episodes' mean frames are %d bits apart; the case needs them within %d", distance, similarMaxBits)
+	}
+	if groups := groupSimilar([]hashedVideo{first, second}, 10); groups != nil {
+		t.Errorf("two episodes: groups = %+v, want none", groups)
+	}
+	want := []SimilarGroup{{MaxDistance: bits.OnesCount64(first.mean ^ again.mean), Videos: []SimilarVideo{first.video, again.video}}}
+	if groups := groupSimilar([]hashedVideo{first, second, again}, 10); !reflect.DeepEqual(groups, want) {
+		t.Errorf("with a re-encode: groups = %+v, want %+v", groups, want)
+	}
+}
+
+func TestFramesAlike_TwoThirdsOfTheSharedSlotsInOrder(t *testing.T) {
+	frames := func(slots ...int) []FrameHash {
+		var out []FrameHash
+		for _, slot := range slots {
+			out = append(out, FrameHash{Slot: slot, Hash: uint64(slot+1) * 0x9E3779B97F4A7C15})
+		}
+		return out
+	}
+	far := func(list []FrameHash, slots ...int) []FrameHash {
+		out := append([]FrameHash(nil), list...)
+		for index := range out {
+			for _, slot := range slots {
+				if out[index].Slot == slot {
+					out[index].Hash = ^out[index].Hash
+				}
+			}
+		}
+		return out
+	}
+	all := frames(0, 1, 2, 3, 4, 5, 6)
+	for _, test := range []struct {
+		name          string
+		first, second []FrameHash
+		want          bool
+	}{
+		{"identical", all, all, true},
+		{"five of seven", all, far(all, 1, 4), true},
+		{"four of seven", all, far(all, 1, 4, 6), false},
+		{"three of five shared", frames(0, 1, 2, 3, 4, 5), far(frames(1, 2, 3, 4, 5, 6), 2, 5), false},
+		{"four of five shared", frames(0, 1, 2, 3, 4), far(frames(0, 1, 2, 3, 4, 6), 2), true},
+		{"three shared slots", frames(0, 1, 2), frames(0, 1, 2), false},
+		{"other slots", frames(0, 2, 4, 6), frames(1, 3, 5), false},
+		{"one shifted along", all, []FrameHash{{1, all[0].Hash}, {2, all[1].Hash}, {3, all[2].Hash}, {4, all[3].Hash}, {5, all[4].Hash}, {6, all[5].Hash}}, false},
+		{"nothing", nil, nil, false},
+	} {
+		if got := framesAlike(test.first, test.second); got != test.want {
+			t.Errorf("%s: framesAlike = %v, want %v", test.name, got, test.want)
+		}
+	}
+}
+
+func TestFrameHashes_RoundTripAndRefuseATornRecord(t *testing.T) {
+	frames := []FrameHash{{0, 0xFEDCBA9876543210}, {6, 1}}
+	encoded := encodeFrameHashes(frames)
+	if want := []byte{0, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10, 6, 0, 0, 0, 0, 0, 0, 0, 1}; !reflect.DeepEqual(encoded, want) {
+		t.Errorf("encoded = %v, want %v", encoded, want)
+	}
+	decoded, err := decodeFrameHashes(encoded)
+	if err != nil || !reflect.DeepEqual(decoded, frames) {
+		t.Errorf("decoded = %+v, %v; want %+v", decoded, err, frames)
+	}
+	if decoded, err := decodeFrameHashes(nil); err != nil || !reflect.DeepEqual(decoded, []FrameHash{}) {
+		t.Errorf("empty = %+v, %v", decoded, err)
+	}
+	if _, err := decodeFrameHashes(encoded[:10]); err == nil {
+		t.Error("a torn record was accepted")
 	}
 }

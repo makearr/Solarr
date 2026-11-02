@@ -140,35 +140,55 @@ func TestReadTags_LyricsLanguageAgainstRealFFprobe(t *testing.T) {
 	}
 }
 
-// The same synthetic video encoded twice (size and bitrate differ) hashes within a few bits; another picture does not.
+// The same synthetic video encoded twice (size and bitrate differ) hashes within a few bits, mean and frame by frame;
+// another picture does not, and neither does the same footage played backwards, though its mean frame is the same.
 func TestPerceptualHash_AgainstRealFFmpeg(t *testing.T) {
 	requireFFmpeg(t)
 	directory := t.TempDir()
-	encode := func(name, source, size, bitrate string) string {
+	encode := func(name, source, filter, size, bitrate string) string {
 		path := filepath.Join(directory, name)
-		command := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", source,
-			"-t", "10", "-s", size, "-c:v", "mpeg4", "-b:v", bitrate, path)
+		command := exec.CommandContext(t.Context(), "ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-t", "10", "-i", source,
+			"-vf", filter, "-s", size, "-c:v", "mpeg4", "-b:v", bitrate, path)
 		if output, err := command.CombinedOutput(); err != nil {
 			t.Fatalf("encode %s: %v: %s", name, err, output)
 		}
 		return path
 	}
 	tool := mediatool.New(mediatool.ExecRunner{}, 1)
-	hash := func(path string) uint64 {
+	hash := func(path string) mediatool.VideoHash {
 		value, err := tool.PerceptualHash(t.Context(), path)
 		if err != nil {
 			t.Fatalf("PerceptualHash(%s): %v", path, err)
 		}
 		return value
 	}
+	matching := func(a, b mediatool.VideoHash) int {
+		matched := 0
+		for _, first := range a.Frames {
+			for _, second := range b.Frames {
+				if first.Slot == second.Slot && mediatool.PerceptualDistance(first.Hash, second.Hash) <= 10 {
+					matched++
+				}
+			}
+		}
+		return matched
+	}
 	cut := "mandelbrot=size=640x360:rate=10"
-	large := hash(encode("large.mkv", cut, "640x360", "2M"))
-	small := hash(encode("small.mkv", cut, "320x180", "300k"))
-	other := hash(encode("other.mkv", "testsrc2=size=640x360:rate=10:duration=10", "640x360", "2M"))
-	if got := mediatool.PerceptualDistance(large, small); got > 8 {
+	large := hash(encode("large.mkv", cut, "null", "640x360", "2M"))
+	small := hash(encode("small.mkv", cut, "null", "320x180", "300k"))
+	backwards := hash(encode("backwards.mkv", cut, "reverse", "640x360", "2M"))
+	other := hash(encode("other.mkv", "testsrc2=size=640x360:rate=10:duration=10", "null", "640x360", "2M"))
+	if got := mediatool.PerceptualDistance(large.Mean, small.Mean); got > 8 {
 		t.Errorf("same cut, two encodes: %d bits apart, want <= 8", got)
 	}
-	if got := mediatool.PerceptualDistance(large, other); got < 12 {
+	if got := mediatool.PerceptualDistance(large.Mean, other.Mean); got < 12 {
 		t.Errorf("different pictures: %d bits apart, want >= 12", got)
+	}
+	if len(large.Frames) != 7 || matching(large, small) != 7 {
+		t.Errorf("same cut, two encodes: %d of %d frames match, want 7 of 7", matching(large, small), len(large.Frames))
+	}
+	t.Logf("backwards: mean %d bits apart, %d of 7 frames match", mediatool.PerceptualDistance(large.Mean, backwards.Mean), matching(large, backwards))
+	if got := matching(large, backwards); got >= 5 {
+		t.Errorf("the cut played backwards: %d frames match, want fewer than two thirds", got)
 	}
 }

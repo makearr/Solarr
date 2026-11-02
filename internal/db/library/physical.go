@@ -262,11 +262,11 @@ func (p Physical) SetOshash(ctx context.Context, mediaObjectID int64, oshash str
 	return nil
 }
 
-// ListVideoWithoutPhash pages through the video files with no perceptual hash yet, oldest id first.
-func (p Physical) ListVideoWithoutPhash(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
-	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutPhash(ctx, librarydb.ListVideoWithoutPhashParams{AfterID: afterID, PageSize: pageSize})
+// ListVideoWithoutFrameHashes pages through the video files with no per-frame hash yet, oldest id first.
+func (p Physical) ListVideoWithoutFrameHashes(ctx context.Context, afterID int64, pageSize int64) ([]UnmeasuredFile, error) {
+	rows, err := librarydb.New(p.store.Read()).ListVideoWithoutFrameHashes(ctx, librarydb.ListVideoWithoutFrameHashesParams{AfterID: afterID, PageSize: pageSize})
 	if err != nil {
-		return nil, fmt.Errorf("library: list video without phash: %w", err)
+		return nil, fmt.Errorf("library: list video without frame hashes: %w", err)
 	}
 	files := make([]UnmeasuredFile, len(rows))
 	for index, row := range rows {
@@ -275,13 +275,18 @@ func (p Physical) ListVideoWithoutPhash(ctx context.Context, afterID int64, page
 	return files, nil
 }
 
-// SetPhash records a video's perceptual hash; the 64 bits are stored as the signed integer they reinterpret to.
-func (p Physical) SetPhash(ctx context.Context, mediaObjectID int64, phash uint64) error {
+// SetPerceptualHash records a video's mean-frame hash and its per-frame hashes; the 64 bits of the mean are stored
+// as the signed integer they reinterpret to.
+func (p Physical) SetPerceptualHash(ctx context.Context, mediaObjectID int64, mean uint64, frames []FrameHash) error {
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		return librarydb.New(tx).SetPhash(ctx, librarydb.SetPhashParams{Phash: sql.NullInt64{Int64: int64(phash), Valid: true}, ID: mediaObjectID})
+		queries := librarydb.New(tx)
+		if err := queries.SetPhash(ctx, librarydb.SetPhashParams{Phash: sql.NullInt64{Int64: int64(mean), Valid: true}, ID: mediaObjectID}); err != nil {
+			return err
+		}
+		return queries.SetVideoFrameHashes(ctx, librarydb.SetVideoFrameHashesParams{MediaObjectID: mediaObjectID, Frames: encodeFrameHashes(frames)})
 	})
 	if err != nil {
-		return fmt.Errorf("library: set phash %d: %w", mediaObjectID, err)
+		return fmt.Errorf("library: set perceptual hash %d: %w", mediaObjectID, err)
 	}
 	return nil
 }

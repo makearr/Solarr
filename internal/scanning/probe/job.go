@@ -145,7 +145,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 		return err
 	}
 	if hasher, ok := j.tool.(PerceptualHasher); ok {
-		err := j.backfill(ctx, started, phashPass, "phash", j.physical.ListVideoWithoutPhash,
+		err := j.backfill(ctx, started, phashPass, "phash", j.physical.ListVideoWithoutFrameHashes,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
 				return j.perceptualHash(ctx, hasher, file)
 			})
@@ -174,7 +174,7 @@ const (
 
 // PerceptualHasher is the tool's frame hash (ADR-35); a Tool without it leaves video unhashed.
 type PerceptualHasher interface {
-	PerceptualHash(ctx context.Context, path string) (uint64, error)
+	PerceptualHash(ctx context.Context, path string) (mediatool.VideoHash, error)
 }
 
 // backfill hashes the video files a pass still lists (the hash was not written at scan time); a file that cannot
@@ -220,11 +220,15 @@ func (j *Job) perceptualHash(ctx context.Context, hasher PerceptualHasher, file 
 	if !found {
 		return fmt.Errorf("root folder %d is not configured", file.RootFolderID)
 	}
-	phash, err := hasher.PerceptualHash(ctx, path.Join(root.Path, file.RelPath))
+	hash, err := hasher.PerceptualHash(ctx, path.Join(root.Path, file.RelPath))
 	if err != nil {
 		return err
 	}
-	return j.physical.SetPhash(ctx, file.MediaObjectID, phash)
+	frames := make([]library.FrameHash, len(hash.Frames))
+	for index, frame := range hash.Frames {
+		frames[index] = library.FrameHash{Slot: frame.Slot, Hash: frame.Hash}
+	}
+	return j.physical.SetPerceptualHash(ctx, file.MediaObjectID, hash.Mean, frames)
 }
 
 func (j *Job) hashFile(ctx context.Context, file library.UnmeasuredFile) error {

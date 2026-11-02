@@ -2,11 +2,13 @@ package probe_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -319,18 +321,19 @@ type hashingTool struct {
 	failFor string
 }
 
-func (h *hashingTool) PerceptualHash(_ context.Context, path string) (uint64, error) {
+func (h *hashingTool) PerceptualHash(_ context.Context, path string) (mediatool.VideoHash, error) {
 	if filepath.Base(path) == h.failFor {
-		return 0, mediatool.ErrNoFrames
+		return mediatool.VideoHash{}, mediatool.ErrNoFrames
 	}
-	return 0xF0F0F0F0F0F0F0F0, nil
+	return mediatool.VideoHash{Mean: 0xF0F0F0F0F0F0F0F0, Frames: []mediatool.FrameHash{{Slot: 0, Hash: 0x0102030405060708}, {Slot: 3, Hash: 9}}}, nil
 }
 
+// old.mkv was hashed before frames were kept, so it is hashed once more.
 func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T) {
 	opened := newLibrary(t)
 	physical := library.NewPhysical(opened)
 	root := t.TempDir()
-	for _, name := range []string{"a.mkv", "broken.mkv"} {
+	for _, name := range []string{"a.mkv", "broken.mkv", "old.mkv"} {
 		if err := os.WriteFile(filepath.Join(root, name), make([]byte, 100), 0o644); err != nil {
 			t.Fatalf("write fixture file: %v", err)
 		}
@@ -338,9 +341,16 @@ func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T)
 	ids, err := physical.RegisterBatch(t.Context(), 1, []library.PhysicalFile{
 		{RelPath: "a.mkv", SizeBytes: 100, QuickHash: "a", FirstSeenAt: time.Unix(0, 0)},
 		{RelPath: "broken.mkv", SizeBytes: 100, QuickHash: "b", FirstSeenAt: time.Unix(0, 0)},
+		{RelPath: "old.mkv", SizeBytes: 100, QuickHash: "c", FirstSeenAt: time.Unix(0, 0)},
 	})
 	if err != nil {
 		t.Fatalf("RegisterBatch: %v", err)
+	}
+	err = opened.Write(t.Context(), store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		return librarydb.New(tx).SetPhash(ctx, librarydb.SetPhashParams{Phash: sql.NullInt64{Int64: 1, Valid: true}, ID: ids[2].MediaObjectID})
+	})
+	if err != nil {
+		t.Fatalf("SetPhash: %v", err)
 	}
 	job := probe.NewJob(probe.Config{
 		Physical: physical,
@@ -354,15 +364,23 @@ func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T)
 	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	want := uint64(0xF0F0F0F0F0F0F0F0)
-	for index, wantValid := range []bool{true, false} {
-		object, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[index].MediaObjectID)
-		if err != nil {
-			t.Fatalf("GetMediaObject: %v", err)
-		}
-		if object.Phash.Valid != wantValid || (wantValid && uint64(object.Phash.Int64) != want) {
-			t.Errorf("file %d phash = %+v, want valid=%v value %x", index, object.Phash, wantValid, want)
-		}
+	rows, err := librarydb.New(opened.Read()).ListHashedVideos(t.Context())
+	if err != nil {
+		t.Fatalf("ListHashedVideos: %v", err)
+	}
+	frames := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 3, 0, 0, 0, 0, 0, 0, 0, 9}
+	mean := sql.NullInt64{Int64: int64(-0x0F0F0F0F0F0F0F10), Valid: true}
+	second := sql.NullInt64{Int64: 1000, Valid: true}
+	want := []librarydb.ListHashedVideosRow{
+		{ID: ids[0].MediaObjectID, SizeBytes: 100, Phash: mean, DurationMs: second, RootFolderID: 1, RelPath: "a.mkv", Frames: frames},
+		{ID: ids[2].MediaObjectID, SizeBytes: 100, Phash: mean, DurationMs: second, RootFolderID: 1, RelPath: "old.mkv", Frames: frames},
+	}
+	if !reflect.DeepEqual(rows, want) {
+		t.Errorf("hashed videos = %+v, want %+v", rows, want)
+	}
+	broken, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[1].MediaObjectID)
+	if err != nil || broken.Phash.Valid {
+		t.Errorf("broken.mkv phash = %+v, %v; want none", broken.Phash, err)
 	}
 }
 

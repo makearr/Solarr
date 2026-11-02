@@ -792,6 +792,11 @@ type TitleSearch struct {
 	MediaType string
 }
 
+type VideoFrameHash struct {
+	MediaObjectID int64
+	Frames        []byte
+}
+
 type Work struct {
 	ID                 int64
 	MediaType          string

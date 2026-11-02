@@ -85,6 +85,11 @@ language, 3 also a video's picture, subtitle tracks and encoder's CRF (`library.
 before what the probe reads now is found by number (`probe_version < 2` for any file, `< 3` for a video) and read
 once more by the background probe. `media_object.probe_json` is no longer written and goes in a later migration.
 
+`video_frame_hash` keeps a video's perceptual hash per sampled frame (ADR-35): `frames` is 9 bytes per frame, its
+sample slot (0 to 6) then the 64-bit hash big-endian, in slot order, with flat frames left out. `media_object.phash`
+is the hash of the averaged frames and only finds candidates for `library.SimilarVideos`; the frames decide, since the
+average of one show's episodes is near-identical. A video with no row is hashed by the probe sweep's last pass.
+
 `media_object.kind` is what the file is by its extension -- `audio`, `video`, `subtitle`, `image` or `other` -- set
 when the file is registered, from the one table in `internal/platform/filekind` that the scan, the import classifier
 and the TV consumer all read. "A video" above is `kind = 'video'`. Rows registered before the column (migration 0071)
