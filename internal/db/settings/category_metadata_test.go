@@ -225,3 +225,23 @@ func TestMergeCategory_MovesTheFoldersAndRemovesTheLibrary(t *testing.T) {
 		t.Errorf("the folder is attached to %v, want only the target", roots)
 	}
 }
+
+// Google Books answers 429 without a key: it starts off, a person may still switch it on, and that sticks.
+func TestGoogleBooksStartsOffUntilSwitchedOn(t *testing.T) {
+	cache, fake := newCache(t)
+	if got := cache.Snapshot().MusicSourceOrder(0); !slices.Equal(got, []string{"brainzmash", "musicbrainz-proxy", "musicbrainz"}) {
+		t.Fatalf("starting order = %v", got)
+	}
+	if cache.Snapshot().ProviderEnabled(settings.BookSourceGoogleBooks) {
+		t.Error("Google Books is on in a fresh instance")
+	}
+	if !cache.Snapshot().ProviderEnabled(settings.BookSourceOpenLibrary) {
+		t.Error("the default switched another provider off")
+	}
+	if err := cache.SetProviderEnabled(t.Context(), fake, settings.BookSourceGoogleBooks, true); err != nil {
+		t.Fatal(err)
+	}
+	if !cache.Snapshot().ProviderEnabled(settings.BookSourceGoogleBooks) {
+		t.Error("switching it on did not stick")
+	}
+}

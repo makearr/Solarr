@@ -5289,7 +5289,7 @@ export interface components {
             root_folder_id: number;
             library: string;
             path: string;
-            /** @description It reads every folder rather than the changed ones. */
+            /** @description It reads every file; otherwise only what changed, and files_seen counts those. */
             full: boolean;
             /**
              * Format: int64
@@ -5298,7 +5298,7 @@ export interface components {
             files_seen: number;
             /**
              * Format: int64
-             * @description What the last finished scan found; 0 when none has.
+             * @description What the last scan that read everything found; 0 for an incremental scan, or when none has.
              */
             files_expected: number;
             /** Format: date-time */

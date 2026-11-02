@@ -35,7 +35,7 @@ function ScanLine({ scan }: { scan: components["schemas"]["ScanRun"] }) {
       <div className="flex items-baseline justify-between gap-3">
         <span className="min-w-0 truncate" title={scan.path}>{scan.library || scan.path}</span>
         <span className="shrink-0 text-xs tabular-nums text-ink-muted">
-          {share === null ? `${seen} files so far` : `${seen} of about ${expected.toLocaleString()} files`}
+          {share !== null ? `${seen} of about ${expected.toLocaleString()} files` : `${seen} ${scan.full ? "" : "changed "}files so far`}
         </span>
       </div>
       {share !== null && (

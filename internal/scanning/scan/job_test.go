@@ -778,3 +778,19 @@ func TestJob_AResumedSweepOfUnknownStartMarksNothing(t *testing.T) {
 		t.Error("a sweep of unknown start marked a path missing")
 	}
 }
+
+// An incremental scan counts what changed, which must not become the root's size: that is what a full scan's progress reads.
+func TestJob_AnIncrementalSweepKeepsTheRootsSize(t *testing.T) {
+	fixture := newJobFixture(t, "a/01.flac", "b/01.flac")
+	handler := fixture.job(t, scan.IsAudio)
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1, Full: true}); err != nil {
+		t.Fatalf("full: %v", err)
+	}
+	fixture.clock.Advance(time.Hour)
+	if err := fixture.run(t, handler, scan.Payload{RootFolderID: 1}); err != nil {
+		t.Fatalf("incremental: %v", err)
+	}
+	if progress := fixture.progress(t); progress.FilesFound != 2 {
+		t.Errorf("FilesFound = %d, want the full scan's 2", progress.FilesFound)
+	}
+}

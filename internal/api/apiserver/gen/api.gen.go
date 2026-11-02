@@ -4722,13 +4722,13 @@ type SameContentSuggestion struct {
 
 // ScanRun defines model for ScanRun.
 type ScanRun struct {
-	// FilesExpected What the last finished scan found; 0 when none has.
+	// FilesExpected What the last scan that read everything found; 0 for an incremental scan, or when none has.
 	FilesExpected int64 `json:"files_expected"`
 
 	// FilesSeen Files committed so far.
 	FilesSeen int64 `json:"files_seen"`
 
-	// Full It reads every folder rather than the changed ones.
+	// Full It reads every file; otherwise only what changed, and files_seen counts those.
 	Full         bool       `json:"full"`
 	Library      string     `json:"library"`
 	Path         string     `json:"path"`

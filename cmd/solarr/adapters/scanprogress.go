@@ -38,8 +38,12 @@ func (a ScanProgress) RunningScans(ctx context.Context) ([]gen.ScanRun, error) {
 			continue
 		}
 		run := gen.ScanRun{
-			RootFolderId: root.ID, Library: libraries[root.ID], Path: root.Path, Full: state.RunFull,
-			FilesSeen: state.FilesSeen, FilesExpected: state.FilesFound,
+			RootFolderId: root.ID, Library: libraries[root.ID], Path: root.Path, Full: state.RunFull || state.SweptThrough.IsZero(),
+			FilesSeen: state.FilesSeen,
+		}
+		// An incremental scan reads what changed, so the root's size says nothing of how far it has come.
+		if run.Full {
+			run.FilesExpected = state.FilesFound
 		}
 		if !state.RunStartedAt.IsZero() {
 			run.StartedAt = &state.RunStartedAt

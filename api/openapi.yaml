@@ -8234,9 +8234,9 @@ components:
         root_folder_id: { type: integer, format: int64 }
         library: { type: string }
         path: { type: string }
-        full: { type: boolean, description: It reads every folder rather than the changed ones. }
+        full: { type: boolean, description: "It reads every file; otherwise only what changed, and files_seen counts those." }
         files_seen: { type: integer, format: int64, description: Files committed so far. }
-        files_expected: { type: integer, format: int64, description: What the last finished scan found; 0 when none has. }
+        files_expected: { type: integer, format: int64, description: "What the last scan that read everything found; 0 for an incremental scan, or when none has." }
         started_at: { type: string, format: date-time }
 
     MetadataProviderInfo:

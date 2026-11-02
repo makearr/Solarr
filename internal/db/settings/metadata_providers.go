@@ -62,6 +62,9 @@ const (
 // KeyMetadataDisabledProviders lists the providers switched off for every library.
 const KeyMetadataDisabledProviders = "metadata.disabled_providers"
 
+// DefaultDisabledProviders start off: Google Books answers 429 without a key of the owner's own.
+var DefaultDisabledProviders = []string{BookSourceGoogleBooks}
+
 // KeyMetadataMovieSources orders the movie providers: the first to hold a field supplies it, the others fill what is missing.
 const KeyMetadataMovieSources = "metadata.movie_sources"
 
@@ -212,7 +215,7 @@ func (s *Snapshot) ProviderEnabled(key string) bool {
 	if setting, own := switchedBy[key]; own {
 		return s.policyBool(setting, true)
 	}
-	return !slices.Contains(s.policyStringList(KeyMetadataDisabledProviders), key)
+	return !slices.Contains(s.policyStringListOr(KeyMetadataDisabledProviders, DefaultDisabledProviders), key)
 }
 
 // SetProviderEnabled switches a provider on or off for every library; the last music source on stays on, since every music
@@ -228,7 +231,7 @@ func (c *Cache) SetProviderEnabled(ctx context.Context, cl clock.Clock, key stri
 	if setting, own := switchedBy[key]; own {
 		return c.setPolicy(ctx, cl, setting, strconv.FormatBool(enabled))
 	}
-	disabled := slices.DeleteFunc(slices.Clone(c.Snapshot().policyStringList(KeyMetadataDisabledProviders)), func(one string) bool { return one == key })
+	disabled := slices.DeleteFunc(slices.Clone(c.Snapshot().policyStringListOr(KeyMetadataDisabledProviders, DefaultDisabledProviders)), func(one string) bool { return one == key })
 	if !enabled {
 		disabled = append(disabled, key)
 	}

@@ -260,10 +260,15 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 
 	// The watermark is when the whole sweep began: a directory changed behind an earlier run's walk is read next time.
 	sweptThrough := run.StartedAt
+	// Only a sweep that read everything knows the root's size; an incremental one counted what changed.
+	filesFound := progress.FilesFound
+	if readsAll := run.Full || progress.SweptThrough.IsZero(); readsAll {
+		filesFound = run.FilesSeen + int64(result.FilesFound)
+	}
 	finished := library.FinishedScan{
 		SweptThrough:    sweptThrough,
 		FinishedAt:      j.clock.Now(),
-		FilesFound:      run.FilesSeen + int64(result.FilesFound),
+		FilesFound:      filesFound,
 		DirectoriesRead: int64(result.DirectoriesRead),
 	}
 	if err := j.scans.Finish(ctx, root.ID, finished); err != nil {
@@ -271,7 +276,7 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	}
 	j.logger.Info("library scan finished",
 		slog.Int64("root_folder_id", root.ID), slog.String("path", root.Path),
-		slog.Int64("files_found", finished.FilesFound),
+		slog.Int("files_read", result.FilesFound),
 		slog.Int("directories_read", result.DirectoriesRead),
 		slog.Int("directories_visited", result.DirectoriesVisited))
 
