@@ -97,6 +97,14 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
 
 type SimilarGroup = components["schemas"]["SimilarVideoReport"]["groups"][number];
 
+const episodeTokenOf = (path: string) => path.match(/S\d+E\d+/i)?.[0]?.toUpperCase() ?? "";
+
+/** The averaged-frame hash also joins different episodes of one show, so a group is only resolvable when every file names the same episode. */
+const sameEpisode = (group: SimilarGroup) => {
+  const tokens = new Set(group.videos.map((video) => episodeTokenOf(video.path)));
+  return tokens.size === 1 && !tokens.has("");
+};
+
 /** One group of look-alike videos: the largest file is ticked to keep, the others are linked to it (same container) or recycled. */
 function SimilarGroupCard({ group, categoryId }: { group: SimilarGroup; categoryId: number }) {
   const queryClient = useQueryClient();
@@ -142,6 +150,8 @@ function SimilarGroupCard({ group, categoryId }: { group: SimilarGroup; category
             <span key={problem} className="block text-warn">{problem}</span>
           ))}
         </p>
+      ) : !sameEpisode(group) ? (
+        <p className="text-ink-muted">These files name different episodes, so nothing is offered: check them by hand.</p>
       ) : asking ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-ink-muted">
