@@ -40,3 +40,18 @@ func TestTorrentContentHash_IsEmptyForWhatIsNotATorrent(t *testing.T) {
 		t.Errorf("a torrent: %q, want bt: and a 40 character hash", got)
 	}
 }
+
+// A string length near the integer limit is malformed, never a panic: a torrent file is the indexer's.
+func TestInfoHash_AnOverlongStringLengthIsRefused(t *testing.T) {
+	for _, file := range []string{
+		"d9223372036854775807:xe",
+		"d4:infod4:name9223372036854775807:xee",
+	} {
+		if _, err := download.InfoHash([]byte(file)); err == nil {
+			t.Errorf("InfoHash(%q) succeeded", file)
+		}
+		if name := download.TorrentName([]byte(file)); name != "" {
+			t.Errorf("TorrentName(%q) = %q", file, name)
+		}
+	}
+}

@@ -79,7 +79,8 @@ func readString(data []byte, position int) (string, int, error) {
 		colon++
 	}
 	length, err := strconv.Atoi(string(data[position:min(colon, len(data))]))
-	if err != nil || colon >= len(data) || length < 0 || colon+1+length > len(data) {
+	// Compared as what is left, not as colon+1+length: a length near the integer limit would wrap that sum negative.
+	if err != nil || colon >= len(data) || length < 0 || length > len(data)-colon-1 {
 		return "", 0, ErrNoInfoHash
 	}
 	return string(data[colon+1 : colon+1+length]), colon + 1 + length, nil
