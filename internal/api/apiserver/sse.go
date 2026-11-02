@@ -65,6 +65,11 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 	// has enough bytes -- meaning nothing arrives until something else does.
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Subscribed before the 200 is committed: a client that acts the moment the stream opens must not miss what its
+	// action publishes in the window before the subscription would otherwise exist.
+	subscription := s.events.Subscribe(topics, 0)
+	defer subscription.Close()
+
 	// The first flush commits the 200 and proves the connection can stream.
 	if err := controller.Flush(); err != nil {
 		w.Header().Del("Content-Type")
@@ -73,9 +78,6 @@ func (s *Server) StreamEvents(w http.ResponseWriter, r *http.Request, params gen
 			"Internal error", "streaming is not supported on this connection")
 		return
 	}
-
-	subscription := s.events.Subscribe(topics, 0)
-	defer subscription.Close()
 
 	stream := &eventStream{
 		writer:     w,
