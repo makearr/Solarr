@@ -67,6 +67,7 @@ var blockedPrefixes = []struct {
 	{netip.MustParsePrefix("203.0.113.0/24"), ReasonReserved},     // TEST-NET-3
 	{netip.MustParsePrefix("240.0.0.0/4"), ReasonReserved},        // reserved, incl. broadcast
 	{netip.MustParsePrefix("64:ff9b::/96"), ReasonReserved},       // NAT64, a route to IPv4 privates
+	{netip.MustParsePrefix("64:ff9b:1::/48"), ReasonReserved},     // local-use NAT64 (RFC 8215), the same
 	{netip.MustParsePrefix("100::/64"), ReasonUnroutable},         // discard-only
 	{netip.MustParsePrefix("2001:db8::/32"), ReasonReserved},      // documentation
 }
@@ -98,7 +99,32 @@ func ClassifyAddress(address netip.Addr) BlockReason {
 			return blocked.reason
 		}
 	}
+	// An IPv6 address that carries an IPv4 one is judged by what it carries: 6to4 and the deprecated IPv4-compatible
+	// form reach 127.0.0.1 or 10.0.0.1 wherever a host still routes them.
+	if embedded, ok := embeddedIPv4(address); ok {
+		return ClassifyAddress(embedded)
+	}
 	return ""
+}
+
+var (
+	sixToFour      = netip.MustParsePrefix("2002::/16")
+	ipv4Compatible = netip.MustParsePrefix("::/96")
+)
+
+// embeddedIPv4 is the IPv4 address a 6to4 or IPv4-compatible IPv6 address carries.
+func embeddedIPv4(address netip.Addr) (netip.Addr, bool) {
+	if !address.Is6() {
+		return netip.Addr{}, false
+	}
+	raw := address.As16()
+	switch {
+	case sixToFour.Contains(address):
+		return netip.AddrFrom4([4]byte(raw[2:6])), true
+	case ipv4Compatible.Contains(address):
+		return netip.AddrFrom4([4]byte(raw[12:16])), true
+	}
+	return netip.Addr{}, false
 }
 
 // Resolver looks a hostname up. Injected so the guard is testable without DNS.

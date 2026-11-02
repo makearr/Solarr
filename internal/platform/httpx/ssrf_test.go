@@ -61,6 +61,15 @@ func TestClassifyAddress(t *testing.T) {
 		{"64:ff9b::7f00:1", httpx.ReasonReserved},
 		{"2001:db8::1", httpx.ReasonReserved},
 
+		{"64:ff9b:1::a00:1", httpx.ReasonReserved},
+		// 6to4 and IPv4-compatible addresses are judged by the IPv4 address they carry.
+		{"2002:7f00:1::1", httpx.ReasonLoopback},
+		{"2002:a00:1::", httpx.ReasonPrivate},
+		{"2002:a9fe:a9fe::", httpx.ReasonLinkLocal},
+		{"::7f00:1", httpx.ReasonLoopback},
+		{"::a00:1", httpx.ReasonPrivate},
+		{"2002:5db8:d822::1", ""},
+
 		// 172.32/16 is public despite sitting just past the private block.
 		{"172.32.0.1", ""},
 	}
