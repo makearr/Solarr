@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useSearch } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
@@ -19,9 +19,10 @@ const FILTER_KEYS: readonly string[] = ["category_id"];
 
 export function Unidentified() {
   const queryClient = useQueryClient();
-  const { categoryId } = useParams({ strict: false }) as { categoryId?: string };
+  // The library is a search param here, the sidebar's link into this page; no library means the whole queue.
+  const { category_id: categoryId } = useSearch({ strict: false }) as { category_id?: string | number };
   // A type whose providers can be asked again names the schedule that does it; here it runs for this library alone.
-  const canRetry = useMediaType(useLibrary(categoryId ?? "")?.media_type)?.unidentified_retry != null;
+  const canRetry = useMediaType(useLibrary(String(categoryId ?? ""))?.media_type)?.unidentified_retry != null;
   const retry = useMutation({
     mutationFn: () => ok(api.POST("/libraries/{id}/identify-again", { params: { path: { id: Number(categoryId) } } })),
     onSuccess: () => {
