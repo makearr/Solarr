@@ -215,6 +215,9 @@ func partWrite(episode Episode, monitored bool, grace *library.AvailabilityGrace
 		Title: episode.Title, Date: episode.AirDate, MonitoredIfNew: monitored,
 		AvailableConfidence: string(episode.AirConfidence), AvailableBasis: episode.AirBasis,
 	}
+	for _, alt := range episode.AltTitles {
+		part.AltTitles = append(part.AltTitles, library.PartTitleWrite{Language: alt.Language, Title: alt.Title})
+	}
 	if episode.RuntimeMin > 0 {
 		runtime := int64(episode.RuntimeMin) * 60_000
 		part.RuntimeMs = &runtime

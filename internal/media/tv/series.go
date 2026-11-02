@@ -76,7 +76,12 @@ type Episode struct {
 	Special bool
 	// IDs maps provider to that provider's episode id.
 	IDs map[string]int64
+	// AltTitles are the episode's title in other languages, for matching files named in them.
+	AltTitles []AltTitle
 }
+
+// AltTitle is an episode's title in one language (a two-letter code).
+type AltTitle struct{ Language, Title string }
 
 // Key is the (season, number) pair an episode is found by.
 type Key struct{ Season, Number int }

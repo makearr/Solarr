@@ -76,11 +76,19 @@ type fakeTMDB struct {
 	series  tmdb.Series
 	seasons []tmdb.Season
 	hits    []tmdb.Hit
+	// byLanguage is the season SeasonIn answers for a language.
+	byLanguage map[string]tmdb.Season
 }
 
 func (f fakeTMDB) Configured() bool { return true }
 func (f fakeTMDB) Series(context.Context, int64) (tmdb.Series, error) {
 	return f.series, nil
+}
+func (f fakeTMDB) SeasonIn(_ context.Context, _ int64, number int, language string) (tmdb.Season, error) {
+	if season, found := f.byLanguage[language]; found && season.SeasonNumber == number {
+		return season, nil
+	}
+	return tmdb.Season{}, tmdb.ErrNotFound
 }
 func (f fakeTMDB) Season(_ context.Context, _ int64, number int) (tmdb.Season, error) {
 	for _, season := range f.seasons {
@@ -329,5 +337,26 @@ func TestFetch_AsksTheSourcesWithTheirOwnBucketsAtOnce(t *testing.T) {
 	}
 	if seen.most != 2 {
 		t.Errorf("at most %d of TMDB and TVmaze were asked at once, want both", seen.most)
+	}
+}
+
+func TestAltTitlesAreAddedInTheProfilesLanguagesWhenTheAirDatesAgree(t *testing.T) {
+	german := tmdb.Season{SeasonNumber: 1, Episodes: []tmdb.Episode{
+		{SeasonNumber: 1, EpisodeNumber: 1, Name: "Der Pilot", AirDate: "2020-01-05"},
+		{SeasonNumber: 1, EpisodeNumber: 2, Name: "Anderes Datum", AirDate: "2019-12-31"},
+	}}
+	service := tv.Service{
+		TMDB:              fakeTMDB{byLanguage: map[string]tmdb.Season{"de": german}},
+		AltTitleLanguages: func(int64) []string { return []string{"de"} },
+	}
+	series := tv.Series{IDs: tv.IDs{TMDB: 7}, Episodes: []tv.Episode{
+		{Season: 1, Number: 1, Title: "Pilot", AirDate: "2020-01-05"}, {Season: 1, Number: 2, Title: "Two", AirDate: "2020-01-12"},
+	}}
+	service.AddAltTitles(t.Context(), &series, 1, false)
+	if got := series.Episodes[0].AltTitles; len(got) != 1 || got[0] != (tv.AltTitle{Language: "de", Title: "Der Pilot"}) {
+		t.Errorf("episode 1 alt titles = %v, want the German one", got)
+	}
+	if got := series.Episodes[1].AltTitles; len(got) != 0 {
+		t.Errorf("episode 2 alt titles = %v, want none: its air date disagrees", got)
 	}
 }

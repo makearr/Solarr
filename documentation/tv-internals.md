@@ -244,3 +244,7 @@ The season counts are recomputed in the same transaction; the log line "episodes
 A module brings job types through `RegisterJobs` (`media.JobRegistration`), says what its libraries lack through `media.Healthy`
 (the TV module asks for a TMDB key), and renames through `media.Renaming`: the type only names one work's files
 (`NameFiles`); `renamejob.Engine` lists them, finds their companions and plans the move job for every type alike.
+
+## Episode titles in other languages
+
+A series add or refresh asks TMDB for each season in every language of the library's language profile (one call per season and language; a refresh only the newest two seasons) and stores the titles in `work_part_title` (provider `tmdb`), replaced on each refresh. A title is kept only when the episode's air date agrees with the primary one. An unnumbered file named after an episode (ADR-41) matches the primary title or any of these.

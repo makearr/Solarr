@@ -280,6 +280,12 @@ func (c Client) Season(ctx context.Context, seriesID int64, number int) (Season,
 	return season, c.get(ctx, "/tv/"+strconv.FormatInt(seriesID, 10)+"/season/"+strconv.Itoa(number), nil, &season)
 }
 
+// SeasonIn reads one season with its titles in another language (a BCP 47 tag).
+func (c Client) SeasonIn(ctx context.Context, seriesID int64, number int, language string) (Season, error) {
+	c.language = language
+	return c.Season(ctx, seriesID, number)
+}
+
 // Hit is one search or find result.
 type Hit struct {
 	ID               int64    `json:"id"`

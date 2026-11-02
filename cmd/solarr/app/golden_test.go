@@ -328,6 +328,10 @@ func (goldenTMDB) Series(context.Context, int64) (tmdb.Series, error) {
 	return series, nil
 }
 
+func (g goldenTMDB) SeasonIn(ctx context.Context, id int64, number int, _ string) (tmdb.Season, error) {
+	return g.Season(ctx, id, number)
+}
+
 func (goldenTMDB) Season(context.Context, int64, int) (tmdb.Season, error) {
 	return tmdb.Season{SeasonNumber: 1, Name: "Season 1", AirDate: "2020-02-03", Episodes: []tmdb.Episode{{
 		ID: 801, SeasonNumber: 1, EpisodeNumber: 1, Name: "Slack Water", AirDate: "2020-02-03", Runtime: 45,

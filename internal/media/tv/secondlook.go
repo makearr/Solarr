@@ -62,7 +62,7 @@ func (l *secondLook) byTitle(ctx context.Context, relPath string) []library.Part
 		}
 		var found []library.PartKey
 		for _, episode := range episodes {
-			if episodeKey(episode.Title) == key {
+			if episodeTitled(episode, key) {
 				found = append(found, library.PartKey{MediaRef: MediaRef(episode.Season, episode.Number)})
 			}
 		}
@@ -71,6 +71,19 @@ func (l *secondLook) byTitle(ctx context.Context, relPath string) []library.Part
 		}
 	}
 	return nil
+}
+
+// episodeTitled is whether an episode's title, or one it has in another language, normalises to the key.
+func episodeTitled(episode library.SeriesEpisode, key string) bool {
+	if episodeKey(episode.Title) == key {
+		return true
+	}
+	for _, alt := range episode.AltTitles {
+		if episodeKey(alt) == key {
+			return true
+		}
+	}
+	return false
 }
 
 // runsPast is the episode a number past the end of its season counts on to: S01E19 of a first season of 18 is S02E01.
@@ -131,7 +144,7 @@ func titledEpisode(episodes []library.SeriesEpisode, relPath string) (int, []int
 	}
 	var found []library.SeriesEpisode
 	for _, episode := range episodes {
-		if episode.Season > 0 && episodeKey(episode.Title) == title {
+		if episode.Season > 0 && episodeTitled(episode, title) {
 			found = append(found, episode)
 		}
 	}

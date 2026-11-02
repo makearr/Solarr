@@ -154,6 +154,16 @@ WHERE id = sqlc.arg(id) AND COALESCE(json_extract(COALESCE(fields_json, '{}'), '
 SELECT a.part_id, a.alt_ref FROM alt_numbering a JOIN work_part p ON p.id = a.part_id
 WHERE p.work_id = sqlc.arg(work_id) AND a.scheme = sqlc.arg(scheme);
 
+-- A refresh rewrites the alternative titles its provider gave, leaving any other source's.
+-- name: DeleteWorkPartTitlesByProvider :exec
+DELETE FROM work_part_title WHERE part_id = ? AND provider = ?;
+
+-- Every part's alternative titles for a whole work.
+-- name: ListWorkPartTitlesForWork :many
+SELECT t.part_id, t.title, CAST(COALESCE(t.language, '') AS TEXT) AS language
+FROM work_part_title t JOIN work_part p ON p.id = t.part_id
+WHERE p.work_id = ? ORDER BY t.part_id, t.id;
+
 -- name: DeleteWorkFieldByProvider :exec
 DELETE FROM work_field WHERE work_id = ? AND field = ? AND provider = ?;
 

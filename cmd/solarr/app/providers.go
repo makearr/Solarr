@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"time"
 
@@ -306,6 +307,20 @@ func (p *process) tvService() tv.Service {
 					return nil
 				}
 				return snapshot.MetadataSourcesFor(category)
+			},
+			AltTitleLanguages: func(categoryID int64) []string {
+				snapshot := p.cache.Snapshot()
+				category, found := snapshot.Category(categoryID)
+				if !found || category.LanguageProfileID == nil {
+					return nil
+				}
+				profile, found := snapshot.LanguageProfile(*category.LanguageProfileID)
+				if !found {
+					return nil
+				}
+				languages := append(slices.Clone(profile.AudioRequired), profile.AudioPreferred...)
+				slices.Sort(languages)
+				return slices.Compact(languages)
 			},
 			Grace:     p.availabilityGrace,
 			Orderings: p.tvdbShared,

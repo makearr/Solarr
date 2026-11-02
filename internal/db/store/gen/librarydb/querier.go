@@ -290,6 +290,8 @@ type Querier interface {
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
 	DeleteWorkMergeSuggestion(ctx context.Context, workID int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
+	// A refresh rewrites the alternative titles its provider gave, leaving any other source's.
+	DeleteWorkPartTitlesByProvider(ctx context.Context, arg DeleteWorkPartTitlesByProviderParams) error
 	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
 	DeleteWorkReleaseFilters(ctx context.Context, workID int64) error
 	DeleteWorkTags(ctx context.Context, subjectID int64) error
@@ -869,6 +871,8 @@ type Querier interface {
 	ListWorkPartExternalIDs(ctx context.Context, partID int64) ([]WorkPartExternalID, error)
 	ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWorkPartRefsRow, error)
 	ListWorkPartTitles(ctx context.Context, partID int64) ([]WorkPartTitle, error)
+	// Every part's alternative titles for a whole work.
+	ListWorkPartTitlesForWork(ctx context.Context, workID int64) ([]ListWorkPartTitlesForWorkRow, error)
 	// Ordered by the module's sort key. Core never parses media_ref to order parts.
 	ListWorkParts(ctx context.Context, workID int64) ([]WorkPart, error)
 	// One page of a work's parts, in one group (its parts "<group>:..."), or all of them with group ''.

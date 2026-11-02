@@ -105,6 +105,21 @@ func (q *Queries) DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkF
 	return err
 }
 
+const deleteWorkPartTitlesByProvider = `-- name: DeleteWorkPartTitlesByProvider :exec
+DELETE FROM work_part_title WHERE part_id = ? AND provider = ?
+`
+
+type DeleteWorkPartTitlesByProviderParams struct {
+	PartID   int64
+	Provider sql.NullString
+}
+
+// A refresh rewrites the alternative titles its provider gave, leaving any other source's.
+func (q *Queries) DeleteWorkPartTitlesByProvider(ctx context.Context, arg DeleteWorkPartTitlesByProviderParams) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkPartTitlesByProvider, arg.PartID, arg.Provider)
+	return err
+}
+
 const deleteWorkRating = `-- name: DeleteWorkRating :exec
 DELETE FROM work_rating WHERE work_id = ? AND provider = ?
 `
@@ -583,6 +598,42 @@ func (q *Queries) ListWorkPartRefs(ctx context.Context, workID int64) ([]ListWor
 	for rows.Next() {
 		var i ListWorkPartRefsRow
 		if err := rows.Scan(&i.ID, &i.MediaRef); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listWorkPartTitlesForWork = `-- name: ListWorkPartTitlesForWork :many
+SELECT t.part_id, t.title, CAST(COALESCE(t.language, '') AS TEXT) AS language
+FROM work_part_title t JOIN work_part p ON p.id = t.part_id
+WHERE p.work_id = ? ORDER BY t.part_id, t.id
+`
+
+type ListWorkPartTitlesForWorkRow struct {
+	PartID   int64
+	Title    string
+	Language string
+}
+
+// Every part's alternative titles for a whole work.
+func (q *Queries) ListWorkPartTitlesForWork(ctx context.Context, workID int64) ([]ListWorkPartTitlesForWorkRow, error) {
+	rows, err := q.db.QueryContext(ctx, listWorkPartTitlesForWork, workID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListWorkPartTitlesForWorkRow{}
+	for rows.Next() {
+		var i ListWorkPartTitlesForWorkRow
+		if err := rows.Scan(&i.PartID, &i.Title, &i.Language); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

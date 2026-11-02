@@ -66,6 +66,8 @@ type SeriesEpisode struct {
 	// AvailableGrace is how long after its time or date it is waited for.
 	AvailableGrace time.Duration
 	Absolute       string
+	// AltTitles are the episode's titles in other languages.
+	AltTitles []string
 }
 
 // SeriesCreditRow is one person's credit on a series; PartID is the episode of an episode-scoped credit, 0 for the series.
@@ -160,6 +162,14 @@ func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, w
 	for _, alt := range absolutes {
 		absoluteOf[alt.PartID] = alt.AltRef
 	}
+	altTitles, err := queries.ListWorkPartTitlesForWork(ctx, workID)
+	if err != nil {
+		return SeriesDetailRow{}, fmt.Errorf("library: alt titles: %w", err)
+	}
+	altOf := make(map[int64][]string, len(altTitles))
+	for _, alt := range altTitles {
+		altOf[alt.PartID] = append(altOf[alt.PartID], alt.Title)
+	}
 	files, err := r.episodeFiles(ctx, workID)
 	if err != nil {
 		return SeriesDetailRow{}, err
@@ -171,7 +181,7 @@ func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, w
 			PartID: part.ID, Season: season, Number: number, Absolute: absoluteOf[part.ID], Title: part.Title.String, Date: part.Date.String,
 			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
 			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,
-			AvailableGrace: PartGrace(part.AvailableGrace, part.AvailableConfidence),
+			AvailableGrace: PartGrace(part.AvailableGrace, part.AvailableConfidence), AltTitles: altOf[part.ID],
 		})
 	}
 	return detail, nil

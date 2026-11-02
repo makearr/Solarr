@@ -36,7 +36,15 @@ type SeriesPartWrite struct {
 	MonitoredIfNew bool
 	AltNumbers     []AltNumberWrite
 	ExternalIDs    []ExternalIDWrite
+	// AltTitles are the title in other languages; a write replaces what the same provider stored before.
+	AltTitles []PartTitleWrite
 }
+
+// PartTitleWrite is one episode title in one language.
+type PartTitleWrite struct{ Language, Title string }
+
+// altTitleProvider labels the part titles a series refresh writes.
+const altTitleProvider = "tmdb"
 
 // SeriesFieldWrite is one provider's value of a field, kept beside the others for the field-level merge (ADR-8).
 type SeriesFieldWrite struct{ Field, Provider, Value string }
@@ -475,6 +483,19 @@ func upsertSeriesPart(ctx context.Context, queries *librarydb.Queries, workID in
 	for _, alt := range part.AltNumbers {
 		if err := queries.AddAltNumbering(ctx, librarydb.AddAltNumberingParams{PartID: row.ID, Scheme: alt.Scheme, Provider: alt.Provider, AltRef: alt.Ref}); err != nil {
 			return 0, fmt.Errorf("library: alt number %s: %w", part.MediaRef, err)
+		}
+	}
+	if len(part.AltTitles) > 0 {
+		if err := queries.DeleteWorkPartTitlesByProvider(ctx, librarydb.DeleteWorkPartTitlesByProviderParams{PartID: row.ID, Provider: nullString(altTitleProvider)}); err != nil {
+			return 0, fmt.Errorf("library: clear alt titles %s: %w", part.MediaRef, err)
+		}
+	}
+	for _, alt := range part.AltTitles {
+		if _, err := queries.AddWorkPartTitle(ctx, librarydb.AddWorkPartTitleParams{
+			PartID: row.ID, Title: alt.Title, Normalized: strings.ToLower(strings.Join(strings.Fields(alt.Title), " ")),
+			Language: nullString(alt.Language), Provider: nullString(altTitleProvider),
+		}); err != nil {
+			return 0, fmt.Errorf("library: alt title %s: %w", part.MediaRef, err)
 		}
 	}
 	for _, id := range part.ExternalIDs {

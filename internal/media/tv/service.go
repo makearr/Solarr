@@ -49,6 +49,7 @@ type RichSource interface {
 	Configured() bool
 	Series(ctx context.Context, id int64) (tmdb.Series, error)
 	Season(ctx context.Context, seriesID int64, number int) (tmdb.Season, error)
+	SeasonIn(ctx context.Context, seriesID int64, number int, language string) (tmdb.Season, error)
 	FindByTVDB(ctx context.Context, tvdbID int64) (tmdb.Hit, error)
 	FindByIMDb(ctx context.Context, imdbID string) (tmdb.Hit, error)
 	Search(ctx context.Context, term string) ([]tmdb.Hit, error)
@@ -84,6 +85,9 @@ type Service struct {
 	Grace func() library.AvailabilityGrace
 	// IgnoreNewSeasons says a library leaves the seasons a refresh finds unmonitored; nil follows the series.
 	IgnoreNewSeasons func(categoryID int64) bool
+	// AltTitleLanguages are the languages a library's language profile asks for, whose episode titles are stored beside the
+	// primary ones; nil stores none.
+	AltTitleLanguages func(categoryID int64) []string
 	// KindOf answers a library's kind; nil takes none.
 	KindOf func(categoryID int64) string
 	// Orderings lists a series in TheTVDB's other orderings (DVD, absolute, ...); nil offers the aired one only.
@@ -416,6 +420,79 @@ func (s Service) fetchSeasons(ctx context.Context, id int64, numbers []int) []tm
 	return seasons
 }
 
+// addAltTitles gives each episode its TMDB title in the languages the library's profile asks for, one call per season
+// and language; recentOnly asks the newest two seasons, which is all a refresh adds. A failed call only leaves titles out.
+func (s Service) addAltTitles(ctx context.Context, series *Series, categoryID int64, recentOnly bool) {
+	if s.AltTitleLanguages == nil || s.TMDB == nil || !s.TMDB.Configured() || series.IDs.TMDB == 0 {
+		return
+	}
+	languages := s.AltTitleLanguages(categoryID)
+	if len(languages) == 0 {
+		return
+	}
+	newest := 0
+	for _, episode := range series.Episodes {
+		newest = max(newest, episode.Season)
+	}
+	var seasons []int
+	seen := map[int]bool{}
+	for _, episode := range series.Episodes {
+		if seen[episode.Season] || (recentOnly && episode.Season < newest-1) {
+			continue
+		}
+		seen[episode.Season] = true
+		seasons = append(seasons, episode.Season)
+		if len(seasons) == maxCreditSeasons {
+			break
+		}
+	}
+	index := make(map[Key]int, len(series.Episodes))
+	for i, episode := range series.Episodes {
+		index[Key{episode.Season, episode.Number}] = i
+	}
+	type ask struct {
+		season   int
+		language string
+	}
+	var asks []ask
+	for _, season := range seasons {
+		for _, language := range languages {
+			asks = append(asks, ask{season, language})
+		}
+	}
+	answers := make([]*tmdb.Season, len(asks))
+	for _, err := range parallel.Do(ctx, len(asks), seasonWorkers, func(ctx context.Context, i int) error {
+		answer, err := s.TMDB.SeasonIn(ctx, series.IDs.TMDB, asks[i].season, asks[i].language)
+		if err == nil {
+			answers[i] = &answer
+		}
+		return err
+	}) {
+		if err != nil {
+			s.warn("tmdb season titles", series.IDs.TMDB, err)
+		}
+	}
+	for i, answer := range answers {
+		if answer == nil {
+			continue
+		}
+		for _, found := range answer.Episodes {
+			at, held := index[Key{found.SeasonNumber, found.EpisodeNumber}]
+			if !held || found.Name == "" {
+				continue
+			}
+			episode := &series.Episodes[at]
+			// The same slot under another basis is another episode: its air date must agree.
+			if found.AirDate != "" && episode.AirDate != "" && found.AirDate != episode.AirDate {
+				continue
+			}
+			if found.Name != episode.Title && !slices.Contains(episode.AltTitles, AltTitle{asks[i].language, found.Name}) {
+				episode.AltTitles = append(episode.AltTitles, AltTitle{asks[i].language, found.Name})
+			}
+		}
+	}
+}
+
 // guardEpisodeCredits drops an episode credit whose episode aired on another date under the numbering basis, or is
 // missing: a guest star on the wrong episode is worse than none.
 func guardEpisodeCredits(credits []Credit, episodes []Episode) []Credit {
@@ -539,6 +616,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 	if err != nil {
 		return AddResult{}, err
 	}
+	s.addAltTitles(ctx, &series, request.CategoryID, false)
 	now := s.Clock.Now()
 	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Monitor: request.Monitor, Specials: request.Specials, Now: now, Grace: s.grace()}))
 	if err != nil {
@@ -651,6 +729,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	if err != nil {
 		return AddResult{}, err
 	}
+	s.addAltTitles(ctx, &series, request.CategoryID, true)
 	manual, err := s.Reader.ManualFields(ctx, request.WorkID)
 	if err != nil {
 		return AddResult{}, err

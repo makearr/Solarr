@@ -423,3 +423,29 @@ func TestPrunePartsRemovesOnlyWhatNothingHoldsOnTo(t *testing.T) {
 		t.Errorf("emptying a series: err = %v, want ErrPruneTooLarge", err)
 	}
 }
+
+func TestAnEpisodesAltTitlesAreRewrittenByARefreshAndRead(t *testing.T) {
+	opened, queries := newLibrary(t)
+	series := library.NewSeries(opened)
+	write := sampleSeries()
+	write.Parts[0].AltTitles = []library.PartTitleWrite{{Language: "de", Title: "Der Pilot"}}
+	first, err := series.Upsert(t.Context(), seriesAt, write)
+	if err != nil {
+		t.Fatal(err)
+	}
+	write.Parts[0].AltTitles = []library.PartTitleWrite{{Language: "de", Title: "Der Pilot"}, {Language: "fr", Title: "Le Pilote"}}
+	if _, err := series.Upsert(t.Context(), seriesAt.Add(time.Hour), write); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := queries.ListWorkPartTitlesForWork(t.Context(), first.WorkID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, row := range rows {
+		titles = append(titles, row.Language+":"+row.Title)
+	}
+	if want := []string{"de:Der Pilot", "fr:Le Pilote"}; !reflect.DeepEqual(titles, want) {
+		t.Errorf("alt titles = %v, want %v (the refresh replaces, never doubles)", titles, want)
+	}
+}
