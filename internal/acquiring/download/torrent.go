@@ -120,6 +120,9 @@ func TorrentPath(folder, name string) string {
 	if trimmed == "" || name == "" {
 		return trimmed
 	}
+	if !PlainName(name) {
+		return ""
+	}
 	if last := trimmed[strings.LastIndexAny(trimmed, "/\\")+1:]; last == name {
 		return trimmed
 	}
@@ -128,4 +131,18 @@ func TorrentPath(folder, name string) string {
 		separator = "\\"
 	}
 	return trimmed + separator + name
+}
+
+// ContentPath is a torrent's content saved under its name in folder, or nothing when the name is not one plain entry:
+// the name is the torrent's own, from the indexer, and "../other" would point the import at another download.
+func ContentPath(folder, name string) string {
+	if !PlainName(name) {
+		return ""
+	}
+	return strings.TrimRight(folder, "/") + "/" + name
+}
+
+// PlainName says whether a name is one plain entry of a folder: never a path, nor "." or "..".
+func PlainName(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
 }

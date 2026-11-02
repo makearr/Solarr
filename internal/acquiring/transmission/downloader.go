@@ -98,7 +98,7 @@ func (d Downloader) outputPath(torrent Torrent) string {
 	if d.Vuze {
 		return download.TorrentPath(torrent.DownloadDir, torrent.Name)
 	}
-	return strings.TrimRight(torrent.DownloadDir, "/") + "/" + torrent.Name
+	return download.ContentPath(torrent.DownloadDir, torrent.Name)
 }
 
 // Transmission's torrent status numbers.

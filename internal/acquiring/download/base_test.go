@@ -99,6 +99,8 @@ func TestTorrentPath_IsTheFolderOfAMultiFileTorrentAndTheFileOfASingleOne(t *tes
 		{`C:\Downloads`, "track.flac"}:   `C:\Downloads\track.flac`,
 		{`C:\Downloads\Album\`, "Album"}: `C:\Downloads\Album`,
 		{"", "x"}:                        "",
+		{"/downloads", ".."}:             "",
+		{"/downloads", "../other"}:       "",
 	}
 	for input, want := range cases {
 		if got := download.TorrentPath(input[0], input[1]); got != want {
@@ -127,6 +129,22 @@ func TestParseDirectRelease_NeedsAPeerAndFiles(t *testing.T) {
 	for _, bad := range []string{`{"files":[{"path":"x"}]}`, `{"source":"peer","files":[]}`, `<nzb>`} {
 		if _, err := download.ParseDirectRelease([]byte(bad)); !errors.Is(err, download.ErrNotDirectRelease) {
 			t.Errorf("%s: %v, want ErrNotDirectRelease", bad, err)
+		}
+	}
+}
+
+// A torrent's name is the indexer's: one that is not a plain entry gives no path, never one elsewhere.
+func TestContentPath_RefusesANameThatIsAPath(t *testing.T) {
+	cases := map[[2]string]string{
+		{"/downloads/", "Album"}: "/downloads/Album",
+		{"/downloads", ".."}:     "",
+		{"/downloads", "../x"}:   "",
+		{"/downloads", `..\x`}:   "",
+		{"/downloads", ""}:       "",
+	}
+	for input, want := range cases {
+		if got := download.ContentPath(input[0], input[1]); got != want {
+			t.Errorf("ContentPath(%q, %q) = %q, want %q", input[0], input[1], got, want)
 		}
 	}
 }

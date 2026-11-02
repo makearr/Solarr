@@ -65,7 +65,7 @@ func (d Downloader) Downloads(ctx context.Context, _ string) ([]download.Downloa
 		}
 		switch entry.State {
 		case download.StateCompleted:
-			entry.Path = strings.TrimRight(status.Dir, "/") + "/" + entry.Name
+			entry.Path = download.ContentPath(status.Dir, entry.Name)
 		case download.StateFailed:
 			entry.Error = "aria2 reports " + status.ErrorMessage
 		}

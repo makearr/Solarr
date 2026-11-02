@@ -58,7 +58,7 @@ func (t Torrent) reference(request download.AddRequest) string {
 	// a single plain file name ("../..", "a/b") is cleaned like a release name, or removing the download would reach
 	// outside the watch folder.
 	if name := download.TorrentName(request.File); name != "" {
-		if singleComponent(name) {
+		if download.PlainName(name) {
 			return name
 		}
 		if cleaned := cleanName(name); cleaned != "" {
