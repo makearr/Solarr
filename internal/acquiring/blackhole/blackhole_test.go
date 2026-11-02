@@ -137,3 +137,24 @@ func TestProbe_RefusesAMissingFolder(t *testing.T) {
 		t.Errorf("no watch folder: %v, want ErrNoFolder", err)
 	}
 }
+
+// A torrent's name comes from the indexer: one that climbs out of the folder is cleaned into a plain name, and a
+// reference that is not a plain name never deletes anything outside the two folders.
+func TestTorrent_ANameThatClimbsOutIsNeverFollowed(t *testing.T) {
+	base, mem, _ := folders(t)
+	if err := mem.MkdirAll("/library/Album", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, mem, "/library/Album/01.flac", "1")
+	driver := download.NewTorrent(blackhole.Torrent{Folders: base})
+	ref, err := driver.Add(t.Context(), download.AddRequest{Name: "Album", File: clienttest.TorrentFile("../library")})
+	if err != nil || ref != "library" {
+		t.Fatalf("Add = %q, %v", ref, err)
+	}
+	if err := driver.Remove(t.Context(), "../library", true); err == nil {
+		t.Error("Remove of a reference outside the watch folder succeeded")
+	}
+	if _, err := mem.Stat("/library/Album/01.flac"); err != nil {
+		t.Errorf("a file outside the blackhole's folders was deleted: %v", err)
+	}
+}

@@ -10,6 +10,7 @@ import (
 	"io"
 	"io/fs"
 	"path"
+	"slices"
 	"strings"
 	"time"
 
@@ -42,6 +43,11 @@ func cleanName(name string) string {
 		return r
 	}, name)
 	return strings.Trim(strings.TrimSpace(cleaned), ".")
+}
+
+// singleComponent says whether a name is one plain entry of a folder: never a path, nor "." or "..".
+func singleComponent(name string) bool {
+	return name != "" && name != "." && name != ".." && !strings.ContainsAny(name, "/\\\x00")
 }
 
 // write puts one file into the drop folder whole, never half-written where the watching program could see it.
@@ -139,6 +145,13 @@ func (f Folders) downloads(ref func(entry) string) ([]download.Download, error) 
 func (f Folders) remove(watchNames, dropNames []string, deleteFiles bool) error {
 	if !deleteFiles {
 		return download.ErrNotSupported
+	}
+	// A name is a download's reference, stored and handed back by the caller: one that is not a plain entry of its
+	// folder is refused before anything is deleted, so no reference can reach outside the two folders.
+	for _, name := range append(slices.Clone(dropNames), watchNames...) {
+		if !singleComponent(name) {
+			return fmt.Errorf("blackhole: %q is not a download in its folder", name)
+		}
 	}
 	for _, name := range dropNames {
 		if err := removeAll(f.FS, path.Join(f.Drop, name)); err != nil {

@@ -54,8 +54,16 @@ func (t Torrent) AddMagnet(_ context.Context, _, magnet string, request download
 }
 
 func (t Torrent) reference(request download.AddRequest) string {
+	// The torrent's own name is what the client saves its content under, but it comes from the indexer: one that is not
+	// a single plain file name ("../..", "a/b") is cleaned like a release name, or removing the download would reach
+	// outside the watch folder.
 	if name := download.TorrentName(request.File); name != "" {
-		return name
+		if singleComponent(name) {
+			return name
+		}
+		if cleaned := cleanName(name); cleaned != "" {
+			return cleaned
+		}
 	}
 	return cleanName(request.Name)
 }
