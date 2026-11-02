@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
@@ -149,9 +151,13 @@ func (a People) GetPersonDetail(ctx context.Context, id int64, visible []int64) 
 		for i, fact := range extras.Facts {
 			facts[i] = gen.PersonFact{Label: fact.Label, Value: fact.Value}
 		}
-		links := make([]gen.PersonWebLink, len(extras.Links))
-		for i, link := range extras.Links {
-			links[i] = gen.PersonWebLink{Label: link.Label, Url: link.URL}
+		links := make([]gen.PersonWebLink, 0, len(extras.Links))
+		for _, link := range extras.Links {
+			// The addresses come from community-edited databases and become a link in the page: only a web address
+			// may, never a javascript: or data: one.
+			if webAddress(link.URL) {
+				links = append(links, gen.PersonWebLink{Label: link.Label, Url: link.URL})
+			}
 		}
 		view.Facts, view.Links, view.Images = &facts, &links, &extras.Images
 	}
@@ -331,4 +337,14 @@ func attributesView(in library.PersonAttributes) *gen.PersonAttributes {
 		view.Status = &status
 	}
 	return &view
+}
+
+// webAddress says whether a provider's address is an absolute http or https one, the only kind the page may link to.
+func webAddress(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	scheme := strings.ToLower(parsed.Scheme)
+	return scheme == "http" || scheme == "https"
 }
