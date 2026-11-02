@@ -16,7 +16,6 @@ const (
 	providerWikipedia      = "wikipedia"
 	providerWikimediaImage = "wikimedia-image"
 	providerTheAudioDB     = "theaudiodb"
-	providerArr            = "arr"
 	providerProwlarr       = "prowlarr"
 	providerPublicIP       = "public-ip"
 	providerImages         = "images"
@@ -43,6 +42,8 @@ const (
 	// Each indexer and each download client connection has a bucket of its own, named by its id.
 	providerIndexerPrefix    = "indexer:"
 	providerDownloaderPrefix = "downloader:"
+	// Each *Arr instance has its own bucket, named by its host, so one instance being down pauses no other.
+	providerArrPrefix = "arr:"
 )
 
 // providerLimits is every provider's pace, declared once (ADR-13): the metadata providers' in settings.MetadataProviders,
@@ -50,8 +51,6 @@ const (
 var providerLimits = withMetadataPaces(map[string]httpx.Limits{
 	// Wikipedia's REST API allows 200/s.
 	providerWikipedia: {MinInterval: 100 * time.Millisecond},
-	// Someone's own *Arr server, often busy with its own imports.
-	providerArr: {MinInterval: 500 * time.Millisecond},
 	// A wall of posters must not starve the metadata calls.
 	providerImages: {MinInterval: 100 * time.Millisecond},
 })
@@ -106,6 +105,8 @@ func (p *process) livePace(bucket string) (time.Duration, bool) {
 var providerFamilyLimits = map[string]httpx.Limits{
 	providerIndexerPrefix:    {MinInterval: 500 * time.Millisecond},
 	providerDownloaderPrefix: {MinInterval: 200 * time.Millisecond},
+	// Someone's own *Arr server, often busy with its own imports.
+	providerArrPrefix: {MinInterval: 500 * time.Millisecond},
 }
 
 // outbound is the process's one rate-limit registry and one circuit breaker (ADR-13). A limiter built anywhere
@@ -135,7 +136,7 @@ func (p *process) providerClient(provider string, guard *httpx.Guard, config htt
 	}
 	config.Provider = provider
 	config.RejectedKeyOpens = !strings.HasPrefix(provider, providerIndexerPrefix) && !strings.HasPrefix(provider, providerDownloaderPrefix) &&
-		provider != providerProwlarr && provider != providerArr && provider != providerWhisparr
+		!strings.HasPrefix(provider, providerArrPrefix) && provider != providerProwlarr && provider != providerWhisparr
 	_, metadata := settings.MetadataProviderByKey(provider)
 	config.RetryTransient = metadata && provider != providerWhisparr
 	if config.UserAgent == "" && config.LiveUserAgent == nil {

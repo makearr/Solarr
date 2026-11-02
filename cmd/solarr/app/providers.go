@@ -147,14 +147,9 @@ func (p *process) musicBrainzSources(sources config.MusicBrainzConfig) []musicbr
 	return append(ordered, musicbrainz.NewDirect(direct, sources.BaseURL))
 }
 
-// arrClientFactory builds adapters.LidarrClientFactory: one shared rate-
-// limit/breaker bucket across every *Arr instance sync (todo 4.13) -- these
-// are rare, admin-triggered, one-at-a-time operations, not a high-frequency
-// provider like MusicBrainz, so one shared "arr" bucket is enough rather
-// than one per instance. Deliberately gentle (2 req/s, a 60s per-request
-// timeout well above httpx's own 30s default): the *Arr instance on the
-// other end is someone's own real server, often also busy with its own
-// imports, not infrastructure this project operates.
+// arrClientFactory builds adapters.LidarrClientFactory: one rate-limit/breaker bucket per *Arr instance (named by its
+// host), deliberately gentle (2 req/s, a timeout well above httpx's 30s default): the instance on the other end is
+// someone's own real server, often busy with its own imports.
 //
 // The guard is built fresh per call, allowing baseURL's own host -- an
 // *Arr instance lives on the LAN or a Docker network in almost every real
@@ -170,9 +165,18 @@ const arrRequestTimeout = 20 * time.Minute
 
 func (p *process) arrClientFactory() adapters.LidarrClientFactory {
 	return func(baseURL, apiKey string) arrimport.LidarrClient {
-		client := p.providerClient(providerArr, connectionGuard(baseURL), httpx.ClientConfig{Timeout: arrRequestTimeout})
+		client := p.providerClient(providerArrPrefix+arrHost(baseURL), connectionGuard(baseURL), httpx.ClientConfig{Timeout: arrRequestTimeout})
 		return arrimport.NewLidarrClient(client, baseURL, apiKey)
 	}
+}
+
+// arrHost names an instance's bucket; an unparsable address shares one bucket rather than failing the call.
+func arrHost(baseURL string) string {
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Host == "" {
+		return "unknown"
+	}
+	return parsed.Host
 }
 
 // listProwlarr reads a Prowlarr's indexer list; the guard admits Prowlarr's own host, as for an indexer.
