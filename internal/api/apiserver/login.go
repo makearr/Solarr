@@ -145,9 +145,23 @@ func (s *Server) sessionCookie(value string, maxAge int, r *http.Request) *http.
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		// Secure only over TLS: a self-hosted instance on plain HTTP inside a
-		// LAN would otherwise silently fail to log in.
-		Secure: r.TLS != nil,
+		// LAN would otherwise silently fail to log in. TLS ended at a trusted
+		// reverse proxy counts, or the cookie would never be Secure there.
+		Secure: s.overTLS(r),
 		// Zero omits Max-Age entirely, making it a session cookie; -1 expires it.
 		MaxAge: maxAge,
 	}
+}
+
+// overTLS says whether the browser reached this instance over TLS: directly, or through a trusted reverse proxy that
+// says so. The header is believed only from a proxy, as X-Forwarded-For is.
+func (s *Server) overTLS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	if !s.fromTrustedNetwork(r.RemoteAddr) {
+		return false
+	}
+	proto, _, _ := strings.Cut(r.Header.Get("X-Forwarded-Proto"), ",")
+	return strings.EqualFold(strings.TrimSpace(proto), "https")
 }

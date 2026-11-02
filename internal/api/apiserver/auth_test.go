@@ -693,3 +693,25 @@ func TestAuth_LoginAcceptsAPasswordSealedInTheBrowser(t *testing.T) {
 		t.Errorf("sealed, tampered, plain = %v; want 200 400 200", got)
 	}
 }
+
+// TLS ended at a trusted reverse proxy makes the session cookie Secure; the same header from anyone else does not.
+func TestAuth_TheSessionCookieIsSecureBehindATrustedTLSProxy(t *testing.T) {
+	fixture := newAuthFixture(t, apiserver.AuthLocal, netip.MustParsePrefix("10.0.0.0/8"))
+	for _, tc := range []struct {
+		remote string
+		secure bool
+	}{{"10.0.0.2:4000", true}, {"192.168.1.9:4000", false}} {
+		body, _ := json.Marshal(map[string]string{"username": "avs", "password": testPassword})
+		request := httptest.NewRequest(http.MethodPost, "/api/v1/auth/login", bytes.NewReader(body))
+		request.RemoteAddr = tc.remote
+		request.Header.Set("X-Forwarded-Proto", "https")
+		response := fixture.do(t, request)
+		cookies := response.Result().Cookies()
+		if response.Code != http.StatusOK || len(cookies) == 0 {
+			t.Fatalf("%s: login = %d", tc.remote, response.Code)
+		}
+		if cookies[0].Secure != tc.secure {
+			t.Errorf("%s: Secure = %v, want %v", tc.remote, cookies[0].Secure, tc.secure)
+		}
+	}
+}
