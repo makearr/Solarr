@@ -95,7 +95,73 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
   );
 }
 
-/** Videos that look like one cut in several encodes, by perceptual hash. Read only: which file to keep is the user's call. */
+type SimilarGroup = components["schemas"]["SimilarVideoReport"]["groups"][number];
+
+/** One group of look-alike videos: the largest file is ticked to keep, the others are linked to it (same container) or recycled. */
+function SimilarGroupCard({ group, categoryId }: { group: SimilarGroup; categoryId: number }) {
+  const queryClient = useQueryClient();
+  const largest = group.videos.reduce((best, video, index) => (video.size_bytes > (group.videos[best]?.size_bytes ?? 0) ? index : best), 0);
+  const [keepIndex, setKeepIndex] = useState(largest);
+  const [asking, setAsking] = useState(false);
+  const keep = group.videos[keepIndex] ?? group.videos[0];
+  const others = group.videos.filter((_, index) => index !== keepIndex);
+  const apply = useMutation({
+    mutationFn: () => ok(api.POST("/categories/{id}/duplicates/resolve", {
+      params: { path: { id: categoryId } },
+      body: {
+        keep_media_object_id: keep?.media_object_id ?? 0,
+        drop: others.map((video) => ({
+          media_object_id: video.media_object_id,
+          action: (extensionOf(video.path) === extensionOf(keep?.path ?? "") ? "link" : "recycle") as Action,
+        })),
+      },
+    })),
+    onSuccess: () => {
+      setAsking(false);
+      void queryClient.invalidateQueries({ queryKey: ["similar-videos", categoryId] });
+    },
+  });
+  const done = apply.data;
+  return (
+    <li className="flex flex-col gap-1 text-xs">
+      <span className="text-ink-muted">
+        {group.videos.length} files, at most {group.max_distance} of 64 bits apart
+      </span>
+      {group.videos.map((video, index) => (
+        <label key={video.media_object_id} className="flex items-start gap-1.5">
+          <input type="radio" name={`similar-${group.videos[0]?.media_object_id}`} checked={index === keepIndex} onChange={() => setKeepIndex(index)} />
+          <span className="break-all font-mono">
+            {video.path} <span className="text-ink-muted">({formatBytes(video.size_bytes)})</span>
+          </span>
+        </label>
+      ))}
+      {done ? (
+        <p className="text-ok">
+          Done: {done.linked} linked, {done.recycled} recycled.
+          {done.problems.map((problem) => (
+            <span key={problem} className="block text-warn">{problem}</span>
+          ))}
+        </p>
+      ) : asking ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-ink-muted">
+            Keep the ticked file; the other {others.length} become links to it where the container matches, else go to the recycle bin
+            (restorable for 7 days).
+          </span>
+          <Button onClick={() => apply.mutate()} disabled={apply.isPending}>Confirm</Button>
+          <Button onClick={() => setAsking(false)}>Cancel</Button>
+        </div>
+      ) : (
+        <div>
+          <Button onClick={() => setAsking(true)}>Keep the ticked file</Button>
+        </div>
+      )}
+      {apply.isError && <p className="text-warn">The resolution failed; nothing was changed.</p>}
+    </li>
+  );
+}
+
+/** Videos that look like one cut in several encodes, by perceptual hash. Which file to keep is the user's call. */
 function SimilarVideos({ categoryId }: { categoryId: number }) {
   const report = useQuery({
     queryKey: ["similar-videos", categoryId],
@@ -112,16 +178,7 @@ function SimilarVideos({ categoryId }: { categoryId: number }) {
       </p>
       <ul className="flex flex-col gap-3">
         {data.groups.map((group) => (
-          <li key={group.videos.map((video) => video.media_object_id).join("-")} className="flex flex-col gap-1 text-xs">
-            <span className="text-ink-muted">
-              {group.videos.length} files, at most {group.max_distance} of 64 bits apart
-            </span>
-            {group.videos.map((video) => (
-              <span key={video.media_object_id} className="break-all font-mono">
-                {video.path} <span className="text-ink-muted">({formatBytes(video.size_bytes)})</span>
-              </span>
-            ))}
-          </li>
+          <SimilarGroupCard key={group.videos.map((video) => video.media_object_id).join("-")} group={group} categoryId={categoryId} />
         ))}
       </ul>
     </section>
