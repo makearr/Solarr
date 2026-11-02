@@ -225,6 +225,7 @@ func (s *Server) routeStreamFile(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, s.logger, http.StatusNotFound, TypeNotFound, "Not found", "the file is not on disk")
 		return
 	}
+	s.clearWriteDeadline(w)
 	w.Header().Set("Cache-Control", "private, no-store")
 	http.ServeContent(w, r, filepath.Base(file.AbsolutePath), info.ModTime, opened)
 }
@@ -262,6 +263,7 @@ func (s *Server) routeTranscodeFile(w http.ResponseWriter, r *http.Request) {
 		Accel: resolution.Accel, Device: resolution.Device, MaxHeight: height, VideoKbps: kbps,
 	}
 
+	s.clearWriteDeadline(w)
 	w.Header().Set("Content-Type", spec.ContentType())
 	w.Header().Set("Cache-Control", "private, no-store")
 	w.Header().Set("X-Accel-Buffering", "no")
@@ -319,6 +321,14 @@ func parseStart(raw string) (float64, error) {
 		return 0, errors.New("bad start")
 	}
 	return start, nil
+}
+
+// clearWriteDeadline lifts the server's WriteTimeout for a response that plays for as long as the media does: a film
+// streamed or converted to a browser that reads it at playback speed would otherwise be cut off after a minute.
+func (s *Server) clearWriteDeadline(w http.ResponseWriter) {
+	if err := http.NewResponseController(w).SetWriteDeadline(time.Time{}); err != nil {
+		s.logger.Debug("could not clear the write deadline for a media stream", "error", err)
+	}
 }
 
 // flushWriter pushes every chunk out at once: a transcode is a live stream, not a body that is ready.
