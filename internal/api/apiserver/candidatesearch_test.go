@@ -6,10 +6,13 @@ import (
 	"net/http"
 	"reflect"
 	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/identify/model"
 )
 
 // fakeCandidateSearcher serves apiserver.CandidateSearcher over canned
@@ -491,5 +494,20 @@ func TestSearchCategory_CutoffUnmetSearchesTheUpgrades(t *testing.T) {
 	}
 	if fixture.candidateSearcher.cutoffCategory != music.ID {
 		t.Errorf("cutoff search asked for category %d, want %d", fixture.candidateSearcher.cutoffCategory, music.ID)
+	}
+}
+
+func TestListWorkCandidates_AnswersWhenADeferralIsActedOn(t *testing.T) {
+	fixture, cookies := searchableWorkFixture(t, settings.PermissionManage)
+	fixture.candidateSearcher.candidates = []apiserver.CandidateDecision{
+		{ID: 1, Outcome: "DEFER", Title: "held", Deferrals: []model.Deferral{
+			{Reason: "protocol-delay", RetryAfter: time.Date(2026, 11, 3, 13, 0, 0, 0, time.UTC)},
+			{Reason: "unmeasured:bitrate"},
+		}},
+	}
+	recorder := fixture.do(authedGet(t, cookies, "/api/v1/works/42/candidates"))
+	body := recorder.Body.String()
+	if !strings.Contains(body, `"retry_after":"2026-11-03T13:00:00Z"`) || strings.Count(body, "retry_after") != 1 {
+		t.Errorf("body = %s, want retry_after on the delay alone", body)
 	}
 }

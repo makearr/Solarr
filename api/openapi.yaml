@@ -12346,6 +12346,7 @@ components:
       required: [reason]
       properties:
         reason: { type: string }
+        retry_after: { type: string, format: date-time, description: When it is acted on, if it is only a matter of waiting. }
 
     Decision:
       type: object

@@ -29,3 +29,12 @@ function topReasons(reasons: readonly string[]): string {
     .map(([reason, count]) => `${reason} ×${count}`)
     .join(", ");
 }
+
+/** A deferral in words: what is being waited for, and until when where that is known. */
+export function describeDeferral(deferral: components["schemas"]["Deferral"], now: number = Date.now()): string {
+  const until = deferral.retry_after ? Date.parse(deferral.retry_after) : NaN;
+  const when = Number.isNaN(until) ? "" : until > now ? ` Acted on from ${new Date(until).toLocaleString()}.` : " Acted on at the next search.";
+  if (deferral.reason === "protocol-delay") return `Waiting for the preferred protocol to have its turn.${when}`;
+  if (deferral.reason.startsWith("unmeasured:")) return `The ${deferral.reason.slice("unmeasured:".length)} of this release is not measured yet.${when}`;
+  return `${deferral.reason}.${when}`;
+}

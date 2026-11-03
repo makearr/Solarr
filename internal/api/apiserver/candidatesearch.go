@@ -501,6 +501,10 @@ func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
 	deferrals := make([]gen.Deferral, len(decision.Deferrals))
 	for index, deferral := range decision.Deferrals {
 		deferrals[index] = gen.Deferral{Reason: deferral.Reason}
+		if !deferral.RetryAfter.IsZero() {
+			retryAfter := deferral.RetryAfter
+			deferrals[index].RetryAfter = &retryAfter
+		}
 	}
 
 	view := gen.CandidateDecision{

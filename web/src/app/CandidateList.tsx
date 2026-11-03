@@ -1,6 +1,6 @@
 import type { components } from "@/api/schema";
 
-import { candidateSummary } from "./candidateSummary";
+import { candidateSummary, describeDeferral } from "./candidateSummary";
 
 type CandidateDecision = components["schemas"]["CandidateDecision"];
 
@@ -106,7 +106,7 @@ export function CandidateList({
           {decision.deferrals.length > 0 && (
             <ul className="text-xs text-warn">
               {decision.deferrals.map((deferral, index) => (
-                <li key={index}>{deferral.reason}</li>
+                <li key={index}>{describeDeferral(deferral)}</li>
               ))}
             </ul>
           )}

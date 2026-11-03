@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 
 import type { components } from "@/api/schema";
 
-import { candidateSummary } from "./candidateSummary";
+import { candidateSummary, describeDeferral } from "./candidateSummary";
 
 type Decision = components["schemas"]["CandidateDecision"];
 
@@ -36,4 +36,13 @@ test("deferred releases give their reasons", () => {
   expect(candidateSummary([decision({ outcome: "DEFER", deferrals: [{ reason: "too new" }] as Decision["deferrals"] })])).toBe(
     "1 release found; 1 deferred (too new ×1).",
   );
+});
+
+test("a deferral says what it waits for and until when", () => {
+  const now = Date.parse("2026-11-03T12:00:00Z");
+  expect(describeDeferral({ reason: "protocol-delay", retry_after: "2026-11-03T11:00:00Z" }, now)).toBe(
+    "Waiting for the preferred protocol to have its turn. Acted on at the next search.",
+  );
+  expect(describeDeferral({ reason: "unmeasured:bitrate" }, now)).toBe("The bitrate of this release is not measured yet.");
+  expect(describeDeferral({ reason: "protocol-delay", retry_after: "2026-11-03T13:00:00Z" }, now)).toContain("Acted on from ");
 });

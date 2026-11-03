@@ -1991,6 +1991,9 @@ type DecisionOutcome string
 // Deferral A reason this candidate is not actionable yet.
 type Deferral struct {
 	Reason string `json:"reason"`
+
+	// RetryAfter When it is acted on
+	RetryAfter *time.Time `json:"retry_after,omitempty"`
 }
 
 // DownloadFolder One upstream-download destination (todo 4.18). Watched: each entry is imported once it has settled, once only.

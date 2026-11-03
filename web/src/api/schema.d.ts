@@ -8675,6 +8675,11 @@ export interface components {
         /** @description A reason this candidate is not actionable yet. */
         Deferral: {
             reason: string;
+            /**
+             * Format: date-time
+             * @description When it is acted on
+             */
+            retry_after?: string;
         };
         /** @description ADR-10: reasons are the result, never a side channel. score is derived from components, never computed separately, so the explanation and the decision cannot drift apart. */
         Decision: {
