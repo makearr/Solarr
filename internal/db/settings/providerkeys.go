@@ -3,6 +3,7 @@ package settings
 import (
 	"context"
 	"fmt"
+	"slices"
 
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/secrets"
@@ -35,6 +36,16 @@ var providerKeySettings = map[string]string{
 func ProviderKeySetting(provider string) (string, bool) {
 	setting, has := providerKeySettings[provider]
 	return setting, has
+}
+
+// ProviderKeyProviders lists every provider that takes a key, in name order.
+func ProviderKeyProviders() []string {
+	providers := make([]string, 0, len(providerKeySettings))
+	for provider := range providerKeySettings {
+		providers = append(providers, provider)
+	}
+	slices.Sort(providers)
+	return providers
 }
 
 // ProviderKeyStored reports whether the owner's key for a provider is stored, without opening it.

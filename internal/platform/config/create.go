@@ -103,9 +103,11 @@ const template = `# Solarr bootstrap configuration.
 #
 # Every setting can also be given as an environment variable:
 #   server.port  ->  SOLARR_SERVER_PORT
-# The five directories additionally accept the short forms SOLARR_CONFIG_DIR,
-# SOLARR_DATA_DIR, SOLARR_DB_DIR, SOLARR_CACHE_DIR and
-# SOLARR_BACKUP_DIR.
+# Short forms exist for the common ones: SOLARR_PORT, SOLARR_LOG_LEVEL and the
+# five directories SOLARR_CONFIG_DIR, SOLARR_DATA_DIR, SOLARR_DB_DIR,
+# SOLARR_CACHE_DIR and SOLARR_BACKUP_DIR. Append _FILE to read a value from a
+# file. A variable that is set wins over this file; the full list is in
+# documentation/environment-variables.md.
 #
 # Run 'solarr config check' to validate this file without starting up.
 

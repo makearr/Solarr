@@ -12,14 +12,21 @@ import (
 // EnvPrefix namespaces every override.
 const EnvPrefix = "SOLARR_"
 
-// pathAliases are the short environment variable names §14 documents for the directory
-// settings, because those are the ones a Docker deployment actually sets.
-var pathAliases = map[string]string{
-	"SOLARR_CONFIG_DIR": "paths.config_dir",
-	"SOLARR_DATA_DIR":   "paths.data_dir",
-	"SOLARR_DB_DIR":     "paths.db_dir",
-	"SOLARR_CACHE_DIR":  "paths.cache_dir",
-	"SOLARR_BACKUP_DIR": "paths.backup_dir",
+// envAliases are the short environment variable names a Docker deployment actually sets, each
+// accepted beside the generated SOLARR_<SECTION>_<KEY> name (documentation/environment-variables.md).
+var envAliases = map[string]string{
+	"SOLARR_CONFIG_DIR":     "paths.config_dir",
+	"SOLARR_DATA_DIR":       "paths.data_dir",
+	"SOLARR_DB_DIR":         "paths.db_dir",
+	"SOLARR_CACHE_DIR":      "paths.cache_dir",
+	"SOLARR_BACKUP_DIR":     "paths.backup_dir",
+	"SOLARR_PORT":           "server.port",
+	"SOLARR_BIND":           "server.bind",
+	"SOLARR_BASE_URL":       "server.base_url",
+	"SOLARR_LOG_LEVEL":      "logging.level",
+	"SOLARR_LOG_FORMAT":     "logging.format",
+	"SOLARR_AUTH_MODE":      "security.auth_mode",
+	"SOLARR_ENCRYPTION_KEY": "security.encryption_key",
 }
 
 // EnvName returns the generated variable name for a dotted setting path.
@@ -86,12 +93,25 @@ func setField(field reflect.Value, value string) error {
 }
 
 func aliasFor(path string) string {
-	for name, aliased := range pathAliases {
+	for name, aliased := range envAliases {
 		if aliased == path {
 			return name
 		}
 	}
 	return ""
+}
+
+// EnvSet reports whether the environment overrides a setting, under either of its names.
+func EnvSet(path string, lookup Lookup) bool {
+	if _, found := lookup(EnvName(path)); found {
+		return true
+	}
+	alias := aliasFor(path)
+	if alias == "" {
+		return false
+	}
+	_, found := lookup(alias)
+	return found
 }
 
 // schemaLeaf is one settable field: its dotted path and how to reach it.

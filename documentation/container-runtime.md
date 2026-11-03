@@ -1,5 +1,7 @@
 # Container runtime
 
+Environment variables beyond these are listed in [environment-variables.md](environment-variables.md).
+
 How the image decides who it runs as, what it owns, and what it refuses to touch.
 
 ## PUID and PGID
@@ -72,7 +74,7 @@ The default port is **5454** (`EXPOSE 5454`, `docker-compose.yml` maps `5454:545
 
 Resolution order, applied at startup and reported in the startup banner:
 
-1. `SOLARR_SERVER_PORT` — always wins. This is the recovery path out of a bad setting
+1. `SOLARR_PORT` (or `SOLARR_SERVER_PORT`) — always wins, and is written into the Network policy at start. This is the recovery path out of a bad setting
    written from the interface: if a value written from the Network screen locks the port to
    something unreachable, set this and restart.
 2. `settings.db`'s own policy — what the Network screen writes. Changing it there needs a

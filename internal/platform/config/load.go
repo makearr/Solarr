@@ -82,8 +82,12 @@ func Load(fsys fsx.FS, path string) (Config, error) {
 	if int64(len(data)) > MaxDocumentBytes {
 		return Default(), fmt.Errorf("config: %s exceeds the %d byte limit", path, MaxDocumentBytes)
 	}
-	return ParseWithEnv(data, os.LookupEnv)
+	lookup, err := OSEnv(fsys)
+	if err != nil {
+		return Default(), err
+	}
+	return ParseWithEnv(data, lookup)
 }
 
-// OSEnv reads the process environment.
-func OSEnv() Lookup { return os.LookupEnv }
+// OSEnv reads the process environment, with SOLARR_*_FILE variables resolved to the contents of the file they name.
+func OSEnv(fsys fsx.FS) (Lookup, error) { return EnvFrom(fsys, os.Environ()) }

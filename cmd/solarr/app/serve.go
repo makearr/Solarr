@@ -68,8 +68,10 @@ type process struct {
 	extraMedia []media.Module
 	build      Build
 	config     config.Config
-	fsys       fsx.FS
-	logger     *slog.Logger
+	// env is the environment the config was loaded with, including values read from SOLARR_*_FILE.
+	env    config.Lookup
+	fsys   fsx.FS
+	logger *slog.Logger
 	// logRing is the in-memory buffer the Logs screen reads (revision 7.16).
 	logRing  *logbuffer.Ring
 	settings *store.Store
@@ -176,6 +178,11 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 		return err
 	}
 
+	env, err := config.OSEnv(fsys)
+	if err != nil {
+		return err
+	}
+
 	logger, logRing := newLogger(loaded)
 	logger.Info("timezone", "tz", timezone)
 
@@ -190,13 +197,16 @@ func Serve(ctx context.Context, configPath string, out io.Writer, build Build) e
 	}
 
 	running := &process{
-		build: build, config: loaded, fsys: fsys, logger: logger, logRing: logRing,
+		build: build, config: loaded, env: env, fsys: fsys, logger: logger, logRing: logRing,
 		timezone: timezone, configPath: configPath, tool: mediatool.New(nil, 0),
 		transcoder: transcode.NewService(mediatool.ExecRunner{}, transcode.ExecPiper{}, fsys),
 	}
 	defer running.close()
 
 	if err := running.openDatabases(ctx); err != nil {
+		return err
+	}
+	if err := running.applyEnvSettings(ctx); err != nil {
 		return err
 	}
 	if err := running.ensureDefaultQualityProfile(ctx); err != nil {
@@ -231,7 +241,11 @@ func loadOrCreateConfig(fsys fsx.FS, path string, out io.Writer) (config.Config,
 	if _, writeErr := fmt.Fprintf(out, "no config.yml at %s; writing the defaults\n", path); writeErr != nil {
 		return config.Config{}, writeErr
 	}
-	return config.Create(fsys, path, config.GenerateKey, config.OSEnv())
+	env, err := config.OSEnv(fsys)
+	if err != nil {
+		return config.Config{}, err
+	}
+	return config.Create(fsys, path, config.GenerateKey, env)
 }
 
 // logRingCapacity is how many records the Logs screen can show. Bounded by
@@ -572,7 +586,7 @@ func (p *process) startJobs(ctx context.Context) error {
 // config.yml directly. settings.db stays checked, for a setting that
 // someday has a config.yml side that can genuinely be absent.
 func (p *process) resolvedServerPort() (port int, source string) {
-	if _, envSet := os.LookupEnv(config.EnvName("server.port")); envSet {
+	if config.EnvSet("server.port", p.env) {
 		return p.config.Server.Port, "env"
 	}
 	if p.config.Server.Port != 0 {

@@ -226,3 +226,23 @@ func TestParseWithEnv_AMalformedSecretPassesThroughLiterally(t *testing.T) {
 		t.Errorf("the encryption key appeared in DecodeKey's error:\n%s", decodeErr)
 	}
 }
+
+func TestParseWithEnv_ShortNamesForPortAndLogging(t *testing.T) {
+	parsed, err := config.ParseWithEnv([]byte("version: 1\n"), env(
+		"SOLARR_PORT", "6000", "SOLARR_LOG_LEVEL", "debug", "SOLARR_BASE_URL", "/solarr"))
+	if err != nil {
+		t.Fatalf("ParseWithEnv: %v", err)
+	}
+	if parsed.Server.Port != 6000 || parsed.Logging.Level != config.LevelDebug || parsed.Server.BaseURL != "/solarr" {
+		t.Errorf("parsed = %+v %+v, want port 6000, debug, /solarr", parsed.Server, parsed.Logging)
+	}
+}
+
+func TestEnvSet_SeesEitherName(t *testing.T) {
+	if !config.EnvSet("server.port", env("SOLARR_PORT", "1")) || !config.EnvSet("server.port", env("SOLARR_SERVER_PORT", "1")) {
+		t.Error("EnvSet missed a name that is set")
+	}
+	if config.EnvSet("server.port", env()) {
+		t.Error("EnvSet reported an unset variable")
+	}
+}

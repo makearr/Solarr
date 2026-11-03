@@ -34,7 +34,7 @@ const healthcheckDNSEnv = "SOLARR_HEALTHCHECK_DNS"
 func runHealthcheck(args []string, out, errOut io.Writer) error {
 	flags := flag.NewFlagSet("healthcheck", flag.ContinueOnError)
 	flags.SetOutput(errOut)
-	configPath := flags.String("config", defaultConfigPath, "path to config.yml")
+	configPath := flags.String("config", defaultConfigPath(), "path to config.yml")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}

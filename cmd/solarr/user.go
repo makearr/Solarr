@@ -29,7 +29,7 @@ func runUser(args []string, out, errOut io.Writer) error {
 
 	flags := flag.NewFlagSet("user "+args[0], flag.ContinueOnError)
 	flags.SetOutput(errOut)
-	configPath := flags.String("config", defaultConfigPath, "path to config.yml")
+	configPath := flags.String("config", defaultConfigPath(), "path to config.yml")
 	username := flags.String("username", "", "account name")
 	role := flags.String("role", string(settings.RoleAdmin), "admin | operator | readonly")
 	passwordStdin := flags.Bool("password-stdin", false, "read the password from standard input")

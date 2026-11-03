@@ -26,8 +26,19 @@ var (
 	milestone = ""
 )
 
-// defaultConfigPath matches the single /config volume the image expects (§20.2).
-const defaultConfigPath = "/config/config.yml"
+// defaultConfigDir matches the single /config volume the image expects (§20.2).
+const defaultConfigDir = "/config"
+
+// defaultConfigPath is where config.yml lives: SOLARR_CONFIG_DIR moves it with the rest of the config volume.
+func defaultConfigPath() string {
+	if dir := os.Getenv(config.EnvName("paths.config_dir")); dir != "" {
+		return filepath.Join(dir, "config.yml")
+	}
+	if dir := os.Getenv("SOLARR_CONFIG_DIR"); dir != "" {
+		return filepath.Join(dir, "config.yml")
+	}
+	return filepath.Join(defaultConfigDir, "config.yml")
+}
 
 // AGPL section 13: the running program must offer the Corresponding Source for *this* build.
 var (
@@ -79,7 +90,7 @@ func runConfig(args []string, out, errOut io.Writer) error {
 
 	flags := flag.NewFlagSet("config check", flag.ContinueOnError)
 	flags.SetOutput(errOut)
-	path := flags.String("config", defaultConfigPath, "path to config.yml")
+	path := flags.String("config", defaultConfigPath(), "path to config.yml")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -128,7 +139,7 @@ func listenAddress(loaded config.Config) string {
 func runServe(args []string, out, errOut io.Writer) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	flags.SetOutput(errOut)
-	path := flags.String("config", defaultConfigPath, "path to config.yml")
+	path := flags.String("config", defaultConfigPath(), "path to config.yml")
 	if err := flags.Parse(args); err != nil {
 		return err
 	}

@@ -12,6 +12,10 @@ services:
       PGID: 1000
       # Air dates and log timestamps are timezone-dependent.
       TZ: Europe/Berlin
+      # Optional; every variable is listed in documentation/environment-variables.md.
+      # SOLARR_PORT: 5454
+      # SOLARR_ROOT_FOLDERS: Music=/media/music,TV=/media/tv
+      # SOLARR_TMDB_API_KEY: ""
 
     ports:
       - "5454:5454"
