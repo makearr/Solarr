@@ -272,14 +272,9 @@ func (p Placer) Extras(
 		if !wanted[strings.ToLower(path.Ext(other.RelPath))] {
 			continue
 		}
-		var owner *Owner
-		var suffix string
-		for index := range owners {
-			rest, named := strings.CutPrefix(other.RelPath, strings.TrimSuffix(owners[index].SourceRel, path.Ext(owners[index].SourceRel)))
-			// The file named most exactly owns it: "S01E01E02.en.srt" is not the subtitle of "S01E01".
-			if named && strings.HasPrefix(rest, ".") && (owner == nil || len(rest) < len(suffix)) {
-				owner, suffix = &owners[index], rest
-			}
+		owner, suffix := ownerOf(owners, other.RelPath)
+		if owner == nil {
+			owner, suffix = ownerOf(owners, outOfSubsFolder(other.RelPath))
 		}
 		if owner == nil {
 			continue
@@ -296,4 +291,28 @@ func (p Placer) Extras(
 		extras = append(extras, library.UnitExtra{RootFolderID: destRoot.ID, RelPath: destRel})
 	}
 	return extras
+}
+
+// ownerOf is the owner whose name most exactly prefixes rel ("S01E01E02.en.srt" is not the subtitle of "S01E01"), and what follows it.
+func ownerOf(owners []Owner, rel string) (*Owner, string) {
+	var owner *Owner
+	var suffix string
+	for index := range owners {
+		rest, named := strings.CutPrefix(rel, strings.TrimSuffix(owners[index].SourceRel, path.Ext(owners[index].SourceRel)))
+		if named && strings.HasPrefix(rest, ".") && (owner == nil || len(rest) < len(suffix)) {
+			owner, suffix = &owners[index], rest
+		}
+	}
+	return owner, suffix
+}
+
+// outOfSubsFolder moves a scene release's "Subs/Name.en.srt" up beside the video it is named after.
+func outOfSubsFolder(rel string) string {
+	dir, name := path.Split(rel)
+	dir = strings.TrimSuffix(dir, "/")
+	switch strings.ToLower(path.Base(dir)) {
+	case "subs", "sub", "subtitles":
+		return path.Join(path.Dir(dir), name)
+	}
+	return rel
 }
