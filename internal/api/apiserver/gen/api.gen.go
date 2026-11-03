@@ -4533,6 +4533,12 @@ type RatingLimit struct {
 	MaxAge       *int64 `json:"max_age"`
 }
 
+// ReadyQueueLimit The ready queue's bound (acquire.ready_queue_limit).
+type ReadyQueueLimit struct {
+	// Limit Default 200.
+	Limit int `json:"limit"`
+}
+
 // ReadyStatus defines model for ReadyStatus.
 type ReadyStatus struct {
 	Status ReadyStatusStatus `json:"status"`
@@ -6769,6 +6775,9 @@ type MonitorCrossoverJSONRequestBody MonitorCrossoverJSONBody
 // AddDownloaderJSONRequestBody defines body for AddDownloader for application/json ContentType.
 type AddDownloaderJSONRequestBody = AddDownloaderRequest
 
+// SetReadyQueueLimitJSONRequestBody defines body for SetReadyQueueLimit for application/json ContentType.
+type SetReadyQueueLimitJSONRequestBody = ReadyQueueLimit
+
 // TestDownloaderConfigJSONRequestBody defines body for TestDownloaderConfig for application/json ContentType.
 type TestDownloaderConfigJSONRequestBody = TestDownloaderRequest
 
@@ -7260,6 +7269,12 @@ type ServerInterface interface {
 	// Connect a new download client. Administrator only.
 	// (POST /downloaders)
 	AddDownloader(w http.ResponseWriter, r *http.Request)
+	// How many releases Solarr holds while its download clients are full.
+	// (GET /downloaders/queue-limit)
+	GetReadyQueueLimit(w http.ResponseWriter, r *http.Request)
+	// Change the held-release limit. Administrator only.
+	// (PUT /downloaders/queue-limit)
+	SetReadyQueueLimit(w http.ResponseWriter, r *http.Request)
 	// Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
 	// (GET /downloaders/schema)
 	ListDownloaderKinds(w http.ResponseWriter, r *http.Request)
@@ -8415,6 +8430,18 @@ func (_ Unimplemented) ListDownloaders(w http.ResponseWriter, r *http.Request) {
 // Connect a new download client. Administrator only.
 // (POST /downloaders)
 func (_ Unimplemented) AddDownloader(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How many releases Solarr holds while its download clients are full.
+// (GET /downloaders/queue-limit)
+func (_ Unimplemented) GetReadyQueueLimit(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Change the held-release limit. Administrator only.
+// (PUT /downloaders/queue-limit)
+func (_ Unimplemented) SetReadyQueueLimit(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12188,6 +12215,50 @@ func (siw *ServerInterfaceWrapper) AddDownloader(w http.ResponseWriter, r *http.
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.AddDownloader(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetReadyQueueLimit operation middleware
+func (siw *ServerInterfaceWrapper) GetReadyQueueLimit(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetReadyQueueLimit(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetReadyQueueLimit operation middleware
+func (siw *ServerInterfaceWrapper) SetReadyQueueLimit(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetReadyQueueLimit(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20389,6 +20460,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/downloaders", wrapper.AddDownloader)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/downloaders/queue-limit", wrapper.GetReadyQueueLimit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/downloaders/queue-limit", wrapper.SetReadyQueueLimit)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloaders/schema", wrapper.ListDownloaderKinds)

@@ -96,6 +96,8 @@ type Dispatch struct {
 	History func(ctx context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string)
 	// Ready is optional: where an automatic send is held while its client's queue is full.
 	Ready *library.ReadyQueue
+	// ReadyLimit is optional: how many releases Ready may hold (DefaultReadyLimit when nil).
+	ReadyLimit func() int64
 	// Blocklist is optional: a held release blocklisted meanwhile is dropped, not sent.
 	Blocklist *library.BlocklistStore
 	// Admits is optional: whether a library's maximum rating lets in a work admitting age (-1 unrated); an automatic

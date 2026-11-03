@@ -197,8 +197,48 @@ export function Downloaders() {
         <p className="text-xs text-danger">That change was refused.</p>
       )}
 
+      {downloaders.data && downloaders.data.length > 0 && <ReadyQueueLimitEditor />}
+
       {kinds.isError && <p className="text-xs text-danger">The kinds of download client could not be read.</p>}
       {kinds.data && kinds.data.length > 0 && <AddDownloader kinds={kinds.data} onAdded={invalidate} />}
+    </div>
+  );
+}
+
+/** How many releases wait for a free download slot (ADR-57's ready queue). */
+function ReadyQueueLimitEditor() {
+  const queryClient = useQueryClient();
+  const saved = useQuery({ queryKey: ["downloaders", "queue-limit"], queryFn: () => ok(api.GET("/downloaders/queue-limit")) });
+  const save = useMutation({
+    mutationFn: (limit: number) => ok(api.PUT("/downloaders/queue-limit", { body: { limit } })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["downloaders", "queue-limit"] }),
+  });
+  const [draft, setDraft] = useState<number | null>(null);
+  if (!saved.data) return null;
+  const current = draft ?? saved.data.limit;
+  const dirty = draft !== null && draft !== saved.data.limit;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+      <label className="flex items-center gap-1.5">
+        Hold at most
+        <input
+          type="number"
+          min={1}
+          max={10000}
+          aria-label="Held releases"
+          value={current}
+          disabled={save.isPending}
+          onChange={(event) => setDraft(Math.max(1, Math.min(10000, Number(event.target.value) || 1)))}
+          className={`${inputStyle} w-24`}
+        />
+        releases while the clients are full
+      </label>
+      {dirty && (
+        <Button type="button" disabled={save.isPending} onClick={() => save.mutate(current)}>
+          Save
+        </Button>
+      )}
+      {save.isError && <span className="text-danger">That change was refused.</span>}
     </div>
   );
 }

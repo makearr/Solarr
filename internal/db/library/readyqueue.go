@@ -30,12 +30,9 @@ type ReadyQueue struct{ store *store.Store }
 // NewReadyQueue builds it over an open library store.
 func NewReadyQueue(opened *store.Store) ReadyQueue { return ReadyQueue{store: opened} }
 
-// MaxHeld bounds the queue: priming ten thousand releases would only move the problem (section 10.5).
-const MaxHeld = 200
-
-// Hold records entry, replacing any release held earlier for the same album; beyond MaxHeld the entries
+// Hold records entry, replacing any release held earlier for the same album; beyond limit the entries
 // that would be sent last are dropped.
-func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry) error {
+func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry, limit int64) error {
 	return r.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if err := queries.DequeueReadyForItem(ctx, entry.DesiredItemID); err != nil {
@@ -50,7 +47,7 @@ func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry) error {
 		}); err != nil {
 			return err
 		}
-		return queries.TrimReady(ctx, MaxHeld)
+		return queries.TrimReady(ctx, limit)
 	})
 }
 

@@ -710,6 +710,8 @@ func New(config Config) (*Server, error) {
 			secured.Get("/downloaders", server.ListDownloaders)
 			secured.Post("/downloaders", server.AddDownloader)
 			secured.Get("/downloaders/schema", server.ListDownloaderKinds)
+			secured.Get("/downloaders/queue-limit", server.GetReadyQueueLimit)
+			secured.Put("/downloaders/queue-limit", server.SetReadyQueueLimit)
 			secured.Post("/downloaders/{id}/companion", server.routeAddDownloaderCompanion)
 			secured.Post("/downloaders/test", server.TestDownloaderConfig)
 			secured.Patch("/downloaders/{id}", server.routeUpdateDownloader)

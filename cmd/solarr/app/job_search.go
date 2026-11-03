@@ -193,7 +193,7 @@ func (p *process) dispatchFor(mediaType string) music.Dispatch {
 		Desired:     library.NewDesired(p.library),
 		Downloaders: func(ctx context.Context) ([]music.DownloaderConn, error) { return p.downloaderConnsFor(ctx, mediaType) },
 		Fetch:       p.fetchRelease, History: p.recordDownloadHistory, Ready: &ready, Blocklist: &blocklist,
-		Admits: p.ratingAdmits,
+		ReadyLimit: func() int64 { return p.cache.Snapshot().ReadyQueueLimit() }, Admits: p.ratingAdmits,
 	}
 }
 

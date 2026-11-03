@@ -176,6 +176,11 @@ func NewDefaultRegistry() *Registry {
 		Default: strconv.Itoa(DefaultBackupKeepDays),
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyReadyQueueLimit, Kind: KindInt, Tier: TierNormal,
+		Name: "Held releases", HelpText: "How many releases wait for a free download slot; the ones that would be sent last are dropped beyond it.",
+		Default: strconv.Itoa(DefaultReadyQueueLimit),
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,
 		Name:     "New libraries",
 		HelpText: "What a new account is granted on libraries created after it: none, read, request or manage.",

@@ -3161,6 +3161,37 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
 
+  /downloaders/queue-limit:
+    get:
+      operationId: getReadyQueueLimit
+      tags: [settings]
+      summary: How many releases Solarr holds while its download clients are full.
+      responses:
+        "200":
+          description: The limit in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyQueueLimit" }
+        "401": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setReadyQueueLimit
+      tags: [settings]
+      summary: Change the held-release limit. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReadyQueueLimit" }
+      responses:
+        "200":
+          description: The limit now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReadyQueueLimit" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
   /downloaders/schema:
     get:
       operationId: listDownloaderKinds
@@ -11669,6 +11700,13 @@ components:
           description: >-
             Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each
             album folder that has no cover file. Nothing a file or folder already has is replaced.
+
+    ReadyQueueLimit:
+      type: object
+      description: The ready queue's bound (acquire.ready_queue_limit).
+      required: [limit]
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 10000, description: Default 200. }
 
     ImportSettings:
       type: object

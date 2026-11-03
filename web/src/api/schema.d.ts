@@ -2090,6 +2090,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/downloaders/queue-limit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** How many releases Solarr holds while its download clients are full. */
+        get: operations["getReadyQueueLimit"];
+        /** Change the held-release limit. Administrator only. */
+        put: operations["setReadyQueueLimit"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/downloaders/schema": {
         parameters: {
             query?: never;
@@ -8175,6 +8193,11 @@ export interface components {
             /** @description Navidrome's profile: also fill the track artist's tags and MusicBrainz id, and put a cover.jpg in each album folder that has no cover file. Nothing a file or folder already has is replaced. */
             navidrome: boolean;
         };
+        /** @description The ready queue's bound (acquire.ready_queue_limit). */
+        ReadyQueueLimit: {
+            /** @description Default 200. */
+            limit: number;
+        };
         /** @description ADR-48's commit-line knob (import.auto_commit_confidence) and the transfer ladder import walks when it places a file. */
         ImportSettings: {
             /**
@@ -12619,6 +12642,54 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Downloader"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    getReadyQueueLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The limit in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadyQueueLimit"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setReadyQueueLimit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadyQueueLimit"];
+            };
+        };
+        responses: {
+            /** @description The limit now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadyQueueLimit"];
                 };
             };
             400: components["responses"]["Problem"];

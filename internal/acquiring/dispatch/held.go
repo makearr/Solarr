@@ -12,6 +12,9 @@ import (
 	"github.com/makearr/Solarr/internal/identify/priority"
 )
 
+// DefaultReadyLimit is the held-release bound when no ReadyLimit is wired.
+const DefaultReadyLimit = 200
+
 // heldBatch bounds how many held releases one pass looks at; the rest wait for the next poll.
 const heldBatch = 50
 
@@ -44,12 +47,16 @@ func (d Dispatch) HoldIfFull(
 	if release.SizeBytes != nil {
 		size = *release.SizeBytes
 	}
+	limit := int64(DefaultReadyLimit)
+	if d.ReadyLimit != nil {
+		limit = d.ReadyLimit()
+	}
 	return true, d.Ready.Hold(ctx, library.ReadyEntry{
 		CandidateID: release.ID, DesiredItemID: itemID, Priority: rank,
 		QueuedAt: at.Unix(), ExpiresAt: release.ExpiresAt, Origin: string(origin),
 		IndexerID: release.IndexerID, GUID: release.GUID, Title: release.Title, DownloadURL: release.DownloadURL,
 		Protocol: release.Protocol, SizeBytes: size, Score: detail.Decision.Score,
-	})
+	}, limit)
 }
 
 // heldPriority orders held releases user, RSS, new, backfill (ADR-36's ladder); within one, the
