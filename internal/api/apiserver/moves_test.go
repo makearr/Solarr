@@ -3,6 +3,8 @@ package apiserver_test
 import (
 	"context"
 	"net/http"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -66,6 +68,22 @@ type fakeMoveJobLister struct {
 	err  error
 
 	lastFilterReason, lastFilterState string
+	actions                           []string
+}
+
+func (f *fakeMoveJobLister) PauseMoveJob(_ context.Context, id int64) error {
+	f.actions = append(f.actions, "pause "+strconv.FormatInt(id, 10))
+	return f.err
+}
+
+func (f *fakeMoveJobLister) ResumeMoveJob(_ context.Context, id int64) error {
+	f.actions = append(f.actions, "resume "+strconv.FormatInt(id, 10))
+	return f.err
+}
+
+func (f *fakeMoveJobLister) CancelMoveJob(_ context.Context, id int64) error {
+	f.actions = append(f.actions, "cancel "+strconv.FormatInt(id, 10))
+	return f.err
 }
 
 func (f *fakeMoveJobLister) ListMoveJobs(_ context.Context, filterReason, filterState string) ([]apiserver.MoveJobRow, error) {
@@ -324,5 +342,43 @@ func TestRenameRootFolder_OmitsWarningsWhenThereAreNone(t *testing.T) {
 	}
 	if strings.Contains(recorder.Body.String(), `"warnings"`) {
 		t.Errorf("body = %s, want no warnings key when there is nothing to warn about", recorder.Body)
+	}
+}
+
+func TestMoveJobControls_AdministratorOnlyAndMapErrors(t *testing.T) {
+	fixture := newWorksFixture(t)
+	fixture.createUser(t, "listener", settings.RoleReadonly)
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	listener, admin := fixture.signIn(t, "listener"), fixture.signIn(t, "admin")
+
+	if code := fixture.do(authedPost(t, listener, "/api/v1/moves/3/pause", ``)).Code; code != http.StatusForbidden {
+		t.Errorf("pause by a listener = %d, want 403", code)
+	}
+	if len(fixture.moveJobs.actions) != 0 {
+		t.Fatalf("a listener's request reached the controller: %v", fixture.moveJobs.actions)
+	}
+	for path, want := range map[string]string{"/api/v1/moves/3/pause": "pause 3", "/api/v1/moves/3/resume": "resume 3"} {
+		fixture.moveJobs.actions = nil
+		if code := fixture.do(authedPost(t, admin, path, ``)).Code; code != http.StatusNoContent {
+			t.Errorf("POST %s = %d, want 204", path, code)
+		}
+		if !slices.Equal(fixture.moveJobs.actions, []string{want}) {
+			t.Errorf("POST %s called %v, want %q", path, fixture.moveJobs.actions, want)
+		}
+	}
+	fixture.moveJobs.actions = nil
+	if code := fixture.do(authedDelete(t, admin, "/api/v1/moves/3")).Code; code != http.StatusNoContent {
+		t.Errorf("DELETE /moves/3 = %d, want 204", code)
+	}
+	if !slices.Equal(fixture.moveJobs.actions, []string{"cancel 3"}) {
+		t.Errorf("DELETE called %v, want cancel 3", fixture.moveJobs.actions)
+	}
+	fixture.moveJobs.err = apiserver.ErrMoveJobNotInState
+	if code := fixture.do(authedPost(t, admin, "/api/v1/moves/3/pause", ``)).Code; code != http.StatusConflict {
+		t.Errorf("pause in the wrong state = %d, want 409", code)
+	}
+	fixture.moveJobs.err = settings.ErrNotFound
+	if code := fixture.do(authedPost(t, admin, "/api/v1/moves/3/resume", ``)).Code; code != http.StatusNotFound {
+		t.Errorf("resume of an unknown job = %d, want 404", code)
 	}
 }

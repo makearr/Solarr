@@ -743,3 +743,73 @@ func TestJob_ResumeKeepsAnOldSourceWhoseContentDiffers(t *testing.T) {
 		}
 	}
 }
+
+// TestJob_PausedOrCancelledJobMovesNothing proves the loop honours the state a person set, and a resume carries on.
+func TestJob_PausedOrCancelledJobMovesNothing(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/a.flac", "aaaa")
+	id := fx.registerObject(t, 1, "a.flac", "aaaa")
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonRebalance), FilesTotal: 1, BytesTotal: 4, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{MediaObjectID: id, DestRootID: 2, DestRelPath: "a.flac", Bytes: 4}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+	roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}
+
+	if changed, err := moveJobs.Pause(t.Context(), jobID); err != nil || !changed {
+		t.Fatalf("Pause = %v, %v; want true, nil", changed, err)
+	}
+	if err := fx.run(t, fx.job(roots), jobID); err != nil {
+		t.Fatalf("Run paused: %v", err)
+	}
+	if fx.exists("/root2/a.flac") {
+		t.Fatal("a paused job moved a file")
+	}
+
+	if changed, err := moveJobs.Resume(t.Context(), jobID); err != nil || !changed {
+		t.Fatalf("Resume = %v, %v; want true, nil", changed, err)
+	}
+	if err := fx.run(t, fx.job(roots), jobID); err != nil {
+		t.Fatalf("Run resumed: %v", err)
+	}
+	if got := fx.readFile(t, "/root2/a.flac"); got != "aaaa" {
+		t.Errorf("resumed job's file = %q, want aaaa", got)
+	}
+	if changed, _ := moveJobs.Cancel(t.Context(), jobID, 1); changed {
+		t.Error("a finished job was cancelled")
+	}
+}
+
+func TestJob_CancelledJobMovesNothingAndCannotResume(t *testing.T) {
+	fx := newFixture(t)
+	fx.writeFile(t, "/root1/a.flac", "aaaa")
+	id := fx.registerObject(t, 1, "a.flac", "aaaa")
+	moveJobs := library.NewMoveJobs(fx.store)
+	jobID, err := moveJobs.Create(t.Context(), library.NewMoveJob{
+		Reason: string(mover.ReasonRebalance), FilesTotal: 1, BytesTotal: 4, PlanJSON: "{}", CreatedAt: fx.clock.Now().Unix(),
+	})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := moveJobs.AddItems(t.Context(), jobID, []library.NewMoveItem{{MediaObjectID: id, DestRootID: 2, DestRelPath: "a.flac", Bytes: 4}}); err != nil {
+		t.Fatalf("AddItems: %v", err)
+	}
+	if changed, err := moveJobs.Cancel(t.Context(), jobID, fx.clock.Now().Unix()); err != nil || !changed {
+		t.Fatalf("Cancel = %v, %v; want true, nil", changed, err)
+	}
+	roots := fakeRoots{1: {Path: "/root1", FSID: "fs-a"}, 2: {Path: "/root2", FSID: "fs-b"}}
+	if err := fx.run(t, fx.job(roots), jobID); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if fx.exists("/root2/a.flac") {
+		t.Error("a cancelled job moved a file")
+	}
+	if changed, _ := moveJobs.Resume(t.Context(), jobID); changed {
+		t.Error("a cancelled job was resumed")
+	}
+}

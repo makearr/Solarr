@@ -1312,7 +1312,7 @@ export interface paths {
         post: operations["drainRootFolder"];
         /**
          * Stop draining a root; restores accepts_new. Administrator only.
-         * @description Clears drain_state back to NONE and restores accepts_new across every category the root shares. Files already moved stay where they landed; a move job already running is not itself cancelled (see `DELETE /moves/{id}` for that, once it exists).
+         * @description Clears drain_state back to NONE and restores accepts_new across every category the root shares. Files already moved stay where they landed; a move job already running is not itself cancelled (see `DELETE /moves/{id}` for that).
          */
         delete: operations["stopDrainingRootFolder"];
         options?: never;
@@ -1421,6 +1421,63 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moves/{id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop a move job after the file in hand. Administrator only.
+         * @description The files already moved stay moved and the rest wait; resume continues where it stopped.
+         */
+        post: operations["pauseMoveJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moves/{id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Continue a paused move job. Administrator only. */
+        post: operations["resumeMoveJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/moves/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Cancel a move job that has not finished. Administrator only.
+         * @description Stops after the file in hand. Files already moved stay where they landed; nothing is moved back.
+         */
+        delete: operations["cancelMoveJob"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5582,7 +5639,7 @@ export interface components {
             /** Format: int64 */
             source_root_id?: number;
             /** @enum {string} */
-            state: "PLANNED" | "RUNNING" | "PAUSED" | "DONE" | "FAILED";
+            state: "PLANNED" | "RUNNING" | "PAUSED" | "CANCELLED" | "DONE" | "FAILED";
             /** Format: int64 */
             files_total: number;
             /** Format: int64 */
@@ -11323,7 +11380,7 @@ export interface operations {
         parameters: {
             query?: {
                 reason?: "RENAME" | "CATEGORY" | "REBALANCE" | "DRAIN";
-                state?: "PLANNED" | "RUNNING" | "PAUSED" | "DONE" | "FAILED";
+                state?: "PLANNED" | "RUNNING" | "PAUSED" | "CANCELLED" | "DONE" | "FAILED";
             };
             header?: never;
             path?: never;
@@ -11342,6 +11399,78 @@ export interface operations {
             };
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
+        };
+    };
+    pauseMoveJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paused. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    resumeMoveJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Resumed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
+        };
+    };
+    cancelMoveJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cancelled. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            409: components["responses"]["Problem"];
         };
     };
     exportSettings: {

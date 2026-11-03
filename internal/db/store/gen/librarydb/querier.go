@@ -63,6 +63,7 @@ type Querier interface {
 	// had a source, not a refresh (a manual override must always win, ADR-8).
 	BackfillPersonDetails(ctx context.Context, arg BackfillPersonDetailsParams) error
 	BlocklistRelease(ctx context.Context, arg BlocklistReleaseParams) (BlocklistedRelease, error)
+	CancelMoveJob(ctx context.Context, arg CancelMoveJobParams) (int64, error)
 	ClearClassificationGenres(ctx context.Context, workID int64) error
 	ClearDesiredProfileOverride(ctx context.Context, desiredItemID int64) error
 	// Import revert's own first step for one unit (todo 4.9): work_id/edition_id
@@ -976,6 +977,8 @@ type Querier interface {
 	NextPendingMoveItem(ctx context.Context, moveJobID int64) (MoveItem, error)
 	// Revalidated at dispatch, so an expired entry is never handed to a downloader.
 	NextReady(ctx context.Context, arg NextReadyParams) ([]ReadyQueue, error)
+	// Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
+	PauseMoveJob(ctx context.Context, id int64) (int64, error)
 	// Which search caused this file, and which download produced it (F4, section 12).
 	ProvenanceForObject(ctx context.Context, mediaObjectID sql.NullInt64) ([]ProvenanceForObjectRow, error)
 	// Keeps only the newest keep attempts for one file.
@@ -1046,6 +1049,7 @@ type Querier interface {
 	// to belong to a pack) moves that one member from QUEUED to RESOLVED --
 	// RecomputePackCounts is then what updates the pack's own resolved_count.
 	ResolvePackItem(ctx context.Context, arg ResolvePackItemParams) error
+	ResumeMoveJob(ctx context.Context, id int64) (int64, error)
 	// Aged decision detail (section 5.7, Part VI Q5).
 	RollUpDecisions(ctx context.Context, arg RollUpDecisionsParams) error
 	// Whether the library still has a file on a root that is not missing: an empty root then is an unmounted disk.

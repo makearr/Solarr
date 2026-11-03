@@ -143,6 +143,9 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 	if err != nil {
 		return fmt.Errorf("moverjob: get move job %d: %w", payload.MoveJobID, err)
 	}
+	if stopped(moveJob.State) {
+		return nil
+	}
 	if moveJob.State == library.MoveJobPlanned {
 		if err := j.moveJobs.SetRunning(ctx, moveJob.ID); err != nil {
 			return fmt.Errorf("moverjob: set move job %d running: %w", moveJob.ID, err)
@@ -161,6 +164,14 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 
 	permissions := j.permissionsFor(moveJob)
 	for {
+		current, err := j.moveJobs.Get(ctx, moveJob.ID)
+		if err != nil {
+			return fmt.Errorf("moverjob: reread move job %d: %w", moveJob.ID, err)
+		}
+		if stopped(current.State) {
+			j.logger.Info("move job stopped", slog.Int64("move_job_id", moveJob.ID), slog.String("state", current.State))
+			return nil
+		}
 		item, err := j.moveJobs.NextPendingItem(ctx, moveJob.ID)
 		if errors.Is(err, sql.ErrNoRows) {
 			break
@@ -197,6 +208,11 @@ func (j *Job) Run(ctx context.Context, job jobs.Job) error {
 		}
 	}
 	return nil
+}
+
+// stopped is a job a person paused or cancelled; the loop ends after the file in hand and a resume enqueues it again.
+func stopped(state string) bool {
+	return state == library.MoveJobPaused || state == library.MoveJobCancelled
 }
 
 // applyItem moves one file: locate its current path, copy/verify or rename

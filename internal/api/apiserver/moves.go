@@ -41,9 +41,16 @@ type WorkMover interface {
 	StartWorkMove(ctx context.Context, workID, rootFolderID int64, preview bool) (DrainPlanResult, error)
 }
 
-// MoveJobLister reads ADR-51 move jobs.
+// ErrMoveJobNotInState means a move job cannot be paused, resumed or cancelled from where it is.
+var ErrMoveJobNotInState = errors.New("the move job is not in a state that allows that")
+
+// MoveJobLister reads ADR-51 move jobs and stops, continues or cancels one.
 type MoveJobLister interface {
 	ListMoveJobs(ctx context.Context, filterReason, filterState string) ([]MoveJobRow, error)
+	// Pause, Resume and Cancel answer settings.ErrNotFound for an unknown job and ErrMoveJobNotInState for a wrong state.
+	PauseMoveJob(ctx context.Context, id int64) error
+	ResumeMoveJob(ctx context.Context, id int64) error
+	CancelMoveJob(ctx context.Context, id int64) error
 }
 
 // RenameStarter applies section 11.8's own naming template to a root's
@@ -386,4 +393,40 @@ func moveJobView(row MoveJobRow) gen.MoveJob {
 		view.Error = &row.Error
 	}
 	return view
+}
+
+// moveJobAction runs one of the controls an administrator has over a move job.
+func (s *Server) moveJobAction(w http.ResponseWriter, r *http.Request, act func(MoveJobLister, context.Context, int64) error) {
+	if !s.requireAdministrator(w, r) {
+		return
+	}
+	if s.moveJobs == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "move jobs are not available")
+		return
+	}
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		writeProblem(w, s.logger, http.StatusBadRequest, TypeBadRequest, "Bad request", "a move job id must be a number")
+		return
+	}
+	if err := act(s.moveJobs, r.Context(), id); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PauseMoveJob stops a move job after the file in hand.
+func (s *Server) PauseMoveJob(w http.ResponseWriter, r *http.Request, _ int64) {
+	s.moveJobAction(w, r, MoveJobLister.PauseMoveJob)
+}
+
+// ResumeMoveJob continues a paused move job.
+func (s *Server) ResumeMoveJob(w http.ResponseWriter, r *http.Request, _ int64) {
+	s.moveJobAction(w, r, MoveJobLister.ResumeMoveJob)
+}
+
+// CancelMoveJob ends a move job that has not finished.
+func (s *Server) CancelMoveJob(w http.ResponseWriter, r *http.Request, _ int64) {
+	s.moveJobAction(w, r, MoveJobLister.CancelMoveJob)
 }

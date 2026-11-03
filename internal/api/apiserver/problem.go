@@ -102,6 +102,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, ErrNothingToDrain):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Nothing to drain", err.Error())
 
+	case errors.Is(err, ErrMoveJobNotInState):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Wrong state", err.Error())
+
 	case errors.Is(err, ErrNothingToMove):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Nothing to move", err.Error())
 

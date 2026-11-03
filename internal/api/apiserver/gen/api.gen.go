@@ -593,11 +593,12 @@ const (
 
 // Defines values for MoveJobState.
 const (
-	MoveJobStateDONE    MoveJobState = "DONE"
-	MoveJobStateFAILED  MoveJobState = "FAILED"
-	MoveJobStatePAUSED  MoveJobState = "PAUSED"
-	MoveJobStatePLANNED MoveJobState = "PLANNED"
-	MoveJobStateRUNNING MoveJobState = "RUNNING"
+	MoveJobStateCANCELLED MoveJobState = "CANCELLED"
+	MoveJobStateDONE      MoveJobState = "DONE"
+	MoveJobStateFAILED    MoveJobState = "FAILED"
+	MoveJobStatePAUSED    MoveJobState = "PAUSED"
+	MoveJobStatePLANNED   MoveJobState = "PLANNED"
+	MoveJobStateRUNNING   MoveJobState = "RUNNING"
 )
 
 // Defines values for NamingSettingsColonReplacement.
@@ -1006,11 +1007,12 @@ const (
 
 // Defines values for ListMoveJobsParamsState.
 const (
-	ListMoveJobsParamsStateDONE    ListMoveJobsParamsState = "DONE"
-	ListMoveJobsParamsStateFAILED  ListMoveJobsParamsState = "FAILED"
-	ListMoveJobsParamsStatePAUSED  ListMoveJobsParamsState = "PAUSED"
-	ListMoveJobsParamsStatePLANNED ListMoveJobsParamsState = "PLANNED"
-	ListMoveJobsParamsStateRUNNING ListMoveJobsParamsState = "RUNNING"
+	ListMoveJobsParamsStateCANCELLED ListMoveJobsParamsState = "CANCELLED"
+	ListMoveJobsParamsStateDONE      ListMoveJobsParamsState = "DONE"
+	ListMoveJobsParamsStateFAILED    ListMoveJobsParamsState = "FAILED"
+	ListMoveJobsParamsStatePAUSED    ListMoveJobsParamsState = "PAUSED"
+	ListMoveJobsParamsStatePLANNED   ListMoveJobsParamsState = "PLANNED"
+	ListMoveJobsParamsStateRUNNING   ListMoveJobsParamsState = "RUNNING"
 )
 
 // Defines values for ListOrganisationsParamsSort.
@@ -7496,6 +7498,15 @@ type ServerInterface interface {
 	// Every move job (ADR-51), newest first.
 	// (GET /moves)
 	ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams)
+	// Cancel a move job that has not finished. Administrator only.
+	// (DELETE /moves/{id})
+	CancelMoveJob(w http.ResponseWriter, r *http.Request, id int64)
+	// Stop a move job after the file in hand. Administrator only.
+	// (POST /moves/{id}/pause)
+	PauseMoveJob(w http.ResponseWriter, r *http.Request, id int64)
+	// Continue a paused move job. Administrator only.
+	// (POST /moves/{id}/resume)
+	ResumeMoveJob(w http.ResponseWriter, r *http.Request, id int64)
 	// Port resolution, egress proxy and IP allowlist (ADR-58).
 	// (GET /network)
 	GetNetworkSettings(w http.ResponseWriter, r *http.Request)
@@ -8939,6 +8950,24 @@ func (_ Unimplemented) SetTVDBAPIKey(w http.ResponseWriter, r *http.Request) {
 // Every move job (ADR-51), newest first.
 // (GET /moves)
 func (_ Unimplemented) ListMoveJobs(w http.ResponseWriter, r *http.Request, params ListMoveJobsParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Cancel a move job that has not finished. Administrator only.
+// (DELETE /moves/{id})
+func (_ Unimplemented) CancelMoveJob(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Stop a move job after the file in hand. Administrator only.
+// (POST /moves/{id}/pause)
+func (_ Unimplemented) PauseMoveJob(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Continue a paused move job. Administrator only.
+// (POST /moves/{id}/resume)
+func (_ Unimplemented) ResumeMoveJob(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -15335,6 +15364,105 @@ func (siw *ServerInterfaceWrapper) ListMoveJobs(w http.ResponseWriter, r *http.R
 	handler.ServeHTTP(w, r)
 }
 
+// CancelMoveJob operation middleware
+func (siw *ServerInterfaceWrapper) CancelMoveJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.CancelMoveJob(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// PauseMoveJob operation middleware
+func (siw *ServerInterfaceWrapper) PauseMoveJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.PauseMoveJob(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResumeMoveJob operation middleware
+func (siw *ServerInterfaceWrapper) ResumeMoveJob(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResumeMoveJob(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetNetworkSettings operation middleware
 func (siw *ServerInterfaceWrapper) GetNetworkSettings(w http.ResponseWriter, r *http.Request) {
 
@@ -20426,6 +20554,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/moves", wrapper.ListMoveJobs)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/moves/{id}", wrapper.CancelMoveJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/moves/{id}/pause", wrapper.PauseMoveJob)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/moves/{id}/resume", wrapper.ResumeMoveJob)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/network", wrapper.GetNetworkSettings)

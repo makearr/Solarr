@@ -2,6 +2,7 @@ package adapters
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"time"
@@ -9,10 +10,13 @@ import (
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/moving/mover"
+	"github.com/makearr/Solarr/internal/moving/moverjob"
 	"github.com/makearr/Solarr/internal/moving/renamejob"
+	"github.com/makearr/Solarr/internal/platform/clock"
 )
 
 // Drain satisfies apiserver.DrainStarter over drainjob, mapping its sentinels to ones writeError knows (404, 409).
@@ -191,7 +195,52 @@ func (a Rename) start(
 // filters by state -- move job counts never approach library scale
 // (ListImportSessions' own comment gives the identical reasoning), so a
 // second pass over an already-small slice costs nothing.
-type MoveJobs struct{ MoveJobs library.MoveJobs }
+type MoveJobs struct {
+	MoveJobs library.MoveJobs
+	// Queue runs the job again after a resume.
+	Queue *jobs.Queue
+	Clock clock.Clock
+}
+
+// PauseMoveJob stops the job after the file in hand.
+func (a MoveJobs) PauseMoveJob(ctx context.Context, id int64) error {
+	return a.transition(ctx, id, a.MoveJobs.Pause)
+}
+
+// ResumeMoveJob continues a paused job on the queue.
+func (a MoveJobs) ResumeMoveJob(ctx context.Context, id int64) error {
+	if err := a.transition(ctx, id, a.MoveJobs.Resume); err != nil {
+		return err
+	}
+	if _, err := moverjob.Enqueue(ctx, a.Queue, id); err != nil {
+		return fmt.Errorf("enqueue resumed move job %d: %w", id, err)
+	}
+	return nil
+}
+
+// CancelMoveJob ends a job that has not finished.
+func (a MoveJobs) CancelMoveJob(ctx context.Context, id int64) error {
+	return a.transition(ctx, id, func(ctx context.Context, id int64) (bool, error) {
+		return a.MoveJobs.Cancel(ctx, id, a.Clock.Now().Unix())
+	})
+}
+
+// transition applies one state change, telling a missing job from one in the wrong state.
+func (a MoveJobs) transition(ctx context.Context, id int64, change func(context.Context, int64) (bool, error)) error {
+	changed, err := change(ctx, id)
+	if err != nil {
+		return err
+	}
+	if changed {
+		return nil
+	}
+	if _, err := a.MoveJobs.Get(ctx, id); errors.Is(err, sql.ErrNoRows) {
+		return settings.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	return apiserver.ErrMoveJobNotInState
+}
 
 func (a MoveJobs) ListMoveJobs(ctx context.Context, filterReason, filterState string) ([]apiserver.MoveJobRow, error) {
 	rows, err := a.MoveJobs.List(ctx, filterState)

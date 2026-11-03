@@ -15,8 +15,10 @@ const (
 	MoveJobPlanned = "PLANNED"
 	MoveJobRunning = "RUNNING"
 	MoveJobPaused  = "PAUSED"
-	MoveJobDone    = "DONE"
-	MoveJobFailed  = "FAILED"
+	// MoveJobCancelled keeps the files already moved where they landed and leaves the rest untouched.
+	MoveJobCancelled = "CANCELLED"
+	MoveJobDone      = "DONE"
+	MoveJobFailed    = "FAILED"
 )
 
 // Move item states (move_item.state) -- ADR-51's own Apply algorithm, one
@@ -220,6 +222,36 @@ func (m MoveJobs) SetItemState(ctx context.Context, jobID, mediaObjectID int64, 
 		return fmt.Errorf("library: set move item %d/%d state: %w", jobID, mediaObjectID, err)
 	}
 	return nil
+}
+
+// Pause stops a PLANNED or RUNNING job after the file in hand; changed is false when the job was in no such state.
+func (m MoveJobs) Pause(ctx context.Context, jobID int64) (changed bool, err error) {
+	return m.transition(ctx, "pause", jobID, func(queries *librarydb.Queries) (int64, error) { return queries.PauseMoveJob(ctx, jobID) })
+}
+
+// Resume returns a PAUSED job to RUNNING; the caller enqueues the work.
+func (m MoveJobs) Resume(ctx context.Context, jobID int64) (changed bool, err error) {
+	return m.transition(ctx, "resume", jobID, func(queries *librarydb.Queries) (int64, error) { return queries.ResumeMoveJob(ctx, jobID) })
+}
+
+// Cancel ends a job that has not finished; files already moved stay where they landed.
+func (m MoveJobs) Cancel(ctx context.Context, jobID, at int64) (changed bool, err error) {
+	return m.transition(ctx, "cancel", jobID, func(queries *librarydb.Queries) (int64, error) {
+		return queries.CancelMoveJob(ctx, librarydb.CancelMoveJobParams{ID: jobID, FinishedAt: nullInt64(&at)})
+	})
+}
+
+func (m MoveJobs) transition(ctx context.Context, verb string, jobID int64, apply func(*librarydb.Queries) (int64, error)) (bool, error) {
+	var rows int64
+	err := m.store.Write(ctx, store.PrioBulk, func(_ context.Context, tx *sql.Tx) error {
+		var err error
+		rows, err = apply(librarydb.New(tx))
+		return err
+	})
+	if err != nil {
+		return false, fmt.Errorf("library: %s move job %d: %w", verb, jobID, err)
+	}
+	return rows > 0, nil
 }
 
 // Finish transitions a job to a terminal state (MoveJobDone/MoveJobFailed)

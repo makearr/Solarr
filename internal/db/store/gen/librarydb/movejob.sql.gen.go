@@ -10,6 +10,24 @@ import (
 	"database/sql"
 )
 
+const cancelMoveJob = `-- name: CancelMoveJob :execrows
+UPDATE move_job SET state = 'CANCELLED', finished_at = ?1
+WHERE id = ?2 AND state IN ('PLANNED', 'RUNNING', 'PAUSED')
+`
+
+type CancelMoveJobParams struct {
+	FinishedAt sql.NullInt64
+	ID         int64
+}
+
+func (q *Queries) CancelMoveJob(ctx context.Context, arg CancelMoveJobParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, cancelMoveJob, arg.FinishedAt, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const createMoveJob = `-- name: CreateMoveJob :one
 
 INSERT INTO move_job (reason, source_root_id, state, files_total, bytes_total, plan_json, created_at, category_id)
@@ -317,6 +335,19 @@ func (q *Queries) NextPendingMoveItem(ctx context.Context, moveJobID int64) (Mov
 	return i, err
 }
 
+const pauseMoveJob = `-- name: PauseMoveJob :execrows
+UPDATE move_job SET state = 'PAUSED' WHERE id = ? AND state IN ('PLANNED', 'RUNNING')
+`
+
+// Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
+func (q *Queries) PauseMoveJob(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, pauseMoveJob, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
+}
+
 const recomputeMoveJobProgress = `-- name: RecomputeMoveJobProgress :exec
 UPDATE move_job SET
   files_done = (SELECT COUNT(*) FROM move_item mi WHERE mi.move_job_id = ?1 AND mi.state = 'DONE'),
@@ -330,6 +361,18 @@ WHERE id = ?1
 func (q *Queries) RecomputeMoveJobProgress(ctx context.Context, moveJobID int64) error {
 	_, err := q.db.ExecContext(ctx, recomputeMoveJobProgress, moveJobID)
 	return err
+}
+
+const resumeMoveJob = `-- name: ResumeMoveJob :execrows
+UPDATE move_job SET state = 'RUNNING' WHERE id = ? AND state = 'PAUSED'
+`
+
+func (q *Queries) ResumeMoveJob(ctx context.Context, id int64) (int64, error) {
+	result, err := q.db.ExecContext(ctx, resumeMoveJob, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const setMoveItemState = `-- name: SetMoveItemState :exec

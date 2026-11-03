@@ -25,6 +25,17 @@ ORDER BY created_at DESC;
 -- name: SetMoveJobRunning :exec
 UPDATE move_job SET state = 'RUNNING' WHERE id = ?;
 
+-- Pause, resume and cancel say how many rows changed so a job in the wrong state is told apart from a missing one.
+-- name: PauseMoveJob :execrows
+UPDATE move_job SET state = 'PAUSED' WHERE id = ? AND state IN ('PLANNED', 'RUNNING');
+
+-- name: ResumeMoveJob :execrows
+UPDATE move_job SET state = 'RUNNING' WHERE id = ? AND state = 'PAUSED';
+
+-- name: CancelMoveJob :execrows
+UPDATE move_job SET state = 'CANCELLED', finished_at = sqlc.arg(finished_at)
+WHERE id = sqlc.arg(id) AND state IN ('PLANNED', 'RUNNING', 'PAUSED');
+
 -- name: FinishMoveJob :exec
 UPDATE move_job SET state = sqlc.arg(state), finished_at = sqlc.arg(finished_at), error = sqlc.arg(error)
 WHERE id = sqlc.arg(id);

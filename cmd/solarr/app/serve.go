@@ -890,7 +890,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		WorkMerger: adapters.WorkMerger{
 			Identity: library.NewIdentity(p.library), History: statistics.NewHistory(p.statistics), Registry: p.media, Logger: p.logger,
 		},
-		MoveJobs:       adapters.MoveJobs{MoveJobs: library.NewMoveJobs(p.library)},
+		MoveJobs:       adapters.MoveJobs{MoveJobs: library.NewMoveJobs(p.library), Queue: p.queue, Clock: clock.NewSystem()},
 		Navigation:     adapters.MediaTypes{Registry: p.media},
 		MediaTypes:     adapters.MediaTypes{Registry: p.media},
 		LibraryTracks:  adapters.Tracks{Tracks: library.NewTrackParts(p.library)},

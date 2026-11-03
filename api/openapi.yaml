@@ -1893,7 +1893,7 @@ paths:
         Clears drain_state back to NONE and restores accepts_new across
         every category the root shares. Files already moved stay where they
         landed; a move job already running is not itself cancelled (see
-        `DELETE /moves/{id}` for that, once it exists).
+        `DELETE /moves/{id}` for that).
       responses:
         "204": { description: Stopped. }
         "401": { $ref: "#/components/responses/Problem" }
@@ -2072,7 +2072,7 @@ paths:
           schema: { type: string, enum: [RENAME, CATEGORY, REBALANCE, DRAIN] }
         - name: state
           in: query
-          schema: { type: string, enum: [PLANNED, RUNNING, PAUSED, DONE, FAILED] }
+          schema: { type: string, enum: [PLANNED, RUNNING, PAUSED, CANCELLED, DONE, FAILED] }
       responses:
         "200":
           description: The move jobs.
@@ -2083,6 +2083,52 @@ paths:
                 items: { $ref: "#/components/schemas/MoveJob" }
         "400": { $ref: "#/components/responses/Problem" }
         "401": { $ref: "#/components/responses/Problem" }
+
+  /moves/{id}/pause:
+    post:
+      operationId: pauseMoveJob
+      tags: [library]
+      summary: Stop a move job after the file in hand. Administrator only.
+      description: >-
+        The files already moved stay moved and the rest wait; resume continues where it stopped.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "204": { description: Paused. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /moves/{id}/resume:
+    post:
+      operationId: resumeMoveJob
+      tags: [library]
+      summary: Continue a paused move job. Administrator only.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "204": { description: Resumed. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
+
+  /moves/{id}:
+    delete:
+      operationId: cancelMoveJob
+      tags: [library]
+      summary: Cancel a move job that has not finished. Administrator only.
+      description: >-
+        Stops after the file in hand. Files already moved stay where they landed; nothing is moved back.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "204": { description: Cancelled. }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "409": { $ref: "#/components/responses/Problem" }
 
   /settings/export:
     get:
@@ -8567,7 +8613,7 @@ components:
         id: { type: integer, format: int64 }
         reason: { type: string, enum: [RENAME, CATEGORY, REBALANCE, DRAIN, MOVE] }
         source_root_id: { type: integer, format: int64 }
-        state: { type: string, enum: [PLANNED, RUNNING, PAUSED, DONE, FAILED] }
+        state: { type: string, enum: [PLANNED, RUNNING, PAUSED, CANCELLED, DONE, FAILED] }
         files_total: { type: integer, format: int64 }
         files_done: { type: integer, format: int64 }
         bytes_total: { type: integer, format: int64 }

@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ok } from "@/api/client";
 import { useRootFolders } from "@/lib/resources";
 import type { components } from "@/api/schema";
+import { useIsAdministrator } from "@/lib/useAdministrator";
 import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
@@ -285,6 +286,39 @@ export function MoveJobList() {
   );
 }
 
+/** Pause stops after the file in hand, Resume carries on, Cancel ends it; files already moved stay where they landed. */
+function MoveJobControls({ job }: { job: MoveJob }) {
+  const queryClient = useQueryClient();
+  const administrator = useIsAdministrator();
+  const control = useMutation({
+    mutationFn: async (action: "pause" | "resume" | "cancel") => {
+      const params = { params: { path: { id: job.id } } };
+      if (action === "pause") await ok(api.POST("/moves/{id}/pause", params));
+      else if (action === "resume") await ok(api.POST("/moves/{id}/resume", params));
+      else await ok(api.DELETE("/moves/{id}", params));
+    },
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ["move-jobs"] }),
+  });
+  if (!administrator || !["PLANNED", "RUNNING", "PAUSED"].includes(job.state)) return null;
+  return (
+    <>
+      {job.state === "PAUSED" ? (
+        <Button variant="ghost" busy={control.isPending} onClick={() => control.mutate("resume")}>
+          Resume
+        </Button>
+      ) : (
+        <Button variant="ghost" busy={control.isPending} title="Stops after the file being moved" onClick={() => control.mutate("pause")}>
+          Pause
+        </Button>
+      )}
+      <Button variant="ghost" busy={control.isPending} title="Files already moved stay where they are" onClick={() => control.mutate("cancel")}>
+        Cancel
+      </Button>
+      {control.isError && <span className="text-danger">{problemDetail(control.error, "That was refused.")}</span>}
+    </>
+  );
+}
+
 function MoveJobRow({ job }: { job: MoveJob }) {
   const fraction = job.bytes_total > 0 ? job.bytes_done / job.bytes_total : 0;
   return (
@@ -301,6 +335,7 @@ function MoveJobRow({ job }: { job: MoveJob }) {
         <span className="text-ink-muted">
           {job.files_done}/{job.files_total} files
         </span>
+        <MoveJobControls job={job} />
       </div>
       <div className="h-1.5 overflow-hidden rounded-full bg-canvas">
         <div className="h-full rounded-full bg-accent" style={{ width: `${Math.round(fraction * 100)}%` }} />
@@ -312,7 +347,7 @@ function MoveJobRow({ job }: { job: MoveJob }) {
 
 
 function MoveJobStateBadge({ state }: { state: MoveJob["state"] }) {
-  const isTerminal = state === "DONE" || state === "FAILED";
+  const isTerminal = state === "DONE" || state === "FAILED" || state === "CANCELLED";
   return (
     <span
       className={`rounded-full border px-1.5 py-px text-[0.6875rem] ${
