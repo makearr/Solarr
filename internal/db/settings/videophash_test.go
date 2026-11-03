@@ -2,8 +2,8 @@ package settings
 
 import "testing"
 
-func TestVideoPerceptualHashIsOnUnlessTurnedOff(t *testing.T) {
-	for stored, want := range map[string]bool{"": true, "true": true, "false": false} {
+func TestVideoPerceptualHashIsOffUnlessTurnedOn(t *testing.T) {
+	for stored, want := range map[string]bool{"": false, "true": true, "false": false} {
 		policy := map[string]string{}
 		if stored != "" {
 			policy[KeyVideoPerceptualHash] = stored

@@ -9,17 +9,17 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 )
 
-func TestVideoHashing_IsOnUntilAnAdministratorTurnsItOff(t *testing.T) {
+func TestVideoHashing_IsOffUntilAnAdministratorTurnsItOn(t *testing.T) {
 	fixture := newWorksFixture(t)
 	fixture.createUser(t, "admin", settings.RoleAdmin)
 	fixture.createUser(t, "listener", settings.RoleReadonly)
 	admin, listener := fixture.signIn(t, "admin"), fixture.signIn(t, "listener")
 
-	if recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/video-hashing")); !strings.Contains(recorder.Body.String(), `"enabled":true`) {
-		t.Errorf("default: %s, want enabled", recorder.Body)
+	if recorder := fixture.do(authedGet(t, listener, "/api/v1/settings/video-hashing")); !strings.Contains(recorder.Body.String(), `"enabled":false`) {
+		t.Errorf("default: %s, want disabled", recorder.Body)
 	}
 	put := func(cookies []*http.Cookie) *httptest.ResponseRecorder {
-		request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/video-hashing", strings.NewReader(`{"enabled":false}`))
+		request := httptest.NewRequest(http.MethodPut, "/api/v1/settings/video-hashing", strings.NewReader(`{"enabled":true}`))
 		request.Header.Set("Content-Type", "application/json")
 		for _, cookie := range cookies {
 			request.AddCookie(cookie)
@@ -29,10 +29,10 @@ func TestVideoHashing_IsOnUntilAnAdministratorTurnsItOff(t *testing.T) {
 	if recorder := put(listener); recorder.Code != http.StatusForbidden {
 		t.Errorf("listener PUT: status %d, want 403", recorder.Code)
 	}
-	if recorder := put(admin); recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"enabled":false`) {
-		t.Errorf("admin PUT: status %d, body %s, want disabled", recorder.Code, recorder.Body)
+	if recorder := put(admin); recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), `"enabled":true`) {
+		t.Errorf("admin PUT: status %d, body %s, want enabled", recorder.Code, recorder.Body)
 	}
-	if recorder := fixture.do(authedGet(t, admin, "/api/v1/settings/video-hashing")); !strings.Contains(recorder.Body.String(), `"enabled":false`) {
-		t.Errorf("after PUT: %s, want disabled", recorder.Body)
+	if recorder := fixture.do(authedGet(t, admin, "/api/v1/settings/video-hashing")); !strings.Contains(recorder.Body.String(), `"enabled":true`) {
+		t.Errorf("after PUT: %s, want enabled", recorder.Body)
 	}
 }

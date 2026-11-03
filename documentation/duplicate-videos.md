@@ -8,7 +8,7 @@ The probe sweep's last pass hashes every video: seven frames evenly across its l
 reduced to 32x32 grey and hashed by a DCT into 64 bits. The mean image's hash only finds candidates; the per-frame
 hashes decide (`database-layout.md`, `video_frame_hash`).
 
-The pass is a setting, `scan.video_phash` (default on), edited by an administrator under Storage > Duplicates
+The pass is a setting, `scan.video_phash` (default off), edited by an administrator under Storage > Duplicates
 (`GET/PUT /settings/video-hashing`). Off, nothing new is hashed; hashes already stored still serve the finder, and the
 report says so (`hashing_enabled`).
 

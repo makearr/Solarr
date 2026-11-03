@@ -148,6 +148,9 @@ func TestSimilarVideos_AcrossLibrariesIsForAdministratorsAndNamesEachLibrary(t *
 		t.Fatalf("listener: status %d, want 403", recorder.Code)
 	}
 	fixture.createUser(t, "admin", settings.RoleAdmin)
+	if err := fixture.cache.SetVideoPerceptualHash(t.Context(), fixture.clock, true); err != nil {
+		t.Fatal(err)
+	}
 	recorder := fixture.do(authedGet(t, fixture.signIn(t, "admin"), "/api/v1/duplicates/similar-videos"))
 	var body struct {
 		HashingEnabled bool `json:"hashing_enabled"`
