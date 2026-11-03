@@ -7,6 +7,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -510,5 +511,55 @@ func TestSweep_GathersSmallFoldersIntoOneBatch(t *testing.T) {
 	}
 	if len(batches) != 2 || batches[0].Directory != "b" || len(batches[0].Files) != 2 || batches[1].Directory != "c" || len(batches[1].Files) != 1 {
 		t.Errorf("batches = %+v; want a and b together under b, then the rest flushed", batches)
+	}
+}
+
+// gatedFS holds every ReadDir of an artist folder until want of them are in flight at once, or a second has passed.
+type gatedFS struct {
+	*fsx.Mem
+	want    int
+	mu      sync.Mutex
+	inside  int
+	most    int
+	arrived chan struct{}
+}
+
+func (g *gatedFS) ReadDir(name string) ([]fsx.DirEntry, error) {
+	if strings.Count(strings.TrimPrefix(name, root+"/"), "/") == 0 && name != root {
+		g.mu.Lock()
+		g.inside++
+		g.most = max(g.most, g.inside)
+		if g.inside == g.want {
+			close(g.arrived)
+		}
+		g.mu.Unlock()
+		select {
+		case <-g.arrived:
+		case <-time.After(time.Second):
+		}
+		g.mu.Lock()
+		g.inside--
+		g.mu.Unlock()
+	}
+	return g.Mem.ReadDir(name)
+}
+
+// On cold NFS each directory read is a round trip, so the walk reads ahead; what it emits stays in walk order.
+func TestSweep_ReadsDirectoriesAheadAndEmitsInWalkOrder(t *testing.T) {
+	lib := newTree(t, "Vela Morn/Ash/01.flac", "Kito Brae/Salt/01.flac", "Odu Fenn/Rime/01.flac", "Aru Lisk/Dune/01.flac")
+	gated := &gatedFS{Mem: lib.fsys, want: 4, arrived: make(chan struct{})}
+
+	collected := &collector{}
+	lib.clock.Advance(time.Second)
+	if _, err := scan.NewSweeper(gated, lib.clock).Sweep(t.Context(), root, scan.State{}, scan.Options{Full: true}, collected.emit); err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+
+	if gated.most != 4 {
+		t.Errorf("at most %d artist folders were read at once, want 4", gated.most)
+	}
+	want := []string{"Aru Lisk/Dune/01.flac", "Kito Brae/Salt/01.flac", "Odu Fenn/Rime/01.flac", "Vela Morn/Ash/01.flac"}
+	if !slices.Equal(collected.found, want) {
+		t.Errorf("emitted %v, want walk order %v", collected.found, want)
 	}
 }

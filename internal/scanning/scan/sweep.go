@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
-	"slices"
 	"strings"
 	"time"
 
@@ -139,7 +138,10 @@ func (s Sweeper) Sweep(
 		walk.watermark = time.Time{}
 	}
 
+	walk.ahead = newReadAhead(ctx, walk)
+	walk.ahead.schedule([]string{""})
 	err := walk.directory(ctx, "")
+	walk.ahead.close()
 	if err == nil {
 		err = walk.flushGathered(ctx)
 	}
@@ -180,6 +182,7 @@ type sweep struct {
 
 	// gathered is the files of whole directories waiting for Options.GatherFiles.
 	gathered Batch
+	ahead    *readAhead
 
 	visited int
 	read    int
@@ -197,88 +200,81 @@ func (w *sweep) directory(ctx context.Context, relative string) error {
 		absolute = path.Join(w.root, relative)
 	}
 
-	info, err := w.sweeper.fsys.Stat(absolute)
-	if err != nil {
-		// A directory that vanished mid-sweep is not a failed sweep. Section 10.4
-		// is explicit that absence is reported, never acted on as deletion here.
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil
-		}
-		return fmt.Errorf("scan: stat %q: %w", absolute, err)
+	listed := w.ahead.take(ctx, relative)
+	// A directory that vanished mid-sweep is not a failed sweep. Section 10.4 is explicit that absence is reported,
+	// never acted on as deletion here.
+	if listed.gone {
+		return nil
+	}
+	if listed.statErr != nil {
+		return fmt.Errorf("scan: stat %q: %w", absolute, listed.statErr)
 	}
 	w.visited++
-
-	entries, err := w.sweeper.fsys.ReadDir(absolute)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
+	if listed.readErr != nil {
+		if errors.Is(listed.readErr, fs.ErrNotExist) {
 			return nil
 		}
-		return fmt.Errorf("scan: read %q: %w", absolute, err)
+		return fmt.Errorf("scan: read %q: %w", absolute, listed.readErr)
 	}
-	// Lexical order is what makes Cursor enough to resume: the walk has to visit
-	// directories in the same order every time.
-	slices.SortFunc(entries, func(a, b fsx.DirEntry) int { return strings.Compare(a.Name, b.Name) })
-	if len(entries) == 0 && relative != "" && len(w.empty) < maxEmptyDirectories {
+	if len(listed.entries) == 0 && relative != "" && len(w.empty) < maxEmptyDirectories {
 		w.empty = append(w.empty, relative)
 	}
 
-	if err := w.filesIn(ctx, relative, absolute, info, entries); err != nil {
+	var children []string
+	for _, entry := range listed.entries {
+		// Recycled files have left the library; walking them would bring them back.
+		if !entry.IsDir || (relative == "" && (entry.Name == library.RecycleBinDirectory || entry.Name == library.LegacyRecycleBinDirectory)) {
+			continue
+		}
+		children = append(children, path.Join(relative, entry.Name))
+	}
+	w.ahead.schedule(children)
+
+	if err := w.filesIn(ctx, relative, absolute, listed); err != nil {
 		return err
 	}
-	for _, entry := range entries {
-		if !entry.IsDir {
-			continue
-		}
-		// Recycled files have left the library; walking them would bring them back.
-		if relative == "" && (entry.Name == library.RecycleBinDirectory || entry.Name == library.LegacyRecycleBinDirectory) {
-			continue
-		}
-		if err := w.directory(ctx, path.Join(relative, entry.Name)); err != nil {
+	for _, child := range children {
+		if err := w.directory(ctx, child); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-// filesIn emits this directory's files, unless the watermark or the resume cursor
-// says they were already dealt with.
-func (w *sweep) filesIn(
-	ctx context.Context, relative, absolute string, info fsx.FileInfo, entries []fsx.DirEntry,
-) error {
+// reads answers whether the walk reads a directory's files, or the watermark or the resume cursor says they were
+// already dealt with.
+func (w *sweep) reads(relative string, info fsx.FileInfo) bool {
 	// Already committed by the interrupted run this is resuming.
 	if w.resumeFrom != "" && comparePaths(relative, w.resumeFrom) <= 0 {
-		return nil
+		return false
 	}
 	// The workhorse: a directory whose mtime predates the last sweep's start
 	// gained, lost and renamed nothing since, so there is nothing here to read.
 	// Not-after rather than before: a directory touched in the same instant the
 	// last sweep started is re-read, because over-reading is recoverable and
 	// missing a change is not.
-	if !w.options.Full && info.ModTime.Before(w.watermark) {
+	return w.options.Full || !info.ModTime.Before(w.watermark)
+}
+
+// filesIn emits this directory's files when the walk reads it.
+func (w *sweep) filesIn(ctx context.Context, relative, absolute string, listed *listing) error {
+	if !w.reads(relative, listed.info) {
 		return nil
 	}
 	w.read++
 
 	batch := Batch{Directory: relative}
-	for _, entry := range entries {
-		if entry.IsDir {
-			continue
-		}
-		childRelative := path.Join(relative, entry.Name)
-		if w.options.Include != nil && !w.options.Include(childRelative) {
-			continue
-		}
-		child, err := w.sweeper.fsys.Stat(path.Join(absolute, entry.Name))
-		if err != nil {
+	for _, file := range listed.files {
+		if file.err != nil {
 			// Vanished between the read and the stat, which is routine on a live
 			// library and not a reason to fail the sweep.
-			if errors.Is(err, fs.ErrNotExist) {
+			if errors.Is(file.err, fs.ErrNotExist) {
 				continue
 			}
-			return fmt.Errorf("scan: stat %q: %w", path.Join(absolute, entry.Name), err)
+			return fmt.Errorf("scan: stat %q: %w", path.Join(absolute, file.name), file.err)
 		}
 		batch.Files = append(batch.Files, Found{
-			RelPath: childRelative, SizeBytes: child.Size, ModTime: child.ModTime,
+			RelPath: path.Join(relative, file.name), SizeBytes: file.info.Size, ModTime: file.info.ModTime,
 		})
 		if len(batch.Files) == w.options.BatchSize {
 			if err := w.flushGathered(ctx); err != nil {
