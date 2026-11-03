@@ -110,6 +110,9 @@ func setID(ids *IDs, provider, id string) {
 // studioProvider is the key a server's studio ids are stored under.
 func studioProvider(server string) string { return server + ":studio" }
 
+// performerProviders are every key a performer is stored under: one human holds one of each, never two people.
+var performerProviders = []string{performerProvider(ProviderStashDB), performerProvider(ProviderThePornDB), performerProvider(ProviderFansDB), ProviderPerformerName}
+
 // performerProvider is the key a server's performer ids are stored under.
 func performerProvider(server string) string { return server + ":performer" }
 

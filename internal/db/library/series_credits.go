@@ -30,9 +30,9 @@ func (s Series) writeCredits(ctx context.Context, at time.Time, workID int64, pa
 					}
 					partID = id
 				}
-				personID, err := findOrCreatePerson(ctx, queries, at, PersonLink{
+				personID, err := findOrCreatePerson(ctx, tx, queries, at, PersonLink{
 					Provider: credit.Provider, ExternalID: credit.ExternalID,
-					Person: PersonIdentity{Name: credit.Name, Kind: "Person", ImageURL: credit.ImageURL},
+					Person: PersonIdentity{Name: credit.Name, Kind: "Person", ImageURL: credit.ImageURL}, JoinProviders: credit.JoinProviders,
 				})
 				if err != nil {
 					return fmt.Errorf("person %s:%s: %w", credit.Provider, credit.ExternalID, err)

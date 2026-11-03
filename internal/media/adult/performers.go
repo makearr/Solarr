@@ -48,6 +48,7 @@ type PerformerStore interface {
 	SetExtras(ctx context.Context, personID int64, extras library.PersonExtras) error
 	SetBiography(ctx context.Context, personID int64, biography string) error
 	RecordRefresh(ctx context.Context, personID, at int64) error
+	MergeSameNamed(ctx context.Context, providers []string) (int, error)
 }
 
 // Biographies is Wikidata as the sweep needs it: the Wikipedia lead of an item the servers link a performer to.
@@ -72,6 +73,11 @@ var serverOrder = []string{ProviderStashDB, ProviderThePornDB, ProviderFansDB}
 // Run reads the performers that are due; one failing never stops the rest.
 func (p Performers) Run(ctx context.Context, _ jobs.Job) error {
 	now := p.Clock.Now()
+	// First, so a performer the servers gave two ids is one page before it is read.
+	joined, err := p.People.MergeSameNamed(ctx, performerProviders)
+	if err != nil {
+		return fmt.Errorf("adult: performers merge: %w", err)
+	}
 	due, err := p.People.DueForDetails(ctx, MediaType, RolePerformer, now.Add(-detailsRefresh), performersPerRun)
 	if err != nil {
 		return fmt.Errorf("adult: performers sweep: %w", err)
@@ -91,7 +97,7 @@ func (p Performers) Run(ctx context.Context, _ jobs.Job) error {
 			return err
 		}
 	}
-	p.Logger.Info("adult performers sweep finished", slog.Int("due", len(due)), slog.Int("read", read))
+	p.Logger.Info("adult performers sweep finished", slog.Int("due", len(due)), slog.Int("read", read), slog.Int("merged", joined))
 	return nil
 }
 

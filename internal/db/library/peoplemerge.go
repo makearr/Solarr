@@ -370,3 +370,94 @@ ORDER BY t.id`, ProviderWikidata, musicbrainzArtistProvider)
 	}
 	return linked, rows.Err()
 }
+
+// sameNamed is one person holding ids of the providers MergeSameNamed looks at.
+type sameNamed struct {
+	id, credits int64
+	providers   map[string]bool
+}
+
+// MergeSameNamed folds people of one name who hold ids from the given providers into the one with the most credits,
+// when no two of them hold an id of the same provider; a name two ids of one provider share is two people. It answers
+// how many were merged.
+func (p People) MergeSameNamed(ctx context.Context, providers []string) (int, error) {
+	groups, err := p.sameNamedGroups(ctx, providers)
+	if err != nil {
+		return 0, err
+	}
+	merged := 0
+	for _, group := range groups {
+		if len(group) < 2 || !disjointProviders(len(group), func(i int) map[string]bool { return group[i].providers }) {
+			continue
+		}
+		winner := group[0]
+		for _, person := range group[1:] {
+			if person.credits > winner.credits {
+				winner = person
+			}
+		}
+		for _, person := range group {
+			if person == winner {
+				continue
+			}
+			if err := ctx.Err(); err != nil {
+				return merged, err
+			}
+			if err := p.MergePeople(ctx, person.id, winner.id); err != nil {
+				return merged, err
+			}
+			merged++
+		}
+	}
+	return merged, nil
+}
+
+// sameNamedGroups lists the people holding an id of the providers, grouped by lower-cased name.
+func (p People) sameNamedGroups(ctx context.Context, providers []string) (map[string][]*sameNamed, error) {
+	holders := make([]string, len(providers))
+	args := make([]any, len(providers))
+	for index, provider := range providers {
+		holders[index], args[index] = "?", provider
+	}
+	rows, err := p.store.Read().QueryContext(ctx, `SELECT p.id, p.name, x.provider,
+       (SELECT COUNT(*) FROM credit c WHERE c.person_id = p.id)
+FROM person p JOIN person_external_id x ON x.person_id = p.id
+WHERE x.provider IN (`+strings.Join(holders, ",")+`) AND TRIM(p.name) <> ''
+ORDER BY p.id`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("library: list same-named people: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	groups := map[string][]*sameNamed{}
+	byID := map[int64]*sameNamed{}
+	for rows.Next() {
+		var id, credits int64
+		var name, provider string
+		if err := rows.Scan(&id, &name, &provider, &credits); err != nil {
+			return nil, err
+		}
+		person, seen := byID[id]
+		if !seen {
+			person = &sameNamed{id: id, credits: credits, providers: map[string]bool{}}
+			byID[id] = person
+			key := strings.ToLower(strings.TrimSpace(name))
+			groups[key] = append(groups[key], person)
+		}
+		person.providers[provider] = true
+	}
+	return groups, rows.Err()
+}
+
+// disjointProviders is true when no provider appears in two of the n sets.
+func disjointProviders(n int, set func(int) map[string]bool) bool {
+	seen := map[string]bool{}
+	for index := range n {
+		for provider := range set(index) {
+			if seen[provider] {
+				return false
+			}
+			seen[provider] = true
+		}
+	}
+	return true
+}

@@ -318,6 +318,8 @@ func (r *peopleRecorder) RecordRefresh(_ context.Context, personID, _ int64) err
 	return nil
 }
 
+func (r *peopleRecorder) MergeSameNamed(context.Context, []string) (int, error) { return 0, nil }
+
 type fakeWikidata struct{}
 
 func (fakeWikidata) Biography(_ context.Context, qid string) (wikidata.Biography, error) {

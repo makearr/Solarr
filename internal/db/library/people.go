@@ -43,6 +43,9 @@ type PersonLink struct {
 	Provider   string
 	ExternalID string
 	Person     PersonIdentity
+	// JoinProviders, when set, lets an unknown id join the one same-named person who holds an id from one of these
+	// providers and none from Provider: a source that gives the same human another id is not a second person.
+	JoinProviders []string
 }
 
 // GenreLink is one release group's genre tag, with the provider's own vote
@@ -66,7 +69,7 @@ func (p People) ResolvePerson(ctx context.Context, at time.Time, link PersonLink
 	var personID int64
 	err := p.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
-		id, err := findOrCreatePerson(ctx, queries, at, link)
+		id, err := findOrCreatePerson(ctx, tx, queries, at, link)
 		if err != nil {
 			return err
 		}
@@ -157,7 +160,7 @@ func (p People) FindByExternalID(ctx context.Context, provider, externalID strin
 }
 
 func findOrCreatePerson(
-	ctx context.Context, queries *librarydb.Queries, at time.Time, link PersonLink,
+	ctx context.Context, tx librarydb.DBTX, queries *librarydb.Queries, at time.Time, link PersonLink,
 ) (int64, error) {
 	existing, err := queries.GetPersonByExternalID(ctx, librarydb.GetPersonByExternalIDParams{
 		Provider: link.Provider, ExternalID: link.ExternalID,
@@ -167,6 +170,12 @@ func findOrCreatePerson(
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return 0, fmt.Errorf("look up: %w", err)
+	}
+
+	if joined, found, err := joinSameNamed(ctx, tx, queries, link); err != nil {
+		return 0, err
+	} else if found {
+		return joined, nil
 	}
 
 	identity := link.Person
@@ -187,6 +196,47 @@ func findOrCreatePerson(
 		return 0, fmt.Errorf("link external id: %w", err)
 	}
 	return person.ID, nil
+}
+
+// joinSameNamed links the id to the only person of that name held under one of the join providers, when that person
+// has no id of the link's provider yet; two same-named candidates are ambiguous and stay apart.
+func joinSameNamed(ctx context.Context, tx librarydb.DBTX, queries *librarydb.Queries, link PersonLink) (int64, bool, error) {
+	name := strings.TrimSpace(link.Person.Name)
+	if len(link.JoinProviders) == 0 || name == "" {
+		return 0, false, nil
+	}
+	holders := make([]string, len(link.JoinProviders))
+	args := []any{name, link.Provider}
+	for index, provider := range link.JoinProviders {
+		holders[index] = "?"
+		args = append(args, provider)
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT p.id FROM person p
+WHERE p.name = ? COLLATE NOCASE
+  AND NOT EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider = ?)
+  AND EXISTS (SELECT 1 FROM person_external_id y WHERE y.person_id = p.id AND y.provider IN (`+strings.Join(holders, ",")+`))
+ORDER BY p.id LIMIT 2`, args...)
+	if err != nil {
+		return 0, false, fmt.Errorf("join same-named: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var matches []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return 0, false, err
+		}
+		matches = append(matches, id)
+	}
+	if err := rows.Err(); err != nil || len(matches) != 1 {
+		return 0, false, err
+	}
+	if err := queries.LinkPersonExternalID(ctx, librarydb.LinkPersonExternalIDParams{
+		Provider: link.Provider, ExternalID: link.ExternalID, PersonID: matches[0],
+	}); err != nil {
+		return 0, false, fmt.Errorf("link external id: %w", err)
+	}
+	return matches[0], true, nil
 }
 
 // AddCredit records a work-level credit (edition_id/part_id zero, Appendix E D2) for an already-resolved person; ord
