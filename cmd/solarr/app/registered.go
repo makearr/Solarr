@@ -133,7 +133,7 @@ func (p *process) tvModule() tv.Module {
 		DefaultProfileID: p.defaultQualityProfileID, Categories: adapters.Categories{Cache: p.cache}, Threshold: p.acceptThreshold,
 		SharedFiles: p.enqueueSharedFiles,
 	})
-	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
+	return tv.Module{Registrations: p.tvJobs(), SourcesPaused: p.tvSourcesPaused, SceneNumberingDown: p.sceneNumberingDown, TMDBConfigured: func() bool { return p.cache.Snapshot().TMDBConfigured() },
 		Sweep: scan.Sweep{
 			Consumer: consumer, Include: tv.IsVideo,
 			OnSwept: func(ctx context.Context) { _, _ = p.enqueueCategoryCounts(ctx) },

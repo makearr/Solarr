@@ -90,6 +90,7 @@ documentation states is from memory and should be checked before relying on it.
 | TVmaze | air times with time zones, networks, cast, images, runtimes | yes | no key; alone knows the zone |
 | AniList | titles in every language, synonyms, cours, format, status, genres, covers, banners, **relations** (sequel, prequel, spin-off) | yes | anime |
 | Wikidata | the ids every other provider knows a series by, franchises (part of the series, media franchise, spin-off, follows) | yes | first by default; collections of series |
+| TheXEM | scene numbering (TheTVDB's episode to the scene's), scene names | yes | no key; switched on or off, no place in the order ([tv-internals.md](tv-internals.md)) |
 | AniDB, Kitsu, MyAnimeList | anime titles, episodes, relations, ratings | no | AniDB bans heavy clients |
 | Trakt | lists, ratings, calendars, related shows | no | a key; popular lists |
 | IMDb datasets | ratings, episode lists, crew | no | files, not an API |

@@ -28,7 +28,7 @@ the importer passes in and answers with a `model.Rejection` or nothing.
 | FreeSpace / MinimumFreeSpaceWhenImporting | the per-root free-space gate (`min_free_bytes`) | placement |
 | Upgrade (not a quality or revision upgrade) | the strict-upgrade judge (Invariant 72) | search, RSS and the cutoff check |
 | GrabbedReleaseQuality | log only upstream | not ported |
-| UnverifiedSceneNumbering | needs TheXEM | not ported |
+| UnverifiedSceneNumbering | TheXEM's map, read before placing (`sceneNumbers.partKeys`) | not ported as a rejection |
 
 A file ffprobe cannot read is let through (upstream holds it): the tool is optional.
 

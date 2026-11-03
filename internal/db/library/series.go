@@ -25,6 +25,12 @@ type ExternalIDWrite struct {
 // AltNumberWrite is a part's number under another scheme: scene, absolute, dvd, tmdb (ADR-41).
 type AltNumberWrite struct{ Scheme, Provider, Ref string }
 
+// The scene's numbers of an episode (TheXEM): Ref is a media ref ("s02:e05") for AltSchemeScene, a number for the other.
+const (
+	AltSchemeScene         = "scene"
+	AltSchemeSceneAbsolute = "scene_absolute"
+)
+
 // SeriesPartWrite is one episode as the module sees it; MonitoredIfNew applies only to a part this call creates.
 type SeriesPartWrite struct {
 	MediaRef, SortKey, Title            string
@@ -36,7 +42,9 @@ type SeriesPartWrite struct {
 	AvailableGrace *time.Duration
 	MonitoredIfNew bool
 	AltNumbers     []AltNumberWrite
-	ExternalIDs    []ExternalIDWrite
+	// ReplaceAltProviders are the providers whose stored numbers of the part this write replaces rather than adds to.
+	ReplaceAltProviders []string
+	ExternalIDs         []ExternalIDWrite
 	// AltTitles are the title in other languages; a write replaces what the same provider stored before.
 	AltTitles []PartTitleWrite
 }
@@ -480,6 +488,11 @@ func upsertSeriesPart(ctx context.Context, queries *librarydb.Queries, workID in
 	})
 	if err != nil {
 		return 0, fmt.Errorf("library: upsert part %s: %w", part.MediaRef, err)
+	}
+	for _, provider := range part.ReplaceAltProviders {
+		if err := queries.DeleteAltNumberingByProvider(ctx, librarydb.DeleteAltNumberingByProviderParams{PartID: row.ID, Provider: provider}); err != nil {
+			return 0, fmt.Errorf("library: clear alt numbers %s: %w", part.MediaRef, err)
+		}
 	}
 	for _, alt := range part.AltNumbers {
 		if err := queries.AddAltNumbering(ctx, librarydb.AddAltNumberingParams{PartID: row.ID, Scheme: alt.Scheme, Provider: alt.Provider, AltRef: alt.Ref}); err != nil {

@@ -309,6 +309,10 @@ VALUES (?, ?, ?, ?)
 ON CONFLICT (part_id, scheme, provider) DO UPDATE SET
   alt_ref = excluded.alt_ref;
 
+-- A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
+-- name: DeleteAltNumberingByProvider :exec
+DELETE FROM alt_numbering WHERE part_id = ? AND provider = ?;
+
 -- Every other number of a page of parts, one per scheme: the first provider's.
 -- name: ListAltNumbersForParts :many
 SELECT part_id, scheme, alt_ref FROM alt_numbering

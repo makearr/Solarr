@@ -57,6 +57,8 @@ const (
 	SourceTheAudioDB      = "theaudiodb"
 	SourceCoverArtArchive = "coverartarchive"
 	SourceAcoustID        = "acoustid"
+	// SourceTheXEM maps TheTVDB's episode numbers to the ones scene releases carry.
+	SourceTheXEM = "thexem"
 )
 
 // KeyMetadataDisabledProviders lists the providers switched off for every library.
@@ -151,6 +153,8 @@ var MetadataProviders = []MetadataProvider{
 		Published: "none published; served by the Internet Archive"},
 	{Key: SourceAcoustID, Label: "AcoustID", AlsoFor: []string{"music"}, Carries: []string{"files identified by their sound"}, NeedsKey: true,
 		PerMinute: 180, MaxPerMinute: 180, Published: "3 a second"},
+	{Key: SourceTheXEM, Label: "TheXEM", AlsoFor: []string{"tv"}, Carries: []string{"scene numbering", "scene names"},
+		PerMinute: 30, Published: "none published; a community server, asked gently"},
 }
 
 // musicSources are the music providers of which at least one must stay on: every music lookup asks one of them.

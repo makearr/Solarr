@@ -25,7 +25,7 @@ internal/
 ├── jobs/       the durable queue, executor, dispatcher, task registry
 │               + capacity  cachebudget
 ├── metadata/   musicbrainz  wikidata  acoustid  metacache  metaresolve
-│               skyhook  tvmaze  tmdb  tvdb  openlibrary  googlebooks  audible  stashbox  whisparr
+│               skyhook  tvmaze  tmdb  tvdb  thexem  openlibrary  googlebooks  audible  stashbox  whisparr
 ├── identify/   model  parse  parsetv  parsebook  parseadult  match  score  priority
 ├── scanning/   scan  probe
 ├── importing/  inspect  importjob  batch  placer  rules  arrimport  arrmap

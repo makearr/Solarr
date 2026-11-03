@@ -94,7 +94,9 @@ type Service struct {
 	Orderings OrderingSource
 	// Wikidata gives the ids its item records, steering the other providers to the right entry; nil asks none.
 	Wikidata IDBridge
-	Series   library.Series
+	// Scene is TheXEM, the numbers scene releases carry where they differ from TheTVDB's; nil maps none.
+	Scene  SceneSource
+	Series library.Series
 	// Exclusions are the works the user removed and asked not to see again.
 	Exclusions library.Exclusions
 	Reader     library.SeriesReader
@@ -617,6 +619,7 @@ func (s Service) Add(ctx context.Context, request AddRequest) (AddResult, error)
 		return AddResult{}, err
 	}
 	s.addAltTitles(ctx, &series, request.CategoryID, false)
+	s.addSceneNumbers(ctx, &series)
 	now := s.Clock.Now()
 	stored, err := s.Series.Upsert(ctx, now, ToWrite(series, WriteOptions{Monitor: request.Monitor, Specials: request.Specials, Now: now, Grace: s.grace()}))
 	if err != nil {
@@ -738,6 +741,7 @@ func (s Service) Refresh(ctx context.Context, request RefreshRequest) (AddResult
 	if err := s.keepOrdering(ctx, request.WorkID, &series); err != nil {
 		return AddResult{}, fmt.Errorf("tv: numbering by the chosen ordering: %w", err)
 	}
+	s.addSceneNumbers(ctx, &series)
 	monitored, err := s.Reader.SeasonMonitoring(ctx, request.WorkID)
 	if err != nil {
 		return AddResult{}, err

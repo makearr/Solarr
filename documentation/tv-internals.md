@@ -197,6 +197,29 @@ manual field `numbering_basis` (`tvdb:dvd`, ...; empty is aired) and every later
 (the series' Rename preview). Not built: numbering by another *source* (TMDB, TVmaze), whose episodes share no id
 with TheTVDB's.
 
+## Scene numbering (TheXEM, pain point 30)
+
+Scene releases of some series are numbered otherwise than TheTVDB (`S02E05` where TheTVDB says `S01E25`). TheXEM
+(`internal/metadata/thexem`, keyless, its own rate bucket and SSRF-guarded `httpx` client) holds that map. One call
+(`/map/havemap`) lists the series it maps; only those are asked `/map/all`, and `/map/allNames` gives scene names that hold
+for every season. Answers live in `metadata.db` for 12 hours and a stale one is used while TheXEM is down.
+
+**Stored as alternative numbering, not a second numbering basis**: a series stays numbered by TheTVDB (folders, names,
+seasons, Wanted are unchanged) and each mapped episode gets `alt_numbering` rows of provider `thexem`, scheme `scene`
+(a media ref, `s02:e05`) and `scene_absolute`. A basis would renumber the library to a list that only releases use.
+`Service.addSceneNumbers` runs on add and refresh, only for a series numbered by TheTVDB's aired order (TheXEM maps that
+one); when TheXEM answered, the part's `thexem` rows are replaced (`ReplaceAltProviders`), so a dropped mapping goes;
+when it failed, they stay. The scene names become aliases, which the search and RSS match by.
+
+Use (`internal/media/tv/scene.go`, `sceneNumbers`): the search asks for each scene season of the missing episodes (id
+query `season=2`, `Title S02`, `Title Season 2`; one episode as `S02E05`; anime by the scene absolute); a release's
+season and episode are read as the scene's where the map holds them, else as TheTVDB's, so either is taken; a season
+pack covers the episodes the scene releases under its season. A download is placed the same way (`Importer.placeUnit`);
+the library scan is not, since files on disk carry TheTVDB's numbers. The series page shows `scene S02E05` beside an
+episode whose scene number differs. Settings > Metadata switches TheXEM off (the next refresh drops the numbers) and
+tests it; health warns `tv_xem_down` while its circuit is open. The split halves of an episode (`scene_2`, `tvdb_2`) are
+not read.
+
 ## Crossovers (T23)
 
 Two kinds, on generic tables. An **event across series** is a `collection` of kind `crossover` whose members are parts

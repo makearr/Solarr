@@ -22,6 +22,8 @@ type Module struct {
 	TMDBConfigured func() bool
 	// SourcesPaused names the TV providers whose circuit is open right now; nil leaves the source checks out.
 	SourcesPaused func() []string
+	// SceneNumberingDown says TheXEM is not answering; nil leaves the check out.
+	SceneNumberingDown func() bool
 	// Registrations are job types TV brings besides the ones named below, with their handlers.
 	Registrations []media.JobRegistration
 	Sweep         scan.Sweep
@@ -132,6 +134,13 @@ func (m Module) HealthChecks(libraries int) []media.HealthCheck {
 				Link:    "/settings/metadata",
 			})
 		}
+	}
+	if m.SceneNumberingDown != nil && m.SceneNumberingDown() {
+		checks = append(checks, media.HealthCheck{
+			ID: "tv_xem_down", Severity: media.HealthWarning,
+			Message: "TheXEM is not answering: series keep the scene numbers last fetched, and series added meanwhile are searched by TheTVDB's numbers only.",
+			Link:    "/settings/metadata",
+		})
 	}
 	return checks
 }

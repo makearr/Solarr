@@ -38,6 +38,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/acoustid"
 	"github.com/makearr/Solarr/internal/metadata/anilist"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
+	"github.com/makearr/Solarr/internal/metadata/thexem"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -160,6 +161,7 @@ type process struct {
 	tmdbShared    tmdb.Client
 	tvdbShared    tvdb.Client
 	anilistShared anilist.Client
+	xemShared     thexem.Client
 }
 
 // Serve is the startup sequence of architecture section 15.1, in order.

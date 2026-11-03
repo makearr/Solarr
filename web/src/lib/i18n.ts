@@ -27,6 +27,8 @@ const catalogue = {
   "work.partsPresent": "{present} {parts} on disk",
   "work.outBasis": "Known from: {basis}. Counted as missing {hours} hours after.",
   "work.outUnannounced": "No date announced yet.",
+  "work.sceneNumber": "scene {number}",
+  "work.sceneNumberHint": "Scene releases number this episode {number} (TheXEM): searches ask for it, and a release numbered either way is taken.",
   "work.waitingForMetadata": "Waiting for metadata",
   "work.notOutUntil": "Not out yet · {date}",
   "work.noParts": "No {parts} are known yet.",

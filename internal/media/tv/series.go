@@ -24,6 +24,8 @@ const (
 	ProviderMAL    = "mal"
 	// ProviderAniList is the AniList media id.
 	ProviderAniList = "anilist"
+	// ProviderXEM labels the scene numbers TheXEM maps.
+	ProviderXEM = "thexem"
 )
 
 // IDs are the identifiers one series carries at the providers; zero or empty means unknown.
@@ -78,7 +80,12 @@ type Episode struct {
 	IDs map[string]int64
 	// AltTitles are the episode's title in other languages, for matching files named in them.
 	AltTitles []AltTitle
+	// Scene is the number scene releases carry for the episode; nil unless TheXEM maps it.
+	Scene *SceneNumber
 }
+
+// SceneNumber is an episode's place in the scene's numbering; Absolute is zero when TheXEM gives none.
+type SceneNumber struct{ Season, Number, Absolute int }
 
 // AltTitle is an episode's title in one language (a two-letter code).
 type AltTitle struct{ Language, Title string }
@@ -181,4 +188,6 @@ type Series struct {
 	Basis string
 	// Sources lists the providers that contributed, in priority order.
 	Sources []string
+	// SceneMapped says TheXEM answered for the series, so its write replaces the scene numbers stored before.
+	SceneMapped bool
 }

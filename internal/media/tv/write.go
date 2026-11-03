@@ -193,7 +193,11 @@ func ToWrite(series Series, options WriteOptions) library.SeriesWrite {
 		wants = options.NewPart
 	}
 	for _, episode := range series.Episodes {
-		write.Parts = append(write.Parts, partWrite(episode, wants(episode), options.Grace))
+		part := partWrite(episode, wants(episode), options.Grace)
+		if series.SceneMapped {
+			part.ReplaceAltProviders = []string{ProviderXEM}
+		}
+		write.Parts = append(write.Parts, part)
 	}
 	return write
 }
@@ -238,6 +242,12 @@ func partWrite(episode Episode, monitored bool, grace *library.AvailabilityGrace
 	}
 	if episode.AirDate != "" {
 		part.AltNumbers = append(part.AltNumbers, library.AltNumberWrite{Scheme: "date", Provider: "air", Ref: episode.AirDate})
+	}
+	if scene := episode.Scene; scene != nil {
+		part.AltNumbers = append(part.AltNumbers, library.AltNumberWrite{Scheme: library.AltSchemeScene, Provider: ProviderXEM, Ref: MediaRef(scene.Season, scene.Number)})
+		if scene.Absolute > 0 {
+			part.AltNumbers = append(part.AltNumbers, library.AltNumberWrite{Scheme: library.AltSchemeSceneAbsolute, Provider: ProviderXEM, Ref: strconv.Itoa(scene.Absolute)})
+		}
 	}
 	for provider, id := range episode.IDs {
 		part.ExternalIDs = append(part.ExternalIDs, library.ExternalIDWrite{Provider: provider + ":episode", ExternalID: strconv.FormatInt(id, 10)})

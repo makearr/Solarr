@@ -12,7 +12,7 @@ import { Chip } from "@/ui/Chip";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 import { PlayButton } from "../player/PlayButton";
-import { fileChips, formatDuration, formatMinutes, partState, type PartState } from "./workFormat";
+import { fileChips, formatDuration, formatMinutes, partState, sceneNumber, type PartState } from "./workFormat";
 
 type Part = components["schemas"]["WorkPart"];
 type Group = components["schemas"]["WorkGroup"];
@@ -202,6 +202,7 @@ function PartRow({
     ? new Date(part.available_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })
     : part.date;
   const absolute = part.alt_numbers?.absolute;
+  const scene = sceneNumber(part);
   return (
     <tr className="border-b border-border-subtle last:border-0 align-top">
       <td className="w-9 px-3 py-1.5">
@@ -211,6 +212,11 @@ function PartRow({
       <td className="py-1.5">
         <span>{title}</span>
         {absolute && <span className="ml-2 text-xs text-ink-muted">#{absolute}</span>}
+        {scene && (
+          <span className="ml-2 text-xs text-ink-muted" title={t("work.sceneNumberHint", { number: scene })}>
+            {t("work.sceneNumber", { number: scene })}
+          </span>
+        )}
         {part.file && (
           <span className="mt-0.5 flex flex-wrap items-center gap-1">
             {fileChips(part.file).map((chip) => (

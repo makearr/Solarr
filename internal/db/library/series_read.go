@@ -66,6 +66,8 @@ type SeriesEpisode struct {
 	// AvailableGrace is how long after its time or date it is waited for.
 	AvailableGrace time.Duration
 	Absolute       string
+	// Scene is the media ref scene releases number the episode by and SceneAbsolute their absolute; empty unless TheXEM maps it.
+	Scene, SceneAbsolute string
 	// AltTitles are the episode's titles in other languages.
 	AltTitles []string
 }
@@ -154,13 +156,16 @@ func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, w
 	for _, ref := range covered {
 		hasFile[ref] = true
 	}
-	absolutes, err := queries.ListAltNumbersForWork(ctx, librarydb.ListAltNumbersForWorkParams{WorkID: workID, Scheme: "absolute"})
-	if err != nil {
-		return SeriesDetailRow{}, fmt.Errorf("library: absolute numbers: %w", err)
-	}
-	absoluteOf := make(map[int64]string, len(absolutes))
-	for _, alt := range absolutes {
-		absoluteOf[alt.PartID] = alt.AltRef
+	numbersOf := map[string]map[int64]string{}
+	for _, scheme := range []string{"absolute", AltSchemeScene, AltSchemeSceneAbsolute} {
+		numbers, err := queries.ListAltNumbersForWork(ctx, librarydb.ListAltNumbersForWorkParams{WorkID: workID, Scheme: scheme})
+		if err != nil {
+			return SeriesDetailRow{}, fmt.Errorf("library: %s numbers: %w", scheme, err)
+		}
+		numbersOf[scheme] = make(map[int64]string, len(numbers))
+		for _, alt := range numbers {
+			numbersOf[scheme][alt.PartID] = alt.AltRef
+		}
 	}
 	altTitles, err := queries.ListWorkPartTitlesForWork(ctx, workID)
 	if err != nil {
@@ -178,7 +183,8 @@ func (r SeriesReader) GetOf(ctx context.Context, mediaType string, categoryID, w
 		season, number := parseSeriesRef(part.MediaRef)
 		file := files[part.MediaRef]
 		detail.Episodes = append(detail.Episodes, SeriesEpisode{File: file,
-			PartID: part.ID, Season: season, Number: number, Absolute: absoluteOf[part.ID], Title: part.Title.String, Date: part.Date.String,
+			PartID: part.ID, Season: season, Number: number, Absolute: numbersOf["absolute"][part.ID],
+			Scene: numbersOf[AltSchemeScene][part.ID], SceneAbsolute: numbersOf[AltSchemeSceneAbsolute][part.ID], Title: part.Title.String, Date: part.Date.String,
 			RuntimeMs: part.RuntimeMs.Int64, Monitored: part.Monitored == 1, Present: hasFile[part.MediaRef],
 			AvailableAt: part.AvailableAt.Int64, AvailableConfidence: part.AvailableConfidence,
 			AvailableGrace: PartGrace(part.AvailableGrace, part.AvailableConfidence), AltTitles: altOf[part.ID],

@@ -460,6 +460,21 @@ func (q *Queries) CreateWorkPart(ctx context.Context, arg CreateWorkPartParams) 
 	return i, err
 }
 
+const deleteAltNumberingByProvider = `-- name: DeleteAltNumberingByProvider :exec
+DELETE FROM alt_numbering WHERE part_id = ? AND provider = ?
+`
+
+type DeleteAltNumberingByProviderParams struct {
+	PartID   int64
+	Provider string
+}
+
+// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
+func (q *Queries) DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error {
+	_, err := q.db.ExecContext(ctx, deleteAltNumberingByProvider, arg.PartID, arg.Provider)
+	return err
+}
+
 const deleteEdition = `-- name: DeleteEdition :exec
 DELETE FROM edition WHERE id = ?
 `

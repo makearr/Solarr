@@ -233,6 +233,8 @@ type Querier interface {
 	// silently overwriting who decided it and when.
 	DecideRequest(ctx context.Context, arg DecideRequestParams) (int64, error)
 	DeleteAcquisitionStall(ctx context.Context, acquisitionID int64) error
+	// A refresh rewrites the numbers one provider gave a part, so a mapping it dropped goes too.
+	DeleteAltNumberingByProvider(ctx context.Context, arg DeleteAltNumberingByProviderParams) error
 	DeleteCollection(ctx context.Context, id int64) error
 	DeleteCollectionMembers(ctx context.Context, collectionID int64) error
 	DeleteCustomCollection(ctx context.Context, id int64) (int64, error)

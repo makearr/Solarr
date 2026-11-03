@@ -40,6 +40,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/radarrmeta"
 	"github.com/makearr/Solarr/internal/metadata/skyhook"
 	"github.com/makearr/Solarr/internal/metadata/theaudiodb"
+	"github.com/makearr/Solarr/internal/metadata/thexem"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/tvmaze"
@@ -295,8 +296,10 @@ func (p *process) tvService() tv.Service {
 		p.tvdbShared = tvdb.New(client(providerTVDB), p.tvdbKey, nil, wall.Now)
 		p.anilistShared = anilist.New(client(providerAniList))
 		p.skyhookShared, p.tvmazeShared = skyhook.New(client(providerSkyhook), "en"), tvmaze.New(client(providerTVmaze))
+		p.xemShared = thexem.New(client(providerTheXEM), metacache.New(p.metadata).Counting(&p.metadataLookups), wall)
 		p.tvShared = tv.Service{
 			Skyhook: p.skyhookShared, TVmaze: p.tvmazeShared, TMDB: p.tmdbShared, AniList: p.anilistShared, Wikidata: p.wikidataFacts(),
+			Scene: sceneSource{client: p.xemShared, enabled: func() bool { return p.cache.Snapshot().ProviderEnabled(settings.SourceTheXEM) }},
 			Priority: func() []string {
 				return p.cache.Snapshot().MetadataSourcesFor(settings.Category{MediaType: tv.MediaType})
 			},
@@ -507,7 +510,32 @@ func (p *process) tvProviders() adapters.TVProviders {
 			},
 			Ping: func(ctx context.Context) error { return p.tvdbShared.Ping(ctx) },
 		},
+		{
+			Info: apiserver.TVProviderInfo{ID: "thexem", Name: "TheXEM", Key: "not_needed",
+				Adds: "Scene numbering: searches ask for the numbers releases carry (S02E05 where TheTVDB says S01E25) and either is accepted."},
+			Ping: func(ctx context.Context) error { return p.xemShared.Ping(ctx) },
+		},
 	}}
+}
+
+// sceneSource is TheXEM, mapping nothing while it is switched off (the next refresh then drops the scene numbers).
+type sceneSource struct {
+	client  thexem.Client
+	enabled func() bool
+}
+
+func (s sceneSource) Mappings(ctx context.Context, tvdbID int64) ([]thexem.Mapping, error) {
+	if !s.enabled() {
+		return nil, nil
+	}
+	return s.client.Mappings(ctx, tvdbID)
+}
+
+func (s sceneSource) Names(ctx context.Context, tvdbID int64) ([]string, error) {
+	if !s.enabled() {
+		return nil, nil
+	}
+	return s.client.Names(ctx, tvdbID)
 }
 
 // remoteImages is the provider picture cache, on its own rate bucket so a wall of posters cannot starve the metadata calls.

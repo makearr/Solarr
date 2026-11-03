@@ -24,6 +24,7 @@ const (
 	providerTMDB           = "tmdb"
 	providerTVDB           = "tvdb"
 	providerAniList        = "anilist"
+	providerTheXEM         = "thexem"
 	providerRadarrMeta     = "radarr-meta"
 	providerMDBList        = "mdblist"
 	providerOMDb           = "omdb"
@@ -162,6 +163,11 @@ func (p *process) tvSourcesPaused() []string {
 		}
 	}
 	return paused
+}
+
+// sceneNumberingDown says TheXEM's circuit is open, so new scene numbers wait until it answers again.
+func (p *process) sceneNumberingDown() bool {
+	return p.cache.Snapshot().ProviderEnabled(settings.SourceTheXEM) && p.outbound().breaker.State(providerTheXEM).State != httpx.BreakerClosed
 }
 
 // metadataProviderStatus is how a metadata provider stands right now, for Settings -> Metadata.

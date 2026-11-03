@@ -2,11 +2,19 @@ import { expect, test } from "vitest";
 
 import type { components } from "@/api/schema";
 
-import { externalLinks, fileChips, formatSize, partState } from "./workFormat";
+import { externalLinks, fileChips, formatSize, partState, sceneNumber } from "./workFormat";
 
 type Part = components["schemas"]["WorkPart"];
 
 const part = (over: Partial<Part>): Part => ({ id: 1, media_ref: "s01:e01", sort_key: "1", monitored: true, external_ids: [], ...over });
+
+test("an episode shows the scene's number only where TheXEM gives one of its own", () => {
+  expect([
+    sceneNumber(part({ media_ref: "s01:e25", alt_numbers: { scene: "s02:e05" } })),
+    sceneNumber(part({ media_ref: "s01:e01", alt_numbers: { scene: "s01:e01" } })),
+    sceneNumber(part({ alt_numbers: { absolute: "1" } })),
+  ]).toEqual(["S02E05", undefined, undefined]);
+});
 
 test("a part is on disk, missing once it is out, not out yet before, or not wanted", () => {
   const now = Date.parse("2026-10-09T12:00:00Z");

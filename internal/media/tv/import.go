@@ -310,6 +310,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	for _, episode := range detail.Episodes {
 		runtimes[MediaRef(episode.Season, episode.Number)] = episode.RuntimeMs
 	}
+	scene := newSceneNumbers(detail.Episodes)
 	var files []fileEpisodes
 	var rejections []model.Rejection
 	var totalBytes int64
@@ -318,7 +319,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		if !ok {
 			continue
 		}
-		parts, _, err := i.config.Series.ResolveParts(ctx, workID, partKeys(info))
+		parts, _, err := i.config.Series.ResolveParts(ctx, workID, scene.partKeys(info))
 		if err != nil {
 			return nil, err
 		}

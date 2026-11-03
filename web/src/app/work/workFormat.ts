@@ -55,6 +55,13 @@ export function fileChips(file: PartFile): string[] {
 
 export type PartState = "present" | "missing" | "upcoming" | "unmonitored";
 
+/** The number scene releases carry for an episode (TheXEM), as "S02E05"; undefined where it is the episode's own. */
+export function sceneNumber(part: Pick<Part, "media_ref" | "alt_numbers">): string | undefined {
+  const scene = part.alt_numbers?.scene;
+  const match = scene && scene !== part.media_ref ? /^s(\d+):e(\d+)$/.exec(scene) : null;
+  return match ? `S${match[1]}E${match[2]}` : undefined;
+}
+
 /** Where a part stands: on disk, wanted and missing, not out yet, or not wanted. */
 export function partState(part: Part, now = Date.now()): PartState {
   if (part.file) return "present";

@@ -32,3 +32,19 @@ func TestHealthChecksNamesEachPausedSource(t *testing.T) {
 		t.Errorf("no TV library: %+v, want none", checks)
 	}
 }
+
+func TestHealthChecksWarnWhileTheXEMIsDown(t *testing.T) {
+	down := true
+	module := tv.Module{SceneNumberingDown: func() bool { return down }}
+	if checks := module.HealthChecks(1); len(checks) != 1 || checks[0].ID != "tv_xem_down" || checks[0].Link != "/settings/metadata" {
+		t.Errorf("checks = %+v, want one warning linking to Metadata", checks)
+	}
+	down = false
+	if checks := module.HealthChecks(1); len(checks) != 0 {
+		t.Errorf("answering: %+v, want none", checks)
+	}
+	down = true
+	if checks := module.HealthChecks(0); len(checks) != 0 {
+		t.Errorf("no TV library: %+v, want none", checks)
+	}
+}

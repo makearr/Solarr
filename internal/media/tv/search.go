@@ -71,6 +71,8 @@ type wanted struct {
 	owned map[int]score.Facts
 	// names are every title a release may call the series by, cleaned for comparison.
 	names map[string]bool
+	// scene reads a release's numbers as the scene's where TheXEM maps the series.
+	scene sceneNumbers
 }
 
 func seasonNumber(mediaRef string) (int, bool) {
@@ -94,7 +96,7 @@ func (s Search) wantedFor(ctx context.Context, item librarydb.DesiredItem, only 
 	w := wanted{
 		season: season, missing: map[int]library.SeriesEpisode{}, title: detail.Summary.Title, aliases: detail.Aliases,
 		tvdb: detail.IDs[ProviderTVDB], year: detail.Summary.Year, absolute: map[int]int{},
-		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime,
+		anime: SeriesType(detail.Summary.Fields["series_type"]) == SeriesAnime, scene: newSceneNumbers(detail.Episodes),
 	}
 	var runtimeSum, runtimeCount int64
 	for _, episode := range detail.Episodes {
@@ -184,47 +186,66 @@ func (w wanted) titles() map[string]bool {
 	return names
 }
 
-// queries builds the tiers of one season's search: the id query first, then text in the spellings releases use.
-func (w wanted) queries() [][]judge.Query {
-	season := strconv.Itoa(w.season)
-	oneEpisode := len(w.missing) == 1
-	var episodeNumber int
+// maxSceneSeasons bounds the scene seasons one TheTVDB season is asked as.
+const maxSceneSeasons = 3
+
+// sceneSeasons are the seasons the scene releases the missing episodes under, lowest first: the season itself unless
+// TheXEM maps the series.
+func (w wanted) sceneSeasons() []int {
+	var seasons []int
 	for number := range w.missing {
-		episodeNumber = number
+		seasons = append(seasons, w.scene.scene(Key{w.season, number}).Season)
 	}
+	slices.Sort(seasons)
+	seasons = slices.Compact(seasons)
+	return seasons[:min(len(seasons), maxSceneSeasons)]
+}
+
+// queries builds the tiers of one season's search: the id query first, then text in the spellings releases use. The
+// numbers asked are the scene's, which is what indexers hold releases by.
+func (w wanted) queries() [][]judge.Query {
+	oneEpisode := len(w.missing) == 1
+	var episode SceneNumber
+	for number := range w.missing {
+		episode = w.scene.scene(Key{w.season, number})
+	}
+	seasons := w.sceneSeasons()
 
 	var tiers [][]judge.Query
 	if w.tvdb != "" {
-		extra := map[string]string{"tvdbid": w.tvdb, "season": season}
-		needs := idParams
-		if oneEpisode {
-			extra["ep"] = strconv.Itoa(episodeNumber)
-			needs = idParamsOneEp
+		var byID []judge.Query
+		for _, season := range seasons {
+			extra := map[string]string{"tvdbid": w.tvdb, "season": strconv.Itoa(season)}
+			needs := idParams
+			if oneEpisode {
+				extra["ep"] = strconv.Itoa(episode.Number)
+				needs = idParamsOneEp
+			}
+			byID = append(byID, judge.Query{Function: "tvsearch", Extra: extra, Needs: needs})
 		}
-		tiers = append(tiers, []judge.Query{{Function: "tvsearch", Extra: extra, Needs: needs}})
+		tiers = append(tiers, byID)
 	}
 
 	names := append([]string{w.title}, w.aliases...)
 	if len(names) > 3 {
 		names = names[:3]
 	}
-	var text []judge.Query
+	var text, spelled []judge.Query
 	for _, name := range names {
 		clean := releasefacts.CleanQuery(name)
 		if oneEpisode {
-			text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02dE%02d", clean, w.season, episodeNumber)})
-		} else {
-			text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02d", clean, w.season)})
+			text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02dE%02d", clean, episode.Season, episode.Number)})
+		}
+		for _, season := range seasons {
+			if !oneEpisode {
+				text = append(text, judge.Query{Function: "search", Text: fmt.Sprintf("%s S%02d", clean, season)})
+			}
+			spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", clean, season)})
 		}
 	}
 	tiers = append(tiers, text)
 	if w.anime {
 		tiers = append(tiers, w.absoluteQueries(names))
-	}
-
-	var spelled []judge.Query
-	for _, name := range names {
-		spelled = append(spelled, judge.Query{Function: "search", Text: fmt.Sprintf("%s Season %d", releasefacts.CleanQuery(name), w.season)})
 	}
 	tiers = append(tiers, spelled)
 	if w.anime {
@@ -249,6 +270,9 @@ func (w wanted) absoluteQueries(names []string) []judge.Query {
 	var numbers []int
 	for absolute, number := range w.absolute {
 		if _, missing := w.missing[number]; missing {
+			if scene := w.scene.scene(Key{w.season, number}); scene.Absolute > 0 {
+				absolute = scene.Absolute
+			}
 			numbers = append(numbers, absolute)
 		}
 	}
@@ -333,39 +357,36 @@ func (w wanted) coverage(info parsetv.Info) ([]int, bool) {
 	if info.SeasonExtra {
 		return nil, false
 	}
-	wantedSeason := w.season
 	switch {
 	case info.FullSeason || info.MultiSeason && len(info.EpisodeNumbers) == 0:
-		inSeason := info.SeasonNumber == wantedSeason
-		for _, season := range info.Seasons {
-			inSeason = inSeason || season == wantedSeason
-		}
-		if !inSeason {
-			return nil, false
-		}
-		numbers := make([]int, 0, len(w.missing))
+		// A pack holds the episodes the scene releases under its seasons, which for a mapped series need not be ours.
+		packSeasons := append([]int{info.SeasonNumber}, info.Seasons...)
+		var numbers []int
 		for number := range w.missing {
-			numbers = append(numbers, number)
+			if slices.Contains(packSeasons, w.scene.scene(Key{w.season, number}).Season) {
+				numbers = append(numbers, number)
+			}
 		}
-		return numbers, true
+		slices.Sort(numbers)
+		return numbers, len(numbers) > 0
 	case len(info.EpisodeNumbers) > 0:
-		if info.SeasonNumber != wantedSeason {
-			return nil, false
-		}
 		var numbers []int
 		for _, number := range info.EpisodeNumbers {
-			if _, missing := w.missing[number]; missing {
-				numbers = append(numbers, number)
+			episode := w.scene.episode(info.SeasonNumber, number)
+			if _, missing := w.missing[episode.Number]; missing && episode.Season == w.season {
+				numbers = append(numbers, episode.Number)
 			}
 		}
 		return numbers, len(numbers) > 0
 	case len(info.AbsoluteNumbers) > 0 && w.anime:
 		var numbers []int
 		for _, absolute := range info.AbsoluteNumbers {
-			if number, known := w.absolute[absolute]; known {
-				if _, missing := w.missing[number]; missing {
-					numbers = append(numbers, number)
-				}
+			number, known := w.absolute[absolute]
+			if episode, scene := w.scene.fromAbsolute[absolute]; scene {
+				number, known = episode.Number, episode.Season == w.season
+			}
+			if _, missing := w.missing[number]; known && missing {
+				numbers = append(numbers, number)
 			}
 		}
 		return numbers, len(numbers) > 0
