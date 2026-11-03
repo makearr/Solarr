@@ -20,7 +20,7 @@ type Navigation struct{}
 func (Navigation) Levels() []model.Level {
 	return []model.Level{
 		{Key: LevelSeries, Label: "Series", Entity: model.LevelEntityWork, DefaultSort: "title"},
-		{Key: LevelPeople, Label: "Cast", Entity: model.LevelEntityPerson, DefaultSort: "name"},
+		{Key: LevelPeople, Label: "Cast", Entity: model.LevelEntityPerson, DefaultSort: "name", Role: RoleActor},
 		{Key: LevelCollections, Label: "Collections", Entity: model.LevelEntityFranchise, DefaultSort: "name"},
 		{Key: LevelNetworks, Label: "Networks", Entity: model.LevelEntityOrganisation, DefaultSort: "name"},
 		{Key: LevelCrossovers, Label: "Crossovers", Entity: model.LevelEntityCollection, DefaultSort: "name"},

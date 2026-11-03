@@ -50,7 +50,8 @@
         "default_sort": "name",
         "entity": "person",
         "key": "people",
-        "label": "Cast"
+        "label": "Cast",
+        "role": "actor"
       },
       {
         "default_sort": "name",
