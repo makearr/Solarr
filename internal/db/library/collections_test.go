@@ -102,6 +102,39 @@ func TestReadyQueueSkipsExpiredEntries(t *testing.T) {
 	}
 }
 
+func TestReadyQueueTrimDropsWhatWouldBeSentLast(t *testing.T) {
+	opened, queries := newLibrary(t)
+	work := createWork(t, opened, "movie", "Cige")
+	item := createDesired(t, opened, work.ID, "SINGLE", 1)
+	var candidates []int64
+	write(t, opened, func(ctx context.Context, q *librarydb.Queries) error {
+		for index, priority := range []int64{10, 90, 50} {
+			candidate, err := q.UpsertCandidate(ctx, librarydb.UpsertCandidateParams{
+				IndexerID: int64(index + 1), Guid: "g", Title: "t", Protocol: "usenet",
+				DownloadUrl: "u", Source: "search", FirstSeenAt: 1, ExpiresAt: 10_000,
+			})
+			if err != nil {
+				return err
+			}
+			candidates = append(candidates, candidate.ID)
+			if err := q.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
+				CandidateID: candidate.ID, DesiredItemID: item.ID, Priority: priority, QueuedAt: 1, ExpiresAt: 9_000, Origin: "automatic",
+			}); err != nil {
+				return err
+			}
+		}
+		return q.TrimReady(ctx, 2)
+	})
+
+	next, err := queries.NextReady(t.Context(), librarydb.NextReadyParams{Now: 1_000, PageSize: 10})
+	if err != nil {
+		t.Fatalf("NextReady: %v", err)
+	}
+	if len(next) != 2 || next[0].CandidateID != candidates[1] || next[1].CandidateID != candidates[2] {
+		t.Errorf("kept %+v, want the priority 90 and 50 entries", next)
+	}
+}
+
 // ADR-36: the composite priority orders the queue, so the highest goes first
 // and ties break on how long they have waited.
 func TestReadyQueueOrdersByPriorityThenAge(t *testing.T) {

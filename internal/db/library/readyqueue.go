@@ -30,20 +30,27 @@ type ReadyQueue struct{ store *store.Store }
 // NewReadyQueue builds it over an open library store.
 func NewReadyQueue(opened *store.Store) ReadyQueue { return ReadyQueue{store: opened} }
 
-// Hold records entry, replacing any release held earlier for the same album.
+// MaxHeld bounds the queue: priming ten thousand releases would only move the problem (section 10.5).
+const MaxHeld = 200
+
+// Hold records entry, replacing any release held earlier for the same album; beyond MaxHeld the entries
+// that would be sent last are dropped.
 func (r ReadyQueue) Hold(ctx context.Context, entry ReadyEntry) error {
 	return r.store.Write(ctx, store.PrioInteractive, func(ctx context.Context, tx *sql.Tx) error {
 		queries := librarydb.New(tx)
 		if err := queries.DequeueReadyForItem(ctx, entry.DesiredItemID); err != nil {
 			return err
 		}
-		return queries.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
+		if err := queries.EnqueueReady(ctx, librarydb.EnqueueReadyParams{
 			CandidateID: entry.CandidateID, DesiredItemID: entry.DesiredItemID, Priority: entry.Priority,
 			QueuedAt: entry.QueuedAt, ExpiresAt: entry.ExpiresAt, Origin: entry.Origin,
 			SizeBytes: sql.NullInt64{Int64: entry.SizeBytes, Valid: entry.SizeBytes > 0},
 			IndexerID: entry.IndexerID, Guid: entry.GUID, Title: entry.Title, DownloadUrl: entry.DownloadURL,
 			Protocol: entry.Protocol, Score: sql.NullFloat64{Float64: entry.Score, Valid: true},
-		})
+		}); err != nil {
+			return err
+		}
+		return queries.TrimReady(ctx, MaxHeld)
 	})
 }
 

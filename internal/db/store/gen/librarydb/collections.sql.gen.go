@@ -2444,6 +2444,17 @@ func (q *Queries) SetStatRollup(ctx context.Context, arg SetStatRollupParams) er
 	return err
 }
 
+const trimReady = `-- name: TrimReady :exec
+DELETE FROM ready_queue WHERE candidate_id IN (
+  SELECT candidate_id FROM ready_queue ORDER BY priority DESC, queued_at ASC LIMIT -1 OFFSET ?1)
+`
+
+// The queue holds at most keep entries: what would be sent last goes first (section 10.5).
+func (q *Queries) TrimReady(ctx context.Context, keep int64) error {
+	_, err := q.db.ExecContext(ctx, trimReady, keep)
+	return err
+}
+
 const upsertArtwork = `-- name: UpsertArtwork :exec
 INSERT INTO artwork (subject_type, subject_id, kind, source_url, cache_key,
                      width, height, fetched_at)

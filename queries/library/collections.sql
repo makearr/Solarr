@@ -58,6 +58,11 @@ DELETE FROM ready_queue WHERE candidate_id = ?;
 -- name: DequeueReadyForItem :exec
 DELETE FROM ready_queue WHERE desired_item_id = ?;
 
+-- The queue holds at most keep entries: what would be sent last goes first (section 10.5).
+-- name: TrimReady :exec
+DELETE FROM ready_queue WHERE candidate_id IN (
+  SELECT candidate_id FROM ready_queue ORDER BY priority DESC, queued_at ASC LIMIT -1 OFFSET sqlc.arg(keep));
+
 -- name: PurgeExpiredReady :exec
 DELETE FROM ready_queue WHERE expires_at <= ?;
 
