@@ -31,6 +31,9 @@ const decisionRetentionPages = 250
 // finishedJobsKept is how long a finished job stays listed; without a limit jobs.db only grows, by thousands a day.
 const finishedJobsKept = 14 * 24 * time.Hour
 
+// downloadSpeedKept is how long a download's speed row stays; the page shows the last 30 days.
+const downloadSpeedKept = 90 * 24 * time.Hour
+
 // jobRetentionBatch and jobRetentionPages bound one run's transactions and its length (Invariant 2).
 const (
 	jobRetentionBatch = 200
@@ -50,6 +53,7 @@ var maintenanceDefinitions = []jobs.Definition{
 // expired releases nothing refers to any more (section 5.7); without it both tables only grow.
 type decisionRetentionJob struct {
 	candidates statistics.Candidates
+	speeds     statistics.DownloadSpeeds
 	keepFull   time.Duration
 	clock      clock.Clock
 	logger     *slog.Logger
@@ -59,6 +63,9 @@ func (j decisionRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
 	now := j.clock.Now()
 	retired, err := j.candidates.Retire(ctx, now, now.Add(-j.keepFull), decisionRetentionPages)
 	if err != nil {
+		return err
+	}
+	if _, err := j.speeds.Retire(ctx, now.Add(-downloadSpeedKept), decisionRetentionPages); err != nil {
 		return err
 	}
 	if retired.Decisions > 0 || retired.Candidates > 0 {
@@ -217,7 +224,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		recycleBin: library.NewRecycleBin(p.library, p.fsys, clock.NewSystem()), cache: p.cache, logger: p.logger,
 	})
 	executor.Handle(decisionRetentionJobType, decisionRetentionJob{
-		candidates: statistics.NewCandidates(p.statistics), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
+		candidates: statistics.NewCandidates(p.statistics), speeds: statistics.NewDownloadSpeeds(p.statistics), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
 		clock: clock.NewSystem(), logger: p.logger,
 	})
 	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})

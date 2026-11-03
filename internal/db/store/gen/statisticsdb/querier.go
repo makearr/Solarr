@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	// Release decisions since a time, per library and outcome.
 	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
+	// Downloads, bytes and seconds per client since a time.
+	AggregateDownloadSpeedByClient(ctx context.Context, since int64) ([]AggregateDownloadSpeedByClientRow, error)
 	// Grabs, imports and failures per library and indexer since a time; history keeps the indexer's name as it was then.
 	AggregateHistoryByIndexer(ctx context.Context, since int64) ([]AggregateHistoryByIndexerRow, error)
 	// Searches and finds per library since a time.
@@ -25,6 +27,8 @@ type Querier interface {
 	CountDecisionRollup(ctx context.Context) (int64, error)
 	CountStatRollup(ctx context.Context) (int64, error)
 	DeleteDecisionsByID(ctx context.Context, ids interface{}) (int64, error)
+	// The oldest page of rows before a time, removed.
+	DeleteDownloadSpeedBefore(ctx context.Context, arg DeleteDownloadSpeedBeforeParams) (int64, error)
 	// The oldest page of searches before a time, removed.
 	DeleteSearchLogBefore(ctx context.Context, arg DeleteSearchLogBeforeParams) (int64, error)
 	DeleteStatRollupMetric(ctx context.Context, metric string) error
@@ -32,6 +36,7 @@ type Querier interface {
 	// A candidate goes once it expired and no decision refers to it; a held release carries its own copy.
 	DeleteUnreferencedExpiredCandidates(ctx context.Context, arg DeleteUnreferencedExpiredCandidatesParams) (int64, error)
 	GetCandidate(ctx context.Context, id int64) (Candidate, error)
+	InsertDownloadSpeed(ctx context.Context, arg InsertDownloadSpeedParams) error
 	InsertSearchLog(ctx context.Context, arg InsertSearchLogParams) error
 	// Where a copy resumes.
 	LastCandidateID(ctx context.Context) (int64, error)

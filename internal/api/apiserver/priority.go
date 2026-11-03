@@ -133,3 +133,30 @@ func (s *Server) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, s.logger, http.StatusOK, gen.HuntBudget{PerHour: view.PerHour, NewRelease: view.NewRelease, Gap: view.Gap, Upgrade: view.Upgrade})
 }
+
+// DownloaderSpeedView is one client's average over the window (F34).
+type DownloaderSpeedView struct {
+	DownloaderID, Downloads, SizeBytes, BytesPerSecond int64
+}
+
+// ListDownloaderSpeeds answers what each client managed over the last 30 days.
+func (s *Server) ListDownloaderSpeeds(w http.ResponseWriter, r *http.Request) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.downloaderSpeeds == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "download speeds are not recorded")
+		return
+	}
+	views, err := s.downloaderSpeeds(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	out := make([]gen.DownloaderSpeed, len(views))
+	for i, view := range views {
+		out[i] = gen.DownloaderSpeed{DownloaderId: view.DownloaderID, Downloads: view.Downloads, SizeBytes: view.SizeBytes, BytesPerSecond: view.BytesPerSecond}
+	}
+	writeJSON(w, s.logger, http.StatusOK, out)
+}

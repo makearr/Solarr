@@ -35,6 +35,9 @@ export function Downloaders() {
     queryFn: () => ok(api.GET("/downloaders")),
   });
 
+  const speeds = useQuery({ queryKey: ["downloaders", "speeds"], queryFn: () => ok(api.GET("/downloaders/speeds")) });
+  const speedOf = (id: number) => speeds.data?.find((entry) => entry.downloader_id === id);
+
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["downloaders"] });
 
   const setEnabled = useMutation({
@@ -129,6 +132,11 @@ export function Downloaders() {
               </div>
               <span className="flex items-center gap-2 text-xs text-ink-muted">
                 {describeOptions(downloader.options, kindOf(downloader.impl))}
+                {speedOf(downloader.id) && (
+                  <span title="Average over the last 30 days, from first seen running to finished">
+                    {formatSpeed(speedOf(downloader.id)?.bytes_per_second ?? 0)} over {speedOf(downloader.id)?.downloads} downloads
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => setEditing(editing === downloader.id ? null : downloader.id)}
@@ -737,4 +745,10 @@ function StallFields({ stall, onChange }: { stall: StallCleanup; onChange: (stal
       </div>
     </fieldset>
   );
+}
+
+/** Megabytes per second for a client's average; under 1 MB/s it reads in kilobytes. */
+export function formatSpeed(bytesPerSecond: number): string {
+  if (bytesPerSecond >= 1_000_000) return `${(bytesPerSecond / 1_000_000).toFixed(1)} MB/s`;
+  return `${Math.round(bytesPerSecond / 1_000)} KB/s`;
 }

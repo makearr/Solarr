@@ -105,8 +105,10 @@ type Config struct {
 	SendHeld func(ctx context.Context) error
 	// Imported is optional: told once a download's files are in the library, e.g. to settle an upgrade.
 	Imported func(ctx context.Context, acquisition library.Acquisition)
-	Clock    clock.Clock
-	Logger   *slog.Logger
+	// Speed is optional: told how many bytes a client downloaded in how many seconds, for the Clients page (F34).
+	Speed  func(ctx context.Context, downloaderID, sizeBytes, seconds int64)
+	Clock  clock.Clock
+	Logger *slog.Logger
 }
 
 // Job is one poll.
@@ -447,6 +449,10 @@ func (j *Job) setFailed(ctx context.Context, acquisition library.Acquisition, de
 
 func (j *Job) completed(ctx context.Context, client Client, acquisition library.Acquisition, entry download.Download) error {
 	now := j.config.Clock.Now().Unix()
+	// Only a download seen running measures the client: one first seen finished says nothing of how long it took.
+	if j.config.Speed != nil && acquisition.State == StateDownloading && entry.SizeBytes > 0 && now > acquisition.UpdatedAt {
+		j.config.Speed(ctx, acquisition.DownloaderID, entry.SizeBytes, now-acquisition.UpdatedAt)
+	}
 	localPath := entry.Path
 	if client.LocalPath != nil {
 		localPath = client.LocalPath(entry.Path)

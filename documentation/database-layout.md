@@ -20,6 +20,7 @@ what was decided about it (`candidate_decision`, `decision_rollup`), copied ther
 The planner, dispatch and Wanted never read them: a held release and an acquisition carry their own release, and
 freshness reads `rss_sighting`. Interactive search and a person's send read the decisions from `statistics.db`;
 `library.db`'s old candidate tables are no longer written and are dropped a release later.
+`download_speed` logs bytes and seconds per finished download and client (only downloads seen running), kept 90 days; the Clients page shows the 30-day average, and nothing chooses a client by it (F34).
 
 Before revision 2 the paragraph below was true. There is no `history.db`. `decision_rollup` sat in `library.db` beside the decisions it
 aggregates, so F1's "why wasn't this downloaded?" stays one join across both the recent and the

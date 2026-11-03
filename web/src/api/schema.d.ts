@@ -1076,6 +1076,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/downloaders/speeds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How fast each download client finished its downloads over the last 30 days (F34).
+         * @description Measured only on downloads Solarr saw running, from first seen to finished, so it includes the client's queue wait and is accurate to a poll (a minute). Shown, never used to choose a client.
+         */
+        get: operations["listDownloaderSpeeds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metadata/providers": {
         parameters: {
             query?: never;
@@ -7962,6 +7982,19 @@ export interface components {
             /** @description Searches spent on upgrades. */
             upgrade: number;
         };
+        DownloaderSpeed: {
+            /** Format: int64 */
+            downloader_id: number;
+            /** Format: int64 */
+            downloads: number;
+            /** Format: int64 */
+            size_bytes: number;
+            /**
+             * Format: int64
+             * @description Total bytes over total seconds.
+             */
+            bytes_per_second: number;
+        };
         /** @description ADR-36's trigger weights and ADR-55's release-date freshness window. */
         PrioritySettings: {
             /**
@@ -10789,6 +10822,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HuntBudget"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    listDownloaderSpeeds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One row per client that finished a download in the window. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloaderSpeed"][];
                 };
             };
             401: components["responses"]["Problem"];

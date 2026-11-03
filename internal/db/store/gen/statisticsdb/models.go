@@ -49,6 +49,14 @@ type DecisionRollup struct {
 	TopReason     sql.NullString
 }
 
+type DownloadSpeed struct {
+	ID           int64
+	At           int64
+	DownloaderID int64
+	SizeBytes    int64
+	Seconds      int64
+}
+
 type History struct {
 	ID            int64
 	At            int64

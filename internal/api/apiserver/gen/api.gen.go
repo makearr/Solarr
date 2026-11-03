@@ -2135,6 +2135,15 @@ type DownloaderOptions struct {
 	WatchFolder *string `json:"watch_folder,omitempty"`
 }
 
+// DownloaderSpeed defines model for DownloaderSpeed.
+type DownloaderSpeed struct {
+	// BytesPerSecond Total bytes over total seconds.
+	BytesPerSecond int64 `json:"bytes_per_second"`
+	DownloaderId   int64 `json:"downloader_id"`
+	Downloads      int64 `json:"downloads"`
+	SizeBytes      int64 `json:"size_bytes"`
+}
+
 // DrainMove defines model for DrainMove.
 type DrainMove struct {
 	// AffinityKey The top-level directory this file was grouped and moved with.
@@ -7198,6 +7207,9 @@ type ServerInterface interface {
 	// Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
 	// (GET /downloaders/schema)
 	ListDownloaderKinds(w http.ResponseWriter, r *http.Request)
+	// How fast each download client finished its downloads over the last 30 days (F34).
+	// (GET /downloaders/speeds)
+	ListDownloaderSpeeds(w http.ResponseWriter, r *http.Request)
 	// Test a download client before it is added, and read its download folder. Administrator only.
 	// (POST /downloaders/test)
 	TestDownloaderConfig(w http.ResponseWriter, r *http.Request)
@@ -8350,6 +8362,12 @@ func (_ Unimplemented) AddDownloader(w http.ResponseWriter, r *http.Request) {
 // Every kind of download client Solarr can drive, as Sonarr's /downloadclient/schema lists them.
 // (GET /downloaders/schema)
 func (_ Unimplemented) ListDownloaderKinds(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// How fast each download client finished its downloads over the last 30 days (F34).
+// (GET /downloaders/speeds)
+func (_ Unimplemented) ListDownloaderSpeeds(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12127,6 +12145,28 @@ func (siw *ServerInterfaceWrapper) ListDownloaderKinds(w http.ResponseWriter, r 
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDownloaderKinds(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ListDownloaderSpeeds operation middleware
+func (siw *ServerInterfaceWrapper) ListDownloaderSpeeds(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListDownloaderSpeeds(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20254,6 +20294,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/downloaders/schema", wrapper.ListDownloaderKinds)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/downloaders/speeds", wrapper.ListDownloaderSpeeds)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/downloaders/test", wrapper.TestDownloaderConfig)

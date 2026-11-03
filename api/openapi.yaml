@@ -1570,6 +1570,25 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "503": { $ref: "#/components/responses/Problem" }
 
+  /downloaders/speeds:
+    get:
+      operationId: listDownloaderSpeeds
+      tags: [settings]
+      summary: How fast each download client finished its downloads over the last 30 days (F34).
+      description: >-
+        Measured only on downloads Solarr saw running, from first seen to finished, so it includes the client's queue
+        wait and is accurate to a poll (a minute). Shown, never used to choose a client.
+      responses:
+        "200":
+          description: One row per client that finished a download in the window.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/DownloaderSpeed" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /metadata/providers:
     get:
       operationId: listMetadataProviders
@@ -11364,6 +11383,15 @@ components:
         new_release: { type: integer, description: Searches spent on recent releases. }
         gap: { type: integer, description: Searches spent on missing older items. }
         upgrade: { type: integer, description: Searches spent on upgrades. }
+
+    DownloaderSpeed:
+      type: object
+      required: [downloader_id, downloads, size_bytes, bytes_per_second]
+      properties:
+        downloader_id: { type: integer, format: int64 }
+        downloads: { type: integer, format: int64 }
+        size_bytes: { type: integer, format: int64 }
+        bytes_per_second: { type: integer, format: int64, description: Total bytes over total seconds. }
 
     PrioritySettings:
       type: object

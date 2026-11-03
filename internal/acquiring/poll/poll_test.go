@@ -80,6 +80,7 @@ type env struct {
 	imported     []string
 	searched     []int64
 	history      []string
+	speeds       []string
 	logger       *slog.Logger
 }
 
@@ -136,6 +137,9 @@ func (e *env) job() *poll.Job {
 		},
 		History: func(_ context.Context, kind download.HistoryKind, acquisition library.Acquisition, detail string) {
 			e.history = append(e.history, fmt.Sprintf("%s %s %s", kind, acquisition.DownloadClientRef, detail))
+		},
+		Speed: func(_ context.Context, downloaderID, sizeBytes, seconds int64) {
+			e.speeds = append(e.speeds, fmt.Sprintf("%d:%d:%d", downloaderID, sizeBytes, seconds))
 		},
 		Clock: e.clock, Logger: cmpLogger(e.logger),
 	})
@@ -760,5 +764,31 @@ func TestPoll_AStalledDownloadSaysWhyItsFinishedFilesStayed(t *testing.T) {
 	got := e.state(t, sent.ID)
 	if got.State != poll.StateFailed || !strings.Contains(got.LastError, "its finished files were not imported: /elsewhere/incomplete/Heka-Zanuvode is outside every download folder") {
 		t.Errorf("= %s %q, want FAILED saying why the finished files stayed", got.State, got.LastError)
+	}
+}
+
+func TestPoll_RecordsHowLongARunningDownloadTook(t *testing.T) {
+	e := newEnv(t)
+	e.send(t, "nzo-1")
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateDownloading, SizeBytes: 4_000}}
+	e.run(t)
+	e.clock.Advance(40 * time.Second)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted, SizeBytes: 4_000,
+		Path: "/downloads/complete/Heka-Zanuvode"}}
+	e.run(t)
+	if !slices.Equal(e.speeds, []string{"1:4000:40"}) {
+		t.Errorf("speeds = %v, want one download of 4000 bytes in 40 seconds on client 1", e.speeds)
+	}
+}
+
+func TestPoll_ADownloadFirstSeenFinishedMeasuresNothing(t *testing.T) {
+	e := newEnv(t)
+	e.send(t, "nzo-1")
+	e.clock.Advance(time.Hour)
+	e.client.downloads = []download.Download{{ClientRef: "nzo-1", Name: "Heka-Zanuvode", State: download.StateCompleted, SizeBytes: 4_000,
+		Path: "/downloads/complete/Heka-Zanuvode"}}
+	e.run(t)
+	if len(e.speeds) != 0 {
+		t.Errorf("speeds = %v, want none: the download was never seen running", e.speeds)
 	}
 }

@@ -3,11 +3,14 @@ package app
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/acquiring/poll"
+	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/statistics"
 	"github.com/makearr/Solarr/internal/importing/importjob"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/media"
@@ -30,7 +33,7 @@ func (p *process) pollJob() *poll.Job {
 		Blocklist: library.NewBlocklistStore(p.library), FS: p.fsys,
 		Clients: p.pollClients, DownloadFolders: p.pollDownloadFolders,
 		Import: p.importAcquisition, Search: p.searchAgain, History: p.recordDownloadHistory,
-		SendHeld: p.sendHeld, Imported: p.afterDownloadImported, Clock: clock.NewSystem(), Logger: p.logger,
+		SendHeld: p.sendHeld, Imported: p.afterDownloadImported, Speed: p.recordDownloadSpeed, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 }
 
@@ -152,4 +155,29 @@ func pollStallRules(rules settings.StallRules) poll.StallRules {
 		Enabled: rules.Enabled, Strikes: rules.Strikes, Check: rules.Check, NoProgress: rules.NoProgress,
 		IgnoreAboveBytes: rules.IgnoreAboveBytes,
 	}
+}
+
+// downloadSpeedWindow is how far back the Clients page averages.
+const downloadSpeedWindow = 30 * 24 * time.Hour
+
+// recordDownloadSpeed logs how long a client took over a download; a failure is only logged.
+func (p *process) recordDownloadSpeed(ctx context.Context, downloaderID, sizeBytes, seconds int64) {
+	if err := statistics.NewDownloadSpeeds(p.statistics).Record(ctx, downloaderID, sizeBytes, seconds, clock.NewSystem().Now()); err != nil {
+		p.logger.Warn("download speed not recorded", slog.Int64("downloader_id", downloaderID), slog.Any("error", err))
+	}
+}
+
+// downloaderSpeeds answers each client's average over the last 30 days for the Clients page.
+func (p *process) downloaderSpeeds(ctx context.Context) ([]apiserver.DownloaderSpeedView, error) {
+	speeds, err := statistics.NewDownloadSpeeds(p.statistics).ByClient(ctx, clock.NewSystem().Now().Add(-downloadSpeedWindow))
+	if err != nil {
+		return nil, err
+	}
+	views := make([]apiserver.DownloaderSpeedView, len(speeds))
+	for i, speed := range speeds {
+		views[i] = apiserver.DownloaderSpeedView{
+			DownloaderID: speed.DownloaderID, Downloads: speed.Downloads, SizeBytes: speed.SizeBytes, BytesPerSecond: speed.BytesPerSecond(),
+		}
+	}
+	return views, nil
 }

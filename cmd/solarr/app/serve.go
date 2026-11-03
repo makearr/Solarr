@@ -805,8 +805,9 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ArtworkChoices: adapters.ArtworkChoices{
 			Works: library.NewWorks(p.library), Picturing: adapters.MediaTypes{Registry: p.media}.PicturingOf, People: p.musicPictures(),
 		},
-		HuntBudget: p.huntBudget,
-		Statistics: adapters.Statistics{Rollup: statistics.NewRollup(p.statistics)},
+		HuntBudget:       p.huntBudget,
+		DownloaderSpeeds: p.downloaderSpeeds,
+		Statistics:       adapters.Statistics{Rollup: statistics.NewRollup(p.statistics)},
 		Duplicates: adapters.Duplicates{
 			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,
 		},

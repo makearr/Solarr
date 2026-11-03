@@ -117,6 +117,8 @@ type Config struct {
 
 	// HuntBudget answers the search budget's spending. Optional: nil answers 503.
 	HuntBudget func(ctx context.Context) (HuntBudgetView, error)
+	// DownloaderSpeeds answers each client's recent average speed. Optional: nil answers 503.
+	DownloaderSpeeds func(ctx context.Context) ([]DownloaderSpeedView, error)
 	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
@@ -331,6 +333,7 @@ type Server struct {
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
 	huntBudget              func(ctx context.Context) (HuntBudgetView, error)
+	downloaderSpeeds        func(ctx context.Context) ([]DownloaderSpeedView, error)
 	duplicates              DuplicateReader
 	similarVideos           SimilarVideoReader
 	recycleContents         RecycleBinContents
@@ -464,6 +467,7 @@ func New(config Config) (*Server, error) {
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
 		huntBudget:              config.HuntBudget,
+		downloaderSpeeds:        config.DownloaderSpeeds,
 		duplicates:              config.Duplicates,
 		similarVideos:           config.SimilarVideos,
 		recycleContents:         config.RecycleBinContents,
@@ -824,6 +828,7 @@ func New(config Config) (*Server, error) {
 			secured.Get("/priority", server.GetPrioritySettings)
 			secured.Patch("/priority", server.UpdatePrioritySettings)
 			secured.Get("/hunt/budget", server.GetHuntBudget)
+			secured.Get("/downloaders/speeds", server.ListDownloaderSpeeds)
 			secured.Get("/metadata/providers", server.ListMetadataProviders)
 			secured.Put("/metadata/providers/{key}/apikey", func(w http.ResponseWriter, r *http.Request) {
 				server.SetMetadataProviderKey(w, r, chi.URLParam(r, "key"))
