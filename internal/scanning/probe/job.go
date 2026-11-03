@@ -14,8 +14,6 @@ import (
 	"io"
 	"log/slog"
 	"path"
-	"slices"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -179,10 +177,6 @@ type PerceptualHasher interface {
 	PerceptualHash(ctx context.Context, path string) (mediatool.VideoHash, error)
 }
 
-// backfillParallel is how many files a backfill hashes at once: a hash is round trips on a share and seven frame
-// decodes, and the tool's own slots still bound the processes.
-const backfillParallel = 4
-
 // backfill hashes the video files a pass still lists (the hash was not written at scan time); a file that cannot
 // be read stays unhashed and is asked again next run.
 func (j *Job) backfill(
@@ -203,22 +197,14 @@ func (j *Job) backfill(
 		if err != nil {
 			return fmt.Errorf("probe: %w", err)
 		}
-		for chunk := range slices.Chunk(batch, backfillParallel) {
-			var hashing sync.WaitGroup
-			var done atomic.Int64
-			for _, file := range chunk {
-				hashing.Go(func() {
-					if err := hash(ctx, file); err != nil {
-						j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
-						return
-					}
-					done.Add(1)
-				})
+		for _, file := range batch {
+			if err := hash(ctx, file); err != nil {
+				j.logger.WarnContext(ctx, name+" failed", slog.Int64("media_object_id", file.MediaObjectID), slog.Any("error", err))
+			} else {
+				hashed++
 			}
-			hashing.Wait()
-			hashed += int(done.Load())
 			if j.clock.Now().Sub(started) >= yieldAfter {
-				j.resumeAt[pass].Store(chunk[len(chunk)-1].MediaObjectID)
+				j.resumeAt[pass].Store(file.MediaObjectID)
 				return fmt.Errorf("probe: %d %s hashes in %s: %w", hashed, name, yieldAfter, jobs.ErrYield)
 			}
 		}

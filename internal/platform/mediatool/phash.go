@@ -145,21 +145,18 @@ func (s *Subprocess) PerceptualHash(ctx context.Context, path string) (VideoHash
 		return VideoHash{}, ErrNoFrames
 	}
 	slots := make([][]byte, phashSamples)
-	// Each frame is its own seek and decode, so they run side by side within the tool's shared slots.
-	s.eachInParallel(ctx, phashSamples, func(sample int) {
-		at := length * time.Duration(sample+1) / (phashSamples + 1)
-		if frame, err := s.frameAt(ctx, path, at); err == nil {
-			slots[sample] = frame
-		}
-	})
-	if err := ctx.Err(); err != nil {
-		return VideoHash{}, err
-	}
 	read := 0
-	for _, frame := range slots {
-		if frame != nil {
-			read++
+	for sample := range phashSamples {
+		at := length * time.Duration(sample+1) / (phashSamples + 1)
+		frame, err := s.frameAt(ctx, path, at)
+		if err != nil {
+			if ctx.Err() != nil {
+				return VideoHash{}, ctx.Err()
+			}
+			continue
 		}
+		slots[sample] = frame
+		read++
 	}
 	if read <= phashSamples/2 {
 		return VideoHash{}, ErrNoFrames
