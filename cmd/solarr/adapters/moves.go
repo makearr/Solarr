@@ -139,6 +139,9 @@ func (a Rename) renaming(categoryID int64) (settings.Category, media.Renaming, e
 	if !ok {
 		return settings.Category{}, nil, fmt.Errorf("%w: a %s library has no naming to rename by", apiserver.ErrNotBuiltForMediaType, category.MediaType)
 	}
+	if category.Naming != nil && category.Naming.RenameMode() == settings.RenameExistingNever {
+		return settings.Category{}, nil, fmt.Errorf("%w: %s", apiserver.ErrRenameOff, category.Name)
+	}
 	return category, renaming, nil
 }
 

@@ -57,6 +57,7 @@ const (
 	outageRetryScheduleCron        = "*/5 * * * *"  // every 5 minutes; does nothing unless a provider came back
 	importRetryScheduleCron        = "*/30 * * * *" // twice an hour; a full disk or an offline root is not fixed in a minute
 	tvTitleRenameScheduleCron      = "25 */6 * * *" // every 6 hours; a TBA title is usually filled within a day
+	automaticRenameScheduleCron    = "35 3 * * *"   // daily at 03:35; a naming change reaches the files overnight
 )
 
 // buildTaskRegistry declares every periodic action this process has (ADR-59), in the order a
@@ -87,6 +88,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(p.outageRetryTask())
 	registry.MustRegister(p.importRetryTask())
 	registry.MustRegister(p.tvTitleRenameTask())
+	registry.MustRegister(p.automaticRenameTask())
 	registry.MustRegister(jobs.Task{
 		Key: "tv_crossovers", Name: "Find crossover episodes", DefaultCadence: crossoverPassScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,

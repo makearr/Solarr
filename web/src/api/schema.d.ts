@@ -5521,6 +5521,11 @@ export interface components {
             replace_illegal_characters: boolean;
             /** @enum {string} */
             colon_replacement: "delete" | "dash" | "space_dash" | "space_dash_space" | "smart";
+            /**
+             * @description Whether files already in the library are renamed to match the naming. never hides the rename and refuses it; on_request (the default) previews, then renames on accept; automatic renames on a schedule, each run planned the same way. Absent means on_request.
+             * @enum {string}
+             */
+            rename_existing?: "never" | "on_request" | "automatic";
             /** @description A template per slot key the media type declares. */
             formats: {
                 [key: string]: string;

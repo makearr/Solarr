@@ -68,6 +68,9 @@ func writeError(w http.ResponseWriter, logger *slog.Logger, err error) {
 	case errors.Is(err, ErrNotBuiltForMediaType):
 		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Not available yet", err.Error())
 
+	case errors.Is(err, ErrRenameOff):
+		writeProblem(w, logger, http.StatusConflict, TypeConflict, "Renaming is off", err.Error())
+
 	case errors.Is(err, ErrInvalidChoice):
 		writeProblem(w, logger, http.StatusBadRequest, TypeBadRequest, "Bad request", err.Error())
 

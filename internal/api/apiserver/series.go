@@ -5,6 +5,9 @@ import "errors"
 // ErrNotBuiltForMediaType is a feature the media type has no engine for yet; answered as 409 with the reason.
 var ErrNotBuiltForMediaType = errors.New("apiserver: not built for this media type")
 
+// ErrRenameOff is a rename asked of a library whose naming says never to rename existing files; answered as 409.
+var ErrRenameOff = errors.New("apiserver: renaming existing files is off for this library")
+
 // ErrInvalidChoice is a value the request named that the series cannot take (an unknown monitor option, a profile of
 // another media type); answered as 400 with the reason.
 var ErrInvalidChoice = errors.New("apiserver: invalid choice")

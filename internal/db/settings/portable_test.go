@@ -572,7 +572,7 @@ func TestDocument_RoundTrips_IncludesNaming(t *testing.T) {
 	music := mustCategory(t, cache, "music", "Music", 10)
 	mustCategory(t, cache, "music", "Soundtracks", 20)
 	naming := settings.NamingProfile{
-		RenameFiles: true, ReplaceIllegalCharacters: false, ColonReplacement: "dash",
+		RenameFiles: true, ReplaceIllegalCharacters: false, ColonReplacement: "dash", RenameExisting: settings.RenameExistingOnRequest,
 		Formats: map[string]string{"artist_folder": "{Artist Name}", "standard_track": "{track:00} {Track Title}"},
 	}
 	if err := cache.SetCategoryNaming(t.Context(), music.ID, naming); err != nil {

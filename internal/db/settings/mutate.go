@@ -915,6 +915,11 @@ func (c *Cache) SetCategoryNaming(ctx context.Context, categoryID int64, profile
 	if !found {
 		return fmt.Errorf("%w: category %d", ErrNotFound, categoryID)
 	}
+	switch profile.RenameMode() {
+	case RenameExistingNever, RenameExistingOnRequest, RenameExistingAutomatic:
+	default:
+		return fmt.Errorf("%w: unknown rename_existing %q", ErrInvalidNaming, profile.RenameExisting)
+	}
 	if c.validateNaming != nil {
 		if err := c.validateNaming(category.MediaType, profile); err != nil {
 			return fmt.Errorf("%w: %w", ErrInvalidNaming, err)
@@ -940,6 +945,7 @@ func writeCategoryNaming(
 			RenameFiles:              boolToInt(profile.RenameFiles),
 			ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
 			ColonReplacement:         profile.ColonReplacement,
+			RenameExisting:           profile.RenameMode(),
 			ID:                       profileID,
 		})
 		if err != nil {
@@ -951,6 +957,7 @@ func writeCategoryNaming(
 			RenameFiles:              boolToInt(profile.RenameFiles),
 			ReplaceIllegalCharacters: boolToInt(profile.ReplaceIllegalCharacters),
 			ColonReplacement:         profile.ColonReplacement,
+			RenameExisting:           profile.RenameMode(),
 		})
 		if err != nil {
 			return fmt.Errorf("settings: create naming profile for category %d: %w", categoryID, err)

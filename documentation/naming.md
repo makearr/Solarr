@@ -67,6 +67,13 @@ folder moves to one new folder (an album, a season, a movie, and the artist or s
 other files (`cover.jpg`, `tvshow.nfo`) go with it. An audio or video file is never a companion, and a companion
 whose new name is taken stays where it is.
 
+### Rename Existing Files
+
+The naming's `rename_existing` is per library. `never` hides Apply to library and refuses the rename (409) on the
+library, the root and a work's page; `on_request` (the default) previews, then renames on accept; `automatic` also
+lets the nightly task "Rename libraries set to rename automatically" plan the rename as a manual one is and start it.
+A library whose last rename job is still planned, running or paused is skipped for that run.
+
 ## Episodes named before their title was known
 
 An episode still titled TBA is held from import for up to 48 hours after it aired, as the library's **Episode Title

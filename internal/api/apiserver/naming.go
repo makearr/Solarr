@@ -213,6 +213,7 @@ func (s *Server) decodeNaming(w http.ResponseWriter, r *http.Request) (settings.
 	return settings.NamingProfile{
 		RenameFiles: body.RenameFiles, ReplaceIllegalCharacters: body.ReplaceIllegalCharacters,
 		ColonReplacement: string(body.ColonReplacement), Formats: body.Formats,
+		RenameExisting: renameExistingOf(body.RenameExisting),
 	}, true
 }
 
@@ -246,11 +247,20 @@ func (s *Server) libraryNamingView(category settings.Category, scheme NamingSche
 	return view
 }
 
+func renameExistingOf(mode *gen.NamingSettingsRenameExisting) string {
+	if mode == nil {
+		return ""
+	}
+	return string(*mode)
+}
+
 func namingSettingsView(profile settings.NamingProfile) gen.NamingSettings {
+	mode := gen.NamingSettingsRenameExisting(profile.RenameMode())
 	return gen.NamingSettings{
 		RenameFiles:              profile.RenameFiles,
 		ReplaceIllegalCharacters: profile.ReplaceIllegalCharacters,
 		ColonReplacement:         gen.NamingSettingsColonReplacement(profile.ColonReplacement),
+		RenameExisting:           &mode,
 		Formats:                  profile.Formats,
 	}
 }

@@ -236,6 +236,7 @@ type NamingProfile struct {
 	RenameFiles              int64
 	ReplaceIllegalCharacters int64
 	ColonReplacement         string
+	RenameExisting           string
 }
 
 type PlacementAffinity struct {

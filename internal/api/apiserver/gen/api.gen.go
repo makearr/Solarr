@@ -622,6 +622,13 @@ const (
 	NamingSettingsColonReplacementSpaceDashSpace NamingSettingsColonReplacement = "space_dash_space"
 )
 
+// Defines values for NamingSettingsRenameExisting.
+const (
+	NamingSettingsRenameExistingAutomatic NamingSettingsRenameExisting = "automatic"
+	NamingSettingsRenameExistingNever     NamingSettingsRenameExisting = "never"
+	NamingSettingsRenameExistingOnRequest NamingSettingsRenameExisting = "on_request"
+)
+
 // Defines values for PackDetectedFrom.
 const (
 	PackDetectedFromStructure        PackDetectedFrom = "structure"
@@ -3881,6 +3888,9 @@ type NamingSettings struct {
 	// Formats A template per slot key the media type declares.
 	Formats map[string]string `json:"formats"`
 
+	// RenameExisting Whether files already in the library are renamed to match the naming. never hides the rename and refuses it; on_request (the default) previews, then renames on accept; automatic renames on a schedule, each run planned the same way. Absent means on_request.
+	RenameExisting *NamingSettingsRenameExisting `json:"rename_existing,omitempty"`
+
 	// RenameFiles Lidarr's "Rename Tracks". Off, a file keeps the name it arrived with.
 	RenameFiles bool `json:"rename_files"`
 
@@ -3890,6 +3900,9 @@ type NamingSettings struct {
 
 // NamingSettingsColonReplacement defines model for NamingSettings.ColonReplacement.
 type NamingSettingsColonReplacement string
+
+// NamingSettingsRenameExisting Whether files already in the library are renamed to match the naming. never hides the rename and refuses it; on_request (the default) previews, then renames on accept; automatic renames on a schedule, each run planned the same way. Absent means on_request.
+type NamingSettingsRenameExisting string
 
 // NamingSlot defines model for NamingSlot.
 type NamingSlot struct {

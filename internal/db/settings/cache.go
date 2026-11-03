@@ -267,6 +267,7 @@ func convertNamingProfiles(
 			RenameFiles:              row.RenameFiles != 0,
 			ReplaceIllegalCharacters: row.ReplaceIllegalCharacters != 0,
 			ColonReplacement:         row.ColonReplacement,
+			RenameExisting:           row.RenameExisting,
 			Formats:                  map[string]string{},
 		}
 	}

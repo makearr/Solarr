@@ -32,7 +32,7 @@ func TestSetCategoryNaming_CreatesThenReplaces(t *testing.T) {
 		t.Fatalf("SetCategoryNaming: %v", err)
 	}
 	second := settings.NamingProfile{
-		RenameFiles: false, ReplaceIllegalCharacters: false, ColonReplacement: "delete",
+		RenameFiles: false, ReplaceIllegalCharacters: false, ColonReplacement: "delete", RenameExisting: settings.RenameExistingOnRequest,
 		Formats: map[string]string{"standard_track": "{Track Title}"},
 	}
 	if err := cache.SetCategoryNaming(t.Context(), category.ID, second); err != nil {
@@ -102,5 +102,34 @@ func TestDeleteCategory_TakesItsNamingProfileWithIt(t *testing.T) {
 	}
 	if err := cache.SetCategoryNaming(t.Context(), again.ID, musicNaming("{Track Title}")); err != nil {
 		t.Fatalf("SetCategoryNaming after delete: %v", err)
+	}
+}
+
+// A library's rename_existing round-trips; an empty one is saved as on_request and an unknown one is refused.
+func TestSetCategoryNaming_RenameExisting(t *testing.T) {
+	cache, _ := newCache(t)
+	category, err := cache.CreateCategory(t.Context(), "music", "Music", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	profile := musicNaming("{Track Title}")
+	if err := cache.SetCategoryNaming(t.Context(), category.ID, profile); err != nil {
+		t.Fatalf("SetCategoryNaming: %v", err)
+	}
+	if got, _ := cache.Snapshot().Category(category.ID); got.Naming.RenameExisting != settings.RenameExistingOnRequest {
+		t.Errorf("an unset mode was saved as %q, want on_request", got.Naming.RenameExisting)
+	}
+
+	profile.RenameExisting = settings.RenameExistingAutomatic
+	if err := cache.SetCategoryNaming(t.Context(), category.ID, profile); err != nil {
+		t.Fatalf("SetCategoryNaming automatic: %v", err)
+	}
+	if got, _ := cache.Snapshot().Category(category.ID); got.Naming.RenameExisting != settings.RenameExistingAutomatic {
+		t.Errorf("mode = %q, want automatic", got.Naming.RenameExisting)
+	}
+
+	profile.RenameExisting = "sometimes"
+	if err := cache.SetCategoryNaming(t.Context(), category.ID, profile); !errors.Is(err, settings.ErrInvalidNaming) {
+		t.Errorf("an unknown mode: err = %v, want ErrInvalidNaming", err)
 	}
 }

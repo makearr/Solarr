@@ -43,6 +43,7 @@ type namingBody struct {
 		RenameFiles              bool              `json:"rename_files"`
 		ReplaceIllegalCharacters bool              `json:"replace_illegal_characters"`
 		ColonReplacement         string            `json:"colon_replacement"`
+		RenameExisting           *string           `json:"rename_existing"`
 		Formats                  map[string]string `json:"formats"`
 	} `json:"naming"`
 	IsDefault bool `json:"is_default"`
@@ -108,7 +109,7 @@ func TestLibraryNaming_SaveThenRead(t *testing.T) {
 	}
 	category, _ := fixture.cache.Snapshot().Category(id)
 	want := settings.NamingProfile{
-		RenameFiles: false, ReplaceIllegalCharacters: false, ColonReplacement: "dash",
+		RenameFiles: false, ReplaceIllegalCharacters: false, ColonReplacement: "dash", RenameExisting: settings.RenameExistingOnRequest,
 		Formats: map[string]string{"track": "{track:00} {Track Title}"},
 	}
 	if category.Naming == nil || !reflect.DeepEqual(*category.Naming, want) {
@@ -202,5 +203,34 @@ func TestRenameLibrary_NarrowsToOneWork(t *testing.T) {
 	}
 	if starter := fixture.renameStarter; starter.lastCategoryID != id || starter.lastWorkID != 42 || !starter.lastPreview {
 		t.Errorf("category=%d work=%d preview=%v; want %d, 42, true", starter.lastCategoryID, starter.lastWorkID, starter.lastPreview, id)
+	}
+}
+
+// A library whose naming says never refuses the rename with a 409 and the reason; automatic is saved and read back.
+func TestRenameLibrary_NeverIsRefused(t *testing.T) {
+	fixture, cookies, id := adminWithLibrary(t)
+	fixture.renameStarter.err = apiserver.ErrRenameOff
+
+	recorder := fixture.do(authedPost(t, cookies, "/api/v1/categories/"+strconv.FormatInt(id, 10)+"/rename", `{"preview":true}`))
+	if recorder.Code != http.StatusConflict {
+		t.Errorf("status = %d, want 409; %s", recorder.Code, recorder.Body)
+	}
+}
+
+func TestLibraryNaming_SavesRenameExisting(t *testing.T) {
+	fixture, cookies, id := adminWithLibrary(t)
+	saved := `{"rename_files":true,"replace_illegal_characters":true,"colon_replacement":"dash","rename_existing":"automatic",` +
+		`"formats":{"track":"{Track Title}"}}`
+
+	recorder := fixture.do(authedPut(t, cookies, "/api/v1/categories/"+strconv.FormatInt(id, 10)+"/naming", saved))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, %s", recorder.Code, recorder.Body)
+	}
+	if got := decodeNaming(t, recorder.Body.Bytes()).Naming.RenameExisting; got == nil || *got != "automatic" {
+		t.Errorf("rename_existing = %v, want automatic", got)
+	}
+	bad := strings.Replace(saved, "automatic", "sometimes", 1)
+	if recorder := fixture.do(authedPut(t, cookies, "/api/v1/categories/"+strconv.FormatInt(id, 10)+"/naming", bad)); recorder.Code != http.StatusBadRequest {
+		t.Errorf("unknown mode: status = %d, want 400", recorder.Code)
 	}
 }

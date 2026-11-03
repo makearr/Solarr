@@ -348,6 +348,7 @@ type NamingEntry struct {
 	RenameFiles              bool              `yaml:"rename_files"`
 	ReplaceIllegalCharacters bool              `yaml:"replace_illegal_characters"`
 	ColonReplacement         string            `yaml:"colon_replacement"`
+	RenameExisting           string            `yaml:"rename_existing,omitempty"`
 	Formats                  map[string]string `yaml:"formats"`
 }
 
@@ -549,7 +550,7 @@ func (c *Cache) Export() Document {
 		if category.Naming != nil {
 			entry.Naming = &NamingEntry{
 				RenameFiles: category.Naming.RenameFiles, ReplaceIllegalCharacters: category.Naming.ReplaceIllegalCharacters,
-				ColonReplacement: category.Naming.ColonReplacement, Formats: category.Naming.Formats,
+				ColonReplacement: category.Naming.ColonReplacement, RenameExisting: category.Naming.RenameExisting, Formats: category.Naming.Formats,
 			}
 		}
 		if !category.FileManagement.IsDefault() {

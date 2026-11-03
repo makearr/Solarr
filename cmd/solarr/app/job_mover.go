@@ -1,8 +1,11 @@
 package app
 
 import (
+	"context"
+
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/jobs"
 	"github.com/makearr/Solarr/internal/moving/drainjob"
 	"github.com/makearr/Solarr/internal/moving/mover"
@@ -30,7 +33,39 @@ func (p *process) registerMoverJob(registry *jobs.Registry, executor *jobs.Execu
 		Permissions: p.libraryPermissions, Clock: clock.NewSystem(), Logger: p.logger,
 	})
 	executor.Handle(moverjob.JobType, job)
+	if err := registry.Register(renamejob.AutomaticDefinition); err != nil {
+		return err
+	}
+	renamer := adapters.Rename{Registry: p.media, Settings: p.cache, Engine: p.renameEngine()}
+	executor.Handle(renamejob.AutomaticJobType, renamejob.NewAutomaticJob(renamejob.AutomaticConfig{
+		Libraries: p.automaticRenameLibraries,
+		Rename: func(ctx context.Context, categoryID int64) error {
+			_, err := renamer.StartLibraryRename(ctx, categoryID, 0, false)
+			return err
+		},
+		MoveJobs: library.NewMoveJobs(p.library), Logger: p.logger,
+	}))
 	return nil
+}
+
+// automaticRenameLibraries are the libraries whose naming renames existing files without being asked.
+func (p *process) automaticRenameLibraries() []int64 {
+	var ids []int64
+	for _, category := range p.cache.Snapshot().Categories() {
+		if category.Naming != nil && category.Naming.RenameMode() == settings.RenameExistingAutomatic {
+			ids = append(ids, category.ID)
+		}
+	}
+	return ids
+}
+
+// automaticRenameTask is the registered sweep that renames libraries set to rename automatically.
+func (p *process) automaticRenameTask() jobs.Task {
+	return jobs.Task{
+		Key: renamejob.AutomaticScheduleKey, Name: "Rename libraries set to rename automatically", DefaultCadence: automaticRenameScheduleCron,
+		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary,
+		Enqueue: func(ctx context.Context) (jobs.EnqueueResult, error) { return renamejob.EnqueueAutomatic(ctx, p.queue) },
+	}
 }
 
 // libraryPermissions is a library's Set Permissions for the move engine; ok is false when it is off.

@@ -164,8 +164,25 @@ type NamingProfile struct {
 	RenameFiles              bool
 	ReplaceIllegalCharacters bool
 	ColonReplacement         string
+	// RenameExisting is one of the RenameExisting* values; "" is RenameExistingOnRequest.
+	RenameExisting string
 	// Formats maps a slot key ("standard_track") to its template.
 	Formats map[string]string
+}
+
+// Whether files already on disk are renamed to match a library's naming (plan/03 4.5); the rename is always previewed.
+const (
+	RenameExistingNever     = "never"
+	RenameExistingOnRequest = "on_request"
+	RenameExistingAutomatic = "automatic"
+)
+
+// RenameMode is RenameExisting with the default filled in.
+func (p NamingProfile) RenameMode() string {
+	if p.RenameExisting == "" {
+		return RenameExistingOnRequest
+	}
+	return p.RenameExisting
 }
 
 // DefaultMonitorReleaseTypes is what a library monitors unless told

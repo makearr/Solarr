@@ -11,8 +11,8 @@ import (
 )
 
 const createNamingProfile = `-- name: CreateNamingProfile :one
-INSERT INTO naming_profile (name, rename_files, replace_illegal_characters, colon_replacement)
-VALUES (?, ?, ?, ?)
+INSERT INTO naming_profile (name, rename_files, replace_illegal_characters, colon_replacement, rename_existing)
+VALUES (?, ?, ?, ?, ?)
 RETURNING id
 `
 
@@ -21,6 +21,7 @@ type CreateNamingProfileParams struct {
 	RenameFiles              int64
 	ReplaceIllegalCharacters int64
 	ColonReplacement         string
+	RenameExisting           string
 }
 
 func (q *Queries) CreateNamingProfile(ctx context.Context, arg CreateNamingProfileParams) (int64, error) {
@@ -29,6 +30,7 @@ func (q *Queries) CreateNamingProfile(ctx context.Context, arg CreateNamingProfi
 		arg.RenameFiles,
 		arg.ReplaceIllegalCharacters,
 		arg.ColonReplacement,
+		arg.RenameExisting,
 	)
 	var id int64
 	err := row.Scan(&id)
@@ -97,7 +99,7 @@ func (q *Queries) ListNamingFormats(ctx context.Context) ([]NamingFormat, error)
 
 const listNamingProfiles = `-- name: ListNamingProfiles :many
 
-SELECT id, name, rename_files, replace_illegal_characters, colon_replacement
+SELECT id, name, rename_files, replace_illegal_characters, colon_replacement, rename_existing
 FROM naming_profile ORDER BY id
 `
 
@@ -117,6 +119,7 @@ func (q *Queries) ListNamingProfiles(ctx context.Context) ([]NamingProfile, erro
 			&i.RenameFiles,
 			&i.ReplaceIllegalCharacters,
 			&i.ColonReplacement,
+			&i.RenameExisting,
 		); err != nil {
 			return nil, err
 		}
@@ -146,7 +149,7 @@ func (q *Queries) SetCategoryNamingProfile(ctx context.Context, arg SetCategoryN
 }
 
 const updateNamingProfile = `-- name: UpdateNamingProfile :exec
-UPDATE naming_profile SET rename_files = ?, replace_illegal_characters = ?, colon_replacement = ?
+UPDATE naming_profile SET rename_files = ?, replace_illegal_characters = ?, colon_replacement = ?, rename_existing = ?
 WHERE id = ?
 `
 
@@ -154,6 +157,7 @@ type UpdateNamingProfileParams struct {
 	RenameFiles              int64
 	ReplaceIllegalCharacters int64
 	ColonReplacement         string
+	RenameExisting           string
 	ID                       int64
 }
 
@@ -162,6 +166,7 @@ func (q *Queries) UpdateNamingProfile(ctx context.Context, arg UpdateNamingProfi
 		arg.RenameFiles,
 		arg.ReplaceIllegalCharacters,
 		arg.ColonReplacement,
+		arg.RenameExisting,
 		arg.ID,
 	)
 	return err

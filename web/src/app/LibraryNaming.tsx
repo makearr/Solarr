@@ -25,6 +25,14 @@ const COLON_REPLACEMENTS: readonly { value: ColonReplacement; label: string }[] 
   { value: "smart", label: "Smart Replace" },
 ];
 
+type RenameExisting = NonNullable<NamingSettings["rename_existing"]>;
+
+const RENAME_EXISTING: readonly { value: RenameExisting; label: string; help: string }[] = [
+  { value: "never", label: "Never", help: "Files already in the library keep their names, and the rename is not offered." },
+  { value: "on_request", label: "On request", help: "You preview the renames and accept them, here or on a work's page." },
+  { value: "automatic", label: "Automatically", help: "Every night the files whose name differs are renamed; Storage → Folders shows each run." },
+];
+
 const MULTI_EPISODE_STYLE = "multi_episode_style";
 
 // Sonarr's six multi-episode styles, with its own example for each.
@@ -154,6 +162,23 @@ export function LibraryNaming() {
           checked={draft.replace_illegal_characters}
           onChange={(checked) => setDraft({ ...draft, replace_illegal_characters: checked })}
         />
+        <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+          <span className="w-48 shrink-0">Rename Existing Files</span>
+          <select
+            value={draft.rename_existing ?? "on_request"}
+            onChange={(event) => setDraft({ ...draft, rename_existing: event.target.value as RenameExisting })}
+            className={inputStyle}
+          >
+            {RENAME_EXISTING.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-xs text-ink-muted">
+            {RENAME_EXISTING.find((option) => option.value === (draft.rename_existing ?? "on_request"))?.help}
+          </span>
+        </label>
         {draft.replace_illegal_characters && (
           <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
             <span className="w-48 shrink-0">Colon Replacement</span>
@@ -331,7 +356,7 @@ export function LibraryNaming() {
         )}
       </div>
 
-      <ApplyToLibrary categoryId={id} unsaved={namingDirty} />
+      {naming.data.naming.rename_existing !== "never" && <ApplyToLibrary categoryId={id} unsaved={namingDirty} />}
 
       {builderSlot !== undefined && (
         <TokenBuilder
