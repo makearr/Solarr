@@ -41,7 +41,7 @@ from its Connections page, with the user name filled in for you.
 
 ### Path mapping (🟡)
 
-If the client names its download folder differently from Solarr, set the path mapping on the client.
+Adding a client that reports a finished-downloads folder Solarr can read also watches that folder. If the client names its download folder differently from Solarr, set the path mapping on the client.
 
 ## What the dashboard tells you
 

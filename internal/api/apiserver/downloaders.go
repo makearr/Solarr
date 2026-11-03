@@ -16,6 +16,7 @@ import (
 	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/platform/config"
+	"github.com/makearr/Solarr/internal/platform/fsx"
 	"github.com/makearr/Solarr/internal/platform/secrets"
 )
 
@@ -65,7 +66,36 @@ func (s *Server) AddDownloader(w http.ResponseWriter, r *http.Request) {
 		writeDownloaderError(w, s, err, "The connection has problems", "Nothing was created.")
 		return
 	}
+	s.registerFinishedFolder(r.Context(), created)
 	writeJSON(w, s.logger, http.StatusCreated, downloaderView(created))
+}
+
+// registerFinishedFolder watches the folder a new client reports for finished downloads, so its first download is
+// not refused as "outside every download folder"; best effort, and only a folder this process can read.
+func (s *Server) registerFinishedFolder(ctx context.Context, created settings.Downloader) {
+	if s.downloaderTester == nil || s.downloadRoots == nil {
+		return
+	}
+	result, err := s.downloaderTester.TestDownloader(ctx, created.ID)
+	if err != nil || !result.OK || result.DownloadFolder == "" {
+		return
+	}
+	folder := created.Options().LocalPathFor(result.DownloadFolder)
+	if s.downloadRoots.Validate(folder) != nil || s.downloadRoots.Readable(folder) != nil {
+		return
+	}
+	existing, err := s.auth.Settings.DownloadFolders(ctx)
+	if err != nil {
+		return
+	}
+	for _, known := range existing {
+		if fsx.Within(known.Path, folder) {
+			return
+		}
+	}
+	if _, err := s.auth.Settings.CreateDownloadFolder(ctx, settings.DownloadFolderRequest{Path: folder, Label: created.Name, Readable: true}); err != nil {
+		s.logger.Warn("finished-downloads folder of a new client not registered", "client", created.Name, "path", folder, "error", err)
+	}
 }
 
 // routeUpdateDownloader parses the id path parameter, mirroring routeUpdateIndexer.

@@ -2,6 +2,7 @@ package apiserver_test
 
 import (
 	"bytes"
+	"fmt"
 	"encoding/json"
 	"net/http"
 	"testing"
@@ -254,5 +255,37 @@ func TestAddDownloader_ChecksWhatItsKindNeeds(t *testing.T) {
 		if recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders", test.body)); recorder.Code != test.want {
 			t.Errorf("%s: status = %d, want %d (%s)", test.name, recorder.Code, test.want, recorder.Body)
 		}
+	}
+}
+
+func TestAddDownloader_RegistersTheFolderItReportsOnce(t *testing.T) {
+	fixture := newWorksFixture(t)
+	for _, folder := range []string{"/downloads/sabnzbd", "/downloads/sabnzbd/complete"} {
+		if err := fixture.fsys.MkdirAll(folder, 0o755); err != nil {
+			t.Fatalf("MkdirAll: %v", err)
+		}
+	}
+	fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+	added := 0
+	add := func(folder string) {
+		added++
+		fixture.downloaderTester.result = apiserver.ConnectionTestResult{OK: true, DownloadFolder: folder}
+		recorder := fixture.do(authedPost(t, cookies, "/api/v1/downloaders",
+			fmt.Sprintf(`{"name":"SABnzbd%d","impl":"sabnzbd","base_url":"http://sabnzbd.local:8080","protocol":"usenet"}`, added)))
+		if recorder.Code != http.StatusCreated {
+			t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body)
+		}
+	}
+	add("/downloads/sabnzbd")
+	add("/downloads/sabnzbd/complete") // inside the registered one
+	add("/not/visible/here")           // unreadable from this process
+
+	folders, err := fixture.cache.DownloadFolders(t.Context())
+	if err != nil {
+		t.Fatalf("DownloadFolders: %v", err)
+	}
+	if len(folders) != 1 || folders[0].Path != "/downloads/sabnzbd" || !folders[0].Readable || folders[0].Label != "SABnzbd1" {
+		t.Errorf("folders = %+v, want only /downloads/sabnzbd", folders)
 	}
 }
