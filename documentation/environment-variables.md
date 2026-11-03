@@ -1,5 +1,7 @@
 # Environment variables
 
+> **Level: 🟡 Advanced.** Configure the container without editing files.
+
 Every variable Solarr reads. **None is required**: with nothing set, the image starts on port 5454 with
 everything under `/config`. In Docker, a variable is how you configure a container without editing files.
 

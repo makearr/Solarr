@@ -1,5 +1,7 @@
 # Benchmarks
 
+> **Level: 🔴 Expert.** The 500k corpus and the performance targets.
+
 ADR-28 states performance as numbers, and numbers only mean something against a corpus.
 `internal/db/library/fixture` builds one; `internal/db/library/bench_test.go` measures against it.
 

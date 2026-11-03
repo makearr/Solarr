@@ -1,5 +1,7 @@
 # Music identification
 
+> **Level: 🔴 Expert.** How a music file is identified.
+
 How a scanned or imported music file comes to belong to an album. Code:
 `internal/media/music/consumer.go` (scan), `inspect_identify.go` (import),
 `album_match.go`, `album_identify.go`, `album_local.go`, `edition_choice.go`.

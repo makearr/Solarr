@@ -1,5 +1,7 @@
 # Books and audiobooks
 
+> **Level: 🟡 Advanced.** Books and audiobooks.
+
 Two media types, `book` and `audiobook`, over one module, `internal/media/book`, as Readarr ran one code base for
 both. What differs is a `Format` (`format.go`): the media type and its words, the files a library holds, whether a book
 is one file or a folder of chapters, the Newznab categories, the default provider order and the size floor. Everything

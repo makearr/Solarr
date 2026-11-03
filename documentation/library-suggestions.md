@@ -1,5 +1,7 @@
 # Which library a work belongs in
 
+> **Level: 🟡 Advanced.** How Solarr proposes a library for a work.
+
 Adding from anywhere suggests a library with its reason (ADR-56, plan 10-libraries L5); a library's check lists what
 it holds that belongs elsewhere.
 

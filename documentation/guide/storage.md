@@ -1,0 +1,79 @@
+# Storage, folders and the recycle bin
+
+> **Level: 🟡 Advanced**, administrators. 🔴 sections need the *expert* interface level.
+
+## Root folders (🟡)
+
+**Storage → Folders** holds the root folders, grouped under their library (a root folder belongs to at most
+one), and the download folders. Each root's card carries:
+
+- the policy (read only, allow rename, **reserve**: free space kept, 8 GB by default; automatic downloads stop
+  before they would eat into it);
+- capacity;
+- **Preview rename**: names the files even on a root it may not change, and says why;
+- **Drain…**: shows what would move and asks before moving every file to the library's other roots.
+
+Removing a folder, or taking a root out of its library, asks first. Startup checks:
+[startup-checks.md](../startup-checks.md).
+
+## A root Solarr cannot reach (🟡)
+
+Missing, unreadable, or empty although it held files (an unmounted disk): Solarr declares it **offline**,
+checks every five minutes, and declares it online again once reached. A root *you* declare offline stays
+offline until you declare it online.
+
+## A file you delete (🟡)
+
+The next **full** scan notices: its album or season is missing again and searched for, unless the library
+unmonitors deleted files.
+
+If a full scan finds a great many files of a root gone at once (more than 50 and more than one in twenty), it
+marks **none** of them and the bell says so: a disk that was not mounted is not a deleted library. Run a full
+scan once the disk is back, or press **Accept as gone** on the root's card.
+
+## Recycle bin (🟡, administrators)
+
+**Storage → Recycle bin** lists what the bins hold, newest first, with the day each file is removed for good.
+An administrator can **Empty recycle bin** by hand. Nothing in Solarr is deleted directly; it goes here first.
+Reference: [file-management.md](../file-management.md).
+
+## Similar videos (🔴)
+
+**Similar videos** (the Duplicates page of TV, movie and other video libraries) lists files that look like one
+cut in several encodes. **Keep the ticked file** makes the others links to it where the container matches and
+recycles the rest. It is not offered when the file names give different episodes (SxxExx), and it does not
+compare across libraries.
+
+How it decides: a background pass at the end of the probe sweep samples seven frames of every video and keeps a
+64-bit perceptual hash of each frame and of their average (a file ffmpeg cannot decode stays unhashed and is
+tried again next sweep). Two files are grouped when:
+
+- their average frames are within 8 bits,
+- their lengths are within 2% or 5 seconds,
+- at least two thirds of the moments both files have a usable frame for (at least four; black and flat frames do
+  not count) show the same picture within 10 bits.
+
+Groups are listed largest first. The hash is Solarr's own, not StashDB's. **TV Duplicates** are two files on one
+episode record, never two episodes that merely share a title or a length.
+
+## Cache and database memory (🔴)
+
+**Settings → Cache** bounds the provider answers and resized artwork Solarr keeps. Clearing it is always safe.
+
+| Setting | Default |
+|---|---|
+| Size limit | 10 GiB |
+| Age | 90 days |
+| Images / metadata split | |
+| **Keep disk free** | 10%: when the disk under the cache runs short of that, the next cache maintenance shrinks the cache by the shortfall, below its size limit |
+
+The page shows the disk's size and free space and warns when the size limit is larger than the disk.
+
+**Database memory** sets the library database's SQLite page cache (default 64 MB per connection, written to
+`config.yml`, applied at the next start; **Set defaults** restores it). It also shows every database's file
+size, how full its cache is and its hit ratio, beside the hit ratios of the picture and provider-response
+caches (counted since the start). Layout of the databases: [database-layout.md](../database-layout.md).
+
+## Moving a configuration (🟡)
+
+Export and import of the settings as YAML: [configuration-export.md](../configuration-export.md).

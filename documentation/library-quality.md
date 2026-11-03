@@ -1,5 +1,7 @@
 # Library quality
 
+> **Level: 🟡 Advanced.** Quality profiles, cutoff and target for a library.
+
 How a library says what quality it wants (the 2026-09-19 review, answered 2026-09-24). The
 profiles themselves are ADR-40's rules: gates, then lexicographic tiers, then an additive score.
 

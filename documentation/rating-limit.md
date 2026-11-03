@@ -1,5 +1,7 @@
 # A library's maximum rating
 
+> **Level: 🟡 Advanced.** Maximum rating for a library.
+
 A TV or movie library may set a maximum rating (Settings -> Libraries -> Edit): the youngest viewer age a work may
 admit, shown with the ratings of that age ("13 (PG-13)"). Plan 10-libraries L2.
 

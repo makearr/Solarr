@@ -1,5 +1,7 @@
 # Metadata providers
 
+> **Level: 🟡 Advanced.** What each provider carries and which library it serves.
+
 What each provider carries and which library it can serve. *Built* is in Solarr today; *not built* is a candidate. A
 library asks its providers in its own order (the library's Settings, Metadata): the first provider that holds a field
 supplies it, each later one only fills what the earlier ones left empty, and a provider left out is not asked. A

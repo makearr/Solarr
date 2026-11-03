@@ -1,5 +1,7 @@
 # API generation
 
+> **Level: 🔴 Expert.** For contributors: spec-first generation.
+
 `api/openapi.yaml` generates the Go server interface and the TypeScript client (ADR-31).
 Generated output is committed and CI fails on a stale diff.
 

@@ -1,5 +1,7 @@
 # Libraries of several media types
 
+> **Level: 🟡 Advanced.** One library holding several media types.
+
 A library may hold more than one media type (plan 10-libraries L4): an Anime library holding series and movies.
 
 ## Storage

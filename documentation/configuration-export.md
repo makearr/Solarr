@@ -1,5 +1,7 @@
 # Configuration export and import (F9)
 
+> **Level: 🟡 Advanced.** Export and import your settings as YAML.
+
 `GET /api/v1/settings/export` renders configuration as YAML; `POST /api/v1/settings/import`
 applies it.
 

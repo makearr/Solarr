@@ -1,5 +1,7 @@
 # Downloads: what is sent, and what waits
 
+> **Level: 🟡 Advanced.** Why a release is sent now, held, or ordered as it is.
+
 ## Indexers
 
 Connections -> Indexers -> **Add indexers…** opens Prowlarr's add list: every indexer Solarr can search

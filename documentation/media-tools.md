@@ -1,5 +1,7 @@
 # Media tools in the image
 
+> **Level: 🔴 Expert.** ffprobe, fpcalc and the tagging helper inside the image.
+
 ADR-30 keeps the Go binary pure and static and puts the two things with no good pure-Go
 implementation into the **image** instead: acoustic fingerprinting and tag writing. They
 are invoked as batched subprocesses through one `MediaTool` interface

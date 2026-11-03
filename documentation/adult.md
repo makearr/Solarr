@@ -1,5 +1,7 @@
 # Adult
 
+> **Level: 🟡 Advanced.** The adult media type.
+
 The adult media type is Whisparr's job in Solarr: scenes and films, their performers and studios, over `internal/media/works`
 like movies and books. One type, two library kinds: **Scenes** (the unit Stash and Whisparr keep) and **Movies** (whole
 films). Package `internal/media/adult`; the file and release name parser is `internal/identify/parseadult`.

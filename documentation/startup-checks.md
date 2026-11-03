@@ -1,5 +1,7 @@
 # Startup directory checks
 
+> **Level: 🟡 Advanced.** What Solarr verifies about its folders at start.
+
 `internal/platform/config.CheckDirectories` runs before anything opens a database
 (architecture §14.3). The most common containerised failure is a volume the
 process cannot write, discovered at the first import rather than at startup.

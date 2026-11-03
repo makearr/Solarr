@@ -1,5 +1,7 @@
 # Database layout
 
+> **Level: 🔴 Expert.** Which database a table lives in.
+
 Four persistent databases, one disposable cache (ADR-2, revised 2026-10-04 by `statistics.db`). Each has one writer and a read pool
 (ADR-3), and **no query joins across them** — compose in Go (architecture section 4.3).
 

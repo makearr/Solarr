@@ -1,5 +1,7 @@
 # Built-in media player
 
+> **Level: 🟡 Advanced.** The preview player.
+
 Previews an audio or video file from the web interface, in the browser, without a download.
 
 ## Where it appears

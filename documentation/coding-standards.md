@@ -1,5 +1,7 @@
 # Coding standards
 
+> **Level: 🔴 Expert.** For contributors: style and structure.
+
 Written for a codebase that will be maintained largely by AI agents working from a cold start.
 Both goals point the same way: **predictable, explicit, boring code.**
 

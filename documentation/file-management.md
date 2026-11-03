@@ -1,5 +1,7 @@
 # File management
 
+> **Level: 🟡 Advanced.** Folders, recycle bin, file dates and permissions.
+
 Sonarr's *Media Management → Folders, File Management, Permissions*, per library (asked for
 2026-09-19, answered 2026-09-24). Library → Configuration → **File management** (normal level; Propers, Rescan,
 Change file date and Permissions from advanced),

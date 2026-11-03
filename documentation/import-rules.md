@@ -1,5 +1,7 @@
 # Import rules
 
+> **Level: 🟡 Advanced.** What an import accepts, and why.
+
 What Radarr and Sonarr check before they import a downloaded file, and where each check lives in Solarr
 (`internal/importing/rules`, ported from their import specifications; `ATTRIBUTION.md`). Every rule is a pure function of facts
 the importer passes in and answers with a `model.Rejection` or nothing.

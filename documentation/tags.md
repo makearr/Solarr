@@ -1,5 +1,7 @@
 # Tags and genre trees
 
+> **Level: 🟡 Advanced.** Tags and genre trees.
+
 One mechanism for genres and labels (ADR-33, `private` plan 10 L1): every genre is a tag, and a tag belongs to a
 **genre tree** or to none.
 

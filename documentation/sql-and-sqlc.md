@@ -1,5 +1,7 @@
 # SQL and sqlc
 
+> **Level: 🔴 Expert.** For contributors: writing queries.
+
 SQL lives in `queries/*.sql` and `migrations/*.sql`; typed Go is generated into
 `internal/db/store/gen/` and committed (ADR-31). Change the SQL and run
 `make sqlc`. CI fails on stale output.

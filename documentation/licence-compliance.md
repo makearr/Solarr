@@ -1,5 +1,7 @@
 # Licence compliance
 
+> **Level: 🔴 Expert.** AGPL-3.0 and the network clause.
+
 Solarr is **AGPL-3.0-or-later**. Most of that licence is satisfied by shipping `LICENSE`
 and keeping `ATTRIBUTION.md` current. One clause is a **functional requirement** and is easy
 to overlook.

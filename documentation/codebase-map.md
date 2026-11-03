@@ -1,5 +1,7 @@
 # Codebase map
 
+> **Level: 🔴 Expert.** For contributors: the package tree.
+
 Where things live and what depends on what. The dependency rules are enforced by
 `internal/archtest`, which holds the graph as an explicit allowlist: a new package fails the
 build until it declares what it imports.

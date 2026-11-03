@@ -1,5 +1,7 @@
 # Web interface
 
+> **Level: 🔴 Expert.** For contributors: the frontend's structure.
+
 Vite, React, TanStack Query and Tailwind, served from `embed.FS` (ADR-19, ADR-31).
 
 ## Where the bundle lives

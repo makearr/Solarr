@@ -1,5 +1,7 @@
 # Importing from, and sending back to, the *Arrs
 
+> **Level: 🟡 Advanced.** Bring over a Lidarr, Sonarr, Radarr or Whisparr setup.
+
 A connection (Connections, or step 2 of the setup assistant) is one Sonarr, Radarr, Lidarr, Whisparr or Prowlarr: its address
 and API key. Readarr connects and waits for its own import. The same options panel is on the Connections page and in the
 setup assistant.

@@ -1,5 +1,7 @@
 # Container runtime
 
+> **Level: 🟡 Advanced.** Who the container runs as and what it owns.
+
 Environment variables beyond these are listed in [environment-variables.md](environment-variables.md).
 
 How the image decides who it runs as, what it owns, and what it refuses to touch.

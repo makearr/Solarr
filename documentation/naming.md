@@ -1,5 +1,7 @@
 # Naming
 
+> **Level: 🟡 Advanced.** How files and folders are named.
+
 How a library names its files: Lidarr's model, per library (the 2026-09-19 review).
 
 ## Shape

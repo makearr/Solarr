@@ -1,5 +1,7 @@
 # Versioning
 
+> **Level: 🔴 Expert.** Version numbers, milestones and releases.
+
 ```text
 YEAR . MONTH . RELEASE . BUILD
 2026 .  10   .    1    .  0512
