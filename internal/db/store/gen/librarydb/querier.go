@@ -444,6 +444,8 @@ type Querier interface {
 	InFlightBytesForCategory(ctx context.Context, categoryID int64) (int64, error)
 	// Identification attempts (migration 0033). Column lists follow table order.
 	InsertIdentificationAttempt(ctx context.Context, arg InsertIdentificationAttemptParams) error
+	// One row per file a replacement kept or turned away, so "why did this file replace that one" can be answered (pain point 18).
+	InsertImportDecision(ctx context.Context, arg InsertImportDecisionParams) error
 	InsertImportUnit(ctx context.Context, arg InsertImportUnitParams) (ImportUnit, error)
 	InsertImportUnitExtra(ctx context.Context, arg InsertImportUnitExtraParams) error
 	// library_path_id is nullable: 0029's own migration comment explains why
@@ -624,6 +626,7 @@ type Querier interface {
 	// detail's own "last searched" column. Absent means never.
 	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)
 	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
+	ListImportDecisionsForWork(ctx context.Context, arg ListImportDecisionsForWorkParams) ([]ImportDecision, error)
 	// Import list entries and state (migration 0099, ADR-38). Column lists follow table order.
 	ListImportListEntries(ctx context.Context, listID int64) ([]ImportListEntry, error)
 	// Small, operator-facing list -- session counts never approach library scale

@@ -526,3 +526,57 @@ func candidateDecisionView(decision CandidateDecision) gen.CandidateDecision {
 	view.PublishedAt = decision.PublishedAt
 	return view
 }
+
+// ImportDecisionView is one replacement decision, side by side (pain point 18).
+type ImportDecisionView struct {
+	ID                 int64
+	Outcome            string
+	DecidedAt          time.Time
+	DecidedBy, Winner  string
+	Arrived, Incumbent ReplacementSideView
+}
+
+// ReplacementSideView is one file of a replacement: its position on each tier and its score.
+type ReplacementSideView struct {
+	MediaObjectID int64
+	Tiers         []model.TierValue
+	Score         float64
+}
+
+// ListWorkImportDecisions answers why files replaced others, or were turned away, for the work.
+func (s *Server) ListWorkImportDecisions(w http.ResponseWriter, r *http.Request, id int64) {
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if !s.workVisible(w, r, access, id) {
+		return
+	}
+	if s.importDecisions == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "import decisions are not recorded")
+		return
+	}
+	decisions, err := s.importDecisions(r.Context(), id)
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	views := make([]gen.ImportDecisionRecord, len(decisions))
+	for index, decision := range decisions {
+		views[index] = gen.ImportDecisionRecord{
+			Id: decision.ID, Outcome: gen.ImportDecisionRecordOutcome(decision.Outcome), DecidedAt: decision.DecidedAt,
+			DecidedBy: decision.DecidedBy, Winner: gen.ImportDecisionRecordWinner(decision.Winner),
+			Arrived: replacementSideView(decision.Arrived), Incumbent: replacementSideView(decision.Incumbent),
+		}
+	}
+	writeJSON(w, s.logger, http.StatusOK, views)
+}
+
+func replacementSideView(side ReplacementSideView) gen.ReplacementSide {
+	tiers := make([]gen.TierValue, len(side.Tiers))
+	for index, tier := range side.Tiers {
+		tiers[index] = gen.TierValue{Dimension: tier.Dimension, Rank: tier.Rank, Label: tier.Label, Detail: tier.Detail}
+	}
+	return gen.ReplacementSide{MediaObjectId: side.MediaObjectID, Tiers: tiers, Score: float32(side.Score)}
+}

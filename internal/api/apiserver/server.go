@@ -119,6 +119,8 @@ type Config struct {
 	HuntBudget func(ctx context.Context) (HuntBudgetView, error)
 	// DownloaderSpeeds answers each client's recent average speed. Optional: nil answers 503.
 	DownloaderSpeeds func(ctx context.Context) ([]DownloaderSpeedView, error)
+	// ImportDecisions answers a work's replacement decisions. Optional: nil answers 503.
+	ImportDecisions func(ctx context.Context, workID int64) ([]ImportDecisionView, error)
 	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
@@ -334,6 +336,7 @@ type Server struct {
 	statistics              StatisticsReader
 	huntBudget              func(ctx context.Context) (HuntBudgetView, error)
 	downloaderSpeeds        func(ctx context.Context) ([]DownloaderSpeedView, error)
+	importDecisions         func(ctx context.Context, workID int64) ([]ImportDecisionView, error)
 	duplicates              DuplicateReader
 	similarVideos           SimilarVideoReader
 	recycleContents         RecycleBinContents
@@ -468,6 +471,7 @@ func New(config Config) (*Server, error) {
 		statistics:              config.Statistics,
 		huntBudget:              config.HuntBudget,
 		downloaderSpeeds:        config.DownloaderSpeeds,
+		importDecisions:         config.ImportDecisions,
 		duplicates:              config.Duplicates,
 		similarVideos:           config.SimilarVideos,
 		recycleContents:         config.RecycleBinContents,
@@ -662,6 +666,11 @@ func New(config Config) (*Server, error) {
 			secured.Put("/works/{id}/artwork", server.routeChooseWorkArtwork)
 			secured.Get("/works/{id}/artwork/options", server.routeGetWorkArtworkOptions)
 			secured.Get("/works/{id}/candidates", server.routeListWorkCandidates)
+			secured.Get("/works/{id}/import-decisions", func(w http.ResponseWriter, r *http.Request) {
+				if id, err := parsePathID(w, server, r, "id", "a work id must be a number"); err == nil {
+					server.ListWorkImportDecisions(w, r, id)
+				}
+			})
 			secured.Post("/works/{id}/candidates/{decisionId}/send", server.routeSendCandidate)
 			secured.Post("/works/{id}/candidates/{decisionId}/blocklist", server.routeBlocklistCandidate)
 			secured.Post("/works/{id}/search", server.routeSearchWork)

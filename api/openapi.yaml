@@ -4013,6 +4013,28 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
 
+  /works/{id}/import-decisions:
+    get:
+      operationId: listWorkImportDecisions
+      tags: [acquisition]
+      summary: Why a file replaced another, or was turned away, side by side (pain point 18).
+      description: >-
+        Recorded each time a download and an owned file contest the same part: the two files' quality tiers and scores,
+        and the tier that decided. A tie keeps the owned file. Newest first, at most 50.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64 } }
+      responses:
+        "200":
+          description: The work's replacement decisions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportDecisionRecord" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
   /works/{id}/candidates/{decisionId}/send:
     parameters:
       - name: id
@@ -12320,6 +12342,28 @@ components:
         rank: { type: integer, description: Lower is better. }
         label: { type: string, example: "hevc" }
         detail: { type: string }
+
+    ImportDecisionRecord:
+      type: object
+      required: [id, outcome, decided_at, decided_by, winner, arrived, incumbent]
+      properties:
+        id: { type: integer, format: int64 }
+        outcome: { type: string, enum: [IMPORT, REJECT_WORSE], description: IMPORT when the arrival replaced the owned file. }
+        decided_at: { type: string, format: date-time }
+        decided_by: { type: string, description: The tier dimension that decided, or "score" when the tiers tied. }
+        winner: { type: string, enum: [arrived, incumbent] }
+        arrived: { $ref: "#/components/schemas/ReplacementSide" }
+        incumbent: { $ref: "#/components/schemas/ReplacementSide" }
+
+    ReplacementSide:
+      type: object
+      required: [media_object_id, tiers, score]
+      properties:
+        media_object_id: { type: integer, format: int64 }
+        tiers:
+          type: array
+          items: { $ref: "#/components/schemas/TierValue" }
+        score: { type: number, format: float }
 
     ScoreComponent:
       type: object

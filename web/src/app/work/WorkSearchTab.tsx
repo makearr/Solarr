@@ -11,6 +11,7 @@ import { Button } from "@/ui/Button";
 import { CandidateList } from "../CandidateList";
 import { IndexerProblems } from "../IndexerProblems";
 import { grabNote } from "./grabNote";
+import { ReplacementHistory } from "./ReplacementHistory";
 import { relativeTime } from "./workFormat";
 
 type Work = components["schemas"]["WorkDetail"];
@@ -106,6 +107,7 @@ export function WorkSearchTab({ work, info, words, lead }: { work: Work; info: M
         sendErrorDetail={send.isError ? (send.error as { detail?: string }).detail : undefined}
         onBlocklist={administrator ? (decisionId) => blocklist.mutate(decisionId) : undefined}
       />
+      <ReplacementHistory workId={work.id} />
     </div>
   );
 }

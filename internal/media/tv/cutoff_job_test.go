@@ -151,6 +151,30 @@ func TestCutoffJobMarksASeasonBelowTheTargetUpgradable(t *testing.T) {
 	}
 }
 
+// wantDecision checks the one import decision the settling recorded: its outcome, the owned file it was weighed
+// against, and the tier that decided it (empty when the tiers tied).
+func (f upgradeFixture) wantDecision(t *testing.T, outcome string, incumbent int64, tier string) {
+	t.Helper()
+	decisions, err := library.NewImportDecisions(f.opened).ForWork(t.Context(), f.workID, 10)
+	if err != nil || len(decisions) != 1 {
+		t.Fatalf("decisions = %+v, %v; want exactly one", decisions, err)
+	}
+	got := decisions[0]
+	if got.Outcome != outcome || got.IncumbentObject != incumbent {
+		t.Errorf("decision = %s against %d, want %s against %d", got.Outcome, got.IncumbentObject, outcome, incumbent)
+	}
+	var reason judge.Reason
+	if err := json.Unmarshal([]byte(got.Reason), &reason); err != nil {
+		t.Fatal(err)
+	}
+	if tier != "" && reason.DecidedBy != tier {
+		t.Errorf("decided by %q, want %q", reason.DecidedBy, tier)
+	}
+	if tier == "" && reason.DecidedBy == "resolution" {
+		t.Errorf("a tie was decided by %q", reason.DecidedBy)
+	}
+}
+
 func TestCutoffJobKeepsTheBetterOfTwoFilesForAnEpisode(t *testing.T) {
 	better := upgradeSeries(t, "720p", "1080p")
 	recycled := map[int64]bool{}
@@ -158,6 +182,7 @@ func TestCutoffJobKeepsTheBetterOfTwoFilesForAnEpisode(t *testing.T) {
 	if len(recycled) != 1 || !recycled[better.owned] {
 		t.Errorf("recycled %v, want only the owned 720p, as replaced", recycled)
 	}
+	better.wantDecision(t, library.ImportDecisionImport, better.owned, "resolution")
 
 	same := upgradeSeries(t, "1080p", "1080p")
 	recycled = map[int64]bool{}
@@ -165,6 +190,7 @@ func TestCutoffJobKeepsTheBetterOfTwoFilesForAnEpisode(t *testing.T) {
 	if replaced, found := recycled[same.brought]; len(recycled) != 1 || !found || replaced {
 		t.Errorf("recycled %v, want only the downloaded copy, as no better (a tie keeps the owned file)", recycled)
 	}
+	same.wantDecision(t, library.ImportDecisionRejectWorse, same.owned, "")
 }
 
 // A two-episode file beaten on one episode is still the other's only file, so it stays.

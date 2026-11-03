@@ -2589,6 +2589,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/works/{id}/import-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Why a file replaced another, or was turned away, side by side (pain point 18).
+         * @description Recorded each time a download and an owned file contest the same part: the two files' quality tiers and scores, and the tier that decided. A tie keeps the owned file. Newest first, at most 50.
+         */
+        get: operations["listWorkImportDecisions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/works/{id}/candidates/{decisionId}/send": {
         parameters: {
             query?: {
@@ -8658,6 +8678,30 @@ export interface components {
             label: string;
             detail: string;
         };
+        ImportDecisionRecord: {
+            /** Format: int64 */
+            id: number;
+            /**
+             * @description IMPORT when the arrival replaced the owned file.
+             * @enum {string}
+             */
+            outcome: "IMPORT" | "REJECT_WORSE";
+            /** Format: date-time */
+            decided_at: string;
+            /** @description The tier dimension that decided */
+            decided_by: string;
+            /** @enum {string} */
+            winner: "arrived" | "incumbent";
+            arrived: components["schemas"]["ReplacementSide"];
+            incumbent: components["schemas"]["ReplacementSide"];
+        };
+        ReplacementSide: {
+            /** Format: int64 */
+            media_object_id: number;
+            tiers: components["schemas"]["TierValue"][];
+            /** Format: float */
+            score: number;
+        };
         /** @description One additive-stage contribution (ADR-40 stage 3). Breaks ties only. */
         ScoreComponent: {
             /** @example preferred-groups */
@@ -13518,6 +13562,31 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listWorkImportDecisions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The work's replacement decisions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDecisionRecord"][];
+                };
+            };
+            401: components["responses"]["Problem"];
+            404: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     sendCandidate: {

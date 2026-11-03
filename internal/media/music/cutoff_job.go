@@ -116,7 +116,18 @@ func (j CutoffJob) replaceSuperseded(ctx context.Context, snapshot *settings.Sna
 			if file.MediaObjectID == keeper.MediaObjectID {
 				continue
 			}
-			if err := j.Recycle(ctx, file.MediaObjectID, item.CategoryID, !downloaded[file.MediaObjectID]); err != nil {
+			replaced := !downloaded[file.MediaObjectID]
+			arrived, incumbent := file, keeper
+			if replaced {
+				arrived, incumbent = keeper, file
+			}
+			decision := judge.DescribeReplacement(item.ID, arrived.MediaObjectID, incumbent.MediaObjectID,
+				judge.EvaluateInOrder(rules, measuredFacts(arrived), language), judge.EvaluateInOrder(rules, measuredFacts(incumbent), language),
+				measuredFacts(arrived))
+			if err := j.Desired.RecordImportDecision(ctx, decision); err != nil {
+				return recycled, err
+			}
+			if err := j.Recycle(ctx, file.MediaObjectID, item.CategoryID, replaced); err != nil {
 				return recycled, err
 			}
 			recycled++

@@ -311,6 +311,18 @@ const (
 	IdentificationAttemptOutcomeRetry      IdentificationAttemptOutcome = "retry"
 )
 
+// Defines values for ImportDecisionRecordOutcome.
+const (
+	ImportDecisionRecordOutcomeIMPORT      ImportDecisionRecordOutcome = "IMPORT"
+	ImportDecisionRecordOutcomeREJECTWORSE ImportDecisionRecordOutcome = "REJECT_WORSE"
+)
+
+// Defines values for ImportDecisionRecordWinner.
+const (
+	ImportDecisionRecordWinnerArrived   ImportDecisionRecordWinner = "arrived"
+	ImportDecisionRecordWinnerIncumbent ImportDecisionRecordWinner = "incumbent"
+)
+
 // Defines values for ImportInspectRequestOrigin.
 const (
 	ImportInspectRequestOriginAcquisition ImportInspectRequestOrigin = "acquisition"
@@ -2725,6 +2737,27 @@ type ImportCommitHeldResult struct {
 	UnitsCommitted int64    `json:"units_committed"`
 }
 
+// ImportDecisionRecord defines model for ImportDecisionRecord.
+type ImportDecisionRecord struct {
+	Arrived   ReplacementSide `json:"arrived"`
+	DecidedAt time.Time       `json:"decided_at"`
+
+	// DecidedBy The tier dimension that decided
+	DecidedBy string          `json:"decided_by"`
+	Id        int64           `json:"id"`
+	Incumbent ReplacementSide `json:"incumbent"`
+
+	// Outcome IMPORT when the arrival replaced the owned file.
+	Outcome ImportDecisionRecordOutcome `json:"outcome"`
+	Winner  ImportDecisionRecordWinner  `json:"winner"`
+}
+
+// ImportDecisionRecordOutcome IMPORT when the arrival replaced the owned file.
+type ImportDecisionRecordOutcome string
+
+// ImportDecisionRecordWinner defines model for ImportDecisionRecord.Winner.
+type ImportDecisionRecordWinner string
+
 // ImportEvidence Every GROUP signal that shaped this unit's boundary (ADR-10 shape).
 type ImportEvidence struct {
 	// Ambiguous True when grouping had to infer a boundary from a weaker signal rather than a decisive one.
@@ -4617,6 +4650,13 @@ type RemoveWorkResult struct {
 
 	// WorkDeleted False when the album was kept because files for it remain in the library.
 	WorkDeleted bool `json:"work_deleted"`
+}
+
+// ReplacementSide defines model for ReplacementSide.
+type ReplacementSide struct {
+	MediaObjectId int64       `json:"media_object_id"`
+	Score         float32     `json:"score"`
+	Tiers         []TierValue `json:"tiers"`
 }
 
 // Role defines model for Role.
@@ -7861,6 +7901,9 @@ type ServerInterface interface {
 	// Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 	// (POST /works/{id}/grab)
 	GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams)
+	// Why a file replaced another, or was turned away, side by side (pain point 18).
+	// (GET /works/{id}/import-decisions)
+	ListWorkImportDecisions(w http.ResponseWriter, r *http.Request, id int64)
 	// Move or copy one work to another library of its media type. Administrator only.
 	// (POST /works/{id}/library)
 	MoveWorkToLibrary(w http.ResponseWriter, r *http.Request, id int64)
@@ -9667,6 +9710,12 @@ func (_ Unimplemented) ListWorkFranchises(w http.ResponseWriter, r *http.Request
 // Automatic search, as in Lidarr and Sonarr: search what the scope names and send its best accepted release to a download client. Nothing is searched while a download for it is already on its way.
 // (POST /works/{id}/grab)
 func (_ Unimplemented) GrabWork(w http.ResponseWriter, r *http.Request, id int64, params GrabWorkParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Why a file replaced another, or was turned away, side by side (pain point 18).
+// (GET /works/{id}/import-decisions)
+func (_ Unimplemented) ListWorkImportDecisions(w http.ResponseWriter, r *http.Request, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -19398,6 +19447,39 @@ func (siw *ServerInterfaceWrapper) GrabWork(w http.ResponseWriter, r *http.Reque
 	handler.ServeHTTP(w, r)
 }
 
+// ListWorkImportDecisions operation middleware
+func (siw *ServerInterfaceWrapper) ListWorkImportDecisions(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListWorkImportDecisions(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // MoveWorkToLibrary operation middleware
 func (siw *ServerInterfaceWrapper) MoveWorkToLibrary(w http.ResponseWriter, r *http.Request) {
 
@@ -20948,6 +21030,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/grab", wrapper.GrabWork)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/works/{id}/import-decisions", wrapper.ListWorkImportDecisions)
 	})
 	r.Group(func(r chi.Router) {
 		r.Post(options.BaseURL+"/works/{id}/library", wrapper.MoveWorkToLibrary)

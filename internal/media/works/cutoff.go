@@ -133,7 +133,8 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 	language := judge.LanguagePolicyFor(snapshot, item.CategoryID)
 	// A file holding several parts goes only once it lost every part it holds: beaten on one, it is still another's only file.
 	lost := map[int64]int{}
-	var losers []File
+	type beaten struct{ file, keeper File }
+	var losers []beaten
 	for _, ref := range order {
 		part := byPart[ref]
 		if len(part) < 2 || !anyBrought(part, downloaded) || !allMeasured(part) {
@@ -161,13 +162,23 @@ func (c Cutoff) settle(ctx context.Context, snapshot *settings.Snapshot, item li
 			}
 			lost[file.MediaObjectID]++
 			if lost[file.MediaObjectID] == covers[file.MediaObjectID] {
-				losers = append(losers, file)
+				losers = append(losers, beaten{file: file, keeper: keeper})
 			}
 		}
 	}
 	recycled := 0
-	for _, file := range losers {
-		if err := c.Recycle(ctx, file.MediaObjectID, item.CategoryID, !downloaded[file.MediaObjectID]); err != nil {
+	for _, loser := range losers {
+		replaced := !downloaded[loser.file.MediaObjectID]
+		arrived, incumbent := loser.file, loser.keeper
+		if replaced {
+			arrived, incumbent = loser.keeper, loser.file
+		}
+		decision := judge.DescribeReplacement(item.ID, arrived.MediaObjectID, incumbent.MediaObjectID,
+			judge.EvaluateInOrder(rules, arrived.Facts, language), judge.EvaluateInOrder(rules, incumbent.Facts, language), arrived.Facts)
+		if err := c.Desired.RecordImportDecision(ctx, decision); err != nil {
+			return recycled, err
+		}
+		if err := c.Recycle(ctx, loser.file.MediaObjectID, item.CategoryID, replaced); err != nil {
 			return recycled, err
 		}
 		recycled++
