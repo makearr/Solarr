@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "@tanstack/react-router";
+import { useParams, useSearch } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Ban, ChevronDown, ChevronRight, HelpCircle, Undo2, X } from "lucide-react";
 
@@ -72,7 +72,9 @@ function useImportProgressStream(
  *  from its own card below (todo 4.9: "decide per unit" stays available via
  *  the API, but this screen always offers assigning one). */
 export function Import() {
-  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(null);
+  // The Unidentified page links here with the session whose held units wait.
+  const { session: linkedSession } = useSearch({ strict: false }) as { session?: number | string };
+  const [selectedSessionId, setSelectedSessionId] = useState<number | null>(Number(linkedSession) || null);
   const [liveProgress, setLiveProgress] = useState<Record<number, ImportProgress>>({});
   const queryClient = useQueryClient();
 

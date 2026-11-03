@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useSearch } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api, ok } from "@/api/client";
 import { invalidateWorkLists } from "@/lib/resources";
@@ -112,7 +112,7 @@ export function Unidentified() {
       <div className="flex shrink-0 items-center gap-3 border-b border-border-subtle px-4 py-2">
         <h1 className="text-sm font-medium">Unidentified</h1>
         <span className="text-xs text-ink-muted">
-          Files a scan found but could not confidently match to a work
+          Files a scan could not match to a work, and import units held for your decision
         </span>
         {canRetry && categoryId && (
         <button
@@ -127,6 +127,8 @@ export function Unidentified() {
         )}
       </div>
 
+      <HeldImports categoryId={categoryId === undefined ? undefined : Number(categoryId)} />
+
       <div className="min-h-0 flex-1">
         {list.isLoading && <Message>Loading the queue…</Message>}
         {list.error !== null && <Message>The queue could not be read.</Message>}
@@ -139,6 +141,41 @@ export function Unidentified() {
         )}
       </div>
     </div>
+  );
+}
+
+/** Import units held below the threshold wait in their session; they are the other half of this queue. */
+function HeldImports({ categoryId }: { categoryId?: number }) {
+  const sessions = useQuery({
+    queryKey: ["import-sessions"],
+    queryFn: () => ok(api.GET("/import/sessions")),
+    refetchInterval: 15000,
+  });
+  const held = (sessions.data ?? []).filter(
+    (session) => session.units_queued > 0 && (categoryId === undefined || session.category_id === categoryId),
+  );
+  if (held.length === 0) return null;
+  return (
+    <section className="flex shrink-0 flex-col gap-1 border-b border-border-subtle bg-surface px-4 py-2" aria-label="Held imports">
+      <h2 className="text-xs font-medium">Held in imports</h2>
+      <ul className="flex flex-col gap-1">
+        {held.map((session) => (
+          <li key={session.id} className="flex items-center gap-2 text-xs">
+            <span className="min-w-0 flex-1 truncate font-mono text-ink-muted" title={session.source_path}>
+              {session.source_path}
+            </span>
+            <span>{session.units_queued} held</span>
+            <Link
+              to="/storage/import"
+              search={{ session: session.id }}
+              className="rounded-md border border-border-subtle px-2 py-0.5 text-ink-muted hover:text-ink"
+            >
+              Review
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
