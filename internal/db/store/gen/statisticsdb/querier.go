@@ -11,6 +11,8 @@ import (
 type Querier interface {
 	// Release decisions since a time, per library and outcome.
 	AggregateDecisionsByCategoryAndOutcome(ctx context.Context, since int64) ([]AggregateDecisionsByCategoryAndOutcomeRow, error)
+	// Grabs, imports and failures per library and indexer since a time; history keeps the indexer's name as it was then.
+	AggregateHistoryByIndexer(ctx context.Context, since int64) ([]AggregateHistoryByIndexerRow, error)
 	// Searches and finds per library since a time.
 	AggregateSearchesByCategory(ctx context.Context, since int64) ([]AggregateSearchesByCategoryRow, error)
 	AppendHistory(ctx context.Context, arg AppendHistoryParams) (int64, error)

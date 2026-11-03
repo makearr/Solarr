@@ -57,6 +57,7 @@ func (s Statistics) CategoryStatistics(ctx context.Context, categoryID int64) (a
 		{library.StatGrowthByMonth, &view.GrowthByMonth},
 		{library.StatDecisionsByOutcome, &view.DecisionsByOutcome},
 		{library.StatSearches, &view.Searches},
+		{library.StatIndexers, &view.Indexers},
 		{library.StatMostSearched, &view.MostSearched},
 		{library.StatFilesBelowCutoff, &view.BelowCutoff},
 	} {

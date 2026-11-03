@@ -8743,6 +8743,8 @@ export interface components {
             /** @description How many days back the download figures reach. */
             window_days: number;
             searches?: components["schemas"]["StatisticsSearches"];
+            /** @description Grabs, imports and failures per indexer in the window, the most grabbed first; absent before the first grab. */
+            indexers?: components["schemas"]["StatisticsIndexer"][];
             /** @description The wanted items searched most that are still missing, most first; at most ten. */
             most_searched?: components["schemas"]["StatisticsSearchedItem"][];
             files_by_codec: components["schemas"]["StatisticsFiles"][];
@@ -8782,6 +8784,15 @@ export interface components {
             searched: number;
             /** Format: int64 */
             found: number;
+        };
+        StatisticsIndexer: {
+            name: string;
+            /** Format: int64 */
+            grabbed: number;
+            /** Format: int64 */
+            imported: number;
+            /** Format: int64 */
+            failed: number;
         };
         StatisticsSearchedItem: {
             /** Format: int64 */

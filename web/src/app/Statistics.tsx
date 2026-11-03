@@ -292,6 +292,22 @@ export function Statistics() {
             group={words.Group ?? "Group"}
           />
 
+          {data.indexers !== undefined && data.indexers.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <h2 className="text-sm font-medium">Indexers, last {data.window_days} days</h2>
+              <ul className="flex flex-col divide-y divide-border-subtle rounded-lg border border-border-subtle bg-surface">
+                {data.indexers.map((row) => (
+                  <li key={row.name} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <span className="min-w-0 flex-1 truncate">{row.name}</span>
+                    <span className="shrink-0 text-xs text-ink-muted tabular-nums">
+                      {row.grabbed} grabbed · {row.imported} imported · {row.failed} failed
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="flex flex-col gap-2">
             <h2 className="text-sm font-medium">Acquisition, last {data.window_days} days</h2>
             <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">

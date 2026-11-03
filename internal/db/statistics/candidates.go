@@ -123,6 +123,22 @@ func (c Candidates) DecisionsByOutcome(ctx context.Context, since int64) ([]Figu
 	return figures, nil
 }
 
+// HistoryByIndexer counts the grabs, imports and failures since a time, per library and indexer, for the statistics.
+func (c Candidates) HistoryByIndexer(ctx context.Context, since int64) ([]Figure, error) {
+	rows, err := statisticsdb.New(c.store.Read()).AggregateHistoryByIndexer(ctx, since)
+	if err != nil {
+		return nil, fmt.Errorf("statistics: history by indexer: %w", err)
+	}
+	figures := make([]Figure, len(rows))
+	for i, row := range rows {
+		figures[i] = Figure{
+			Metric: library.StatIndexers, Dimension: Dimension(row.CategoryID, row.Indexer+"|"+row.Kind),
+			Value: float64(row.Events), Count: row.Events,
+		}
+	}
+	return figures, nil
+}
+
 // Retired counts what one retention pass removed.
 type Retired struct {
 	Decisions  int64

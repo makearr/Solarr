@@ -9,6 +9,50 @@ import (
 	"context"
 )
 
+const aggregateHistoryByIndexer = `-- name: AggregateHistoryByIndexer :many
+SELECT category_id, indexer, CAST(REPLACE(kind, 'download.', '') AS TEXT) AS kind, CAST(COUNT(*) AS INTEGER) AS events
+FROM history
+WHERE at >= ?1 AND indexer <> '' AND kind IN ('download.grabbed', 'download.imported', 'download.failed')
+GROUP BY category_id, indexer, kind
+ORDER BY category_id, indexer, kind
+`
+
+type AggregateHistoryByIndexerRow struct {
+	CategoryID int64
+	Indexer    string
+	Kind       string
+	Events     int64
+}
+
+// Grabs, imports and failures per library and indexer since a time; history keeps the indexer's name as it was then.
+func (q *Queries) AggregateHistoryByIndexer(ctx context.Context, since int64) ([]AggregateHistoryByIndexerRow, error) {
+	rows, err := q.db.QueryContext(ctx, aggregateHistoryByIndexer, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []AggregateHistoryByIndexerRow{}
+	for rows.Next() {
+		var i AggregateHistoryByIndexerRow
+		if err := rows.Scan(
+			&i.CategoryID,
+			&i.Indexer,
+			&i.Kind,
+			&i.Events,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const appendHistory = `-- name: AppendHistory :one
 INSERT INTO history (at, kind, category_id, work_id, acquisition_id, release_title, work_title, lead_name, indexer, client, detail, event_id)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

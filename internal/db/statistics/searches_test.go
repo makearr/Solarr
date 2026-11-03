@@ -44,3 +44,33 @@ func TestCandidates_SearchesAreCountedPerLibraryAndRetired(t *testing.T) {
 		t.Errorf("after retention %+v, want one search left in each library", left)
 	}
 }
+
+// History is counted per library, indexer and kind since a time; removals and rows without an indexer are left out.
+func TestCandidates_HistoryByIndexer(t *testing.T) {
+	opened := openStatistics(t)
+	history, candidates := statistics.NewHistory(opened), statistics.NewCandidates(opened)
+	ctx := t.Context()
+	for _, e := range []statistics.HistoryEntry{
+		{At: 2_000, Kind: "download.grabbed", CategoryID: 1, Indexer: "geek"},
+		{At: 2_100, Kind: "download.grabbed", CategoryID: 1, Indexer: "geek"},
+		{At: 2_200, Kind: "download.failed", CategoryID: 1, Indexer: "geek"},
+		{At: 2_300, Kind: "download.removed", CategoryID: 1, Indexer: "geek"},
+		{At: 2_400, Kind: "download.imported", CategoryID: 1},
+		{At: 100, Kind: "download.grabbed", CategoryID: 1, Indexer: "geek"},
+	} {
+		if _, err := history.Append(ctx, e); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := candidates.HistoryByIndexer(ctx, 1_000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	figure := func(key string, n int64) statistics.Figure {
+		return statistics.Figure{Metric: library.StatIndexers, Dimension: statistics.Dimension(1, key), Value: float64(n), Count: n}
+	}
+	want := []statistics.Figure{figure("geek|failed", 1), figure("geek|grabbed", 2)}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("history by indexer = %+v, want %+v", got, want)
+	}
+}

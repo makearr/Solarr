@@ -39,6 +39,7 @@ type StatisticsView struct {
 	DecisionsByOutcome []StatisticsFigure
 	Searches           []StatisticsFigure
 	MostSearched       []StatisticsFigure
+	Indexers           []StatisticsFigure
 	BelowCutoff        []StatisticsFigure
 }
 
@@ -109,6 +110,7 @@ func (s *Server) GetCategoryStatistics(w http.ResponseWriter, r *http.Request, i
 	out.SeriesBySize, out.SeriesGaps = seriesFigures(view.SeriesSize, false), seriesFigures(view.SeriesGaps, true)
 	out.SizePerHour = pictureFigures(view.SizePerHour, view.VideoBitrate)
 	out.Searches, out.MostSearched = searchFigures(view.Searches), mostSearched(view.MostSearched)
+	out.Indexers = indexerFigures(view.Indexers)
 	if !view.ComputedAt.IsZero() {
 		out.ComputedAt = &view.ComputedAt
 	}
@@ -186,6 +188,37 @@ func searchFigures(figures []StatisticsFigure) *gen.StatisticsSearches {
 			out.Found = figure.Count
 		}
 	}
+	return &out
+}
+
+// indexerFigures reads "<indexer>|<kind>" keys into one row per indexer, the busiest first.
+func indexerFigures(figures []StatisticsFigure) *[]gen.StatisticsIndexer {
+	byName := map[string]*gen.StatisticsIndexer{}
+	var out []gen.StatisticsIndexer
+	for _, figure := range figures {
+		name, kind, found := strings.Cut(figure.Key, "|")
+		if !found {
+			continue
+		}
+		row := byName[name]
+		if row == nil {
+			out = append(out, gen.StatisticsIndexer{Name: name})
+			row = &out[len(out)-1]
+			byName[name] = row
+		}
+		switch kind {
+		case "grabbed":
+			row.Grabbed = figure.Count
+		case "imported":
+			row.Imported = figure.Count
+		case "failed":
+			row.Failed = figure.Count
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Grabbed > out[j].Grabbed })
 	return &out
 }
 

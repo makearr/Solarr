@@ -1811,6 +1811,9 @@ type CategoryStatistics struct {
 	// GrowthByMonth Files and bytes first seen per month, oldest first; the first scan lands in one month.
 	GrowthByMonth []StatisticsFiles `json:"growth_by_month"`
 
+	// Indexers Grabs, imports and failures per indexer in the window, the most grabbed first; absent before the first grab.
+	Indexers *[]StatisticsIndexer `json:"indexers,omitempty"`
+
 	// MostSearched The wanted items searched most that are still missing, most first; at most ten.
 	MostSearched *[]StatisticsSearchedItem `json:"most_searched,omitempty"`
 
@@ -4902,6 +4905,14 @@ type StatisticsFiles struct {
 
 	// Key The audio codec
 	Key string `json:"key"`
+}
+
+// StatisticsIndexer defines model for StatisticsIndexer.
+type StatisticsIndexer struct {
+	Failed   int64  `json:"failed"`
+	Grabbed  int64  `json:"grabbed"`
+	Imported int64  `json:"imported"`
+	Name     string `json:"name"`
 }
 
 // StatisticsPicture defines model for StatisticsPicture.

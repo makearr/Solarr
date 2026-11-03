@@ -12486,6 +12486,10 @@ components:
         window_days: { type: integer, description: How many days back the download figures reach. }
         searches:
           $ref: "#/components/schemas/StatisticsSearches"
+        indexers:
+          type: array
+          description: Grabs, imports and failures per indexer in the window, the most grabbed first; absent before the first grab.
+          items: { $ref: "#/components/schemas/StatisticsIndexer" }
         most_searched:
           type: array
           description: The wanted items searched most that are still missing, most first; at most ten.
@@ -12554,6 +12558,14 @@ components:
       properties:
         searched: { type: integer, format: int64 }
         found: { type: integer, format: int64 }
+    StatisticsIndexer:
+      type: object
+      required: [name, grabbed, imported, failed]
+      properties:
+        name: { type: string }
+        grabbed: { type: integer, format: int64 }
+        imported: { type: integer, format: int64 }
+        failed: { type: integer, format: int64 }
     StatisticsSearchedItem:
       type: object
       required: [work_id, title, searches, last_searched_at]

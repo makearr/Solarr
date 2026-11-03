@@ -22,3 +22,11 @@ LIMIT sqlc.arg(page_size);
 
 -- name: MoveHistoryToWork :exec
 UPDATE history SET work_id = sqlc.arg(to_work_id) WHERE work_id = sqlc.arg(from_work_id);
+
+-- Grabs, imports and failures per library and indexer since a time; history keeps the indexer's name as it was then.
+-- name: AggregateHistoryByIndexer :many
+SELECT category_id, indexer, CAST(REPLACE(kind, 'download.', '') AS TEXT) AS kind, CAST(COUNT(*) AS INTEGER) AS events
+FROM history
+WHERE at >= sqlc.arg(since) AND indexer <> '' AND kind IN ('download.grabbed', 'download.imported', 'download.failed')
+GROUP BY category_id, indexer, kind
+ORDER BY category_id, indexer, kind;
