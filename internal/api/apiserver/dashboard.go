@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"sync"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
 	"github.com/makearr/Solarr/internal/api/authz"
@@ -42,23 +43,28 @@ func (s *Server) GetDashboard(w http.ResponseWriter, r *http.Request) {
 func (s *Server) rootFolderViews(ctx context.Context) []gen.RootFolder {
 	folders := s.auth.Settings.Snapshot().RootFolders()
 	held := s.heldVanished(ctx)
-	views := make([]gen.RootFolder, 0, len(folders))
-	for _, folder := range folders {
-		view := s.rootFolderView(folder)
+	views := make([]gen.RootFolder, len(folders))
+	// Each probe is a create and a remove, round trips on a network share: one root never waits for another.
+	var probes sync.WaitGroup
+	for index, folder := range folders {
+		views[index] = s.rootFolderView(folder)
 		if count, found := held[folder.ID]; found {
-			view.VanishedHeld = &count
+			views[index].VanishedHeld = &count
 		}
-		if s.roots != nil {
+		if s.roots == nil {
+			continue
+		}
+		probes.Go(func() {
 			err := s.roots.Writable(folder.Path)
 			writable := err == nil
-			view.Writable = &writable
+			views[index].Writable = &writable
 			if errors.Is(err, ErrReadOnlyFilesystem) {
 				detected := true
-				view.ReadOnlyDetected = &detected
+				views[index].ReadOnlyDetected = &detected
 			}
-		}
-		views = append(views, view)
+		})
 	}
+	probes.Wait()
 	return views
 }
 
