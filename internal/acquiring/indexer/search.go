@@ -25,40 +25,65 @@ type SearchRequest struct {
 // (ADR-18/ADR-40's own jobs); it only turns the indexer's own protocol
 // response into a plain Go value.
 func (c Client) Search(ctx context.Context, request SearchRequest) ([]RawItem, error) {
-	function := request.Function
-	if function == "" {
-		function = "search"
+	body, err := c.getBody(ctx, c.apiURL(request.function(), request.params()))
+	if err != nil {
+		return nil, fmt.Errorf("indexer: search: %w", err)
 	}
+	return parseItems(body)
+}
 
-	params := url.Values{}
-	if request.Query != "" {
-		params.Set("q", request.Query)
+// Validators are the HTTP cache validators an indexer answered a feed with; zero asks unconditionally.
+type Validators struct {
+	ETag         string
+	LastModified string
+}
+
+// SearchIfChanged is Search with the validators of the last answer; unchanged reports a 304, which carries no items.
+func (c Client) SearchIfChanged(ctx context.Context, request SearchRequest, seen Validators) (items []RawItem, now Validators, unchanged bool, err error) {
+	response, err := c.getConditional(ctx, c.apiURL(request.function(), request.params()), seen)
+	if err != nil {
+		return nil, seen, false, fmt.Errorf("indexer: search: %w", err)
 	}
-	if len(request.Categories) > 0 {
-		categories := make([]string, len(request.Categories))
-		for i, cat := range request.Categories {
+	if response.unchanged {
+		return nil, seen, true, nil
+	}
+	items, err = parseItems(response.body)
+	return items, response.validators, false, err
+}
+
+func (r SearchRequest) function() string {
+	if r.Function == "" {
+		return "search"
+	}
+	return r.Function
+}
+
+func (r SearchRequest) params() url.Values {
+	params := url.Values{}
+	if r.Query != "" {
+		params.Set("q", r.Query)
+	}
+	if len(r.Categories) > 0 {
+		categories := make([]string, len(r.Categories))
+		for i, cat := range r.Categories {
 			categories[i] = strconv.Itoa(cat)
 		}
 		params.Set("cat", strings.Join(categories, ","))
 	}
-	if request.Limit > 0 {
-		params.Set("limit", strconv.Itoa(request.Limit))
+	if r.Limit > 0 {
+		params.Set("limit", strconv.Itoa(r.Limit))
 	}
-	for key, value := range request.Extra {
+	for key, value := range r.Extra {
 		params.Set(key, value)
 	}
+	return params
+}
 
-	requestURL := c.apiURL(function, params)
-	body, err := c.getBody(ctx, requestURL)
-	if err != nil {
-		return nil, fmt.Errorf("indexer: search: %w", err)
-	}
-
+func parseItems(body []byte) ([]RawItem, error) {
 	var parsed rssXML
 	if err := xml.Unmarshal(body, &parsed); err != nil {
 		return nil, fmt.Errorf("indexer: parse search response: %w", err)
 	}
-
 	items := make([]RawItem, len(parsed.Channel.Item))
 	for i, item := range parsed.Channel.Item {
 		items[i] = item.toRawItem()

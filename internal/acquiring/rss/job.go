@@ -66,6 +66,11 @@ type readMark struct {
 	indexerID int64
 }
 
+// conditionalSearcher is an indexer connection that can ask "anything new since?" with HTTP validators.
+type conditionalSearcher interface {
+	SearchIfChanged(ctx context.Context, request indexer.SearchRequest, seen indexer.Validators) ([]indexer.RawItem, indexer.Validators, bool, error)
+}
+
 // Job reads every indexer's feed for every media type and offers what is new.
 type Job struct {
 	config Config
@@ -73,6 +78,8 @@ type Job struct {
 	// newest is the latest release each feed was read up to; a restart reads it all again, which only judges
 	// again what was judged before.
 	newest map[readMark]time.Time
+	// validators are what each feed last answered, sent back so an indexer that honours them answers 304.
+	validators map[readMark]indexer.Validators
 }
 
 // NewJob builds the sync.
@@ -80,7 +87,7 @@ func NewJob(config Config) *Job {
 	if config.Logger == nil {
 		config.Logger = slog.Default()
 	}
-	return &Job{config: config, newest: map[readMark]time.Time{}}
+	return &Job{config: config, newest: map[readMark]time.Time{}, validators: map[readMark]indexer.Validators{}}
 }
 
 // Run reads each media type's feed from each of its indexers and offers the releases not read before. One indexer
@@ -106,12 +113,17 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 				request.Categories = conn.Categories
 			}
 			request.Limit = FeedLimit
-			raws, err := conn.Client.Search(ctx, request)
+			mark := readMark{source: source.Name, indexerID: conn.ID}
+			raws, unchanged, err := j.fetch(ctx, mark, conn, request)
 			if err != nil {
 				j.config.Logger.Warn("rss sync: feed failed", "media_type", source.Name, "indexer", conn.Name, "error", err)
 				continue
 			}
-			unread := j.unread(readMark{source: source.Name, indexerID: conn.ID}, raws)
+			if unchanged {
+				read = append(read, conn.Name+" not modified")
+				continue
+			}
+			unread := j.unread(mark, raws)
 			releases += len(unread)
 			read = append(read, fmt.Sprintf("%s %d new of %d", conn.Name, len(unread), len(raws)))
 			tally := source.Feed.OfferFeed(ctx, conn, unread, j.config.Clock.Now())
@@ -122,6 +134,20 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 			"items_judged", total.Judged, "sent", total.Sent, "held", total.Held)
 	}
 	return nil
+}
+
+// fetch reads one feed, conditionally when the connection can; unchanged is a 304.
+func (j *Job) fetch(ctx context.Context, mark readMark, conn judge.Conn, request indexer.SearchRequest) (raws []indexer.RawItem, unchanged bool, err error) {
+	conditional, ok := conn.Client.(conditionalSearcher)
+	if !ok {
+		raws, err = conn.Client.Search(ctx, request)
+		return raws, false, err
+	}
+	raws, validators, unchanged, err := conditional.SearchIfChanged(ctx, request, j.validators[mark])
+	if err == nil {
+		j.validators[mark] = validators
+	}
+	return raws, unchanged, err
 }
 
 // unread keeps the releases newer than the last sync read from this feed, and moves its mark.

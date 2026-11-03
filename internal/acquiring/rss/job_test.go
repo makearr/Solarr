@@ -56,3 +56,40 @@ func TestJob_ReportsWhatEachFeedGaveWhenNothingMatched(t *testing.T) {
 		}
 	}
 }
+
+// conditionalListing answers 304 once it has been asked with the validator it handed out.
+type conditionalListing struct {
+	listing
+	asked *[]string
+}
+
+func (c conditionalListing) SearchIfChanged(_ context.Context, _ indexer.SearchRequest, seen indexer.Validators) ([]indexer.RawItem, indexer.Validators, bool, error) {
+	*c.asked = append(*c.asked, seen.ETag)
+	if seen.ETag == "v1" {
+		return nil, seen, true, nil
+	}
+	return c.listing, indexer.Validators{ETag: "v1"}, false, nil
+}
+
+func TestJob_AFeedAnswering304IsNotJudgedAgain(t *testing.T) {
+	var logged bytes.Buffer
+	var asked []string
+	published := time.Unix(1_700_000_000, 0)
+	feed := wantsNothing{conns: []judge.Conn{{ID: 1, Name: "Usenet one", Client: conditionalListing{listing{{GUID: "a", PublishedAt: published}}, &asked}}}}
+	job := rss.NewJob(rss.Config{
+		Sources: func() []rss.Source { return []rss.Source{{Name: "music", Feed: feed}} },
+		Clock:   clock.NewFakeAtEpoch(),
+		Logger:  slog.New(slog.NewTextHandler(&logged, nil)),
+	})
+	for range 2 {
+		if err := job.Run(t.Context(), jobs.Job{}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	if got := strings.Join(asked, "|"); got != "|v1" {
+		t.Errorf("validators sent = %q, want the second sync to send v1", got)
+	}
+	if !strings.Contains(logged.String(), `indexers="Usenet one not modified"`) {
+		t.Errorf("log lacks the not-modified feed: %s", logged.String())
+	}
+}

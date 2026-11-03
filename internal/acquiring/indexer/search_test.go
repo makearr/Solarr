@@ -2,6 +2,9 @@ package indexer_test
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,5 +144,41 @@ func TestSearch_ToleratesAnUnparseablePubDate(t *testing.T) {
 	}
 	if !items[0].PublishedAt.IsZero() {
 		t.Errorf("PublishedAt = %v, want the zero time for an unparseable date", items[0].PublishedAt)
+	}
+}
+
+// etagTransport answers 304 to the validator it issued and the feed with it otherwise.
+type etagTransport struct{ answered []string }
+
+func (e *etagTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+	sent := request.Header.Get("If-None-Match")
+	e.answered = append(e.answered, sent)
+	response := &http.Response{Header: http.Header{}, Request: request, StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(searchFixtureXML))}
+	if sent == `"v1"` {
+		response.StatusCode, response.Body = http.StatusNotModified, io.NopCloser(strings.NewReader(""))
+		return response, nil
+	}
+	response.Header.Set("ETag", `"v1"`)
+	response.Header.Set("Last-Modified", "Mon, 01 Jan 2024 12:00:00 GMT")
+	return response, nil
+}
+
+func TestSearchIfChanged_SendsTheValidatorsBackAndReadsA304(t *testing.T) {
+	transport := &etagTransport{}
+	client := indexer.NewClient(newTestClient(t, transport), "http://indexer.local", "k")
+
+	items, seen, unchanged, err := client.SearchIfChanged(context.Background(), indexer.SearchRequest{}, indexer.Validators{})
+	if err != nil || unchanged || len(items) != 2 {
+		t.Fatalf("first = %d items, unchanged %v, err %v", len(items), unchanged, err)
+	}
+	if want := (indexer.Validators{ETag: `"v1"`, LastModified: "Mon, 01 Jan 2024 12:00:00 GMT"}); seen != want {
+		t.Fatalf("validators = %+v, want %+v", seen, want)
+	}
+	items, again, unchanged, err := client.SearchIfChanged(context.Background(), indexer.SearchRequest{}, seen)
+	if err != nil || !unchanged || len(items) != 0 || again != seen {
+		t.Fatalf("second = %d items, unchanged %v, validators %+v, err %v", len(items), unchanged, again, err)
+	}
+	if got := strings.Join(transport.answered, "|"); got != `|"v1"` {
+		t.Errorf("If-None-Match sent = %q", got)
 	}
 }

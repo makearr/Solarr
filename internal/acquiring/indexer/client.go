@@ -2,8 +2,10 @@ package indexer
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -56,7 +58,46 @@ func (c Client) getBody(ctx context.Context, requestURL string) ([]byte, error) 
 		return nil, err
 	}
 	defer func() { _ = response.Body.Close() }()
+	return readBounded(response)
+}
 
+// conditionalAnswer is the answer to a conditional request: a 304, or the body with the validators to send next time.
+type conditionalAnswer struct {
+	unchanged  bool
+	body       []byte
+	validators Validators
+}
+
+// getConditional sends the validators seen before;
+func (c Client) getConditional(ctx context.Context, requestURL string, seen Validators) (conditionalAnswer, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	if err != nil {
+		return conditionalAnswer{}, fmt.Errorf("indexer: build request: %w", err)
+	}
+	if seen.ETag != "" {
+		request.Header.Set("If-None-Match", seen.ETag)
+	}
+	if seen.LastModified != "" {
+		request.Header.Set("If-Modified-Since", seen.LastModified)
+	}
+	response, err := c.http.Do(ctx, request)
+	var status *httpx.StatusError
+	if errors.As(err, &status) && status.Status == http.StatusNotModified {
+		return conditionalAnswer{unchanged: true}, nil
+	}
+	if err != nil {
+		return conditionalAnswer{}, err
+	}
+	defer func() { _ = response.Body.Close() }()
+	validators := Validators{ETag: response.Header.Get("ETag"), LastModified: response.Header.Get("Last-Modified")}
+	body, err := readBounded(response)
+	if err != nil {
+		return conditionalAnswer{}, err
+	}
+	return conditionalAnswer{body: body, validators: validators}, nil
+}
+
+func readBounded(response *http.Response) ([]byte, error) {
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("indexer: read response: %w", err)
