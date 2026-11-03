@@ -74,8 +74,6 @@ type SeriesCreditWrite struct {
 	Role, Character                      string
 	Ord                                  int
 	PartRef                              string
-	// JoinProviders is PersonLink.JoinProviders for this credit's person.
-	JoinProviders []string
 }
 
 // SeriesNetworkWrite is a further network or streamer the series airs on.

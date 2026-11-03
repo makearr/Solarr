@@ -66,6 +66,27 @@ func (p Profiling) KnownFor(ctx context.Context, personID, categoryID int64) ([]
 	return append(p.knownFor(ctx, personID, categoryID, remote), p.albums(ctx, personID, remote.ExternalIDs.Wikidata)...), nil
 }
 
+// Details reads the TMDB person and keeps what it adds; nil when the person holds no TMDB id.
+func (p Profiling) Details(ctx context.Context, personID int64) error {
+	if p.Source == nil || !p.Source.Configured() {
+		return nil
+	}
+	external, found, err := p.People.ExternalIDFor(ctx, personID, tmdb.KeyPerson)
+	if err != nil || !found {
+		return err
+	}
+	id, ok := parseID(external)
+	if !ok {
+		return nil
+	}
+	remote, err := p.Source.Person(ctx, id)
+	if err != nil {
+		return err
+	}
+	p.keep(ctx, personID, remote)
+	return nil
+}
+
 // musicBrainzArtistProvider mirrors music.ProviderArtist, which this package cannot import.
 const musicBrainzArtistProvider = "musicbrainz:artist"
 

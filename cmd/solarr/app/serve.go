@@ -555,6 +555,9 @@ func (p *process) startJobs(ctx context.Context) error {
 	if err := p.registerMoverJob(registry, executor); err != nil {
 		return err
 	}
+	if err := p.registerPeopleJobs(registry, executor); err != nil {
+		return err
+	}
 	if err := p.registerPlanJobs(registry, executor); err != nil {
 		return err
 	}
@@ -830,6 +833,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 			People: library.NewPeople(p.library), Works: library.NewWorks(p.library), Roles: adapters.MediaTypes{Registry: p.media}.RoleKeys,
 			Categories: adapters.Categories{Cache: p.cache},
 			Profiling:  adapters.MediaTypes{Registry: p.media}.ProfilingIn(adapters.Categories{Cache: p.cache}),
+			Clock:      clock.NewSystem(), Warm: p.warmPerson,
 		},
 		Organisations: adapters.Organisations{Organisations: library.NewOrganisations(p.library), Works: library.NewWorks(p.library)},
 		ArtistActions: adapters.ArtistActions{

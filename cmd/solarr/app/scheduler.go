@@ -89,6 +89,7 @@ func (p *process) buildTaskRegistry() *jobs.TaskRegistry {
 	registry.MustRegister(p.importRetryTask())
 	registry.MustRegister(p.tvTitleRenameTask())
 	registry.MustRegister(p.automaticRenameTask())
+	registry.MustRegister(p.peopleConvergeTask())
 	registry.MustRegister(jobs.Task{
 		Key: "tv_crossovers", Name: "Find crossover episodes", DefaultCadence: crossoverPassScheduleCron,
 		Tier: string(settings.TierAdvanced), Category: jobs.CategoryLibrary, Startup: jobs.StartupOn,

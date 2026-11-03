@@ -121,7 +121,7 @@ func TestAnArtistIsInTheLibraryTheirAlbumIsWantedIn(t *testing.T) {
 		t.Fatal(err)
 	}
 	other, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
-		Provider: "local", ExternalID: "vutu doci", Person: library.PersonIdentity{Name: "Vutu Doci", Kind: "Person"},
+		Provider: "local:folder", ExternalID: "vutu doci", Person: library.PersonIdentity{Name: "Vutu Doci", Kind: "Person"},
 	})
 	if err != nil {
 		t.Fatal(err)

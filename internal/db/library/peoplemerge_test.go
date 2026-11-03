@@ -114,12 +114,18 @@ func TestLinkWikidata_TheSameQIDMergesTheTwoAndTheMusicArtistSurvives(t *testing
 	opened, _ := newLibrary(t)
 	people := library.NewPeople(opened)
 	actor, err := people.ResolvePerson(t.Context(), firstSeen, library.PersonLink{
-		Provider: "tmdb", ExternalID: "1", Person: library.PersonIdentity{Name: "Vutu Doci"},
+		Provider: "tmdb", ExternalID: "1", Person: library.PersonIdentity{Name: "Placeholder"},
 	})
 	if err != nil {
 		t.Fatalf("ResolvePerson actor: %v", err)
 	}
-	artist := resolvePersonNamed(t, people, "artist-1", "Vutu Doci")
+	if err := people.BackfillDetails(t.Context(), actor, library.PersonIdentity{Name: "Vutu Doci"}); err != nil {
+		t.Fatalf("BackfillDetails actor: %v", err)
+	}
+	artist := resolvePersonNamed(t, people, "artist-1", "Placeholder artist")
+	if err := people.BackfillDetails(t.Context(), artist, library.PersonIdentity{Name: "Vutu Doci"}); err != nil {
+		t.Fatalf("BackfillDetails artist: %v", err)
+	}
 	if _, err := people.LinkWikidata(t.Context(), artist, "q42"); err != nil {
 		t.Fatalf("LinkWikidata artist: %v", err)
 	}

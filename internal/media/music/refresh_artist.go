@@ -28,13 +28,22 @@ type RefreshArtistPayload struct {
 
 // EnqueueRefreshArtist asks for one artist's metadata again; a second click while one runs is folded in.
 func EnqueueRefreshArtist(ctx context.Context, queue *jobs.Queue, personID int64) (jobs.EnqueueResult, error) {
+	return enqueueRefreshArtist(ctx, queue, personID, jobs.PriorityNormal)
+}
+
+// EnqueueRefreshArtistNow is the refresh of an artist whose page someone has open: ahead of the background sweeps.
+func EnqueueRefreshArtistNow(ctx context.Context, queue *jobs.Queue, personID int64) (jobs.EnqueueResult, error) {
+	return enqueueRefreshArtist(ctx, queue, personID, jobs.PriorityInteractive)
+}
+
+func enqueueRefreshArtist(ctx context.Context, queue *jobs.Queue, personID int64, priority jobs.Priority) (jobs.EnqueueResult, error) {
 	payload, err := json.Marshal(RefreshArtistPayload{PersonID: personID})
 	if err != nil {
 		return jobs.EnqueueResult{}, err
 	}
 	return queue.Enqueue(ctx, jobs.Request{
 		Type: RefreshArtistJobType, ActionKey: fmt.Sprintf("%s:%d", RefreshArtistJobType, personID),
-		Priority: jobs.PriorityNormal, Payload: payload,
+		Priority: priority, Payload: payload,
 	})
 }
 

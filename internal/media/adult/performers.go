@@ -48,7 +48,6 @@ type PerformerStore interface {
 	SetExtras(ctx context.Context, personID int64, extras library.PersonExtras) error
 	SetBiography(ctx context.Context, personID int64, biography string) error
 	RecordRefresh(ctx context.Context, personID, at int64) error
-	MergeSameNamed(ctx context.Context, providers []string) (int, error)
 }
 
 // Biographies is Wikidata as the sweep needs it: the Wikipedia lead of an item the servers link a performer to.
@@ -73,11 +72,6 @@ var serverOrder = []string{ProviderStashDB, ProviderThePornDB, ProviderFansDB}
 // Run reads the performers that are due; one failing never stops the rest.
 func (p Performers) Run(ctx context.Context, _ jobs.Job) error {
 	now := p.Clock.Now()
-	// First, so a performer the servers gave two ids is one page before it is read.
-	joined, err := p.People.MergeSameNamed(ctx, performerProviders)
-	if err != nil {
-		return fmt.Errorf("adult: performers merge: %w", err)
-	}
 	due, err := p.People.DueForDetails(ctx, MediaType, RolePerformer, now.Add(-detailsRefresh), performersPerRun)
 	if err != nil {
 		return fmt.Errorf("adult: performers sweep: %w", err)
@@ -97,9 +91,15 @@ func (p Performers) Run(ctx context.Context, _ jobs.Job) error {
 			return err
 		}
 	}
-	p.Logger.Info("adult performers sweep finished", slog.Int("due", len(due)), slog.Int("read", read), slog.Int("merged", joined))
+	p.Logger.Info("adult performers sweep finished", slog.Int("due", len(due)), slog.Int("read", read))
 	return nil
 }
+
+// ErrNoServerKnows is a performer no configured server holds an id for, or none answers for.
+var ErrNoServerKnows = errors.New("no server knows the performer")
+
+// Read fills one performer's page now; ErrNoServerKnows when there is nothing to read it from.
+func (p Performers) Read(ctx context.Context, personID int64) error { return p.read(ctx, personID) }
 
 func (p Performers) read(ctx context.Context, personID int64) error {
 	var identity library.PersonIdentity
@@ -133,7 +133,7 @@ func (p Performers) read(ctx context.Context, personID int64) error {
 		identity, extras = mergePerformer(identity, extras, more, moreExtras)
 	}
 	if !known {
-		return errors.New("no server knows the performer")
+		return ErrNoServerKnows
 	}
 	if err := p.People.BackfillDetails(ctx, personID, identity); err != nil {
 		return err

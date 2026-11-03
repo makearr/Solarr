@@ -43,9 +43,6 @@ type PersonLink struct {
 	Provider   string
 	ExternalID string
 	Person     PersonIdentity
-	// JoinProviders, when set, lets an unknown id join the one same-named person who holds an id from one of these
-	// providers and none from Provider: a source that gives the same human another id is not a second person.
-	JoinProviders []string
 }
 
 // GenreLink is one release group's genre tag, with the provider's own vote
@@ -198,45 +195,73 @@ func findOrCreatePerson(
 	return person.ID, nil
 }
 
-// joinSameNamed links the id to the only person of that name held under one of the join providers, when that person
-// has no id of the link's provider yet; two same-named candidates are ambiguous and stay apart.
+// joinSameNamed links the id to the one identified person it names: by name, else by alias, whose birth does not
+// contradict the new person's and who holds no id of the link's provider; several candidates stay apart.
 func joinSameNamed(ctx context.Context, tx librarydb.DBTX, queries *librarydb.Queries, link PersonLink) (int64, bool, error) {
 	name := strings.TrimSpace(link.Person.Name)
-	if len(link.JoinProviders) == 0 || name == "" {
+	if name == "" || strings.HasPrefix(link.Provider, "local:") {
 		return 0, false, nil
 	}
-	holders := make([]string, len(link.JoinProviders))
-	args := []any{name, link.Provider}
-	for index, provider := range link.JoinProviders {
-		holders[index] = "?"
-		args = append(args, provider)
+	for _, lookup := range []string{
+		`SELECT p.id, COALESCE(p.born, '') AS born FROM person p WHERE p.name = ? COLLATE NOCASE`,
+		`SELECT p.id, COALESCE(p.born, '') AS born FROM person p WHERE p.id IN (SELECT person_id FROM person_alias WHERE normalized = ?)`,
+	} {
+		arg := name
+		if strings.Contains(lookup, "normalized") {
+			arg = normalizedAlias(name)
+		}
+		matches, err := identifiedMatches(ctx, tx, lookup, arg, link)
+		if err != nil {
+			return 0, false, err
+		}
+		if len(matches) == 0 {
+			continue
+		}
+		if len(matches) > 1 {
+			return 0, false, nil
+		}
+		if err := queries.LinkPersonExternalID(ctx, librarydb.LinkPersonExternalIDParams{
+			Provider: link.Provider, ExternalID: link.ExternalID, PersonID: matches[0],
+		}); err != nil {
+			return 0, false, fmt.Errorf("link external id: %w", err)
+		}
+		return matches[0], true, nil
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT p.id FROM person p
-WHERE p.name = ? COLLATE NOCASE
-  AND NOT EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = p.id AND x.provider = ?)
-  AND EXISTS (SELECT 1 FROM person_external_id y WHERE y.person_id = p.id AND y.provider IN (`+strings.Join(holders, ",")+`))
-ORDER BY p.id LIMIT 2`, args...)
+	return 0, false, nil
+}
+
+// identifiedMatches runs a person lookup and keeps who is identified by a provider, holds no id of the link's and was
+// not born at another time.
+func identifiedMatches(ctx context.Context, tx librarydb.DBTX, lookup, arg string, link PersonLink) ([]int64, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT found.id, found.born FROM (`+lookup+`) found
+WHERE EXISTS (SELECT 1 FROM person_external_id y WHERE y.person_id = found.id AND y.provider NOT LIKE 'local:%')
+  AND NOT EXISTS (SELECT 1 FROM person_external_id x WHERE x.person_id = found.id AND x.provider = ?)
+ORDER BY found.id LIMIT 3`, arg, link.Provider)
 	if err != nil {
-		return 0, false, fmt.Errorf("join same-named: %w", err)
+		return nil, fmt.Errorf("join same-named: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	var matches []int64
 	for rows.Next() {
 		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return 0, false, err
+		var born string
+		if err := rows.Scan(&id, &born); err != nil {
+			return nil, err
 		}
-		matches = append(matches, id)
+		if bornCompatible(born, link.Person.Born) {
+			matches = append(matches, id)
+		}
 	}
-	if err := rows.Err(); err != nil || len(matches) != 1 {
-		return 0, false, err
+	return matches, rows.Err()
+}
+
+// bornCompatible is false only when both births are known and differ on the digits both give.
+func bornCompatible(a, b string) bool {
+	if a == "" || b == "" {
+		return true
 	}
-	if err := queries.LinkPersonExternalID(ctx, librarydb.LinkPersonExternalIDParams{
-		Provider: link.Provider, ExternalID: link.ExternalID, PersonID: matches[0],
-	}); err != nil {
-		return 0, false, fmt.Errorf("link external id: %w", err)
-	}
-	return matches[0], true, nil
+	shared := min(len(a), len(b), 10)
+	return a[:shared] == b[:shared]
 }
 
 // AddCredit records a work-level credit (edition_id/part_id zero, Appendix E D2) for an already-resolved person; ord

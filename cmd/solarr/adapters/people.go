@@ -34,6 +34,8 @@ type People struct {
 	Provider      musicbrainz.Provider
 	Categories    Categories
 	Clock         clock.Clock
+	// Warm asks for a person's details to be read ahead of the background work; optional.
+	Warm func(ctx context.Context, personID int64)
 }
 
 // Remove stops following an artist and deletes them (revision 7.3). The
@@ -122,6 +124,7 @@ func (a People) GetPersonDetail(ctx context.Context, id int64, visible []int64) 
 	if err != nil {
 		return gen.PersonDetail{}, nil, err
 	}
+	a.warm(ctx, profile)
 	view := gen.PersonDetail{
 		Id: profile.ID, Name: profile.Name, SortName: profile.SortName, Monitored: profile.Monitored,
 		Aliases: nonNil(profile.Aliases), Genres: nonNil(profile.Genres), Ids: profile.IDs,
@@ -347,4 +350,18 @@ func webAddress(raw string) bool {
 	}
 	scheme := strings.ToLower(parsed.Scheme)
 	return scheme == "http" || scheme == "https"
+}
+
+// detailsRetry is how long a person whose page is open stays unasked after their details were tried.
+const detailsRetry = 24 * time.Hour
+
+// warm asks for the details of a person who has none, once a day at most: an opened page should not wait for the sweeps.
+func (a People) warm(ctx context.Context, profile library.PersonProfile) {
+	if a.Warm == nil || a.Clock == nil || profile.Biography != "" || profile.Born != "" || profile.ImageURL != "" {
+		return
+	}
+	if asked, err := a.People.DetailsAsked(ctx, profile.ID, a.Clock.Now().Add(-detailsRetry)); err != nil || asked {
+		return
+	}
+	a.Warm(ctx, profile.ID)
 }

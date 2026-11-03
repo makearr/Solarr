@@ -371,93 +371,169 @@ ORDER BY t.id`, ProviderWikidata, musicbrainzArtistProvider)
 	return linked, rows.Err()
 }
 
-// sameNamed is one person holding ids of the providers MergeSameNamed looks at.
-type sameNamed struct {
+// duplicate is one identified person as the convergence pass sees them.
+type duplicate struct {
 	id, credits int64
+	name, born  string
 	providers   map[string]bool
 }
 
-// MergeSameNamed folds people of one name who hold ids from the given providers into the one with the most credits,
-// when no two of them hold an id of the same provider; a name two ids of one provider share is two people. It answers
-// how many were merged.
-func (p People) MergeSameNamed(ctx context.Context, providers []string) (int, error) {
-	groups, err := p.sameNamedGroups(ctx, providers)
+// maxConvergePasses bounds the rounds of one run; a merge can make another one uncontested.
+const maxConvergePasses = 3
+
+// ConvergePeople merges the people two sources made of one human. Of the identified people sharing a name (or one's
+// alias being the other's name) all merge when they hold no provider twice and no two births differ; where that does
+// not hold, only those of one known birth merge, and the rest stay apart. It answers how many people were merged.
+func (p People) ConvergePeople(ctx context.Context) (int, error) {
+	total := 0
+	for range maxConvergePasses {
+		merged, err := p.convergeOnce(ctx)
+		total += merged
+		if err != nil || merged == 0 {
+			return total, err
+		}
+	}
+	return total, nil
+}
+
+func (p People) convergeOnce(ctx context.Context) (int, error) {
+	groups, err := p.duplicateGroups(ctx)
 	if err != nil {
 		return 0, err
 	}
 	merged := 0
+	gone := map[int64]bool{}
 	for _, group := range groups {
-		if len(group) < 2 || !disjointProviders(len(group), func(i int) map[string]bool { return group[i].providers }) {
-			continue
-		}
-		winner := group[0]
-		for _, person := range group[1:] {
-			if person.credits > winner.credits {
-				winner = person
+		for _, cluster := range uncontested(group) {
+			winner := cluster[0]
+			for _, person := range cluster[1:] {
+				if survives(person, winner) {
+					winner = person
+				}
 			}
-		}
-		for _, person := range group {
-			if person == winner {
-				continue
+			for _, person := range cluster {
+				if person == winner || gone[person.id] || gone[winner.id] {
+					continue
+				}
+				if err := ctx.Err(); err != nil {
+					return merged, err
+				}
+				if err := p.MergePeople(ctx, person.id, winner.id); err != nil {
+					return merged, err
+				}
+				gone[person.id] = true
+				merged++
 			}
-			if err := ctx.Err(); err != nil {
-				return merged, err
-			}
-			if err := p.MergePeople(ctx, person.id, winner.id); err != nil {
-				return merged, err
-			}
-			merged++
 		}
 	}
 	return merged, nil
 }
 
-// sameNamedGroups lists the people holding an id of the providers, grouped by lower-cased name.
-func (p People) sameNamedGroups(ctx context.Context, providers []string) (map[string][]*sameNamed, error) {
-	holders := make([]string, len(providers))
-	args := make([]any, len(providers))
-	for index, provider := range providers {
-		holders[index], args[index] = "?", provider
+// survives is true when a is the better one to keep than b: the music artist (its folders are named by it), then the
+// one with more credits, then the older.
+func survives(a, b *duplicate) bool {
+	if a.providers[musicbrainzArtistProvider] != b.providers[musicbrainzArtistProvider] {
+		return a.providers[musicbrainzArtistProvider]
 	}
-	rows, err := p.store.Read().QueryContext(ctx, `SELECT p.id, p.name, x.provider,
-       (SELECT COUNT(*) FROM credit c WHERE c.person_id = p.id)
-FROM person p JOIN person_external_id x ON x.person_id = p.id
-WHERE x.provider IN (`+strings.Join(holders, ",")+`) AND TRIM(p.name) <> ''
-ORDER BY p.id`, args...)
-	if err != nil {
-		return nil, fmt.Errorf("library: list same-named people: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	groups := map[string][]*sameNamed{}
-	byID := map[int64]*sameNamed{}
-	for rows.Next() {
-		var id, credits int64
-		var name, provider string
-		if err := rows.Scan(&id, &name, &provider, &credits); err != nil {
-			return nil, err
-		}
-		person, seen := byID[id]
-		if !seen {
-			person = &sameNamed{id: id, credits: credits, providers: map[string]bool{}}
-			byID[id] = person
-			key := strings.ToLower(strings.TrimSpace(name))
-			groups[key] = append(groups[key], person)
-		}
-		person.providers[provider] = true
-	}
-	return groups, rows.Err()
+	return a.credits > b.credits
 }
 
-// disjointProviders is true when no provider appears in two of the n sets.
-func disjointProviders(n int, set func(int) map[string]bool) bool {
+// uncontested splits one name's people into the sets that are one human each: everyone when nothing contradicts, else
+// those of one birth.
+func uncontested(group []*duplicate) [][]*duplicate {
+	if len(group) < 2 {
+		return nil
+	}
+	if compatibleAll(group) {
+		return [][]*duplicate{group}
+	}
+	var clusters [][]*duplicate
+	for _, person := range group {
+		if person.born == "" {
+			continue
+		}
+		placed := false
+		for index, cluster := range clusters {
+			if compatibleAll(append(slices.Clone(cluster), person)) {
+				clusters[index] = append(cluster, person)
+				placed = true
+				break
+			}
+		}
+		if !placed {
+			clusters = append(clusters, []*duplicate{person})
+		}
+	}
+	return slices.DeleteFunc(clusters, func(cluster []*duplicate) bool { return len(cluster) < 2 })
+}
+
+// compatibleAll is true when no provider is held twice and no two births contradict.
+func compatibleAll(people []*duplicate) bool {
 	seen := map[string]bool{}
-	for index := range n {
-		for provider := range set(index) {
+	for index, person := range people {
+		for provider := range person.providers {
 			if seen[provider] {
 				return false
 			}
 			seen[provider] = true
 		}
+		for _, other := range people[:index] {
+			if !bornCompatible(person.born, other.born) {
+				return false
+			}
+		}
 	}
 	return true
+}
+
+// duplicateGroups lists the identified people by lower-cased name; a person is also in the group of each alias that
+// names another group's people.
+func (p People) duplicateGroups(ctx context.Context) (map[string][]*duplicate, error) {
+	rows, err := p.store.Read().QueryContext(ctx, `SELECT p.id, p.name, COALESCE(p.born, ''), x.provider,
+       (SELECT COUNT(*) FROM credit c WHERE c.person_id = p.id)
+FROM person p JOIN person_external_id x ON x.person_id = p.id
+WHERE x.provider NOT LIKE 'local:%' AND TRIM(p.name) <> ''
+ORDER BY p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("library: list identified people: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	groups := map[string][]*duplicate{}
+	byID := map[int64]*duplicate{}
+	for rows.Next() {
+		var id, credits int64
+		var name, born, provider string
+		if err := rows.Scan(&id, &name, &born, &provider, &credits); err != nil {
+			return nil, err
+		}
+		person, seen := byID[id]
+		if !seen {
+			person = &duplicate{id: id, name: name, born: born, credits: credits, providers: map[string]bool{}}
+			byID[id] = person
+			key := normalizedAlias(name)
+			groups[key] = append(groups[key], person)
+		}
+		person.providers[provider] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	aliases, err := p.store.Read().QueryContext(ctx, `SELECT person_id, normalized FROM person_alias ORDER BY person_id`)
+	if err != nil {
+		return nil, fmt.Errorf("library: list aliases: %w", err)
+	}
+	defer func() { _ = aliases.Close() }()
+	for aliases.Next() {
+		var id int64
+		var alias string
+		if err := aliases.Scan(&id, &alias); err != nil {
+			return nil, err
+		}
+		person, identified := byID[id]
+		if _, named := groups[alias]; !identified || !named || alias == normalizedAlias(person.name) || slices.Contains(groups[alias], person) {
+			continue
+		}
+		groups[alias] = append(groups[alias], person)
+	}
+	return groups, aliases.Err()
 }

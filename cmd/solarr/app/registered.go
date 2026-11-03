@@ -747,3 +747,24 @@ func (p *process) adultGrab() adult.Grab {
 
 // acceptThreshold is import.auto_commit_confidence as the settings hold it now, for every media type's accept rule.
 func (p *process) acceptThreshold() float64 { return p.cache.Snapshot().ImportAutoCommitConfidence() }
+
+// personReaders are the sources that fill a person's page when it is opened: the performer servers and TMDB.
+func (p *process) personReaders(people library.People) []namedPersonReader {
+	performers := adult.Performers{Service: p.adultService(), People: people, Wikidata: p.wikidataFetcher(), Clock: clock.NewSystem(), Logger: p.logger}
+	tmdbPeople := knownfor.Profiling{People: people, Reader: library.NewSeriesReader(p.library), Source: p.tmdbShared}
+	return []namedPersonReader{
+		{name: "performer servers", read: func(ctx context.Context, personID int64) error {
+			if err := performers.Read(ctx, personID); err != nil && !errors.Is(err, adult.ErrNoServerKnows) {
+				return err
+			}
+			return nil
+		}},
+		{name: "tmdb", read: tmdbPeople.Details},
+	}
+}
+
+// refreshArtistNow refreshes a music artist whose page is open ahead of the background sweeps.
+func (p *process) refreshArtistNow(ctx context.Context, personID int64) error {
+	_, err := music.EnqueueRefreshArtistNow(ctx, p.queue, personID)
+	return err
+}

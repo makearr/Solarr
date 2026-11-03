@@ -54,3 +54,14 @@ EPs there too (found through Wikidata), added to the music library.
 On a person's page: **Edit** the name, gender and attributes (nationality, height, weight, measurements, hair
 colour, ethnicity, status, tattoos, piercings; a provider's values fill in what is empty, yours stay), and
 **Merge into…** another person found by name. The people list filters on all of those.
+
+## One person, many sources
+
+A person two sources know under different ids (a performer on StashDB and on ThePornDB, an actor on TMDB and TVDB, an
+artist who also acts) is one person. A new id joins the identified person of the same name, or whose alias is that
+name, when that person holds no id from the same source and their births do not differ; two candidates stay apart. The
+daily **Merge duplicate people** action does the same for people already stored. Where a name is shared and the
+sources disagree, only people of one known birth (date, else year) merge; people with no birth stay apart.
+
+Opening a person who has no biography, birth or picture reads their details at once, ahead of the background sweeps
+(at most once a day per person); the page looks again a few times while it is read.

@@ -96,7 +96,7 @@ func ToWrite(scene Scene, now time.Time) library.SeriesWrite {
 		}
 		write.Credits = append(write.Credits, library.SeriesCreditWrite{
 			Provider: provider, ExternalID: externalID, Name: strings.TrimSpace(credit.Name), ImageURL: credit.Image,
-			Role: credit.Role, Character: credit.As, Ord: credit.Order, JoinProviders: performerProviders,
+			Role: credit.Role, Character: credit.As, Ord: credit.Order,
 		})
 	}
 	return write

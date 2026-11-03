@@ -99,6 +99,12 @@ export function PersonPage() {
     queryKey: ["person", id],
     enabled: Number.isFinite(id),
     queryFn: () => ok(api.GET("/people/{id}", { params: { path: { id } } })),
+    // A person without details is being read in the background; look again a few times.
+    refetchInterval: (query) => {
+      const person = query.state.data;
+      const bare = person && !person.biography && !person.born && !person.image_url;
+      return bare && query.state.dataUpdateCount < 6 ? 4000 : false;
+    },
   });
   const libraries = useLibraries();
   const searchMissing = usePersonAction(id, "/people/{id}/search");
