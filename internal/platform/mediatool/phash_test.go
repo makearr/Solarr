@@ -1,10 +1,13 @@
 package mediatool
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"reflect"
+	"sync"
 	"testing"
+	"time"
 )
 
 func syntheticFrame(seed int64, blobs int) []byte {
@@ -101,5 +104,47 @@ func TestHashOfFrames_ReorderedScenesShareTheMeanButNotTheFrames(t *testing.T) {
 		if got := PerceptualDistance(a.Frames[index].Hash, b.Frames[index].Hash); got < 16 {
 			t.Errorf("slot %d: %d bits apart, want >= 16", index, got)
 		}
+	}
+}
+
+// frameGate answers ffprobe with a length and holds every frame until all phashSamples are in flight, or a second passed.
+type frameGate struct {
+	mu      sync.Mutex
+	inside  int
+	most    int
+	arrived chan struct{}
+}
+
+func (g *frameGate) Lookup(string) error { return nil }
+
+func (g *frameGate) Run(_ context.Context, name string, _ ...string) ([]byte, error) {
+	if name == ffprobeBinary {
+		return []byte(`{"format":{"duration":"800.0"},"streams":[{"codec_type":"video","width":32,"height":32}]}`), nil
+	}
+	g.mu.Lock()
+	g.inside++
+	g.most = max(g.most, g.inside)
+	if g.inside == phashSamples {
+		close(g.arrived)
+	}
+	g.mu.Unlock()
+	select {
+	case <-g.arrived:
+	case <-time.After(time.Second):
+	}
+	g.mu.Lock()
+	g.inside--
+	g.mu.Unlock()
+	return syntheticFrame(int64(g.most), 9), nil
+}
+
+// Each frame is a seek and a decode over a share, so a video's frames are read side by side.
+func TestPerceptualHash_ReadsEveryFrameAtOnce(t *testing.T) {
+	gate := &frameGate{arrived: make(chan struct{})}
+	if _, err := New(gate, 0).PerceptualHash(t.Context(), "/tv/episode.mkv"); err != nil {
+		t.Fatalf("PerceptualHash: %v", err)
+	}
+	if gate.most != phashSamples {
+		t.Errorf("at most %d frames were read at once, want %d", gate.most, phashSamples)
 	}
 }
