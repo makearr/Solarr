@@ -111,20 +111,21 @@ func (c Cache) DeleteOlderThan(ctx context.Context, cutoff time.Time) (int64, er
 	return removed, nil
 }
 
-// DeleteOldest removes up to n entries, oldest first (ADR-60's budget-
-// triggered eviction). Returns how many were actually removed, which may be
-// fewer than n if the cache holds less.
-func (c Cache) DeleteOldest(ctx context.Context, n int64) (int64, error) {
-	var removed int64
-	err := c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-		var err error
-		removed, err = metadatadb.New(tx).DeleteOldestMetadataCache(ctx, n)
+// DeleteOldest removes up to n entries, oldest first (ADR-60's budget-triggered eviction): how many went, which may
+// be fewer than n, and the bytes they held as SizeBytes counts them.
+func (c Cache) DeleteOldest(ctx context.Context, n int64) (removed, bytes int64, err error) {
+	err = c.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		sizes, err := metadatadb.New(tx).DeleteOldestMetadataCache(ctx, n)
+		removed, bytes = int64(len(sizes)), 0
+		for _, size := range sizes {
+			bytes += size
+		}
 		return err
 	})
 	if err != nil {
-		return 0, fmt.Errorf("metacache: delete oldest %d: %w", n, err)
+		return 0, 0, fmt.Errorf("metacache: delete oldest %d: %w", n, err)
 	}
-	return removed, nil
+	return removed, bytes, nil
 }
 
 // Clear removes every entry (Invariant 5: deleting the cache is always

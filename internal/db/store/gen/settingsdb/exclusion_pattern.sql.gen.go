@@ -63,27 +63,6 @@ func (q *Queries) DeleteExclusionPattern(ctx context.Context, id int64) error {
 	return err
 }
 
-const getExclusionPattern = `-- name: GetExclusionPattern :one
-SELECT id, pattern, action, media_type, category_id, note, builtin, enabled
-FROM exclusion_pattern WHERE id = ?
-`
-
-func (q *Queries) GetExclusionPattern(ctx context.Context, id int64) (ExclusionPattern, error) {
-	row := q.db.QueryRowContext(ctx, getExclusionPattern, id)
-	var i ExclusionPattern
-	err := row.Scan(
-		&i.ID,
-		&i.Pattern,
-		&i.Action,
-		&i.MediaType,
-		&i.CategoryID,
-		&i.Note,
-		&i.Builtin,
-		&i.Enabled,
-	)
-	return i, err
-}
-
 const listExclusionPatterns = `-- name: ListExclusionPatterns :many
 SELECT id, pattern, action, media_type, category_id, note, builtin, enabled
 FROM exclusion_pattern ORDER BY id

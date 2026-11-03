@@ -181,8 +181,9 @@ every migration up to `NNNN` built, so a fresh database runs one file (plus anyt
 To squash again: build a database from the current chain, dump `sqlite_master` (shadow tables of
 FTS5 excluded) and the seed rows into a new baseline at the last version, delete the older files,
 and check that a database built from the baseline is identical (schema text, `table_xinfo`, foreign
-keys, rows). The original files stay in git history. The last squash (2026-10-22) did this in
-Python's `sqlite3`.
+keys, indexes, CHECKs, rows) both to the chain and to a live database. The original files stay in git history.
+The last squash (2026-11-03, library 0103, settings 0059, metadata 0003) did this in Python's `sqlite3`; it left
+a database from release 2026.10.001.515 (library 0096, settings 0053) refused, by the user's decision.
 
 Every migration is preceded by a backup, and a failure restores from it rather than leaving a
 half-applied schema (Invariant 7).
@@ -198,6 +199,7 @@ Both are scheduler tasks (Settings -> Scheduler, Maintenance), since 2026-09-24:
 | Clean old backups | daily 01:30 | Keeps the newest N (default 7) or the last N days; never fewer than 3 |
 | Clean recycling bin | daily 02:30 | Purges recycle bin entries past their library's retention ([file-management.md](file-management.md)) |
 | Clean old search results | daily 03:10 | Decisions older than `retention.decisions_full` (90 days) are counted into `decision_rollup` per item, day and outcome, then deleted. A release past its expiry is deleted once no decision refers to it; a held download carries its own copy of the release. At most 250 pages of 200 a run, so an old backlog is worked off over several nights |
+| Clean old jobs | daily 03:20 | Jobs that finished more than 14 days ago, with their attempts, 200 a transaction; a job another still depends on stays |
 
 Every task can also be set to run **at startup** (Settings -> Scheduler, "Add at startup"). Database maintenance and
 backup are heavy: their startup run waits five minutes and is skipped when the task last ran within its own

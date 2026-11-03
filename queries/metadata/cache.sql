@@ -23,15 +23,13 @@ SELECT CAST(COUNT(*) AS INTEGER) FROM metadata_cache;
 -- name: DeleteMetadataCacheOlderThan :execrows
 DELETE FROM metadata_cache WHERE fetched_at < ?;
 
--- ADR-60's budget-triggered eviction: oldest first, exactly n rows so the
--- caller can re-measure and stop once it is back under budget rather than
--- guessing a cutoff time. metadata_cache is WITHOUT ROWID (its own
--- (kind, external_id) primary key already is the index), so the row-value
--- form is used instead of a rowid subquery.
--- name: DeleteOldestMetadataCache :execrows
+-- ADR-60's budget-triggered eviction: oldest first, exactly n rows, returning each one's bytes so the caller keeps a
+-- running total instead of summing the whole cache again. WITHOUT ROWID, so the subquery is by primary key.
+-- name: DeleteOldestMetadataCache :many
 DELETE FROM metadata_cache WHERE (kind, external_id) IN (
   SELECT kind, external_id FROM metadata_cache ORDER BY fetched_at ASC LIMIT ?
-);
+)
+RETURNING CAST(LENGTH(CAST(body AS BLOB)) AS INTEGER) AS bytes;
 
 -- The manual "always safe" clear (Invariant 5).
 -- name: ClearMetadataCache :exec

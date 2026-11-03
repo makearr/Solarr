@@ -118,20 +118,6 @@ func (q *Queries) AnyUnverifiedWork(ctx context.Context) (int64, error) {
 	return present, err
 }
 
-const clearWorkClassification = `-- name: ClearWorkClassification :exec
-DELETE FROM work_classification WHERE work_id = ? AND kind = ?
-`
-
-type ClearWorkClassificationParams struct {
-	WorkID int64
-	Kind   string
-}
-
-func (q *Queries) ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error {
-	_, err := q.db.ExecContext(ctx, clearWorkClassification, arg.WorkID, arg.Kind)
-	return err
-}
-
 const countCalendarDates = `-- name: CountCalendarDates :many
 SELECT release_date, CAST(COUNT(*) AS INTEGER) AS releases
 FROM (

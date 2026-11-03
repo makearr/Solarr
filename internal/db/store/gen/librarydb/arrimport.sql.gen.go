@@ -232,55 +232,6 @@ func (q *Queries) ListArrImportItems(ctx context.Context, importID int64) ([]Arr
 	return items, nil
 }
 
-const listArrImportItemsCreatedByRun = `-- name: ListArrImportItemsCreatedByRun :many
-SELECT id, import_id, kind, source_id, title, person_id, person_created,
-       subscription_id, work_id, work_created, desired_item_id, desired_item_created,
-       payload_json, created_at
-FROM arr_import_item
-WHERE import_id = ? AND (person_created = 1 OR work_created = 1)
-ORDER BY id
-`
-
-// Revert's own lookup (library.ArrImportRevert): every item this run itself
-// created something for, the only rows a revert is allowed to touch.
-func (q *Queries) ListArrImportItemsCreatedByRun(ctx context.Context, importID int64) ([]ArrImportItem, error) {
-	rows, err := q.db.QueryContext(ctx, listArrImportItemsCreatedByRun, importID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ArrImportItem{}
-	for rows.Next() {
-		var i ArrImportItem
-		if err := rows.Scan(
-			&i.ID,
-			&i.ImportID,
-			&i.Kind,
-			&i.SourceID,
-			&i.Title,
-			&i.PersonID,
-			&i.PersonCreated,
-			&i.SubscriptionID,
-			&i.WorkID,
-			&i.WorkCreated,
-			&i.DesiredItemID,
-			&i.DesiredItemCreated,
-			&i.PayloadJson,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listArrImportsForInstance = `-- name: ListArrImportsForInstance :many
 SELECT id, instance_id, app, state, started_at, finished_at, error,
        artists_created, artists_matched, albums_created, albums_matched, items_parked

@@ -245,9 +245,6 @@ WHERE c.kind = sqlc.arg(kind) AND c.value = sqlc.arg(value)
 ORDER BY w.sort_title, w.id
 LIMIT sqlc.arg(page_size);
 
--- name: ClearWorkClassification :exec
-DELETE FROM work_classification WHERE work_id = ? AND kind = ?;
-
 -- name: CreateWorkPart :one
 INSERT INTO work_part (work_id, media_ref, sort_key, title, runtime_ms, date, monitored)
 VALUES (?, ?, ?, ?, ?, ?, ?)

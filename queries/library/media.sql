@@ -103,11 +103,6 @@ UPDATE media_object
 SET oshash = ?, phash = ?, audio_fp = ?, audio_fp_prefix = ?, fingerprinted_at = ?
 WHERE id = ?;
 
--- The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
--- Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
--- name: ListPerceptualHashes :many
-SELECT id, phash FROM media_object WHERE phash IS NOT NULL ORDER BY id;
-
 -- The measured half of ADR-39 is the lowest-priority background work, resumable
 -- the same way fingerprinting is (todo 4.2): a cursor on media_object.id rather
 -- than re-deriving "unmeasured" from scratch, so a file that fails its probe

@@ -1,5 +1,5 @@
--- Every migration up to 0088, squashed into the schema they built (documentation/database-layout.md).
--- migrate:baseline replaces=ec0ab6ca4bb391475d988b31ec7388847ca862ae291b16ba34f58bf838208222
+-- Every migration up to 0103, squashed into the schema they built (documentation/database-layout.md).
+-- migrate:baseline replaces=8df9e92c4142d550cd60796257a239fe92b9952916b806eb9dec2beb9d021a56
 
 CREATE TABLE work (
   id                INTEGER PRIMARY KEY,
@@ -13,8 +13,12 @@ CREATE TABLE work (
   added_at          INTEGER NOT NULL,
   updated_at        INTEGER NOT NULL,
   -- No foreign key: app_user lives in settings.db (ADR-25, section 4.3).
-  added_by          INTEGER
-, description TEXT, lead_person_id INTEGER REFERENCES person(id), lead_person_sort_name TEXT, subtype TEXT);
+  added_by          INTEGER,
+  description TEXT,
+  lead_person_id INTEGER REFERENCES person(id),
+  lead_person_sort_name TEXT,
+  subtype TEXT
+);
 CREATE INDEX work_type_sort ON work(media_type, sort_title);
 CREATE INDEX work_sort ON work(sort_title);
 CREATE INDEX work_year_sort ON work(year, id);
@@ -48,6 +52,7 @@ CREATE TABLE work_certification (
   work_id INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
   system  TEXT    NOT NULL,
   rating  TEXT    NOT NULL,
+  age INTEGER,
   PRIMARY KEY (work_id, system)
 ) WITHOUT ROWID;
 
@@ -86,8 +91,12 @@ CREATE TABLE work_part (
   -- Partial dates as work_date: an episode air date outlives any intent to hold it.
   date       TEXT,
   -- Per-part monitoring inside a SET: the season, but not s03e05 (Appendix E, D3).
-  monitored  INTEGER NOT NULL DEFAULT 1 CHECK (monitored IN (0, 1)), available_at INTEGER, available_confidence TEXT NOT NULL DEFAULT 'unknown'
-  CHECK (available_confidence IN ('unknown', 'low', 'medium', 'high')), available_basis TEXT NOT NULL DEFAULT '', available_grace INTEGER,
+  monitored  INTEGER NOT NULL DEFAULT 1 CHECK (monitored IN (0, 1)),
+  available_at INTEGER,
+  available_confidence TEXT NOT NULL DEFAULT 'unknown'
+  CHECK (available_confidence IN ('unknown', 'low', 'medium', 'high')),
+  available_basis TEXT NOT NULL DEFAULT '',
+  available_grace INTEGER,
   UNIQUE(work_id, media_ref)
 );
 CREATE INDEX work_part_order ON work_part(work_id, sort_key);
@@ -112,7 +121,6 @@ CREATE TABLE work_part_title (
   language   TEXT,
   provider   TEXT
 );
-CREATE INDEX work_part_title_norm ON work_part_title(normalized);
 CREATE INDEX work_part_title_part ON work_part_title(part_id);
 
 CREATE TABLE alt_numbering (
@@ -140,7 +148,6 @@ CREATE TABLE edition (
   is_default       INTEGER NOT NULL DEFAULT 0 CHECK (is_default IN (0, 1)),
   UNIQUE(work_id, kind, label)
 );
-CREATE INDEX edition_by_work ON edition(work_id);
 
 CREATE TABLE edition_external_id (
   provider    TEXT    NOT NULL,
@@ -181,9 +188,16 @@ CREATE TABLE media_attributes (
   scan_type       TEXT,
   container       TEXT,
   lossless        INTEGER,
-  sample_rate     INTEGER
-, image_format TEXT, colour_depth INTEGER, page_count INTEGER, bitrate_kbps INTEGER, bitrate_mode TEXT, vbr_preset TEXT, lyrics_languages TEXT, crf REAL);
-CREATE INDEX media_attributes_res ON media_attributes(resolution, source);
+  sample_rate     INTEGER,
+  image_format TEXT,
+  colour_depth INTEGER,
+  page_count INTEGER,
+  bitrate_kbps INTEGER,
+  bitrate_mode TEXT,
+  vbr_preset TEXT,
+  lyrics_languages TEXT,
+  crf REAL
+);
 
 CREATE TABLE media_object (
   id               INTEGER PRIMARY KEY,
@@ -215,11 +229,11 @@ CREATE TABLE media_object (
   overall_bitrate  INTEGER,
   probe_json       TEXT,
   first_seen_at    INTEGER NOT NULL,
-  verified_at      INTEGER
-, kind TEXT);
+  verified_at      INTEGER,
+  kind TEXT
+);
 CREATE INDEX media_object_quick ON media_object(quick_hash);
 CREATE INDEX media_object_oshash ON media_object(oshash) WHERE oshash IS NOT NULL;
-CREATE INDEX media_object_afp ON media_object(audio_fp_prefix) WHERE audio_fp_prefix IS NOT NULL;
 CREATE INDEX media_object_unfp ON media_object(id) WHERE fingerprinted_at IS NULL;
 CREATE INDEX media_object_attrs ON media_object(measured_attributes_id);
 
@@ -231,7 +245,9 @@ CREATE TABLE library_path (
   rel_path        TEXT    NOT NULL,
   link_kind       TEXT    NOT NULL,
   is_primary      INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
-  created_at      INTEGER NOT NULL, last_seen_at INTEGER NOT NULL DEFAULT 0, missing_since INTEGER,
+  created_at      INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL DEFAULT 0,
+  missing_since INTEGER,
   UNIQUE(root_folder_id, rel_path)
 );
 CREATE INDEX library_path_object ON library_path(media_object_id);
@@ -289,9 +305,10 @@ CREATE TABLE hunt_queue (
   release_date     INTEGER,
   -- Availability and backoff, folded into one comparison.
   eligible_after   INTEGER NOT NULL DEFAULT 0,
-  search_count     INTEGER NOT NULL DEFAULT 0
-, queued_since INTEGER NOT NULL DEFAULT 0, after_failure INTEGER NOT NULL DEFAULT 0);
-CREATE INDEX hunt_by_searched ON hunt_queue(class, eligible_after, priority DESC, last_searched_at ASC);
+  search_count     INTEGER NOT NULL DEFAULT 0,
+  queued_since INTEGER NOT NULL DEFAULT 0,
+  after_failure INTEGER NOT NULL DEFAULT 0
+);
 CREATE INDEX hunt_by_release ON hunt_queue(class, eligible_after, priority DESC, release_date ASC);
 
 CREATE TABLE counter (
@@ -424,7 +441,8 @@ CREATE TABLE person (
   died           TEXT,
   fields_json    TEXT,
   monitored      INTEGER NOT NULL DEFAULT 0 CHECK (monitored IN (0, 1)),
-  added_at       INTEGER NOT NULL
+  added_at       INTEGER NOT NULL,
+  name_locked INTEGER NOT NULL DEFAULT 0 CHECK (name_locked IN (0, 1))
 );
 CREATE INDEX person_monitored ON person(id) WHERE monitored = 1;
 CREATE INDEX person_sort ON person(sort_name COLLATE NOCASE);
@@ -499,6 +517,7 @@ CREATE TABLE tag (
   parent_id   INTEGER REFERENCES tag(id),
   description TEXT,
   source      TEXT    NOT NULL,
+  genre_tree TEXT NOT NULL DEFAULT '',
   UNIQUE(parent_id, name)
 );
 
@@ -546,8 +565,11 @@ CREATE TABLE collection (
   -- The member count a provider states, when it states one; null means unknown
   -- rather than zero, so "4 of 6" is distinguishable from "4 of unknown".
   complete_at INTEGER,
-  added_at    INTEGER NOT NULL
-, poster_url TEXT NOT NULL DEFAULT '', category_id INTEGER NOT NULL DEFAULT 0);
+  added_at    INTEGER NOT NULL,
+  poster_url TEXT NOT NULL DEFAULT '',
+  category_id INTEGER NOT NULL DEFAULT 0,
+  name_locked INTEGER NOT NULL DEFAULT 0 CHECK (name_locked IN (0, 1))
+);
 CREATE INDEX collection_monitored ON collection(id) WHERE monitored = 1;
 
 CREATE TABLE collection_external_id (
@@ -647,8 +669,13 @@ CREATE TABLE scan_state (
   finished_at    INTEGER,
   -- Counters from the last completed sweep, for the same reason.
   files_found    INTEGER NOT NULL DEFAULT 0,
-  directories_read INTEGER NOT NULL DEFAULT 0
-, vanished_held INTEGER NOT NULL DEFAULT 0, vanished_through INTEGER NOT NULL DEFAULT 0) WITHOUT ROWID;
+  directories_read INTEGER NOT NULL DEFAULT 0,
+  vanished_held INTEGER NOT NULL DEFAULT 0,
+  vanished_through INTEGER NOT NULL DEFAULT 0,
+  run_started_at INTEGER NOT NULL DEFAULT 0,
+  run_full INTEGER NOT NULL DEFAULT 0,
+  files_seen INTEGER NOT NULL DEFAULT 0
+) WITHOUT ROWID;
 
 CREATE TABLE work_root_folder (
   work_id        INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
@@ -688,8 +715,13 @@ CREATE TABLE import_session (
   extract_dir       TEXT,                 -- workspace, removed when the session ends
   started_at        INTEGER NOT NULL,
   finished_at       INTEGER,
-  error             TEXT
-, units_skipped INTEGER NOT NULL DEFAULT 0, units_failed  INTEGER NOT NULL DEFAULT 0, units_estimated INTEGER, dismissed_at INTEGER, preview INTEGER NOT NULL DEFAULT 0 CHECK (preview IN (0, 1)));
+  error             TEXT,
+  units_skipped INTEGER NOT NULL DEFAULT 0,
+  units_failed  INTEGER NOT NULL DEFAULT 0,
+  units_estimated INTEGER,
+  dismissed_at INTEGER,
+  preview INTEGER NOT NULL DEFAULT 0 CHECK (preview IN (0, 1))
+);
 CREATE INDEX idx_import_session_state ON import_session(state, started_at DESC);
 
 CREATE TABLE import_unit (
@@ -705,8 +737,11 @@ CREATE TABLE import_unit (
   edition_id        INTEGER REFERENCES edition(id),
   evidence_json     TEXT    NOT NULL,     -- every signal and what it said (ADR-10 shape)
   candidates_json   TEXT,                 -- ranked alternatives, for the queue
-  reason            TEXT                  -- structured code when QUEUE or SKIP
-, work_created    INTEGER NOT NULL DEFAULT 0, edition_created INTEGER NOT NULL DEFAULT 0, pack_id INTEGER REFERENCES pack(id));
+  reason            TEXT,                  -- structured code when QUEUE or SKIP
+  work_created    INTEGER NOT NULL DEFAULT 0,
+  edition_created INTEGER NOT NULL DEFAULT 0,
+  pack_id INTEGER REFERENCES pack(id)
+);
 CREATE INDEX idx_import_unit_session ON import_unit(session_id, decision);
 CREATE INDEX idx_import_unit_queue   ON import_unit(decision, confidence DESC)
   WHERE decision = 'QUEUE';
@@ -736,8 +771,6 @@ CREATE TABLE blocked_content (
 );
 CREATE INDEX blocked_by_oshash     ON blocked_content(oshash)      WHERE oshash IS NOT NULL;
 CREATE INDEX blocked_by_quick_hash ON blocked_content(quick_hash)  WHERE quick_hash IS NOT NULL;
-CREATE INDEX blocked_by_chromaprint ON blocked_content(chromaprint)
-  WHERE chromaprint IS NOT NULL;
 
 CREATE TABLE move_job (
   id              INTEGER PRIMARY KEY,
@@ -751,8 +784,9 @@ CREATE TABLE move_job (
   plan_json       TEXT    NOT NULL,       -- the previewed plan, exactly as accepted
   created_at      INTEGER NOT NULL,
   finished_at     INTEGER,
-  error           TEXT
-, category_id INTEGER);
+  error           TEXT,
+  category_id INTEGER
+);
 CREATE INDEX idx_move_job_state ON move_job(state, created_at DESC);
 
 CREATE TABLE move_item (
@@ -764,6 +798,7 @@ CREATE TABLE move_item (
   bytes           INTEGER NOT NULL,
   state           TEXT    NOT NULL,       -- PENDING | COPIED | VERIFIED | DONE | FAILED
   error           TEXT,
+  keep_source INTEGER NOT NULL DEFAULT 0 CHECK (keep_source IN (0, 1)),
   PRIMARY KEY (move_job_id, media_object_id)
 ) WITHOUT ROWID;
 CREATE INDEX idx_move_item_pending ON move_item(move_job_id, state);
@@ -771,8 +806,10 @@ CREATE INDEX idx_move_item_pending ON move_item(move_job_id, state);
 CREATE TABLE import_unit_file (
   id              INTEGER PRIMARY KEY,
   unit_id         INTEGER NOT NULL REFERENCES import_unit(id) ON DELETE CASCADE,
-  media_object_id INTEGER NOT NULL REFERENCES media_object(id) ON DELETE CASCADE
-, library_path_id INTEGER REFERENCES library_path(id) ON DELETE SET NULL, transfer_method TEXT);
+  media_object_id INTEGER NOT NULL REFERENCES media_object(id) ON DELETE CASCADE,
+  library_path_id INTEGER REFERENCES library_path(id) ON DELETE SET NULL,
+  transfer_method TEXT
+);
 CREATE INDEX idx_import_unit_file_unit   ON import_unit_file(unit_id);
 CREATE INDEX idx_import_unit_file_object ON import_unit_file(media_object_id);
 
@@ -923,8 +960,9 @@ CREATE TABLE tag_writeback (
   attempted_at    INTEGER NOT NULL,
   -- The keys written, comma-separated; empty when the file already had them all.
   written         TEXT    NOT NULL DEFAULT '',
-  error           TEXT
-, digest TEXT NOT NULL DEFAULT '');
+  error           TEXT,
+  digest TEXT NOT NULL DEFAULT ''
+);
 
 CREATE TABLE work_arrival (
   work_id    INTEGER PRIMARY KEY REFERENCES work(id) ON DELETE CASCADE,
@@ -942,6 +980,7 @@ CREATE TABLE "collection_member" (
   work_id       INTEGER NOT NULL REFERENCES work(id) ON DELETE CASCADE,
   part_id       INTEGER NOT NULL DEFAULT 0,
   ord           INTEGER,
+  by_hand INTEGER NOT NULL DEFAULT 0 CHECK (by_hand IN (0, 1)),
   PRIMARY KEY (collection_id, work_id, part_id)
 ) WITHOUT ROWID;
 CREATE INDEX collection_member_work ON collection_member(work_id);
@@ -958,7 +997,6 @@ CREATE TABLE work_release_filter (
   created_at       INTEGER NOT NULL,
   UNIQUE (work_id, media_ref_prefix, kind, value)
 );
-CREATE INDEX work_release_filter_work ON work_release_filter(work_id);
 
 CREATE TABLE person_library (
   person_id   INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
@@ -1060,7 +1098,6 @@ CREATE TABLE rss_sighting (
   desired_item_id INTEGER PRIMARY KEY REFERENCES desired_item(id) ON DELETE CASCADE,
   seen_at         INTEGER NOT NULL
 );
-CREATE INDEX rss_sighting_seen ON rss_sighting(seen_at);
 
 CREATE TABLE media_probe (
   media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
@@ -1082,12 +1119,8 @@ CREATE TABLE acquisition_stall (
   strikes        INTEGER NOT NULL DEFAULT 0,
   left_bytes     INTEGER NOT NULL,
   progress_at    INTEGER NOT NULL,
-  checked_at     INTEGER NOT NULL
-, importing_finished INTEGER NOT NULL DEFAULT 0 CHECK (importing_finished IN (0, 1)));
-
-CREATE TABLE work_franchise_check (
-  work_id    INTEGER PRIMARY KEY REFERENCES work(id) ON DELETE CASCADE,
-  checked_at INTEGER NOT NULL
+  checked_at     INTEGER NOT NULL,
+  importing_finished INTEGER NOT NULL DEFAULT 0 CHECK (importing_finished IN (0, 1))
 );
 
 CREATE TABLE work_anime_check (
@@ -1095,66 +1128,111 @@ CREATE TABLE work_anime_check (
   checked_at INTEGER NOT NULL
 );
 
+CREATE TABLE move_item_companion (
+  move_job_id     INTEGER NOT NULL REFERENCES move_job(id) ON DELETE CASCADE,
+  media_object_id INTEGER NOT NULL,
+  source_rel_path TEXT    NOT NULL,
+  dest_rel_path   TEXT    NOT NULL,
+  PRIMARY KEY (move_job_id, media_object_id, source_rel_path)
+) WITHOUT ROWID;
+
+CREATE TABLE "genre_tree" (
+  key            TEXT    PRIMARY KEY,
+  seeded_version INTEGER NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX tag_alias_alias ON tag_alias(alias);
+CREATE INDEX work_year_known_sort ON work(COALESCE(year, 0), id);
+CREATE INDEX idx_import_unit_unplaced ON import_unit(session_id) WHERE decision = 'COMMIT' AND work_id IS NULL;
+
+CREATE TABLE collection_refusal (
+  provider    TEXT    NOT NULL,
+  external_id TEXT    NOT NULL,
+  work_id     INTEGER NOT NULL,
+  PRIMARY KEY (provider, external_id, work_id)
+) WITHOUT ROWID;
+
+CREATE TABLE import_list_entry (
+  list_id     INTEGER NOT NULL,
+  provider    TEXT    NOT NULL,
+  external_id TEXT    NOT NULL,
+  outcome     TEXT    NOT NULL CHECK (outcome IN ('added', 'held', 'foreign', 'unresolved')),
+  work_id     INTEGER NOT NULL DEFAULT 0,
+  title       TEXT    NOT NULL DEFAULT '',
+  seen_at     INTEGER NOT NULL,
+  PRIMARY KEY (list_id, provider, external_id)
+);
+
+CREATE TABLE import_list_state (
+  list_id           INTEGER PRIMARY KEY,
+  previewed_options TEXT    NOT NULL DEFAULT '',
+  previewed_at      INTEGER NOT NULL DEFAULT 0,
+  run_at            INTEGER NOT NULL DEFAULT 0,
+  run_added         INTEGER NOT NULL DEFAULT 0,
+  run_failure       TEXT    NOT NULL DEFAULT ''
+);
+
+CREATE TABLE arr_link (
+  instance_id INTEGER NOT NULL,
+  source_kind TEXT    NOT NULL,
+  source_id   TEXT    NOT NULL,
+  local_kind  TEXT    NOT NULL CHECK (local_kind IN ('work', 'person', 'organisation')),
+  local_id    INTEGER NOT NULL,
+  PRIMARY KEY (instance_id, source_kind, source_id)
+) WITHOUT ROWID;
+CREATE INDEX arr_link_by_instance ON arr_link(instance_id);
+
+CREATE TABLE video_frame_hash (
+  media_object_id INTEGER PRIMARY KEY REFERENCES media_object(id) ON DELETE CASCADE,
+  frames          BLOB    NOT NULL
+);
 CREATE TRIGGER title_search_work_ai AFTER INSERT ON work BEGIN
   INSERT INTO title_search(rowid, title, work_id, media_type)
   VALUES (NEW.id * 4, NEW.canonical_title, NEW.id, NEW.media_type);
 END;
-
 CREATE TRIGGER title_search_work_au AFTER UPDATE OF canonical_title, media_type ON work BEGIN
   UPDATE title_search SET title = NEW.canonical_title, media_type = NEW.media_type
   WHERE rowid = NEW.id * 4;
 END;
-
 CREATE TRIGGER title_search_work_ad AFTER DELETE ON work BEGIN
   DELETE FROM title_search WHERE rowid = OLD.id * 4;
 END;
-
 CREATE TRIGGER title_search_work_title_ai AFTER INSERT ON work_title BEGIN
   INSERT INTO title_search(rowid, title, work_id, media_type)
   SELECT NEW.id * 4 + 1, NEW.title, NEW.work_id, w.media_type
   FROM work w WHERE w.id = NEW.work_id;
 END;
-
 CREATE TRIGGER title_search_work_title_au AFTER UPDATE OF title ON work_title BEGIN
   UPDATE title_search SET title = NEW.title WHERE rowid = NEW.id * 4 + 1;
 END;
-
 CREATE TRIGGER title_search_work_title_ad AFTER DELETE ON work_title BEGIN
   DELETE FROM title_search WHERE rowid = OLD.id * 4 + 1;
 END;
-
 CREATE TRIGGER title_search_work_part_ai AFTER INSERT ON work_part
 WHEN NEW.title IS NOT NULL BEGIN
   INSERT INTO title_search(rowid, title, work_id, media_type)
   SELECT NEW.id * 4 + 2, NEW.title, NEW.work_id, w.media_type
   FROM work w WHERE w.id = NEW.work_id;
 END;
-
 CREATE TRIGGER title_search_work_part_au AFTER UPDATE OF title ON work_part BEGIN
   DELETE FROM title_search WHERE rowid = NEW.id * 4 + 2;
   INSERT INTO title_search(rowid, title, work_id, media_type)
   SELECT NEW.id * 4 + 2, NEW.title, NEW.work_id, w.media_type
   FROM work w WHERE w.id = NEW.work_id AND NEW.title IS NOT NULL;
 END;
-
 CREATE TRIGGER title_search_work_part_ad AFTER DELETE ON work_part BEGIN
   DELETE FROM title_search WHERE rowid = OLD.id * 4 + 2;
 END;
-
 CREATE TRIGGER title_search_work_part_title_ai AFTER INSERT ON work_part_title BEGIN
   INSERT INTO title_search(rowid, title, work_id, media_type)
   SELECT NEW.id * 4 + 3, NEW.title, p.work_id, w.media_type
   FROM work_part p JOIN work w ON w.id = p.work_id WHERE p.id = NEW.part_id;
 END;
-
 CREATE TRIGGER title_search_work_part_title_au AFTER UPDATE OF title ON work_part_title BEGIN
   UPDATE title_search SET title = NEW.title WHERE rowid = NEW.id * 4 + 3;
 END;
-
 CREATE TRIGGER title_search_work_part_title_ad AFTER DELETE ON work_part_title BEGIN
   DELETE FROM title_search WHERE rowid = OLD.id * 4 + 3;
 END;
-
 CREATE TRIGGER work_file_arrival AFTER INSERT ON work_file
 BEGIN
   INSERT INTO work_arrival (work_id, arrived_at) VALUES (NEW.work_id, NEW.first_seen_at)

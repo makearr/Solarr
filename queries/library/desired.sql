@@ -203,9 +203,6 @@ INSERT INTO hunt_queue (desired_item_id, class, priority, last_searched_at, sear
 VALUES (?, 'missing', 0, 0, 0, 1)
 ON CONFLICT (desired_item_id) DO UPDATE SET after_failure = 1;
 
--- name: RemoveFromHuntQueue :exec
-DELETE FROM hunt_queue WHERE desired_item_id = ?;
-
 -- The hunt's five modes (section 9.3), each within a class and, for the new-release and gap shares, a release-date range:
 -- release_from and release_before are Unix seconds, zero for no bound; an unknown release date counts as a gap.
 -- category_id narrows to one library, zero for every library.
@@ -265,11 +262,6 @@ LIMIT sqlc.arg(page_size);
 -- The composite priority a held release goes out in (ADR-36).
 -- name: GetHuntPriority :one
 SELECT priority FROM hunt_queue WHERE desired_item_id = ?;
-
--- name: MarkHunted :exec
-UPDATE hunt_queue
-SET last_searched_at = ?, search_count = search_count + 1, eligible_after = ?
-WHERE desired_item_id = ?;
 
 -- Aged decision detail (section 5.7, Part VI Q5).
 

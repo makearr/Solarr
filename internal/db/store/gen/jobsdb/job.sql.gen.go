@@ -220,12 +220,22 @@ func (q *Queries) CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, 
 }
 
 const deleteFinishedJobsBefore = `-- name: DeleteFinishedJobsBefore :execrows
-DELETE FROM job
-WHERE state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND updated_at < ?
+DELETE FROM job WHERE id IN (
+  SELECT j.id FROM job j
+  WHERE j.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND j.updated_at < ?1
+    AND NOT EXISTS (SELECT 1 FROM job d WHERE d.depends_on = j.id)
+  LIMIT ?2
+)
 `
 
-func (q *Queries) DeleteFinishedJobsBefore(ctx context.Context, updatedAt int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteFinishedJobsBefore, updatedAt)
+type DeleteFinishedJobsBeforeParams struct {
+	Before    int64
+	BatchSize int64
+}
+
+// One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
+func (q *Queries) DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinishedJobsBeforeParams) (int64, error) {
+	result, err := q.db.ExecContext(ctx, deleteFinishedJobsBefore, arg.Before, arg.BatchSize)
 	if err != nil {
 		return 0, err
 	}

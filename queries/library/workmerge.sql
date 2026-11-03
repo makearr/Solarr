@@ -86,6 +86,3 @@ FROM work_merge_suggestion s
 JOIN work w ON w.id = s.into_work_id
 LEFT JOIN person p ON p.id = w.lead_person_id
 WHERE s.work_id = ?;
-
--- name: DeleteWorkMergeSuggestion :exec
-DELETE FROM work_merge_suggestion WHERE work_id = ?;

@@ -7,10 +7,6 @@ VALUES (sqlc.arg(pattern), sqlc.arg(action), sqlc.arg(media_type), sqlc.arg(cate
         sqlc.arg(note), sqlc.arg(builtin), sqlc.arg(enabled))
 RETURNING id, pattern, action, media_type, category_id, note, builtin, enabled;
 
--- name: GetExclusionPattern :one
-SELECT id, pattern, action, media_type, category_id, note, builtin, enabled
-FROM exclusion_pattern WHERE id = ?;
-
 -- name: ListExclusionPatterns :many
 SELECT id, pattern, action, media_type, category_id, note, builtin, enabled
 FROM exclusion_pattern ORDER BY id;

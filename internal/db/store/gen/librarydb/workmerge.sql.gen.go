@@ -41,15 +41,6 @@ func (q *Queries) CountWorkMerge(ctx context.Context, dropID int64) (CountWorkMe
 	return i, err
 }
 
-const deleteWorkMergeSuggestion = `-- name: DeleteWorkMergeSuggestion :exec
-DELETE FROM work_merge_suggestion WHERE work_id = ?
-`
-
-func (q *Queries) DeleteWorkMergeSuggestion(ctx context.Context, workID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteWorkMergeSuggestion, workID)
-	return err
-}
-
 const deleteWorkTags = `-- name: DeleteWorkTags :exec
 DELETE FROM tag_assignment WHERE subject_type = 'work' AND subject_id = ?
 `

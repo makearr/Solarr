@@ -44,13 +44,3 @@ SELECT id, import_id, kind, source_id, title, person_id, person_created,
        subscription_id, work_id, work_created, desired_item_id, desired_item_created,
        payload_json, created_at
 FROM arr_import_item WHERE import_id = ? ORDER BY id;
-
--- Revert's own lookup (library.ArrImportRevert): every item this run itself
--- created something for, the only rows a revert is allowed to touch.
--- name: ListArrImportItemsCreatedByRun :many
-SELECT id, import_id, kind, source_id, title, person_id, person_created,
-       subscription_id, work_id, work_created, desired_item_id, desired_item_created,
-       payload_json, created_at
-FROM arr_import_item
-WHERE import_id = ? AND (person_created = 1 OR work_created = 1)
-ORDER BY id;

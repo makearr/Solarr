@@ -4,9 +4,6 @@
 SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile
 ORDER BY media_type, suggested_rank, name;
 
--- name: GetQualityProfile :one
-SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile WHERE id = ?;
-
 -- name: CreateQualityProfile :one
 INSERT INTO quality_profile (name, rules_json, upgrade_json, media_type)
 VALUES (?, ?, ?, ?)
@@ -18,19 +15,10 @@ UPDATE quality_profile SET name = ?, rules_json = ?, upgrade_json = ? WHERE id =
 -- name: DeleteQualityProfile :exec
 DELETE FROM quality_profile WHERE id = ?;
 
--- Invariant 41: deleting a profile in use is refused with a count of what references it.
--- name: CountCategoriesUsingQualityProfile :one
-SELECT count(*) FROM category WHERE quality_profile_id = ?;
-
 -- name: ListLanguageProfiles :many
 SELECT id, name, audio_preferred_json, audio_required_json, subtitle_preferred_json,
        subtitle_required_json, prefer_original_audio, reject_dubbed
 FROM language_profile ORDER BY name;
-
--- name: GetLanguageProfile :one
-SELECT id, name, audio_preferred_json, audio_required_json, subtitle_preferred_json,
-       subtitle_required_json, prefer_original_audio, reject_dubbed
-FROM language_profile WHERE id = ?;
 
 -- name: CreateLanguageProfile :one
 INSERT INTO language_profile (name, audio_preferred_json, audio_required_json,
@@ -105,9 +93,6 @@ ON CONFLICT (category_id) DO UPDATE SET target_id = excluded.target_id;
 
 -- name: ClearCategoryTarget :exec
 DELETE FROM category_target WHERE category_id = ?;
-
--- name: CountCategoriesUsingQualityTarget :one
-SELECT CAST(COUNT(*) AS INTEGER) FROM category_target WHERE target_id = ?;
 
 -- name: CountCategoryListsUsingQualityProfile :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM category_quality_profile WHERE quality_profile_id = ?;

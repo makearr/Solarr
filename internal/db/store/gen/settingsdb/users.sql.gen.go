@@ -10,17 +10,6 @@ import (
 	"database/sql"
 )
 
-const countUsers = `-- name: CountUsers :one
-SELECT count(*) FROM app_user
-`
-
-func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUsers)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const createAPIKey = `-- name: CreateAPIKey :one
 INSERT INTO api_key (user_id, name, key_hash, created_at, key_sealed)
 VALUES (?, ?, ?, ?, ?)
@@ -110,20 +99,6 @@ func (q *Queries) DeleteAPIKey(ctx context.Context, id int64) error {
 	return err
 }
 
-const deletePreference = `-- name: DeletePreference :exec
-DELETE FROM user_preference WHERE user_id = ? AND key = ?
-`
-
-type DeletePreferenceParams struct {
-	UserID int64
-	Key    string
-}
-
-func (q *Queries) DeletePreference(ctx context.Context, arg DeletePreferenceParams) error {
-	_, err := q.db.ExecContext(ctx, deletePreference, arg.UserID, arg.Key)
-	return err
-}
-
 const deleteUser = `-- name: DeleteUser :exec
 DELETE FROM app_user WHERE id = ?
 `
@@ -131,26 +106,6 @@ DELETE FROM app_user WHERE id = ?
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteUser, id)
 	return err
-}
-
-const getAPIKeyByHash = `-- name: GetAPIKeyByHash :one
-SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
-FROM api_key WHERE key_hash = ?
-`
-
-func (q *Queries) GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error) {
-	row := q.db.QueryRowContext(ctx, getAPIKeyByHash, keyHash)
-	var i ApiKey
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.Name,
-		&i.KeyHash,
-		&i.CreatedAt,
-		&i.LastUsedAt,
-		&i.KeySealed,
-	)
-	return i, err
 }
 
 const getPreference = `-- name: GetPreference :one
@@ -207,38 +162,15 @@ func (q *Queries) GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetU
 	return i, err
 }
 
-const getUserByID = `-- name: GetUserByID :one
-
-SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission
-FROM app_user WHERE id = ?
-`
-
-// Columns are listed explicitly rather than with *, so adding one cannot
-// silently reshape an existing result (documentation/sql-and-sqlc.md).
-func (q *Queries) GetUserByID(ctx context.Context, id int64) (AppUser, error) {
-	row := q.db.QueryRowContext(ctx, getUserByID, id)
-	var i AppUser
-	err := row.Scan(
-		&i.ID,
-		&i.Username,
-		&i.PasswordHash,
-		&i.Role,
-		&i.CreatedAt,
-		&i.UiTier,
-		&i.UiTierDefault,
-		&i.UiTierMax,
-		&i.NewLibraryPermission,
-	)
-	return i, err
-}
-
 const getUserByUsername = `-- name: GetUserByUsername :one
+
 SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
   new_library_permission
 FROM app_user WHERE username = ?
 `
 
+// Columns are listed explicitly rather than with *, so adding one cannot
+// silently reshape an existing result (documentation/sql-and-sqlc.md).
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (AppUser, error) {
 	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
 	var i AppUser
@@ -298,33 +230,6 @@ SELECT user_id, category_id, permission FROM user_category_access
 
 func (q *Queries) ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error) {
 	rows, err := q.db.QueryContext(ctx, listAllCategoryAccess)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []UserCategoryAccess{}
-	for rows.Next() {
-		var i UserCategoryAccess
-		if err := rows.Scan(&i.UserID, &i.CategoryID, &i.Permission); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listCategoryAccessForUser = `-- name: ListCategoryAccessForUser :many
-SELECT user_id, category_id, permission FROM user_category_access WHERE user_id = ?
-`
-
-func (q *Queries) ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error) {
-	rows, err := q.db.QueryContext(ctx, listCategoryAccessForUser, userID)
 	if err != nil {
 		return nil, err
 	}

@@ -63,12 +63,6 @@ SELECT id, path, label, online, writable, writable_reason, read_only, allow_rena
        drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
 FROM root_folder ORDER BY path;
 
--- name: GetRootFolder :one
-SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
-       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
-FROM root_folder WHERE id = ?;
-
 -- name: CreateRootFolder :one
 INSERT INTO root_folder (path, label, online, min_free_bytes)
 VALUES (?, ?, ?, ?)

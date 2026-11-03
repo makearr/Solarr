@@ -78,7 +78,6 @@ type Querier interface {
 	// own curation (ADR-33).
 	ClearProviderTagAssignments(ctx context.Context, arg ClearProviderTagAssignmentsParams) error
 	ClearVanished(ctx context.Context, rootFolderID int64) error
-	ClearWorkClassification(ctx context.Context, arg ClearWorkClassificationParams) error
 	ClearWorkOrganisationRole(ctx context.Context, arg ClearWorkOrganisationRoleParams) error
 	// A refresh replaces every provider's genres of a work at once: every source but a person's own.
 	ClearWorkProviderTagsOfGenreTree(ctx context.Context, arg ClearWorkProviderTagsOfGenreTreeParams) error
@@ -172,15 +171,6 @@ type Querier interface {
 	// e.g. music's Tracks): every work_part belonging to a work visible to the
 	// category, by the same on-disk-or-desired union CountWorksVisibleToCategory uses.
 	CountWorkPartsVisibleToCategory(ctx context.Context, arg CountWorkPartsVisibleToCategoryParams) (int64, error)
-	// Discography rows, plus availability (wanted state, on-disk), are composed
-	// as raw SQL in internal/db/library/people.go instead of here: the scalar
-	// subqueries that carry wanted_state/on_disk are correlated per row, which
-	// sqlc cannot see is nullable the way it can a real table column -- it would
-	// type wanted_state as a plain non-null string and panic the first row with
-	// no monitored desired_item. works.go's workStateColumn already established
-	// the same raw-SQL-with-manual-Scan shape for exactly this reason.
-	// Coverage: what a monitored person has produced against what is held (ADR-32).
-	CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error)
 	// The "works" count for one category: the union of on-disk presence
 	// (work_root_folder) and desired-state membership (desired_item.category_id) --
 	// a subscription-discovered work has no root folder yet but still belongs to its
@@ -213,6 +203,13 @@ type Querier interface {
 	// ADR-51 (migration 0020). Column lists follow table order, or sqlc stops
 	// reusing models.
 	CreateMoveJob(ctx context.Context, arg CreateMoveJobParams) (MoveJob, error)
+	// Discography rows, plus availability (wanted state, on-disk), are composed
+	// as raw SQL in internal/db/library/people.go instead of here: the scalar
+	// subqueries that carry wanted_state/on_disk are correlated per row, which
+	// sqlc cannot see is nullable the way it can a real table column -- it would
+	// type wanted_state as a plain non-null string and panic the first row with
+	// no monitored desired_item. works.go's workStateColumn already established
+	// the same raw-SQL-with-manual-Scan shape for exactly this reason.
 	CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error)
 	// ADR-50, todo 4.11 (migration 0026). Column lists follow table order.
 	CreatePack(ctx context.Context, arg CreatePackParams) (Pack, error)
@@ -288,11 +285,9 @@ type Querier interface {
 	DeleteWork(ctx context.Context, id int64) error
 	DeleteWorkExclusion(ctx context.Context, arg DeleteWorkExclusionParams) error
 	DeleteWorkFieldByProvider(ctx context.Context, arg DeleteWorkFieldByProviderParams) error
-	DeleteWorkMergeSuggestion(ctx context.Context, workID int64) error
 	DeleteWorkPart(ctx context.Context, id int64) error
 	// A refresh rewrites the alternative titles its provider gave, leaving any other source's.
 	DeleteWorkPartTitlesByProvider(ctx context.Context, arg DeleteWorkPartTitlesByProviderParams) error
-	DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error
 	DeleteWorkReleaseFilters(ctx context.Context, workID int64) error
 	DeleteWorkTags(ctx context.Context, subjectID int64) error
 	DeleteWorkTitlesBySource(ctx context.Context, arg DeleteWorkTitlesBySourceParams) error
@@ -363,8 +358,6 @@ type Querier interface {
 	// Only a completed sweep moves the watermark and clears the cursor.
 	FinishScan(ctx context.Context, arg FinishScanParams) error
 	GetAcquisition(ctx context.Context, id int64) (Acquisition, error)
-	// Identity is the client reference; the path is re-read on every poll.
-	GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error)
 	GetAcquisitionStall(ctx context.Context, acquisitionID int64) (AcquisitionStall, error)
 	// Checked before CreateAcquisition so a caller gets a clean, mapped refusal
 	// rather than the acquisition_one_inflight unique index's own raw
@@ -484,7 +477,6 @@ type Querier interface {
 	// covers a work with no root folder yet, e.g. subscription-discovered), but it is
 	// still real and still needed for that half.
 	LinkWorkRootFolder(ctx context.Context, arg LinkWorkRootFolderParams) error
-	ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error)
 	// Startup reconciliation polls every non-terminal acquisition (section 10.9).
 	ListActiveAcquisitions(ctx context.Context) ([]Acquisition, error)
 	// The per-root counterpart, for the max_percent_of_root guard.
@@ -512,9 +504,6 @@ type Querier interface {
 	// One entry per series: the crawl follows sequels and prequels from it to the rest of the franchise.
 	ListAnimeWithoutRelationCheck(ctx context.Context, limit int64) ([]ListAnimeWithoutRelationCheckRow, error)
 	ListArrImportItems(ctx context.Context, importID int64) ([]ArrImportItem, error)
-	// Revert's own lookup (library.ArrImportRevert): every item this run itself
-	// created something for, the only rows a revert is allowed to touch.
-	ListArrImportItemsCreatedByRun(ctx context.Context, importID int64) ([]ArrImportItem, error)
 	ListArrImportsForInstance(ctx context.Context, instanceID int64) ([]ArrImport, error)
 	// The monitored artists to refresh next: never refreshed first, then the stalest.
 	ListArtistsDueRefresh(ctx context.Context, arg ListArtistsDueRefreshParams) ([]int64, error)
@@ -632,7 +621,6 @@ type Querier interface {
 	// detail's own "last searched" column. Absent means never.
 	ListHuntSearchTimesForWork(ctx context.Context, workID int64) ([]ListHuntSearchTimesForWorkRow, error)
 	ListIdentificationAttempts(ctx context.Context, mediaObjectID int64) ([]IdentificationAttempt, error)
-	ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error)
 	// Import list entries and state (migration 0099, ADR-38). Column lists follow table order.
 	ListImportListEntries(ctx context.Context, listID int64) ([]ImportListEntry, error)
 	// Small, operator-facing list -- session counts never approach library scale
@@ -734,9 +722,6 @@ type Querier interface {
 	// internal/media/music.ProviderArtist.
 	ListPeopleNeedingArtwork(ctx context.Context, arg ListPeopleNeedingArtworkParams) ([]ListPeopleNeedingArtworkRow, error)
 	ListPeopleOfWork(ctx context.Context, workID int64) ([]int64, error)
-	// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
-	// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
-	ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error)
 	// What subscription.expand needs to go from a subscribed person back to the
 	// provider id their discography is browsed by.
 	ListPersonExternalIDs(ctx context.Context, personID int64) ([]PersonExternalID, error)
@@ -756,12 +741,9 @@ type Querier interface {
 	ListQueuedWithNewestAttempt(ctx context.Context, arg ListQueuedWithNewestAttemptParams) ([]ListQueuedWithNewestAttemptRow, error)
 	// Pairs of works a provider says are related (an anime's sequel, its spin-off).
 	ListRelatedWorkPairs(ctx context.Context, mediaType string) ([]ListRelatedWorkPairsRow, error)
-	ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error)
 	// A rename's files: each primary file on a root still there, with every part of one library it covers, a page of
 	// files at a time (all of one file's rows on one page); work_id narrows to one work, 0 is every work.
 	ListRenameFilesOnRoot(ctx context.Context, arg ListRenameFilesOnRootParams) ([]ListRenameFilesOnRootRow, error)
-	// Newest first: a user's own request history.
-	ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error)
 	ListRootFoldersForWork(ctx context.Context, workID int64) ([]int64, error)
 	// Every same-broadcast link of a media type, once from each side.
 	ListSameContentPairs(ctx context.Context, mediaType string) ([]ListSameContentPairsRow, error)
@@ -785,8 +767,6 @@ type Querier interface {
 	// Video files whose probe predates what the probe now reads of a video (below_version): the picture, the subtitle
 	// tracks and the encoder's CRF.
 	ListStaleVideoProbes(ctx context.Context, arg ListStaleVideoProbesParams) ([]ListStaleVideoProbesRow, error)
-	// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
-	ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error)
 	// "This tag or any descendant" is one join because the closure is materialised.
 	ListSubjectsForTagTree(ctx context.Context, arg ListSubjectsForTagTreeParams) ([]ListSubjectsForTagTreeRow, error)
 	ListSubscriptionsForSubject(ctx context.Context, arg ListSubscriptionsForSubjectParams) ([]Subscription, error)
@@ -928,7 +908,6 @@ type Querier interface {
 	// single transaction exceeds the write budget (Invariant 2), and self-terminating:
 	// it stops reporting rows once nothing is left clean.
 	MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int64) (int64, error)
-	MarkHunted(ctx context.Context, arg MarkHuntedParams) error
 	// Bounded per Invariant 2: the caller loops this until a pass affects zero rows,
 	// never one UPDATE over the whole root.
 	MarkLibraryPathsMissing(ctx context.Context, arg MarkLibraryPathsMissingParams) (int64, error)
@@ -1022,7 +1001,6 @@ type Querier interface {
 	// Only content-attributable outcomes count: a full disk is not the group's
 	// fault, and counting it would make reputation measure the environment (ADR-45).
 	RecordGroupObservation(ctx context.Context, arg RecordGroupObservationParams) error
-	RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error)
 	RecordImportListEntry(ctx context.Context, arg RecordImportListEntryParams) error
 	RecordImportListPreview(ctx context.Context, arg RecordImportListPreviewParams) error
 	RecordImportListRun(ctx context.Context, arg RecordImportListRunParams) error
@@ -1045,10 +1023,8 @@ type Querier interface {
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveCollectionMember(ctx context.Context, arg RemoveCollectionMemberParams) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
-	RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error
 	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
 	RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error)
-	RenameCustomCollection(ctx context.Context, arg RenameCustomCollectionParams) (int64, error)
 	RenamePersonByHand(ctx context.Context, arg RenamePersonByHandParams) error
 	RepointEditionExternalID(ctx context.Context, arg RepointEditionExternalIDParams) (int64, error)
 	// A merged MusicBrainz id answers under its new id: the work follows it, unless another work
@@ -1116,8 +1092,6 @@ type Querier interface {
 	SetDesiredItemRequiredCount(ctx context.Context, arg SetDesiredItemRequiredCountParams) error
 	SetDesiredItemState(ctx context.Context, arg SetDesiredItemStateParams) error
 	SetDesiredProfileOverride(ctx context.Context, arg SetDesiredProfileOverrideParams) error
-	// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
-	SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error
 	SetFingerprints(ctx context.Context, arg SetFingerprintsParams) error
 	SetGenreTreeSeed(ctx context.Context, arg SetGenreTreeSeedParams) error
 	SetGroupReputation(ctx context.Context, arg SetGroupReputationParams) error

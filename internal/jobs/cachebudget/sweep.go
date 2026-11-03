@@ -312,32 +312,25 @@ func (s *Sweep) evictOldestImagesUntilUnder(budgetBytes int64) (int64, error) {
 	return evicted, nil
 }
 
-// evictOldestMetadataUntilUnder removes one entry at a time, re-measuring
-// after each -- deliberately not a larger batch. library.Recycle bin's own
-// Sweep once over-evicted by purging a whole batch before re-checking the
-// running total against a small budget; the fix there was the same one
-// applied here from the start: evict one entry, then check again.
+// evictOldestMetadataUntilUnder removes one entry at a time against a running total, so it never over-evicts and
+// measures the cache once rather than once per entry (a full read of every body).
 func (s *Sweep) evictOldestMetadataUntilUnder(ctx context.Context, budgetBytes int64) (int64, error) {
+	size, err := s.metadata.SizeBytes(ctx)
+	if err != nil {
+		return 0, err
+	}
 	var evicted int64
-	for {
-		size, err := s.metadata.SizeBytes(ctx)
-		if err != nil {
-			return evicted, err
-		}
-		if size <= budgetBytes {
-			return evicted, nil
-		}
-		removed, err := s.metadata.DeleteOldest(ctx, 1)
+	for size > budgetBytes {
+		removed, bytes, err := s.metadata.DeleteOldest(ctx, 1)
 		if err != nil {
 			return evicted, err
 		}
 		evicted += removed
+		size -= bytes
 		if removed == 0 {
-			// Over budget with nothing left to evict: the budget itself is
-			// smaller than what a single measurement rounds down to, or
-			// every remaining entry is already gone. Either way, looping
-			// further would spin forever.
+			// Over budget with nothing left to evict; looping further would spin forever.
 			return evicted, nil
 		}
 	}
+	return evicted, nil
 }

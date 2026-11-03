@@ -149,9 +149,14 @@ UPDATE job_attempt SET finished_at = ?, outcome = ?, error = ? WHERE id = ?;
 SELECT id, job_id, attempt, lease_owner, started_at, finished_at, outcome, error
 FROM job_attempt WHERE job_id = ? ORDER BY attempt;
 
+-- One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
 -- name: DeleteFinishedJobsBefore :execrows
-DELETE FROM job
-WHERE state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND updated_at < ?;
+DELETE FROM job WHERE id IN (
+  SELECT j.id FROM job j
+  WHERE j.state IN ('SUCCEEDED', 'FAILED', 'CANCELLED') AND j.updated_at < sqlc.arg(before)
+    AND NOT EXISTS (SELECT 1 FROM job d WHERE d.depends_on = j.id)
+  LIMIT sqlc.arg(batch_size)
+);
 
 -- History (section 5.7). Appended after a library commit succeeds, never inside one.
 

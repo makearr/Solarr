@@ -251,6 +251,22 @@ func (q *Queue) Renew(ctx context.Context, job Job, owner string, leaseTTL time.
 	return nil
 }
 
+// PruneFinished deletes up to batchSize jobs that finished before before, with their attempts; how many went.
+func (q *Queue) PruneFinished(ctx context.Context, before time.Time, batchSize int) (int64, error) {
+	var deleted int64
+	err := q.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		var err error
+		deleted, err = q.queries.WithTx(tx).DeleteFinishedJobsBefore(ctx, jobsdb.DeleteFinishedJobsBeforeParams{
+			Before: before.Unix(), BatchSize: int64(batchSize),
+		})
+		return err
+	})
+	if err != nil {
+		return 0, fmt.Errorf("jobs: prune finished: %w", err)
+	}
+	return deleted, nil
+}
+
 // Visibility narrows a job listing to what a caller may see (ADR-27, Invariant 36).
 type Visibility struct {
 	// Categories the caller may read. A job scoped to any other category is

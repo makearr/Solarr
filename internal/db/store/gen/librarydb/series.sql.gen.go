@@ -120,20 +120,6 @@ func (q *Queries) DeleteWorkPartTitlesByProvider(ctx context.Context, arg Delete
 	return err
 }
 
-const deleteWorkRating = `-- name: DeleteWorkRating :exec
-DELETE FROM work_rating WHERE work_id = ? AND provider = ?
-`
-
-type DeleteWorkRatingParams struct {
-	WorkID   int64
-	Provider string
-}
-
-func (q *Queries) DeleteWorkRating(ctx context.Context, arg DeleteWorkRatingParams) error {
-	_, err := q.db.ExecContext(ctx, deleteWorkRating, arg.WorkID, arg.Provider)
-	return err
-}
-
 const deleteWorkTitlesBySource = `-- name: DeleteWorkTitlesBySource :exec
 DELETE FROM work_title WHERE work_id = ? AND source = ?
 `

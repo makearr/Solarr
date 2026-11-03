@@ -43,9 +43,6 @@ WHERE work_id = ? AND field = ? AND provider = '__manual__';
 -- name: ListWorkPartRefs :many
 SELECT id, media_ref FROM work_part WHERE work_id = ?;
 
--- name: DeleteWorkRating :exec
-DELETE FROM work_rating WHERE work_id = ? AND provider = ?;
-
 -- name: SetWorkRating :exec
 INSERT INTO work_rating (work_id, provider, score, votes, fetched_at)
 VALUES (?, ?, ?, ?, ?)

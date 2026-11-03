@@ -19,7 +19,8 @@ type Querier interface {
 	CloseReclaimedAttempts(ctx context.Context, arg CloseReclaimedAttemptsParams) error
 	CompleteJob(ctx context.Context, arg CompleteJobParams) (int64, error)
 	CountJobsByState(ctx context.Context) ([]CountJobsByStateRow, error)
-	DeleteFinishedJobsBefore(ctx context.Context, updatedAt int64) (int64, error)
+	// One bounded page of retention (Invariant 2); a job another depends on stays, or its delete fails the whole page.
+	DeleteFinishedJobsBefore(ctx context.Context, arg DeleteFinishedJobsBeforeParams) (int64, error)
 	EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, error)
 	FailJob(ctx context.Context, arg FailJobParams) (int64, error)
 	// A restore leaves jobs referencing library rows that no longer exist, so unfinished

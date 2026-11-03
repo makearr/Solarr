@@ -30,29 +30,6 @@ func (q *Queries) CountCategoriesUsingLanguageProfile(ctx context.Context, langu
 	return count, err
 }
 
-const countCategoriesUsingQualityProfile = `-- name: CountCategoriesUsingQualityProfile :one
-SELECT count(*) FROM category WHERE quality_profile_id = ?
-`
-
-// Invariant 41: deleting a profile in use is refused with a count of what references it.
-func (q *Queries) CountCategoriesUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countCategoriesUsingQualityProfile, qualityProfileID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const countCategoriesUsingQualityTarget = `-- name: CountCategoriesUsingQualityTarget :one
-SELECT CAST(COUNT(*) AS INTEGER) FROM category_target WHERE target_id = ?
-`
-
-func (q *Queries) CountCategoriesUsingQualityTarget(ctx context.Context, targetID int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countCategoriesUsingQualityTarget, targetID)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const countCategoryListsUsingQualityProfile = `-- name: CountCategoryListsUsingQualityProfile :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM category_quality_profile WHERE quality_profile_id = ?
 `
@@ -232,46 +209,6 @@ DELETE FROM quality_target WHERE id = ?
 func (q *Queries) DeleteQualityTarget(ctx context.Context, id int64) error {
 	_, err := q.db.ExecContext(ctx, deleteQualityTarget, id)
 	return err
-}
-
-const getLanguageProfile = `-- name: GetLanguageProfile :one
-SELECT id, name, audio_preferred_json, audio_required_json, subtitle_preferred_json,
-       subtitle_required_json, prefer_original_audio, reject_dubbed
-FROM language_profile WHERE id = ?
-`
-
-func (q *Queries) GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error) {
-	row := q.db.QueryRowContext(ctx, getLanguageProfile, id)
-	var i LanguageProfile
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.AudioPreferredJson,
-		&i.AudioRequiredJson,
-		&i.SubtitlePreferredJson,
-		&i.SubtitleRequiredJson,
-		&i.PreferOriginalAudio,
-		&i.RejectDubbed,
-	)
-	return i, err
-}
-
-const getQualityProfile = `-- name: GetQualityProfile :one
-SELECT id, name, rules_json, upgrade_json, suggested_rank, media_type FROM quality_profile WHERE id = ?
-`
-
-func (q *Queries) GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error) {
-	row := q.db.QueryRowContext(ctx, getQualityProfile, id)
-	var i QualityProfile
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.RulesJson,
-		&i.UpgradeJson,
-		&i.SuggestedRank,
-		&i.MediaType,
-	)
-	return i, err
 }
 
 const insertCategoryMetadataSource = `-- name: InsertCategoryMetadataSource :exec

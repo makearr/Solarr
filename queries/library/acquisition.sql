@@ -125,15 +125,6 @@ FROM acquisition
 WHERE state = 'IMPORTED'
 ORDER BY id;
 
--- Identity is the client reference; the path is re-read on every poll.
--- name: GetAcquisitionByClientRef :one
-SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
-       candidate_title, search_terms, downloader_id, download_client_ref,
-       download_dir, client_category, client_fingerprint, protocol,
-       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
-FROM acquisition WHERE downloader_id = ? AND download_client_ref = ?;
-
 -- A client's queue as Solarr fills it: sent and not finished downloading (ADR-57).
 -- name: CountQueuedOnDownloader :one
 SELECT CAST(COUNT(*) AS INTEGER) FROM acquisition
@@ -144,12 +135,6 @@ UPDATE acquisition SET state = ?, last_error = ?, updated_at = ? WHERE id = ?;
 
 -- name: SetAcquisitionPath :exec
 UPDATE acquisition SET download_dir = ?, updated_at = ? WHERE id = ?;
-
--- Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
--- name: SetDownloadProgress :exec
-UPDATE acquisition
-SET ddl_resolved_url = ?, ddl_bytes_done = ?, ddl_resumable = ?, updated_at = ?
-WHERE id = ?;
 
 -- name: BlocklistRelease :one
 INSERT INTO blocklisted_release (indexer_id, guid, content_hash, title,
@@ -178,22 +163,6 @@ DELETE FROM blocklisted_release WHERE id = ?;
 -- Auto entries expire because indexers repair things; manual ones do not.
 -- name: PurgeExpiredBlocklist :exec
 DELETE FROM blocklisted_release WHERE expires_at IS NOT NULL AND expires_at <= ?;
-
--- name: RecordImportDecision :one
-INSERT INTO import_decision (desired_item_id, acquisition_id, incumbent_object_id,
-                             arrived_probe_json, comparison_json, outcome,
-                             reason_json, decided_at, overridden_by, overridden_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, desired_item_id, acquisition_id, incumbent_object_id,
-          arrived_probe_json, comparison_json, outcome, reason_json, decided_at,
-          overridden_by, overridden_at;
-
--- name: ListImportDecisionsNeedingReview :many
-SELECT id, desired_item_id, acquisition_id, incumbent_object_id,
-       arrived_probe_json, comparison_json, outcome, reason_json, decided_at,
-       overridden_by, overridden_at
-FROM import_decision
-WHERE outcome = 'NEEDS_REVIEW' ORDER BY decided_at DESC LIMIT ?;
 
 -- name: RecycleBin :one
 INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
@@ -265,10 +234,6 @@ INSERT INTO acquisition_file (acquisition_id, source_path, media_object_id,
                               library_path_id, imported_at)
 VALUES (?, ?, ?, ?, ?)
 RETURNING id, acquisition_id, source_path, media_object_id, library_path_id, imported_at;
-
--- name: ListAcquiredFiles :many
-SELECT id, acquisition_id, source_path, media_object_id, library_path_id, imported_at
-FROM acquisition_file WHERE acquisition_id = ? ORDER BY id;
 
 -- Which search caused this file, and which download produced it (F4, section 12).
 -- name: ProvenanceForObject :many

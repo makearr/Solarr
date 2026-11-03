@@ -1,11 +1,6 @@
 -- Columns are listed explicitly rather than with *, so adding one cannot
 -- silently reshape an existing result (documentation/sql-and-sqlc.md).
 
--- name: GetUserByID :one
-SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
-  new_library_permission
-FROM app_user WHERE id = ?;
-
 -- name: GetUserByUsername :one
 SELECT id, username, password_hash, role, created_at, ui_tier, ui_tier_default, ui_tier_max,
   new_library_permission
@@ -38,12 +33,6 @@ UPDATE app_user SET ui_tier_default = ?, ui_tier_max = ?, new_library_permission
 -- name: DeleteUser :exec
 DELETE FROM app_user WHERE id = ?;
 
--- name: CountUsers :one
-SELECT count(*) FROM app_user;
-
--- name: ListCategoryAccessForUser :many
-SELECT user_id, category_id, permission FROM user_category_access WHERE user_id = ?;
-
 -- name: ListAllCategoryAccess :many
 SELECT user_id, category_id, permission FROM user_category_access;
 
@@ -65,13 +54,6 @@ SELECT user_id, key, value_json FROM user_preference WHERE user_id = ? AND key =
 INSERT INTO user_preference (user_id, key, value_json)
 VALUES (?, ?, ?)
 ON CONFLICT (user_id, key) DO UPDATE SET value_json = excluded.value_json;
-
--- name: DeletePreference :exec
-DELETE FROM user_preference WHERE user_id = ? AND key = ?;
-
--- name: GetAPIKeyByHash :one
-SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed
-FROM api_key WHERE key_hash = ?;
 
 -- name: ListAPIKeysForUser :many
 SELECT id, user_id, name, key_hash, created_at, last_used_at, key_sealed

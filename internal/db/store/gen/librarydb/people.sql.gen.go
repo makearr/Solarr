@@ -231,35 +231,8 @@ func (q *Queries) CountEnabledSubscriptionsForSubject(ctx context.Context, arg C
 	return follows, err
 }
 
-const countWorksCreditedTo = `-- name: CountWorksCreditedTo :one
-
-SELECT CAST(COUNT(DISTINCT c.work_id) AS INTEGER) AS total
-FROM credit c
-WHERE c.person_id = ?1
-  AND (?2 = '' OR c.role = ?2)
-`
-
-type CountWorksCreditedToParams struct {
-	PersonID int64
-	Role     interface{}
-}
-
-// Discography rows, plus availability (wanted state, on-disk), are composed
-// as raw SQL in internal/db/library/people.go instead of here: the scalar
-// subqueries that carry wanted_state/on_disk are correlated per row, which
-// sqlc cannot see is nullable the way it can a real table column -- it would
-// type wanted_state as a plain non-null string and panic the first row with
-// no monitored desired_item. works.go's workStateColumn already established
-// the same raw-SQL-with-manual-Scan shape for exactly this reason.
-// Coverage: what a monitored person has produced against what is held (ADR-32).
-func (q *Queries) CountWorksCreditedTo(ctx context.Context, arg CountWorksCreditedToParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countWorksCreditedTo, arg.PersonID, arg.Role)
-	var total int64
-	err := row.Scan(&total)
-	return total, err
-}
-
 const createOrganisation = `-- name: CreateOrganisation :one
+
 INSERT INTO organisation (name, sort_name, kind, parent_id, country, fields_json, monitored)
 VALUES (?, ?, ?, ?, ?, ?, ?)
 RETURNING id, name, sort_name, kind, parent_id, country, fields_json, monitored
@@ -275,6 +248,13 @@ type CreateOrganisationParams struct {
 	Monitored  int64
 }
 
+// Discography rows, plus availability (wanted state, on-disk), are composed
+// as raw SQL in internal/db/library/people.go instead of here: the scalar
+// subqueries that carry wanted_state/on_disk are correlated per row, which
+// sqlc cannot see is nullable the way it can a real table column -- it would
+// type wanted_state as a plain non-null string and panic the first row with
+// no monitored desired_item. works.go's workStateColumn already established
+// the same raw-SQL-with-manual-Scan shape for exactly this reason.
 func (q *Queries) CreateOrganisation(ctx context.Context, arg CreateOrganisationParams) (Organisation, error) {
 	row := q.db.QueryRowContext(ctx, createOrganisation,
 		arg.Name,
@@ -1334,46 +1314,6 @@ func (q *Queries) ListPersonExternalIDs(ctx context.Context, personID int64) ([]
 	for rows.Next() {
 		var i PersonExternalID
 		if err := rows.Scan(&i.Provider, &i.ExternalID, &i.PersonID); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listRelationshipsFrom = `-- name: ListRelationshipsFrom :many
-SELECT id, from_type, from_id, to_type, to_id, kind
-FROM relationship WHERE from_type = ? AND from_id = ? ORDER BY kind, to_id
-`
-
-type ListRelationshipsFromParams struct {
-	FromType string
-	FromID   int64
-}
-
-func (q *Queries) ListRelationshipsFrom(ctx context.Context, arg ListRelationshipsFromParams) ([]Relationship, error) {
-	rows, err := q.db.QueryContext(ctx, listRelationshipsFrom, arg.FromType, arg.FromID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Relationship{}
-	for rows.Next() {
-		var i Relationship
-		if err := rows.Scan(
-			&i.ID,
-			&i.FromType,
-			&i.FromID,
-			&i.ToType,
-			&i.ToID,
-			&i.Kind,
-		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

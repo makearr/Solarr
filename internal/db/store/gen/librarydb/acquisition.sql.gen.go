@@ -281,51 +281,6 @@ func (q *Queries) GetAcquisition(ctx context.Context, id int64) (Acquisition, er
 	return i, err
 }
 
-const getAcquisitionByClientRef = `-- name: GetAcquisitionByClientRef :one
-SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
-       candidate_title, search_terms, downloader_id, download_client_ref,
-       download_dir, client_category, client_fingerprint, protocol,
-       ddl_resolved_url, ddl_bytes_done, ddl_resumable, state, last_error,
-       created_at, updated_at, content_hash, size_bytes
-FROM acquisition WHERE downloader_id = ? AND download_client_ref = ?
-`
-
-type GetAcquisitionByClientRefParams struct {
-	DownloaderID      int64
-	DownloadClientRef string
-}
-
-// Identity is the client reference; the path is re-read on every poll.
-func (q *Queries) GetAcquisitionByClientRef(ctx context.Context, arg GetAcquisitionByClientRefParams) (Acquisition, error) {
-	row := q.db.QueryRowContext(ctx, getAcquisitionByClientRef, arg.DownloaderID, arg.DownloadClientRef)
-	var i Acquisition
-	err := row.Scan(
-		&i.ID,
-		&i.DesiredItemID,
-		&i.CandidateID,
-		&i.IndexerID,
-		&i.CandidateGuid,
-		&i.CandidateTitle,
-		&i.SearchTerms,
-		&i.DownloaderID,
-		&i.DownloadClientRef,
-		&i.DownloadDir,
-		&i.ClientCategory,
-		&i.ClientFingerprint,
-		&i.Protocol,
-		&i.DdlResolvedUrl,
-		&i.DdlBytesDone,
-		&i.DdlResumable,
-		&i.State,
-		&i.LastError,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ContentHash,
-		&i.SizeBytes,
-	)
-	return i, err
-}
-
 const getAcquisitionStall = `-- name: GetAcquisitionStall :one
 SELECT acquisition_id, strikes, left_bytes, progress_at, checked_at, importing_finished FROM acquisition_stall WHERE acquisition_id = ?
 `
@@ -484,41 +439,6 @@ func (q *Queries) IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (i
 	var blocked int64
 	err := row.Scan(&blocked)
 	return blocked, err
-}
-
-const listAcquiredFiles = `-- name: ListAcquiredFiles :many
-SELECT id, acquisition_id, source_path, media_object_id, library_path_id, imported_at
-FROM acquisition_file WHERE acquisition_id = ? ORDER BY id
-`
-
-func (q *Queries) ListAcquiredFiles(ctx context.Context, acquisitionID int64) ([]AcquisitionFile, error) {
-	rows, err := q.db.QueryContext(ctx, listAcquiredFiles, acquisitionID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AcquisitionFile{}
-	for rows.Next() {
-		var i AcquisitionFile
-		if err := rows.Scan(
-			&i.ID,
-			&i.AcquisitionID,
-			&i.SourcePath,
-			&i.MediaObjectID,
-			&i.LibraryPathID,
-			&i.ImportedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listActiveAcquisitions = `-- name: ListActiveAcquisitions :many
@@ -1149,49 +1069,6 @@ func (q *Queries) ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecy
 	return items, nil
 }
 
-const listImportDecisionsNeedingReview = `-- name: ListImportDecisionsNeedingReview :many
-SELECT id, desired_item_id, acquisition_id, incumbent_object_id,
-       arrived_probe_json, comparison_json, outcome, reason_json, decided_at,
-       overridden_by, overridden_at
-FROM import_decision
-WHERE outcome = 'NEEDS_REVIEW' ORDER BY decided_at DESC LIMIT ?
-`
-
-func (q *Queries) ListImportDecisionsNeedingReview(ctx context.Context, limit int64) ([]ImportDecision, error) {
-	rows, err := q.db.QueryContext(ctx, listImportDecisionsNeedingReview, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ImportDecision{}
-	for rows.Next() {
-		var i ImportDecision
-		if err := rows.Scan(
-			&i.ID,
-			&i.DesiredItemID,
-			&i.AcquisitionID,
-			&i.IncumbentObjectID,
-			&i.ArrivedProbeJson,
-			&i.ComparisonJson,
-			&i.Outcome,
-			&i.ReasonJson,
-			&i.DecidedAt,
-			&i.OverriddenBy,
-			&i.OverriddenAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listImportedAcquisitions = `-- name: ListImportedAcquisitions :many
 SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,
@@ -1416,59 +1293,6 @@ func (q *Queries) RecordDecision(ctx context.Context, arg RecordDecisionParams) 
 	return i, err
 }
 
-const recordImportDecision = `-- name: RecordImportDecision :one
-INSERT INTO import_decision (desired_item_id, acquisition_id, incumbent_object_id,
-                             arrived_probe_json, comparison_json, outcome,
-                             reason_json, decided_at, overridden_by, overridden_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, desired_item_id, acquisition_id, incumbent_object_id,
-          arrived_probe_json, comparison_json, outcome, reason_json, decided_at,
-          overridden_by, overridden_at
-`
-
-type RecordImportDecisionParams struct {
-	DesiredItemID     int64
-	AcquisitionID     sql.NullInt64
-	IncumbentObjectID sql.NullInt64
-	ArrivedProbeJson  string
-	ComparisonJson    string
-	Outcome           string
-	ReasonJson        string
-	DecidedAt         int64
-	OverriddenBy      sql.NullInt64
-	OverriddenAt      sql.NullInt64
-}
-
-func (q *Queries) RecordImportDecision(ctx context.Context, arg RecordImportDecisionParams) (ImportDecision, error) {
-	row := q.db.QueryRowContext(ctx, recordImportDecision,
-		arg.DesiredItemID,
-		arg.AcquisitionID,
-		arg.IncumbentObjectID,
-		arg.ArrivedProbeJson,
-		arg.ComparisonJson,
-		arg.Outcome,
-		arg.ReasonJson,
-		arg.DecidedAt,
-		arg.OverriddenBy,
-		arg.OverriddenAt,
-	)
-	var i ImportDecision
-	err := row.Scan(
-		&i.ID,
-		&i.DesiredItemID,
-		&i.AcquisitionID,
-		&i.IncumbentObjectID,
-		&i.ArrivedProbeJson,
-		&i.ComparisonJson,
-		&i.Outcome,
-		&i.ReasonJson,
-		&i.DecidedAt,
-		&i.OverriddenBy,
-		&i.OverriddenAt,
-	)
-	return i, err
-}
-
 const recycleBin = `-- name: RecycleBin :one
 INSERT INTO recycle_bin (original_path, recycled_path, root_folder_id,
                         media_object_id, acquisition_id, reason, size_bytes,
@@ -1619,32 +1443,6 @@ func (q *Queries) SetAcquisitionState(ctx context.Context, arg SetAcquisitionSta
 	_, err := q.db.ExecContext(ctx, setAcquisitionState,
 		arg.State,
 		arg.LastError,
-		arg.UpdatedAt,
-		arg.ID,
-	)
-	return err
-}
-
-const setDownloadProgress = `-- name: SetDownloadProgress :exec
-UPDATE acquisition
-SET ddl_resolved_url = ?, ddl_bytes_done = ?, ddl_resumable = ?, updated_at = ?
-WHERE id = ?
-`
-
-type SetDownloadProgressParams struct {
-	DdlResolvedUrl sql.NullString
-	DdlBytesDone   int64
-	DdlResumable   sql.NullInt64
-	UpdatedAt      int64
-	ID             int64
-}
-
-// Persisted before bytes move, so a restart resumes rather than restarts (ADR-46).
-func (q *Queries) SetDownloadProgress(ctx context.Context, arg SetDownloadProgressParams) error {
-	_, err := q.db.ExecContext(ctx, setDownloadProgress,
-		arg.DdlResolvedUrl,
-		arg.DdlBytesDone,
-		arg.DdlResumable,
 		arg.UpdatedAt,
 		arg.ID,
 	)

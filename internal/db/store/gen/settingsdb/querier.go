@@ -13,9 +13,6 @@ type Querier interface {
 	AttachRootFolderToCategory(ctx context.Context, arg AttachRootFolderToCategoryParams) error
 	ClearCategoryTarget(ctx context.Context, categoryID int64) error
 	CountCategoriesUsingLanguageProfile(ctx context.Context, languageProfileID sql.NullInt64) (int64, error)
-	// Invariant 41: deleting a profile in use is refused with a count of what references it.
-	CountCategoriesUsingQualityProfile(ctx context.Context, qualityProfileID sql.NullInt64) (int64, error)
-	CountCategoriesUsingQualityTarget(ctx context.Context, targetID int64) (int64, error)
 	// Invariant 41: deleting an entity in use is refused with a count of what
 	// references it, so the user gets a reason rather than a constraint violation.
 	CountCategoriesUsingRootFolder(ctx context.Context, rootFolderID int64) (int64, error)
@@ -24,7 +21,6 @@ type Querier interface {
 	// references it.
 	CountDiscoveryJobsUsingCategory(ctx context.Context, categoryID sql.NullInt64) (int64, error)
 	CountRootFoldersInCategory(ctx context.Context, categoryID int64) (int64, error)
-	CountUsers(ctx context.Context) (int64, error)
 	CountUsersWithCategoryAccess(ctx context.Context, categoryID int64) (int64, error)
 	CreateAPIKey(ctx context.Context, arg CreateAPIKeyParams) (ApiKey, error)
 	// *Arr instance connections (todo 4.13, ADR-52). Column lists follow table order.
@@ -57,7 +53,6 @@ type Querier interface {
 	DeleteCategory(ctx context.Context, id int64) error
 	DeleteCategoryMetadataSources(ctx context.Context, categoryID int64) error
 	DeleteCategoryQualityProfiles(ctx context.Context, categoryID int64) error
-	DeleteDiscoveryJob(ctx context.Context, id int64) error
 	DeleteDownloadFolder(ctx context.Context, id int64) error
 	DeleteDownloader(ctx context.Context, id int64) error
 	DeleteExclusionPattern(ctx context.Context, id int64) error
@@ -66,13 +61,11 @@ type Querier interface {
 	DeleteLanguageProfile(ctx context.Context, id int64) error
 	DeleteNamingFormats(ctx context.Context, namingProfileID int64) error
 	DeleteNamingProfile(ctx context.Context, id int64) error
-	DeletePreference(ctx context.Context, arg DeletePreferenceParams) error
 	DeleteQualityProfile(ctx context.Context, id int64) error
 	DeleteQualityTarget(ctx context.Context, id int64) error
 	DeleteRootFolder(ctx context.Context, id int64) error
 	DeleteUser(ctx context.Context, id int64) error
 	DetachRootFolderFromCategory(ctx context.Context, arg DetachRootFolderFromCategoryParams) error
-	GetAPIKeyByHash(ctx context.Context, keyHash string) (ApiKey, error)
 	GetArrInstance(ctx context.Context, id int64) (ArrInstance, error)
 	GetCalendarFeed(ctx context.Context, userID int64) (CalendarFeed, error)
 	GetCalendarFeedByHash(ctx context.Context, tokenHash string) (CalendarFeed, error)
@@ -80,19 +73,14 @@ type Querier interface {
 	GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, error)
 	GetDownloadFolder(ctx context.Context, id int64) (DownloadFolder, error)
 	GetDownloader(ctx context.Context, id int64) (Downloader, error)
-	GetExclusionPattern(ctx context.Context, id int64) (ExclusionPattern, error)
 	GetImportList(ctx context.Context, id int64) (ImportList, error)
 	GetIndexer(ctx context.Context, id int64) (Indexer, error)
 	GetInstanceSetting(ctx context.Context, key string) (InstanceSetting, error)
-	GetLanguageProfile(ctx context.Context, id int64) (LanguageProfile, error)
 	GetPlacementAffinity(ctx context.Context, arg GetPlacementAffinityParams) (int64, error)
 	GetPreference(ctx context.Context, arg GetPreferenceParams) (UserPreference, error)
-	GetQualityProfile(ctx context.Context, id int64) (QualityProfile, error)
-	GetRootFolder(ctx context.Context, id int64) (RootFolder, error)
 	GetUserByAPIKeyHash(ctx context.Context, keyHash string) (GetUserByAPIKeyHashRow, error)
 	// Columns are listed explicitly rather than with *, so adding one cannot
 	// silently reshape an existing result (documentation/sql-and-sqlc.md).
-	GetUserByID(ctx context.Context, id int64) (AppUser, error)
 	GetUserByUsername(ctx context.Context, username string) (AppUser, error)
 	InsertCategoryMetadataSource(ctx context.Context, arg InsertCategoryMetadataSourceParams) error
 	InsertCategoryQualityProfile(ctx context.Context, arg InsertCategoryQualityProfileParams) error
@@ -101,13 +89,11 @@ type Querier interface {
 	ListAllCategoryAccess(ctx context.Context) ([]UserCategoryAccess, error)
 	ListArrInstances(ctx context.Context) ([]ArrInstance, error)
 	ListCategories(ctx context.Context) ([]Category, error)
-	ListCategoryAccessForUser(ctx context.Context, userID int64) ([]UserCategoryAccess, error)
 	ListCategoryFileManagement(ctx context.Context) ([]CategoryFileManagement, error)
 	ListCategoryMetadataSources(ctx context.Context) ([]CategoryMetadataSource, error)
 	ListCategoryQualityProfiles(ctx context.Context) ([]CategoryQualityProfile, error)
 	ListCategoryRootFolders(ctx context.Context) ([]CategoryRootFolder, error)
 	ListCategoryTargets(ctx context.Context) ([]CategoryTarget, error)
-	ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error)
 	ListDownloadFolders(ctx context.Context) ([]DownloadFolder, error)
 	ListDownloaders(ctx context.Context) ([]Downloader, error)
 	// What a scheduler actually runs -- off until previewed (ADR-38).
@@ -190,7 +176,6 @@ type Querier interface {
 	TouchAPIKey(ctx context.Context, arg TouchAPIKeyParams) error
 	UpdateArrInstance(ctx context.Context, arg UpdateArrInstanceParams) error
 	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) error
-	UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error
 	UpdateDownloadFolder(ctx context.Context, arg UpdateDownloadFolderParams) error
 	UpdateDownloader(ctx context.Context, arg UpdateDownloaderParams) error
 	UpdateExclusionPattern(ctx context.Context, arg UpdateExclusionPatternParams) error

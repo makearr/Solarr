@@ -171,58 +171,6 @@ func (q *Queries) ListPendingRequests(ctx context.Context, arg ListPendingReques
 	return items, nil
 }
 
-const listRequestsForUser = `-- name: ListRequestsForUser :many
-SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
-       state, decided_by, decided_at, decline_reason, created_at
-FROM request
-WHERE user_id = ? AND (?2 = 0 OR id < ?2)
-ORDER BY id DESC
-LIMIT ?3
-`
-
-type ListRequestsForUserParams struct {
-	UserID   int64
-	BeforeID interface{}
-	PageSize int64
-}
-
-// Newest first: a user's own request history.
-func (q *Queries) ListRequestsForUser(ctx context.Context, arg ListRequestsForUserParams) ([]Request, error) {
-	rows, err := q.db.QueryContext(ctx, listRequestsForUser, arg.UserID, arg.BeforeID, arg.PageSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Request{}
-	for rows.Next() {
-		var i Request
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.WorkID,
-			&i.ExternalRef,
-			&i.MediaType,
-			&i.CategoryID,
-			&i.ScopeJson,
-			&i.State,
-			&i.DecidedBy,
-			&i.DecidedAt,
-			&i.DeclineReason,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const markRequestFulfilled = `-- name: MarkRequestFulfilled :execrows
 UPDATE request SET state = 'FULFILLED' WHERE id = ? AND state = 'APPROVED'
 `

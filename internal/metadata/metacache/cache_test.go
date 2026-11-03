@@ -184,19 +184,20 @@ func TestCache_DeleteOlderThanRemovesOnlyStaleEntries(t *testing.T) {
 
 func TestCache_DeleteOldestRemovesTheOldestFirst(t *testing.T) {
 	cache := newCache(t)
-	for index, id := range []string{"oldest", "middle", "newest"} {
+	// Bytes as SizeBytes counts them: "é" is two.
+	for index, entry := range [][2]string{{"oldest", "ab"}, {"middle", "cdé"}, {"newest", "f"}} {
 		at := time.Unix(1_000_000_000+int64(index)*1000, 0)
-		if err := cache.Set(t.Context(), "release", id, metacache.Entry{Body: "x", FetchedAt: at}); err != nil {
-			t.Fatalf("Set(%s): %v", id, err)
+		if err := cache.Set(t.Context(), "release", entry[0], metacache.Entry{Body: entry[1], FetchedAt: at}); err != nil {
+			t.Fatalf("Set(%s): %v", entry[0], err)
 		}
 	}
 
-	removed, err := cache.DeleteOldest(t.Context(), 2)
+	removed, bytes, err := cache.DeleteOldest(t.Context(), 2)
 	if err != nil {
 		t.Fatalf("DeleteOldest: %v", err)
 	}
-	if removed != 2 {
-		t.Fatalf("removed = %d, want 2", removed)
+	if removed != 2 || bytes != 6 {
+		t.Fatalf("removed, bytes = %d, %d, want 2, 6", removed, bytes)
 	}
 	if _, err := cache.Get(t.Context(), "release", "oldest"); !errors.Is(err, metacache.ErrNotFound) {
 		t.Error("oldest survived")
@@ -215,7 +216,7 @@ func TestCache_DeleteOldestNeverRemovesMoreThanExist(t *testing.T) {
 		t.Fatalf("Set: %v", err)
 	}
 
-	removed, err := cache.DeleteOldest(t.Context(), 100)
+	removed, _, err := cache.DeleteOldest(t.Context(), 100)
 	if err != nil {
 		t.Fatalf("DeleteOldest: %v", err)
 	}

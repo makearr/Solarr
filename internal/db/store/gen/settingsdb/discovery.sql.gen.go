@@ -77,15 +77,6 @@ func (q *Queries) CreateDiscoveryJob(ctx context.Context, arg CreateDiscoveryJob
 	return i, err
 }
 
-const deleteDiscoveryJob = `-- name: DeleteDiscoveryJob :exec
-DELETE FROM discovery_job WHERE id = ?
-`
-
-func (q *Queries) DeleteDiscoveryJob(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteDiscoveryJob, id)
-	return err
-}
-
 const getDiscoveryJob = `-- name: GetDiscoveryJob :one
 SELECT id, name, source_json, media_type, category_id, filters_json, scoring_json,
        limit_per_run, action, schedule, enabled, last_run_at
@@ -110,48 +101,6 @@ func (q *Queries) GetDiscoveryJob(ctx context.Context, id int64) (DiscoveryJob, 
 		&i.LastRunAt,
 	)
 	return i, err
-}
-
-const listDiscoveryJobs = `-- name: ListDiscoveryJobs :many
-SELECT id, name, source_json, media_type, category_id, filters_json, scoring_json,
-       limit_per_run, action, schedule, enabled, last_run_at
-FROM discovery_job ORDER BY name
-`
-
-func (q *Queries) ListDiscoveryJobs(ctx context.Context) ([]DiscoveryJob, error) {
-	rows, err := q.db.QueryContext(ctx, listDiscoveryJobs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []DiscoveryJob{}
-	for rows.Next() {
-		var i DiscoveryJob
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.SourceJson,
-			&i.MediaType,
-			&i.CategoryID,
-			&i.FiltersJson,
-			&i.ScoringJson,
-			&i.LimitPerRun,
-			&i.Action,
-			&i.Schedule,
-			&i.Enabled,
-			&i.LastRunAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const listEnabledDiscoveryJobs = `-- name: ListEnabledDiscoveryJobs :many
@@ -224,39 +173,5 @@ type SetDiscoveryJobEnabledParams struct {
 // deliberate act distinct from editing a job's policy.
 func (q *Queries) SetDiscoveryJobEnabled(ctx context.Context, arg SetDiscoveryJobEnabledParams) error {
 	_, err := q.db.ExecContext(ctx, setDiscoveryJobEnabled, arg.Enabled, arg.ID)
-	return err
-}
-
-const updateDiscoveryJob = `-- name: UpdateDiscoveryJob :exec
-UPDATE discovery_job
-SET source_json = ?, media_type = ?, category_id = ?, filters_json = ?,
-    scoring_json = ?, limit_per_run = ?, action = ?, schedule = ?
-WHERE id = ?
-`
-
-type UpdateDiscoveryJobParams struct {
-	SourceJson  string
-	MediaType   sql.NullString
-	CategoryID  sql.NullInt64
-	FiltersJson string
-	ScoringJson sql.NullString
-	LimitPerRun int64
-	Action      string
-	Schedule    sql.NullString
-	ID          int64
-}
-
-func (q *Queries) UpdateDiscoveryJob(ctx context.Context, arg UpdateDiscoveryJobParams) error {
-	_, err := q.db.ExecContext(ctx, updateDiscoveryJob,
-		arg.SourceJson,
-		arg.MediaType,
-		arg.CategoryID,
-		arg.FiltersJson,
-		arg.ScoringJson,
-		arg.LimitPerRun,
-		arg.Action,
-		arg.Schedule,
-		arg.ID,
-	)
 	return err
 }

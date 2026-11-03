@@ -118,14 +118,6 @@ SELECT metric, dimension, period, value, count, computed_at
 FROM stat_rollup
 ORDER BY metric, dimension, period;
 
--- Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
--- name: ListStatRollup :many
-SELECT metric, dimension, period, value, count, computed_at
-FROM stat_rollup
-WHERE metric = sqlc.arg(metric) AND period >= sqlc.arg(since)
-ORDER BY period DESC, dimension
-LIMIT sqlc.arg(page_size);
-
 -- Only content-attributable outcomes count: a full disk is not the group's
 -- fault, and counting it would make reputation measure the environment (ADR-45).
 -- name: RecordGroupObservation :exec
@@ -368,9 +360,6 @@ ORDER BY m.collection_id, m.ord, w.year, w.id;
 INSERT INTO collection (media_type, name, kind, source, monitored, added_at, category_id)
 VALUES (?, ?, 'custom', 'user', 0, ?, ?)
 RETURNING id;
-
--- name: RenameCustomCollection :execrows
-UPDATE collection SET name = ? WHERE id = ? AND kind = 'custom';
 
 -- name: RenameCollectionByHand :execrows
 UPDATE collection SET name = ?, name_locked = 1 WHERE id = ?;

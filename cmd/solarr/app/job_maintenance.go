@@ -22,10 +22,20 @@ const (
 	backupCleanupJobType       = jobs.Type("database.backup_cleanup")
 	recycleBinCleanupJobType   = jobs.Type("library.recycle_bin_cleanup")
 	decisionRetentionJobType   = jobs.Type("library.decision_retention")
+	jobRetentionJobType        = jobs.Type("jobs.retention")
 )
 
 // decisionRetentionPages bounds one run, so a first pass over an old backlog is spread over several nights.
 const decisionRetentionPages = 250
+
+// finishedJobsKept is how long a finished job stays listed; without a limit jobs.db only grows, by thousands a day.
+const finishedJobsKept = 14 * 24 * time.Hour
+
+// jobRetentionBatch and jobRetentionPages bound one run's transactions and its length (Invariant 2).
+const (
+	jobRetentionBatch = 200
+	jobRetentionPages = 500
+)
 
 var maintenanceDefinitions = []jobs.Definition{
 	{Type: databaseMaintenanceJobType, Name: "Maintaining the databases", Pool: jobs.PoolMaintenance, Mutating: false, MaxAttempts: 1},
@@ -33,6 +43,7 @@ var maintenanceDefinitions = []jobs.Definition{
 	{Type: backupCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: recycleBinCleanupJobType, Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 	{Type: decisionRetentionJobType, Name: "Cleaning old search results", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
+	{Type: jobRetentionJobType, Name: "Cleaning old jobs", Pool: jobs.PoolHousekeeping, Mutating: true, MaxAttempts: 3},
 }
 
 // decisionRetentionJob ages search decisions past retention.decisions_full into the daily rollup and deletes the
@@ -52,6 +63,32 @@ func (j decisionRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
 	}
 	if retired.Decisions > 0 || retired.Candidates > 0 {
 		j.logger.Info("old search results cleaned", slog.Int64("decisions", retired.Decisions), slog.Int64("releases", retired.Candidates))
+	}
+	return nil
+}
+
+// jobRetentionJob deletes jobs finished more than finishedJobsKept ago, a page at a time.
+type jobRetentionJob struct {
+	queue  *jobs.Queue
+	clock  clock.Clock
+	logger *slog.Logger
+}
+
+func (j jobRetentionJob) Run(ctx context.Context, _ jobs.Job) error {
+	before := j.clock.Now().Add(-finishedJobsKept)
+	var total int64
+	for range jobRetentionPages {
+		deleted, err := j.queue.PruneFinished(ctx, before, jobRetentionBatch)
+		if err != nil {
+			return err
+		}
+		total += deleted
+		if deleted < jobRetentionBatch {
+			break
+		}
+	}
+	if total > 0 {
+		j.logger.Info("old jobs cleaned", slog.Int64("jobs", total))
 	}
 	return nil
 }
@@ -164,7 +201,7 @@ func (j backupCleanupJob) Run(_ context.Context, _ jobs.Job) error {
 	return nil
 }
 
-// registerMaintenanceJobs wires the three into the registry and the executor.
+// registerMaintenanceJobs wires the maintenance jobs into the registry and the executor.
 func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *jobs.Executor) error {
 	for _, definition := range maintenanceDefinitions {
 		if err := registry.Register(definition); err != nil {
@@ -183,6 +220,7 @@ func (p *process) registerMaintenanceJobs(registry *jobs.Registry, executor *job
 		candidates: statistics.NewCandidates(p.statistics), keepFull: p.config.Retention.DecisionsFull.AsDuration(),
 		clock: clock.NewSystem(), logger: p.logger,
 	})
+	executor.Handle(jobRetentionJobType, jobRetentionJob{queue: p.queue, clock: clock.NewSystem(), logger: p.logger})
 	executor.Handle(backupJobType, backupJob{stores: backedUp, directory: p.config.Paths.BackupDir, logger: p.logger})
 	executor.Handle(backupCleanupJobType, backupCleanupJob{
 		stores: backedUp, directory: p.config.Paths.BackupDir, cache: p.cache, clock: clock.NewSystem(), logger: p.logger,
@@ -214,6 +252,10 @@ func (p *process) enqueueRecycleBinCleanup(ctx context.Context) (jobs.EnqueueRes
 
 func (p *process) enqueueDecisionRetention(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.enqueueMaintenanceJob(ctx, decisionRetentionJobType)
+}
+
+func (p *process) enqueueJobRetention(ctx context.Context) (jobs.EnqueueResult, error) {
+	return p.enqueueMaintenanceJob(ctx, jobRetentionJobType)
 }
 
 func (p *process) enqueueBackupCleanup(ctx context.Context) (jobs.EnqueueResult, error) {

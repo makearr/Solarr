@@ -244,40 +244,6 @@ func (q *Queries) GetPlacementAffinity(ctx context.Context, arg GetPlacementAffi
 	return root_folder_id, err
 }
 
-const getRootFolder = `-- name: GetRootFolder :one
-SELECT id, path, label, online, writable, writable_reason, read_only, allow_rename,
-       total_bytes, free_bytes, min_free_bytes, capacity_checked_at, fs_id, capabilities_json,
-       drain_state, drain_job_id, offline_auto, offline_reason, seen_entries
-FROM root_folder WHERE id = ?
-`
-
-func (q *Queries) GetRootFolder(ctx context.Context, id int64) (RootFolder, error) {
-	row := q.db.QueryRowContext(ctx, getRootFolder, id)
-	var i RootFolder
-	err := row.Scan(
-		&i.ID,
-		&i.Path,
-		&i.Label,
-		&i.Online,
-		&i.Writable,
-		&i.WritableReason,
-		&i.ReadOnly,
-		&i.AllowRename,
-		&i.TotalBytes,
-		&i.FreeBytes,
-		&i.MinFreeBytes,
-		&i.CapacityCheckedAt,
-		&i.FsID,
-		&i.CapabilitiesJson,
-		&i.DrainState,
-		&i.DrainJobID,
-		&i.OfflineAuto,
-		&i.OfflineReason,
-		&i.SeenEntries,
-	)
-	return i, err
-}
-
 const listCategories = `-- name: ListCategories :many
 SELECT id, media_type, name, priority_rank, quality_profile_id, language_profile_id,
        monitor_discovered, naming_profile_id, monitor_release_types, quality_cutoff_profile_id, quality_upgrades,

@@ -242,7 +242,7 @@ func TestCategory_CarriesItsProfileAssignments(t *testing.T) {
 
 // TestQualityProfile_ShippedDefaultsAreSeeded is todo 4.3's own remaining checklist
 // item: ready-made profiles so a fresh install has something usable before
-// anyone opens the profile builder (migrations/settings/0012). Every shipped
+// anyone opens the profile builder (the settings baseline). Every shipped
 // profile must parse as valid ADR-40 shape -- score.Parse/ParseUpgrade, the same
 // validator CreateQualityProfile itself runs -- not just be present.
 func TestQualityProfile_ShippedDefaultsAreSeeded(t *testing.T) {

@@ -14,12 +14,9 @@ type Querier interface {
 	CountMetadataCache(ctx context.Context) (int64, error)
 	// ADR-60's max_age: a per-entry ceiling, enforced regardless of budget.
 	DeleteMetadataCacheOlderThan(ctx context.Context, fetchedAt int64) (int64, error)
-	// ADR-60's budget-triggered eviction: oldest first, exactly n rows so the
-	// caller can re-measure and stop once it is back under budget rather than
-	// guessing a cutoff time. metadata_cache is WITHOUT ROWID (its own
-	// (kind, external_id) primary key already is the index), so the row-value
-	// form is used instead of a rowid subquery.
-	DeleteOldestMetadataCache(ctx context.Context, limit int64) (int64, error)
+	// ADR-60's budget-triggered eviction: oldest first, exactly n rows, returning each one's bytes so the caller keeps a
+	// running total instead of summing the whole cache again. WITHOUT ROWID, so the subquery is by primary key.
+	DeleteOldestMetadataCache(ctx context.Context, limit int64) ([]int64, error)
 	// Column lists follow table order, or sqlc stops reusing the generated model.
 	GetCachedMetadata(ctx context.Context, arg GetCachedMetadataParams) (MetadataCache, error)
 	SetCachedMetadata(ctx context.Context, arg SetCachedMetadataParams) error

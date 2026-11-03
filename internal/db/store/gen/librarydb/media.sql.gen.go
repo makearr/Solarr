@@ -772,40 +772,6 @@ func (q *Queries) ListPathsInRoot(ctx context.Context, arg ListPathsInRootParams
 	return items, nil
 }
 
-const listPerceptualHashes = `-- name: ListPerceptualHashes :many
-SELECT id, phash FROM media_object WHERE phash IS NOT NULL ORDER BY id
-`
-
-type ListPerceptualHashesRow struct {
-	ID    int64
-	Phash sql.NullInt64
-}
-
-// The whole phash set is 4 MB at 500k files: Hamming distance is brute-forced in
-// Go, so this hands over every candidate rather than filtering in SQL (ADR-35).
-func (q *Queries) ListPerceptualHashes(ctx context.Context) ([]ListPerceptualHashesRow, error) {
-	rows, err := q.db.QueryContext(ctx, listPerceptualHashes)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListPerceptualHashesRow{}
-	for rows.Next() {
-		var i ListPerceptualHashesRow
-		if err := rows.Scan(&i.ID, &i.Phash); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listRenameFilesOnRoot = `-- name: ListRenameFilesOnRoot :many
 SELECT lp.media_object_id, lp.rel_path, o.size_bytes, d.work_id, CAST(COALESCE(d.edition_id, 0) AS INTEGER) AS edition_id,
        f.media_ref

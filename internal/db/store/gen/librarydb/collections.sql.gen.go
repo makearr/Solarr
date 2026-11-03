@@ -1797,51 +1797,6 @@ func (q *Queries) ListSeriesProviderIDs(ctx context.Context) ([]ListSeriesProvid
 	return items, nil
 }
 
-const listStatRollup = `-- name: ListStatRollup :many
-SELECT metric, dimension, period, value, count, computed_at
-FROM stat_rollup
-WHERE metric = ?1 AND period >= ?2
-ORDER BY period DESC, dimension
-LIMIT ?3
-`
-
-type ListStatRollupParams struct {
-	Metric   string
-	Since    int64
-	PageSize int64
-}
-
-// Every chart reads a rollup, never a live aggregate (ADR-28, section 21.12).
-func (q *Queries) ListStatRollup(ctx context.Context, arg ListStatRollupParams) ([]StatRollup, error) {
-	rows, err := q.db.QueryContext(ctx, listStatRollup, arg.Metric, arg.Since, arg.PageSize)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []StatRollup{}
-	for rows.Next() {
-		var i StatRollup
-		if err := rows.Scan(
-			&i.Metric,
-			&i.Dimension,
-			&i.Period,
-			&i.Value,
-			&i.Count,
-			&i.ComputedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUnrelatedWorkPairs = `-- name: ListUnrelatedWorkPairs :many
 SELECT r.from_id, r.to_id FROM relationship r
 JOIN work a ON a.id = r.from_id AND a.media_type = ?
@@ -2308,23 +2263,6 @@ type RenameCollectionByHandParams struct {
 
 func (q *Queries) RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, renameCollectionByHand, arg.Name, arg.ID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected()
-}
-
-const renameCustomCollection = `-- name: RenameCustomCollection :execrows
-UPDATE collection SET name = ? WHERE id = ? AND kind = 'custom'
-`
-
-type RenameCustomCollectionParams struct {
-	Name string
-	ID   int64
-}
-
-func (q *Queries) RenameCustomCollection(ctx context.Context, arg RenameCustomCollectionParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, renameCustomCollection, arg.Name, arg.ID)
 	if err != nil {
 		return 0, err
 	}

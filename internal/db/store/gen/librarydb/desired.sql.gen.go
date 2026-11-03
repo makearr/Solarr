@@ -1737,23 +1737,6 @@ func (q *Queries) MarkDesiredItemsDirtyBatch(ctx context.Context, batchSize int6
 	return result.RowsAffected()
 }
 
-const markHunted = `-- name: MarkHunted :exec
-UPDATE hunt_queue
-SET last_searched_at = ?, search_count = search_count + 1, eligible_after = ?
-WHERE desired_item_id = ?
-`
-
-type MarkHuntedParams struct {
-	LastSearchedAt int64
-	EligibleAfter  int64
-	DesiredItemID  int64
-}
-
-func (q *Queries) MarkHunted(ctx context.Context, arg MarkHuntedParams) error {
-	_, err := q.db.ExecContext(ctx, markHunted, arg.LastSearchedAt, arg.EligibleAfter, arg.DesiredItemID)
-	return err
-}
-
 const markWorkItemsDirty = `-- name: MarkWorkItemsDirty :exec
 UPDATE desired_item SET dirty = 1 WHERE work_id = ?
 `
@@ -2119,15 +2102,6 @@ type RecordRSSSightingParams struct {
 // A release RSS showed for the item; the newest first-seen is kept.
 func (q *Queries) RecordRSSSighting(ctx context.Context, arg RecordRSSSightingParams) error {
 	_, err := q.db.ExecContext(ctx, recordRSSSighting, arg.DesiredItemID, arg.SeenAt)
-	return err
-}
-
-const removeFromHuntQueue = `-- name: RemoveFromHuntQueue :exec
-DELETE FROM hunt_queue WHERE desired_item_id = ?
-`
-
-func (q *Queries) RemoveFromHuntQueue(ctx context.Context, desiredItemID int64) error {
-	_, err := q.db.ExecContext(ctx, removeFromHuntQueue, desiredItemID)
 	return err
 }
 

@@ -141,13 +141,6 @@ FROM credit WHERE work_id = ? ORDER BY part_id, edition_id, role, ord, person_id
 -- no monitored desired_item. works.go's workStateColumn already established
 -- the same raw-SQL-with-manual-Scan shape for exactly this reason.
 
--- Coverage: what a monitored person has produced against what is held (ADR-32).
--- name: CountWorksCreditedTo :one
-SELECT CAST(COUNT(DISTINCT c.work_id) AS INTEGER) AS total
-FROM credit c
-WHERE c.person_id = sqlc.arg(person_id)
-  AND (sqlc.arg(role) = '' OR c.role = sqlc.arg(role));
-
 -- name: CreateOrganisation :one
 INSERT INTO organisation (name, sort_name, kind, parent_id, country, fields_json, monitored)
 VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -286,10 +279,6 @@ DELETE FROM subscription WHERE id = ?;
 INSERT INTO relationship (from_type, from_id, to_type, to_id, kind)
 VALUES (?, ?, ?, ?, ?)
 ON CONFLICT (from_type, from_id, to_type, to_id, kind) DO NOTHING;
-
--- name: ListRelationshipsFrom :many
-SELECT id, from_type, from_id, to_type, to_id, kind
-FROM relationship WHERE from_type = ? AND from_id = ? ORDER BY kind, to_id;
 
 -- name: DeletePerson :exec
 DELETE FROM person WHERE id = ?;

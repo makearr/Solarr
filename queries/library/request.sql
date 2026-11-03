@@ -24,15 +24,6 @@ WHERE state = 'PENDING' AND (sqlc.arg(after_id) = 0 OR id > sqlc.arg(after_id))
 ORDER BY id
 LIMIT sqlc.arg(page_size);
 
--- Newest first: a user's own request history.
--- name: ListRequestsForUser :many
-SELECT id, user_id, work_id, external_ref, media_type, category_id, scope_json,
-       state, decided_by, decided_at, decline_reason, created_at
-FROM request
-WHERE user_id = ? AND (sqlc.arg(before_id) = 0 OR id < sqlc.arg(before_id))
-ORDER BY id DESC
-LIMIT sqlc.arg(page_size);
-
 -- Guarded on the current state so approving (or declining) twice -- a race between
 -- two admins, or a retried request -- reports that nothing changed rather than
 -- silently overwriting who decided it and when.

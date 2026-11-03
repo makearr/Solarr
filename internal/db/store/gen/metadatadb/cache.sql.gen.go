@@ -43,23 +43,36 @@ func (q *Queries) DeleteMetadataCacheOlderThan(ctx context.Context, fetchedAt in
 	return result.RowsAffected()
 }
 
-const deleteOldestMetadataCache = `-- name: DeleteOldestMetadataCache :execrows
+const deleteOldestMetadataCache = `-- name: DeleteOldestMetadataCache :many
 DELETE FROM metadata_cache WHERE (kind, external_id) IN (
   SELECT kind, external_id FROM metadata_cache ORDER BY fetched_at ASC LIMIT ?
 )
+RETURNING CAST(LENGTH(CAST(body AS BLOB)) AS INTEGER) AS bytes
 `
 
-// ADR-60's budget-triggered eviction: oldest first, exactly n rows so the
-// caller can re-measure and stop once it is back under budget rather than
-// guessing a cutoff time. metadata_cache is WITHOUT ROWID (its own
-// (kind, external_id) primary key already is the index), so the row-value
-// form is used instead of a rowid subquery.
-func (q *Queries) DeleteOldestMetadataCache(ctx context.Context, limit int64) (int64, error) {
-	result, err := q.db.ExecContext(ctx, deleteOldestMetadataCache, limit)
+// ADR-60's budget-triggered eviction: oldest first, exactly n rows, returning each one's bytes so the caller keeps a
+// running total instead of summing the whole cache again. WITHOUT ROWID, so the subquery is by primary key.
+func (q *Queries) DeleteOldestMetadataCache(ctx context.Context, limit int64) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, deleteOldestMetadataCache, limit)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return result.RowsAffected()
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var column_1 int64
+		if err := rows.Scan(&column_1); err != nil {
+			return nil, err
+		}
+		items = append(items, column_1)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getCachedMetadata = `-- name: GetCachedMetadata :one
