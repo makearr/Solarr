@@ -6,7 +6,18 @@
 One self-hosted app that finds out what you have, what's missing and what could be better, then goes and gets it.<br>
 Music, TV, anime, movies, books and audiobooks in one engine: a successor to Lidarr, Sonarr, Radarr and Readarr, not a port of them.</p>
 
-<p align="center"><img src="documentation/screenshots/dashboard.png" alt="The dashboard: recently added series and the libraries" width="900"></p>
+<p align="center"><img src="documentation/screenshots/dashboard.png" alt="The dashboard: recently added films, series and albums, and the libraries" width="900"></p>
+
+---
+
+**Solarr** is a Go-native media management, discovery and acquisition platform, built for speed and for
+people who would rather not read a manual. One static Go binary and four small SQLite databases keep the web
+interface fast whatever the size of the library: a filtered page of a 500,000-file library comes back in
+**under 4 ms** and search-as-you-type in **17 ms** (worst case, measured; [benchmarks](documentation/benchmarks.md)).
+Every database has one writer behind a priority queue in WAL mode, so **your click jumps ahead of a bulk scan**
+and the browser never stalls while Solarr works. Your views, filters and sorts are remembered, settings are shown
+at your own level (normal, advanced or expert), every decision keeps its reasons on the page, and anything
+irreversible is **previewed first and undone in one click**.
 
 ---
 
@@ -41,18 +52,63 @@ you expected and what happened (logs help: *Settings → Logs*). Every report ma
 - **Private by default.** No telemetry, no accounts, no phone-home. It talks to what you configure.
 - **One small container.** A Go binary with SQLite inside. No database server, no message broker.
 
+## New since the first release
+
+Added after 2026.10.001.515 (2026-10-25), newest areas first. Details are in the
+[documentation](documentation/README.md); the commit log has the rest.
+
+- **Books and audiobooks are real libraries.** Metadata from Open Library, Google Books, Hardcover, FantLab, iTunes
+  and Audible (with Audnexus), covers, one collection per series and the books a series still lacks, **Monitor** on
+  a whole series, **follow an author** as Readarr does, and a **Narrators** level, filter and column for
+  audiobooks. Ebooks are never handed to ffprobe.
+- **An adult library type** (optional), over the stash-box providers, ThePornDB and Whisparr's metadata: scenes and
+  films, performers, and a StashDB favourites import list. See [adult](documentation/adult.md).
+- **Import lists for TV.** An AniList season or user list, a TMDB list or TMDB's trending and popular shows add
+  series for you, **previewed before you enable them**, with *Run now* and a periodic sync.
+  See [import lists](documentation/import-lists.md).
+- **Import from the \*Arrs by choice.** A preview and mapping step first, then pick what to bring across; Whisparr
+  is a source too, and monitoring can be **sent back** to the \*Arr. Still never changes your \*Arr otherwise.
+- **Merge one library into another** of the same media type, previewed like a move.
+- **A preview player in the browser.** A bar, a corner window or full screen, source bitrate shown, a quality menu
+  (original, 1080p, 720p, 480p) and **GPU transcoding** for files a browser cannot play.
+  See [media player](documentation/media-player.md).
+- **Similar videos report.** Perceptual hashes of the frames (plus duration) find the same video in two files;
+  keep one and **link or recycle the others**, offered only when every file names the same episode.
+- **More download clients and indexers.** Every kind of client Lidarr and Sonarr offer on one shared base,
+  **Soulseek through slskd** as a source for any media type, and **Prowlarr's catalog** to choose indexers from.
+- **Per-library music provider order**, like TV and movies already had, and **label, network and organisation
+  logos** from Wikidata and Skyhook.
+- **People and collections editable by hand**, a collection you can Monitor, and *Also known for* on a person
+  (an actor's albums, with *Add to Solarr*). A provider's collection you deleted stays deleted.
+- **TV details**: episode titles in the library's profile languages, *Episode Title Required* with a rename once
+  the title arrives, air moments on the calendar, and a franchise watch task.
+- **Cache and memory page** (*Settings → Cache*): library page cache size, database file sizes, cache use and hit
+  ratios, and a card to size the database memory.
+- **Statistics** count the files **below each library's cutoff**, even in libraries that never upgrade.
+- **Settings by environment variable**: config folder, port, root folders and API keys can be set per variable.
+- **Hardening.** The first-run claim race is closed, cross-site writes are refused, a session cookie is
+  `Secure` behind a trusted TLS proxy, 6to4 and IPv4-compatible addresses are judged by the IPv4 they carry,
+  symlinks in a download are never followed, a torrent whose name is a path never becomes an import path, and
+  a whole download folder is never imported as one download.
+- **Faster.** Bulk edit writes only what changed, album decisions are about 3x faster, release-name parses are
+  remembered, and the queue asks all download clients together, once for every polling page.
+
+---
+
 ## Screenshots
 
 | | |
 |---|---|
-| [![Album wall](documentation/screenshots/music-albums.png)](documentation/screenshots/music-albums.png) **Music library**: albums as a poster wall, with table and overview views, filters and bulk edit | [![Album page](documentation/screenshots/album.png)](documentation/screenshots/album.png) **An album**: tracks with the measured format and size of every file |
-| [![Artist page](documentation/screenshots/artist.png)](documentation/screenshots/artist.png) **An artist**: biography, aliases, the albums you have and the ones still missing | [![Series wall](documentation/screenshots/tv-series.png)](documentation/screenshots/tv-series.png) **TV library**: series with how much of each is on disk |
-| [![Series page](documentation/screenshots/tv-series-page.png)](documentation/screenshots/tv-series-page.png) **A series**: cast and crew, seasons, and per episode the file's resolution, codec and size | [![Series page, light](documentation/screenshots/tv-series-page-light.png)](documentation/screenshots/tv-series-page-light.png) **Light or dark**, following your system |
-| [![Import preview](documentation/screenshots/import-preview.png)](documentation/screenshots/import-preview.png) **Import preview**: an untagged two-album pack, both albums recognised from their tracklists | [![Calendar](documentation/screenshots/calendar.png)](documentation/screenshots/calendar.png) **Calendar**: what you have, what's wanted and out, and what isn't out yet |
-| [![Statistics](documentation/screenshots/statistics.png)](documentation/screenshots/statistics.png) **Insights**: completeness, the biggest albums, formats and growth | |
+| [![Album wall](documentation/screenshots/music-albums.png)](documentation/screenshots/music-albums.png) **Music library**: albums as a poster wall, with table and overview views, filters and bulk edit | [![Album page](documentation/screenshots/album.png)](documentation/screenshots/album.png) **An album**: tracks with the measured format and size of every file, and the ones still to come |
+| [![Series wall](documentation/screenshots/tv-series.png)](documentation/screenshots/tv-series.png) **TV library**: series with how much of each is on disk | [![Series page](documentation/screenshots/tv-series-page.png)](documentation/screenshots/tv-series-page.png) **A series**: cast and crew, collections, seasons, and per episode the file on disk |
+| [![Movie wall](documentation/screenshots/movies.png)](documentation/screenshots/movies.png) **Movies**: posters, editions, collections and franchises | [![Book wall](documentation/screenshots/books.png)](documentation/screenshots/books.png) **Books**: authors, series and covers from Open Library; audiobooks add narrators |
+| [![Import list preview](documentation/screenshots/import-lists.png)](documentation/screenshots/import-lists.png) **Import lists**: an AniList season, previewed before you enable it: what would be added, what is already known | [![Series page, light](documentation/screenshots/tv-series-page-light.png)](documentation/screenshots/tv-series-page-light.png) **Light or dark**, following your system |
+| [![Artist page](documentation/screenshots/artist.png)](documentation/screenshots/artist.png) **An artist**: biography, aliases, the albums you have and the ones still missing | [![Import preview](documentation/screenshots/import-preview.png)](documentation/screenshots/import-preview.png) **Import preview**: an untagged two-album pack, both albums recognised from their tracklists |
+| [![Calendar](documentation/screenshots/calendar.png)](documentation/screenshots/calendar.png) **Calendar**: what you have, what's wanted and out, and what isn't out yet | [![Statistics](documentation/screenshots/statistics.png)](documentation/screenshots/statistics.png) **Insights**: completeness, the biggest albums, formats and growth |
 
 <sub>Screenshots are from a demo instance. Its files are silent or blank placeholders, which is why every
-track is the same FLAC and every episode the same 1080p H.264.</sub>
+track is the same FLAC and every episode the same 720p H.264. Some pages (artist, calendar, insights, import
+preview) are from an earlier demo.</sub>
 
 ---
 
@@ -366,7 +422,8 @@ that advances with every build. See [versioning](documentation/versioning.md).
 
 ## First steps
 
-The full walk-through is the [user guide](documentation/user-guide.md). In short:
+New here? [Getting started](documentation/getting-started.md) takes 15 minutes; the full walk-through is the
+[user guide](documentation/user-guide.md). In short:
 
 1. **Setup wizard:** create the administrator and your first library (a name, a type and a folder).
    Solarr scans it; covers, posters and photos arrive over the next few minutes.
@@ -383,17 +440,18 @@ The full walk-through is the [user guide](documentation/user-guide.md). In short
 
 | | |
 |---|---|
-| **Libraries** | Music, TV, anime and movie libraries, mixed libraries · poster, overview and table views · saved filters · bulk edit · tags with a genre tree · rating limits · calendar with a subscribable link |
+| **Libraries** | Music, TV, anime, movie, book and audiobook libraries (adult optional), mixed libraries, merge · import lists for TV · poster, overview and table views · saved filters · bulk edit · tags with a genre tree · rating limits · calendar with a subscribable link |
 | **Music** | Artists, albums and editions · labels · aliases and merges · add with monitoring · Navidrome-friendly tags and covers (optional) |
 | **TV and anime** | Series, seasons, episodes, daily shows, absolute numbering, other orderings · cast, crew, networks, follow · crossovers · franchises · Jellyfin/Kodi files (optional) |
 | **Movies** | Add, scan, search, grab, import, rename · editions · collections and franchises · Radarr import |
+| **Books and audiobooks** | Authors, series, narrators · covers · follow an author · several providers per library · Readarr-style monitoring |
 | **Finding** | Newznab/Torznab indexers (Prowlarr works as-is), in parallel · hunting, RSS, upgrade hunting · manual search with scores and reasons · delay profile |
-| **Downloading** | **SABnzbd** and **qBittorrent** · queue, history, held releases, free-space protection · seeding limit per client · failed releases blocklisted and searched again |
-| **Running it** | Web UI · several users · notifications centre · statistics · encrypted secrets · automatic backups · scheduled tasks you can run on demand · YAML settings export |
+| **Downloading** | **SABnzbd**, **qBittorrent**, Soulseek (slskd) and the other clients Lidarr and Sonarr offer · queue, history, held releases, free-space protection · seeding limit per client · failed releases blocklisted and searched again |
+| **Running it** | Web UI · several users · notifications centre · statistics · encrypted secrets · automatic backups · scheduled tasks you can run on demand · YAML settings export · preview player · similar-video report |
 
 **Not there yet:** torrents work end to end but have seen less use than usenet · notifications are
-in-app only (no webhooks or connectors yet) · external import lists (Trakt and others) · matching the
-same audio across formats for duplicates · books, audiobooks and comics come later. Not API-compatible
+in-app only (no webhooks or connectors yet) · import lists for movies, music and books, and Trakt · matching the
+same audio across formats for duplicates · comics come later. Not API-compatible
 with the \*Arrs, on purpose: their data model can't express editions, packs or files shared between
 libraries.
 
@@ -439,7 +497,7 @@ Start at [codebase-map.md](documentation/codebase-map.md) and
 
 ## More
 
-- **Documentation:** [documentation/](documentation/README.md): [user guide](documentation/user-guide.md),
+- **Documentation:** [documentation/](documentation/README.md), sorted into beginner, advanced and expert: [getting started](documentation/getting-started.md), [user guide](documentation/user-guide.md),
   [music identification](documentation/music-identification.md), [TV internals](documentation/tv-internals.md),
   [naming](documentation/naming.md), [downloads](documentation/downloads.md),
   [file management](documentation/file-management.md), [container runtime](documentation/container-runtime.md).
