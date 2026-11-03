@@ -267,3 +267,18 @@ func TestWalker_AndListFilesNeverImportASymlink(t *testing.T) {
 		t.Errorf("ListFiles = %+v, want only the real file", files)
 	}
 }
+
+func TestWalker_SubtitlesInASubsFolderBelongToTheUnit(t *testing.T) {
+	tr := newTree(t, "Rel/S01E01.mkv", "Rel/Subs/S01E01.English.srt", "Rel/Subs/readme.txt")
+	units, _ := walkAll(t, tr, inspect.WalkOptions{})
+	if len(units) != 1 {
+		t.Fatalf("got %d units, want 1: %+v", len(units), units)
+	}
+	var others []string
+	for _, file := range units[0].Other {
+		others = append(others, file.RelPath)
+	}
+	if len(others) != 1 || others[0] != "Rel/Subs/S01E01.English.srt" {
+		t.Errorf("Other = %v, want only the subtitle from Subs/", others)
+	}
+}

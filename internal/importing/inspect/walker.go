@@ -209,6 +209,9 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		if !entry.IsDir {
 			continue
 		}
+		if isSubtitleFolder(entry.Name) {
+			ownOther = append(ownOther, w.subtitleFiles(path.Join(relative, entry.Name))...)
+		}
 		child, err := w.visit(ctx, path.Join(relative, entry.Name))
 		if err != nil {
 			return clusterFiles{}, err
@@ -262,4 +265,36 @@ func (w *walkerRun) visit(ctx context.Context, relative string) (clusterFiles, e
 		w.agg.Add(u)
 	}
 	return clusterFiles{}, nil
+}
+
+// isSubtitleFolder is the folder scene releases keep their subtitles in, beside the video.
+func isSubtitleFolder(name string) bool {
+	switch strings.ToLower(name) {
+	case "subs", "sub", "subtitles":
+		return true
+	}
+	return false
+}
+
+// subtitleFiles lists the subtitles directly inside a subtitle folder, so they follow the unit's videos.
+func (w *walkerRun) subtitleFiles(relative string) []File {
+	entries, err := w.fsys.ReadDir(path.Join(w.root, relative))
+	if err != nil {
+		return nil
+	}
+	var files []File
+	for _, entry := range entries {
+		childRelative := path.Join(relative, entry.Name)
+		if entry.IsDir || (w.opts.Only != nil && !w.opts.Only[childRelative]) {
+			continue
+		}
+		info, err := w.fsys.Lstat(path.Join(w.root, childRelative))
+		if err != nil || info.Mode&fs.ModeSymlink != 0 {
+			continue
+		}
+		if class := classify(childRelative, info.Size, w.opts.MediaSizeFloorBytes, w.opts.Books); class == ClassSubtitle {
+			files = append(files, File{RelPath: childRelative, SizeBytes: info.Size, ModTime: info.ModTime, Class: class})
+		}
+	}
+	return files
 }
