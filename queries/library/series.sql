@@ -164,17 +164,19 @@ WHERE p.work_id = ? ORDER BY t.part_id, t.id;
 -- name: DeleteWorkFieldByProvider :exec
 DELETE FROM work_field WHERE work_id = ? AND field = ? AND provider = ?;
 
--- One batch of parts whose stamped wait differs from what the settings now say for their confidence.
+-- One batch of parts whose stamped wait differs from what the settings now say for their confidence: read first, so a
+-- run with nothing to stamp scans the table on the read pool, not inside the one writer.
+-- name: ListPartsWithStaleGrace :many
+SELECT p.id FROM work_part p
+WHERE (p.available_at IS NOT NULL OR p.date IS NOT NULL)
+  AND p.available_grace IS NOT CASE p.available_confidence
+        WHEN 'high' THEN CAST(sqlc.arg(high) AS INTEGER) WHEN 'medium' THEN CAST(sqlc.arg(medium) AS INTEGER) ELSE CAST(sqlc.arg(low) AS INTEGER) END
+LIMIT sqlc.arg(limit);
+
 -- name: StampPartGrace :execrows
 UPDATE work_part SET available_grace = CASE available_confidence
     WHEN 'high' THEN CAST(sqlc.arg(high) AS INTEGER) WHEN 'medium' THEN CAST(sqlc.arg(medium) AS INTEGER) ELSE CAST(sqlc.arg(low) AS INTEGER) END
-WHERE id IN (
-  SELECT p.id FROM work_part p
-  WHERE (p.available_at IS NOT NULL OR p.date IS NOT NULL)
-    AND p.available_grace IS NOT CASE p.available_confidence
-          WHEN 'high' THEN CAST(sqlc.arg(high) AS INTEGER) WHEN 'medium' THEN CAST(sqlc.arg(medium) AS INTEGER) ELSE CAST(sqlc.arg(low) AS INTEGER) END
-  LIMIT sqlc.arg(limit)
-);
+WHERE id IN (SELECT value FROM json_each(sqlc.arg(ids)));
 
 -- The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
 -- name: ListPartPaths :many

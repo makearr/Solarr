@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -548,24 +549,32 @@ func graceSeconds(grace *time.Duration) sql.NullInt64 {
 // StampGrace gives every part with a time or a date the wait grace says for its confidence, a batch at a time, and
 // answers how many parts changed.
 func (s Series) StampGrace(ctx context.Context, grace AvailabilityGrace) (int, error) {
+	high, medium, low := int64(grace.High/time.Second), int64(grace.Medium/time.Second), int64(grace.Low/time.Second)
 	total := 0
 	for {
-		var changed int64
-		err := s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
-			var err error
-			changed, err = librarydb.New(tx).StampPartGrace(ctx, librarydb.StampPartGraceParams{
-				High: int64(grace.High / time.Second), Medium: int64(grace.Medium / time.Second),
-				Low: int64(grace.Low / time.Second), Limit: dirtyBatchSize,
+		stale, err := librarydb.New(s.store.Read()).ListPartsWithStaleGrace(ctx, librarydb.ListPartsWithStaleGraceParams{
+			High: high, Medium: medium, Low: low, Limit: dirtyBatchSize,
+		})
+		if err != nil {
+			return total, fmt.Errorf("library: parts with a stale wait: %w", err)
+		}
+		if len(stale) == 0 {
+			return total, nil
+		}
+		ids, err := json.Marshal(stale)
+		if err != nil {
+			return total, fmt.Errorf("library: encode part ids: %w", err)
+		}
+		err = s.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+			_, err := librarydb.New(tx).StampPartGrace(ctx, librarydb.StampPartGraceParams{
+				High: high, Medium: medium, Low: low, Ids: string(ids),
 			})
 			return err
 		})
 		if err != nil {
 			return total, fmt.Errorf("library: stamp part grace: %w", err)
 		}
-		if changed == 0 {
-			return total, nil
-		}
-		total += int(changed)
+		total += len(stale)
 	}
 }
 

@@ -472,6 +472,51 @@ func (q *Queries) ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([
 	return items, nil
 }
 
+const listPartsWithStaleGrace = `-- name: ListPartsWithStaleGrace :many
+SELECT p.id FROM work_part p
+WHERE (p.available_at IS NOT NULL OR p.date IS NOT NULL)
+  AND p.available_grace IS NOT CASE p.available_confidence
+        WHEN 'high' THEN CAST(?1 AS INTEGER) WHEN 'medium' THEN CAST(?2 AS INTEGER) ELSE CAST(?3 AS INTEGER) END
+LIMIT ?4
+`
+
+type ListPartsWithStaleGraceParams struct {
+	High   int64
+	Medium int64
+	Low    int64
+	Limit  int64
+}
+
+// One batch of parts whose stamped wait differs from what the settings now say for their confidence: read first, so a
+// run with nothing to stamp scans the table on the read pool, not inside the one writer.
+func (q *Queries) ListPartsWithStaleGrace(ctx context.Context, arg ListPartsWithStaleGraceParams) ([]int64, error) {
+	rows, err := q.db.QueryContext(ctx, listPartsWithStaleGrace,
+		arg.High,
+		arg.Medium,
+		arg.Low,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []int64{}
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPrunableWorkParts = `-- name: ListPrunableWorkParts :many
 SELECT p.id, p.media_ref FROM work_part p
 WHERE p.work_id = ?
@@ -1015,29 +1060,22 @@ func (q *Queries) SetWorkRating(ctx context.Context, arg SetWorkRatingParams) er
 const stampPartGrace = `-- name: StampPartGrace :execrows
 UPDATE work_part SET available_grace = CASE available_confidence
     WHEN 'high' THEN CAST(?1 AS INTEGER) WHEN 'medium' THEN CAST(?2 AS INTEGER) ELSE CAST(?3 AS INTEGER) END
-WHERE id IN (
-  SELECT p.id FROM work_part p
-  WHERE (p.available_at IS NOT NULL OR p.date IS NOT NULL)
-    AND p.available_grace IS NOT CASE p.available_confidence
-          WHEN 'high' THEN CAST(?1 AS INTEGER) WHEN 'medium' THEN CAST(?2 AS INTEGER) ELSE CAST(?3 AS INTEGER) END
-  LIMIT ?4
-)
+WHERE id IN (SELECT value FROM json_each(?4))
 `
 
 type StampPartGraceParams struct {
 	High   int64
 	Medium int64
 	Low    int64
-	Limit  int64
+	Ids    interface{}
 }
 
-// One batch of parts whose stamped wait differs from what the settings now say for their confidence.
 func (q *Queries) StampPartGrace(ctx context.Context, arg StampPartGraceParams) (int64, error) {
 	result, err := q.db.ExecContext(ctx, stampPartGrace,
 		arg.High,
 		arg.Medium,
 		arg.Low,
-		arg.Limit,
+		arg.Ids,
 	)
 	if err != nil {
 		return 0, err
