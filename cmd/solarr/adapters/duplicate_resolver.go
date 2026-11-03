@@ -34,11 +34,65 @@ type duplicatePath struct {
 }
 
 func (d DuplicateResolver) ResolveDuplicates(ctx context.Context, categoryID, keepID int64, drops []apiserver.DuplicateDrop) (apiserver.DuplicateOutcome, error) {
-	var outcome apiserver.DuplicateOutcome
 	roots := map[int64]settings.RootFolder{}
 	for _, root := range d.Settings.Snapshot().RootFoldersForCategory(categoryID) {
 		roots[root.ID] = root
 	}
+	return d.resolve(ctx, roots, keepID, drops)
+}
+
+// ResolveDuplicatesEverywhere resolves over every root folder; a copy is linked only when it shares a library with the
+// kept one, since a merged file would otherwise belong to two libraries.
+func (d DuplicateResolver) ResolveDuplicatesEverywhere(ctx context.Context, keepID int64, drops []apiserver.DuplicateDrop) (apiserver.DuplicateOutcome, error) {
+	snapshot := d.Settings.Snapshot()
+	roots := map[int64]settings.RootFolder{}
+	for _, root := range snapshot.RootFolders() {
+		roots[root.ID] = root
+	}
+	keepRows, err := d.Physical.PathsForObject(ctx, keepID)
+	if err != nil {
+		return apiserver.DuplicateOutcome{}, err
+	}
+	keepLibraries := map[int64]bool{}
+	for _, row := range keepRows {
+		for _, category := range snapshot.CategoriesForRootFolder(row.RootFolderID) {
+			keepLibraries[category] = true
+		}
+	}
+	var outcome apiserver.DuplicateOutcome
+	var allowed []apiserver.DuplicateDrop
+	for _, drop := range drops {
+		if drop.Action == "link" && !d.sharesLibrary(ctx, snapshot, drop.MediaObjectID, keepLibraries) {
+			outcome.Problems = append(outcome.Problems, fmt.Sprintf("copy %d: it is in another library than the kept copy, so it cannot be merged; delete it instead", drop.MediaObjectID))
+			continue
+		}
+		allowed = append(allowed, drop)
+	}
+	resolved, err := d.resolve(ctx, roots, keepID, allowed)
+	resolved.Problems = append(outcome.Problems, resolved.Problems...)
+	return resolved, err
+}
+
+// sharesLibrary is whether every path of a media object lies in one of the libraries given.
+func (d DuplicateResolver) sharesLibrary(ctx context.Context, snapshot *settings.Snapshot, mediaObjectID int64, libraries map[int64]bool) bool {
+	rows, err := d.Physical.PathsForObject(ctx, mediaObjectID)
+	if err != nil || len(rows) == 0 {
+		return false
+	}
+	for _, row := range rows {
+		shared := false
+		for _, category := range snapshot.CategoriesForRootFolder(row.RootFolderID) {
+			shared = shared || libraries[category]
+		}
+		if !shared {
+			return false
+		}
+	}
+	return true
+}
+
+func (d DuplicateResolver) resolve(ctx context.Context, roots map[int64]settings.RootFolder, keepID int64, drops []apiserver.DuplicateDrop) (apiserver.DuplicateOutcome, error) {
+	var outcome apiserver.DuplicateOutcome
 	keepPaths, err := d.paths(ctx, keepID, roots, false)
 	if err != nil {
 		return outcome, err

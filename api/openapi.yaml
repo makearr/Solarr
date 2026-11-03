@@ -6171,6 +6171,14 @@ paths:
     get:
       operationId: getCategorySimilarVideos
       tags: [library]
+      parameters:
+        - name: level
+          in: query
+          required: false
+          description: >-
+            How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium
+            (up to 8, the default) or low (up to 10, finds more and wrong ones too).
+          schema: { type: string, enum: [exact, high, medium, low], default: medium }
       summary: Videos one library holds in more than one encode, found by perceptual hash (read only).
       description: >-
         Files that look like the same cut (a re-encode, another size or container), grouped by the distance between their
@@ -6184,6 +6192,86 @@ paths:
               schema: { $ref: "#/components/schemas/SimilarVideoReport" }
         "401": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /duplicates/similar-videos:
+    get:
+      operationId: getSimilarVideos
+      tags: [library]
+      summary: Videos held in more than one encode across every library, found by perceptual hash (administrator, read only).
+      description: >-
+        The same report as one library's, over all libraries at once, so a copy in one library and another in a second
+        library are found together. Nothing is changed by looking.
+      parameters:
+        - name: level
+          in: query
+          required: false
+          description: >-
+            How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium
+            (up to 8, the default) or low (up to 10, finds more and wrong ones too).
+          schema: { type: string, enum: [exact, high, medium, low], default: medium }
+      responses:
+        "200":
+          description: The groups.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SimilarVideoReport" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+
+  /duplicates/similar-videos/resolve:
+    post:
+      operationId: resolveSimilarVideos
+      tags: [library]
+      summary: Keep one video of a group and merge or delete the others, across libraries (administrator).
+      description: >-
+        Each dropped copy is either merged into the kept one (its paths become links to it, which needs the same library,
+        the same filesystem and the same file extension) or goes to the recycle bin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DuplicateResolveRequest" }
+      responses:
+        "200":
+          description: What was done.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DuplicateResolution" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
+        "503": { $ref: "#/components/responses/Problem" }
+
+  /settings/video-hashing:
+    get:
+      operationId: getVideoHashing
+      tags: [settings]
+      summary: Whether videos are hashed in the background for the duplicate finder.
+      responses:
+        "200":
+          description: The setting in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VideoHashing" }
+        "401": { $ref: "#/components/responses/Problem" }
+    put:
+      operationId: setVideoHashing
+      tags: [settings]
+      summary: Turn background video hashing on or off. Administrator only.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VideoHashing" }
+      responses:
+        "200":
+          description: The setting now in force.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VideoHashing" }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+        "403": { $ref: "#/components/responses/Problem" }
 
   /categories/{id}/duplicates/resolve:
     parameters:
@@ -12620,10 +12708,32 @@ components:
                     keep: { type: boolean, description: The copy to keep. }
                     paths: { type: array, items: { type: string } }
 
+    VideoHashing:
+      type: object
+      description: The perceptual hashing switch (scan.video_phash).
+      required: [enabled]
+      properties:
+        enabled: { type: boolean, description: "Off, no new video is hashed; hashes already stored still serve the finder." }
+
+    DuplicateResolveRequest:
+      type: object
+      required: [keep_media_object_id, drop]
+      properties:
+        keep_media_object_id: { type: integer, format: int64 }
+        drop:
+          type: array
+          items:
+            type: object
+            required: [media_object_id, action]
+            properties:
+              media_object_id: { type: integer, format: int64 }
+              action: { type: string, enum: [link, recycle] }
+
     SimilarVideoReport:
       type: object
-      required: [groups, limited]
+      required: [groups, limited, hashing_enabled]
       properties:
+        hashing_enabled: { type: boolean, description: "False when background hashing is switched off; only files hashed before are compared." }
         limited: { type: boolean, description: "True when the library holds more groups than one report shows." }
         groups:
           type: array
@@ -12636,11 +12746,15 @@ components:
                 type: array
                 items:
                   type: object
-                  required: [media_object_id, size_bytes, path]
+                  required: [media_object_id, size_bytes, path, duration_ms, width, height, category_id]
                   properties:
                     media_object_id: { type: integer, format: int64 }
                     size_bytes: { type: integer, format: int64 }
                     path: { type: string }
+                    duration_ms: { type: integer, format: int64, description: Zero when not probed. }
+                    width: { type: integer, format: int64, description: Zero when not probed. }
+                    height: { type: integer, format: int64, description: Zero when not probed. }
+                    category_id: { type: integer, format: int64, description: The library the file is in. }
 
     LinkPreview:
       type: object

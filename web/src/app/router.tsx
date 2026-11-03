@@ -269,6 +269,7 @@ const routes = [
     },
   }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/import", component: Import }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/storage/duplicates", component: lazyRouteComponent(() => import("./VideoDuplicates"), "VideoDuplicates") }),
   createRoute({ getParentRoute: () => rootRoute, path: "/storage/recycle-bin", component: lazyRouteComponent(() => import("./RecycleBin"), "RecycleBin") }),
   // Packs moved to each library 2026-09-11; redirected rather than 404ing,
   // same as /import and /moves below.

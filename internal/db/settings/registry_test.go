@@ -109,7 +109,7 @@ func TestNewDefaultRegistry_CoversEveryKnownScalarSetting(t *testing.T) {
 		settings.KeyNetworkProxyBypass, settings.KeyNetworkAllowCIDRsEnabled, settings.KeyNetworkAllowCIDRs,
 		settings.KeyCacheMaxBytes, settings.KeyCacheMaxAgeDays, settings.KeyCacheImagesShare, settings.KeyCacheMetadataShare, settings.KeyCacheMinFreePercent,
 		settings.KeyRecycleBinMaxBytes, settings.KeyRecycleBinMaxPercentOfRoot,
-		settings.KeyReadyQueueLimit,
+		settings.KeyReadyQueueLimit, settings.KeyVideoPerceptualHash,
 		settings.KeyPriorityUserRequestWeight, settings.KeyPriorityNewReleaseWeight,
 		settings.KeyPriorityGapWeight, settings.KeyPriorityUpgradeWeight, settings.KeySearchesPerHour, settings.KeyHuntMode, settings.KeyPriorityNewReleaseDays, settings.KeyRSSFreshHours,
 		settings.KeyBrainzMashUserAgent, settings.KeyMetadataSourceOrder,

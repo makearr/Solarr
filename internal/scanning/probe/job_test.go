@@ -328,8 +328,10 @@ func (h *hashingTool) PerceptualHash(_ context.Context, path string) (mediatool.
 	return mediatool.VideoHash{Mean: 0xF0F0F0F0F0F0F0F0, Frames: []mediatool.FrameHash{{Slot: 0, Hash: 0x0102030405060708}, {Slot: 3, Hash: 9}}}, nil
 }
 
-// old.mkv was hashed before frames were kept, so it is hashed once more.
-func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T) {
+// hashVideos runs one sweep over a.mkv, broken.mkv (which cannot be hashed) and old.mkv (hashed before frames were
+// kept, so hashed once more), with hashing switched as given.
+func hashVideos(t *testing.T, hashing func() bool) (*store.Store, []librarydb.ListHashedVideosRow, []library.RegisteredFile) {
+	t.Helper()
 	opened := newLibrary(t)
 	physical := library.NewPhysical(opened)
 	root := t.TempDir()
@@ -353,13 +355,14 @@ func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T)
 		t.Fatalf("SetPhash: %v", err)
 	}
 	job := probe.NewJob(probe.Config{
-		Physical: physical,
-		Coverage: library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
-		Roots:    fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
-		Tool:     &hashingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}}, failFor: "broken.mkv"},
-		FS:       fsx.NewOS(),
-		Clock:    clock.NewFakeAtEpoch(),
-		Logger:   slog.New(slog.DiscardHandler),
+		Physical:          physical,
+		Coverage:          library.NewProbeCoverage(opened, clock.NewFakeAtEpoch()),
+		Roots:             fakeRoots{1: settings.RootFolder{ID: 1, Path: root, Online: true}},
+		Tool:              &hashingTool{fakeTool: fakeTool{measured: mediatool.Measured{FormatName: "matroska", Duration: time.Second}}, failFor: "broken.mkv"},
+		FS:                fsx.NewOS(),
+		PerceptualHashing: hashing,
+		Clock:             clock.NewFakeAtEpoch(),
+		Logger:            slog.New(slog.DiscardHandler),
 	})
 	if err := job.Run(t.Context(), jobs.Job{}); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -368,6 +371,11 @@ func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T)
 	if err != nil {
 		t.Fatalf("ListHashedVideos: %v", err)
 	}
+	return opened, rows, ids
+}
+
+func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T) {
+	opened, rows, ids := hashVideos(t, nil)
 	frames := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 3, 0, 0, 0, 0, 0, 0, 0, 9}
 	mean := sql.NullInt64{Int64: int64(-0x0F0F0F0F0F0F0F10), Valid: true}
 	second := sql.NullInt64{Int64: 1000, Valid: true}
@@ -381,6 +389,13 @@ func TestJob_RunStoresPerceptualHashOfVideoAndSkipsTheOneThatFails(t *testing.T)
 	broken, err := librarydb.New(opened.Read()).GetMediaObject(t.Context(), ids[1].MediaObjectID)
 	if err != nil || broken.Phash.Valid {
 		t.Errorf("broken.mkv phash = %+v, %v; want none", broken.Phash, err)
+	}
+}
+
+func TestJob_RunHashesNothingWhileHashingIsSwitchedOff(t *testing.T) {
+	_, rows, _ := hashVideos(t, func() bool { return false })
+	if len(rows) != 0 {
+		t.Errorf("hashed videos = %+v, want none while hashing is off", rows)
 	}
 }
 

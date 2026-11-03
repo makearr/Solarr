@@ -60,6 +60,8 @@ type DuplicateOutcome struct {
 // DuplicateResolver acts on a group of copies: keeps one and gives up the rest.
 type DuplicateResolver interface {
 	ResolveDuplicates(ctx context.Context, categoryID, keepMediaObjectID int64, drops []DuplicateDrop) (DuplicateOutcome, error)
+	// ResolveDuplicatesEverywhere is the same across every library; a link needs both copies in one library.
+	ResolveDuplicatesEverywhere(ctx context.Context, keepMediaObjectID int64, drops []DuplicateDrop) (DuplicateOutcome, error)
 }
 
 // duplicateGroupLimit bounds one report.

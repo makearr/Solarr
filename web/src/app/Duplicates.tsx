@@ -12,6 +12,7 @@ import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
 
 import { formatBytes } from "./Queue";
+import { SimilarVideos } from "./SimilarVideos";
 
 const skipReasons: Record<string, string> = {
   missing: "not found on disk",
@@ -91,104 +92,6 @@ function IdenticalCopies({ categoryId }: { categoryId: number }) {
           {queued && <span className="text-xs text-ink-muted">Running in the background; see Activity.</span>}
         </div>
       )}
-    </section>
-  );
-}
-
-type SimilarGroup = components["schemas"]["SimilarVideoReport"]["groups"][number];
-
-const episodeTokenOf = (path: string) => path.match(/S\d+E\d+/i)?.[0]?.toUpperCase() ?? "";
-
-/** File names that say two different episodes outweigh a picture match, so such a group is left to the user. */
-const namesOtherEpisodes = (group: SimilarGroup) =>
-  new Set(group.videos.map((video) => episodeTokenOf(video.path)).filter((token) => token !== "")).size > 1;
-
-/** One group of look-alike videos: the largest file is ticked to keep, the others are linked to it (same container) or recycled. */
-function SimilarGroupCard({ group, categoryId }: { group: SimilarGroup; categoryId: number }) {
-  const queryClient = useQueryClient();
-  const largest = group.videos.reduce((best, video, index) => (video.size_bytes > (group.videos[best]?.size_bytes ?? 0) ? index : best), 0);
-  const [keepIndex, setKeepIndex] = useState(largest);
-  const [asking, setAsking] = useState(false);
-  const keep = group.videos[keepIndex] ?? group.videos[0];
-  const others = group.videos.filter((_, index) => index !== keepIndex);
-  const apply = useMutation({
-    mutationFn: () => ok(api.POST("/categories/{id}/duplicates/resolve", {
-      params: { path: { id: categoryId } },
-      body: {
-        keep_media_object_id: keep?.media_object_id ?? 0,
-        drop: others.map((video) => ({
-          media_object_id: video.media_object_id,
-          action: (extensionOf(video.path) === extensionOf(keep?.path ?? "") ? "link" : "recycle") as Action,
-        })),
-      },
-    })),
-    onSuccess: () => {
-      setAsking(false);
-      void queryClient.invalidateQueries({ queryKey: ["similar-videos", categoryId] });
-    },
-  });
-  const done = apply.data;
-  return (
-    <li className="flex flex-col gap-1 text-xs">
-      <span className="text-ink-muted">
-        {group.videos.length} files, at most {group.max_distance} of 64 bits apart
-      </span>
-      {group.videos.map((video, index) => (
-        <label key={video.media_object_id} className="flex items-start gap-1.5">
-          <input type="radio" name={`similar-${group.videos[0]?.media_object_id}`} checked={index === keepIndex} onChange={() => setKeepIndex(index)} />
-          <span className="break-all font-mono">
-            {video.path} <span className="text-ink-muted">({formatBytes(video.size_bytes)})</span>
-          </span>
-        </label>
-      ))}
-      {done ? (
-        <p className="text-ok">
-          Done: {done.linked} linked, {done.recycled} recycled.
-          {done.problems.map((problem) => (
-            <span key={problem} className="block text-warn">{problem}</span>
-          ))}
-        </p>
-      ) : namesOtherEpisodes(group) ? (
-        <p className="text-ink-muted">These files name different episodes, so nothing is offered: check them by hand.</p>
-      ) : asking ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-ink-muted">
-            Keep the ticked file; the other {others.length} become links to it where the container matches, else go to the recycle bin
-            (restorable for 7 days).
-          </span>
-          <Button onClick={() => apply.mutate()} disabled={apply.isPending}>Confirm</Button>
-          <Button onClick={() => setAsking(false)}>Cancel</Button>
-        </div>
-      ) : (
-        <div>
-          <Button onClick={() => setAsking(true)}>Keep the ticked file</Button>
-        </div>
-      )}
-      {apply.isError && <p className="text-warn">The resolution failed; nothing was changed.</p>}
-    </li>
-  );
-}
-
-/** Videos that look like one cut in several encodes, by perceptual hash. Which file to keep is the user's call. */
-function SimilarVideos({ categoryId }: { categoryId: number }) {
-  const report = useQuery({
-    queryKey: ["similar-videos", categoryId],
-    queryFn: () => ok(api.GET("/categories/{id}/similar-videos", { params: { path: { id: categoryId } } })),
-  });
-  const data = report.data;
-  if (!data || data.groups.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-2 rounded-lg border border-border-subtle bg-surface p-4">
-      <h2 className="text-sm font-medium">Similar videos</h2>
-      <p className="max-w-xl text-xs text-ink-muted">
-        These files look like the same video in another encode, size or container. Only files the background hash pass has
-        reached are compared, so more can appear over time.{data.limited ? " Only the largest groups are shown." : ""}
-      </p>
-      <ul className="flex flex-col gap-3">
-        {data.groups.map((group) => (
-          <SimilarGroupCard key={group.videos.map((video) => video.media_object_id).join("-")} group={group} categoryId={categoryId} />
-        ))}
-      </ul>
     </section>
   );
 }
@@ -391,7 +294,7 @@ export function Duplicates() {
         </p>
       </header>
       {categoryId !== undefined && <IdenticalCopies categoryId={Number(categoryId)} />}
-      {categoryId !== undefined && <SimilarVideos categoryId={Number(categoryId)} />}
+      {categoryId !== undefined && <SimilarVideos scope={{ categoryId: Number(categoryId) }} />}
       {report.isLoading && <p className="text-sm text-ink-muted">Looking…</p>}
       {report.error !== null && !report.isLoading && <p className="text-sm text-danger">The report could not be made.</p>}
       {data && data.groups.length === 0 && <p className="text-sm text-ink-muted">No duplicate {words.parts} found.</p>}

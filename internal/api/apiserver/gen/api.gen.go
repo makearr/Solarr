@@ -193,6 +193,12 @@ const (
 	DownloaderKindProtocolUsenet  DownloaderKindProtocol = "usenet"
 )
 
+// Defines values for DuplicateResolveRequestDropAction.
+const (
+	DuplicateResolveRequestDropActionLink    DuplicateResolveRequestDropAction = "link"
+	DuplicateResolveRequestDropActionRecycle DuplicateResolveRequestDropAction = "recycle"
+)
+
 // Defines values for EventTopic.
 const (
 	EventTopicAcquisition  EventTopic = "acquisition"
@@ -959,6 +965,22 @@ const (
 const (
 	ResolveCategoryDuplicatesJSONBodyDropActionLink    ResolveCategoryDuplicatesJSONBodyDropAction = "link"
 	ResolveCategoryDuplicatesJSONBodyDropActionRecycle ResolveCategoryDuplicatesJSONBodyDropAction = "recycle"
+)
+
+// Defines values for GetCategorySimilarVideosParamsLevel.
+const (
+	GetCategorySimilarVideosParamsLevelExact  GetCategorySimilarVideosParamsLevel = "exact"
+	GetCategorySimilarVideosParamsLevelHigh   GetCategorySimilarVideosParamsLevel = "high"
+	GetCategorySimilarVideosParamsLevelLow    GetCategorySimilarVideosParamsLevel = "low"
+	GetCategorySimilarVideosParamsLevelMedium GetCategorySimilarVideosParamsLevel = "medium"
+)
+
+// Defines values for GetSimilarVideosParamsLevel.
+const (
+	GetSimilarVideosParamsLevelExact  GetSimilarVideosParamsLevel = "exact"
+	GetSimilarVideosParamsLevelHigh   GetSimilarVideosParamsLevel = "high"
+	GetSimilarVideosParamsLevelLow    GetSimilarVideosParamsLevel = "low"
+	GetSimilarVideosParamsLevelMedium GetSimilarVideosParamsLevel = "medium"
 )
 
 // Defines values for TranscodeFileParamsQuality.
@@ -2249,6 +2271,18 @@ type DuplicateResolution struct {
 	// Recycled Copies moved to the recycle bin.
 	Recycled int `json:"recycled"`
 }
+
+// DuplicateResolveRequest defines model for DuplicateResolveRequest.
+type DuplicateResolveRequest struct {
+	Drop []struct {
+		Action        DuplicateResolveRequestDropAction `json:"action"`
+		MediaObjectId int64                             `json:"media_object_id"`
+	} `json:"drop"`
+	KeepMediaObjectId int64 `json:"keep_media_object_id"`
+}
+
+// DuplicateResolveRequestDropAction defines model for DuplicateResolveRequest.Drop.Action.
+type DuplicateResolveRequestDropAction string
 
 // Edition defines model for Edition.
 type Edition struct {
@@ -4954,11 +4988,25 @@ type SimilarVideoReport struct {
 		// MaxDistance The widest gap
 		MaxDistance int `json:"max_distance"`
 		Videos      []struct {
+			// CategoryId The library the file is in.
+			CategoryId int64 `json:"category_id"`
+
+			// DurationMs Zero when not probed.
+			DurationMs int64 `json:"duration_ms"`
+
+			// Height Zero when not probed.
+			Height        int64  `json:"height"`
 			MediaObjectId int64  `json:"media_object_id"`
 			Path          string `json:"path"`
 			SizeBytes     int64  `json:"size_bytes"`
+
+			// Width Zero when not probed.
+			Width int64 `json:"width"`
 		} `json:"videos"`
 	} `json:"groups"`
+
+	// HashingEnabled False when background hashing is switched off; only files hashed before are compared.
+	HashingEnabled bool `json:"hashing_enabled"`
 
 	// Limited True when the library holds more groups than one report shows.
 	Limited bool `json:"limited"`
@@ -5322,6 +5370,12 @@ type UserLimits struct {
 	NewLibraryPermission Permission `json:"new_library_permission"`
 	TierDefault          Tier       `json:"tier_default"`
 	TierMax              Tier       `json:"tier_max"`
+}
+
+// VideoHashing The perceptual hashing switch (scan.video_phash).
+type VideoHashing struct {
+	// Enabled Off, no new video is hashed; hashes already stored still serve the finder.
+	Enabled bool `json:"enabled"`
 }
 
 // Wanted The work's own album-level SET desired_item (section 19.6) -- what makes "9 of 12 tracks" a fact rather than on_disk's coarse badge.
@@ -5798,6 +5852,15 @@ type SearchCategoryJSONBody struct {
 	WorkIds     *[]int64 `json:"work_ids,omitempty"`
 }
 
+// GetCategorySimilarVideosParams defines parameters for GetCategorySimilarVideos.
+type GetCategorySimilarVideosParams struct {
+	// Level How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too).
+	Level *GetCategorySimilarVideosParamsLevel `form:"level,omitempty" json:"level,omitempty"`
+}
+
+// GetCategorySimilarVideosParamsLevel defines parameters for GetCategorySimilarVideos.
+type GetCategorySimilarVideosParamsLevel string
+
 // ListLibraryTagsParams defines parameters for ListLibraryTags.
 type ListLibraryTagsParams struct {
 	// WholeLibrary Every media type of the library (its All list), not that one category.
@@ -5854,6 +5917,15 @@ type UpdateDownloadFolderJSONBody struct {
 	TransferLadder *[]string `json:"transfer_ladder,omitempty"`
 	Watch          bool      `json:"watch"`
 }
+
+// GetSimilarVideosParams defines parameters for GetSimilarVideos.
+type GetSimilarVideosParams struct {
+	// Level How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too).
+	Level *GetSimilarVideosParamsLevel `form:"level,omitempty" json:"level,omitempty"`
+}
+
+// GetSimilarVideosParamsLevel defines parameters for GetSimilarVideos.
+type GetSimilarVideosParamsLevel string
 
 // StreamEventsParams defines parameters for StreamEvents.
 type StreamEventsParams struct {
@@ -6793,6 +6865,9 @@ type AddDownloadFolderJSONRequestBody AddDownloadFolderJSONBody
 // UpdateDownloadFolderJSONRequestBody defines body for UpdateDownloadFolder for application/json ContentType.
 type UpdateDownloadFolderJSONRequestBody UpdateDownloadFolderJSONBody
 
+// ResolveSimilarVideosJSONRequestBody defines body for ResolveSimilarVideos for application/json ContentType.
+type ResolveSimilarVideosJSONRequestBody = DuplicateResolveRequest
+
 // CreateExclusionPatternJSONRequestBody defines body for CreateExclusionPattern for application/json ContentType.
 type CreateExclusionPatternJSONRequestBody = ExclusionPatternWrite
 
@@ -6969,6 +7044,9 @@ type SetBackupRetentionJSONRequestBody = BackupRetention
 
 // SetUserDefaultsJSONRequestBody defines body for SetUserDefaults for application/json ContentType.
 type SetUserDefaultsJSONRequestBody = UserDefaults
+
+// SetVideoHashingJSONRequestBody defines body for SetVideoHashing for application/json ContentType.
+type SetVideoHashingJSONRequestBody = VideoHashing
 
 // CreateFirstAdministratorJSONRequestBody defines body for CreateFirstAdministrator for application/json ContentType.
 type CreateFirstAdministratorJSONRequestBody CreateFirstAdministratorJSONBody
@@ -7223,7 +7301,7 @@ type ServerInterface interface {
 	SearchCategory(w http.ResponseWriter, r *http.Request, id int64)
 	// Videos one library holds in more than one encode, found by perceptual hash (read only).
 	// (GET /categories/{id}/similar-videos)
-	GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request, id int64)
+	GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request, id int64, params GetCategorySimilarVideosParams)
 	// One library's statistics, as the last rollup computed them (section 21.12).
 	// (GET /categories/{id}/statistics)
 	GetCategoryStatistics(w http.ResponseWriter, r *http.Request, id int64)
@@ -7314,6 +7392,12 @@ type ServerInterface interface {
 	// What is sitting in a download folder right now.
 	// (GET /downloadfolders/{id}/contents)
 	ListDownloadFolderContents(w http.ResponseWriter, r *http.Request, id int64)
+	// Videos held in more than one encode across every library, found by perceptual hash (administrator, read only).
+	// (GET /duplicates/similar-videos)
+	GetSimilarVideos(w http.ResponseWriter, r *http.Request, params GetSimilarVideosParams)
+	// Keep one video of a group and merge or delete the others, across libraries (administrator).
+	// (POST /duplicates/similar-videos/resolve)
+	ResolveSimilarVideos(w http.ResponseWriter, r *http.Request)
 	// Server-sent events, filtered by category access.
 	// (GET /events)
 	StreamEvents(w http.ResponseWriter, r *http.Request, params StreamEventsParams)
@@ -7800,6 +7884,12 @@ type ServerInterface interface {
 	// Change what a new account starts with. Administrator only.
 	// (PUT /settings/users)
 	SetUserDefaults(w http.ResponseWriter, r *http.Request)
+	// Whether videos are hashed in the background for the duplicate finder.
+	// (GET /settings/video-hashing)
+	GetVideoHashing(w http.ResponseWriter, r *http.Request)
+	// Turn background video hashing on or off. Administrator only.
+	// (PUT /settings/video-hashing)
+	SetVideoHashing(w http.ResponseWriter, r *http.Request)
 	// What the first-run wizard still has to do.
 	// (GET /setup)
 	GetSetupStatus(w http.ResponseWriter, r *http.Request)
@@ -8339,7 +8429,7 @@ func (_ Unimplemented) SearchCategory(w http.ResponseWriter, r *http.Request, id
 
 // Videos one library holds in more than one encode, found by perceptual hash (read only).
 // (GET /categories/{id}/similar-videos)
-func (_ Unimplemented) GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request, id int64) {
+func (_ Unimplemented) GetCategorySimilarVideos(w http.ResponseWriter, r *http.Request, id int64, params GetCategorySimilarVideosParams) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -8520,6 +8610,18 @@ func (_ Unimplemented) UpdateDownloadFolder(w http.ResponseWriter, r *http.Reque
 // What is sitting in a download folder right now.
 // (GET /downloadfolders/{id}/contents)
 func (_ Unimplemented) ListDownloadFolderContents(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Videos held in more than one encode across every library, found by perceptual hash (administrator, read only).
+// (GET /duplicates/similar-videos)
+func (_ Unimplemented) GetSimilarVideos(w http.ResponseWriter, r *http.Request, params GetSimilarVideosParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Keep one video of a group and merge or delete the others, across libraries (administrator).
+// (POST /duplicates/similar-videos/resolve)
+func (_ Unimplemented) ResolveSimilarVideos(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -9492,6 +9594,18 @@ func (_ Unimplemented) GetUserDefaults(w http.ResponseWriter, r *http.Request) {
 // Change what a new account starts with. Administrator only.
 // (PUT /settings/users)
 func (_ Unimplemented) SetUserDefaults(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Whether videos are hashed in the background for the duplicate finder.
+// (GET /settings/video-hashing)
+func (_ Unimplemented) GetVideoHashing(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Turn background video hashing on or off. Administrator only.
+// (PUT /settings/video-hashing)
+func (_ Unimplemented) SetVideoHashing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -11725,8 +11839,19 @@ func (siw *ServerInterfaceWrapper) GetCategorySimilarVideos(w http.ResponseWrite
 
 	r = r.WithContext(ctx)
 
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetCategorySimilarVideosParams
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "level", r.URL.Query(), &params.Level)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		return
+	}
+
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		siw.Handler.GetCategorySimilarVideos(w, r, id)
+		siw.Handler.GetCategorySimilarVideos(w, r, id, params)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -12633,6 +12758,63 @@ func (siw *ServerInterfaceWrapper) ListDownloadFolderContents(w http.ResponseWri
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListDownloadFolderContents(w, r, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetSimilarVideos operation middleware
+func (siw *ServerInterfaceWrapper) GetSimilarVideos(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetSimilarVideosParams
+
+	// ------------- Optional query parameter "level" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "level", r.URL.Query(), &params.Level)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "level", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetSimilarVideos(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// ResolveSimilarVideos operation middleware
+func (siw *ServerInterfaceWrapper) ResolveSimilarVideos(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ResolveSimilarVideos(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -17927,6 +18109,50 @@ func (siw *ServerInterfaceWrapper) SetUserDefaults(w http.ResponseWriter, r *htt
 	handler.ServeHTTP(w, r)
 }
 
+// GetVideoHashing operation middleware
+func (siw *ServerInterfaceWrapper) GetVideoHashing(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetVideoHashing(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// SetVideoHashing operation middleware
+func (siw *ServerInterfaceWrapper) SetVideoHashing(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.SetVideoHashing(w, r)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetSetupStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetSetupStatus(w http.ResponseWriter, r *http.Request) {
 
@@ -20507,6 +20733,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 		r.Get(options.BaseURL+"/downloadfolders/{id}/contents", wrapper.ListDownloadFolderContents)
 	})
 	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/duplicates/similar-videos", wrapper.GetSimilarVideos)
+	})
+	r.Group(func(r chi.Router) {
+		r.Post(options.BaseURL+"/duplicates/similar-videos/resolve", wrapper.ResolveSimilarVideos)
+	})
+	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/events", wrapper.StreamEvents)
 	})
 	r.Group(func(r chi.Router) {
@@ -20991,6 +21223,12 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Put(options.BaseURL+"/settings/users", wrapper.SetUserDefaults)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/settings/video-hashing", wrapper.GetVideoHashing)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/settings/video-hashing", wrapper.SetVideoHashing)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/setup", wrapper.GetSetupStatus)

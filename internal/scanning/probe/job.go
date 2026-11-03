@@ -66,6 +66,7 @@ type Job struct {
 	roots    Roots
 	tool     mediatool.Tool
 	fs       fsx.FS
+	hashing  func() bool
 	clock    clock.Clock
 	logger   *slog.Logger
 	// resumeAt is each list's place when a run yielded, so the continuation does not re-read the files that failed first.
@@ -79,9 +80,11 @@ type Config struct {
 	Roots    Roots
 	Tool     mediatool.Tool
 	// FS lists the folder of a video for subtitle files beside it; nil leaves those out.
-	FS     fsx.FS
-	Clock  clock.Clock
-	Logger *slog.Logger
+	FS fsx.FS
+	// PerceptualHashing says whether videos are hashed this run; nil means always.
+	PerceptualHashing func() bool
+	Clock             clock.Clock
+	Logger            *slog.Logger
 }
 
 // NewJob builds the handler.
@@ -92,7 +95,7 @@ func NewJob(config Config) *Job {
 	}
 	return &Job{
 		physical: config.Physical, coverage: config.Coverage, roots: config.Roots,
-		tool: config.Tool, fs: config.FS, clock: config.Clock, logger: logger,
+		tool: config.Tool, fs: config.FS, hashing: config.PerceptualHashing, clock: config.Clock, logger: logger,
 	}
 }
 
@@ -144,7 +147,7 @@ func (j *Job) Run(ctx context.Context, _ jobs.Job) error {
 	if err := j.backfill(ctx, started, oshashPass, "oshash", j.physical.ListVideoWithoutOshash, j.hashFile); err != nil {
 		return err
 	}
-	if hasher, ok := j.tool.(PerceptualHasher); ok {
+	if hasher, ok := j.tool.(PerceptualHasher); ok && (j.hashing == nil || j.hashing()) {
 		err := j.backfill(ctx, started, phashPass, "phash", j.physical.ListVideoWithoutFrameHashes,
 			func(ctx context.Context, file library.UnmeasuredFile) error {
 				return j.perceptualHash(ctx, hasher, file)

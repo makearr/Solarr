@@ -10,6 +10,9 @@ import (
 )
 
 // sameFrames is a full set of frames that match whatever else they are compared with, for tests about the mean hash.
+// mediumBits is the default level's bound, the one the cases below were written against.
+var mediumBits = SimilarityMedium.MaxBits()
+
 var sameFrames = []FrameHash{{0, 1}, {1, 2}, {2, 3}, {3, 4}, {4, 5}, {5, 6}, {6, 7}}
 
 func hashed(video SimilarVideo, mean uint64) hashedVideo {
@@ -29,7 +32,7 @@ func TestGroupSimilar_JoinsNearHashesAcrossBandsAndLeavesStrangersAlone(t *testi
 	for index := range videos {
 		videos[index] = hashed(SimilarVideo{MediaObjectID: int64(index + 1), SizeBytes: int64(100 - index)}, hashes[index])
 	}
-	groups := groupSimilar(videos, 10)
+	groups := groupSimilar(videos, mediumBits, 10)
 	want := []SimilarGroup{{MaxDistance: 5, Videos: []SimilarVideo{
 		{MediaObjectID: 1, SizeBytes: 100}, {MediaObjectID: 2, SizeBytes: 99}, {MediaObjectID: 3, SizeBytes: 98},
 	}}}
@@ -40,7 +43,7 @@ func TestGroupSimilar_JoinsNearHashesAcrossBandsAndLeavesStrangersAlone(t *testi
 
 func TestGroupSimilar_NineBitsApartAreNotOneCut(t *testing.T) {
 	videos := []hashedVideo{hashed(SimilarVideo{MediaObjectID: 1}, 0), hashed(SimilarVideo{MediaObjectID: 2}, 0x1FF)}
-	if groups := groupSimilar(videos, 10); groups != nil {
+	if groups := groupSimilar(videos, mediumBits, 10); groups != nil {
 		t.Errorf("groups = %+v, want none", groups)
 	}
 }
@@ -50,12 +53,12 @@ func TestGroupSimilar_EpisodesWithTheSameOpeningButOtherLengthsAreNotOneCut(t *t
 		hashed(SimilarVideo{MediaObjectID: 1, DurationMs: 2_700_000}, 0),
 		hashed(SimilarVideo{MediaObjectID: 2, DurationMs: 2_640_000}, 0b11),
 	}
-	if groups := groupSimilar(videos, 10); groups != nil {
+	if groups := groupSimilar(videos, mediumBits, 10); groups != nil {
 		t.Errorf("groups = %+v, want none", groups)
 	}
 	videos[1].video.DurationMs = 2_690_000
 	want := []SimilarGroup{{MaxDistance: 2, Videos: []SimilarVideo{videos[0].video, videos[1].video}}}
-	if groups := groupSimilar(videos, 10); !reflect.DeepEqual(groups, want) {
+	if groups := groupSimilar(videos, mediumBits, 10); !reflect.DeepEqual(groups, want) {
 		t.Errorf("groups = %+v, want %+v", groups, want)
 	}
 }
@@ -115,14 +118,14 @@ func TestGroupSimilar_EpisodesSharingABackdropAreNotOneCutAndAReencodeIs(t *test
 	first := videoOf(t, 1, 2_700_000, episode)
 	second := videoOf(t, 2, 2_700_000, next)
 	again := videoOf(t, 3, 2_699_000, reencode)
-	if distance := bits.OnesCount64(first.mean ^ second.mean); distance > similarMaxBits {
-		t.Fatalf("the episodes' mean frames are %d bits apart; the case needs them within %d", distance, similarMaxBits)
+	if distance := bits.OnesCount64(first.mean ^ second.mean); distance > mediumBits {
+		t.Fatalf("the episodes' mean frames are %d bits apart; the case needs them within %d", distance, mediumBits)
 	}
-	if groups := groupSimilar([]hashedVideo{first, second}, 10); groups != nil {
+	if groups := groupSimilar([]hashedVideo{first, second}, mediumBits, 10); groups != nil {
 		t.Errorf("two episodes: groups = %+v, want none", groups)
 	}
 	want := []SimilarGroup{{MaxDistance: bits.OnesCount64(first.mean ^ again.mean), Videos: []SimilarVideo{first.video, again.video}}}
-	if groups := groupSimilar([]hashedVideo{first, second, again}, 10); !reflect.DeepEqual(groups, want) {
+	if groups := groupSimilar([]hashedVideo{first, second, again}, mediumBits, 10); !reflect.DeepEqual(groups, want) {
 		t.Errorf("with a re-encode: groups = %+v, want %+v", groups, want)
 	}
 }
@@ -162,7 +165,7 @@ func TestFramesAlike_TwoThirdsOfTheSharedSlotsInOrder(t *testing.T) {
 		{"one shifted along", all, []FrameHash{{1, all[0].Hash}, {2, all[1].Hash}, {3, all[2].Hash}, {4, all[3].Hash}, {5, all[4].Hash}, {6, all[5].Hash}}, false},
 		{"nothing", nil, nil, false},
 	} {
-		if got := framesAlike(test.first, test.second); got != test.want {
+		if got := framesAlike(test.first, test.second, 10); got != test.want {
 			t.Errorf("%s: framesAlike = %v, want %v", test.name, got, test.want)
 		}
 	}
@@ -183,5 +186,27 @@ func TestFrameHashes_RoundTripAndRefuseATornRecord(t *testing.T) {
 	}
 	if _, err := decodeFrameHashes(encoded[:10]); err == nil {
 		t.Error("a torn record was accepted")
+	}
+}
+
+func TestGroupSimilar_TheLevelSetsHowFarApartTwoHashesMayBe(t *testing.T) {
+	videos := []hashedVideo{hashed(SimilarVideo{MediaObjectID: 1}, 0), hashed(SimilarVideo{MediaObjectID: 2}, 0b1111111111)}
+	for _, test := range []struct {
+		level SimilarityLevel
+		bits  int
+		want  bool
+	}{
+		{SimilarityExact, 0, false}, {SimilarityHigh, 4, false}, {SimilarityMedium, 8, false}, {SimilarityLow, 10, true},
+	} {
+		if got := test.level.MaxBits(); got != test.bits {
+			t.Errorf("%s: %d bits, want %d", test.level, got, test.bits)
+		}
+		if got := groupSimilar(videos, test.level.MaxBits(), 10) != nil; got != test.want {
+			t.Errorf("%s: ten bits apart grouped = %v, want %v", test.level, got, test.want)
+		}
+	}
+	same := []hashedVideo{hashed(SimilarVideo{MediaObjectID: 1}, 7), hashed(SimilarVideo{MediaObjectID: 2}, 7)}
+	if groups := groupSimilar(same, SimilarityExact.MaxBits(), 10); len(groups) != 1 || groups[0].MaxDistance != 0 {
+		t.Errorf("exact: groups = %+v, want the one identical pair", groups)
 	}
 }

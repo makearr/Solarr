@@ -21,13 +21,14 @@ func (p *process) registerProbeJob(registry *jobs.Registry, executor *jobs.Execu
 		return err
 	}
 	job := probe.NewJob(probe.Config{
-		Physical: library.NewPhysical(p.library),
-		Coverage: library.NewProbeCoverage(p.library, clock.NewSystem()),
-		Roots:    adapters.Roots{Cache: p.cache},
-		Tool:     mediatool.New(nil, 0),
-		FS:       p.fsys,
-		Clock:    clock.NewSystem(),
-		Logger:   p.logger,
+		Physical:          library.NewPhysical(p.library),
+		Coverage:          library.NewProbeCoverage(p.library, clock.NewSystem()),
+		Roots:             adapters.Roots{Cache: p.cache},
+		Tool:              mediatool.New(nil, 0),
+		FS:                p.fsys,
+		PerceptualHashing: func() bool { return p.cache.Snapshot().VideoPerceptualHash() },
+		Clock:             clock.NewSystem(),
+		Logger:            p.logger,
 	})
 	executor.Handle(probe.JobType, job)
 	return nil

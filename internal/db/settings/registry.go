@@ -181,6 +181,12 @@ func NewDefaultRegistry() *Registry {
 		Default: strconv.Itoa(DefaultReadyQueueLimit),
 	})
 	registry.MustRegister(SettingDef{
+		Key: KeyVideoPerceptualHash, Kind: KindBool, Tier: TierNormal,
+		Name:     "Find duplicate videos",
+		HelpText: "Hashes what each video looks like in the background so the duplicate finder can match re-encodes. It reads seven frames per file with ffmpeg; off, nothing new is hashed and hashes already stored keep working.",
+		Default:  "true",
+	})
+	registry.MustRegister(SettingDef{
 		Key: KeyUsersNewLibraryPermission, Kind: KindString, Tier: TierNormal,
 		Name:     "New libraries",
 		HelpText: "What a new account is granted on libraries created after it: none, read, request or manage.",

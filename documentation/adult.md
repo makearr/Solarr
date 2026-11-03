@@ -38,7 +38,7 @@ A scan registers each video file with its oshash (and the quick hash), then reso
 4. Anything less clear waits in **Review** with the candidates, as for every type.
 
 Names read: `[Studio] Title (2020-05-14).mp4` below a studio folder, `Title (2018).mp4`, a trailing `- Performer`, and a scene
-group's `Studio.20.05.14.Performer.Title.1080p`. phash is not computed yet.
+group's `Studio.20.05.14.Performer.Title.1080p`. Its phash is computed like any video's (`duplicate-videos.md`).
 
 **What a scan costs the providers.** A library of one file per folder is gathered into batches of 40 (`scan.Sweep.GatherFiles`),
 whose oshashes go to each server in one query. A title search stops at the first provider that settles it, except in a movies

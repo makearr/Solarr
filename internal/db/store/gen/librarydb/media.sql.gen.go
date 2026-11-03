@@ -575,7 +575,7 @@ func (q *Queries) InternAttributes(ctx context.Context, arg InternAttributesPara
 }
 
 const listHashedVideos = `-- name: ListHashedVideos :many
-SELECT o.id, o.size_bytes, o.phash, o.duration_ms, lp.root_folder_id, lp.rel_path, f.frames
+SELECT o.id, o.size_bytes, o.phash, o.duration_ms, o.width, o.height, lp.root_folder_id, lp.rel_path, f.frames
 FROM media_object o
 JOIN video_frame_hash f ON f.media_object_id = o.id
 JOIN library_path lp ON lp.media_object_id = o.id AND lp.is_primary = 1 AND lp.missing_since IS NULL
@@ -588,6 +588,8 @@ type ListHashedVideosRow struct {
 	SizeBytes    int64
 	Phash        sql.NullInt64
 	DurationMs   sql.NullInt64
+	Width        sql.NullInt64
+	Height       sql.NullInt64
 	RootFolderID int64
 	RelPath      string
 	Frames       []byte
@@ -608,6 +610,8 @@ func (q *Queries) ListHashedVideos(ctx context.Context) ([]ListHashedVideosRow, 
 			&i.SizeBytes,
 			&i.Phash,
 			&i.DurationMs,
+			&i.Width,
+			&i.Height,
 			&i.RootFolderID,
 			&i.RelPath,
 			&i.Frames,

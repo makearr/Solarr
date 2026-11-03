@@ -24,6 +24,8 @@ type SimilarVideo struct {
 	SizeBytes     int64
 	// DurationMs is zero when unprobed; the duration gate then lets the pair through.
 	DurationMs   int64
+	Width        int64
+	Height       int64
 	RootFolderID int64
 	RelPath      string
 }
@@ -35,8 +37,33 @@ type SimilarGroup struct {
 	Videos      []SimilarVideo
 }
 
-// similarMaxBits is the Hamming distance between mean-frame hashes at or under which two videos are compared frame by frame.
-const similarMaxBits = 8
+// SimilarityLevel is how far apart two videos' hashes may be and still count as one video, named as Stash names them.
+type SimilarityLevel string
+
+// The levels; Medium is what the finder used before the level was a choice.
+const (
+	SimilarityExact  SimilarityLevel = "exact"
+	SimilarityHigh   SimilarityLevel = "high"
+	SimilarityMedium SimilarityLevel = "medium"
+	SimilarityLow    SimilarityLevel = "low"
+)
+
+// MaxBits is the Hamming distance between mean-frame hashes at or under which two videos are compared frame by frame;
+// an unknown level is Medium.
+func (l SimilarityLevel) MaxBits() int {
+	switch l {
+	case SimilarityExact:
+		return 0
+	case SimilarityHigh:
+		return 4
+	case SimilarityLow:
+		return 10
+	}
+	return 8
+}
+
+// frameBitsFor is the per-frame bound that goes with a mean-hash bound: a quarter wider, so 8 allows 10.
+func frameBitsFor(maxBits int) int { return (maxBits*5 + 3) / 4 }
 
 // FrameHash is one sampled frame's perceptual hash; Slot is the moment of the video it was taken at, in order.
 type FrameHash struct {
@@ -44,15 +71,12 @@ type FrameHash struct {
 	Hash uint64
 }
 
-// frameMaxBits is the Hamming distance at or under which two frames taken at one slot show the same picture.
-const frameMaxBits = 10
-
 // minSharedFrames is how many slots two videos must both have a frame for before they can be called alike.
 const minSharedFrames = 4
 
 // framesAlike is whether two videos show the same pictures at the same moments: at least two thirds of the slots
 // both sampled match. One show's episodes share a look, so the mean frame alone joins them (found 2026-11-02).
-func framesAlike(first, second []FrameHash) bool {
+func framesAlike(first, second []FrameHash, frameMaxBits int) bool {
 	shared, matched := 0, 0
 	for i, j := 0, 0; i < len(first) && j < len(second); {
 		switch {
@@ -110,12 +134,8 @@ func sameLength(first, second int64) bool {
 	return max(first, second)-min(first, second) <= max(5_000, max(first, second)/50)
 }
 
-// similarBands splits a hash for the pigeonhole index: two hashes within similarMaxBits bits agree on at least one of
-// similarMaxBits+1 bands, so only files sharing a band are compared.
-const similarBands = similarMaxBits + 1
-
 // Groups answers the groups of similar videos among those with a path in rootFolderIDs, most files first.
-func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, limit int) ([]SimilarGroup, error) {
+func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level SimilarityLevel, limit int) ([]SimilarGroup, error) {
 	rows, err := librarydb.New(s.store.Read()).ListHashedVideos(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("library: list hashed videos: %w", err)
@@ -134,16 +154,17 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, limit 
 			return nil, fmt.Errorf("library: video %d: %w", row.ID, err)
 		}
 		videos = append(videos, hashedVideo{
-			video: SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath},
+			video: SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, Width: row.Width.Int64, Height: row.Height.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath},
 			mean:  uint64(row.Phash.Int64), frames: frames,
 		})
 	}
-	return groupSimilar(videos, limit), nil
+	return groupSimilar(videos, level.MaxBits(), limit), nil
 }
 
-// groupSimilar joins videos whose mean hashes are within similarMaxBits, lengths agree and frames match into groups of
-// two or more.
-func groupSimilar(videos []hashedVideo, limit int) []SimilarGroup {
+// groupSimilar joins videos whose mean hashes are within maxBits, lengths agree and frames match into groups of two or
+// more. Two hashes within maxBits bits agree on at least one of maxBits+1 bands, so only files sharing a band are compared.
+func groupSimilar(videos []hashedVideo, maxBits, limit int) []SimilarGroup {
+	bands, frameBits := maxBits+1, frameBitsFor(maxBits)
 	parent := make([]int, len(videos))
 	for index := range parent {
 		parent[index] = index
@@ -156,8 +177,8 @@ func groupSimilar(videos []hashedVideo, limit int) []SimilarGroup {
 		return index
 	}
 	widest := make(map[int]int)
-	for band := range similarBands {
-		low, high := band*64/similarBands, (band+1)*64/similarBands
+	for band := range bands {
+		low, high := band*64/bands, (band+1)*64/bands
 		mask := uint64(1)<<(high-low) - 1
 		buckets := make(map[uint64][]int)
 		for index, video := range videos {
@@ -168,8 +189,8 @@ func groupSimilar(videos []hashedVideo, limit int) []SimilarGroup {
 			for i, first := range members {
 				for _, second := range members[i+1:] {
 					distance := bits.OnesCount64(videos[first].mean ^ videos[second].mean)
-					if distance > similarMaxBits || !sameLength(videos[first].video.DurationMs, videos[second].video.DurationMs) ||
-						!framesAlike(videos[first].frames, videos[second].frames) {
+					if distance > maxBits || !sameLength(videos[first].video.DurationMs, videos[second].video.DurationMs) ||
+						!framesAlike(videos[first].frames, videos[second].frames, frameBits) {
 						continue
 					}
 					rootFirst, rootSecond := find(first), find(second)

@@ -3913,6 +3913,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/duplicates/similar-videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Videos held in more than one encode across every library, found by perceptual hash (administrator, read only).
+         * @description The same report as one library's, over all libraries at once, so a copy in one library and another in a second library are found together. Nothing is changed by looking.
+         */
+        get: operations["getSimilarVideos"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/duplicates/similar-videos/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Keep one video of a group and merge or delete the others, across libraries (administrator).
+         * @description Each dropped copy is either merged into the kept one (its paths become links to it, which needs the same library, the same filesystem and the same file extension) or goes to the recycle bin.
+         */
+        post: operations["resolveSimilarVideos"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/settings/video-hashing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether videos are hashed in the background for the duplicate finder. */
+        get: operations["getVideoHashing"];
+        /** Turn background video hashing on or off. Administrator only. */
+        put: operations["setVideoHashing"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/categories/{id}/duplicates/resolve": {
         parameters: {
             query?: never;
@@ -8890,7 +8948,24 @@ export interface components {
                 }[];
             }[];
         };
+        /** @description The perceptual hashing switch (scan.video_phash). */
+        VideoHashing: {
+            /** @description Off, no new video is hashed; hashes already stored still serve the finder. */
+            enabled: boolean;
+        };
+        DuplicateResolveRequest: {
+            /** Format: int64 */
+            keep_media_object_id: number;
+            drop: {
+                /** Format: int64 */
+                media_object_id: number;
+                /** @enum {string} */
+                action: "link" | "recycle";
+            }[];
+        };
         SimilarVideoReport: {
+            /** @description False when background hashing is switched off; only files hashed before are compared. */
+            hashing_enabled: boolean;
             /** @description True when the library holds more groups than one report shows. */
             limited: boolean;
             groups: {
@@ -8902,6 +8977,26 @@ export interface components {
                     /** Format: int64 */
                     size_bytes: number;
                     path: string;
+                    /**
+                     * Format: int64
+                     * @description Zero when not probed.
+                     */
+                    duration_ms: number;
+                    /**
+                     * Format: int64
+                     * @description Zero when not probed.
+                     */
+                    width: number;
+                    /**
+                     * Format: int64
+                     * @description Zero when not probed.
+                     */
+                    height: number;
+                    /**
+                     * Format: int64
+                     * @description The library the file is in.
+                     */
+                    category_id: number;
                 }[];
             }[];
         };
@@ -15901,7 +15996,10 @@ export interface operations {
     };
     getCategorySimilarVideos: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too). */
+                level?: "exact" | "high" | "medium" | "low";
+            };
             header?: never;
             path: {
                 id: number;
@@ -15921,6 +16019,107 @@ export interface operations {
             };
             401: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    getSimilarVideos: {
+        parameters: {
+            query?: {
+                /** @description How alike two videos must look, as in Stash: exact (identical hashes), high (up to 4 of 64 bits apart), medium (up to 8, the default) or low (up to 10, finds more and wrong ones too). */
+                level?: "exact" | "high" | "medium" | "low";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The groups. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimilarVideoReport"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+        };
+    };
+    resolveSimilarVideos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description What was done. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DuplicateResolution"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
+        };
+    };
+    getVideoHashing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The setting in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoHashing"];
+                };
+            };
+            401: components["responses"]["Problem"];
+        };
+    };
+    setVideoHashing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VideoHashing"];
+            };
+        };
+        responses: {
+            /** @description The setting now in force. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoHashing"];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+            403: components["responses"]["Problem"];
         };
     };
     resolveCategoryDuplicates: {
