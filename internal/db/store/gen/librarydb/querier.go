@@ -698,6 +698,9 @@ type Querier interface {
 	ListPartIDs(ctx context.Context, arg ListPartIDsParams) ([]ListPartIDsRow, error)
 	// The files of a work's parts with where they are and one provider's id of each part, for files written beside them.
 	ListPartPaths(ctx context.Context, arg ListPartPathsParams) ([]ListPartPathsRow, error)
+	// One batch of parts whose stamped wait differs from what the settings now say for their confidence: read first, so a
+	// run with nothing to stamp scans the table on the read pool, not inside the one writer.
+	ListPartsWithStaleGrace(ctx context.Context, arg ListPartsWithStaleGraceParams) ([]int64, error)
 	ListPathsForObject(ctx context.Context, mediaObjectID int64) ([]LibraryPath, error)
 	// ADR-51's drain: every real file to evacuate, with its size for
 	// mover.PlanDrain's own affinity-group byte totals. Primary paths only,
@@ -996,6 +999,7 @@ type Querier interface {
 	// inevitable, so the repair path is not optional. A file whose every path a sweep found gone holds nothing.
 	RecomputePresentCount(ctx context.Context, id int64) error
 	RecordAcquiredFile(ctx context.Context, arg RecordAcquiredFileParams) (AcquisitionFile, error)
+	RecordArtworkMiss(ctx context.Context, arg RecordArtworkMissParams) error
 	RecordBlockedContentHit(ctx context.Context, arg RecordBlockedContentHitParams) error
 	RecordDecision(ctx context.Context, arg RecordDecisionParams) (CandidateDecision, error)
 	// Only content-attributable outcomes count: a full disk is not the group's
@@ -1162,7 +1166,6 @@ type Querier interface {
 	// so there is no earlier value worth protecting.
 	// A work is named after its release group once enrichment has it, not after whichever file came first.
 	SetWorkTitle(ctx context.Context, arg SetWorkTitleParams) error
-	// One batch of parts whose stamped wait differs from what the settings now say for their confidence.
 	StampPartGrace(ctx context.Context, arg StampPartGraceParams) (int64, error)
 	// A sweep that starts records only that it started: the watermark must not move
 	// until one finishes, or an interrupted scan would look complete.

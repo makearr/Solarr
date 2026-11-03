@@ -127,9 +127,12 @@ func newArtworkJob(t *testing.T, coverArt *fakeCoverArt, imageServerURL string) 
 type fakePictures struct {
 	byPath map[string][]byte
 	asked  []string
+	lock   sync.Mutex
 }
 
 func (f *fakePictures) EmbeddedPicture(_ context.Context, path string) ([]byte, error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	f.asked = append(f.asked, path)
 	picture, ok := f.byPath[path]
 	if !ok {
@@ -152,12 +155,18 @@ func newArtworkJobReadingPictures(
 	t *testing.T, coverArt *fakeCoverArt, imageServerURL string, pictures *fakePictures, coverSources ...string,
 ) (*music.ArtworkJob, *store.Store, *fsx.Mem) {
 	t.Helper()
+	return newArtworkJobAt(t, clock.NewFakeAtEpoch(), coverArt, imageServerURL, pictures, coverSources...)
+}
+
+func newArtworkJobAt(
+	t *testing.T, fake *clock.Fake, coverArt *fakeCoverArt, imageServerURL string, pictures *fakePictures, coverSources ...string,
+) (*music.ArtworkJob, *store.Store, *fsx.Mem) {
+	t.Helper()
 	directory := t.TempDir()
 	backups := filepath.Join(directory, "backups")
 	if err := os.MkdirAll(backups, 0o755); err != nil {
 		t.Fatalf("create backup directory: %v", err)
 	}
-	fake := clock.NewFakeAtEpoch()
 
 	libraryStore, err := store.Open(t.Context(), fake, store.Config{
 		Name: "library", Path: filepath.Join(directory, "library.db"),
@@ -223,7 +232,7 @@ func TestArtworkJob_FetchesResizesAndRecordsEndToEnd(t *testing.T) {
 	}
 
 	artworks := library.NewArtworks(opened)
-	remaining, err := artworks.NeedingArtwork(t.Context(), 0, 10)
+	remaining, err := artworks.NeedingArtwork(t.Context(), library.ArtworkAsk{Source: "release"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -297,6 +306,34 @@ func refineWithReleaseMBIDForArtworkJob(t *testing.T, identity library.Identity,
 // releases the archive has no art for therefore came back forever, and nothing
 // after them was ever reached -- why only 516 of a library's albums ever got
 // covers. Bounded by a deadline so the old behaviour fails rather than hangs.
+// A source with nothing for an album is not asked again every run: 680 coverless albums cost seven minutes a run.
+func TestArtworkJob_AsksASourceThatHadNoCoverAgainOnlyAfterAWeek(t *testing.T) {
+	server := testImageServer(t)
+	coverArt := &fakeCoverArt{urlByMBID: map[string]string{}}
+	pictures := &fakePictures{}
+	fake := clock.NewFakeAtEpoch()
+	job, opened, _ := newArtworkJobAt(t, fake, coverArt, server.URL, pictures)
+	resolveWorkFromFile(t, opened, "rg-quiet", "Vela Morn/Quiet/01.flac")
+
+	run := func() {
+		t.Helper()
+		if err := job.Run(t.Context(), jobs.Job{Type: music.ArtworkJobType}); err != nil {
+			t.Fatalf("Run: %v", err)
+		}
+	}
+	run()
+	fake.Advance(6 * 24 * time.Hour)
+	run()
+	if got := [2]int{coverArt.releaseGroupCalls, len(pictures.asked)}; got != [2]int{1, 1} {
+		t.Fatalf("within a week the archive and the file were asked %v times, want once each", got)
+	}
+	fake.Advance(2 * 24 * time.Hour)
+	run()
+	if got := [2]int{coverArt.releaseGroupCalls, len(pictures.asked)}; got != [2]int{2, 2} {
+		t.Errorf("after a week the archive and the file were asked %v times in all, want twice each", got)
+	}
+}
+
 func TestArtworkJob_ReachesPastAFullPageOfReleasesWithNoArt(t *testing.T) {
 	server := testImageServer(t)
 	coverArt := &fakeCoverArt{urlByMBID: map[string]string{"release-with-art": server.URL + "/cover.png"}}

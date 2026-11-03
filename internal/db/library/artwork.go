@@ -32,12 +32,35 @@ func NewArtworks(opened *store.Store) Artworks { return Artworks{store: opened} 
 // video-shaped and have no source yet.
 const artworkKindCover = "cover"
 
+// ArtworkAsk names the cover source a sweep asks; a work it missed after MissedSince (unix seconds) is left out.
+type ArtworkAsk struct {
+	Source      string
+	MissedSince int64
+}
+
+// RecordMisses notes that a cover source had nothing for these works, so the sweep skips them until the miss is old.
+func (a Artworks) RecordMisses(ctx context.Context, source string, workIDs []int64, missedAt int64) error {
+	if len(workIDs) == 0 {
+		return nil
+	}
+	return a.store.Write(ctx, store.PrioBulk, func(ctx context.Context, tx *sql.Tx) error {
+		queries := librarydb.New(a.store.Read()).WithTx(tx)
+		for _, workID := range workIDs {
+			err := queries.RecordArtworkMiss(ctx, librarydb.RecordArtworkMissParams{SubjectID: workID, Source: source, MissedAt: missedAt})
+			if err != nil {
+				return fmt.Errorf("library: record artwork miss: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
 // NeedingArtwork returns up to pageSize works with a usable release MBID and no
 // recorded cover, lowest work id first. The result set shrinks as Record
 // succeeds, the same no-cursor-needed shape library.PlaceholderEditions uses.
-func (a Artworks) NeedingArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]ArtworkCandidate, error) {
+func (a Artworks) NeedingArtwork(ctx context.Context, ask ArtworkAsk, afterWorkID, pageSize int64) ([]ArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingArtwork(ctx, librarydb.ListWorksNeedingArtworkParams{
-		AfterID: afterWorkID, PageSize: pageSize,
+		AfterID: afterWorkID, Source: ask.Source, RetryAfter: ask.MissedSince, PageSize: pageSize,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("library: works needing artwork: %w", err)
@@ -51,9 +74,11 @@ func (a Artworks) NeedingArtwork(ctx context.Context, afterWorkID, pageSize int6
 
 // NeedingReleaseGroupArtwork returns up to pageSize works after afterWorkID
 // still without a cover that carry a release-group id.
-func (a Artworks) NeedingReleaseGroupArtwork(ctx context.Context, afterWorkID, pageSize int64) ([]ArtworkCandidate, error) {
+func (a Artworks) NeedingReleaseGroupArtwork(ctx context.Context, ask ArtworkAsk, afterWorkID, pageSize int64) ([]ArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingReleaseGroupArtwork(ctx,
-		librarydb.ListWorksNeedingReleaseGroupArtworkParams{AfterID: afterWorkID, PageSize: pageSize})
+		librarydb.ListWorksNeedingReleaseGroupArtworkParams{
+			AfterID: afterWorkID, Source: ask.Source, RetryAfter: ask.MissedSince, PageSize: pageSize,
+		})
 	if err != nil {
 		return nil, fmt.Errorf("library: works needing release group artwork: %w", err)
 	}
@@ -74,9 +99,13 @@ type EmbeddedArtworkCandidate struct {
 
 // NeedingEmbeddedArtwork returns up to pageSize works of the media type after afterWorkID still
 // without a cover that have a file recorded by work_file.
-func (a Artworks) NeedingEmbeddedArtwork(ctx context.Context, mediaType string, afterWorkID, pageSize int64) ([]EmbeddedArtworkCandidate, error) {
+func (a Artworks) NeedingEmbeddedArtwork(
+	ctx context.Context, mediaType string, ask ArtworkAsk, afterWorkID, pageSize int64,
+) ([]EmbeddedArtworkCandidate, error) {
 	rows, err := librarydb.New(a.store.Read()).ListWorksNeedingEmbeddedArtwork(ctx,
-		librarydb.ListWorksNeedingEmbeddedArtworkParams{AfterID: afterWorkID, MediaType: mediaType, PageSize: pageSize})
+		librarydb.ListWorksNeedingEmbeddedArtworkParams{
+			AfterID: afterWorkID, MediaType: mediaType, Source: ask.Source, RetryAfter: ask.MissedSince, PageSize: pageSize,
+		})
 	if err != nil {
 		return nil, fmt.Errorf("library: works needing embedded artwork: %w", err)
 	}

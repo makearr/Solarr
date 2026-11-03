@@ -1922,13 +1922,19 @@ WHERE e.kind != 'unknown'
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = e.work_id AND a.kind = 'cover'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork_miss m
+    WHERE m.subject_type = 'work' AND m.subject_id = e.work_id AND m.source = ?2 AND m.missed_at > ?3
+  )
 ORDER BY e.work_id
-LIMIT ?2
+LIMIT ?4
 `
 
 type ListWorksNeedingArtworkParams struct {
-	AfterID  int64
-	PageSize int64
+	AfterID    int64
+	Source     string
+	RetryAfter int64
+	PageSize   int64
 }
 
 type ListWorksNeedingArtworkRow struct {
@@ -1945,7 +1951,12 @@ type ListWorksNeedingArtworkRow struct {
 // release-group id (internal/media/music.ProviderReleaseGroup) identifies the work,
 // not the edition, and is the wrong id for this API (section 19.6's tag table).
 func (q *Queries) ListWorksNeedingArtwork(ctx context.Context, arg ListWorksNeedingArtworkParams) ([]ListWorksNeedingArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingArtwork,
+		arg.AfterID,
+		arg.Source,
+		arg.RetryAfter,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -1979,14 +1990,20 @@ WHERE f.work_id > ?1
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = f.work_id AND a.kind = 'cover'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork_miss m
+    WHERE m.subject_type = 'work' AND m.subject_id = f.work_id AND m.source = ?3 AND m.missed_at > ?4
+  )
 ORDER BY f.work_id
-LIMIT ?3
+LIMIT ?5
 `
 
 type ListWorksNeedingEmbeddedArtworkParams struct {
-	AfterID   int64
-	MediaType string
-	PageSize  int64
+	AfterID    int64
+	MediaType  string
+	Source     string
+	RetryAfter int64
+	PageSize   int64
 }
 
 type ListWorksNeedingEmbeddedArtworkRow struct {
@@ -2000,7 +2017,13 @@ type ListWorksNeedingEmbeddedArtworkRow struct {
 // paths live in settings.db, so the caller resolves root_folder_id itself
 // (section 4.3). Only the asking media type's works: a series has no embedded cover.
 func (q *Queries) ListWorksNeedingEmbeddedArtwork(ctx context.Context, arg ListWorksNeedingEmbeddedArtworkParams) ([]ListWorksNeedingEmbeddedArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksNeedingEmbeddedArtwork, arg.AfterID, arg.MediaType, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingEmbeddedArtwork,
+		arg.AfterID,
+		arg.MediaType,
+		arg.Source,
+		arg.RetryAfter,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -2030,14 +2053,20 @@ WHERE x.provider = 'musicbrainz:release-group'
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = x.work_id AND a.kind = 'cover'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork_miss m
+    WHERE m.subject_type = 'work' AND m.subject_id = x.work_id AND m.source = ?2 AND m.missed_at > ?3
+  )
 GROUP BY x.work_id
 ORDER BY x.work_id
-LIMIT ?2
+LIMIT ?4
 `
 
 type ListWorksNeedingReleaseGroupArtworkParams struct {
-	AfterID  int64
-	PageSize int64
+	AfterID    int64
+	Source     string
+	RetryAfter int64
+	PageSize   int64
 }
 
 type ListWorksNeedingReleaseGroupArtworkRow struct {
@@ -2052,7 +2081,12 @@ type ListWorksNeedingReleaseGroupArtworkRow struct {
 // carrying several after a merge. 'musicbrainz:release-group' must match
 // internal/media/music.ProviderReleaseGroup.
 func (q *Queries) ListWorksNeedingReleaseGroupArtwork(ctx context.Context, arg ListWorksNeedingReleaseGroupArtworkParams) ([]ListWorksNeedingReleaseGroupArtworkRow, error) {
-	rows, err := q.db.QueryContext(ctx, listWorksNeedingReleaseGroupArtwork, arg.AfterID, arg.PageSize)
+	rows, err := q.db.QueryContext(ctx, listWorksNeedingReleaseGroupArtwork,
+		arg.AfterID,
+		arg.Source,
+		arg.RetryAfter,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -2176,6 +2210,22 @@ DELETE FROM ready_queue WHERE expires_at <= ?
 
 func (q *Queries) PurgeExpiredReady(ctx context.Context, expiresAt int64) error {
 	_, err := q.db.ExecContext(ctx, purgeExpiredReady, expiresAt)
+	return err
+}
+
+const recordArtworkMiss = `-- name: RecordArtworkMiss :exec
+INSERT INTO artwork_miss (subject_type, subject_id, source, missed_at) VALUES ('work', ?, ?, ?)
+ON CONFLICT (subject_type, subject_id, source) DO UPDATE SET missed_at = excluded.missed_at
+`
+
+type RecordArtworkMissParams struct {
+	SubjectID int64
+	Source    string
+	MissedAt  int64
+}
+
+func (q *Queries) RecordArtworkMiss(ctx context.Context, arg RecordArtworkMissParams) error {
+	_, err := q.db.ExecContext(ctx, recordArtworkMiss, arg.SubjectID, arg.Source, arg.MissedAt)
 	return err
 }
 

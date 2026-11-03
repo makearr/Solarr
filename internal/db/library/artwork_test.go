@@ -50,7 +50,7 @@ func TestNeedingArtwork_ListsARefinedEditionsReleaseMBID(t *testing.T) {
 
 	workID := refineWithReleaseMBID(t, identity, "rg-artwork-1", "release-artwork-1")
 
-	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
+	found, err := artworks.NeedingArtwork(t.Context(), library.ArtworkAsk{Source: "release"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestNeedingArtwork_ExcludesAPlaceholderEdition(t *testing.T) {
 	}
 
 	// Still kind='unknown' -- never refined -- so it must not be a candidate yet.
-	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
+	found, err := artworks.NeedingArtwork(t.Context(), library.ArtworkAsk{Source: "release"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestRecord_RemovesTheWorkFromNeedingArtwork(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	found, err := artworks.NeedingArtwork(t.Context(), 0, 10)
+	found, err := artworks.NeedingArtwork(t.Context(), library.ArtworkAsk{Source: "release"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingArtwork: %v", err)
 	}
@@ -322,7 +322,7 @@ func TestNeedingEmbeddedArtwork_NamesTheFileTheWorkWasResolvedFrom(t *testing.T)
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 
-	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", library.ArtworkAsk{Source: "embedded"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -347,7 +347,7 @@ func TestNeedingEmbeddedArtwork_CoversWorksResolvedByImport(t *testing.T) {
 		t.Fatalf("ResolveWorksDetailed: %v", err)
 	}
 
-	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", library.ArtworkAsk{Source: "embedded"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -374,7 +374,7 @@ func TestNeedingEmbeddedArtwork_ExcludesAWorkWithACover(t *testing.T) {
 		t.Fatalf("Record: %v", err)
 	}
 
-	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
+	found, err := artworks.NeedingEmbeddedArtwork(t.Context(), "music", library.ArtworkAsk{Source: "embedded"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -448,7 +448,7 @@ func TestWorkFileLocations_AnswersEveryFolderAWorkWasResolvedFrom(t *testing.T) 
 		t.Errorf("WorkFileLocations = %+v, want both folders %+v", got, want)
 	}
 
-	candidates, err := library.NewArtworks(opened).NeedingEmbeddedArtwork(t.Context(), "music", 0, 10)
+	candidates, err := library.NewArtworks(opened).NeedingEmbeddedArtwork(t.Context(), "music", library.ArtworkAsk{Source: "embedded"}, 0, 10)
 	if err != nil {
 		t.Fatalf("NeedingEmbeddedArtwork: %v", err)
 	}
@@ -471,7 +471,7 @@ func TestNeedingEmbeddedArtwork_AsksOnlyForItsOwnMediaType(t *testing.T) {
 		t.Fatalf("ResolveWorks: %v", err)
 	}
 	for mediaType, want := range map[string]int{"music": 0, "tv": 1} {
-		found, err := artworks.NeedingEmbeddedArtwork(t.Context(), mediaType, 0, 10)
+		found, err := artworks.NeedingEmbeddedArtwork(t.Context(), mediaType, library.ArtworkAsk{Source: "embedded"}, 0, 10)
 		if err != nil || len(found) != want {
 			t.Errorf("%s: %d candidates, %v; want %d", mediaType, len(found), err, want)
 		}

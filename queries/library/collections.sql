@@ -101,6 +101,10 @@ WHERE e.kind != 'unknown'
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = e.work_id AND a.kind = 'cover'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork_miss m
+    WHERE m.subject_type = 'work' AND m.subject_id = e.work_id AND m.source = sqlc.arg(source) AND m.missed_at > sqlc.arg(retry_after)
+  )
 ORDER BY e.work_id
 LIMIT sqlc.arg(page_size);
 
@@ -190,6 +194,10 @@ WHERE x.provider = 'musicbrainz:release-group'
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = x.work_id AND a.kind = 'cover'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork_miss m
+    WHERE m.subject_type = 'work' AND m.subject_id = x.work_id AND m.source = sqlc.arg(source) AND m.missed_at > sqlc.arg(retry_after)
+  )
 GROUP BY x.work_id
 ORDER BY x.work_id
 LIMIT sqlc.arg(page_size);
@@ -210,8 +218,16 @@ WHERE f.work_id > sqlc.arg(after_id)
   AND NOT EXISTS (
     SELECT 1 FROM artwork a WHERE a.subject_type = 'work' AND a.subject_id = f.work_id AND a.kind = 'cover'
   )
+  AND NOT EXISTS (
+    SELECT 1 FROM artwork_miss m
+    WHERE m.subject_type = 'work' AND m.subject_id = f.work_id AND m.source = sqlc.arg(source) AND m.missed_at > sqlc.arg(retry_after)
+  )
 ORDER BY f.work_id
 LIMIT sqlc.arg(page_size);
+
+-- name: RecordArtworkMiss :exec
+INSERT INTO artwork_miss (subject_type, subject_id, source, missed_at) VALUES ('work', ?, ?, ?)
+ON CONFLICT (subject_type, subject_id, source) DO UPDATE SET missed_at = excluded.missed_at;
 
 -- A crossover (an event across works) and its members in order, each with what a list shows of it.
 -- name: ListPartCollectionMembers :many

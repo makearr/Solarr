@@ -110,6 +110,13 @@ type Artwork struct {
 	FetchedAt   sql.NullInt64
 }
 
+type ArtworkMiss struct {
+	SubjectType string
+	SubjectID   int64
+	Source      string
+	MissedAt    int64
+}
+
 type BlockedContent struct {
 	ID           int64
 	Oshash       sql.NullString

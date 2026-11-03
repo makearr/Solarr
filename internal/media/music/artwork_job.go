@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
+	"time"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
@@ -44,6 +45,9 @@ const artworkBatchSize = 20
 // artworkWorkers overlaps a batch's covers: each is a lookup plus a download of several megabytes,
 // and one at a time the full library gained ~500 covers an hour (measured 2026-09-28).
 const artworkWorkers = 4
+
+// artworkRetryAfter is how long a source that had no cover for a work is left alone before it is asked again.
+const artworkRetryAfter = 7 * 24 * time.Hour
 
 // maxImageBytes bounds one fetched cover image. Cover Art Archive uploads are
 // typically well under this; a provider serving something far larger is a
@@ -133,6 +137,7 @@ func (j *ArtworkJob) Run(ctx context.Context, job jobs.Job) error {
 	}
 
 	// Each source fills only the works still without a cover, so the order decides which wins.
+	missedSince := j.clock.Now().Add(-artworkRetryAfter).Unix()
 	sources := settings.DefaultCoverSources
 	if j.coverSources != nil {
 		sources = j.coverSources()
@@ -142,22 +147,23 @@ func (j *ArtworkJob) Run(ctx context.Context, job jobs.Job) error {
 		case settings.CoverSourceArchive:
 			// Releases first, as the more exact image; then release groups, for wanted albums with
 			// no edition and releases the archive had nothing for.
-			if err := j.sweep(ctx, job.Progress, "release", j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
+			if err := j.sweep(ctx, job.Progress, library.ArtworkAsk{Source: "release", MissedSince: missedSince}, j.artworks.NeedingArtwork, j.coverArt.Fetch); err != nil {
 				return err
 			}
-			if err := j.sweep(ctx, job.Progress, "release-group", j.artworks.NeedingReleaseGroupArtwork,
+			if err := j.sweep(ctx, job.Progress, library.ArtworkAsk{Source: "release-group", MissedSince: missedSince}, j.artworks.NeedingReleaseGroupArtwork,
 				j.coverArt.FetchReleaseGroup); err != nil {
 				return err
 			}
 		case settings.CoverSourceEmbedded:
-			if err := j.sweepEmbedded(ctx, job.Progress); err != nil {
+			if err := j.sweepEmbedded(ctx, job.Progress, library.ArtworkAsk{Source: "embedded", MissedSince: missedSince}); err != nil {
 				return err
 			}
 		case settings.CoverSourceTheAudioDB:
 			if j.theAudioDBCover == nil {
 				continue
 			}
-			if err := j.sweep(ctx, job.Progress, "theaudiodb", j.artworks.NeedingReleaseGroupArtwork, j.theAudioDBCover); err != nil {
+			if err := j.sweep(ctx, job.Progress, library.ArtworkAsk{Source: "theaudiodb", MissedSince: missedSince},
+				j.artworks.NeedingReleaseGroupArtwork, j.theAudioDBCover); err != nil {
 				return err
 			}
 		}
@@ -170,7 +176,7 @@ func (j *ArtworkJob) Run(ctx context.Context, job jobs.Job) error {
 
 // sweepEmbedded reads cover art out of one known file per work still without
 // a cover, walked by work id for the same reason sweep is.
-func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress) error {
+func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress, ask library.ArtworkAsk) error {
 	if j.pictures == nil || j.roots == nil {
 		return nil
 	}
@@ -181,7 +187,7 @@ func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress)
 			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
 		}
 
-		batch, err := j.artworks.NeedingEmbeddedArtwork(ctx, string(MediaType), afterWorkID, artworkBatchSize)
+		batch, err := j.artworks.NeedingEmbeddedArtwork(ctx, string(MediaType), ask, afterWorkID, artworkBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: artwork: %w", err)
 		}
@@ -189,24 +195,33 @@ func (j *ArtworkJob) sweepEmbedded(ctx context.Context, progress *jobs.Progress)
 			break
 		}
 
-		for _, candidate := range batch {
+		// Each read is a file opened on a share: they overlap the way a provider batch does.
+		outcomes := parallel.Do(ctx, len(batch), artworkWorkers, func(ctx context.Context, index int) error {
+			return j.embeddedOne(ctx, batch[index])
+		})
+		var missed []int64
+		for index, candidate := range batch {
 			total++
 			afterWorkID = candidate.WorkID
-			switch err := j.embeddedOne(ctx, candidate); {
+			switch err := outcomes[index]; {
 			case errors.Is(err, mediatool.ErrNoEmbeddedPicture):
 				skipped++
+				missed = append(missed, candidate.WorkID)
 			case err != nil:
 				failed++
 				j.logger.WarnContext(ctx, "embedded cover art failed",
 					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
 			}
 		}
+		if err := j.artworks.RecordMisses(ctx, ask.Source, missed, j.clock.Now().Unix()); err != nil {
+			return fmt.Errorf("music: artwork: %w", err)
+		}
 		progress.Add(int64(len(batch)))
 		if len(batch) < artworkBatchSize {
 			break
 		}
 	}
-	j.logger.Info("music artwork sweep finished", slog.String("kind", "embedded"),
+	j.logger.Info("music artwork sweep finished", slog.String("kind", ask.Source),
 		slog.Int("processed", total), slog.Int("failed", failed), slog.Int("skipped", skipped))
 	return nil
 }
@@ -223,7 +238,7 @@ func (j *ArtworkJob) embeddedOne(ctx context.Context, candidate library.Embedded
 	return j.storeCover(ctx, candidate.WorkID, "", source)
 }
 
-type artworkPage func(ctx context.Context, afterWorkID, pageSize int64) ([]library.ArtworkCandidate, error)
+type artworkPage func(ctx context.Context, ask library.ArtworkAsk, afterWorkID, pageSize int64) ([]library.ArtworkCandidate, error)
 
 type artworkSource func(ctx context.Context, mbid string) (string, error)
 
@@ -231,8 +246,9 @@ type artworkSource func(ctx context.Context, mbid string) (string, error)
 // records nothing, so re-reading from the top would return the same page
 // indefinitely.
 func (j *ArtworkJob) sweep(
-	ctx context.Context, progress *jobs.Progress, kind string, page artworkPage, lookup artworkSource,
+	ctx context.Context, progress *jobs.Progress, ask library.ArtworkAsk, page artworkPage, lookup artworkSource,
 ) error {
+	kind := ask.Source
 	total, failed, skipped := 0, 0, 0
 	var afterWorkID int64
 	for {
@@ -240,7 +256,7 @@ func (j *ArtworkJob) sweep(
 			return jobs.Retryablef("artwork.context", string(ArtworkJobType), err)
 		}
 
-		batch, err := page(ctx, afterWorkID, artworkBatchSize)
+		batch, err := page(ctx, ask, afterWorkID, artworkBatchSize)
 		if err != nil {
 			return fmt.Errorf("music: artwork: %w", err)
 		}
@@ -253,6 +269,7 @@ func (j *ArtworkJob) sweep(
 		})
 		progress.Add(int64(len(batch)))
 		paused := false
+		var missed []int64
 		for index, candidate := range batch {
 			total++
 			afterWorkID = candidate.WorkID
@@ -260,14 +277,17 @@ func (j *ArtworkJob) sweep(
 			case errors.Is(err, httpx.ErrCircuitOpen):
 				paused = true
 			case errors.Is(err, musicbrainz.ErrNoCoverArt):
-				// Not a failure: nothing in the archive. Asked again next sweep,
-				// which is cheap and right if art is added later.
+				// Not a failure: nothing at this source. Asked again once the miss is artworkRetryAfter old.
 				skipped++
+				missed = append(missed, candidate.WorkID)
 			case err != nil:
 				failed++
 				j.logger.WarnContext(ctx, "cover art fetch failed", slog.String("kind", kind),
 					slog.Int64("work_id", candidate.WorkID), slog.Any("error", err))
 			}
+		}
+		if err := j.artworks.RecordMisses(ctx, kind, missed, j.clock.Now().Unix()); err != nil {
+			return fmt.Errorf("music: artwork: %w", err)
 		}
 		// A source down says nothing of the albums left: the next sweep asks after them, not this one.
 		if paused {
