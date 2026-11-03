@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CircleHelp, Trash2 } from "lucide-react";
+import { CircleHelp } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
@@ -9,8 +9,8 @@ import { missingDownloader } from "@/lib/indexerCatalog";
 import { useDownloaderKinds, useIndexerKinds } from "@/lib/resources";
 import { usePreference } from "@/lib/usePreference";
 import { isTierVisible, useTier } from "@/lib/useTier";
-import { Button } from "@/ui/Button";
-import { inputStyle, labelStyle } from "@/ui/form";
+import { Button, RemoveButton } from "@/ui/Button";
+import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 type Indexer = components["schemas"]["Indexer"];
 type ConnectionTestResult = components["schemas"]["ConnectionTestResult"];
@@ -154,15 +154,11 @@ export function Indexers() {
                   >
                     {test.isPending && test.variables === indexer.id ? "Testing…" : "Test"}
                   </button>
-                  <button
-                    type="button"
+                  <RemoveButton
                     aria-label={`Remove ${indexer.name}`}
                     onClick={() => remove.mutate(indexer.id)}
                     disabled={remove.isPending}
-                    className="rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50"
-                  >
-                    <Trash2 aria-hidden className="size-3.5" />
-                  </button>
+                  />
                 </span>
               </div>
               <span className="flex flex-wrap items-center gap-1 text-xs text-ink-muted">
@@ -259,7 +255,7 @@ function AddIndexer({ onAdded, expert }: { onAdded: () => void; expert: boolean 
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className={addFormStyle}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();

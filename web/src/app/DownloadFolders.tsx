@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, Download, File, Folder, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, File, Folder } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories, useDownloadFolders, useImportSettings } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
-import { Button } from "@/ui/Button";
+import { Button, RemoveButton } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { inputStyle, labelStyle } from "@/ui/form";
+import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { TransferLadderEditor, type TransferMethod } from "./Import";
 
@@ -142,17 +142,12 @@ function DownloadFolderCard({
             unreachable
           </span>
         )}
-        <button
-          type="button"
+        <RemoveButton
           aria-label={`Stop watching ${folder.path}`}
           onClick={() => setConfirmingRemove(true)}
           disabled={busy}
-          className="ml-auto shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
-                     hover:text-danger disabled:opacity-50 focus-visible:outline-2
-                     focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <Trash2 aria-hidden className="size-3.5" />
-        </button>
+          className="ml-auto shrink-0"
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
@@ -291,7 +286,7 @@ function AddDownloadFolder({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className={addFormStyle}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();

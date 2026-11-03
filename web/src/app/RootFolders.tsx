@@ -10,7 +10,7 @@ import type { components } from "@/api/schema";
 import { EditCategoryForm } from "./Categories";
 import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
-import { inputStyle } from "@/ui/form";
+import { inputStyle, addFormStyle } from "@/ui/form";
 import { NewLibraryFields, useNewLibrary } from "./NewLibrary";
 import { RootMoveControls } from "./Moves";
 
@@ -524,7 +524,7 @@ function AddRootFolder({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className={addFormStyle}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();

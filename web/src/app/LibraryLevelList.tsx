@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import type { LinkProps } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowDown, ArrowUp, Check, Columns3 } from "lucide-react";
+import { ArrowDown, ArrowUp, Columns3 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { albumStatusFill, albumStatusLabel } from "@/lib/albumStatus";
@@ -14,6 +14,7 @@ import { useRouteView } from "@/list/useRouteView";
 import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
+import { MenuCheck } from "@/ui/MenuCheck";
 import { LEVEL_FILTER_FIELDS } from "./filterFields";
 import { CoverArt } from "./CoverArt";
 import { CustomFilterMenu } from "./CustomFilterMenu";
@@ -328,11 +329,7 @@ function ColumnChooser({
               }
               className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas"
             >
-              <span className="size-3.5">
-                <DropdownMenu.ItemIndicator>
-                  <Check aria-hidden className="size-3.5" />
-                </DropdownMenu.ItemIndicator>
-              </span>
+              <MenuCheck />
               {column.header || "Details"}
             </DropdownMenu.CheckboxItem>
           ))}

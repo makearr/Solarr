@@ -1,7 +1,7 @@
 import type { LinkProps } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Check, LayoutGrid, Rows3, Settings2, StretchHorizontal } from "lucide-react";
+import { LayoutGrid, Rows3, Settings2, StretchHorizontal } from "lucide-react";
 
 import { albumStatusFill, albumStatusLabel, type AlbumStatus } from "@/lib/albumStatus";
 import type { components } from "@/api/schema";
@@ -9,6 +9,7 @@ import type { useLibraryList } from "@/list/useLibraryList";
 import { t } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
+import { MenuCheck } from "@/ui/MenuCheck";
 
 import { CoverArt } from "./CoverArt";
 import { ActionButtons, MonitorToggle, useItemActions } from "./LevelItemActions";
@@ -164,11 +165,7 @@ export function PosterOptionsMenu({ options, onChange }: { options: PosterOption
           <DropdownMenu.RadioGroup value={options.size} onValueChange={(size) => onChange({ ...options, size: size as PosterSize })}>
             {(Object.keys(POSTER_WIDTHS) as PosterSize[]).map((size) => (
               <DropdownMenu.RadioItem key={size} value={size} onSelect={(event) => event.preventDefault()} className={`${menuItem} capitalize`}>
-                <span className="size-3.5">
-                  <DropdownMenu.ItemIndicator>
-                    <Check aria-hidden className="size-3.5" />
-                  </DropdownMenu.ItemIndicator>
-                </span>
+                <MenuCheck />
                 {size}
               </DropdownMenu.RadioItem>
             ))}
@@ -182,11 +179,7 @@ export function PosterOptionsMenu({ options, onChange }: { options: PosterOption
               onCheckedChange={(checked) => onChange({ ...options, [toggle.key]: checked })}
               className={menuItem}
             >
-              <span className="size-3.5">
-                <DropdownMenu.ItemIndicator>
-                  <Check aria-hidden className="size-3.5" />
-                </DropdownMenu.ItemIndicator>
-              </span>
+              <MenuCheck />
               {toggle.label}
             </DropdownMenu.CheckboxItem>
           ))}

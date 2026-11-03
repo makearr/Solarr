@@ -1,6 +1,7 @@
+import { Trash2 } from "lucide-react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "icon";
+export type ButtonVariant = "primary" | "secondary" | "danger" | "ghost" | "icon" | "remove";
 
 const VARIANTS: Record<ButtonVariant, string> = {
   primary: "border border-accent bg-accent px-3 py-1.5 text-accent-ink enabled:hover:opacity-90",
@@ -8,6 +9,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   danger: "border border-danger px-3 py-1.5 text-danger enabled:hover:bg-danger enabled:hover:text-accent-ink",
   ghost: "px-2 py-1 text-ink-muted enabled:hover:text-ink",
   icon: "p-1 text-ink-muted enabled:hover:text-ink",
+  remove: "border border-border-subtle p-1 text-ink-muted enabled:hover:text-danger",
 };
 
 /** The one button: a variant, and while busy a label saying so and no second click. */
@@ -40,5 +42,14 @@ export function Button({
       {icon}
       {busy && busyLabel ? busyLabel : children}
     </button>
+  );
+}
+
+/** A row's remove control: a bin that turns red on hover; aria-label says what goes. */
+export function RemoveButton(props: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & { "aria-label": string }) {
+  return (
+    <Button variant="remove" {...props}>
+      <Trash2 aria-hidden className="size-3.5" />
+    </Button>
   );
 }

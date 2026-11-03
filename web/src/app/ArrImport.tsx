@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ChevronDown, ChevronRight, RefreshCw, RotateCcw, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, RefreshCw, RotateCcw } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useCategories } from "@/lib/resources";
 import { useLibraryLabel } from "@/lib/libraryLabel";
-import { Button } from "@/ui/Button";
-import { inputStyle, labelStyle } from "@/ui/form";
+import { Button, RemoveButton } from "@/ui/Button";
+import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { ArrConnectionTools } from "./ArrConnectionTools";
 import { ArrSyncOptions } from "./ArrSyncOptions";
@@ -161,17 +161,12 @@ function InstanceCard({
           Import…
         </button>
         )}
-        <button
-          type="button"
+        <RemoveButton
           aria-label={`Remove ${instance.name}`}
           onClick={onRemove}
           disabled={busy}
-          className="shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
-                     hover:text-danger disabled:opacity-50 focus-visible:outline-2
-                     focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <Trash2 aria-hidden className="size-3.5" />
-        </button>
+          className="shrink-0"
+        />
       </div>
 
       {choosing && (
@@ -365,7 +360,7 @@ function AddInstance({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className={addFormStyle}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();

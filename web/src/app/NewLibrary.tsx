@@ -7,7 +7,7 @@ import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useMediaTypes } from "@/lib/useMediaTypes";
 import { Button } from "@/ui/Button";
-import { inputStyle, labelStyle } from "@/ui/form";
+import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { KindSelect } from "./LibraryKindSelect";
 
@@ -92,7 +92,7 @@ export function AddLibraryForm() {
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className={addFormStyle}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();

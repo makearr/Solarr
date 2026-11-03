@@ -1,11 +1,12 @@
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronDown, ChevronRight, CircleUser } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleUser } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { MODES, SCHEMES, type Mode } from "@/lib/theme";
 import { useTheme } from "@/lib/useTheme";
 import { useSetMyTier, type Tier } from "@/lib/useTier";
+import { MenuCheck } from "@/ui/MenuCheck";
 
 const TIERS: readonly { tier: Tier; label: string }[] = [
   { tier: "normal", label: "Normal" },
@@ -16,16 +17,6 @@ const TIERS: readonly { tier: Tier; label: string }[] = [
 const TIER_RANK: Record<Tier, number> = { normal: 0, advanced: 1, expert: 2 };
 
 const itemStyle = "flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none data-[highlighted]:bg-canvas";
-
-function Chosen() {
-  return (
-    <span className="size-3.5">
-      <DropdownMenu.ItemIndicator>
-        <Check aria-hidden className="size-3.5" />
-      </DropdownMenu.ItemIndicator>
-    </span>
-  );
-}
 
 /** Light, dark or the OS's choice, and the colour scheme; the top bar keeps only the quick light/dark switch. */
 function Appearance() {
@@ -43,7 +34,7 @@ function Appearance() {
             onSelect={(event) => event.preventDefault()}
             className={`${itemStyle} data-[disabled]:opacity-50`}
           >
-            <Chosen />
+            <MenuCheck />
             {entry.label}
           </DropdownMenu.RadioItem>
         ))}
@@ -68,7 +59,7 @@ function Appearance() {
                   onSelect={(event) => event.preventDefault()}
                   className={itemStyle}
                 >
-                  <Chosen />
+                  <MenuCheck />
                   {entry.label}
                 </DropdownMenu.RadioItem>
               ))}
@@ -124,11 +115,7 @@ export function UserMenu() {
                 className="flex cursor-default items-center gap-2 rounded px-2 py-1 outline-none
                            data-[highlighted]:bg-canvas"
               >
-                <span className="size-3.5">
-                  <DropdownMenu.ItemIndicator>
-                    <Check aria-hidden className="size-3.5" />
-                  </DropdownMenu.ItemIndicator>
-                </span>
+                <MenuCheck />
                 {entry.label}
               </DropdownMenu.RadioItem>
             ))}

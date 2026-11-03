@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Eye, EyeOff, ShieldAlert, ShieldCheck, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, ShieldAlert, ShieldCheck } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { useAuthPolicy, useSetAuthRequired } from "@/lib/useAuthPolicy";
 import { useSetMyTier } from "@/lib/useTier";
 import type { components } from "@/api/schema";
 import { useCategories, useUserDefaults } from "@/lib/resources";
-import { Button } from "@/ui/Button";
+import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
@@ -250,8 +250,7 @@ function APIKeyRow({
         >
           {shown ? <EyeOff aria-hidden className="size-3.5" /> : <Eye aria-hidden className="size-3.5" />}
         </button>
-        <button
-          type="button"
+        <RemoveButton
           aria-label={`Revoke ${apiKey.name}`}
           onClick={() => {
             if (window.confirm(`Revoke "${apiKey.name}"? Anything using it will stop working immediately.`)) {
@@ -259,12 +258,8 @@ function APIKeyRow({
             }
           }}
           disabled={busy}
-          className="shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
-                     hover:text-danger disabled:opacity-50 focus-visible:outline-2
-                     focus-visible:outline-offset-2 focus-visible:outline-accent"
-        >
-          <Trash2 aria-hidden className="size-3.5" />
-        </button>
+          className="shrink-0"
+        />
       </div>
       {shown && (
         <div className="flex items-center gap-1.5">
@@ -714,17 +709,11 @@ function Row({
           Password
         </button>
 
-        <button
-          type="button"
+        <RemoveButton
           aria-label={`Remove ${user.username}`}
           onClick={onRemove}
           disabled={busy}
-          className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger
-                     disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                     focus-visible:outline-accent"
-        >
-          <Trash2 aria-hidden className="size-3.5" />
-        </button>
+        />
       </div>
 
       <p className="text-xs text-ink-muted">

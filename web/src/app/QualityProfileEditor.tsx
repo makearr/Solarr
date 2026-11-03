@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, X } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { LanguageProfiles } from "./LanguageProfiles";
@@ -15,6 +15,7 @@ import {
 import { useQualityProfiles } from "@/lib/resources";
 import { isTierVisible, useTier } from "@/lib/useTier";
 import { labelStyle } from "@/ui/form";
+import { RemoveButton } from "@/ui/Button";
 
 import { LanguagePicker } from "./LanguagePicker";
 
@@ -134,15 +135,11 @@ export function QualityProfilesPage() {
                   <button type="button" onClick={() => setEditing(profile.id)} className={smallButton}>
                     Edit
                   </button>
-                  <button
-                    type="button"
+                  <RemoveButton
                     aria-label={`Remove quality profile ${profile.name}`}
                     disabled={remove.isPending}
                     onClick={() => remove.mutate(profile.id)}
-                    className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger disabled:opacity-50"
-                  >
-                    <Trash2 aria-hidden className="size-3.5" />
-                  </button>
+                  />
                 </li>
               ),
             )}

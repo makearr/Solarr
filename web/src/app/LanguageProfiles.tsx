@@ -1,11 +1,10 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { useLanguageProfiles } from "@/lib/resources";
-import { Button } from "@/ui/Button";
+import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
@@ -89,17 +88,11 @@ export function LanguageProfiles() {
                 >
                   Edit
                 </button>
-                <button
-                  type="button"
+                <RemoveButton
                   aria-label={`Remove language profile ${profile.name}`}
                   disabled={remove.isPending}
                   onClick={() => remove.mutate(profile.id)}
-                  className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger
-                             disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                             focus-visible:outline-accent"
-                >
-                  <Trash2 aria-hidden className="size-3.5" />
-                </button>
+                />
               </li>
             ),
           )}

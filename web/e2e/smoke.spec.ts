@@ -205,7 +205,7 @@ test("a target quality can be made under quality profiles, and language profiles
 
   await page.getByRole("button", { name: "New target" }).click();
   await page.getByLabel("Name").first().fill("E2E 1080p");
-  await page.getByLabel("For").selectOption("tv");
+  await page.getByRole("combobox", { name: /^For/ }).selectOption("tv");
   for (const group of ["Container", "Video", "Audio"]) {
     await expect(page.getByText(group, { exact: true }).first()).toBeVisible();
   }

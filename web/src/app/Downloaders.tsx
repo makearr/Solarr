@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import { fieldOptions, fieldValues, kindSecret, missingFields, newLabel, type FieldValues } from "@/lib/downloaderKinds";
@@ -8,7 +7,7 @@ import { missingIndexer } from "@/lib/indexerCatalog";
 import { useDownloaderKinds, useDownloadFolders, useIndexerKinds } from "@/lib/resources";
 import { usePreference } from "@/lib/usePreference";
 import type { components } from "@/api/schema";
-import { Button } from "@/ui/Button";
+import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
 type Downloader = components["schemas"]["Downloader"];
@@ -121,15 +120,11 @@ export function Downloaders() {
                   >
                     {test.isPending && test.variables === downloader.id ? "Testing…" : "Test"}
                   </button>
-                  <button
-                    type="button"
+                  <RemoveButton
                     aria-label={`Remove ${downloader.name}`}
                     onClick={() => remove.mutate(downloader.id)}
                     disabled={remove.isPending}
-                    className="rounded-md p-1 text-ink-muted hover:text-danger disabled:opacity-50"
-                  >
-                    <Trash2 aria-hidden className="size-3.5" />
-                  </button>
+                  />
                 </span>
               </div>
               <span className="flex items-center gap-2 text-xs text-ink-muted">

@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
-import { Button } from "@/ui/Button";
-import { inputStyle, labelStyle } from "@/ui/form";
+import { Button, RemoveButton } from "@/ui/Button";
+import { inputStyle, labelStyle, addFormStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
 
@@ -145,17 +144,11 @@ function PatternRow({
         />
         enabled
       </label>
-      <button
-        type="button"
+      <RemoveButton
         aria-label={`Remove pattern ${pattern.pattern}`}
         onClick={onRemove}
         disabled={busy}
-        className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger
-                   disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                   focus-visible:outline-accent"
-      >
-        <Trash2 aria-hidden className="size-3.5" />
-      </button>
+      />
     </li>
   );
 }
@@ -178,7 +171,7 @@ function AddPattern({ onAdded }: { onAdded: () => void }) {
 
   return (
     <form
-      className="flex flex-wrap items-end gap-2 rounded-lg border border-border-subtle bg-surface p-3"
+      className={addFormStyle}
       onSubmit={(event) => {
         event.preventDefault();
         create.mutate();
@@ -302,17 +295,12 @@ function BlockedRow({
           fired {entry.hit_count}×
         </span>
       )}
-      <button
-        type="button"
+      <RemoveButton
         aria-label={`Remove block ${entry.title ?? entry.id}`}
         onClick={onRemove}
         disabled={busy}
-        className="ml-auto shrink-0 rounded-md border border-border-subtle p-1 text-ink-muted
-                   hover:text-danger disabled:opacity-50 focus-visible:outline-2
-                   focus-visible:outline-offset-2 focus-visible:outline-accent"
-      >
-        <Trash2 aria-hidden className="size-3.5" />
-      </button>
+        className="ml-auto shrink-0"
+      />
     </li>
   );
 }

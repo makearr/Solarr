@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { invalidateWorkLists, useCategories, useLanguageProfiles, useQualityProfiles } from "@/lib/resources";
 import { useMediaType, useMediaTypes } from "@/lib/useMediaTypes";
-import { Button } from "@/ui/Button";
+import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 import { Card } from "./SettingsCard";
@@ -261,17 +260,11 @@ function Row({
       >
         Edit
       </button>
-      <button
-        type="button"
+      <RemoveButton
         aria-label={`Remove ${category.name}`}
         onClick={onRemove}
         disabled={busy}
-        className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger
-                   disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2
-                   focus-visible:outline-accent"
-      >
-        <Trash2 aria-hidden className="size-3.5" />
-      </button>
+      />
     </li>
   );
 }

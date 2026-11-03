@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { api, ok } from "@/api/client";
 import type { components } from "@/api/schema";
 import { mediaTypeName } from "@/lib/mediaTypeIcon";
 import { useMediaTypes } from "@/lib/useMediaTypes";
-import { Button } from "@/ui/Button";
+import { Button, RemoveButton } from "@/ui/Button";
 import { inputStyle } from "@/ui/form";
 
 import { LanguagePicker } from "./LanguagePicker";
@@ -302,15 +302,11 @@ export function QualityTargetsSection() {
                   <button type="button" onClick={() => setEditing(target.id ?? null)} className={smallButton}>
                     Edit
                   </button>
-                  <button
-                    type="button"
+                  <RemoveButton
                     aria-label={`Remove target ${target.name}`}
                     disabled={remove.isPending}
                     onClick={() => target.id && remove.mutate(target.id)}
-                    className="rounded-md border border-border-subtle p-1 text-ink-muted hover:text-danger disabled:opacity-50"
-                  >
-                    <Trash2 aria-hidden className="size-3.5" />
-                  </button>
+                  />
                 </li>
               ),
             )}
