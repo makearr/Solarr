@@ -110,3 +110,26 @@ func (s *Server) prioritySettingsView() gen.PrioritySettings {
 		SearchShares: &shares,
 	}
 }
+
+// HuntBudgetView is the hourly search budget and what the last hour spent of it, by share.
+type HuntBudgetView struct {
+	PerHour, NewRelease, Gap, Upgrade int
+}
+
+// GetHuntBudget answers where the last hour's searches went.
+func (s *Server) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
+	if _, err := authz.FromContext(r.Context()); err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	if s.huntBudget == nil {
+		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable, "Unavailable", "the hunt is not running")
+		return
+	}
+	view, err := s.huntBudget(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
+	writeJSON(w, s.logger, http.StatusOK, gen.HuntBudget{PerHour: view.PerHour, NewRelease: view.NewRelease, Gap: view.Gap, Upgrade: view.Upgrade})
+}

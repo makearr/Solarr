@@ -69,10 +69,47 @@ type LibraryShare struct {
 type HuntJob struct {
 	config HuntConfig
 	mu     sync.Mutex
-	// searched is when each search of the last window ran; a restart forgets it, costing one window at most.
-	searched []time.Time
+	// searched is each search of the last window; a restart forgets it, costing one window at most.
+	searched []spentSearch
 	// credit is each library's standing in splitByShare's round robin.
 	credit map[int64]int64
+}
+
+// spentSearch is one search the budget paid for, and which share of it.
+type spentSearch struct {
+	at    time.Time
+	share string
+}
+
+// Shares of the budget, as BudgetUse names them.
+const (
+	ShareNewRelease = "new_release"
+	ShareGap        = "gap"
+	ShareUpgrade    = "upgrade"
+)
+
+// BudgetUse is the hourly search budget as it stands: what the window has spent, by share.
+type BudgetUse struct {
+	PerHour int
+	Spent   map[string]int
+}
+
+// Budget answers the searches spent in the last hour; safe beside a running hunt.
+func (j *HuntJob) Budget(ctx context.Context) (BudgetUse, error) {
+	perHour, err := j.config.PerHour(ctx)
+	if err != nil {
+		return BudgetUse{}, fmt.Errorf("plan: hunt budget: %w", err)
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	cutoff := j.config.Clock.Now().Add(-budgetWindow)
+	use := BudgetUse{PerHour: perHour, Spent: map[string]int{ShareNewRelease: 0, ShareGap: 0, ShareUpgrade: 0}}
+	for _, search := range j.searched {
+		if search.at.After(cutoff) {
+			use.Spent[search.share]++
+		}
+	}
+	return use, nil
 }
 
 // NewHuntJob builds the hunt.
@@ -118,9 +155,9 @@ func (j *HuntJob) Run(ctx context.Context, job jobs.Job) error {
 	freshFrom := now.Add(-time.Duration(days) * 24 * time.Hour).Unix()
 	// Section 9.4: each share gets its part of the budget first, then what one leaves unused goes to the others.
 	shares := []share{
-		{class: ClassMissing, releaseFrom: freshFrom},
-		{class: ClassMissing, releaseBefore: freshFrom},
-		{class: ClassUpgrade},
+		{name: ShareNewRelease, class: ClassMissing, releaseFrom: freshFrom},
+		{name: ShareGap, class: ClassMissing, releaseBefore: freshFrom},
+		{name: ShareUpgrade, class: ClassUpgrade},
 	}
 	searched, looked := 0, 0
 	// Rounded up for the missing shares, so a budget of one goes to a missing album, not to an upgrade.
@@ -224,6 +261,7 @@ const (
 // share is one slice of the queue the budget is split over: a class, and for missing albums the release-date range
 // that makes them new releases or gaps.
 type share struct {
+	name                       string
 	class                      string
 	releaseFrom, releaseBefore int64
 }
@@ -250,7 +288,7 @@ func (j *HuntJob) huntShare(
 			if err := ctx.Err(); err != nil {
 				return searched, looked, err
 			}
-			searched += j.huntOne(ctx, itemID)
+			searched += j.huntOne(ctx, itemID, one.name)
 			looked++
 			job.Progress.Add(1)
 		}
@@ -259,7 +297,7 @@ func (j *HuntJob) huntShare(
 }
 
 // huntOne searches itemID and keeps the hunt off it until it is worth looking again; answers 1 when a search ran.
-func (j *HuntJob) huntOne(ctx context.Context, itemID int64) int {
+func (j *HuntJob) huntOne(ctx context.Context, itemID int64, shareName string) int {
 	outcome, err := j.config.Search(ctx, itemID)
 	now := j.config.Clock.Now()
 	next, spent := now.Add(firstBackoff).Unix(), 1
@@ -273,7 +311,7 @@ func (j *HuntJob) huntOne(ctx context.Context, itemID int64) int {
 		next, spent = Never, 0
 	}
 	if spent > 0 {
-		j.searched = append(j.searched, now)
+		j.searched = append(j.searched, spentSearch{at: now, share: shareName})
 	}
 	if err := j.config.Hunt.Postpone(ctx, itemID, next); err != nil {
 		j.config.Logger.Warn("plan: hunt: postpone failed", "item_id", itemID, "error", err)
@@ -283,9 +321,9 @@ func (j *HuntJob) huntOne(ctx context.Context, itemID int64) int {
 
 func (j *HuntJob) forgetBefore(cutoff time.Time) {
 	kept := j.searched[:0]
-	for _, at := range j.searched {
-		if at.After(cutoff) {
-			kept = append(kept, at)
+	for _, search := range j.searched {
+		if search.at.After(cutoff) {
+			kept = append(kept, search)
 		}
 	}
 	j.searched = kept

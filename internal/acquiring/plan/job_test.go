@@ -161,6 +161,28 @@ func TestHuntSpendsNoMoreThanTheHourlyBudget(t *testing.T) {
 	}
 }
 
+func TestHuntBudgetCountsTheLastHourBySpentShare(t *testing.T) {
+	e := newEnv(t)
+	e.perHour = 5
+	e.album(t, "A", true)
+	e.album(t, "B", true)
+	e.planPass(t)
+	hunt := e.huntJob()
+	run(t, hunt)
+
+	use, err := hunt.Budget(t.Context())
+	if err != nil {
+		t.Fatalf("Budget: %v", err)
+	}
+	if use.PerHour != 5 || use.Spent[plan.ShareNewRelease]+use.Spent[plan.ShareGap]+use.Spent[plan.ShareUpgrade] != 2 {
+		t.Fatalf("budget = %+v, want 2 of 5 spent", use)
+	}
+	e.clock.Advance(61 * time.Minute)
+	if use, _ = hunt.Budget(t.Context()); use.Spent[plan.ShareGap]+use.Spent[plan.ShareNewRelease] != 0 {
+		t.Fatalf("budget after the window = %+v, want nothing spent", use)
+	}
+}
+
 // A searched album waits out its backoff, and the planner keeps that backoff when it replans.
 func TestHuntBacksOffASearchedAlbumAcrossPlanPasses(t *testing.T) {
 	e := newEnv(t)

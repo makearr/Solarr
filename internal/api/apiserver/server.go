@@ -115,6 +115,8 @@ type Config struct {
 	// IncompleteDiscographies feeds Discover's library-derived suggestions. Optional: nil answers 503.
 	IncompleteDiscographies IncompleteDiscographies
 
+	// HuntBudget answers the search budget's spending. Optional: nil answers 503.
+	HuntBudget func(ctx context.Context) (HuntBudgetView, error)
 	// Statistics reads a library's rolled-up figures. Optional: nil answers 503.
 	Statistics StatisticsReader
 	// Duplicates finds a library's likely copies. Optional: nil answers 503.
@@ -328,6 +330,7 @@ type Server struct {
 	artistActions           ArtistActions
 	artworkChoices          ArtworkChoices
 	statistics              StatisticsReader
+	huntBudget              func(ctx context.Context) (HuntBudgetView, error)
 	duplicates              DuplicateReader
 	similarVideos           SimilarVideoReader
 	recycleContents         RecycleBinContents
@@ -460,6 +463,7 @@ func New(config Config) (*Server, error) {
 		artistActions:           config.ArtistActions,
 		artworkChoices:          config.ArtworkChoices,
 		statistics:              config.Statistics,
+		huntBudget:              config.HuntBudget,
 		duplicates:              config.Duplicates,
 		similarVideos:           config.SimilarVideos,
 		recycleContents:         config.RecycleBinContents,
@@ -819,6 +823,7 @@ func New(config Config) (*Server, error) {
 			secured.Post("/recyclebin/empty", server.EmptyRecycleBin)
 			secured.Get("/priority", server.GetPrioritySettings)
 			secured.Patch("/priority", server.UpdatePrioritySettings)
+			secured.Get("/hunt/budget", server.GetHuntBudget)
 			secured.Get("/metadata/providers", server.ListMetadataProviders)
 			secured.Put("/metadata/providers/{key}/apikey", func(w http.ResponseWriter, r *http.Request) {
 				server.SetMetadataProviderKey(w, r, chi.URLParam(r, "key"))

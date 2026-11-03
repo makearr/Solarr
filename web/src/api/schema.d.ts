@@ -1056,6 +1056,26 @@ export interface paths {
         patch: operations["updatePrioritySettings"];
         trace?: never;
     };
+    "/hunt/budget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the hourly search budget went in the last hour (F23).
+         * @description Searches the hunt spent in the last hour, split into new releases, gaps and upgrades, against the per-hour budget. Counted in memory, so a restart starts again from zero.
+         */
+        get: operations["getHuntBudget"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/metadata/providers": {
         parameters: {
             query?: never;
@@ -7874,6 +7894,17 @@ export interface components {
             /** @description Every desired_item id detached and recomputed. */
             reopened_items: number[];
         };
+        /** @description The hourly search budget and what the last hour spent of it. */
+        HuntBudget: {
+            /** @description The budget; 0 means automatic searching is off. */
+            per_hour: number;
+            /** @description Searches spent on recent releases. */
+            new_release: number;
+            /** @description Searches spent on missing older items. */
+            gap: number;
+            /** @description Searches spent on upgrades. */
+            upgrade: number;
+        };
         /** @description ADR-36's trigger weights and ADR-55's release-date freshness window. */
         PrioritySettings: {
             /**
@@ -10683,6 +10714,28 @@ export interface operations {
             400: components["responses"]["Problem"];
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
+        };
+    };
+    getHuntBudget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The last hour's spending. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HuntBudget"];
+                };
+            };
+            401: components["responses"]["Problem"];
+            503: components["responses"]["Problem"];
         };
     };
     listMetadataProviders: {

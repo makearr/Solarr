@@ -30,7 +30,7 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 		Hunt: hunt, Facts: p.planFacts, Clock: clock.NewSystem(), Logger: p.logger,
 		Searchable: func(item library.PlanInput) bool { return plan.SearchedOnItsOwn(item.SatisfactionKind) },
 	}))
-	executor.Handle(plan.HuntJobType, plan.NewHuntJob(plan.HuntConfig{
+	p.hunt = plan.NewHuntJob(plan.HuntConfig{
 		Hunt: hunt, PerHour: p.searchesPerHour, Search: p.huntSearch,
 		Mode: func(context.Context) (library.HuntMode, error) {
 			return library.HuntMode(p.cache.Snapshot().PrioritySettings().HuntMode), nil
@@ -47,7 +47,8 @@ func (p *process) registerPlanJobs(registry *jobs.Registry, executor *jobs.Execu
 			}
 			return shares, nil
 		},
-	}))
+	})
+	executor.Handle(plan.HuntJobType, p.hunt)
 	if err := registry.Register(rss.Definition); err != nil {
 		return err
 	}
@@ -230,4 +231,16 @@ func (p *process) enqueueHunt(ctx context.Context) (jobs.EnqueueResult, error) {
 	return p.queue.Enqueue(ctx, jobs.Request{
 		Type: plan.HuntJobType, ActionKey: string(plan.HuntJobType), Priority: jobs.PriorityLow, Payload: []byte("{}"),
 	})
+}
+
+// huntBudget answers the hunt's spending for the API; before the hunt is built it is not running.
+func (p *process) huntBudget(ctx context.Context) (apiserver.HuntBudgetView, error) {
+	if p.hunt == nil {
+		return apiserver.HuntBudgetView{}, nil
+	}
+	use, err := p.hunt.Budget(ctx)
+	if err != nil {
+		return apiserver.HuntBudgetView{}, err
+	}
+	return apiserver.HuntBudgetView{PerHour: use.PerHour, NewRelease: use.Spent[plan.ShareNewRelease], Gap: use.Spent[plan.ShareGap], Upgrade: use.Spent[plan.ShareUpgrade]}, nil
 }

@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/makearr/Solarr/cmd/solarr/adapters"
+	"github.com/makearr/Solarr/internal/acquiring/plan"
 	"github.com/makearr/Solarr/internal/api/apiserver"
 	"github.com/makearr/Solarr/internal/api/auth"
 	"github.com/makearr/Solarr/internal/api/health"
@@ -64,6 +65,8 @@ type Build struct {
 
 // process is everything the server owns, so shutdown has one place to look.
 type process struct {
+	// hunt is the search hunt, kept for the budget view.
+	hunt *plan.HuntJob
 	// extraMedia are media types a test registers beside the built-in ones (revision 2's R1.9 proof).
 	extraMedia []media.Module
 	build      Build
@@ -802,6 +805,7 @@ func (p *process) newServer(authConfig apiserver.AuthConfig, prober *egress.Prob
 		ArtworkChoices: adapters.ArtworkChoices{
 			Works: library.NewWorks(p.library), Picturing: adapters.MediaTypes{Registry: p.media}.PicturingOf, People: p.musicPictures(),
 		},
+		HuntBudget: p.huntBudget,
 		Statistics: adapters.Statistics{Rollup: statistics.NewRollup(p.statistics)},
 		Duplicates: adapters.Duplicates{
 			Store: library.NewDuplicates(p.library), Settings: p.cache, ByName: adapters.MediaTypes{Registry: p.media}.DuplicatesByName,

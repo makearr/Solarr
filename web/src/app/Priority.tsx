@@ -51,6 +51,12 @@ export function Priority() {
   });
   const huntCadences = schedules.data?.find((schedule) => schedule.key === HUNT_TASK)?.cadences;
 
+  const budget = useQuery({
+    queryKey: ["hunt-budget"],
+    queryFn: () => ok(api.GET("/hunt/budget")),
+    refetchInterval: 60_000,
+  });
+
   const update = useMutation({
     mutationFn: async ({ body, minutes }: { body: PrioritySettings; minutes?: number }) => {
       await ok(api.PATCH("/priority", { body }));
@@ -76,6 +82,12 @@ export function Priority() {
         onSave={(body, minutes) => update.mutate({ body, minutes })}
         busy={update.isPending}
       />
+      {budget.data && budget.data.per_hour > 0 && (
+        <p className="text-xs text-ink-muted">
+          Last hour: {budget.data.new_release + budget.data.gap + budget.data.upgrade} of {budget.data.per_hour} searches
+          spent ({budget.data.new_release} new releases, {budget.data.gap} gaps, {budget.data.upgrade} upgrades).
+        </p>
+      )}
       {update.isError && <p className="text-sm text-danger">That change was refused.</p>}
     </section>
   );

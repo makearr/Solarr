@@ -2601,6 +2601,21 @@ type HistoryPage struct {
 	NextCursor *int64 `json:"next_cursor,omitempty"`
 }
 
+// HuntBudget The hourly search budget and what the last hour spent of it.
+type HuntBudget struct {
+	// Gap Searches spent on missing older items.
+	Gap int `json:"gap"`
+
+	// NewRelease Searches spent on recent releases.
+	NewRelease int `json:"new_release"`
+
+	// PerHour The budget; 0 means automatic searching is off.
+	PerHour int `json:"per_hour"`
+
+	// Upgrade Searches spent on upgrades.
+	Upgrade int `json:"upgrade"`
+}
+
 // IdentificationAttempt defines model for IdentificationAttempt.
 type IdentificationAttempt struct {
 	AttemptedAt time.Time                    `json:"attempted_at"`
@@ -7271,6 +7286,9 @@ type ServerInterface interface {
 	// What happened to downloads -- grabbed, imported, failed (section 5.7).
 	// (GET /history)
 	ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams)
+	// Where the hourly search budget went in the last hour (F23).
+	// (GET /hunt/budget)
+	GetHuntBudget(w http.ResponseWriter, r *http.Request)
 	// A provider's picture (poster, photo, logo) from Solarr's own cache, fetched once on first use.
 	// (GET /images/remote)
 	GetRemoteImage(w http.ResponseWriter, r *http.Request, params GetRemoteImageParams)
@@ -8501,6 +8519,12 @@ func (_ Unimplemented) GetHealth(w http.ResponseWriter, r *http.Request) {
 // What happened to downloads -- grabbed, imported, failed (section 5.7).
 // (GET /history)
 func (_ Unimplemented) ListHistory(w http.ResponseWriter, r *http.Request, params ListHistoryParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Where the hourly search budget went in the last hour (F23).
+// (GET /hunt/budget)
+func (_ Unimplemented) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -13156,6 +13180,28 @@ func (siw *ServerInterfaceWrapper) ListHistory(w http.ResponseWriter, r *http.Re
 
 	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		siw.Handler.ListHistory(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// GetHuntBudget operation middleware
+func (siw *ServerInterfaceWrapper) GetHuntBudget(w http.ResponseWriter, r *http.Request) {
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.GetHuntBudget(w, r)
 	}))
 
 	for _, middleware := range siw.HandlerMiddlewares {
@@ -20170,6 +20216,9 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/history", wrapper.ListHistory)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/hunt/budget", wrapper.GetHuntBudget)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/images/remote", wrapper.GetRemoteImage)
