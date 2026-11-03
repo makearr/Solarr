@@ -157,6 +157,17 @@ func (s Subscriptions) FollowsOf(ctx context.Context, subject Subject, userID in
 	return out, nil
 }
 
+// Followed says whether any user has an enabled follow of the subject.
+func (s Subscriptions) Followed(ctx context.Context, subject Subject) (bool, error) {
+	count, err := librarydb.New(s.store.Read()).CountEnabledSubscriptionsForSubject(ctx, librarydb.CountEnabledSubscriptionsForSubjectParams{
+		SubjectType: subject.Type, SubjectID: subject.ID,
+	})
+	if err != nil {
+		return false, fmt.Errorf("library: followed %s %d: %w", subject.Type, subject.ID, err)
+	}
+	return count > 0, nil
+}
+
 // Get answers one subscription by id.
 func (s Subscriptions) Get(ctx context.Context, id int64) (Subscription, bool, error) {
 	all, err := s.ListEnabled(ctx)

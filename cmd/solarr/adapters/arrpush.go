@@ -105,8 +105,7 @@ func (p pusher) local(ctx context.Context, link library.ArrLink) (bool, error) {
 		}
 		return false, nil
 	default:
-		follows, err := p.sync.Subscriptions.FollowsOf(ctx, library.Subject{Type: link.LocalKind, ID: link.LocalID}, 0)
-		return len(follows) > 0, err
+		return p.sync.Subscriptions.Followed(ctx, library.Subject{Type: link.LocalKind, ID: link.LocalID})
 	}
 }
 

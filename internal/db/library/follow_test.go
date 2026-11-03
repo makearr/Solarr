@@ -40,6 +40,9 @@ func TestFollows_AreOnePerLibrary(t *testing.T) {
 		t.Fatalf("FollowsOf = %+v, %v; want both", follows, err)
 	}
 
+	if followed, err := subscriptions.Followed(t.Context(), subject); err != nil || !followed {
+		t.Fatalf("Followed = %v, %v; want true for a user's follow", followed, err)
+	}
 	if err := subscriptions.Unfollow(t.Context(), subject, user, 2); err != nil {
 		t.Fatal(err)
 	}
@@ -51,5 +54,8 @@ func TestFollows_AreOnePerLibrary(t *testing.T) {
 	}
 	if row, _ := people.Person(t.Context(), person.ID); row.Monitored != 0 {
 		t.Error("with no follow left the person is still monitored")
+	}
+	if followed, err := subscriptions.Followed(t.Context(), subject); err != nil || followed {
+		t.Errorf("Followed = %v, %v; want false with no follow left", followed, err)
 	}
 }
