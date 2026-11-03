@@ -1,5 +1,7 @@
 import type { components } from "@/api/schema";
 
+import { candidateSummary } from "./candidateSummary";
+
 type CandidateDecision = components["schemas"]["CandidateDecision"];
 
 /** The latest search's releases, best first, each sendable: the album page and Wanted's
@@ -27,7 +29,9 @@ export function CandidateList({
     return <p className="text-xs text-ink-muted">Nothing found yet -- try Search now.</p>;
   }
   return (
-    <ul className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-ink-muted">{candidateSummary(decisions)}</p>
+      <ul className="flex flex-col gap-2">
       {decisions.map((decision) => (
         <li
           key={decision.id}
@@ -108,7 +112,8 @@ export function CandidateList({
           )}
         </li>
       ))}
-    </ul>
+      </ul>
+    </div>
   );
 }
 
