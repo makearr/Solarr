@@ -37,7 +37,7 @@ type SonarrImport struct {
 
 // Import walks Sonarr's series.
 func (s SonarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrImportCounts, error) {
-	client, options := run.Client.Sonarr(), run.Options
+	client := run.Client.Sonarr()
 	var profileNames map[int64]string
 	return arrmap.Walk(ctx, run, arrmap.Source[arrimport.SonarrSeries]{
 		Connect: func(ctx context.Context) error {
@@ -49,17 +49,19 @@ func (s SonarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 		},
 		List: func(ctx context.Context) ([]arrimport.SonarrSeries, error) {
 			profileNames = sonarrProfileNames(ctx, client)
-			series, err := client.Series(ctx)
-			if err == nil && s.Warm != nil && !options.MonitoringOnly {
-				ids := make([]string, 0, len(series))
-				for _, one := range series {
-					if one.TVDBID != 0 {
-						ids = append(ids, strconv.FormatInt(one.TVDBID, 10))
-					}
-				}
-				s.Warm(ctx, ids)
+			return client.Series(ctx)
+		},
+		Prepare: func(ctx context.Context, chosen []arrimport.SonarrSeries) {
+			if s.Warm == nil {
+				return
 			}
-			return series, err
+			ids := make([]string, 0, len(chosen))
+			for _, one := range chosen {
+				if one.TVDBID != 0 {
+					ids = append(ids, strconv.FormatInt(one.TVDBID, 10))
+				}
+			}
+			s.Warm(ctx, ids)
 		},
 		Describe: func(series arrimport.SonarrSeries) arrmap.Item {
 			return arrmap.Item{Name: series.Title, RootFolder: series.RootFolderPath, Monitored: series.Monitored}

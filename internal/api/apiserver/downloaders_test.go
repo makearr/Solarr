@@ -2,8 +2,8 @@ package apiserver_test
 
 import (
 	"bytes"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 

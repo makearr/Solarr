@@ -33,7 +33,7 @@ func (r RadarrImport) Import(ctx context.Context, run arrmap.Run) (library.ArrIm
 }
 
 func (r RadarrImport) source(run arrmap.Run) arrmap.Source[arrimport.RadarrMovie] {
-	client, options := run.Client.Radarr(), run.Options
+	client := run.Client.Radarr()
 	var profileNames map[int64]string
 	return arrmap.Source[arrimport.RadarrMovie]{
 		Connect: func(ctx context.Context) error {
@@ -45,17 +45,19 @@ func (r RadarrImport) source(run arrmap.Run) arrmap.Source[arrimport.RadarrMovie
 		},
 		List: func(ctx context.Context) ([]arrimport.RadarrMovie, error) {
 			profileNames = radarrProfileNames(ctx, client)
-			movies, err := client.Movies(ctx)
-			if err == nil && r.Warm != nil && !options.MonitoringOnly {
-				ids := make([]string, 0, len(movies))
-				for _, movie := range movies {
-					if movie.TMDBID != 0 {
-						ids = append(ids, strconv.FormatInt(movie.TMDBID, 10))
-					}
-				}
-				r.Warm(ctx, ids)
+			return client.Movies(ctx)
+		},
+		Prepare: func(ctx context.Context, chosen []arrimport.RadarrMovie) {
+			if r.Warm == nil {
+				return
 			}
-			return movies, err
+			ids := make([]string, 0, len(chosen))
+			for _, movie := range chosen {
+				if movie.TMDBID != 0 {
+					ids = append(ids, strconv.FormatInt(movie.TMDBID, 10))
+				}
+			}
+			r.Warm(ctx, ids)
 		},
 		Describe: func(radarr arrimport.RadarrMovie) arrmap.Item {
 			return arrmap.Item{Name: radarr.Title, RootFolder: radarr.RootFolderPath, Monitored: radarr.Monitored}

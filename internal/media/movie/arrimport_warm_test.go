@@ -36,10 +36,12 @@ func TestRadarrImportWarmsWikidataWithEveryTMDBIDBeforeTheWalk(t *testing.T) {
 		httpx.ClientConfig{Provider: "radarr-test", UserAgent: "test", Transport: radarrAnswers{}})
 	var warmed []string
 	radarr := RadarrImport{Warm: func(_ context.Context, ids []string) { warmed = append(warmed, ids...) }}
-	movies, err := radarr.source(arrmap.Run{Client: arrimport.NewLidarrClient(client, "http://radarr.local", "key")}).List(t.Context())
+	source := radarr.source(arrmap.Run{Client: arrimport.NewLidarrClient(client, "http://radarr.local", "key")})
+	movies, err := source.List(t.Context())
 	if err != nil || len(movies) != 3 {
 		t.Fatalf("list = %d movies, %v", len(movies), err)
 	}
+	source.Prepare(t.Context(), movies)
 	if !slices.Equal(warmed, []string{"603", "78"}) {
 		t.Errorf("warmed %v, want every TMDB id", warmed)
 	}

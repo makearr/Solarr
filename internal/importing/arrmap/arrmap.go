@@ -104,6 +104,8 @@ type Source[T any] struct {
 	// Monitor sets what Solarr already holds of one item to the *Arr's monitored flag and adds nothing; nil means the app
 	// has no monitoring-only import. categoryID is the library its root folder belongs to, 0 when none does.
 	Monitor func(ctx context.Context, categoryID int64, item T) (library.ArrImportCounts, error)
+	// Prepare runs once on the items a full import will sync, after the limit applies, so a bulk warm covers only those.
+	Prepare func(ctx context.Context, chosen []T)
 	// Workers is how many items are synced at once; each waits mostly on providers that pace themselves.
 	Workers int
 }
@@ -137,6 +139,9 @@ func Walk[T any](ctx context.Context, run Run, source Source[T]) (library.ArrImp
 	}
 	if run.Options.Limit > 0 && len(chosen) > run.Options.Limit {
 		chosen = chosen[:run.Options.Limit]
+	}
+	if source.Prepare != nil && !run.Options.MonitoringOnly {
+		source.Prepare(ctx, chosen)
 	}
 	total := int64(len(chosen))
 	run.Progress(0, total)

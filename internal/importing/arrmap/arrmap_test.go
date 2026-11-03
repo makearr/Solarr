@@ -127,12 +127,17 @@ func TestWalkArr_MonitoringOnlyTakesEveryItemAndAddsNothing(t *testing.T) {
 // A limit tries an import on the first few chosen items; what the options leave out does not use it up.
 func TestWalk_LimitCountsOnlyChosenItems(t *testing.T) {
 	items := []walked{{"Alpha", "/a", false}, {"Bravo", "/b", true}, {"Charlie", "/c", true}, {"Delta", "/d", true}}
-	var synced []string
+	var synced, prepared []string
 	source := Source[walked]{
 		Connect: func(context.Context) error { return nil },
 		List:    func(context.Context) ([]walked, error) { return items, nil },
 		Describe: func(item walked) Item {
 			return Item{Name: item.name, RootFolder: item.root, Monitored: item.monitored}
+		},
+		Prepare: func(_ context.Context, chosen []walked) {
+			for _, item := range chosen {
+				prepared = append(prepared, item.name)
+			}
 		},
 		Sync: func(_ context.Context, _ int64, item walked) (library.ArrImportCounts, error) {
 			synced = append(synced, item.name)
@@ -145,5 +150,8 @@ func TestWalk_LimitCountsOnlyChosenItems(t *testing.T) {
 	}
 	if !slices.Equal(synced, []string{"Bravo", "Charlie"}) {
 		t.Errorf("synced %v, want the first two monitored", synced)
+	}
+	if !slices.Equal(prepared, []string{"Bravo", "Charlie"}) {
+		t.Errorf("prepared %v, want only what the limit keeps", prepared)
 	}
 }
