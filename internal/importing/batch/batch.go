@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/identify/model"
@@ -105,6 +106,20 @@ var ErrUnresolved = errors.New("batch: the unit was matched to nothing; say what
 
 // ErrNothingToPlace is a held unit none of whose files adds anything to the work.
 var ErrNothingToPlace = errors.New("batch: none of the unit's files is something the library does not already hold")
+
+// RejectedError is a unit whose files the import rules refused; its text is the Review queue's reason.
+type RejectedError struct {
+	MediaType  string
+	Rejections []model.Rejection
+}
+
+func (e *RejectedError) Error() string {
+	names := make([]string, len(e.Rejections))
+	for index, rejection := range e.Rejections {
+		names[index] = rejection.Rule
+	}
+	return e.MediaType + ": refused by the import rules: " + strings.Join(names, ", ")
+}
 
 // SizeFloor is an Importer whose walk leaves out media files smaller than MediaSizeFloorBytes.
 type SizeFloor interface {

@@ -1,8 +1,9 @@
-// Package works is what TV, movies, books and audiobooks do alike with the works of a library: add them, search for
-// what they want and send the best release, read the indexers' feeds, settle and judge their files against the
-// cutoff, place files a person names and read them again from their sources. Each media type keeps only its
-// specialisation (what an item wants, what a release is, which files a work has, which ids name it); the rest is here.
-// Music is not built on it: its albums are identified and grabbed track by track.
+// Package works is what TV, movies, adult, books and audiobooks do alike with the works of a library: add them,
+// search for what they want and send the best release, read the indexers' feeds, settle and judge their files against
+// the cutoff, import a download that holds one work, place files a person names and read them again from their
+// sources. Each media type keeps only its specialisation (what an item wants, what a release is, which files a work
+// has, which ids name it); the rest is here. Music is not built on it: its albums are identified and grabbed track by
+// track.
 package works
 
 import (

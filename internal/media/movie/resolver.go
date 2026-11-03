@@ -13,12 +13,13 @@ import (
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsemovie"
 	"github.com/makearr/Solarr/internal/identify/parsetv"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
 // ExcludedMovie is what Resolve answers for a movie the user deleted and asked not to see again: not a place to put the
 // file, and not something to queue for review either.
-const ExcludedMovie int64 = -1
+const ExcludedMovie = works.Excluded
 
 // searchLimit is how many hits one search keeps.
 const searchLimit = 10

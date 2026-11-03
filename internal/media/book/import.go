@@ -21,6 +21,7 @@ import (
 	"github.com/makearr/Solarr/internal/importing/placer"
 	"github.com/makearr/Solarr/internal/importing/rules"
 	"github.com/makearr/Solarr/internal/media"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/moving/mover"
 	"github.com/makearr/Solarr/internal/platform/clock"
 	"github.com/makearr/Solarr/internal/platform/fsx"
@@ -60,20 +61,25 @@ type ImporterConfig struct {
 // Importer is the book module's batch importer: it works out which book a download holds, names and places its files
 // below the author's folder, and records them as the book's. What it cannot place waits in the Review queue.
 type Importer struct {
+	works.Importer
+	placing
+}
+
+// placing is the book's part of works.Importer.
+type placing struct {
 	config ImporterConfig
-	logger *slog.Logger
 }
 
 // NewImporter builds the importer.
 func NewImporter(config ImporterConfig) Importer {
-	logger := config.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return Importer{config: config, logger: logger}
+	units := placing{config: config}
+	return Importer{works.NewImporter(works.ImporterConfig{
+		MediaType: "book", Noun: "book", GuessFloor: GuessFloor, Units: units,
+		Acquisitions: config.Acquisitions, Desired: config.Desired, Logger: config.Logger, AfterPlacing: config.AfterPlacing,
+	}), units}
 }
 
-func (i Importer) format() Format { return i.config.Resolver.Service.Format }
+func (p placing) format() Format { return p.config.Resolver.Service.Format }
 
 // MediaSizeFloorBytes implements batch.SizeFloor.
 func (i Importer) MediaSizeFloorBytes() int64 { return i.format().SizeFloorBytes }
@@ -84,159 +90,52 @@ func (i Importer) TakesBookFiles() bool { return !i.format().ByFolder }
 var (
 	_ batch.Importer      = Importer{}
 	_ batch.HeldCommitter = Importer{}
+	_ batch.SizeFloor     = Importer{}
 	_ batch.BookFiles     = Importer{}
 )
 
-var errNothingToPlace = errors.New("book: the unit holds no file the book still wants")
-
-// rejectedError says the unit's files were refused by the import rules.
-type rejectedError struct{ Rejections []model.Rejection }
-
-func (e *rejectedError) Error() string {
-	names := make([]string, len(e.Rejections))
-	for index, rejection := range e.Rejections {
-		names[index] = rejection.Rule
-	}
-	return "book: refused by the import rules: " + strings.Join(names, ", ")
-}
-
-// ImportBatch implements batch.Importer.
-func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
-	result := batch.Result{
-		Decisions:  make([]library.UnitDecision, len(request.Units)),
-		Placements: make([]*library.Placement, len(request.Units)),
-	}
-	var seeded int64
-	var upgrade bool
-	if request.AcquisitionID != nil {
-		seeded, upgrade = i.seededBook(ctx, *request.AcquisitionID)
-	}
-	for index, unit := range request.Units {
-		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no book of the library was found in it"}
-		workID, candidates := seeded, []model.Identification(nil)
-		if workID == 0 {
-			workID, candidates = i.resolve(ctx, request, unit)
-		}
-		if workID <= 0 {
-			result.Decisions[index] = decision
-			result.Decisions[index].CandidatesJSON = library.CandidatesJSON(candidates)
-			continue
-		}
-		decision.WorkID = &workID
-		if request.Preview {
-			decision.Reason = batch.ReasonPreview
-			result.Decisions[index] = decision
-			continue
-		}
-		placed, err := i.placeUnit(ctx, request, unit, workID, upgrade && workID == seeded)
-		var refused *rejectedError
-		switch {
-		case errors.Is(err, errNothingToPlace):
-			decision.Decision, decision.Reason, decision.WorkID = library.UnitSkip, batch.ReasonNothingNew, nil
-			result.Decisions[index] = decision
-		case errors.As(err, &refused):
-			decision.Reason = refused.Error()
-			result.Decisions[index] = decision
-		case errors.Is(err, placer.ErrNoRoot):
-			result.Decisions[index] = batch.WaitToPlace(decision, workID, err)
-		case err != nil:
-			i.logger.Warn("book import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
-			decision.Decision, decision.Reason, decision.WorkID = library.UnitFailed, err.Error(), nil
-			result.Decisions[index] = decision
-		default:
-			decision.Decision, decision.Reason, decision.Confidence = library.UnitCommit, "", 1
-			result.Decisions[index] = decision
-			result.Placements[index] = placed
-			if i.config.AfterPlacing != nil {
-				i.config.AfterPlacing(ctx, request.CategoryID, workID)
-			}
-		}
-	}
-	return result, nil
-}
-
-// resolve finds the book a unit holds: from its file's name (an ebook) or its folder's (an audiobook), else from the
-// download's own name.
-func (i Importer) resolve(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
-	files := i.bookFiles(unit)
+// Resolve implements works.UnitPlacer: the book from its file's name (an ebook) or its folder's (an audiobook), else
+// from the download's own name.
+func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
+	files := p.bookFiles(unit)
 	if len(files) == 0 {
 		return 0, nil
 	}
 	var candidates []model.Identification
-	if info, ok := i.format().Parse(files[0].RelPath); ok {
-		workID, found := i.config.Resolver.Resolve(ctx, request.CategoryID, info)
+	if info, ok := p.format().Parse(files[0].RelPath); ok {
+		workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, info)
 		if workID != 0 {
 			return workID, nil
 		}
 		candidates = found
 	}
 	if info, ok := parsebook.Parse(path.Base(path.Join(request.SourcePath, unit.Directory))); ok {
-		if workID, found := i.config.Resolver.Resolve(ctx, request.CategoryID, info); workID != 0 || len(candidates) == 0 {
+		if workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, info); workID != 0 || len(candidates) == 0 {
 			return workID, found
 		}
 	}
 	return 0, candidates
 }
 
-// seededBook is the book a download was grabbed for; upgrade says it was below its cutoff.
-func (i Importer) seededBook(ctx context.Context, acquisitionID int64) (workID int64, upgrade bool) {
-	acquisition, err := i.config.Acquisitions.Get(ctx, acquisitionID)
-	if err != nil || acquisition.DesiredItemID == nil {
-		return 0, false
+// ResolveNamed implements works.UnitPlacer: an id of the format's providers a person named.
+func (p placing) ResolveNamed(ctx context.Context, categoryID int64, named batch.Named) (int64, error) {
+	ids, ok := p.format().NamedIDs(named.Provider, named.ExternalID)
+	if !ok {
+		return 0, fmt.Errorf("%w: %s %q is not a book id", media.ErrInvalidAdd, named.Provider, named.ExternalID)
 	}
-	item, err := i.config.Desired.Get(ctx, *acquisition.DesiredItemID)
-	if err != nil {
-		return 0, false
-	}
-	return item.WorkID, item.State == ItemStateUpgradable
-}
-
-// CommitHeld implements batch.HeldCommitter: the unit goes to the book named, else the one it resolved to.
-func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (library.Placement, error) {
-	workID := request.WorkID
-	if request.As != nil && request.Guess > 0 && request.Guess < GuessFloor {
-		return library.Placement{}, batch.ErrGuessTooWeak
-	}
-	if request.As != nil {
-		ids, ok := i.format().NamedIDs(request.As.Provider, request.As.ExternalID)
-		if !ok {
-			return library.Placement{}, fmt.Errorf("%w: %s %q is not a book id", media.ErrInvalidAdd, request.As.Provider, request.As.ExternalID)
-		}
-		if i.config.Exclusions != nil {
-			if err := i.config.Exclusions.Allow(ctx, i.format().MediaType, request.As.Provider, request.As.ExternalID); err != nil {
-				return library.Placement{}, err
-			}
-		}
-		if workID = i.config.Resolver.ByIDs(ctx, request.CategoryID, ids); workID <= 0 {
-			return library.Placement{}, batch.ErrUnresolved
+	if p.config.Exclusions != nil {
+		if err := p.config.Exclusions.Allow(ctx, p.format().MediaType, named.Provider, named.ExternalID); err != nil {
+			return 0, err
 		}
 	}
-	if workID <= 0 {
-		return library.Placement{}, batch.ErrUnresolved
-	}
-	var upgrade bool
-	if request.AcquisitionID != nil {
-		seeded, upgradable := i.seededBook(ctx, *request.AcquisitionID)
-		upgrade = upgradable && workID == seeded
-	}
-	placed, err := i.placeUnit(ctx, batch.Request{SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath}, request.Unit, workID, upgrade)
-	if errors.Is(err, errNothingToPlace) {
-		return library.Placement{}, batch.ErrNothingToPlace
-	}
-	if err != nil {
-		return library.Placement{}, err
-	}
-	if i.config.AfterPlacing != nil {
-		i.config.AfterPlacing(ctx, request.CategoryID, workID)
-	}
-	return *placed, nil
+	return p.config.Resolver.ByIDs(ctx, categoryID, ids), nil
 }
 
 // bookFiles are the unit's files of the format, in the order their names sort as chapters ("2" before "10").
-func (i Importer) bookFiles(unit inspect.Unit) []inspect.File {
+func (p placing) bookFiles(unit inspect.Unit) []inspect.File {
 	var files []inspect.File
 	for _, file := range unit.Media {
-		if i.format().Includes(file.RelPath) {
+		if p.format().Includes(file.RelPath) {
 			files = append(files, file)
 		}
 	}
@@ -246,23 +145,24 @@ func (i Importer) bookFiles(unit inspect.Unit) []inspect.File {
 
 // placeUnit places the book's files: an ebook's file (each format a version of it), or an audiobook's chapters as its
 // numbered parts. A book that already has files takes more only as an upgrade of an ebook.
-func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
-	now := i.config.Clock.Now()
-	format := i.format()
-	files := i.bookFiles(unit)
+// Place implements works.UnitPlacer.
+func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
+	now := p.config.Clock.Now()
+	format := p.format()
+	files := p.bookFiles(unit)
 	if len(files) == 0 {
-		return nil, errNothingToPlace
+		return nil, batch.ErrNothingToPlace
 	}
-	roots, err := i.config.Identity.WorkFileRoots(ctx, workID)
+	roots, err := p.config.Identity.WorkFileRoots(ctx, workID)
 	if err != nil {
 		return nil, fmt.Errorf("book %d: find existing roots: %w", workID, err)
 	}
 	if len(roots) > 0 && (!upgrade || format.ByFolder) {
-		return nil, errNothingToPlace
+		return nil, batch.ErrNothingToPlace
 	}
 	for _, file := range files {
 		if rejection := rules.Unpacking(path.Join(request.SourcePath, file.RelPath), false); rejection != nil {
-			return nil, &rejectedError{Rejections: []model.Rejection{*rejection}}
+			return nil, &batch.RejectedError{MediaType: "book", Rejections: []model.Rejection{*rejection}}
 		}
 	}
 	placerFiles := make([]placer.File, len(files))
@@ -271,27 +171,27 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		placerFiles[index] = placer.File{RelPath: file.RelPath, SizeBytes: file.SizeBytes}
 		total += file.SizeBytes
 	}
-	hashes, err := i.config.Placer.CheckBlocked(ctx, request.SourcePath, placerFiles)
+	hashes, err := p.config.Placer.CheckBlocked(ctx, request.SourcePath, placerFiles)
 	if err != nil {
 		return nil, err
 	}
-	basics, err := i.config.Reader.Basics(ctx, workID)
+	basics, err := p.config.Reader.Basics(ctx, workID)
 	if err != nil {
 		return nil, fmt.Errorf("book %d: %w", workID, err)
 	}
-	names, fileManagement := i.namingFor(request.CategoryID)
-	destRoot, err := i.config.Placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(format, basics.Title), total)
+	names, fileManagement := p.namingFor(request.CategoryID)
+	destRoot, err := p.config.Placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(format, basics.Title), total)
 	if err != nil {
 		return nil, err
 	}
-	facts, err := NamingFacts(ctx, i.config.Reader, format, request.CategoryID, workID, now)
+	facts, err := NamingFacts(ctx, p.config.Reader, format, request.CategoryID, workID, now)
 	if err != nil {
 		return nil, err
 	}
-	methods := i.config.Placer.Methods(request.Ladder)
+	methods := p.config.Placer.Methods(request.Ladder)
 	var placed []placer.Placed
 	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, i.config.Placer.Undo(placed))
+		return nil, errors.Join(cause, p.config.Placer.Undo(placed))
 	}
 	physical := make([]library.PhysicalFile, 0, len(files))
 	owners := make([]placer.Owner, 0, len(files))
@@ -311,21 +211,21 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 			return undo(fmt.Errorf("name %q: %w", file.RelPath, err))
 		}
 		if upgrade || slices.ContainsFunc(placed, func(done placer.Placed) bool { return done.Rel == destRel }) {
-			destRel = i.config.Placer.FreeName(destRoot.Path, destRel)
+			destRel = p.config.Placer.FreeName(destRoot.Path, destRel)
 		}
 		sourceAbs, destAbs := path.Join(request.SourcePath, file.RelPath), path.Join(destRoot.Path, destRel)
-		method, err := mover.PlaceOne(i.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
+		method, err := mover.PlaceOne(p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
 		if err != nil {
 			return undo(fmt.Errorf("place %q: %w", file.RelPath, err))
 		}
 		placed = append(placed, placer.Placed{Source: sourceAbs, Dest: destAbs, Rel: destRel, Hash: hashes[index], Size: file.SizeBytes, Method: method})
 		if method != mover.PlaceSymlink {
-			i.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
+			p.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
 		}
 		physical = append(physical, library.PhysicalFile{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[index], FirstSeenAt: now})
 		owners = append(owners, placer.Owner{SourceRel: file.RelPath, DestRel: destRel})
 	}
-	registered, err := i.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
+	registered, err := p.config.Physical.RegisterBatch(ctx, destRoot.ID, physical)
 	if err != nil {
 		return undo(fmt.Errorf("register placed files: %w", err))
 	}
@@ -335,23 +235,23 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		placement.LibraryPathIDs = append(placement.LibraryPathIDs, entry.LibraryPathID)
 		placement.TransferMethods = append(placement.TransferMethods, string(placed[index].Method))
 	}
-	if _, err := i.config.Series.AttachWholeFiles(ctx, now, workID, destRoot.ID, placement.MediaObjectIDs); err != nil {
+	if _, err := p.config.Series.AttachWholeFiles(ctx, now, workID, destRoot.ID, placement.MediaObjectIDs); err != nil {
 		return undo(err)
 	}
-	if i.config.ExtraFiles != nil {
-		placement.Extras = i.config.Placer.Extras(i.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners[:1], methods)
+	if p.config.ExtraFiles != nil {
+		placement.Extras = p.config.Placer.Extras(p.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners[:1], methods)
 	}
 	return placement, nil
 }
 
-func (i Importer) namingFor(categoryID int64) (Naming, settings.FileManagement) {
-	names := i.format().NamingFor(nil)
+func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
+	names := p.format().NamingFor(nil)
 	fileManagement := settings.DefaultFileManagement
-	if category, found := i.config.Categories.Category(categoryID); found {
-		names = i.format().NamingFor(category.Naming)
+	if category, found := p.config.Categories.Category(categoryID); found {
+		names = p.format().NamingFor(category.Naming)
 		fileManagement = category.FileManagement
 	}
-	if i.config.RenameOnImport != nil && !i.config.RenameOnImport() {
+	if p.config.RenameOnImport != nil && !p.config.RenameOnImport() {
 		names.RenameFiles = false
 	}
 	return names, fileManagement

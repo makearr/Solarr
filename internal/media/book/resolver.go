@@ -12,12 +12,13 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parsebook"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
 // Excluded is what Resolve answers for a book a person removed and asked not to see again: not a place to put the
 // file, and not something to queue for review either.
-const Excluded int64 = -1
+const Excluded = works.Excluded
 
 // searchLimit is how many hits one search keeps.
 const searchLimit = 10

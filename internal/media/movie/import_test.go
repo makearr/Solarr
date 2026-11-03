@@ -8,6 +8,7 @@ import (
 
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
+	"github.com/makearr/Solarr/internal/db/store"
 	"github.com/makearr/Solarr/internal/importing/batch"
 	"github.com/makearr/Solarr/internal/importing/inspect"
 	"github.com/makearr/Solarr/internal/importing/placer"
@@ -49,6 +50,13 @@ func newImporter(t *testing.T) (movie.Importer, *fsx.Mem, func(rel string) inspe
 // newImporterWithRoom is newImporter over a root with free bytes left.
 func newImporterWithRoom(t *testing.T, free int64) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity) {
 	t.Helper()
+	importer, fsys, write, identity, _ := newImporterOver(t, free, noAcquisition{})
+	return importer, fsys, write, identity
+}
+
+// newImporterOver is newImporterWithRoom whose downloads come from acquisitions, with the library's store.
+func newImporterOver(t *testing.T, free int64, acquisitions batch.AcquisitionSource) (movie.Importer, *fsx.Mem, func(rel string) inspect.File, library.Identity, *store.Store) {
+	t.Helper()
 	service, opened := newService(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, nil)
 	fake := clock.NewFakeAtEpoch()
 	fake.Set(addNow)
@@ -75,14 +83,45 @@ func newImporterWithRoom(t *testing.T, free int64) (movie.Importer, *fsx.Mem, fu
 	reader := library.NewSeriesReader(opened)
 	return movie.NewImporter(movie.ImporterConfig{
 		FS: fsys, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader, Identity: identity,
-		Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Desired: library.NewDesired(opened), Acquisitions: acquisitions,
 		Placer: placer.New(placer.Config{
 			FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &total}},
 			Affinity: memoryAffinity{}, Identity: identity, Clock: fake,
 		}),
 		Resolver:   movie.Resolver{Service: service, Reader: reader, DefaultProfileID: 1, Categories: categories{}},
 		Categories: categories{}, Clock: fake,
-	}), fsys, write, identity
+	}), fsys, write, identity, opened
+}
+
+// grabbedFor is a download grabbed for one desired item.
+type grabbedFor struct{ desiredItemID *int64 }
+
+func (g grabbedFor) Get(context.Context, int64) (library.Acquisition, error) {
+	return library.Acquisition{DesiredItemID: g.desiredItemID}, nil
+}
+
+// A download is the film it was grabbed for, whatever its folder is called.
+func TestImportOfADownloadGoesToTheFilmItWasGrabbedFor(t *testing.T) {
+	var desiredItemID int64
+	importer, _, write, _, opened := newImporterOver(t, 1<<40, grabbedFor{&desiredItemID})
+	first, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{5},
+		Units: []inspect.Unit{{Directory: "The.Example.Film.1999.1080p", Media: []inspect.File{write("The.Example.Film.1999.1080p/film.mkv")}}}})
+	if err != nil || first.Decisions[0].WorkID == nil {
+		t.Fatalf("first import = %+v, %v; want The Example Film placed", first.Decisions, err)
+	}
+	items, err := library.NewDesired(opened).AlbumItemsForWork(t.Context(), *first.Decisions[0].WorkID)
+	if err != nil || len(items) != 1 {
+		t.Fatalf("items = %+v, %v; want the film's one item", items, err)
+	}
+	desiredItemID = items[0].ID
+
+	acquisitionID := int64(1)
+	again, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 2, CategoryID: 3, SourcePath: "/downloads", UnitIDs: []int64{6}, AcquisitionID: &acquisitionID,
+		Units: []inspect.Unit{{Directory: "holiday", Media: []inspect.File{write("holiday/clip.mkv")}}}})
+	// Held already and not wanted better, so it adds nothing; unseeded, a folder named so is held for a person.
+	if d := again.Decisions[0]; err != nil || d.Decision != library.UnitSkip || d.Reason != batch.ReasonNothingNew {
+		t.Errorf("decision = %+v, %v; want the grabbed film's download skipped as nothing new", d, err)
+	}
 }
 
 func TestImportPlacesTheBiggestFileUnderTheMovieFolderAndLeavesTheSample(t *testing.T) {

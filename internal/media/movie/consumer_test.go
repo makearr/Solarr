@@ -1,7 +1,9 @@
 package movie_test
 
 import (
+	"bytes"
 	"context"
+	"database/sql"
 	"path"
 	"testing"
 	"time"
@@ -9,6 +11,7 @@ import (
 	"github.com/makearr/Solarr/internal/db/library"
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/db/store"
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/media/movie"
 	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/platform/clock"
@@ -234,5 +237,35 @@ func TestScanTakesTheFoldersYearWhenTheFileIsNamedAnotherYear(t *testing.T) {
 	}
 	if queue, err := library.NewUnidentified(opened).Count(t.Context()); err != nil || queue != 0 {
 		t.Errorf("review queue = %d, %v; want none", queue, err)
+	}
+}
+
+func TestScanRecordsEachFilesFingerprint(t *testing.T) {
+	consumer, opened, fsys := newConsumer(t, byTitle{movies: []tmdb.Movie{simpleMovie(603, "The Example Film", "1999-03-30")}}, settings.TVMonitorExisting)
+	rel := "The Example Film (1999)/The Example Film (1999).mkv"
+	absolute := path.Join(scanRoot, rel)
+	if err := fsys.MkdirAll(path.Dir(absolute), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// An oshash reads a 64 KiB block from each end, so the file must be larger than one.
+	content := bytes.Repeat([]byte("frame "), 30_000)
+	file, err := fsys.Create(absolute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = file.Write(content)
+	_ = file.Close()
+	want, err := library.OSHash(fsys, absolute, int64(len(content)))
+	if err != nil || want == "" {
+		t.Fatalf("OSHash = %q, %v; want a fingerprint", want, err)
+	}
+
+	observed := scan.Observed{File: scan.Found{RelPath: rel, SizeBytes: int64(len(content)), ModTime: time.Unix(0, 0)}, Probe: mediatool.Probe{Path: absolute}}
+	if err := consumer.Observe(t.Context(), root(), 3, []scan.Observed{observed}); err != nil {
+		t.Fatal(err)
+	}
+	object, err := librarydb.New(opened.Read()).GetMediaObjectByOshash(t.Context(), sql.NullString{String: want, Valid: true})
+	if err != nil || object.SizeBytes != int64(len(content)) {
+		t.Fatalf("media object by oshash = %+v, %v; want the scanned file", object, err)
 	}
 }

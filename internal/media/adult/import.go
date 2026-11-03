@@ -64,17 +64,20 @@ type ImporterConfig struct {
 // Importer is the adult module's batch importer: it works out which scene a download holds, names and places its video
 // file below the studio's folder, and records it as the scene's. What it cannot place waits in the Review queue.
 type Importer struct {
+	works.Importer
+}
+
+// placing is the scene's part of works.Importer.
+type placing struct {
 	config ImporterConfig
-	logger *slog.Logger
 }
 
 // NewImporter builds the importer.
 func NewImporter(config ImporterConfig) Importer {
-	logger := config.Logger
-	if logger == nil {
-		logger = slog.Default()
-	}
-	return Importer{config: config, logger: logger}
+	return Importer{works.NewImporter(works.ImporterConfig{
+		MediaType: MediaType, Noun: "scene", GuessFloor: GuessFloor, Units: placing{config: config},
+		Acquisitions: config.Acquisitions, Desired: config.Desired, Logger: config.Logger, AfterPlacing: config.AfterPlacing,
+	})}
 }
 
 // MediaSizeFloorBytes implements batch.SizeFloor.
@@ -83,158 +86,48 @@ func (Importer) MediaSizeFloorBytes() int64 { return batch.VideoSizeFloorBytes }
 var (
 	_ batch.Importer      = Importer{}
 	_ batch.HeldCommitter = Importer{}
+	_ batch.SizeFloor     = Importer{}
 )
 
-var errNothingToPlace = errors.New("adult: the unit holds no file the scene still wants")
-
-// rejectedError says the unit's file was refused by the import rules.
-type rejectedError struct{ Rejections []model.Rejection }
-
-func (e *rejectedError) Error() string {
-	names := make([]string, len(e.Rejections))
-	for index, rejection := range e.Rejections {
-		names[index] = rejection.Rule
-	}
-	return "adult: refused by the import rules: " + strings.Join(names, ", ")
-}
-
-// ImportBatch implements batch.Importer.
-func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch.Result, error) {
-	result := batch.Result{
-		Decisions:  make([]library.UnitDecision, len(request.Units)),
-		Placements: make([]*library.Placement, len(request.Units)),
-	}
-	var seeded int64
-	var upgrade bool
-	if request.AcquisitionID != nil {
-		seeded, upgrade = i.seededScene(ctx, *request.AcquisitionID)
-	}
-	for index, unit := range request.Units {
-		decision := library.UnitDecision{UnitID: request.UnitIDs[index], Decision: library.UnitQueue, Reason: "no scene of the library was found in it"}
-		workID, candidates := seeded, []model.Identification(nil)
-		if workID == 0 {
-			workID, candidates = i.resolve(ctx, request, unit)
-		}
-		if workID <= 0 {
-			result.Decisions[index] = decision
-			result.Decisions[index].CandidatesJSON = library.CandidatesJSON(candidates)
-			continue
-		}
-		decision.WorkID = &workID
-		if request.Preview {
-			decision.Reason = batch.ReasonPreview
-			result.Decisions[index] = decision
-			continue
-		}
-		placed, err := i.placeUnit(ctx, request, unit, workID, upgrade && workID == seeded)
-		var refused *rejectedError
-		switch {
-		case errors.Is(err, errNothingToPlace):
-			decision.Decision, decision.Reason, decision.WorkID = library.UnitSkip, batch.ReasonNothingNew, nil
-			result.Decisions[index] = decision
-		case errors.As(err, &refused):
-			decision.Reason = refused.Error()
-			result.Decisions[index] = decision
-		case errors.Is(err, placer.ErrNoRoot):
-			result.Decisions[index] = batch.WaitToPlace(decision, workID, err)
-		case err != nil:
-			i.logger.Warn("adult import: could not place unit", slog.String("unit", unit.Directory), slog.Any("error", err))
-			decision.Decision, decision.Reason, decision.WorkID = library.UnitFailed, err.Error(), nil
-			result.Decisions[index] = decision
-		default:
-			decision.Decision, decision.Reason, decision.Confidence = library.UnitCommit, "", 1
-			result.Decisions[index] = decision
-			result.Placements[index] = placed
-			if i.config.AfterPlacing != nil {
-				i.config.AfterPlacing(ctx, request.CategoryID, workID)
-			}
-		}
-	}
-	return result, nil
-}
-
-// resolve finds the scene a unit holds: from its file's fingerprint and name, else from the download's own name.
-func (i Importer) resolve(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
+// Resolve implements works.UnitPlacer: the scene from its file's fingerprint and name, else from the download's name.
+func (p placing) Resolve(ctx context.Context, request batch.Request, unit inspect.Unit) (int64, []model.Identification) {
 	file := largest(unit.Media)
 	if file == nil {
 		return 0, nil
 	}
-	oshash, _ := library.OSHash(i.config.FS, path.Join(request.SourcePath, file.RelPath), file.SizeBytes)
+	oshash, _ := library.OSHash(p.config.FS, path.Join(request.SourcePath, file.RelPath), file.SizeBytes)
 	var candidates []model.Identification
 	info, parsed := parseadult.ParsePath(file.RelPath)
 	if parsed || oshash != "" {
-		workID, found := i.config.Resolver.Resolve(ctx, request.CategoryID, info, oshash)
+		workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, info, oshash)
 		if workID != 0 {
 			return workID, nil
 		}
 		candidates = found
 	}
 	if release, ok := parseadult.ParseName(path.Base(path.Join(request.SourcePath, unit.Directory))); ok {
-		if workID, found := i.config.Resolver.Resolve(ctx, request.CategoryID, release, ""); workID != 0 || len(candidates) == 0 {
+		if workID, found := p.config.Resolver.Resolve(ctx, request.CategoryID, release, ""); workID != 0 || len(candidates) == 0 {
 			return workID, found
 		}
 	}
 	return 0, candidates
 }
 
-// seededScene is the scene a download was grabbed for; upgrade says it was below its cutoff.
-func (i Importer) seededScene(ctx context.Context, acquisitionID int64) (workID int64, upgrade bool) {
-	acquisition, err := i.config.Acquisitions.Get(ctx, acquisitionID)
-	if err != nil || acquisition.DesiredItemID == nil {
-		return 0, false
+// ResolveNamed implements works.UnitPlacer: a film's id adds the film, a scene's finds the scene.
+func (p placing) ResolveNamed(ctx context.Context, categoryID int64, named batch.Named) (int64, error) {
+	if named.Provider == ProviderFilm {
+		return p.config.Resolver.AddFilm(ctx, categoryID, named.ExternalID)
 	}
-	item, err := i.config.Desired.Get(ctx, *acquisition.DesiredItemID)
-	if err != nil {
-		return 0, false
+	ids, ok := NamedIDs(named.Provider, named.ExternalID)
+	if !ok {
+		return 0, fmt.Errorf("%w: %s %q is not a scene id", media.ErrInvalidAdd, named.Provider, named.ExternalID)
 	}
-	return item.WorkID, item.State == works.StateUpgradable
-}
-
-// CommitHeld implements batch.HeldCommitter: the unit goes to the scene named, else the one it resolved to.
-func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (library.Placement, error) {
-	workID := request.WorkID
-	if request.As != nil && request.Guess > 0 && request.Guess < GuessFloor {
-		return library.Placement{}, batch.ErrGuessTooWeak
-	}
-	if request.As != nil && request.As.Provider == ProviderFilm {
-		film, err := i.config.Resolver.AddFilm(ctx, request.CategoryID, request.As.ExternalID)
-		if err != nil {
-			return library.Placement{}, err
-		}
-		workID = film
-	} else if request.As != nil {
-		ids, ok := NamedIDs(request.As.Provider, request.As.ExternalID)
-		if !ok {
-			return library.Placement{}, fmt.Errorf("%w: %s %q is not a scene id", media.ErrInvalidAdd, request.As.Provider, request.As.ExternalID)
-		}
-		if i.config.Exclusions != nil {
-			if err := i.config.Exclusions.Allow(ctx, MediaType, request.As.Provider, request.As.ExternalID); err != nil {
-				return library.Placement{}, err
-			}
-		}
-		if workID = i.config.Resolver.ByIDs(ctx, request.CategoryID, ids, Hint{}); workID <= 0 {
-			return library.Placement{}, batch.ErrUnresolved
+	if p.config.Exclusions != nil {
+		if err := p.config.Exclusions.Allow(ctx, MediaType, named.Provider, named.ExternalID); err != nil {
+			return 0, err
 		}
 	}
-	if workID <= 0 {
-		return library.Placement{}, batch.ErrUnresolved
-	}
-	var upgrade bool
-	if request.AcquisitionID != nil {
-		seeded, upgradable := i.seededScene(ctx, *request.AcquisitionID)
-		upgrade = upgradable && workID == seeded
-	}
-	placed, err := i.placeUnit(ctx, batch.Request{SessionID: request.SessionID, CategoryID: request.CategoryID, SourcePath: request.SourcePath}, request.Unit, workID, upgrade)
-	if errors.Is(err, errNothingToPlace) {
-		return library.Placement{}, batch.ErrNothingToPlace
-	}
-	if err != nil {
-		return library.Placement{}, err
-	}
-	if i.config.AfterPlacing != nil {
-		i.config.AfterPlacing(ctx, request.CategoryID, workID)
-	}
-	return *placed, nil
+	return p.config.Resolver.ByIDs(ctx, categoryID, ids, Hint{}), nil
 }
 
 // largest is the unit's biggest video file, which is the scene; the rest are samples.
@@ -250,16 +143,16 @@ func largest(files []inspect.File) *inspect.File {
 
 // screen holds the scene's file against the checks made before an import: still being unpacked, one part of several, a
 // sample by its runtime, no audio track. nil lets it through.
-func (i Importer) screen(ctx context.Context, sourceAbs string, siblings []string, expectedMinutes int) *model.Rejection {
+func (p placing) screen(ctx context.Context, sourceAbs string, siblings []string, expectedMinutes int) *model.Rejection {
 	for _, rejection := range []*model.Rejection{rules.Unpacking(sourceAbs, false), rules.MultiPart(sourceAbs, siblings)} {
 		if rejection != nil {
 			return rejection
 		}
 	}
-	if i.config.Probe == nil {
+	if p.config.Probe == nil {
 		return nil
 	}
-	measured, ok := i.config.Probe(ctx, sourceAbs)
+	measured, ok := p.config.Probe(ctx, sourceAbs)
 	if expectedMinutes == 0 {
 		expectedMinutes = defaultSceneMinutes
 	}
@@ -274,20 +167,21 @@ func (i Importer) screen(ctx context.Context, sourceAbs string, siblings []strin
 }
 
 // placeUnit places the scene's file. A scene that already has a file takes another only as an upgrade.
-func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
-	now := i.config.Clock.Now()
+// Place implements works.UnitPlacer.
+func (p placing) Place(ctx context.Context, request batch.Request, unit inspect.Unit, workID int64, upgrade bool) (*library.Placement, error) {
+	now := p.config.Clock.Now()
 	file := largest(unit.Media)
 	if file == nil {
-		return nil, errNothingToPlace
+		return nil, batch.ErrNothingToPlace
 	}
-	roots, err := i.config.Identity.WorkFileRoots(ctx, workID)
+	roots, err := p.config.Identity.WorkFileRoots(ctx, workID)
 	if err != nil {
 		return nil, fmt.Errorf("scene %d: find existing roots: %w", workID, err)
 	}
 	if len(roots) > 0 && !upgrade {
-		return nil, errNothingToPlace
+		return nil, batch.ErrNothingToPlace
 	}
-	basics, err := i.config.Reader.Basics(ctx, workID)
+	basics, err := p.config.Reader.Basics(ctx, workID)
 	if err != nil {
 		return nil, fmt.Errorf("scene %d: %w", workID, err)
 	}
@@ -297,19 +191,19 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		siblings = append(siblings, path.Join(request.SourcePath, other.RelPath))
 	}
 	// A scene is as long as its provider says; the sample check scales to it.
-	if rejection := i.screen(ctx, sourceAbs, siblings, int(basics.RuntimeMs/60_000)); rejection != nil {
-		return nil, &rejectedError{Rejections: []model.Rejection{*rejection}}
+	if rejection := p.screen(ctx, sourceAbs, siblings, int(basics.RuntimeMs/60_000)); rejection != nil {
+		return nil, &batch.RejectedError{MediaType: MediaType, Rejections: []model.Rejection{*rejection}}
 	}
-	hashes, err := i.config.Placer.CheckBlocked(ctx, request.SourcePath, []placer.File{{RelPath: file.RelPath, SizeBytes: file.SizeBytes}})
+	hashes, err := p.config.Placer.CheckBlocked(ctx, request.SourcePath, []placer.File{{RelPath: file.RelPath, SizeBytes: file.SizeBytes}})
 	if err != nil {
 		return nil, err
 	}
-	names, fileManagement := i.namingFor(request.CategoryID)
-	destRoot, err := i.config.Placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(basics.Title), file.SizeBytes)
+	names, fileManagement := p.namingFor(request.CategoryID)
+	destRoot, err := p.config.Placer.ChooseRoot(ctx, request.CategoryID, workID, affinityKey(basics.Title), file.SizeBytes)
 	if err != nil {
 		return nil, err
 	}
-	facts, err := NamingFacts(ctx, i.config.Reader, request.CategoryID, workID, now)
+	facts, err := NamingFacts(ctx, p.config.Reader, request.CategoryID, workID, now)
 	if err != nil {
 		return nil, err
 	}
@@ -322,48 +216,48 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 		return nil, fmt.Errorf("name %q: %w", file.RelPath, err)
 	}
 	if upgrade {
-		destRel = i.config.Placer.FreeName(destRoot.Path, destRel)
+		destRel = p.config.Placer.FreeName(destRoot.Path, destRel)
 	}
 	destAbs := path.Join(destRoot.Path, destRel)
-	methods := i.config.Placer.Methods(request.Ladder)
-	method, err := mover.PlaceOne(i.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
+	methods := p.config.Placer.Methods(request.Ladder)
+	method, err := mover.PlaceOne(p.config.FS, sourceAbs, destAbs, file.SizeBytes, methods)
 	if err != nil {
 		return nil, fmt.Errorf("place %q: %w", file.RelPath, err)
 	}
 	placed := []placer.Placed{{Source: sourceAbs, Dest: destAbs, Rel: destRel, Hash: hashes[0], Size: file.SizeBytes, Method: method}}
 	undo := func(cause error) (*library.Placement, error) {
-		return nil, errors.Join(cause, i.config.Placer.Undo(placed))
+		return nil, errors.Join(cause, p.config.Placer.Undo(placed))
 	}
 	if method != mover.PlaceSymlink {
-		i.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
+		p.config.Placer.Finish(destRoot, destAbs, fileManagement, time.Time{})
 	}
-	oshash, _ := library.OSHash(i.config.FS, destAbs, file.SizeBytes)
-	registered, err := i.config.Physical.RegisterBatch(ctx, destRoot.ID, []library.PhysicalFile{{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[0], OSHash: oshash, FirstSeenAt: now}})
+	oshash, _ := library.OSHash(p.config.FS, destAbs, file.SizeBytes)
+	registered, err := p.config.Physical.RegisterBatch(ctx, destRoot.ID, []library.PhysicalFile{{RelPath: destRel, SizeBytes: file.SizeBytes, QuickHash: hashes[0], OSHash: oshash, FirstSeenAt: now}})
 	if err != nil {
 		return undo(fmt.Errorf("register placed file: %w", err))
 	}
-	if _, err := i.config.Series.AttachWholeFiles(ctx, now, workID, destRoot.ID, []int64{registered[0].MediaObjectID}); err != nil {
+	if _, err := p.config.Series.AttachWholeFiles(ctx, now, workID, destRoot.ID, []int64{registered[0].MediaObjectID}); err != nil {
 		return undo(err)
 	}
 	placement := &library.Placement{
 		WorkID: workID, MediaObjectIDs: []int64{registered[0].MediaObjectID}, LibraryPathIDs: []int64{registered[0].LibraryPathID},
 		TransferMethods: []string{string(method)},
 	}
-	if i.config.ExtraFiles != nil {
+	if p.config.ExtraFiles != nil {
 		owners := []placer.Owner{{SourceRel: file.RelPath, DestRel: destRel}}
-		placement.Extras = i.config.Placer.Extras(i.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners, methods)
+		placement.Extras = p.config.Placer.Extras(p.config.ExtraFiles(request.CategoryID), request.SourcePath, destRoot, unit.Other, owners, methods)
 	}
 	return placement, nil
 }
 
-func (i Importer) namingFor(categoryID int64) (Naming, settings.FileManagement) {
+func (p placing) namingFor(categoryID int64) (Naming, settings.FileManagement) {
 	names := NamingFor(nil)
 	fileManagement := settings.DefaultFileManagement
-	if category, found := i.config.Categories.Category(categoryID); found {
+	if category, found := p.config.Categories.Category(categoryID); found {
 		names = NamingFor(category.Naming)
 		fileManagement = category.FileManagement
 	}
-	if i.config.RenameOnImport != nil && !i.config.RenameOnImport() {
+	if p.config.RenameOnImport != nil && !p.config.RenameOnImport() {
 		names.RenameFiles = false
 	}
 	return names, fileManagement

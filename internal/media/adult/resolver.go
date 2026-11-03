@@ -11,12 +11,13 @@ import (
 	"github.com/makearr/Solarr/internal/db/settings"
 	"github.com/makearr/Solarr/internal/identify/model"
 	"github.com/makearr/Solarr/internal/identify/parseadult"
+	"github.com/makearr/Solarr/internal/media/works"
 	"github.com/makearr/Solarr/internal/platform/keyedlock"
 )
 
 // Excluded is what Resolve answers for a scene a person removed and asked not to see again: not a place to put the
 // file, and not something to queue for review either.
-const Excluded int64 = -1
+const Excluded = works.Excluded
 
 // rankedWell is how far down a provider's own ranking an exact hit may sit and still be taken.
 const rankedWell = 3

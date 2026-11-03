@@ -138,7 +138,7 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			continue
 		}
 		placed, err := i.placeUnit(ctx, request, unit, workID, upgrade && workID == seeded)
-		var refused *rejectedError
+		var refused *batch.RejectedError
 		var untitled *titleWaitError
 		switch {
 		case errors.Is(err, errNothingToPlace):
@@ -245,17 +245,6 @@ func (i Importer) seedSeries(ctx context.Context, acquisitionID int64) (workID i
 	return item.WorkID, item.State == ItemStateUpgradable || item.State == "PARTIAL"
 }
 
-// rejectedError says every file of a unit that could have been placed was refused by Sonarr's import rules.
-type rejectedError struct{ Rejections []model.Rejection }
-
-func (e *rejectedError) Error() string {
-	rules := make([]string, len(e.Rejections))
-	for index, rejection := range e.Rejections {
-		rules[index] = rejection.Rule
-	}
-	return "tv: refused by the import rules: " + strings.Join(rules, ", ")
-}
-
 // screen holds one downloaded file against the checks Sonarr makes before it imports: still being unpacked, a whole
 // season or one piece of an episode in a single file, a sample by its runtime, no audio track. nil lets it through.
 func (i Importer) screen(ctx context.Context, sourceAbs string, info parsetv.Info, parts []library.ResolvedPart, runtimes map[string]int64) *model.Rejection {
@@ -349,7 +338,7 @@ func (i Importer) placeUnit(ctx context.Context, request batch.Request, unit ins
 	}
 	if len(files) == 0 {
 		if len(rejections) > 0 {
-			return nil, &rejectedError{Rejections: rejections}
+			return nil, &batch.RejectedError{MediaType: "tv", Rejections: rejections}
 		}
 		return nil, errNothingToPlace
 	}

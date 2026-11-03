@@ -417,11 +417,14 @@ var allowedInternalImports = map[string][]string{
 		"internal/moving/renamejob", "internal/platform/clock", "internal/platform/fsx", "internal/platform/keyedlock",
 		"internal/platform/parallel", "internal/scanning/scan", "internal/db/statistics",
 	},
-	// What TV, movies and books do alike with their works: search, grab, feeds, cutoff, adding, placing and refreshing.
+	// What TV, movies, adult and books do alike with their works: search, grab, feeds, cutoff, adding, importing, placing
+	// and refreshing.
 	"internal/media/works": {
 		"internal/acquiring/cutoff", "internal/acquiring/dispatch", "internal/acquiring/indexer", "internal/acquiring/judge",
 		"internal/acquiring/rss", "internal/db/library", "internal/db/settings", "internal/db/statistics", "internal/db/store/gen/librarydb",
 		"internal/identify/model", "internal/identify/quality", "internal/identify/score", "internal/jobs", "internal/media",
+		"internal/importing/batch", "internal/importing/inspect", "internal/importing/placer", "internal/scanning/scan",
+		"internal/platform/fsx",
 		"internal/platform/clock", "internal/platform/parallel",
 	},
 	// The book providers: Open Library, Google Books, Audible's catalog with Audnexus.
