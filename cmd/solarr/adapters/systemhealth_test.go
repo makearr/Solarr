@@ -4,9 +4,11 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
 	"github.com/makearr/Solarr/internal/db/library"
+	"github.com/makearr/Solarr/internal/platform/httpx"
 )
 
 type fakeActive []library.Acquisition
@@ -30,5 +32,21 @@ func TestSystemHealth_CountsOnlyDownloadsHeldForAPerson(t *testing.T) {
 	}
 	if none := (SystemHealth{Acquisitions: fakeActive{{State: poll.StateImporting}}}).waitingForReview(t.Context()); len(none) != 0 {
 		t.Errorf("checks = %+v, want none", none)
+	}
+}
+
+func TestSystemHealth_NamesAPausedMetadataProviderAndSkipsAnUnknownConnection(t *testing.T) {
+	retry := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	health := SystemHealth{Paused: func() []httpx.BreakerSnapshot {
+		return []httpx.BreakerSnapshot{
+			{Provider: "tmdb", RetryAt: retry, KeyRejected: true},
+			{Provider: "indexer:abc", RetryAt: retry},
+			{Provider: "arr:3", RetryAt: retry},
+		}
+	}}
+	checks := health.pausedProviders(t.Context())
+	if len(checks) != 1 || checks[0].ID != "provider_paused_tmdb" || checks[0].Link != "/settings/metadata" ||
+		!strings.Contains(checks[0].Message, "tmdb is paused until") || !strings.Contains(checks[0].Message, "key was rejected") {
+		t.Fatalf("checks = %+v, want only the tmdb warning", checks)
 	}
 }

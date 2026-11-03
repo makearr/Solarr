@@ -3,6 +3,7 @@ package adapters
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/makearr/Solarr/internal/acquiring/poll"
@@ -65,7 +66,7 @@ func (a SystemHealth) Checks(ctx context.Context) []apiserver.HealthCheck {
 	checks = append(checks, a.vanishedHeld(ctx, snapshot)...)
 	checks = append(checks, a.mediaChecks(snapshot)...)
 	checks = append(checks, a.heldByRating(ctx, snapshot)...)
-	checks = append(checks, a.pausedProviders()...)
+	checks = append(checks, a.pausedProviders(ctx)...)
 	return append(checks, pausedForRoom(snapshot)...)
 }
 
@@ -238,15 +239,16 @@ func anyEnabledDownloader(downloaders []settings.Downloader) bool {
 	return false
 }
 
-// pausedProviders names each metadata provider the breaker has stopped asking, and says when its key was refused. The
-// connections of a user's own services have their own screens.
-func (a SystemHealth) pausedProviders() []apiserver.HealthCheck {
+// pausedProviders names each provider the breaker has stopped asking, and says when its key was refused. An indexer or
+// download client is named by its own connection, linked to its screen.
+func (a SystemHealth) pausedProviders(ctx context.Context) []apiserver.HealthCheck {
 	if a.Paused == nil {
 		return nil
 	}
 	var checks []apiserver.HealthCheck
 	for _, paused := range a.Paused() {
-		if strings.Contains(paused.Provider, ":") {
+		name, link := a.pausedConnection(ctx, paused.Provider)
+		if name == "" {
 			continue
 		}
 		reason := "it keeps failing"
@@ -255,11 +257,47 @@ func (a SystemHealth) pausedProviders() []apiserver.HealthCheck {
 		}
 		checks = append(checks, apiserver.HealthCheck{
 			ID: "provider_paused_" + paused.Provider, Severity: apiserver.HealthWarning,
-			Message: fmt.Sprintf("%s is paused until %s: %s.", paused.Provider, paused.RetryAt.Local().Format("15:04"), reason),
-			Link:    "/settings/metadata",
+			Message: fmt.Sprintf("%s is paused until %s: %s.", name, paused.RetryAt.Local().Format("15:04"), reason),
+			Link:    link,
 		})
 	}
 	return checks
+}
+
+// pausedConnection is a paused provider's display name and the screen that fixes it; empty for a user's own *Arr or
+// other service, which have screens of their own.
+func (a SystemHealth) pausedConnection(ctx context.Context, provider string) (name, link string) {
+	kind, idText, connection := strings.Cut(provider, ":")
+	if !connection {
+		return provider, "/settings/metadata"
+	}
+	id, err := strconv.ParseInt(idText, 10, 64)
+	if err != nil {
+		return "", ""
+	}
+	switch kind {
+	case "indexer":
+		indexers, err := a.Cache.Indexers(ctx)
+		if err != nil {
+			return "", ""
+		}
+		for _, indexer := range indexers {
+			if indexer.ID == id {
+				return "Indexer " + indexer.Name, "/connections/indexers"
+			}
+		}
+	case "downloader":
+		downloaders, err := a.Cache.Downloaders(ctx)
+		if err != nil {
+			return "", ""
+		}
+		for _, downloader := range downloaders {
+			if downloader.ID == id {
+				return "Download client " + downloader.Name, "/connections/downloaders"
+			}
+		}
+	}
+	return "", ""
 }
 
 // searchingOffWithConnections says a client and an indexer are ready while the search task is switched off.
