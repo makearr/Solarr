@@ -274,3 +274,38 @@ func TestGrab_HoldsAWorkAboveItsLibrarysRating(t *testing.T) {
 		t.Fatalf("a person's own grab = %+v, %v; want it sent", own, err)
 	}
 }
+
+// live_test 40: after a failed grab the next automatic one may not jump far above its size; a person's own grab may.
+func TestGrab_AnAutomaticRetryDoesNotJumpFarAboveTheReleaseThatFailed(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, alwaysAcceptRules)
+	small := rawItem("guid-small", "Nosi Zada-Discovery-2001-MP3-320-GROUP")
+	small.SizeBytes = 100_000_000
+	huge := rawItem("guid-huge", "Nosi Zada-Discovery-2001-FLAC-GROUP")
+	huge.SizeBytes = 2_000_000_000
+	offered := []indexer.RawItem{small}
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) { return offered, nil }}
+	sender := &fakeSabnzbdSender{clientRef: "nzo-1"}
+	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{
+		{ID: 5, Protocol: "usenet", Client: sender, AlwaysSendUser: true},
+	})}
+	indexers := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
+
+	first, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil || first.Sent == nil {
+		t.Fatalf("first grab = %+v, %v; want the small release sent", first, err)
+	}
+	if err := env.acquisitions.SetState(t.Context(), first.Sent.ID, "FAILED", "incomplete", env.clock.Now().Unix()); err != nil {
+		t.Fatal(err)
+	}
+	offered = []indexer.RawItem{huge}
+	retry, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil || retry.Sent != nil || retry.TooBigAfterFailure != 1 {
+		t.Fatalf("retry = sent %v, too big %d, %v; want the huge release passed over", retry.Sent, retry.TooBigAfterFailure, err)
+	}
+	sender.clientRef = "nzo-2"
+	own, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabUser, env.clock.Now())
+	if err != nil || own.Sent == nil {
+		t.Fatalf("own grab = %+v, %v; want it sent", own, err)
+	}
+}

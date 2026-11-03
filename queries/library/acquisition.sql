@@ -255,6 +255,12 @@ FROM acquisition a
 JOIN desired_item di ON di.id = a.desired_item_id
 WHERE di.category_id = ? AND a.state IN ('QUEUED', 'DOWNLOADING', 'COMPLETED', 'IMPORTING');
 
+-- The largest release of the item that failed since the cutoff; an automatic retry may not jump far above it.
+-- name: LargestFailedBytesForItem :one
+SELECT CAST(COALESCE(MAX(size_bytes), 0) AS INTEGER) AS largest
+FROM acquisition
+WHERE desired_item_id = ? AND state = 'FAILED' AND updated_at >= ?;
+
 -- Retention: decisions age into decision_rollup, then go; a candidate goes once nothing refers to it.
 
 -- Ids rise with time, so the oldest page holds the oldest decisions; a page with none past the line ends the pass.

@@ -441,6 +441,25 @@ func (q *Queries) IsBlocklisted(ctx context.Context, arg IsBlocklistedParams) (i
 	return blocked, err
 }
 
+const largestFailedBytesForItem = `-- name: LargestFailedBytesForItem :one
+SELECT CAST(COALESCE(MAX(size_bytes), 0) AS INTEGER) AS largest
+FROM acquisition
+WHERE desired_item_id = ? AND state = 'FAILED' AND updated_at >= ?
+`
+
+type LargestFailedBytesForItemParams struct {
+	DesiredItemID sql.NullInt64
+	UpdatedAt     int64
+}
+
+// The largest release of the item that failed since the cutoff; an automatic retry may not jump far above it.
+func (q *Queries) LargestFailedBytesForItem(ctx context.Context, arg LargestFailedBytesForItemParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, largestFailedBytesForItem, arg.DesiredItemID, arg.UpdatedAt)
+	var largest int64
+	err := row.Scan(&largest)
+	return largest, err
+}
+
 const listActiveAcquisitions = `-- name: ListActiveAcquisitions :many
 SELECT id, desired_item_id, candidate_id, indexer_id, candidate_guid,
        candidate_title, search_terms, downloader_id, download_client_ref,

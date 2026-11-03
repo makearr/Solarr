@@ -17,6 +17,8 @@ type Best struct {
 	AlreadyInFlight bool
 	// Held means the best release waits for room in its client's queue (ADR-57's HELD).
 	Held bool
+	// TooBigAfterFailure counts releases passed over for being far larger than one of the item's that just failed.
+	TooBigAfterFailure int
 	// Refused counts releases the client declined before one was taken, or none was.
 	Refused int
 	// NoRoom counts releases passed over because the library has no root with space for them.
@@ -32,7 +34,15 @@ type Best struct {
 type Headroom struct {
 	Bytes int64
 	Gated bool
+	// RetryCeiling is the largest release an automatic retry may send after a failure; 0 means no failure to guard against.
+	RetryCeiling int64
 }
+
+// retryGrowthFactor is how many times larger than a failed release the next automatic one may be.
+const retryGrowthFactor = 3
+
+// retryWindow is how long a failed release keeps limiting the size of the next automatic one.
+const retryWindow = 24 * time.Hour
 
 // HeadroomFor is free the library's free space less what is already on its way; free space is measured every six
 // hours, so what is in flight has not been subtracted from it yet.
@@ -60,6 +70,10 @@ func (d Dispatch) SendBest(
 		}
 		if size := detail.ReleaseCandidate.SizeBytes; room.Gated && size != nil && *size > room.Bytes {
 			best.NoRoom++
+			continue
+		}
+		if size := detail.ReleaseCandidate.SizeBytes; room.RetryCeiling > 0 && size != nil && *size > room.RetryCeiling {
+			best.TooBigAfterFailure++
 			continue
 		}
 		if held, err := d.HoldIfFull(ctx, itemID, detail, origin, at); err != nil {

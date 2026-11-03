@@ -462,6 +462,8 @@ type Querier interface {
 	JoinTagSubtree(ctx context.Context, arg JoinTagSubtreeParams) error
 	// A merged release's old id still names its edition, or files tagged with it open a second one.
 	KeepEditionAlias(ctx context.Context, arg KeepEditionAliasParams) error
+	// The largest release of the item that failed since the cutoff; an automatic retry may not jump far above it.
+	LargestFailedBytesForItem(ctx context.Context, arg LargestFailedBytesForItemParams) (int64, error)
 	LinkCollectionExternalID(ctx context.Context, arg LinkCollectionExternalIDParams) error
 	LinkEditionExternalID(ctx context.Context, arg LinkEditionExternalIDParams) error
 	LinkOrganisationExternalID(ctx context.Context, arg LinkOrganisationExternalIDParams) error

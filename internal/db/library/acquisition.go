@@ -127,6 +127,17 @@ func (a Acquisitions) InFlightBytes(ctx context.Context, categoryID int64) (int6
 	return total, nil
 }
 
+// LargestFailedBytes is the size of the biggest release of the item that failed since the given unix time; 0 when none did.
+func (a Acquisitions) LargestFailedBytes(ctx context.Context, desiredItemID, since int64) (int64, error) {
+	largest, err := librarydb.New(a.store.Read()).LargestFailedBytesForItem(ctx, librarydb.LargestFailedBytesForItemParams{
+		DesiredItemID: nullInt64(&desiredItemID), UpdatedAt: since,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("library: largest failed release of item %d: %w", desiredItemID, err)
+	}
+	return largest, nil
+}
+
 // InFlightForItem answers the desired item's download still on its way, if it has one (Invariant 15).
 func (a Acquisitions) InFlightForItem(ctx context.Context, desiredItemID int64) (Acquisition, bool, error) {
 	row, err := librarydb.New(a.store.Read()).GetActiveAcquisitionForItem(ctx, nullInt64(&desiredItemID))

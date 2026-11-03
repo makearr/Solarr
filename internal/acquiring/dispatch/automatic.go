@@ -48,6 +48,13 @@ func (a Automatic) Send(ctx context.Context, itemID int64, decisions []library.D
 	if err != nil {
 		return Best{}, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
 	}
+	if origin != GrabUser {
+		failed, err := a.Dispatch.Acquisitions.LargestFailedBytes(ctx, itemID, at.Add(-retryWindow).Unix())
+		if err != nil {
+			return Best{}, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
+		}
+		room.RetryCeiling = failed * retryGrowthFactor
+	}
 	best, err := a.Dispatch.SendBest(ctx, itemID, decisions, room, origin, at)
 	if err != nil {
 		return best, fmt.Errorf("%s: grab item %d: %w", a.Name, itemID, err)
