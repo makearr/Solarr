@@ -36,6 +36,9 @@ export function DashboardDownloads() {
     );
   }
   const speed = totalSpeed(queue.data.clients);
+  // Clients download in parallel, so the last one to finish sets when the queue is empty.
+  const etas = items.flatMap((item) => (item.eta_seconds != null ? [item.eta_seconds] : []));
+  const drainSeconds = speed > 0 && etas.length > 0 ? Math.max(...etas) : undefined;
   const ordered = [...items].sort((a, b) => rank(a.client_state) - rank(b.client_state));
 
   return (
@@ -44,7 +47,7 @@ export function DashboardDownloads() {
         <div className="flex flex-col">
           <span className="text-2xl font-semibold tabular-nums">{speed > 0 ? `${formatBytes(speed)}/s` : "Idle"}</span>
           <span className="text-xs text-ink-muted">
-            {items.length === 0 ? "Nothing of Solarr's is downloading" : `${items.length} of Solarr's downloads in flight`}
+            {items.length === 0 ? "Nothing of Solarr's is downloading" : `${items.length} of Solarr's downloads in flight${drainSeconds !== undefined ? `, all done in about ${formatDuration(drainSeconds)}` : ""}`}
           </span>
         </div>
         <SpeedGraph samples={samples} />
