@@ -131,7 +131,7 @@ func (s Sweeper) Sweep(
 
 	walk := &sweep{
 		sweeper: s, root: root, options: options,
-		watermark: state.SweptThrough, resumeFrom: state.Cursor,
+		watermark: state.SweptThrough, resumeFrom: state.Cursor, cursor: state.Cursor,
 		emit: emit,
 	}
 	if options.Full {
@@ -226,7 +226,11 @@ func (w *sweep) directory(ctx context.Context, relative string) error {
 		if !entry.IsDir || (relative == "" && (entry.Name == library.RecycleBinDirectory || entry.Name == library.LegacyRecycleBinDirectory)) {
 			continue
 		}
-		children = append(children, path.Join(relative, entry.Name))
+		child := path.Join(relative, entry.Name)
+		if w.finishedBefore(child) {
+			continue
+		}
+		children = append(children, child)
 	}
 	w.ahead.schedule(children)
 
@@ -239,6 +243,11 @@ func (w *sweep) directory(ctx context.Context, relative string) error {
 		}
 	}
 	return nil
+}
+
+// finishedBefore says a resumed walk already swept a whole subtree: it sorts before the cursor and does not hold it.
+func (w *sweep) finishedBefore(relative string) bool {
+	return w.resumeFrom != "" && comparePaths(relative, w.resumeFrom) < 0 && !strings.HasPrefix(w.resumeFrom, relative+"/")
 }
 
 // reads answers whether the walk reads a directory's files, or the watermark or the resume cursor says they were
@@ -259,6 +268,8 @@ func (w *sweep) reads(relative string, info fsx.FileInfo) bool {
 // filesIn emits this directory's files when the walk reads it.
 func (w *sweep) filesIn(ctx context.Context, relative, absolute string, listed *listing) error {
 	if !w.reads(relative, listed.info) {
+		// Passing an unread directory is progress too, or a long walk over unchanged directories never resumes past them.
+		w.passed(relative)
 		return nil
 	}
 	w.read++
@@ -306,6 +317,17 @@ func (w *sweep) filesIn(ctx context.Context, relative, absolute string, listed *
 		return nil
 	}
 	return w.flushGathered(ctx)
+}
+
+// passed moves the cursor over a directory nothing was read from; files still gathered keep it behind them until flushed.
+func (w *sweep) passed(relative string) {
+	if len(w.gathered.Files) > 0 {
+		w.gathered.Directory = relative
+		return
+	}
+	if comparePaths(relative, w.cursor) > 0 {
+		w.cursor = relative
+	}
 }
 
 // flushGathered emits the directories held back; the cursor passes them only once they are committed.

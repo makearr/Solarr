@@ -563,3 +563,34 @@ func TestSweep_ReadsDirectoriesAheadAndEmitsInWalkOrder(t *testing.T) {
 		t.Errorf("emitted %v, want walk order %v", collected.found, want)
 	}
 }
+
+// A resumed walk does not list what the interrupted one swept: on a network share each listing costs a round trip.
+func TestSweep_ResumeDoesNotRelistSubtreesBeforeTheCursor(t *testing.T) {
+	lib := newTree(t, "a/x/01.flac", "a/y/01.flac", "b/01.flac", "c/01.flac")
+
+	result, collected := sweep(t, lib, scan.State{Cursor: "b"}, scan.Options{Full: true})
+	if !slices.Equal(collected.sorted(), []string{"c/01.flac"}) {
+		t.Errorf("found %v, want only what follows the cursor", collected.sorted())
+	}
+	if result.DirectoriesVisited != 3 {
+		t.Errorf("visited %d directories, want the root, b and c", result.DirectoriesVisited)
+	}
+}
+
+// Walking past unchanged directories is progress: an interrupted run that read nothing must not hand back an older cursor.
+func TestSweep_InterruptedIncrementalWalkKeepsTheDirectoriesItPassed(t *testing.T) {
+	lib := newTree(t, "a/01.flac", "b/01.flac", "c/01.flac")
+	first, _ := sweep(t, lib, scan.State{}, scan.Options{Full: true})
+	lib.write(t, "c/02.flac")
+
+	interrupted := errors.New("slice over")
+	collected := &collector{failure: interrupted}
+	lib.clock.Advance(time.Second)
+	result, err := scan.NewSweeper(lib.fsys, lib.clock).Sweep(t.Context(), root, first.State, scan.Options{}, collected.emit)
+	if !errors.Is(err, interrupted) {
+		t.Fatalf("Sweep = %v, want the caller's error", err)
+	}
+	if result.State.Cursor != "b" || !result.State.SweptThrough.Equal(first.State.SweptThrough) {
+		t.Errorf("State = %+v, want cursor b and the old watermark", result.State)
+	}
+}
