@@ -539,7 +539,9 @@ func (p *process) aniListClient() anilist.Client {
 func (p *process) adultService() adult.Service {
 	p.adultOnce.Do(func() {
 		server := func(provider, endpoint string) adult.Server {
-			return stashbox.New(p.providerClient(provider, nil, httpx.ClientConfig{AnswerFailed: stashbox.AnswerFailed}), endpoint, p.providerKey(provider))
+			config := httpx.ClientConfig{AnswerFailed: stashbox.AnswerFailed}
+			return stashbox.New(p.providerClient(provider, nil, config), endpoint, p.providerKey(provider)).
+				WithFingerprintBucket(p.providerClient(provider+providerFingerprintSuffix, nil, config))
 		}
 		p.adultShared = adult.Service{
 			Memo:     adult.NewSearchMemo(clock.NewSystem()),

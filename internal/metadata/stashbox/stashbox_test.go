@@ -108,3 +108,20 @@ func TestAnswerFailedFindsAServersOwnErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestFingerprintsUseTheirOwnBucketAndSearchesDoNot(t *testing.T) {
+	searches, fingerprints := &answer{body: `{"data":{"searchScene":[]}}`}, &answer{body: `{"data":{"findScenesBySceneFingerprints":[[]]}}`}
+	asker := client(t, searches, "k").WithFingerprintBucket(httpx.NewClient(clock.NewFakeAtEpoch(), httpx.NewGuard(nil, nil, nil),
+		httpx.NewLimiter(clock.NewFakeAtEpoch(), httpx.Config{Defaults: httpx.Limits{RequestsPerMinute: 6000}}, httpx.NoJitter),
+		httpx.NewBreaker(clock.NewFakeAtEpoch(), httpx.BreakerConfig{FailureThreshold: 100, Cooldown: time.Minute}),
+		httpx.ClientConfig{Provider: "stashdb-fingerprint", UserAgent: "test", Transport: fingerprints}))
+	if _, err := asker.SearchScenes(t.Context(), "x", 1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := asker.ScenesByFingerprint(t.Context(), [][]stashbox.Fingerprint{{{Hash: "h", Algorithm: "OSHASH"}}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(searches.sent) != 1 || len(fingerprints.sent) != 1 {
+		t.Fatalf("searches %d, fingerprints %d, want 1 and 1", len(searches.sent), len(fingerprints.sent))
+	}
+}

@@ -45,9 +45,11 @@ type Doer interface {
 
 // Client asks one stash-box server with the owner's key.
 type Client struct {
-	http     Doer
-	key      func() string
-	endpoint string
+	http Doer
+	// fingerprints is a bucket of its own: FansDB fails searches while answering fingerprints, and a shared breaker never opens.
+	fingerprints Doer
+	key          func() string
+	endpoint     string
 }
 
 // New builds a client of the server at endpoint; key answers the owner's key, empty while there is none.
@@ -171,7 +173,17 @@ var answerErrors = regexp.MustCompile(`"errors"\s*:\s*\[\s*\{`)
 // 2026-11-01). Clients of these servers set it, so the breaker stops asking.
 func AnswerFailed(start []byte) bool { return answerErrors.Match(start) }
 
+// WithFingerprintBucket sends fingerprint lookups through client, so a server that fails only one kind of query still trips its breaker.
+func (c Client) WithFingerprintBucket(client Doer) Client {
+	c.fingerprints = client
+	return c
+}
+
 func (c Client) query(ctx context.Context, query string, variables map[string]any, into any) error {
+	return c.queryVia(ctx, c.http, query, variables, into)
+}
+
+func (c Client) queryVia(ctx context.Context, doer Doer, query string, variables map[string]any, into any) error {
 	if !c.Configured() {
 		return ErrNoKey
 	}
@@ -185,7 +197,7 @@ func (c Client) query(ctx context.Context, query string, variables map[string]an
 	}
 	request.Header.Set("ApiKey", strings.TrimSpace(c.key()))
 	request.Header.Set("Content-Type", "application/json")
-	response, err := c.http.Do(ctx, request)
+	response, err := doer.Do(ctx, request)
 	if err != nil {
 		return err
 	}
@@ -254,7 +266,11 @@ func (c Client) ScenesByFingerprint(ctx context.Context, files [][]Fingerprint) 
 	var found struct {
 		Scenes [][]Scene `json:"findScenesBySceneFingerprints"`
 	}
-	err := c.query(ctx, `query ($f: [[FingerprintQueryInput!]!]!) { findScenesBySceneFingerprints(fingerprints: $f) {`+sceneFields+`} }`,
+	doer := c.fingerprints
+	if doer == nil {
+		doer = c.http
+	}
+	err := c.queryVia(ctx, doer, `query ($f: [[FingerprintQueryInput!]!]!) { findScenesBySceneFingerprints(fingerprints: $f) {`+sceneFields+`} }`,
 		map[string]any{"f": asked}, &found)
 	return found.Scenes, err
 }
