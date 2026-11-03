@@ -28,6 +28,8 @@ type SimilarVideo struct {
 	Height       int64
 	RootFolderID int64
 	RelPath      string
+	// PathCount is how many paths hold this file; RelPath is the first of them.
+	PathCount int
 }
 
 // SimilarGroup is files whose hashes chain together within the distance; the largest comes first.
@@ -140,25 +142,41 @@ func (s SimilarVideos) Groups(ctx context.Context, rootFolderIDs []int64, level 
 	if err != nil {
 		return nil, fmt.Errorf("library: list hashed videos: %w", err)
 	}
+	videos, err := collectVideos(rows, rootFolderIDs)
+	if err != nil {
+		return nil, err
+	}
+	return groupSimilar(videos, level.MaxBits(), limit), nil
+}
+
+// collectVideos keeps the hashed videos on the given roots, a file linked at several paths once.
+func collectVideos(rows []librarydb.ListHashedVideosRow, rootFolderIDs []int64) ([]hashedVideo, error) {
 	inRoots := make(map[int64]bool, len(rootFolderIDs))
 	for _, id := range rootFolderIDs {
 		inRoots[id] = true
 	}
 	var videos []hashedVideo
+	position := map[int64]int{}
 	for _, row := range rows {
 		if !inRoots[row.RootFolderID] || !row.Phash.Valid {
 			continue
 		}
+		// One file linked at many paths is one video, not a group of copies.
+		if at, seen := position[row.ID]; seen {
+			videos[at].video.PathCount++
+			continue
+		}
+		position[row.ID] = len(videos)
 		frames, err := decodeFrameHashes(row.Frames)
 		if err != nil {
 			return nil, fmt.Errorf("library: video %d: %w", row.ID, err)
 		}
 		videos = append(videos, hashedVideo{
-			video: SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, Width: row.Width.Int64, Height: row.Height.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath},
+			video: SimilarVideo{MediaObjectID: row.ID, SizeBytes: row.SizeBytes, DurationMs: row.DurationMs.Int64, Width: row.Width.Int64, Height: row.Height.Int64, RootFolderID: row.RootFolderID, RelPath: row.RelPath, PathCount: 1},
 			mean:  uint64(row.Phash.Int64), frames: frames,
 		})
 	}
-	return groupSimilar(videos, level.MaxBits(), limit), nil
+	return videos, nil
 }
 
 // groupSimilar joins videos whose mean hashes are within maxBits, lengths agree and frames match into groups of two or

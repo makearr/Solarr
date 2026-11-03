@@ -18,6 +18,7 @@ type SimilarVideoRow struct {
 	Width, Height            int64
 	RootFolderID             int64
 	RelPath                  string
+	PathCount                int
 }
 
 // SimilarVideoGroupRow is videos whose perceptual hashes are within MaxDistance bits of a neighbour.
@@ -128,6 +129,7 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		Width         int64  `json:"width"`
 		Height        int64  `json:"height"`
 		CategoryID    int64  `json:"category_id"`
+		PathCount     int    `json:"path_count"`
 	}
 	type groupView struct {
 		MaxDistance int         `json:"max_distance"`
@@ -143,7 +145,7 @@ func (s *Server) writeSimilarReport(w http.ResponseWriter, r *http.Request, fold
 		for _, video := range group.Videos {
 			view.Videos = append(view.Videos, videoView{
 				MediaObjectID: video.MediaObjectID, SizeBytes: video.SizeBytes, Path: path.Join(rootPath[video.RootFolderID], video.RelPath),
-				DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, CategoryID: rootCategory[video.RootFolderID],
+				DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, CategoryID: rootCategory[video.RootFolderID], PathCount: video.PathCount,
 			})
 		}
 		report.Groups = append(report.Groups, view)

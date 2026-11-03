@@ -8976,7 +8976,10 @@ export interface components {
                     media_object_id: number;
                     /** Format: int64 */
                     size_bytes: number;
+                    /** @description The first path holding the file. */
                     path: string;
+                    /** @description How many paths hold this file; resolving acts on all of them. */
+                    path_count: number;
                     /**
                      * Format: int64
                      * @description Zero when not probed.

@@ -1,11 +1,13 @@
 package library
 
 import (
+	"database/sql"
 	"math/bits"
 	"math/rand"
 	"reflect"
 	"testing"
 
+	"github.com/makearr/Solarr/internal/db/store/gen/librarydb"
 	"github.com/makearr/Solarr/internal/platform/mediatool"
 )
 
@@ -208,5 +210,24 @@ func TestGroupSimilar_TheLevelSetsHowFarApartTwoHashesMayBe(t *testing.T) {
 	same := []hashedVideo{hashed(SimilarVideo{MediaObjectID: 1}, 7), hashed(SimilarVideo{MediaObjectID: 2}, 7)}
 	if groups := groupSimilar(same, SimilarityExact.MaxBits(), 10); len(groups) != 1 || groups[0].MaxDistance != 0 {
 		t.Errorf("exact: groups = %+v, want the one identical pair", groups)
+	}
+}
+
+func TestCollectVideosCountsAFileLinkedAtManyPathsOnce(t *testing.T) {
+	row := func(id int64, rel string, root int64) librarydb.ListHashedVideosRow {
+		return librarydb.ListHashedVideosRow{ID: id, Phash: sql.NullInt64{Int64: 5, Valid: true}, RootFolderID: root, RelPath: rel}
+	}
+	rows := []librarydb.ListHashedVideosRow{row(1, "a/one.mkv", 1), row(1, "b/one.mkv", 1), row(2, "c/two.mkv", 1), row(3, "d/other.mkv", 9)}
+	got, err := collectVideos(rows, []int64{1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	var counts []int
+	for _, video := range got {
+		paths, counts = append(paths, video.video.RelPath), append(counts, video.video.PathCount)
+	}
+	if !reflect.DeepEqual(paths, []string{"a/one.mkv", "c/two.mkv"}) || !reflect.DeepEqual(counts, []int{2, 1}) {
+		t.Fatalf("videos = %v with path counts %v, want [a/one.mkv c/two.mkv] with [2 1]", paths, counts)
 	}
 }

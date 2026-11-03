@@ -101,6 +101,7 @@ function GroupCard({ group, scope, libraryName }: { group: Group; scope: Similar
             )}
           </div>
           <span className="break-all font-mono text-ink-muted">{video.path}</span>
+          {video.path_count > 1 && <span className="text-warn">The same file is linked at {video.path_count} paths; dropping it affects all of them.</span>}
         </div>
       ))}
       {namesOtherEpisodes(group) && <p className="text-warn">These file names say different episodes. Check them before keeping one.</p>}

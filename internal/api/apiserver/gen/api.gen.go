@@ -4995,10 +4995,15 @@ type SimilarVideoReport struct {
 			DurationMs int64 `json:"duration_ms"`
 
 			// Height Zero when not probed.
-			Height        int64  `json:"height"`
-			MediaObjectId int64  `json:"media_object_id"`
-			Path          string `json:"path"`
-			SizeBytes     int64  `json:"size_bytes"`
+			Height        int64 `json:"height"`
+			MediaObjectId int64 `json:"media_object_id"`
+
+			// Path The first path holding the file.
+			Path string `json:"path"`
+
+			// PathCount How many paths hold this file; resolving acts on all of them.
+			PathCount int   `json:"path_count"`
+			SizeBytes int64 `json:"size_bytes"`
 
 			// Width Zero when not probed.
 			Width int64 `json:"width"`

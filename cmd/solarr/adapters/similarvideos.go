@@ -20,7 +20,7 @@ func (s SimilarVideos) SimilarVideos(ctx context.Context, rootFolderIDs []int64,
 		rows[i].MaxDistance = group.MaxDistance
 		for _, video := range group.Videos {
 			rows[i].Videos = append(rows[i].Videos, apiserver.SimilarVideoRow{
-				MediaObjectID: video.MediaObjectID, SizeBytes: video.SizeBytes, DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, RootFolderID: video.RootFolderID, RelPath: video.RelPath,
+				MediaObjectID: video.MediaObjectID, SizeBytes: video.SizeBytes, DurationMs: video.DurationMs, Width: video.Width, Height: video.Height, RootFolderID: video.RootFolderID, RelPath: video.RelPath, PathCount: video.PathCount,
 			})
 		}
 	}

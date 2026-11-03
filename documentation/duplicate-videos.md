@@ -38,3 +38,5 @@ The per-frame bound is a quarter wider (`frameBitsFor`), and two thirds of at le
 - `POST .../duplicates/resolve` (one library) and `POST /duplicates/similar-videos/resolve` (all) keep the chosen file
   and, per other file, either merge it into the kept one (every path becomes a link; the old file waits in the recycle
   bin) or recycle it. A merge across libraries is refused: a merged file would belong to two libraries.
+
+A file linked at several paths (one media object, many paths) is one video in a group with a `path_count`, not several copies; a group needs two different files. Found live on the docu library, where 42 of 238 groups were one file listed repeatedly.

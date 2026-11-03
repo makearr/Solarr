@@ -12746,11 +12746,12 @@ components:
                 type: array
                 items:
                   type: object
-                  required: [media_object_id, size_bytes, path, duration_ms, width, height, category_id]
+                  required: [media_object_id, size_bytes, path, path_count, duration_ms, width, height, category_id]
                   properties:
                     media_object_id: { type: integer, format: int64 }
                     size_bytes: { type: integer, format: int64 }
-                    path: { type: string }
+                    path: { type: string, description: The first path holding the file. }
+                    path_count: { type: integer, description: How many paths hold this file; resolving acts on all of them. }
                     duration_ms: { type: integer, format: int64, description: Zero when not probed. }
                     width: { type: integer, format: int64, description: Zero when not probed. }
                     height: { type: integer, format: int64, description: Zero when not probed. }
