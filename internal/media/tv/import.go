@@ -124,7 +124,8 @@ func (i Importer) ImportBatch(ctx context.Context, request batch.Request) (batch
 			if unit.Directory != "" {
 				folder = path.Base(unit.Directory)
 			}
-			workID, candidates = i.config.Resolver.Resolve(ctx, request.CategoryID, folder, firstMedia(unit))
+			named := ShowNFOIDs(i.config.FS, path.Join(request.SourcePath, unit.Directory))
+			workID, candidates = i.config.Resolver.ResolveFolder(ctx, request.CategoryID, folder, []string{firstMedia(unit)}, named)
 		}
 		if workID <= 0 {
 			result.Decisions[index] = decision

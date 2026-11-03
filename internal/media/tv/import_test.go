@@ -320,3 +320,37 @@ func TestImportBringsAlongTheSubtitlesNamedAfterAnEpisode(t *testing.T) {
 		}
 	}
 }
+
+func TestImportTakesTheSeriesFromATvshowNfoInTheDownload(t *testing.T) {
+	service, opened := newService(t, searchSkyhook{series: fixtureSkyhook()}, fakeTVmaze{err: tvmaze.ErrNotFound})
+	fake := clock.NewFakeAtEpoch()
+	fake.Set(addNow)
+	fsys := fsx.NewMem(fake)
+	write := func(rel, content string) inspect.File {
+		abs := path.Join("/downloads", rel)
+		_ = fsys.MkdirAll(path.Dir(abs), 0o755)
+		file, err := fsys.Create(abs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = file.Write([]byte(content))
+		_ = file.Close()
+		return inspect.File{RelPath: rel, SizeBytes: int64(len(content)), Class: inspect.ClassMedia}
+	}
+	_ = fsys.MkdirAll("/library", 0o755)
+	unit := inspect.Unit{Directory: "zzqx", Media: []inspect.File{write("zzqx/S01E01.mkv", "episode")}}
+	write("zzqx/tvshow.nfo", `<tvshow><uniqueid type="tvdb">1234</uniqueid></tvshow>`)
+	free := int64(1 << 40)
+	reader := library.NewSeriesReader(opened)
+	importer := tv.NewImporter(tv.ImporterConfig{
+		FS: fsys, Roots: oneRoot{settings.RootFolder{ID: 9, Path: "/library", Online: true, Writable: true, FreeBytes: &free, TotalBytes: &free}},
+		Affinity: memoryAffinity{}, Physical: library.NewPhysical(opened), Series: service.Series, Reader: reader,
+		Identity: library.NewIdentity(opened), Desired: library.NewDesired(opened), Acquisitions: noAcquisition{},
+		Resolver:   tv.Resolver{Service: service, Reader: reader, Clock: fake, DefaultProfileID: 1, Categories: categories{}},
+		Categories: categories{}, Clock: fake,
+	})
+	result, err := importer.ImportBatch(t.Context(), batch.Request{SessionID: 1, CategoryID: 3, SourcePath: "/downloads", Units: []inspect.Unit{unit}, UnitIDs: []int64{1}})
+	if err != nil || result.Placements[0] == nil {
+		t.Fatalf("import with the nfo: %+v, %v", result.Decisions, err)
+	}
+}
