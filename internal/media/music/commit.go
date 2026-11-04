@@ -231,6 +231,10 @@ func PlacementOf(decision AlbumDecision, relPaths []string) *AlbumPlacement {
 // trackOf is the file as album matching placed it, or as its own tags claim when it matched no track.
 func (p *AlbumPlacement) trackOf(relPath string, tags mediatool.Tags) (TrackFile, int) {
 	claimed := ReadTrackFile(0, tags)
+	if claimed.Title == "" {
+		// Untagged files would all be named alike and collide.
+		claimed.Title = strings.TrimSuffix(path.Base(relPath), path.Ext(relPath))
+	}
 	if p == nil {
 		return claimed, 0
 	}

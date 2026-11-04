@@ -183,9 +183,9 @@ func (i Importer) CommitHeld(ctx context.Context, request batch.HeldRequest) (li
 	if err != nil {
 		return library.Placement{}, fmt.Errorf("music: probe held unit: %w", err)
 	}
-	// No album placement: what album matching decided during IDENTIFY is no longer in memory.
+	matched := i.namedAlbumPlacement(ctx, request, probes)
 	placed, err := i.config.Committer.CommitMatchedUnit(ctx, request.SourcePath, request.Unit, best,
-		UnitTagSourceFor(request.SourcePath, probes), request.CategoryID, nil, nil)
+		UnitTagSourceFor(request.SourcePath, probes), request.CategoryID, matched, nil)
 	if err != nil {
 		return library.Placement{}, err
 	}
@@ -327,4 +327,30 @@ func holdForReview(decisions []library.UnitDecision) {
 			decisions[index].Reason = batch.ReasonPreview
 		}
 	}
+}
+
+// namedAlbumPlacement places a unit a person named as an album under that album, not under what its files and folder
+// say: tracks matched to its tracklist when they fit, else just its title and artist. Nil when nothing is named.
+func (i Importer) namedAlbumPlacement(ctx context.Context, request batch.HeldRequest, probes []mediatool.Probe) *AlbumPlacement {
+	if i.config.Albums == nil || request.As == nil || request.Guess != 0 || request.As.Provider != ProviderReleaseGroup {
+		return nil
+	}
+	var locals []LocalTrack
+	var relPaths []string
+	for index, media := range request.Unit.Media {
+		if index < len(probes) && probes[index].Err == nil {
+			locals = append(locals, ReadLocalTrack(probes[index].Tags, probes[index].Measured, media.RelPath))
+			relPaths = append(relPaths, media.RelPath)
+		}
+	}
+	decision, err := IdentifyAlbum(ctx, i.config.Albums, musicbrainz.PriorityIdentify, locals, []string{request.As.ExternalID})
+	if err == nil && decision.Best != nil && decision.Best.Candidate.ReleaseGroup.MBID == request.As.ExternalID {
+		return PlacementOf(decision, relPaths)
+	}
+	group, _, err := i.config.Albums.Album(ctx, musicbrainz.PriorityIdentify, request.As.ExternalID, "")
+	if err != nil {
+		i.logger.Warn("named album could not be looked up", slog.String("album", request.As.ExternalID), slog.Any("error", err))
+		return nil
+	}
+	return &AlbumPlacement{AlbumTitle: group.Title, ArtistName: creditNames(group.ArtistCredit)}
 }
