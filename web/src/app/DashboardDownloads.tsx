@@ -47,7 +47,7 @@ export function DashboardDownloads() {
         <div className="flex flex-col">
           <span className="text-2xl font-semibold tabular-nums">{speed > 0 ? `${formatBytes(speed)}/s` : "Idle"}</span>
           <span className="text-xs text-ink-muted">
-            {items.length === 0 ? "Nothing of Solarr's is downloading" : `${items.length} of Solarr's downloads in flight${drainSeconds !== undefined ? `, all done in about ${formatDuration(drainSeconds)}` : ""}`}
+            {items.length === 0 ? "Nothing of Solarr's is downloading" : `${items.length} of Solarr's downloads in flight${drainSeconds !== undefined ? `, all done in ${drainSeconds < 60 ? formatDuration(drainSeconds) : `about ${formatDuration(drainSeconds)}`}` : ""}`}
           </span>
         </div>
         <SpeedGraph samples={samples} />
