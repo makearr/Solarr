@@ -16,7 +16,8 @@ import { PosterGrid } from "@/list/PosterGrid";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
-import { Toolbar, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
+import { Toolbar, ToolbarFavorites, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
+import { HeartButton } from "@/ui/HeartButton";
 
 import {
   DEFAULT_POSTER_OPTIONS, IndexViewToggle, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight, type IndexView,
@@ -28,7 +29,7 @@ import { Poster } from "./Poster";
 
 type Organisation = components["schemas"]["OrganisationEntry"];
 
-const ORGANISATION_FILTER_KEYS: readonly string[] = ["q", "monitored", "from"];
+const ORGANISATION_FILTER_KEYS: readonly string[] = ["q", "monitored", "favorite", "from"];
 
 /** A library's organisations (networks, labels, studios): most works first, on the same wall as every other level. */
 export function OrganisationIndex() {
@@ -61,6 +62,7 @@ export function OrganisationIndex() {
             q: query.filters.q || undefined,
             from: query.filters.from || undefined,
             monitored: query.filters.monitored ? query.filters.monitored === "true" : undefined,
+            favorite: query.filters.favorite === "only" ? true : undefined,
             sort: sort as "name" | "works" | "latest",
             dir: descending ? "desc" : "asc",
             cursor,
@@ -95,6 +97,7 @@ export function OrganisationIndex() {
     { key: "works", header: type?.work.many ?? "Works", sortable: true, width: "6rem", render: (organisation) => organisation.works },
     { key: "latest", header: "Newest", sortable: true, width: "6rem", render: (organisation) => organisation.latest ?? "" },
     { key: "followed", header: "Followed", width: "6rem", render: (organisation) => (organisation.monitored ? "Yes" : "") },
+    { key: "favorite", header: "Favorite", width: "5rem", render: (organisation) => <HeartButton subject="organisation" id={organisation.id} name={organisation.name} /> },
   ];
 
   return (
@@ -105,6 +108,7 @@ export function OrganisationIndex() {
           <option value="true">Followed</option>
           <option value="false">Not followed</option>
         </ToolbarSelect>
+        <ToolbarFavorites active={view.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label={`Filter ${many.toLowerCase()} by name`} />
         <ToolbarSort
           sort={sort}
@@ -122,7 +126,7 @@ export function OrganisationIndex() {
         {list.error !== null && <p className="p-4 text-sm text-danger">These could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <p className="p-4 text-sm text-ink-muted">
-            {view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
+            {view.query.filters.favorite === "only" ? "No favorites here yet. Press the heart to find one again here." : view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
           </p>
         )}
         {list.items.length > 0 && mode === "list" && <ListTable list={list} columns={columns} idOf={(organisation) => organisation.id} />}
@@ -140,6 +144,7 @@ export function OrganisationIndex() {
                 subtitle={`${organisation.works} ${organisation.works === 1 ? (type?.work.one ?? "work").toLowerCase() : works}`}
                 link={link(organisation)}
                 showTitle={options.showTitle}
+                heart={<HeartButton subject="organisation" id={organisation.id} name={organisation.name} />}
               />
             )}
           />
@@ -188,7 +193,10 @@ export function OrganisationPage() {
           <Building2 aria-hidden className="size-10 text-ink-muted" />
         )}
         <div>
-          <h1 className="text-xl font-semibold">{organisation.name}</h1>
+          <span className="flex items-center gap-2">
+            <h1 className="text-xl font-semibold">{organisation.name}</h1>
+            <HeartButton subject="organisation" id={organisation.id} name={organisation.name} />
+          </span>
           <p className="text-sm text-ink-muted">{[organisation.country?.toUpperCase(), organisation.kind].filter(Boolean).join(" · ")}</p>
         </div>
       </div>

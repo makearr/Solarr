@@ -4484,6 +4484,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The ids of one kind of thing the caller has hearted.
+         * @description A favorite is the caller's own heart, kept apart from a follow (which adds and acquires). Lists draw their hearts from this one answer and can narrow to favorites with their own favorite parameter.
+         */
+        get: operations["listFavorites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/favorites/{subjectType}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectType: components["schemas"]["FavoriteSubject"];
+                id: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Heart something. Hearting twice changes nothing. */
+        put: operations["addFavorite"];
+        post?: never;
+        /** Take the heart back. Answers 204 when there was none. */
+        delete: operations["removeFavorite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/franchises": {
         parameters: {
             query?: never;
@@ -4931,6 +4972,11 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * @description What a heart can be on; work_part is a song or an episode, organisation a studio or a network.
+         * @enum {string}
+         */
+        FavoriteSubject: "work" | "work_part" | "person" | "organisation" | "collection";
         HealthStatus: {
             /** @enum {string} */
             status: "ok";
@@ -11564,6 +11610,11 @@ export interface operations {
                      * @description The list's person filter.
                      */
                     person_id?: number;
+                    /**
+                     * @description The list's favorites-only filter.
+                     * @default false
+                     */
+                    favorite?: boolean;
                     /** @default false */
                     whole_library?: boolean;
                     media_type?: string;
@@ -12035,6 +12086,8 @@ export interface operations {
                 whole_library?: boolean;
                 /** @description Only works the person is credited on. */
                 person_id?: number;
+                /** @description Only the works the caller hearted. */
+                favorite?: boolean;
                 /** @description Only works of this media type (the All list's type chip). */
                 media_type?: string;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. */
@@ -13546,6 +13599,11 @@ export interface operations {
                      */
                     person_id?: number;
                     /**
+                     * @description The list's favorites-only filter.
+                     * @default false
+                     */
+                    favorite?: boolean;
+                    /**
                      * @description The selection is of the library's All list.
                      * @default false
                      */
@@ -13608,6 +13666,11 @@ export interface operations {
                      * @description The list's person filter.
                      */
                     person_id?: number;
+                    /**
+                     * @description The list's favorites-only filter.
+                     * @default false
+                     */
+                    favorite?: boolean;
                     /** @default false */
                     whole_library?: boolean;
                     media_type?: string;
@@ -15118,6 +15181,8 @@ export interface operations {
                 dir?: "asc" | "desc";
                 /** @description At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it. */
                 monitored?: boolean;
+                /** @description Only what the caller hearted, at the Albums, Artists and Tracks levels. Other levels ignore it. */
+                favorite?: boolean;
                 /** @description A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country (text); albums_wanted, albums_complete (number); monitored (bool). Tracks: title, album, artist (text); year (number); monitored, has_file (bool). Other levels ignore it. */
                 where?: string;
                 /** @description Tracks only, for now -- the tracks whose title, album or artist contains it, any case. */
@@ -16630,6 +16695,8 @@ export interface operations {
                 /** @description Comma-separated roles (network, label, studio, publisher); any when absent. */
                 role?: string;
                 monitored?: boolean;
+                /** @description Only what the caller hearted. */
+                favorite?: boolean;
                 /** @description Matches anywhere in the name, any case. */
                 q?: string;
                 sort?: "name" | "works" | "latest";
@@ -16701,6 +16768,8 @@ export interface operations {
                 cursor?: string;
                 limit?: number;
                 monitored?: boolean;
+                /** @description Only what the caller hearted. */
+                favorite?: boolean;
                 /** @description Matches anywhere in the name, any case. */
                 q?: string;
             };
@@ -17058,6 +17127,76 @@ export interface operations {
             401: components["responses"]["Problem"];
             403: components["responses"]["Problem"];
             404: components["responses"]["Problem"];
+        };
+    };
+    listFavorites: {
+        parameters: {
+            query: {
+                subject_type: components["schemas"]["FavoriteSubject"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The hearted ids, ascending. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": number[];
+                };
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    addFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectType: components["schemas"]["FavoriteSubject"];
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Hearted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
+        };
+    };
+    removeFavorite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectType: components["schemas"]["FavoriteSubject"];
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Not a favorite any more. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["Problem"];
+            401: components["responses"]["Problem"];
         };
     };
     listFranchises: {

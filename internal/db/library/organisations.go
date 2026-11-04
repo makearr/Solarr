@@ -30,6 +30,8 @@ type OrganisationFilter struct {
 	Category  int64
 	Roles     []string
 	Monitored *bool
+	// FavoriteUserID narrows to the organisations this user hearted; 0 is all.
+	FavoriteUserID int64
 	// NameContains narrows to organisations whose name contains it, any case.
 	NameContains string
 	// Sort is name, works or latest.
@@ -103,6 +105,7 @@ func composeOrganisations(filter OrganisationFilter, after PeopleCursor, pageSiz
 			" WHERE s.subject_type = 'organisation' AND s.subject_id = o.id AND s.enabled = 1 AND "+followed.sql+")))",
 			append(slices.Clone(rowArgs), followed.args...)...)
 	}
+	predicates.AddIf(filter.FavoriteUserID != 0, favoriteSQL(FavoriteOrganisation, "o.id"), filter.FavoriteUserID)
 	if filter.Monitored != nil {
 		predicates.Add("o.monitored = ?", boolInt(*filter.Monitored))
 	}

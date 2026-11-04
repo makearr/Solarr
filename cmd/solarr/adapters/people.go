@@ -77,7 +77,7 @@ func (a People) ListPeople(ctx context.Context, query apiserver.PeopleQuery, aft
 		cursor.Value = value
 	}
 	rows, err := a.People.List(ctx, library.PeopleFilter{
-		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored,
+		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored, FavoriteUserID: query.FavoriteUserID,
 		NameContains: query.NameContains, Where: where, Sort: query.Sort, Desc: query.Desc,
 	}, cursor, limit)
 	if err != nil {

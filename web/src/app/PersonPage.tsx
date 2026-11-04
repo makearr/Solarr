@@ -22,6 +22,7 @@ import { FollowPanel } from "./FollowPanel";
 import { PersonPicker } from "./PersonPicker";
 import { Button } from "@/ui/Button";
 import { Dialog } from "@/ui/Dialog";
+import { HeartButton } from "@/ui/HeartButton";
 import { inputStyle, labelStyle } from "@/ui/form";
 
 type PersonWork = components["schemas"]["PersonWork"];
@@ -172,7 +173,10 @@ export function PersonPage() {
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1.5 pt-1">
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-xl font-semibold">{person.name}</h1>
+              <span className="flex items-center gap-2">
+                <h1 className="text-xl font-semibold">{person.name}</h1>
+                <HeartButton subject="person" id={person.id} name={person.name} />
+              </span>
               {administrator && (
                 <span className="flex shrink-0 gap-2">
                   <Button onClick={() => setEditing(true)}>Edit</Button>

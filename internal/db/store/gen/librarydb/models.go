@@ -297,6 +297,13 @@ type EditionExternalID struct {
 	Confidence float64
 }
 
+type Favorite struct {
+	UserID      int64
+	SubjectType string
+	SubjectID   int64
+	CreatedAt   int64
+}
+
 type FileTrackClaim struct {
 	MediaObjectID int64
 	Disc          int64

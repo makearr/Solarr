@@ -19,6 +19,7 @@ interface levels *normal / advanced / expert* in Settings → User.
 | [guide/tv.md](guide/tv.md) | TV and anime libraries, series, unidentified files, quality |
 | [guide/automation.md](guide/automation.md) | What Solarr does by itself, how to watch it, how to tune it |
 | [guide/people.md](guide/people.md) | People, labels, networks and following |
+| [guide/favorites.md](guide/favorites.md) | Hearts, apart from follows, and the Favorites filter |
 | [screenshots/](screenshots/) | The images the top-level README shows, from a demo instance with placeholder files |
 
 ## 🟡 Advanced: setting it up your way

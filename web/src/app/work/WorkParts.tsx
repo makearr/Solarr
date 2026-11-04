@@ -9,6 +9,7 @@ import type { MediaTypeInfo } from "@/lib/useMediaTypes";
 import { t, type Vocabulary } from "@/lib/i18n";
 import { Button } from "@/ui/Button";
 import { Chip } from "@/ui/Chip";
+import { HeartButton } from "@/ui/HeartButton";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 
 import { PlayButton } from "../player/PlayButton";
@@ -240,6 +241,7 @@ function PartRow({
       </td>
       <td className="whitespace-nowrap py-1.5 pr-3 text-right text-xs">
         <span className={state.tone}>{state.label}</span>
+        <HeartButton subject="work_part" id={part.id} name={title} className="ml-2 inline-flex align-middle" />
         {group && actions.onGrab && (
           <Button variant="icon" className="ml-2" title="Search for it and send the best release" aria-label={`${t("action.search")} ${title}`} onClick={() => actions.onGrab?.(part, group)}>
             <Search aria-hidden className="size-3.5" />

@@ -83,9 +83,11 @@ type WorkFilter struct {
 	MediaTypes []string
 	// PersonID keeps only works the person is credited on; 0 any.
 	PersonID int64
-	Language string
-	YearFrom int64
-	YearTo   int64
+	// FavoriteUserID keeps only the works this user hearted; 0 any.
+	FavoriteUserID int64
+	Language       string
+	YearFrom       int64
+	YearTo         int64
 	// TitlePrefix matches the start of the sort title, which is already normalised
 	// for ordering.
 	TitlePrefix string
@@ -216,6 +218,7 @@ func composeList(filter WorkFilter, after WorkCursor, pageSize int) (string, []a
 		predicates.Add(fragment, arguments...)
 	}
 	predicates.AddIf(filter.PersonID != 0, "EXISTS (SELECT 1 FROM credit pc WHERE pc.work_id = work.id AND pc.person_id = ?)", filter.PersonID)
+	predicates.AddIf(filter.FavoriteUserID != 0, favoriteSQL(FavoriteWork, "work.id"), filter.FavoriteUserID)
 	predicates.AddIf(filter.Language != "", "original_language = ?", filter.Language)
 	predicates.AddIf(filter.YearFrom != 0, "year >= ?", filter.YearFrom)
 	predicates.AddIf(filter.YearTo != 0, "year <= ?", filter.YearTo)

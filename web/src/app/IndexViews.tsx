@@ -9,6 +9,7 @@ import type { useLibraryList } from "@/list/useLibraryList";
 import { t } from "@/lib/i18n";
 import { remoteImage } from "@/lib/remoteImage";
 import type { MediaTypeInfo } from "@/lib/useMediaTypes";
+import { HeartButton } from "@/ui/HeartButton";
 import { MenuCheck } from "@/ui/MenuCheck";
 
 import { CoverArt } from "./CoverArt";
@@ -105,6 +106,13 @@ export function posterRowHeight(options: PosterOptions, cellWidth: number, image
   );
 }
 
+const FAVORITE_SUBJECT = { works: "work", artists: "person", tracks: "work_part" } as const;
+
+/** The heart of an album, artist or track. */
+export function EntryHeart({ entry }: { entry: IndexEntry }) {
+  return <HeartButton subject={FAVORITE_SUBJECT[entry.kind]} id={entry.id} name={entry.title} />;
+}
+
 const actionable = (entry: IndexEntry) => entry.kind === "works" || entry.kind === "artists";
 
 /** One poster with Radarr's bookmark and hover actions; a component of its own, since the actions are hooks. */
@@ -122,6 +130,7 @@ export function IndexPoster({ entry, options }: { entry: IndexEntry; options: Po
         portrait={entry.portrait}
         badge={entry.artistCover ? <ArtistCoverMark /> : entry.badgeSrc ? <LogoBadge src={entry.badgeSrc} title={entry.badgeTitle} /> : undefined}
         topLeft={options.showMonitored ? <MonitorToggle actions={actions} /> : undefined}
+        heart={<EntryHeart entry={entry} />}
         hoverActions={actionable(entry) ? <ActionButtons actions={actions} showNote={false} /> : undefined}
         showTitle={options.showTitle}
         round={entry.kind === "artists"}
@@ -285,6 +294,7 @@ function OverviewRow({ entry }: { entry: IndexEntry }) {
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-center gap-2">
           <MonitorToggle actions={actions} />
+          <EntryHeart entry={entry} />
           <span className="truncate text-base font-medium">{entry.title}</span>
           {entry.subtitle && <span className="truncate text-sm text-ink-muted">{entry.subtitle}</span>}
           {actionable(entry) && (
@@ -313,8 +323,9 @@ function OverviewRow({ entry }: { entry: IndexEntry }) {
 }
 
 /** A table row's monitored bookmark, or its search and refresh buttons. */
-export function RowActions({ column, entry }: { column: "monitored" | "actions"; entry: IndexEntry }) {
+export function RowActions({ column, entry }: { column: "monitored" | "actions" | "favorite"; entry: IndexEntry }) {
   const actions = useItemActions(entry.kind, entry.id, entry.monitored);
+  if (column === "favorite") return <EntryHeart entry={entry} />;
   return column === "monitored" ? <MonitorToggle actions={actions} /> : <ActionButtons actions={actions} showNote={false} />;
 }
 

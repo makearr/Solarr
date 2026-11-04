@@ -18,6 +18,7 @@ import { AddToCollection } from "./AddToCollection";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { Dialog } from "@/ui/Dialog";
 import { EmptyState } from "@/ui/EmptyState";
+import { HeartButton } from "@/ui/HeartButton";
 import { Image } from "@/ui/Image";
 import { PageHeader } from "@/ui/PageHeader";
 import { Tabs, type Tab } from "@/ui/Tabs";
@@ -349,6 +350,7 @@ function WorkHeader({
         }
         actions={
           <>
+            <HeartButton subject="work" id={work.id} name={work.title} className="self-center" />
             <Button
               disabled={!work.can_request}
               busy={monitor.isPending}

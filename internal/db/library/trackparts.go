@@ -23,6 +23,8 @@ type TrackFilter struct {
 	Search string
 	// Where is a custom filter over TrackFields, all of which must hold.
 	Where []listfilter.Condition
+	// FavoriteUserID keeps only the tracks this user hearted; 0 any.
+	FavoriteUserID int64
 }
 
 // TrackFields are the fields a custom filter of the Tracks list may name.
@@ -53,6 +55,7 @@ func (f TrackFilter) partPredicates() store.Predicates {
 		predicates.Add("(LOWER(COALESCE(wp.title, '')) LIKE ? ESCAPE '\\' OR LOWER(work.canonical_title) LIKE ? ESCAPE '\\'"+
 			" OR LOWER("+trackArtistName+") LIKE ? ESCAPE '\\')", like, like, like)
 	}
+	predicates.AddIf(f.FavoriteUserID != 0, favoriteSQL(FavoriteWorkPart, "wp.id"), f.FavoriteUserID)
 	for _, condition := range f.Where {
 		var fragment string
 		var arguments []any

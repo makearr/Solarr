@@ -2016,6 +2016,7 @@ paths:
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
+                favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
                 whole_library: { type: boolean, default: false }
                 media_type: { type: string }
                 wanted: { type: boolean, default: false }
@@ -2482,6 +2483,10 @@ paths:
           in: query
           description: Only works the person is credited on.
           schema: { type: integer, format: int64 }
+        - name: favorite
+          in: query
+          description: Only the works the caller hearted.
+          schema: { type: boolean, default: false }
         - name: media_type
           in: query
           description: Only works of this media type (the All list's type chip).
@@ -3864,6 +3869,7 @@ paths:
                 tags: { type: string, description: The list's tag chips, as listWorks takes them. }
                 above_rating: { type: boolean, default: false, description: The list's Above rating filter. }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
+                favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
                 whole_library: { type: boolean, default: false, description: The selection is of the library's All list. }
                 media_type: { type: string, description: The All list's type chip. }
                 wanted: { type: boolean, default: false, description: The list's Wanted filter. }
@@ -3911,6 +3917,7 @@ paths:
                 tags: { type: string }
                 above_rating: { type: boolean, default: false }
                 person_id: { type: integer, format: int64, description: The list's person filter. }
+                favorite: { type: boolean, default: false, description: The list's favorites-only filter. }
                 whole_library: { type: boolean, default: false }
                 media_type: { type: string }
                 wanted: { type: boolean, default: false }
@@ -5405,6 +5412,10 @@ paths:
           in: query
           description: At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
           schema: { type: boolean }
+        - name: favorite
+          in: query
+          description: Only what the caller hearted, at the Albums, Artists and Tracks levels. Other levels ignore it.
+          schema: { type: boolean }
         - name: where
           in: query
           description: >-
@@ -6677,6 +6688,10 @@ paths:
         - name: monitored
           in: query
           schema: { type: boolean }
+        - name: favorite
+          in: query
+          description: Only what the caller hearted.
+          schema: { type: boolean }
         - name: q
           in: query
           description: Matches anywhere in the name, any case.
@@ -6767,6 +6782,10 @@ paths:
           schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
         - name: monitored
           in: query
+          schema: { type: boolean }
+        - name: favorite
+          in: query
+          description: Only what the caller hearted.
           schema: { type: boolean }
         - name: q
           in: query
@@ -7080,6 +7099,57 @@ paths:
         "401": { $ref: "#/components/responses/Problem" }
         "403": { $ref: "#/components/responses/Problem" }
         "404": { $ref: "#/components/responses/Problem" }
+
+  /favorites:
+    get:
+      operationId: listFavorites
+      tags: [library]
+      summary: The ids of one kind of thing the caller has hearted.
+      description: >-
+        A favorite is the caller's own heart, kept apart from a follow (which adds and acquires). Lists draw their
+        hearts from this one answer and can narrow to favorites with their own favorite parameter.
+      parameters:
+        - name: subject_type
+          in: query
+          required: true
+          schema: { $ref: "#/components/schemas/FavoriteSubject" }
+      responses:
+        "200":
+          description: The hearted ids, ascending.
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: integer, format: int64 }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+
+  /favorites/{subjectType}/{id}:
+    parameters:
+      - name: subjectType
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/FavoriteSubject" }
+      - name: id
+        in: path
+        required: true
+        schema: { type: integer, format: int64 }
+    put:
+      operationId: addFavorite
+      tags: [library]
+      summary: Heart something. Hearting twice changes nothing.
+      responses:
+        "204": { description: Hearted. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
+    delete:
+      operationId: removeFavorite
+      tags: [library]
+      summary: Take the heart back. Answers 204 when there was none.
+      responses:
+        "204": { description: Not a favorite any more. }
+        "400": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Problem" }
 
   /franchises:
     get:
@@ -7826,6 +7896,10 @@ components:
           schema: { $ref: "#/components/schemas/Problem" }
 
   schemas:
+    FavoriteSubject:
+      type: string
+      description: What a heart can be on; work_part is a song or an episode, organisation a studio or a network.
+      enum: [work, work_part, person, organisation, collection]
     HealthStatus:
       type: object
       required: [status]

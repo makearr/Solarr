@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowDown, ArrowUp, Plus, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, Heart, Plus, Search } from "lucide-react";
 
 const control = "rounded-md border border-border-subtle bg-surface px-1.5 py-1 text-ink";
 
@@ -35,6 +35,23 @@ export function ToolbarSelect({
         {children}
       </select>
     </label>
+  );
+}
+
+/** Narrows the list to what the viewer hearted; favorites are not follows, which are the Show choice. */
+export function ToolbarFavorites({ active, onChange }: { active: boolean; onChange: (active: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      onClick={() => onChange(!active)}
+      className={`flex items-center gap-1.5 rounded-md border px-2 py-1 ${
+        active ? "border-accent bg-accent/10 text-ink" : "border-border-subtle text-ink-muted hover:text-ink"
+      }`}
+    >
+      <Heart aria-hidden className={`size-3.5 ${active ? "fill-current text-danger" : ""}`} />
+      Favorites
+    </button>
   );
 }
 

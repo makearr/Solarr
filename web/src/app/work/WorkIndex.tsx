@@ -25,7 +25,7 @@ import { Button } from "@/ui/Button";
 import { ConfirmDialog } from "@/ui/ConfirmDialog";
 import { EmptyState } from "@/ui/EmptyState";
 import { Image } from "@/ui/Image";
-import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSort } from "@/ui/Toolbar";
+import { Toolbar, ToolbarAdd, ToolbarFavorites, ToolbarSearch, ToolbarSort } from "@/ui/Toolbar";
 
 import { CustomFilterMenu } from "../CustomFilterMenu";
 import { STATUS_CHOICES } from "../filterFields";
@@ -43,7 +43,7 @@ import { formatMinutes } from "./workFormat";
 type Work = components["schemas"]["Work"];
 
 // Filters that ride in the URL; the library is the route's own.
-const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "type"];
+const FILTER_KEYS: readonly string[] = ["fresh", "q", "where", "from", "tags", "person", "above_rating", "favorite", "type"];
 const CARD_HEIGHT = 68;
 const TABLE_ROW_HEIGHT = 44;
 const GROUP_HEADER_HEIGHT = 44;
@@ -107,6 +107,7 @@ function selectionBody(request: SelectionRequest) {
     where: whereWithTitle(request.filters.where, request.filters.q),
     tags: request.filters.tags || undefined,
     person_id: request.filters.person ? Number(request.filters.person) : undefined,
+    favorite: request.filters.favorite === "only" ? true : undefined,
     above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
     whole_library: request.filters.whole_library === "1" ? true : undefined,
     media_type: request.filters.type || undefined,
@@ -187,6 +188,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             from: query.filters.from || undefined,
             tags: query.filters.tags || undefined,
             person_id: query.filters.person ? Number(query.filters.person) : undefined,
+            favorite: query.filters.favorite === "only" ? true : undefined,
             above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
             whole_library: wholeLibrary || undefined,
             media_type: chosenType || undefined,
@@ -216,6 +218,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         >
           Fresh
         </Button>
+        <ToolbarFavorites active={routeView.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <ToolbarSearch value={routeView.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Title contains…" label={`Filter ${words.works} by title`} />
         {library?.rating_limit?.max_age != null && (
           <Button
@@ -296,7 +299,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <div className="p-6">
             <EmptyState
-              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
+              title={routeView.query.filters.where || routeView.query.filters.fresh || routeView.query.filters.q || routeView.query.filters.tags || routeView.query.filters.person || routeView.query.filters.above_rating || routeView.query.filters.favorite ? `No ${words.works} match these filters.` : `No ${words.works} in this library yet.`}
               hint={`Identified files appear here once a scan finds them; Add new looks ${words.works} up.`}
             />
           </div>
@@ -369,6 +372,7 @@ function buildColumns(info: MediaTypeInfo | undefined, categoryId: string, hidde
     { key: "size", header: "Size", width: "6rem", sortable: true, render: (work) => (work.size_bytes ? formatBytes(work.size_bytes) : "") },
     { key: "status", header: "Availability", width: "8rem", sortable: true, render: (work) => (work.status ? albumStatusLabel(work.status) : "") },
     { key: "monitored", header: "Monitored", width: "6rem", render: (work) => <RowActions column="monitored" entry={workEntry(work, categoryId, info)} /> },
+    { key: "favorite", header: "Favorite", width: "5rem", render: (work) => <RowActions column="favorite" entry={workEntry(work, categoryId, info)} /> },
     { key: "actions", header: "Actions", width: "7rem", render: (work) => <RowActions column="actions" entry={workEntry(work, categoryId, info)} /> },
   );
   return [...columns, ...optional.filter((column) => !hidden.has(column.key))];
