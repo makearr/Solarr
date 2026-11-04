@@ -71,6 +71,7 @@ type worksFixture struct {
 	playback             *fakePlayback
 	remoteImages         *fakeRemoteImages
 	people               *fakePeopleReader
+	organisations        *fakeOrganisationsReader
 	subscriber           *fakePeopleSubscriber
 	artistActions        *fakeArtistActions
 	follower             *fakeFollower
@@ -241,6 +242,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	playback := &fakePlayback{}
 	remoteImages := &fakeRemoteImages{keys: map[string]string{}}
 	people := &fakePeopleReader{}
+	organisations := &fakeOrganisationsReader{}
 	subscriber := &fakePeopleSubscriber{}
 	artistActions := &fakeArtistActions{}
 	follower := &fakeFollower{}
@@ -290,6 +292,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Playback:             playback,
 		RemoteImages:         remoteImages,
 		People:               people,
+		Organisations:        organisations,
 		PersonRemover:        subscriber,
 		Follower:             follower,
 		ArtistActions:        artistActions,
@@ -346,7 +349,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		server: server, running: running, jobRegistry: jobRegistry, cache: cache, works: works, workDetail: workDetail, worksMonitor: worksMonitor, workEditor: workEditor,
 		wantedParts: wantedParts, crossovers: crossovers, importLists: importLists,
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
-		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, subscriber: subscriber, artistActions: artistActions,
+		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, organisations: organisations, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
 		blockedContent: blockedContent, favorites: favorites, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,

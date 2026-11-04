@@ -435,3 +435,57 @@ func TestPeople_AreReadAsTheCallerMaySeeThem(t *testing.T) {
 		t.Errorf("the person was read as %+v, want %+v", got, want)
 	}
 }
+
+// fakeOrganisationsReader records the libraries the caller may see.
+type fakeOrganisationsReader struct {
+	lastQuery   apiserver.PeopleQuery
+	lastVisible []int64
+	detailErr   error
+}
+
+func (f *fakeOrganisationsReader) ListOrganisations(_ context.Context, query apiserver.PeopleQuery, _ paginate.TextCursor, _ int) ([]gen.OrganisationEntry, error) {
+	f.lastQuery = query
+	return []gen.OrganisationEntry{}, nil
+}
+
+func (f *fakeOrganisationsReader) GetOrganisation(_ context.Context, _ int64, visible []int64) (gen.OrganisationDetail, []apiserver.PersonCreditRow, error) {
+	f.lastVisible = visible
+	return gen.OrganisationDetail{}, nil, f.detailErr
+}
+
+// Organisations are read as the caller may see them, exactly as people are.
+func TestOrganisations_AreReadAsTheCallerMaySeeThem(t *testing.T) {
+	fixture := newWorksFixture(t)
+	shown, err := fixture.cache.CreateCategory(t.Context(), "music", "Shown", 10)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	hidden, err := fixture.cache.CreateCategory(t.Context(), "tv", "Hidden", 20)
+	if err != nil {
+		t.Fatalf("CreateCategory: %v", err)
+	}
+	user := fixture.createUser(t, "listener", settings.RoleReadonly)
+	if err := fixture.cache.SetCategoryAccess(t.Context(), user.ID, shown.ID, settings.PermissionRead); err != nil {
+		t.Fatalf("SetCategoryAccess: %v", err)
+	}
+	cookies := fixture.signIn(t, "listener")
+	want := []int64{shown.ID}
+
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/organisations")); recorder.Code != http.StatusOK {
+		t.Fatalf("list status = %d, body = %s", recorder.Code, recorder.Body)
+	}
+	if got := fixture.organisations.lastQuery.Visible; !reflect.DeepEqual(got, want) {
+		t.Errorf("the list was read as %+v, want %+v", got, want)
+	}
+	if recorder := fixture.do(authedGet(t, cookies, fmt.Sprintf("/api/v1/organisations?category=%d", hidden.ID))); recorder.Code != http.StatusNotFound {
+		t.Errorf("a library the caller may not read: status = %d, want 404", recorder.Code)
+	}
+
+	fixture.organisations.detailErr = apiserver.ErrOrganisationNotFound
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/organisations/9")); recorder.Code != http.StatusNotFound {
+		t.Errorf("an organisation the caller may not know of: status = %d, want 404", recorder.Code)
+	}
+	if got := fixture.organisations.lastVisible; !reflect.DeepEqual(got, want) {
+		t.Errorf("the organisation was read as %+v, want %+v", got, want)
+	}
+}
