@@ -121,7 +121,9 @@ export function FranchiseIndex() {
               <option value="monitored">{t("franchise.sort.monitored")}</option>
             </select>
           </label>
-          <ToolbarFavorites active={onlyFavorites} onChange={setOnlyFavorites} />
+          <span className="text-xs">
+            <ToolbarFavorites active={onlyFavorites} onChange={setOnlyFavorites} />
+          </span>
           <span className="ml-auto flex items-center gap-1">
             {administrator && <Button onClick={() => setCreating(true)}>{t("collection.new")}</Button>}
             <Button variant="icon" aria-label={t("franchise.view.poster")} aria-pressed={view === "poster"} onClick={() => setView("poster")}>

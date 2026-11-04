@@ -169,7 +169,7 @@ export function LibraryLevelList() {
             path: { id: Number(categoryId), level: level ?? "" },
             query: {
               cursor, limit: 100, sort, dir, monitored: monitored ? monitored === "true" : undefined,
-              favorite: query.filters.favorite === "1" ? true : undefined,
+              favorite: query.filters.favorite === "only" ? true : undefined,
               where: query.filters.where || undefined, q: query.filters.q || undefined,
             },
           },
@@ -184,7 +184,7 @@ export function LibraryLevelList() {
     <div ref={frameRef} className="flex h-full flex-col">
       <Toolbar title={<span className="capitalize">{level ?? "Library"}</span>}>
         {(level === "artists" || level === "albums" || level === "tracks") && (
-          <ToolbarFavorites active={list.query.filters.favorite === "1"} onChange={(active) => list.filterBy("favorite", active ? "1" : "")} />
+          <ToolbarFavorites active={list.query.filters.favorite === "only"} onChange={(active) => list.filterBy("favorite", active ? "only" : "")} />
         )}
         {level === "artists" && (
           <ToolbarSelect label="Show" value={list.query.filters.monitored ?? ""} onChange={(value) => list.filterBy("monitored", value)}>

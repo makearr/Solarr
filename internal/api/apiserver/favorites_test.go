@@ -82,3 +82,29 @@ func TestFavorites_RefuseWhatCannotBeHearted(t *testing.T) {
 		t.Errorf("hearting work abc = %d, want 400", recorder.Code)
 	}
 }
+
+// The list routes parse their query by hand, so each one needs its own proof that favorite=true reaches the filter.
+func TestFavoriteFilter_ReachesEveryListAsTheCallersId(t *testing.T) {
+	fixture := newWorksFixture(t)
+	admin := fixture.createUser(t, "admin", settings.RoleAdmin)
+	cookies := fixture.signIn(t, "admin")
+
+	for _, target := range []string{"/api/v1/people?favorite=true", "/api/v1/works?favorite=true"} {
+		if recorder := fixture.do(authedGet(t, cookies, target)); recorder.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d (%s)", target, recorder.Code, recorder.Body)
+		}
+	}
+	if got := fixture.people.lastQuery.FavoriteUserID; got != admin.ID {
+		t.Errorf("people favorite user = %d, want %d", got, admin.ID)
+	}
+	if got := fixture.works.lastFilter.FavoriteUserID; got != admin.ID {
+		t.Errorf("works favorite user = %d, want %d", got, admin.ID)
+	}
+
+	if recorder := fixture.do(authedGet(t, cookies, "/api/v1/people")); recorder.Code != http.StatusOK {
+		t.Fatalf("GET people = %d", recorder.Code)
+	}
+	if got := fixture.people.lastQuery.FavoriteUserID; got != 0 {
+		t.Errorf("an unfiltered people list carries favorite user %d, want 0", got)
+	}
+}

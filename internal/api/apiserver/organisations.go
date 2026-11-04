@@ -53,6 +53,10 @@ func (s *Server) routeListOrganisations(w http.ResponseWriter, r *http.Request) 
 		}
 		params.Monitored = &monitored
 	}
+	if raw := query.Get("favorite"); raw == "true" {
+		favorite := true
+		params.Favorite = &favorite
+	}
 	for name, target := range map[string]**string{"cursor": &params.Cursor, "from": &params.From, "q": &params.Q, "role": &params.Role} {
 		if raw := query.Get(name); raw != "" {
 			*target = &raw

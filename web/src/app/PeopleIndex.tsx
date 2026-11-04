@@ -128,7 +128,7 @@ export function PeopleIndex() {
               q: filters.q || undefined,
               from: filters.from || undefined,
               monitored: filters.monitored ? filters.monitored === "true" : undefined,
-              favorite: filters.favorite === "1" ? true : undefined,
+              favorite: filters.favorite === "only" ? true : undefined,
               sort,
               dir: query.direction,
               where: filters.where || undefined,
@@ -202,7 +202,7 @@ export function PeopleIndex() {
           <option value="true">Followed</option>
           <option value="false">Not followed</option>
         </ToolbarSelect>
-        <ToolbarFavorites active={view.query.filters.favorite === "1"} onChange={(active) => setFilter("favorite", active ? "1" : "")} />
+        <ToolbarFavorites active={view.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label="Filter people by name" />
         <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
         <ToolbarSort
@@ -222,7 +222,7 @@ export function PeopleIndex() {
         {list.error !== null && <p className="p-4 text-sm text-danger">The people could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <p className="max-w-xl p-4 text-sm text-ink-muted">
-            {view.query.filters.favorite === "1"
+            {view.query.filters.favorite === "only"
               ? "No favorites here yet. Press the heart on a person to find them again here."
               : monitored === "true"
               ? "Nobody is followed yet. Open a person and choose Follow to have their new works added for you."

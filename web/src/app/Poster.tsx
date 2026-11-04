@@ -92,7 +92,7 @@ export function Poster({
           </span>
         )}
         {hoverActions && (
-          <span className="absolute inset-x-1.5 bottom-1.5 flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          <span className="pointer-events-none absolute inset-x-1.5 bottom-1.5 flex justify-end opacity-0 [&>*]:pointer-events-auto transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             {hoverActions}
           </span>
         )}

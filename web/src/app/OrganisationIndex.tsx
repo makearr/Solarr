@@ -62,7 +62,7 @@ export function OrganisationIndex() {
             q: query.filters.q || undefined,
             from: query.filters.from || undefined,
             monitored: query.filters.monitored ? query.filters.monitored === "true" : undefined,
-            favorite: query.filters.favorite === "1" ? true : undefined,
+            favorite: query.filters.favorite === "only" ? true : undefined,
             sort: sort as "name" | "works" | "latest",
             dir: descending ? "desc" : "asc",
             cursor,
@@ -108,7 +108,7 @@ export function OrganisationIndex() {
           <option value="true">Followed</option>
           <option value="false">Not followed</option>
         </ToolbarSelect>
-        <ToolbarFavorites active={view.query.filters.favorite === "1"} onChange={(active) => setFilter("favorite", active ? "1" : "")} />
+        <ToolbarFavorites active={view.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label={`Filter ${many.toLowerCase()} by name`} />
         <ToolbarSort
           sort={sort}
@@ -126,7 +126,7 @@ export function OrganisationIndex() {
         {list.error !== null && <p className="p-4 text-sm text-danger">These could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <p className="p-4 text-sm text-ink-muted">
-            {view.query.filters.favorite === "1" ? "No favorites here yet. Press the heart to find one again here." : view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
+            {view.query.filters.favorite === "only" ? "No favorites here yet. Press the heart to find one again here." : view.query.filters.q || view.query.filters.monitored ? "None match." : `None known yet: they arrive with the ${works}' metadata.`}
           </p>
         )}
         {list.items.length > 0 && mode === "list" && <ListTable list={list} columns={columns} idOf={(organisation) => organisation.id} />}

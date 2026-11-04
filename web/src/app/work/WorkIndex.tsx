@@ -107,7 +107,7 @@ function selectionBody(request: SelectionRequest) {
     where: whereWithTitle(request.filters.where, request.filters.q),
     tags: request.filters.tags || undefined,
     person_id: request.filters.person ? Number(request.filters.person) : undefined,
-    favorite: request.filters.favorite === "1" ? true : undefined,
+    favorite: request.filters.favorite === "only" ? true : undefined,
     above_rating: String(request.filters.above_rating) === "1" ? true : undefined,
     whole_library: request.filters.whole_library === "1" ? true : undefined,
     media_type: request.filters.type || undefined,
@@ -188,7 +188,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
             from: query.filters.from || undefined,
             tags: query.filters.tags || undefined,
             person_id: query.filters.person ? Number(query.filters.person) : undefined,
-            favorite: query.filters.favorite === "1" ? true : undefined,
+            favorite: query.filters.favorite === "only" ? true : undefined,
             above_rating: String(query.filters.above_rating) === "1" ? true : undefined,
             whole_library: wholeLibrary || undefined,
             media_type: chosenType || undefined,
@@ -218,7 +218,7 @@ export function WorkIndex({ wholeLibrary = false }: { wholeLibrary?: boolean }) 
         >
           Fresh
         </Button>
-        <ToolbarFavorites active={routeView.query.filters.favorite === "1"} onChange={(active) => setFilter("favorite", active ? "1" : "")} />
+        <ToolbarFavorites active={routeView.query.filters.favorite === "only"} onChange={(active) => setFilter("favorite", active ? "only" : "")} />
         <ToolbarSearch value={routeView.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Title contains…" label={`Filter ${words.works} by title`} />
         {library?.rating_limit?.max_age != null && (
           <Button
