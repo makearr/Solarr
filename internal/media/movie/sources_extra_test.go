@@ -9,6 +9,7 @@ import (
 	"github.com/makearr/Solarr/internal/metadata/fanart"
 	"github.com/makearr/Solarr/internal/metadata/mdblist"
 	"github.com/makearr/Solarr/internal/metadata/omdb"
+	"github.com/makearr/Solarr/internal/metadata/tmdb"
 	"github.com/makearr/Solarr/internal/metadata/tvdb"
 	"github.com/makearr/Solarr/internal/metadata/wikidata"
 )
@@ -100,5 +101,20 @@ func TestWikidataLeadsWhatItHoldsButNeverTheTitleAndItsGenresOnlyFill(t *testing
 	service.TVDB = fakeTVDBFilms{movie: tvdb.Movie{Name: "Example Film", Genres: []tvdb.Named{{Name: "Thriller"}}}}
 	if again, _ := service.FetchFor(t.Context(), 0, movie.IDs{TMDB: 7001}); !reflect.DeepEqual(again.Genres, []string{"Thriller"}) {
 		t.Errorf("genres = %v; want the provider's over Wikidata's finer ones", again.Genres)
+	}
+}
+
+// A TMDB logo that is an SVG is left out: the picture cache decodes raster images only, so it would show broken.
+func TestFromTMDB_LeavesSvgLogosOut(t *testing.T) {
+	var in tmdb.Movie
+	in.Images.Logos = []tmdb.Image{{FilePath: "/vector.svg", VoteAverage: 9}, {FilePath: "/raster.png", VoteAverage: 1}}
+	var logos []string
+	for _, image := range movie.FromTMDB(in, "US").Images {
+		if image.Kind == "logo" {
+			logos = append(logos, image.URL)
+		}
+	}
+	if want := []string{tmdb.ImageURL("/raster.png")}; !reflect.DeepEqual(logos, want) {
+		t.Errorf("logos = %v, want %v", logos, want)
 	}
 }

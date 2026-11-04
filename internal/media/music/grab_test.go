@@ -309,3 +309,28 @@ func TestGrab_AnAutomaticRetryDoesNotJumpFarAboveTheReleaseThatFailed(t *testing
 		t.Fatalf("own grab = %+v, %v; want it sent", own, err)
 	}
 }
+
+// What decides whether an album is searched again lives in library.db: emptying statistics.db after a send changes
+// nothing (revision 2, D7's invariant).
+func TestGrab_AlreadyInFlightSurvivesStatisticsEmptied(t *testing.T) {
+	env := newSearchTestEnv(t)
+	item := env.createSearchableWork(t, "Nosi Zada", "Discovery", 2001, losslessFirstRules)
+	searcher := &fakeIndexerSearcher{responses: func(indexer.SearchRequest) ([]indexer.RawItem, error) {
+		return []indexer.RawItem{rawItem("guid-flac", "Nosi Zada-Discovery-2001-FLAC-GROUP")}, nil
+	}}
+	grab := music.Grab{Search: env.search(), Dispatch: env.dispatch([]music.DownloaderConn{{ID: 5, Protocol: "usenet", Client: &fakeSabnzbdSender{clientRef: "nzo-1"}}})}
+	indexers := []music.IndexerConn{{ID: 1, Impl: "newznab", Client: searcher}}
+	if first, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now()); err != nil || first.Sent == nil {
+		t.Fatalf("first = %+v, %v; want a send", first, err)
+	}
+	for _, table := range []string{"candidate_decision", "candidate", "decision_rollup", "history", "stat_rollup"} {
+		if _, err := env.statistics.WriteDB().ExecContext(t.Context(), "DELETE FROM "+table); err != nil {
+			t.Fatalf("empty %s: %v", table, err)
+		}
+	}
+	calls := len(searcher.requests)
+	second, err := grab.SearchAndSend(t.Context(), item.ID, indexers, music.GrabAutomatic, env.clock.Now())
+	if err != nil || !second.AlreadyInFlight || len(searcher.requests) != calls {
+		t.Errorf("second = %+v, %v after %d more indexer calls; want AlreadyInFlight and no search", second, err, len(searcher.requests)-calls)
+	}
+}

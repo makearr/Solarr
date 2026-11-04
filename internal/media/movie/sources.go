@@ -89,6 +89,9 @@ func tmdbImages(in tmdb.Movie) []Image {
 			if kept >= maxImages {
 				break
 			}
+			if strings.HasSuffix(image.FilePath, ".svg") {
+				continue // the picture cache decodes raster images only
+			}
 			if url := tmdb.ImageURL(image.FilePath); url != "" && !hasImage(images, url) {
 				images = append(images, Image{Kind: kind, URL: url, Source: sourceTMDB})
 				kept++
