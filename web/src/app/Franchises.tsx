@@ -22,6 +22,9 @@ import { AddToLibrary } from "./work/AddWork";
 import { CoverArt } from "./CoverArt";
 import { usePreference } from "@/lib/usePreference";
 import { LetterRail } from "@/ui/LetterRail";
+import { HeartButton } from "@/ui/HeartButton";
+import { ToolbarFavorites } from "@/ui/Toolbar";
+import { useFavoriteIds } from "@/lib/useFavorites";
 import { inputStyle } from "@/ui/form";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -65,6 +68,8 @@ export function FranchiseIndex() {
   const queryClient = useQueryClient();
   const [view, setView] = usePreference<View>(`franchises.view.${categoryId}`, "poster");
   const [filter, setFilter] = useState("");
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
+  const favorites = useFavoriteIds("collection");
   const [sort, setSort] = useState<Sort>("name");
   const navigate = useNavigate();
   const [jump, setJump] = useState("");
@@ -87,9 +92,9 @@ export function FranchiseIndex() {
   });
   const shown = useMemo(() => {
     const needle = filter.trim().toLowerCase();
-    const all = list.data?.franchises ?? [];
+    const all = (list.data?.franchises ?? []).filter((franchise) => !onlyFavorites || favorites.has(franchise.id));
     return sortOf(needle ? all.filter((franchise) => franchise.name.toLowerCase().includes(needle)) : all, sort);
-  }, [list.data, filter, sort]);
+  }, [list.data, filter, sort, onlyFavorites, favorites]);
   if (list.isLoading) return <p className="p-6 text-sm text-ink-muted">{t("work.loading")}</p>;
   if (!list.data) return <p className="p-6 text-sm text-danger">{t("franchise.failed")}</p>;
   const jumpTo = (letter: string) => {
@@ -116,6 +121,7 @@ export function FranchiseIndex() {
               <option value="monitored">{t("franchise.sort.monitored")}</option>
             </select>
           </label>
+          <ToolbarFavorites active={onlyFavorites} onChange={setOnlyFavorites} />
           <span className="ml-auto flex items-center gap-1">
             {administrator && <Button onClick={() => setCreating(true)}>{t("collection.new")}</Button>}
             <Button variant="icon" aria-label={t("franchise.view.poster")} aria-pressed={view === "poster"} onClick={() => setView("poster")}>
@@ -138,7 +144,7 @@ export function FranchiseIndex() {
                 params={{ categoryId, franchiseId: String(franchise.id) }}
                 className="group flex flex-col gap-1 text-left focus-visible:outline-2 focus-visible:outline-accent"
               >
-                <span className="block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
+                <span className="relative block aspect-[2/3] overflow-hidden rounded-lg border border-border-subtle bg-surface">
                   {franchise.poster_url ? (
                     <img src={remoteImage(franchise.poster_url, "small")} alt="" loading="lazy" className="size-full object-cover" />
                   ) : (
@@ -146,6 +152,9 @@ export function FranchiseIndex() {
                       <TypeIcon aria-hidden className="size-8" />
                     </span>
                   )}
+                  <span className="absolute bottom-1.5 left-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-pressed=true]]:opacity-100">
+                    <HeartButton subject="collection" id={franchise.id} name={franchise.name} />
+                  </span>
                 </span>
                 <span className="truncate text-sm font-medium">{franchise.name}</span>
                 <span className="truncate text-xs text-ink-muted">{heldLabel(franchise)}</span>
@@ -165,6 +174,7 @@ export function FranchiseIndex() {
                 </Link>
                 <span className="text-xs text-ink-muted">{heldLabel(franchise)}</span>
                 {franchise.monitored && <Chip tone="ok">{t("franchise.monitored")}</Chip>}
+                <HeartButton subject="collection" id={franchise.id} name={franchise.name} />
                 {administrator && (
                   <Button busy={monitor.isPending && monitor.variables?.id === franchise.id} onClick={() => monitor.mutate(franchise)}>
                     {franchise.monitored ? t("franchise.monitored") : t("franchise.monitor")}
@@ -238,6 +248,7 @@ function CollectionDetail({
     <section className="flex flex-col gap-3 rounded-lg border border-border-subtle bg-surface p-3">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="font-medium">{franchise.name}</h2>
+        <HeartButton subject="collection" id={franchise.id} name={franchise.name} />
         <span className="text-xs text-ink-muted">{heldLabel(franchise)}</span>
         {custom && <Chip>{t("collection.mine")}</Chip>}
         {administrator && (

@@ -141,6 +141,8 @@ type Config struct {
 	ArtistActions ArtistActions
 	// WorkRefresher is a work's Refresh. Optional: nil answers 503.
 	WorkRefresher WorkRefresher
+	// Favorites keeps each user's hearts. Optional: nil answers 503.
+	Favorites Favorites
 	// WorkExclusions lists and lifts "do not add it back". Optional: nil answers 503.
 	WorkExclusions WorkExclusions
 	// WantedParts is Wanted at the grain of a part. Optional: nil answers 503.
@@ -345,6 +347,7 @@ type Server struct {
 	incompleteDiscographies IncompleteDiscographies
 	workRefresher           WorkRefresher
 	workExclusions          WorkExclusions
+	favorites               Favorites
 	wantedParts             WantedPartsReader
 	arrConnections          ArrConnections
 	blockedContent          BlockedContentLister
@@ -480,6 +483,7 @@ func New(config Config) (*Server, error) {
 		incompleteDiscographies: config.IncompleteDiscographies,
 		workRefresher:           config.WorkRefresher,
 		workExclusions:          config.WorkExclusions,
+		favorites:               config.Favorites,
 		wantedParts:             config.WantedParts,
 		arrConnections:          config.ArrConnections,
 		blockedContent:          config.BlockedContent,
@@ -678,6 +682,9 @@ func New(config Config) (*Server, error) {
 			secured.Post("/works/{id}/refresh", server.routeRefreshWork)
 			secured.Get("/wanted/parts", server.routeListWantedParts)
 			secured.Get("/images/remote", server.routeGetRemoteImage)
+			secured.Get("/favorites", server.routeListFavorites)
+			secured.Put("/favorites/{subjectType}/{id}", server.routeFavorite(true))
+			secured.Delete("/favorites/{subjectType}/{id}", server.routeFavorite(false))
 			secured.Get("/works/exclusions", server.routeListWorkExclusions)
 			secured.Delete("/works/exclusions", server.routeRemoveWorkExclusion)
 			secured.Get("/works/lookup", server.routeLookupWorks)
@@ -1137,6 +1144,10 @@ func (s *Server) routeListWorks(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		params.CutoffUnmet = &cutoffUnmet
+	}
+	if raw := query.Get("favorite"); raw != "" {
+		favorite := raw == "true"
+		params.Favorite = &favorite
 	}
 	if raw := query.Get("where"); raw != "" {
 		params.Where = &raw

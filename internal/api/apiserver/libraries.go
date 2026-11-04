@@ -245,6 +245,8 @@ type TracksFilter struct {
 	Search string
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
+	// FavoriteUserID keeps only the tracks this user hearted, 0 any.
+	FavoriteUserID int64
 }
 
 // TracksCursor is a position among the albums backing a Tracks page --
@@ -286,6 +288,8 @@ type ArtistsFilter struct {
 	Monitored *bool
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
 	Where string
+	// FavoriteUserID keeps only the artists this user hearted, 0 any.
+	FavoriteUserID int64
 }
 
 // ArtistsCursor is a position in the Artists level, ordered by sort name.
@@ -399,6 +403,10 @@ func (s *Server) routeListLibraryLevel(w http.ResponseWriter, r *http.Request) {
 		monitored := raw == "true"
 		params.Monitored = &monitored
 	}
+	if raw := query.Get("favorite"); raw == "true" {
+		favorite := true
+		params.Favorite = &favorite
+	}
 	if raw := query.Get("where"); raw != "" {
 		params.Where = &raw
 	}
@@ -452,16 +460,17 @@ func (s *Server) ListLibraryLevel(w http.ResponseWriter, r *http.Request, id int
 		direction = SortDescending
 	}
 
+	favoriteUser := favoriteViewer(params.Favorite, access)
 	switch found.Entity {
 	case model.LevelEntityWork:
-		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction, derefOr(params.Where, ""))
+		s.listLibraryLevelWorks(w, r, rootFolderIDs, categoryIDs, cursor, limit, sort, direction, derefOr(params.Where, ""), favoriteUser)
 	case model.LevelEntityWorkPart:
 		s.listLibraryLevelTracks(w, r, TracksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: direction == SortDescending,
-			Search: derefOr(params.Q, ""), Where: derefOr(params.Where, ""),
+			Search: derefOr(params.Q, ""), Where: derefOr(params.Where, ""), FavoriteUserID: favoriteUser,
 		}, cursor, limit)
 	case model.LevelEntityPerson:
-		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending, params.Monitored, derefOr(params.Where, ""))
+		s.listLibraryLevelArtists(w, r, rootFolderIDs, categoryIDs, cursor, limit, direction == SortDescending, params.Monitored, derefOr(params.Where, ""), favoriteUser)
 	default:
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
 			"Unavailable", "this level has no reader wired up yet")
@@ -490,7 +499,7 @@ func (s *Server) findLevel(mediaType, key string) (model.Level, bool) {
 // list implementation.
 func (s *Server) listLibraryLevelWorks(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64,
-	cursor levelCursor, limit int, sort WorkSort, direction SortDirection, where string,
+	cursor levelCursor, limit int, sort WorkSort, direction SortDirection, where string, favoriteUser int64,
 ) {
 	if s.works == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -505,7 +514,7 @@ func (s *Server) listLibraryLevelWorks(
 	rows, err := s.works.ListWorks(r.Context(),
 		WorksFilter{
 			RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs,
-			Sort: sort, Direction: direction, Where: where,
+			Sort: sort, Direction: direction, Where: where, FavoriteUserID: favoriteUser,
 		},
 		workCursor, limit+1)
 	if err != nil {
@@ -577,7 +586,7 @@ func (s *Server) listLibraryLevelTracks(w http.ResponseWriter, r *http.Request, 
 // LibraryArtistsReader.
 func (s *Server) listLibraryLevelArtists(
 	w http.ResponseWriter, r *http.Request, rootFolderIDs, categoryIDs []int64, cursor levelCursor, limit int,
-	descending bool, monitored *bool, where string,
+	descending bool, monitored *bool, where string, favoriteUser int64,
 ) {
 	if s.libraryArtists == nil {
 		writeProblem(w, s.logger, http.StatusServiceUnavailable, TypeUnavailable,
@@ -585,7 +594,7 @@ func (s *Server) listLibraryLevelArtists(
 		return
 	}
 	rows, err := s.libraryArtists.ListLibraryArtists(r.Context(),
-		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending, Monitored: monitored, Where: where},
+		ArtistsFilter{RootFolderIDs: rootFolderIDs, CategoryIDs: categoryIDs, Descending: descending, Monitored: monitored, Where: where, FavoriteUserID: favoriteUser},
 		ArtistsCursor{SortName: cursor.field(0), ID: cursor.id}, limit+1)
 	if err != nil {
 		writeError(w, s.logger, err)

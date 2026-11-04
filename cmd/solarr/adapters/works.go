@@ -96,6 +96,7 @@ func (a Works) ListWorks(
 			MediaType:       filter.MediaType,
 			MediaTypes:      filter.MediaTypes,
 			PersonID:        filter.PersonID,
+			FavoriteUserID:  filter.FavoriteUserID,
 		},
 		library.WorkCursor{
 			SortTitle: cursor.SortTitle, SortYear: cursor.SortYear, SortAdded: cursor.SortAdded,

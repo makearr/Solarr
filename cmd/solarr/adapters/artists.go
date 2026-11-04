@@ -28,7 +28,7 @@ func (a Artists) ListLibraryArtists(
 	rows, err := a.People.List(ctx,
 		library.PeopleFilter{
 			Visible: filter.CategoryIDs, Roles: []string{artistCreditRole}, Monitored: filter.Monitored, Where: where,
-			Desc: filter.Descending,
+			Desc: filter.Descending, FavoriteUserID: filter.FavoriteUserID,
 		},
 		library.PeopleCursor{Name: cursor.SortName, ID: cursor.ID, Set: cursor.SortName != "" || cursor.ID != 0}, pageSize)
 	if err != nil {

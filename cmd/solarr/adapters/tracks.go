@@ -22,7 +22,7 @@ func (a Tracks) ListLibraryTracks(
 	rows, next, hasMore, err := a.Tracks.List(ctx,
 		library.TrackFilter{
 			RootFolderIDs: filter.RootFolderIDs, CategoryIDs: filter.CategoryIDs, Descending: filter.Descending,
-			Search: filter.Search, Where: where,
+			Search: filter.Search, Where: where, FavoriteUserID: filter.FavoriteUserID,
 		},
 		library.TrackAlbumCursor{
 			ArtistSortName: cursor.ArtistSortName, AlbumSortTitle: cursor.AlbumSortTitle, AlbumID: cursor.AlbumID,

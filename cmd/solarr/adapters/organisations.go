@@ -31,7 +31,7 @@ func (a Organisations) ListOrganisations(ctx context.Context, query apiserver.Pe
 		cursor.Value = value
 	}
 	rows, err := a.Organisations.List(ctx, library.OrganisationFilter{
-		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored,
+		Visible: query.Visible, Category: query.Category, Roles: query.Roles, Monitored: query.Monitored, FavoriteUserID: query.FavoriteUserID,
 		NameContains: query.NameContains, Sort: query.Sort, Desc: query.Desc,
 	}, cursor, limit)
 	if err != nil {

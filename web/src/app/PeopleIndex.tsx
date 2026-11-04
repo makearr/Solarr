@@ -16,7 +16,8 @@ import { PosterGrid } from "@/list/PosterGrid";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { useLibraryList } from "@/list/useLibraryList";
 import { useRouteView } from "@/list/useRouteView";
-import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
+import { Toolbar, ToolbarAdd, ToolbarFavorites, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
+import { HeartButton } from "@/ui/HeartButton";
 
 import {
   DEFAULT_POSTER_OPTIONS, IndexViewToggle, OVERVIEW_ROW_HEIGHT, POSTER_GAP, POSTER_PADDING, POSTER_WIDTHS, PosterOptionsMenu, posterRowHeight,
@@ -30,7 +31,7 @@ type Person = components["schemas"]["PersonEntry"];
 type Role = MediaTypeInfo["roles"][number];
 type SortKey = "name" | "works" | "latest" | "added";
 
-const FILTER_KEYS: readonly string[] = ["role", "monitored", "q", "where", "from"];
+const FILTER_KEYS: readonly string[] = ["role", "monitored", "favorite", "q", "where", "from"];
 const SORT_LABEL: Record<SortKey, string> = { name: "Name", works: "Works", latest: "Newest work", added: "Added" };
 /** "everyone" in the address: no role chosen, which for a library with a lead role is not its default. */
 const EVERYONE = "all";
@@ -127,6 +128,7 @@ export function PeopleIndex() {
               q: filters.q || undefined,
               from: filters.from || undefined,
               monitored: filters.monitored ? filters.monitored === "true" : undefined,
+              favorite: filters.favorite === "1" ? true : undefined,
               sort,
               dir: query.direction,
               where: filters.where || undefined,
@@ -171,6 +173,7 @@ export function PeopleIndex() {
     { key: "works", header: type?.work.many ?? "Works", sortable: true, width: "6rem", render: (person) => person.works },
     { key: "latest", header: "Newest", sortable: true, width: "6rem", render: (person) => person.latest ?? "" },
     { key: "followed", header: "Followed", width: "6rem", render: (person) => (person.monitored ? "Yes" : "") },
+    { key: "favorite", header: "Favorite", width: "5rem", render: (person) => <HeartButton subject="person" id={person.id} name={person.name} /> },
   ];
 
   return (
@@ -199,6 +202,7 @@ export function PeopleIndex() {
           <option value="true">Followed</option>
           <option value="false">Not followed</option>
         </ToolbarSelect>
+        <ToolbarFavorites active={view.query.filters.favorite === "1"} onChange={(active) => setFilter("favorite", active ? "1" : "")} />
         <ToolbarSearch value={view.query.filters.q ?? ""} onChange={(value) => setFilter("q", value)} placeholder="Name contains…" label="Filter people by name" />
         <CustomFilterMenu fields={filterFields} storageKey={`people.${scope}`} where={view.query.filters.where ?? ""} onChange={(where) => setFilter("where", where)} />
         <ToolbarSort
@@ -218,7 +222,9 @@ export function PeopleIndex() {
         {list.error !== null && <p className="p-4 text-sm text-danger">The people could not be loaded.</p>}
         {!list.isLoading && list.error === null && list.items.length === 0 && (
           <p className="max-w-xl p-4 text-sm text-ink-muted">
-            {monitored === "true"
+            {view.query.filters.favorite === "1"
+              ? "No favorites here yet. Press the heart on a person to find them again here."
+              : monitored === "true"
               ? "Nobody is followed yet. Open a person and choose Follow to have their new works added for you."
               : monitored === "false"
                 ? "Everyone listed here is followed."
@@ -282,6 +288,7 @@ export function PeopleIndex() {
                 status={options.showAvailability && leadList ? statusOf(person) : undefined}
                 presentCount={person.complete}
                 requiredCount={person.wanted}
+                heart={<HeartButton subject="person" id={person.id} name={person.name} />}
               />
             )}
           />

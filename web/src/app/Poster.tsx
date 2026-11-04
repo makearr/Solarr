@@ -19,6 +19,7 @@ export function Poster({
   badge,
   topLeft,
   hoverActions,
+  heart,
   showTitle = true,
   link,
   round = false,
@@ -37,6 +38,8 @@ export function Poster({
   // Radarr's poster: the monitored bookmark top left, actions over the cover on hover (2026-09-30).
   topLeft?: React.ReactNode;
   hoverActions?: React.ReactNode;
+  /** The favorite heart: always shown once hearted, otherwise on hover. */
+  heart?: React.ReactNode;
   showTitle?: boolean;
   link: LinkProps | null;
   round?: boolean;
@@ -83,6 +86,11 @@ export function Poster({
         )}
         {badge && <span className="absolute right-1.5 top-1.5">{badge}</span>}
         {topLeft && <span className="absolute left-1.5 top-1.5">{topLeft}</span>}
+        {heart && (
+          <span className="absolute bottom-1.5 left-1.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 has-[[aria-pressed=true]]:opacity-100">
+            {heart}
+          </span>
+        )}
         {hoverActions && (
           <span className="absolute inset-x-1.5 bottom-1.5 flex justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
             {hoverActions}

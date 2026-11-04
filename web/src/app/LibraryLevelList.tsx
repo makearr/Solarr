@@ -11,7 +11,7 @@ import { useLibraryList } from "@/list/useLibraryList";
 import { useGridMetrics } from "@/list/useGridMetrics";
 import { PosterGrid } from "@/list/PosterGrid";
 import { useRouteView } from "@/list/useRouteView";
-import { Toolbar, ToolbarAdd, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
+import { Toolbar, ToolbarAdd, ToolbarFavorites, ToolbarSearch, ToolbarSelect, ToolbarSort } from "@/ui/Toolbar";
 import { useRecordLastLevel } from "@/list/useRecordLastLevel";
 import type { components } from "@/api/schema";
 import { MenuCheck } from "@/ui/MenuCheck";
@@ -27,7 +27,7 @@ import { formatBytes } from "./Queue";
 type LevelItem = components["schemas"]["LibraryLevelItem"];
 
 const ROW_HEIGHT = 44;
-const FILTER_KEYS: readonly string[] = ["monitored", "where", "q"];
+const FILTER_KEYS: readonly string[] = ["monitored", "favorite", "where", "q"];
 
 
 // The poster wall's own geometry: a tile is at least this wide, gaps and page
@@ -169,6 +169,7 @@ export function LibraryLevelList() {
             path: { id: Number(categoryId), level: level ?? "" },
             query: {
               cursor, limit: 100, sort, dir, monitored: monitored ? monitored === "true" : undefined,
+              favorite: query.filters.favorite === "1" ? true : undefined,
               where: query.filters.where || undefined, q: query.filters.q || undefined,
             },
           },
@@ -182,6 +183,9 @@ export function LibraryLevelList() {
   return (
     <div ref={frameRef} className="flex h-full flex-col">
       <Toolbar title={<span className="capitalize">{level ?? "Library"}</span>}>
+        {(level === "artists" || level === "albums" || level === "tracks") && (
+          <ToolbarFavorites active={list.query.filters.favorite === "1"} onChange={(active) => list.filterBy("favorite", active ? "1" : "")} />
+        )}
         {level === "artists" && (
           <ToolbarSelect label="Show" value={list.query.filters.monitored ?? ""} onChange={(value) => list.filterBy("monitored", value)}>
             <option value="">All artists</option>
@@ -243,7 +247,7 @@ export function LibraryLevelList() {
   );
 }
 
-type OptionalColumn = "subtitle" | "year" | "progress" | "status" | "size" | "monitored" | "actions";
+type OptionalColumn = "subtitle" | "year" | "progress" | "status" | "size" | "monitored" | "favorite" | "actions";
 
 interface LevelColumns {
   title: { header: string; sort?: SortKey };
@@ -257,6 +261,7 @@ const LEVEL_COLUMNS: Record<string, LevelColumns> = {
     optional: [
       { key: "progress", header: "Albums", width: "7rem" },
       { key: "status", header: "Status", width: "6rem" },
+      { key: "favorite", header: "Favorite", width: "5rem" },
       { key: "actions", header: "Actions", width: "5rem" },
     ],
   },
@@ -269,6 +274,7 @@ const LEVEL_COLUMNS: Record<string, LevelColumns> = {
       { key: "status", header: "Status", width: "6rem" },
       { key: "size", header: "Size", width: "6rem" },
       { key: "monitored", header: "Monitored", width: "6rem" },
+      { key: "favorite", header: "Favorite", width: "5rem" },
       { key: "actions", header: "Actions", width: "5rem" },
     ],
   },
@@ -277,6 +283,7 @@ const LEVEL_COLUMNS: Record<string, LevelColumns> = {
     optional: [
       { key: "subtitle", header: "Artist -- Album", sort: "artist", width: "1.5fr" },
       { key: "year", header: "Released", width: "6rem" },
+      { key: "favorite", header: "Favorite", width: "5rem" },
     ],
   },
 };
@@ -435,6 +442,7 @@ function cellFor(column: OptionalColumn, item: LevelItem, level?: string): React
     case "size":
       return item.size_bytes ? formatBytes(item.size_bytes) : "";
     case "monitored":
+    case "favorite":
     case "actions":
       return <RowActions column={column} entry={entryOf(level, item)} />;
     case "subtitle":

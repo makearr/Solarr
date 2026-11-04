@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/makearr/Solarr/internal/api/apiserver/gen"
+	"github.com/makearr/Solarr/internal/api/authz"
 	"github.com/makearr/Solarr/internal/platform/paginate"
 )
 
@@ -84,10 +85,16 @@ func (s *Server) ListOrganisations(w http.ResponseWriter, r *http.Request, param
 	if !ok {
 		return
 	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	query := PeopleQuery{
 		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, NameContains: derefOr(params.Q, ""),
-		Sort: string(derefOr(params.Sort, gen.ListOrganisationsParamsSortName)),
-		Desc: derefOr(params.Dir, gen.ListOrganisationsParamsDirAsc) == gen.ListOrganisationsParamsDirDesc,
+		Sort:           string(derefOr(params.Sort, gen.ListOrganisationsParamsSortName)),
+		FavoriteUserID: favoriteViewer(params.Favorite, access),
+		Desc:           derefOr(params.Dir, gen.ListOrganisationsParamsDirAsc) == gen.ListOrganisationsParamsDirDesc,
 	}
 	for _, role := range strings.Split(derefOr(params.Role, ""), ",") {
 		if role = strings.TrimSpace(role); role != "" {

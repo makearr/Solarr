@@ -28,6 +28,8 @@ type PeopleQuery struct {
 	Category  int64
 	Roles     []string
 	Monitored *bool
+	// FavoriteUserID narrows to what this user hearted; 0 is everyone.
+	FavoriteUserID int64
 	// NameContains narrows to names containing it, any case.
 	NameContains string
 	// Where is the custom filter as the JSON the request carried; malformed answers ErrInvalidChoice.
@@ -195,10 +197,16 @@ func (s *Server) ListPeople(w http.ResponseWriter, r *http.Request, params gen.L
 	if !ok {
 		return
 	}
+	access, err := authz.FromContext(r.Context())
+	if err != nil {
+		writeError(w, s.logger, err)
+		return
+	}
 	query := PeopleQuery{
 		Visible: visible, Category: derefOr(params.Category, 0), Monitored: params.Monitored, NameContains: derefOr(params.Q, ""),
 		Where: derefOr(params.Where, ""), Sort: string(derefOr(params.Sort, gen.ListPeopleParamsSortName)),
-		Desc: derefOr(params.Dir, gen.ListPeopleParamsDirAsc) == gen.ListPeopleParamsDirDesc,
+		FavoriteUserID: favoriteViewer(params.Favorite, access),
+		Desc:           derefOr(params.Dir, gen.ListPeopleParamsDirAsc) == gen.ListPeopleParamsDirDesc,
 	}
 	for _, role := range strings.Split(derefOr(params.Role, ""), ",") {
 		if role = strings.TrimSpace(role); role != "" {

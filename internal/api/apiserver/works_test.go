@@ -75,6 +75,7 @@ type worksFixture struct {
 	artistActions        *fakeArtistActions
 	follower             *fakeFollower
 	blockedContent       *fakeBlockedContentLister
+	favorites            *fakeFavorites
 	packs                *fakePackLister
 	removeAndBlocker     *fakeRemoveAndBlocker
 	importSessions       *fakeImportSessionLister
@@ -244,6 +245,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 	artistActions := &fakeArtistActions{}
 	follower := &fakeFollower{}
 	blockedContent := &fakeBlockedContentLister{}
+	favorites := &fakeFavorites{}
 	packs := &fakePackLister{}
 	removeAndBlocker := &fakeRemoveAndBlocker{}
 	importSessions := &fakeImportSessionLister{}
@@ -292,6 +294,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		Follower:             follower,
 		ArtistActions:        artistActions,
 		BlockedContent:       blockedContent,
+		Favorites:            favorites,
 		Packs:                packs,
 		RemoveAndBlocker:     removeAndBlocker,
 		ImportSessions:       importSessions,
@@ -345,7 +348,7 @@ func newWorksFixtureWithLibrarySizeNavigationArtistsAndConfigPath(
 		search: search, unidentified: unidentified, unidentifiedResolver: unidentifiedResolver,
 		artwork: artwork, playback: playback, remoteImages: remoteImages, people: people, subscriber: subscriber, artistActions: artistActions,
 		follower:       follower,
-		blockedContent: blockedContent, packs: packs, removeAndBlocker: removeAndBlocker,
+		blockedContent: blockedContent, favorites: favorites, packs: packs, removeAndBlocker: removeAndBlocker,
 		importSessions: importSessions, importInspector: importInspector,
 		fingerprintRetrier: fingerprintRetrier,
 		drainStarter:       drainStarter, moveJobs: moveJobs, renameStarter: renameStarter, namingSchemes: namingSchemes, calendar: calendar,

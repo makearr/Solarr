@@ -239,6 +239,15 @@ const (
 	FacetKindText     FacetKind = "text"
 )
 
+// Defines values for FavoriteSubject.
+const (
+	FavoriteSubjectCollection   FavoriteSubject = "collection"
+	FavoriteSubjectOrganisation FavoriteSubject = "organisation"
+	FavoriteSubjectPerson       FavoriteSubject = "person"
+	FavoriteSubjectWork         FavoriteSubject = "work"
+	FavoriteSubjectWorkPart     FavoriteSubject = "work_part"
+)
+
 // Defines values for FileManagementChangeFileDate.
 const (
 	FileManagementChangeFileDateNone        FileManagementChangeFileDate = "none"
@@ -2378,6 +2387,9 @@ type FacetEntity string
 
 // FacetKind defines model for Facet.Kind.
 type FacetKind string
+
+// FavoriteSubject What a heart can be on; work_part is a song or an episode, organisation a studio or a network.
+type FavoriteSubject string
 
 // FileManagement Sonarr's File Management and Permissions for one library. The recycling bin is Solarr's recycle bin: nothing is deleted directly, so only how long it keeps what this library removes is set here.
 type FileManagement struct {
@@ -5939,6 +5951,11 @@ type StreamEventsParams struct {
 	LastEventID *string       `json:"Last-Event-ID,omitempty"`
 }
 
+// ListFavoritesParams defines parameters for ListFavorites.
+type ListFavoritesParams struct {
+	SubjectType FavoriteSubject `form:"subject_type" json:"subject_type"`
+}
+
 // TranscodeFileParams defines parameters for TranscodeFile.
 type TranscodeFileParams struct {
 	// Start Where to begin, in seconds.
@@ -6091,6 +6108,9 @@ type ListLibraryLevelParams struct {
 	// Monitored At the Artists level, only monitored (true) or only unmonitored (false) artists; absent means both. Other levels ignore it.
 	Monitored *bool `form:"monitored,omitempty" json:"monitored,omitempty"`
 
+	// Favorite Only what the caller hearted, at the Albums, Artists and Tracks levels. Other levels ignore it.
+	Favorite *bool `form:"favorite,omitempty" json:"favorite,omitempty"`
+
 	// Where A custom filter, a JSON array of conditions (field, op, value) that must all hold. Albums: title, artist, genre, tag (text); year, size_mb (number); monitored, on_disk, verified (bool); status. Artists: name, country (text); albums_wanted, albums_complete (number); monitored (bool). Tracks: title, album, artist (text); year (number); monitored, has_file (bool). Other levels ignore it.
 	Where *string `form:"where,omitempty" json:"where,omitempty"`
 
@@ -6208,6 +6228,9 @@ type ListOrganisationsParams struct {
 	Role      *string `form:"role,omitempty" json:"role,omitempty"`
 	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
 
+	// Favorite Only what the caller hearted.
+	Favorite *bool `form:"favorite,omitempty" json:"favorite,omitempty"`
+
 	// Q Matches anywhere in the name, any case.
 	Q    *string                      `form:"q,omitempty" json:"q,omitempty"`
 	Sort *ListOrganisationsParamsSort `form:"sort,omitempty" json:"sort,omitempty"`
@@ -6266,6 +6289,9 @@ type ListPeopleParams struct {
 	Cursor    *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
 	Monitored *bool   `form:"monitored,omitempty" json:"monitored,omitempty"`
+
+	// Favorite Only what the caller hearted.
+	Favorite *bool `form:"favorite,omitempty" json:"favorite,omitempty"`
 
 	// Q Matches anywhere in the name, any case.
 	Q *string `form:"q,omitempty" json:"q,omitempty"`
@@ -6504,6 +6530,9 @@ type ListWorksParams struct {
 	// PersonId Only works the person is credited on.
 	PersonId *int64 `form:"person_id,omitempty" json:"person_id,omitempty"`
 
+	// Favorite Only the works the caller hearted.
+	Favorite *bool `form:"favorite,omitempty" json:"favorite,omitempty"`
+
 	// MediaType Only works of this media type (the All list's type chip).
 	MediaType *string `form:"media_type,omitempty" json:"media_type,omitempty"`
 
@@ -6524,6 +6553,9 @@ type BulkEditWorksJSONBody struct {
 	CategoryId  *int64    `json:"category_id,omitempty"`
 	CutoffUnmet *bool     `json:"cutoff_unmet,omitempty"`
 	ExcludedIds *[]int64  `json:"excluded_ids,omitempty"`
+
+	// Favorite The list's favorites-only filter.
+	Favorite *bool `json:"favorite,omitempty"`
 
 	// Fields The type's editable facets to set, by key ("" returns one to its sources).
 	Fields    *map[string]string `json:"fields,omitempty"`
@@ -6560,8 +6592,11 @@ type BulkMoveWorksToLibraryJSONBody struct {
 	Copy        *bool    `json:"copy,omitempty"`
 	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
 	ExcludedIds *[]int64 `json:"excluded_ids,omitempty"`
-	Fresh       *bool    `json:"fresh,omitempty"`
-	Ids         *[]int64 `json:"ids,omitempty"`
+
+	// Favorite The list's favorites-only filter.
+	Favorite *bool    `json:"favorite,omitempty"`
+	Fresh    *bool    `json:"fresh,omitempty"`
+	Ids      *[]int64 `json:"ids,omitempty"`
 
 	// LibraryId The library the selection was made in.
 	LibraryId *int64  `json:"library_id,omitempty"`
@@ -6585,6 +6620,9 @@ type BulkSetWorkMonitoredJSONBody struct {
 	// CutoffUnmet The list's Cutoff Unmet filter.
 	CutoffUnmet *bool    `json:"cutoff_unmet,omitempty"`
 	ExcludedIds *[]int64 `json:"excluded_ids,omitempty"`
+
+	// Favorite The list's favorites-only filter.
+	Favorite *bool `json:"favorite,omitempty"`
 
 	// Fresh The list's Fresh filter
 	Fresh *bool `json:"fresh,omitempty"`
@@ -7418,6 +7456,15 @@ type ServerInterface interface {
 	// Change a pattern's content. Administrator only. `builtin` never changes -- a shipped default stays a shipped default, only editable and removable (ADR-53's own text), never rebrandable as user-added.
 	// (PATCH /exclusions/{id})
 	UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, id int64)
+	// The ids of one kind of thing the caller has hearted.
+	// (GET /favorites)
+	ListFavorites(w http.ResponseWriter, r *http.Request, params ListFavoritesParams)
+	// Take the heart back. Answers 204 when there was none.
+	// (DELETE /favorites/{subjectType}/{id})
+	RemoveFavorite(w http.ResponseWriter, r *http.Request, subjectType FavoriteSubject, id int64)
+	// Heart something. Hearting twice changes nothing.
+	// (PUT /favorites/{subjectType}/{id})
+	AddFavorite(w http.ResponseWriter, r *http.Request, subjectType FavoriteSubject, id int64)
 	// What the built-in player needs to know to play a file.
 	// (GET /files/{mediaObjectId}/playback)
 	GetFilePlayback(w http.ResponseWriter, r *http.Request, mediaObjectId int64)
@@ -8657,6 +8704,24 @@ func (_ Unimplemented) DeleteExclusionPattern(w http.ResponseWriter, r *http.Req
 // Change a pattern's content. Administrator only. `builtin` never changes -- a shipped default stays a shipped default, only editable and removable (ADR-53's own text), never rebrandable as user-added.
 // (PATCH /exclusions/{id})
 func (_ Unimplemented) UpdateExclusionPattern(w http.ResponseWriter, r *http.Request, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// The ids of one kind of thing the caller has hearted.
+// (GET /favorites)
+func (_ Unimplemented) ListFavorites(w http.ResponseWriter, r *http.Request, params ListFavoritesParams) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Take the heart back. Answers 204 when there was none.
+// (DELETE /favorites/{subjectType}/{id})
+func (_ Unimplemented) RemoveFavorite(w http.ResponseWriter, r *http.Request, subjectType FavoriteSubject, id int64) {
+	w.WriteHeader(http.StatusNotImplemented)
+}
+
+// Heart something. Hearting twice changes nothing.
+// (PUT /favorites/{subjectType}/{id})
+func (_ Unimplemented) AddFavorite(w http.ResponseWriter, r *http.Request, subjectType FavoriteSubject, id int64) {
 	w.WriteHeader(http.StatusNotImplemented)
 }
 
@@ -12995,6 +13060,132 @@ func (siw *ServerInterfaceWrapper) UpdateExclusionPattern(w http.ResponseWriter,
 	handler.ServeHTTP(w, r)
 }
 
+// ListFavorites operation middleware
+func (siw *ServerInterfaceWrapper) ListFavorites(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params ListFavoritesParams
+
+	// ------------- Required query parameter "subject_type" -------------
+
+	if paramValue := r.URL.Query().Get("subject_type"); paramValue != "" {
+
+	} else {
+		siw.ErrorHandlerFunc(w, r, &RequiredParamError{ParamName: "subject_type"})
+		return
+	}
+
+	err = runtime.BindQueryParameter("form", true, true, "subject_type", r.URL.Query(), &params.SubjectType)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subject_type", Err: err})
+		return
+	}
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.ListFavorites(w, r, params)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// RemoveFavorite operation middleware
+func (siw *ServerInterfaceWrapper) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "subjectType" -------------
+	var subjectType FavoriteSubject
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subjectType", chi.URLParam(r, "subjectType"), &subjectType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subjectType", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.RemoveFavorite(w, r, subjectType, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
+// AddFavorite operation middleware
+func (siw *ServerInterfaceWrapper) AddFavorite(w http.ResponseWriter, r *http.Request) {
+
+	var err error
+
+	// ------------- Path parameter "subjectType" -------------
+	var subjectType FavoriteSubject
+
+	err = runtime.BindStyledParameterWithOptions("simple", "subjectType", chi.URLParam(r, "subjectType"), &subjectType, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "subjectType", Err: err})
+		return
+	}
+
+	// ------------- Path parameter "id" -------------
+	var id int64
+
+	err = runtime.BindStyledParameterWithOptions("simple", "id", chi.URLParam(r, "id"), &id, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "id", Err: err})
+		return
+	}
+
+	ctx := r.Context()
+
+	ctx = context.WithValue(ctx, SessionScopes, []string{})
+
+	ctx = context.WithValue(ctx, ApiKeyScopes, []string{})
+
+	r = r.WithContext(ctx)
+
+	handler := http.Handler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		siw.Handler.AddFavorite(w, r, subjectType, id)
+	}))
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		handler = middleware(handler)
+	}
+
+	handler.ServeHTTP(w, r)
+}
+
 // GetFilePlayback operation middleware
 func (siw *ServerInterfaceWrapper) GetFilePlayback(w http.ResponseWriter, r *http.Request) {
 
@@ -14891,6 +15082,14 @@ func (siw *ServerInterfaceWrapper) ListLibraryLevel(w http.ResponseWriter, r *ht
 		return
 	}
 
+	// ------------- Optional query parameter "favorite" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "favorite", r.URL.Query(), &params.Favorite)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "favorite", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "where" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "where", r.URL.Query(), &params.Where)
@@ -15910,6 +16109,14 @@ func (siw *ServerInterfaceWrapper) ListOrganisations(w http.ResponseWriter, r *h
 		return
 	}
 
+	// ------------- Optional query parameter "favorite" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "favorite", r.URL.Query(), &params.Favorite)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "favorite", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "q" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "q", r.URL.Query(), &params.Q)
@@ -16397,6 +16604,14 @@ func (siw *ServerInterfaceWrapper) ListPeople(w http.ResponseWriter, r *http.Req
 	err = runtime.BindQueryParameter("form", true, false, "monitored", r.URL.Query(), &params.Monitored)
 	if err != nil {
 		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "monitored", Err: err})
+		return
+	}
+
+	// ------------- Optional query parameter "favorite" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "favorite", r.URL.Query(), &params.Favorite)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "favorite", Err: err})
 		return
 	}
 
@@ -18933,6 +19148,14 @@ func (siw *ServerInterfaceWrapper) ListWorks(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// ------------- Optional query parameter "favorite" -------------
+
+	err = runtime.BindQueryParameter("form", true, false, "favorite", r.URL.Query(), &params.Favorite)
+	if err != nil {
+		siw.ErrorHandlerFunc(w, r, &InvalidParamFormatError{ParamName: "favorite", Err: err})
+		return
+	}
+
 	// ------------- Optional query parameter "media_type" -------------
 
 	err = runtime.BindQueryParameter("form", true, false, "media_type", r.URL.Query(), &params.MediaType)
@@ -20757,6 +20980,15 @@ func HandlerWithOptions(si ServerInterface, options ChiServerOptions) http.Handl
 	})
 	r.Group(func(r chi.Router) {
 		r.Patch(options.BaseURL+"/exclusions/{id}", wrapper.UpdateExclusionPattern)
+	})
+	r.Group(func(r chi.Router) {
+		r.Get(options.BaseURL+"/favorites", wrapper.ListFavorites)
+	})
+	r.Group(func(r chi.Router) {
+		r.Delete(options.BaseURL+"/favorites/{subjectType}/{id}", wrapper.RemoveFavorite)
+	})
+	r.Group(func(r chi.Router) {
+		r.Put(options.BaseURL+"/favorites/{subjectType}/{id}", wrapper.AddFavorite)
 	})
 	r.Group(func(r chi.Router) {
 		r.Get(options.BaseURL+"/files/{mediaObjectId}/playback", wrapper.GetFilePlayback)

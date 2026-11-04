@@ -51,6 +51,8 @@ type PeopleFilter struct {
 	// Roles narrow to people credited in any of them; empty is any role.
 	Roles     []string
 	Monitored *bool
+	// FavoriteUserID narrows to the people this user hearted; 0 is everyone.
+	FavoriteUserID int64
 	// NameContains narrows to people whose name contains it, any case.
 	NameContains string
 	Where        []listfilter.Condition
@@ -257,6 +259,7 @@ func composePeople(filter PeopleFilter, after PeopleCursor, pageSize int) (strin
 	if filter.Monitored != nil {
 		predicates.Add("p.monitored = ?", boolInt(*filter.Monitored))
 	}
+	predicates.AddIf(filter.FavoriteUserID != 0, favoriteSQL(FavoritePerson, "p.id"), filter.FavoriteUserID)
 	if filter.NameContains != "" {
 		like := containsPattern(filter.NameContains)
 		predicates.Add("(LOWER(p.name) LIKE ? ESCAPE '\\' OR LOWER(p.sort_name) LIKE ? ESCAPE '\\')", like, like)

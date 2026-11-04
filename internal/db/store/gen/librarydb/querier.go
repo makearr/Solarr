@@ -19,6 +19,8 @@ type Querier interface {
 	AddCollectionRefusal(ctx context.Context, arg AddCollectionRefusalParams) error
 	// edition_id and part_id are 0 for a credit on the work itself (Appendix E, D2).
 	AddCredit(ctx context.Context, arg AddCreditParams) error
+	// Hearts, per user; a favorite is not a follow. Column lists follow table order.
+	AddFavorite(ctx context.Context, arg AddFavoriteParams) error
 	// The second half of importing a file, and execlastid for the same reason.
 	AddLibraryPath(ctx context.Context, arg AddLibraryPathParams) (int64, error)
 	AddPersonAlias(ctx context.Context, arg AddPersonAliasParams) error
@@ -602,6 +604,7 @@ type Querier interface {
 	ListEnabledSubscriptions(ctx context.Context) ([]Subscription, error)
 	ListExpiredRecycleBin(ctx context.Context, arg ListExpiredRecycleBinParams) ([]RecycleBin, error)
 	ListExternalIDsOfCollection(ctx context.Context, collectionID int64) ([]ListExternalIDsOfCollectionRow, error)
+	ListFavoriteIDs(ctx context.Context, arg ListFavoriteIDsParams) ([]int64, error)
 	// A work's files with where each claims to sit, for aligning them once its tracklist exists.
 	ListFileTrackClaimsForWork(ctx context.Context, workID int64) ([]FileTrackClaim, error)
 	ListFilesForDesiredItem(ctx context.Context, desiredItemID int64) ([]DesiredItemFile, error)
@@ -1036,6 +1039,7 @@ type Querier interface {
 	RemoveAutoCollectionMember(ctx context.Context, arg RemoveAutoCollectionMemberParams) error
 	RemoveBlockedContent(ctx context.Context, id int64) error
 	RemoveCollectionMember(ctx context.Context, arg RemoveCollectionMemberParams) error
+	RemoveFavorite(ctx context.Context, arg RemoveFavoriteParams) error
 	RemoveFromBlocklist(ctx context.Context, id int64) error
 	RenameCollection(ctx context.Context, arg RenameCollectionParams) error
 	RenameCollectionByHand(ctx context.Context, arg RenameCollectionByHandParams) (int64, error)
