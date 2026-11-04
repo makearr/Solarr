@@ -182,3 +182,18 @@ func TestSearchIfChanged_SendsTheValidatorsBackAndReadsA304(t *testing.T) {
 		t.Errorf("If-None-Match sent = %q", got)
 	}
 }
+
+func TestSearch_DecodesTitleEntitiesProwlarrEscapesTwice(t *testing.T) {
+	body := `<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><item>` +
+		`<title>Angel Miners &amp;amp; The Lightning Riders</title><guid>g1</guid>` +
+		`<enclosure url="https://indexer.example/nzb" length="1"/></item></channel></rss>`
+	client := indexer.NewClient(newTestClient(t, &recordingTransport{body: body}), "http://indexer.local", "key")
+
+	items, err := client.Search(context.Background(), indexer.SearchRequest{Function: "search", Query: "x", Limit: 1})
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(items) != 1 || items[0].Title != "Angel Miners & The Lightning Riders" {
+		t.Errorf("items = %+v, want the title with a plain ampersand", items)
+	}
+}

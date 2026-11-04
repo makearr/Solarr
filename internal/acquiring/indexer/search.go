@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/xml"
 	"fmt"
+	"html"
 	"net/url"
 	"strconv"
 	"strings"
@@ -164,7 +165,7 @@ func (item rssItemXML) toRawItem() RawItem {
 	peers, _ := strconv.Atoi(item.attr("peers"))
 
 	return RawItem{
-		Title: item.Title, GUID: item.GUID, Link: link,
+		Title: html.UnescapeString(item.Title), GUID: item.GUID, Link: link,
 		Categories: categories, SizeBytes: sizeBytes,
 		PublishedAt: parsePubDate(item.PubDate),
 		Seeders:     seeders, Peers: peers, InfoHash: item.attr("infohash"),
