@@ -56,3 +56,7 @@ Settings (`GET/PUT /settings/import-duplicates`, administrators, Storage > Dupli
 `import.duplicate_blocklist` (off). Blocklisting covers a download skipped as a duplicate and one the cutoff step recycled
 as no better (reason `REJECTED_WORSE`, 30 days). Off, a duplicate download is only removed from the client; a later search
 can grab the same release again. Music (Chromaprint is not stored for the library yet) and movies are not covered.
+
+Two limits seen live (2026-11-04, real SABnzbd grabs): a different cut of an episode (a release running about 4% longer than
+the held file) is not matched, by the duration gate above and because its frames land at other moments; and SABnzbd's own
+duplicate detection refuses a second release of the same episode, so a repeat download of one episode needs another client.
